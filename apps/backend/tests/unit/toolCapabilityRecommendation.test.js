@@ -1908,6 +1908,30 @@ test('CAP-407 orchestrates CAP-400 through CAP-406 into the API response', async
   assert.equal(result.suggestions[0].source.id, 'action-1');
 });
 
+test('CAP-902 enforced human policy approvals gate runtime capability promotion', async () => {
+  const blocked = await getCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'HOME',
+    limit: 3,
+  }, capabilityApiDependencies({
+    enforceApprovals: true,
+    loadApprovedCapabilityIds: async () => [],
+  }));
+  assert.deepEqual(blocked.suggestions, []);
+
+  const approved = await getCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'HOME',
+    limit: 3,
+  }, capabilityApiDependencies({
+    enforceApprovals: true,
+    loadApprovedCapabilityIds: async () => ['coverage-options'],
+  }));
+  assert.equal(approved.suggestions[0].capabilityId, 'coverage-options');
+});
+
 test('CAP-703 records selected recommendation eligibility with canonical lineage', async () => {
   const recorded = [];
   await getCapabilitySuggestions({

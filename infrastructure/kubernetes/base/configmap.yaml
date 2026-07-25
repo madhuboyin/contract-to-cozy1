@@ -60,9 +60,8 @@ data:
   ENABLE_CHAT: "true"
   # Pilot-only authentication switch. Set to "false" before general availability.
   DISABLE_EMAIL_VERIFICATION: "true"
-  # Beta governance switch. Set to "true" before admitting any real users.
-  # Technical safety and evidence validation remain enforced in both modes.
-  ENFORCE_HUMAN_POLICY_APPROVALS: "false"
+  # Real-user launch requires current manifest- and policy-version attestations.
+  ENFORCE_HUMAN_POLICY_APPROVALS: "true"
   # Real-user discovery fails closed unless policy and rollout gates are valid.
   TOOL_DISCOVERY_RELEASE_MODE: "REAL_USER_LAUNCH"
   TOOL_DISCOVERY_ENABLED: "true"

@@ -1777,6 +1777,7 @@ model User {
   // HouseholdMember below, which is the property-collaborator ACL.
   personalizationHouseholds       Household[]
   recommendationGovernanceReviews RecommendationGovernanceReview[]
+  capabilityGovernanceReviews     CapabilityGovernanceReview[]
   groundedAskProposals            GroundedAskProposal[]
   groundedAskArtifacts            GroundedAskArtifact[]
 
@@ -14003,6 +14004,28 @@ model RecommendationGovernanceReview {
   @@index([decision, reviewedAt])
   @@index([reviewerUserId, reviewedAt])
   @@map("personalization_recommendation_governance_reviews")
+}
+
+// Manifest-versioned human policy attestation for one canonical capability.
+// A manifest or policy-version change invalidates older approvals by design.
+model CapabilityGovernanceReview {
+  id              String                       @id @default(uuid())
+  capabilityId    String
+  manifestVersion Int
+  policyVersion   String
+  role            RecommendationReviewRole
+  decision        RecommendationReviewDecision
+  reviewerUserId  String
+  notes           String?                      @db.Text
+  reviewedAt      DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  reviewer User @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([capabilityId, manifestVersion, policyVersion, role])
+  @@index([capabilityId, decision, reviewedAt])
+  @@index([reviewerUserId, reviewedAt])
+  @@map("capability_governance_reviews")
 }
 
 // One immutable, validated-AST version of a definition's eligibility logic.

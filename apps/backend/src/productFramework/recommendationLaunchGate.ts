@@ -32,14 +32,22 @@ const REQUIRED_ROLES_BY_TIER: Record<RecommendationSafetyTier, RecommendationRev
   SAFETY_EMERGENCY: ['PRODUCT', 'DOMAIN', 'TRUST', 'LEGAL_COMPLIANCE'],
 };
 
+export function requiredRecommendationReviewRolesForTier(
+  safetyTier: RecommendationSafetyTier,
+  commercialAction = false,
+): RecommendationReviewRole[] {
+  const required = [...REQUIRED_ROLES_BY_TIER[safetyTier]];
+  if (commercialAction) required.push('COMMERCIAL_INTEGRITY');
+  return Array.from(new Set(required));
+}
+
 export function requiredRecommendationReviewRoles(
   governance: RecommendationGovernance,
 ): RecommendationReviewRole[] {
-  const required = [...REQUIRED_ROLES_BY_TIER[governance.safetyTier]];
-  if (governance.commercialDisclosure.involvesCommercialAction) {
-    required.push('COMMERCIAL_INTEGRITY');
-  }
-  return Array.from(new Set(required));
+  return requiredRecommendationReviewRolesForTier(
+    governance.safetyTier,
+    governance.commercialDisclosure.involvesCommercialAction,
+  );
 }
 
 export type RecommendationLaunchReadiness = {

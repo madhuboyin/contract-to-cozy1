@@ -8,7 +8,7 @@ Per the audit doc, W7 is **"pre-launch, not a beta implementation gate"** — ev
 
 | Flag | Current default | File |
 |---|---|---|
-| `ENFORCE_HUMAN_POLICY_APPROVALS` | `false` | `infrastructure/kubernetes/base/configmap.yaml:65`, `docker-compose.yml:72,117` |
+| `ENFORCE_HUMAN_POLICY_APPROVALS` | Kubernetes `true`; local Compose `false` | `infrastructure/kubernetes/base/configmap.yaml`, `docker-compose.yml` |
 | `WORKER_AUTOMATION_ENABLED` | `true` | same files |
 | `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED` | `false` | same files |
 | `WORKER_EXTERNAL_INGEST_ENABLED` | `false` | same files |
@@ -18,7 +18,13 @@ Per the audit doc, W7 is **"pre-launch, not a beta implementation gate"** — ev
 
 ## 1. `ENFORCE_HUMAN_POLICY_APPROVALS=true`
 
-This is a backend-and-worker-wide flag (already reaches both, per WKR-005) requiring human sign-off on policy-driven actions. Flip it in `infrastructure/kubernetes/base/configmap.yaml` (and mirror in `docker-compose.yml`'s default for local parity) only once you've confirmed the actual approval surface this gates is built and staffed — this runbook doesn't re-derive that surface; check `docs/functional/ADMIN_MODULE_FRD.md` for what currently depends on this flag before flipping it.
+This is a backend-and-worker-wide flag (already reaches both, per WKR-005)
+requiring human sign-off on policy-driven actions. The tracked Kubernetes
+configuration now selects `true`; local Docker Compose intentionally remains
+`false` for explicit internal-beta testing. Before deployment, apply the
+`CapabilityGovernanceReview` schema change and use Admin Release Gates to
+complete current manifest- and policy-version approvals. Do not manufacture
+approval rows through seed data or direct SQL.
 
 ## 2. `ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS` — read this before touching it
 

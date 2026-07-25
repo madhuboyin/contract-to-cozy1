@@ -91,6 +91,12 @@ export interface GateCheckResult {
 }
 
 export type CapabilityLaunchReviewState = 'READY' | 'HELD' | 'BLOCKED';
+export type CapabilityGovernanceReviewRole =
+  | 'PRODUCT'
+  | 'DOMAIN'
+  | 'TRUST'
+  | 'LEGAL_COMPLIANCE'
+  | 'COMMERCIAL_INTEGRITY';
 
 export interface CapabilityLaunchReview {
   capabilityId: string;
@@ -116,6 +122,14 @@ export interface CapabilityLaunchReview {
     issues: string[];
     checkedAt: string;
   } | null;
+  governanceReview: {
+    enforced: boolean;
+    ready: boolean;
+    requiredRoles: CapabilityGovernanceReviewRole[];
+    approvedRoles: CapabilityGovernanceReviewRole[];
+    rejectedRoles: CapabilityGovernanceReviewRole[];
+    missingRoles: CapabilityGovernanceReviewRole[];
+  };
 }
 
 export interface ReleaseGateSummary {
@@ -129,6 +143,8 @@ export interface ReleaseGateSummary {
     failureMode: 'BETA_FAIL_OPEN' | 'LAUNCH_FAIL_CLOSED';
     releaseReady: boolean;
     releaseBlockers: string[];
+    humanPolicyApprovalEnforced: boolean;
+    governanceReviewSourceAvailable: boolean;
     globalEnabled: boolean;
     releaseGateEnforced: boolean;
     registryVersion: string;
@@ -160,5 +176,20 @@ export interface ReleaseGateSummary {
 
 export async function fetchReleaseGateSummary(): Promise<ReleaseGateSummary> {
   const res = await api.get<ReleaseGateSummary>('/api/admin/release-gates');
+  return res.data;
+}
+
+export async function recordCapabilityGovernanceReview(
+  capabilityId: string,
+  input: {
+    role: CapabilityGovernanceReviewRole;
+    decision: 'APPROVED' | 'REJECTED';
+    notes?: string | null;
+  },
+) {
+  const res = await api.post(
+    `/api/admin/release-gates/capabilities/${encodeURIComponent(capabilityId)}/governance-reviews`,
+    input,
+  );
   return res.data;
 }

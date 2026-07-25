@@ -8,7 +8,9 @@ import {
   fetchReleaseGateSummary,
   fetchSharedDataConsistency,
   fetchSharedDataDiagnostics,
+  recordCapabilityGovernanceReview,
   runSharedDataBackfill,
+  type CapabilityGovernanceReviewRole,
 } from '@/lib/api/adminPlatformOps';
 
 export function useSharedDataDiagnostics() {
@@ -46,5 +48,20 @@ export function useReleaseGateSummary() {
     queryFn: fetchReleaseGateSummary,
     staleTime: 30_000,
     refetchInterval: 120_000,
+  });
+}
+
+export function useRecordCapabilityGovernanceReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      capabilityId: string;
+      role: CapabilityGovernanceReviewRole;
+      decision: 'APPROVED' | 'REJECTED';
+      notes?: string | null;
+    }) => recordCapabilityGovernanceReview(input.capabilityId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-release-gates'] });
+    },
   });
 }

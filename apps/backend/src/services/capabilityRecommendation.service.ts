@@ -44,6 +44,8 @@ import {
 import { detectCoverageGaps } from './coverageGap.service';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { buildPropertyContextCapabilitySources } from '../productFramework/capabilities/propertyContextCapabilitySources';
+import { APP_CONFIG } from '../config/appConfig';
+import { loadApprovedCapabilityIds } from './capabilityGovernanceReview.service';
 
 const EVALUATOR_SCOPES = PROPERTY_CONTEXT_SCOPES.filter(
   (scope) => scope !== 'OPTIONAL_HOUSEHOLD',
@@ -83,6 +85,8 @@ export interface CapabilityRecommendationDependencies {
     userId: string,
     includeWorkflowOnly: boolean,
   ) => string[];
+  loadApprovedCapabilityIds?: () => Promise<string[]>;
+  enforceApprovals?: boolean;
   now: () => Date;
   recordEligibility?: (input: {
     userId: string;
@@ -672,6 +676,8 @@ function defaultDependencies(
       createToolDiscoveryCapabilityAvailabilityAdapter(registry)
         .listAvailable({ userId, includeWorkflowOnly })
         .map((capability) => capability.id),
+    loadApprovedCapabilityIds: () => loadApprovedCapabilityIds(registry),
+    enforceApprovals: APP_CONFIG.enforceHumanPolicyApprovals,
     now,
     recordEligibility: recordToolLifecycleEvents,
   };
@@ -808,6 +814,16 @@ async function evaluateCapabilitySuggestions(
     input.userId,
     ['WORKFLOW', 'COMPLETION'].includes(input.surface),
   );
+  const enforceApprovals =
+    dependencies.enforceApprovals ?? APP_CONFIG.enforceHumanPolicyApprovals;
+  const approvedCapabilityIds = enforceApprovals
+    ? await optionalSource(
+        'capability-governance-reviews',
+        input.propertyId,
+        () => dependencies.loadApprovedCapabilityIds?.() ?? Promise.resolve([]),
+        [],
+      )
+    : [];
   const context = buildCapabilityRecommendationContext({
     propertyId: input.propertyId,
     propertyContext: required.propertyContext,
@@ -846,7 +862,8 @@ async function evaluateCapabilitySuggestions(
     governance: {
       canUseCapabilities: true,
       allowedSafetyTiers: [...RECOMMENDATION_SAFETY_TIERS],
-      enforceApprovals: false,
+      enforceApprovals,
+      approvedCapabilityIds,
       evidenceAccess: 'ALLOWED',
       contextFreshness: 'CURRENT',
     },

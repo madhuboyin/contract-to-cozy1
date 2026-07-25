@@ -13,7 +13,11 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useReleaseGateSummary } from '@/hooks/useAdminPlatformOps';
+import {
+  useRecordCapabilityGovernanceReview,
+  useReleaseGateSummary,
+} from '@/hooks/useAdminPlatformOps';
+import type { CapabilityGovernanceReviewRole } from '@/lib/api/adminPlatformOps';
 
 const COHORT_BADGE: Record<string, string> = {
   DISABLED: 'bg-slate-100 text-slate-600',
@@ -39,10 +43,27 @@ export default function AdminReleaseGatesPage() {
   });
 
   const summaryQ = useReleaseGateSummary();
+  const governanceReviewMutation = useRecordCapabilityGovernanceReview();
 
   if (guard.status !== 'ready') return guard.node;
 
   const s = summaryQ.data;
+  const recordReview = (
+    capabilityId: string,
+    role: CapabilityGovernanceReviewRole,
+    decision: 'APPROVED' | 'REJECTED',
+  ) => {
+    const notes = decision === 'REJECTED'
+      ? window.prompt('Reason for rejecting this capability policy review:')
+      : null;
+    if (decision === 'REJECTED' && !notes?.trim()) return;
+    governanceReviewMutation.mutate({
+      capabilityId,
+      role,
+      decision,
+      notes: notes?.trim() || null,
+    });
+  };
 
   return (
     <AdminConsoleShell
@@ -110,6 +131,17 @@ export default function AdminReleaseGatesPage() {
               : 'bg-amber-50 text-amber-700'}
             >
               Release gates {s.operationalControls.releaseGateEnforced ? 'enforced' : 'advisory'}
+            </Badge>
+            <Badge className={s.operationalControls.humanPolicyApprovalEnforced
+              && s.operationalControls.governanceReviewSourceAvailable
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-rose-50 text-rose-700'}
+            >
+              Human policy {s.operationalControls.humanPolicyApprovalEnforced
+                ? s.operationalControls.governanceReviewSourceAvailable
+                  ? 'enforced'
+                  : 'unavailable'
+                : 'advisory'}
             </Badge>
             <Badge className={s.operationalControls.rolloutKeyParity.valid
               ? 'bg-emerald-50 text-emerald-700'
@@ -213,6 +245,7 @@ export default function AdminReleaseGatesPage() {
                 <th className="px-3 py-2.5">Capability</th>
                 <th className="px-3 py-2.5">Readiness</th>
                 <th className="px-3 py-2.5">Policy</th>
+                <th className="px-3 py-2.5">Approvals</th>
                 <th className="px-3 py-2.5">Cohort</th>
                 <th className="px-3 py-2.5">Rollout</th>
                 <th className="px-3 py-2.5">Active incidents</th>
@@ -235,6 +268,47 @@ export default function AdminReleaseGatesPage() {
                   <td className="px-3 py-2.5">
                     <p className="text-slate-600">{review.releaseStage} · {review.recommendationMode}</p>
                     <p className="text-[10px] text-slate-400">{review.safetyTier}</p>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="space-y-1">
+                      {review.governanceReview.requiredRoles.map((role) => {
+                        const approved = review.governanceReview.approvedRoles.includes(role);
+                        const rejected = review.governanceReview.rejectedRoles.includes(role);
+                        return (
+                          <div key={role} className="flex items-center gap-1">
+                            <Badge className={`text-[9px] ${
+                              approved
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : rejected
+                                  ? 'bg-rose-50 text-rose-700'
+                                  : 'bg-amber-50 text-amber-700'
+                            }`}>
+                              {role}
+                            </Badge>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 px-1.5 text-[9px]"
+                              disabled={governanceReviewMutation.isPending || approved}
+                              onClick={() => recordReview(review.capabilityId, role, 'APPROVED')}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 px-1.5 text-[9px] text-rose-700"
+                              disabled={governanceReviewMutation.isPending || rejected}
+                              onClick={() => recordReview(review.capabilityId, role, 'REJECTED')}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </td>
                   <td className="px-3 py-2.5">
                     <Badge className={`text-[10px] ${COHORT_BADGE[review.rollout?.cohort ?? 'DISABLED'] ?? ''}`}>

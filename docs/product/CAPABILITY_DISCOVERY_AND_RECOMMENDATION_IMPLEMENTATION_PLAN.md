@@ -1817,6 +1817,36 @@ This slice reviews technical rollout and containment readiness. Human approval
 attestations and the policy-specific material, regulated, safety, commercial,
 and privacy review remain separate WS9 gates.
 
+### CAP-902: Capability human-policy attestations
+
+Implemented persisted human-policy reviews for canonical capabilities:
+
+- each attestation is keyed by capability ID, manifest version, policy version,
+  and required review role;
+- required roles are inherited from the canonical safety tier, with
+  `COMMERCIAL_INTEGRITY` added for commercial actions;
+- changing a manifest or governance policy version invalidates prior
+  attestations automatically;
+- enforced runtime recommendations load the approved capability set and block
+  promotion when approval data is missing, rejected, or unavailable;
+- Admin Release Gates reports required, approved, rejected, and missing roles
+  per capability and allows an MFA-authenticated administrator with
+  `SYSTEM_SETTINGS_MANAGE` to record a decision;
+- each decision writes an allowlisted immutable governance audit event; and
+- the tracked Kubernetes configuration now enforces human policy approvals,
+  while local Docker development retains explicit advisory behavior.
+
+The Prisma schema adds `CapabilityGovernanceReview` without a migration script,
+per repository policy. No review rows are seeded: attestations must represent
+real human decisions and cannot be manufactured as deployment data. The user
+must apply the schema change before deploying this slice. Until the table is
+available and current reviews are complete, recommendations and the aggregate
+real-user launch gate fail closed.
+
+This slice provides and enforces the approval mechanism; it does not claim that
+the required product, domain, trust, legal/compliance, or commercial reviews
+have been completed.
+
 ---
 
 ## 15. Repository Change Plan

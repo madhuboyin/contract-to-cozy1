@@ -150,6 +150,32 @@ kubectl get configmap app-config -n production \
 kubectl get pods -n production -l app=api
 ```
 
+## 5.1 Capability governance reviews
+
+Real-user configuration sets `ENFORCE_HUMAN_POLICY_APPROVALS=true`.
+Admin Release Gates lists the current approval status for every capability:
+
+- `LOW_CONSEQUENCE` requires `PRODUCT`;
+- `MATERIAL_FINANCIAL` requires `PRODUCT`, `DOMAIN`, and `TRUST`;
+- `REGULATED_COVERAGE` and `SAFETY_EMERGENCY` additionally require
+  `LEGAL_COMPLIANCE`; and
+- a commercial action also requires `COMMERCIAL_INTEGRITY`.
+
+Review decisions require an authenticated admin session with MFA,
+`RELEASE_GATE_VIEW`, and `SYSTEM_SETTINGS_MANAGE`. A rejection must include a
+reason. Decisions apply only to the displayed manifest and policy versions.
+Any later version change returns the capability to missing-approval status.
+
+Do not seed approval rows or copy them between environments. They are human
+attestations. Before deploying this slice, apply the Prisma schema change that
+creates `capability_governance_reviews`; no repository migration script is
+provided. If the table or database is unavailable, runtime contextual
+recommendations and the Admin real-user launch gate fail closed.
+
+Approval completion does not replace the technical tests or drills elsewhere
+in WS9. An approved capability remains blocked by rollout, route, manifest,
+incident, privacy, authorization, or telemetry failures.
+
 ## 6. Incident playbooks
 
 ### 6.1 Broken destination

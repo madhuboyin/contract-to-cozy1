@@ -39,12 +39,38 @@ function launchAvailability(extraEnv = {}) {
   });
 }
 
+function approvedGovernance() {
+  return new Map(canonicalCapabilityRegistry.capabilities.map((capability) => [
+    capability.id,
+    {
+      capabilityId: capability.id,
+      manifestVersion: capability.version,
+      policyVersion: capability.governance.policyVersion,
+      requiredRoles: ['PRODUCT'],
+      approvedRoles: ['PRODUCT'],
+      rejectedRoles: [],
+      missingRoles: [],
+      ready: true,
+    },
+  ]));
+}
+
+function reviewOptions(overrides = {}) {
+  return {
+    governanceReadiness: approvedGovernance(),
+    enforceHumanPolicyApprovals: true,
+    governanceReviewSourceAvailable: true,
+    ...overrides,
+  };
+}
+
 test('CAP-901 reviews every canonical capability exactly once', () => {
   const availability = launchAvailability();
   const reviews = buildCapabilityLaunchReviews(
     canonicalCapabilityRegistry.capabilities,
     availability,
     passingGates(availability),
+    reviewOptions(),
   );
 
   assert.equal(reviews.length, canonicalCapabilityRegistry.capabilities.length);
@@ -74,6 +100,7 @@ test('CAP-901 distinguishes intentional holds from launch blockers', () => {
     canonicalCapabilityRegistry.capabilities,
     availability,
     gates,
+    reviewOptions(),
   );
   const byId = new Map(reviews.map((review) => [review.capabilityId, review]));
 
@@ -108,6 +135,7 @@ test('CAP-901 marks disabled rollout as held and global policy failure as blocke
     canonicalCapabilityRegistry.capabilities,
     disabledRolloutAvailability,
     passingGates(disabledRolloutAvailability),
+    reviewOptions(),
   ).find((review) => review.capabilityId === 'material-specs');
   assert.equal(held.state, 'HELD');
   assert.deepEqual(held.blockers, ['ROLLOUT_DISABLED']);
@@ -119,11 +147,74 @@ test('CAP-901 marks disabled rollout as held and global policy failure as blocke
     canonicalCapabilityRegistry.capabilities,
     invalid,
     passingGates(invalid),
+    reviewOptions(),
   );
   assert.equal(
     blocked.every((review) =>
       review.state === 'BLOCKED'
       && review.blockers.includes('CONFIGURATION_INVALID')),
+    true,
+  );
+});
+
+test('CAP-902 human policy enforcement blocks missing and rejected reviews', () => {
+  const availability = launchAvailability();
+  const governanceReadiness = approvedGovernance();
+  governanceReadiness.set('material-specs', {
+    ...governanceReadiness.get('material-specs'),
+    approvedRoles: [],
+    missingRoles: ['PRODUCT'],
+    ready: false,
+  });
+  governanceReadiness.set('plant-advisor', {
+    ...governanceReadiness.get('plant-advisor'),
+    approvedRoles: [],
+    rejectedRoles: ['PRODUCT'],
+    missingRoles: ['PRODUCT'],
+    ready: false,
+  });
+  const reviews = buildCapabilityLaunchReviews(
+    canonicalCapabilityRegistry.capabilities,
+    availability,
+    passingGates(availability),
+    reviewOptions({ governanceReadiness }),
+  );
+  const byId = new Map(reviews.map((review) => [review.capabilityId, review]));
+
+  assert.equal(byId.get('material-specs').state, 'BLOCKED');
+  assert.ok(
+    byId.get('material-specs').blockers.includes('GOVERNANCE_APPROVAL_MISSING'),
+  );
+  assert.equal(byId.get('plant-advisor').state, 'BLOCKED');
+  assert.ok(
+    byId.get('plant-advisor').blockers.includes('GOVERNANCE_APPROVAL_REJECTED'),
+  );
+});
+
+test('CAP-902 advisory or unavailable approval policy fails launch review closed', () => {
+  const availability = launchAvailability();
+  const gates = passingGates(availability);
+  const advisory = buildCapabilityLaunchReviews(
+    canonicalCapabilityRegistry.capabilities,
+    availability,
+    gates,
+    reviewOptions({ enforceHumanPolicyApprovals: false }),
+  );
+  assert.equal(
+    advisory.every((review) =>
+      review.blockers.includes('HUMAN_POLICY_APPROVALS_NOT_ENFORCED')),
+    true,
+  );
+
+  const unavailable = buildCapabilityLaunchReviews(
+    canonicalCapabilityRegistry.capabilities,
+    availability,
+    gates,
+    reviewOptions({ governanceReviewSourceAvailable: false }),
+  );
+  assert.equal(
+    unavailable.every((review) =>
+      review.blockers.includes('GOVERNANCE_REVIEW_SOURCE_UNAVAILABLE')),
     true,
   );
 });

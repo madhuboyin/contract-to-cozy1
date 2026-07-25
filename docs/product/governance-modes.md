@@ -1,10 +1,15 @@
 # Human policy governance modes
 
-ContractToCozy currently has no real users. Human policy attestations are therefore advisory during internal beta, while technical safety controls remain mandatory in every environment.
+ContractToCozy currently has no real users. Local internal-beta testing keeps
+human policy attestations advisory, while the tracked Kubernetes real-user
+configuration now enforces them. Technical safety controls remain mandatory in
+every environment.
 
 ## Configuration
 
-`ENFORCE_HUMAN_POLICY_APPROVALS` is owned by the Kubernetes `app-config` ConfigMap and read only by the backend.
+`ENFORCE_HUMAN_POLICY_APPROVALS` is owned by the Kubernetes `app-config`
+ConfigMap and propagated to the backend and workers. Capability recommendation
+enforcement occurs in the backend.
 
 | Value | Mode | Behavior |
 | --- | --- | --- |
@@ -29,9 +34,11 @@ The flag does not disable schema validation, evidence requirements, confidence a
 
 Before admitting any real user:
 
-1. Set `ENFORCE_HUMAN_POLICY_APPROVALS: "true"` in `infrastructure/kubernetes/base/configmap.yaml` and deploy the backend.
+1. Confirm the tracked `ENFORCE_HUMAN_POLICY_APPROVALS: "true"` value is
+   effective in the backend and workers.
 2. Record the accountable framework approvals for the current policy version in `phase0/approval-register.md`.
-3. Record every tier-required approval for active recommendation definitions.
+3. Record every tier-required approval for active recommendation definitions
+   and canonical capability manifests.
 4. Admit each new-home pilot property into a named controlled cohort.
 5. Confirm the Admin UI reports policy-approved readiness rather than beta advisory readiness.
 6. Run the Phase 0 contract suite and applicable database acceptance harnesses.

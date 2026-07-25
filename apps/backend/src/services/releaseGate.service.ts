@@ -14,6 +14,11 @@ import {
   getToolDiscoveryAvailability,
   type ToolDiscoveryAvailability,
 } from './toolDiscoveryAvailability.service';
+import { APP_CONFIG } from '../config/appConfig';
+import {
+  loadCapabilityGovernanceReadiness,
+  type CapabilityGovernanceReadiness,
+} from './capabilityGovernanceReview.service';
 
 // ============================================================================
 // INTERFACES
@@ -53,6 +58,10 @@ export const CAPABILITY_LAUNCH_BLOCKER_CODES = [
   'ROLLOUT_MISSING',
   'ROLLOUT_DISABLED',
   'INCIDENT_GATE_FAILED',
+  'HUMAN_POLICY_APPROVALS_NOT_ENFORCED',
+  'GOVERNANCE_REVIEW_SOURCE_UNAVAILABLE',
+  'GOVERNANCE_APPROVAL_MISSING',
+  'GOVERNANCE_APPROVAL_REJECTED',
 ] as const;
 
 export type CapabilityLaunchBlockerCode =
@@ -78,6 +87,14 @@ export interface CapabilityLaunchReview {
     issues: string[];
     checkedAt: string;
   } | null;
+  governanceReview: {
+    enforced: boolean;
+    ready: boolean;
+    requiredRoles: string[];
+    approvedRoles: string[];
+    rejectedRoles: string[];
+    missingRoles: string[];
+  };
 }
 
 const GLOBAL_CAPABILITY_BLOCKERS = new Set<CapabilityLaunchBlockerCode>([
@@ -93,6 +110,11 @@ export function buildCapabilityLaunchReviews(
   capabilities: readonly ToolCapabilityDefinition[],
   availability: ToolDiscoveryAvailability,
   gates: readonly GateCheckResult[],
+  options: {
+    governanceReadiness?: ReadonlyMap<string, CapabilityGovernanceReadiness>;
+    enforceHumanPolicyApprovals?: boolean;
+    governanceReviewSourceAvailable?: boolean;
+  } = {},
 ): CapabilityLaunchReview[] {
   const gatesByRolloutKey = new Map(
     gates.map((gate) => [gate.toolKey, gate]),
@@ -101,12 +123,30 @@ export function buildCapabilityLaunchReviews(
     (blocker): blocker is CapabilityLaunchBlockerCode =>
       GLOBAL_CAPABILITY_BLOCKERS.has(blocker as CapabilityLaunchBlockerCode),
   );
+  const enforceHumanPolicyApprovals =
+    options.enforceHumanPolicyApprovals ?? false;
+  const governanceReviewSourceAvailable =
+    options.governanceReviewSourceAvailable ?? true;
 
   return capabilities.map((capability) => {
     const blockers = [...globalBlockers];
     const gate = gatesByRolloutKey.get(capability.governance.rolloutKey) ?? null;
     const rollout =
       availability.rollouts[capability.governance.rolloutKey] ?? null;
+    const governanceReview =
+      options.governanceReadiness?.get(capability.id) ?? null;
+
+    if (!enforceHumanPolicyApprovals) {
+      blockers.push('HUMAN_POLICY_APPROVALS_NOT_ENFORCED');
+    } else if (!governanceReviewSourceAvailable) {
+      blockers.push('GOVERNANCE_REVIEW_SOURCE_UNAVAILABLE');
+    } else if (!governanceReview?.ready) {
+      blockers.push(
+        governanceReview && governanceReview.rejectedRoles.length > 0
+          ? 'GOVERNANCE_APPROVAL_REJECTED'
+          : 'GOVERNANCE_APPROVAL_MISSING',
+      );
+    }
 
     if (availability.disabledToolIds.includes(capability.id)) {
       blockers.push('CAPABILITY_DISABLED');
@@ -162,6 +202,14 @@ export function buildCapabilityLaunchReviews(
             checkedAt: gate.checkedAt,
           }
         : null,
+      governanceReview: {
+        enforced: enforceHumanPolicyApprovals,
+        ready: governanceReview?.ready ?? false,
+        requiredRoles: governanceReview?.requiredRoles ?? [],
+        approvedRoles: governanceReview?.approvedRoles ?? [],
+        rejectedRoles: governanceReview?.rejectedRoles ?? [],
+        missingRoles: governanceReview?.missingRoles ?? [],
+      },
     };
   });
 }
@@ -284,6 +332,8 @@ export async function getReleaseSummary(): Promise<{
     failureMode: ToolDiscoveryAvailability['failureMode'];
     releaseReady: boolean;
     releaseBlockers: string[];
+    humanPolicyApprovalEnforced: boolean;
+    governanceReviewSourceAvailable: boolean;
     globalEnabled: boolean;
     releaseGateEnforced: boolean;
     registryVersion: string;
@@ -314,10 +364,30 @@ export async function getReleaseSummary(): Promise<{
 }> {
   const gates = await checkAllGates();
   const availability = getToolDiscoveryAvailability();
+  let governanceReviewSourceAvailable = true;
+  let governanceReadiness = new Map<string, CapabilityGovernanceReadiness>();
+  try {
+    governanceReadiness = await loadCapabilityGovernanceReadiness(
+      canonicalCapabilityRegistry,
+    );
+  } catch (error) {
+    governanceReviewSourceAvailable = false;
+    logger.error(
+      { err: error },
+      '[ReleaseGate] Capability governance reviews failed closed',
+    );
+  }
+  const humanPolicyApprovalEnforced =
+    APP_CONFIG.enforceHumanPolicyApprovals;
   const capabilityReviews = buildCapabilityLaunchReviews(
     canonicalCapabilityRegistry.capabilities,
     availability,
     gates,
+    {
+      governanceReadiness,
+      enforceHumanPolicyApprovals: humanPolicyApprovalEnforced,
+      governanceReviewSourceAvailable,
+    },
   );
 
   const passing = gates.filter((g) => g.pass).length;
@@ -341,6 +411,24 @@ export async function getReleaseSummary(): Promise<{
   for (const review of capabilityReviews) {
     capabilityReviewCounts[review.state] += 1;
   }
+  const releaseBlockers = [
+    ...availability.releaseBlockers,
+    ...(!humanPolicyApprovalEnforced
+      ? ['HUMAN_POLICY_APPROVALS_NOT_ENFORCED']
+      : []),
+    ...(!governanceReviewSourceAvailable
+      ? ['GOVERNANCE_REVIEW_SOURCE_UNAVAILABLE']
+      : []),
+    ...(capabilityReviews.some((review) =>
+      review.blockers.includes('GOVERNANCE_APPROVAL_MISSING')
+      || review.blockers.includes('GOVERNANCE_APPROVAL_REJECTED'))
+      ? ['CAPABILITY_GOVERNANCE_BLOCKED']
+      : []),
+    ...(capabilityReviews.some((review) =>
+      review.blockers.includes('INCIDENT_GATE_FAILED'))
+      ? ['INCIDENT_GATE_FAILED']
+      : []),
+  ];
 
   return {
     totalTools: gates.length,
@@ -351,8 +439,12 @@ export async function getReleaseSummary(): Promise<{
     operationalControls: {
       releaseMode: availability.releaseMode,
       failureMode: availability.failureMode,
-      releaseReady: availability.releaseReady,
-      releaseBlockers: availability.releaseBlockers,
+      releaseReady:
+        availability.releaseReady
+        && capabilityReviews.every((review) => review.state !== 'BLOCKED'),
+      releaseBlockers: Array.from(new Set(releaseBlockers)),
+      humanPolicyApprovalEnforced,
+      governanceReviewSourceAvailable,
       globalEnabled: availability.enabled,
       releaseGateEnforced: availability.enforceReleaseGates,
       registryVersion: availability.registryVersion,
