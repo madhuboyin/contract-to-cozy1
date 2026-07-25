@@ -169,6 +169,28 @@ test('tool discovery flags can disable discovery and individual tool ids', () =>
   assert.deepEqual(result.disabledToolIds, ['coverage-options', 'home-event-radar']);
 });
 
+test('containment lists reject unknown capability ids', () => {
+  const result = getToolDiscoveryAvailability('launch-user', {
+    TOOL_DISCOVERY_RELEASE_MODE: 'REAL_USER_LAUNCH',
+    TOOL_DISCOVERY_ENABLED: 'true',
+    ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: 'true',
+    TOOL_DISCOVERY_DISABLED_IDS: 'material-specs,missing-disabled',
+    TOOL_DISCOVERY_BROKEN_ROUTE_IDS: 'missing-route',
+    TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS: 'missing-gate',
+  });
+
+  assert.deepEqual(result.unknownDisabledToolIds, ['missing-disabled']);
+  assert.deepEqual(result.unknownBrokenRouteToolIds, ['missing-route']);
+  assert.deepEqual(result.unknownReleaseGateBlockedToolIds, ['missing-gate']);
+  assert.equal(result.configurationValid, false);
+  assert.deepEqual(result.invalidConfigurationEntries, [
+    'TOOL_DISCOVERY_DISABLED_IDS',
+    'TOOL_DISCOVERY_BROKEN_ROUTE_IDS',
+    'TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS',
+  ]);
+  assert.ok(result.releaseBlockers.includes('CONFIGURATION_INVALID'));
+});
+
 test('tool discovery exposes the existing cohort registry', () => {
   const result = getToolDiscoveryAvailability('beta-user', {});
   assert.ok(result.rollouts.HOME_EVENT_RADAR);

@@ -6,7 +6,10 @@
 import { prisma } from '../lib/prisma';
 import { TOOL_FLAGS, cohortFromPct, RolloutCohort } from '../config/featureFlags';
 import { logger } from '../lib/logger';
-import { canonicalCapabilityRegistry } from '../productFramework/capabilities';
+import {
+  canonicalCapabilityRegistry,
+  type ToolCapabilityDefinition,
+} from '../productFramework/capabilities';
 import {
   getToolDiscoveryAvailability,
   type ToolDiscoveryAvailability,
@@ -25,6 +28,142 @@ export interface GateCheckResult {
   issues: string[];
   activeIncidentCount: number;
   checkedAt: string;
+}
+
+export const CAPABILITY_LAUNCH_REVIEW_STATES = [
+  'READY',
+  'HELD',
+  'BLOCKED',
+] as const;
+
+export type CapabilityLaunchReviewState =
+  typeof CAPABILITY_LAUNCH_REVIEW_STATES[number];
+
+export const CAPABILITY_LAUNCH_BLOCKER_CODES = [
+  'DISCOVERY_DISABLED',
+  'RELEASE_GATES_NOT_ENFORCED',
+  'CONFIGURATION_INVALID',
+  'REGISTRY_VERSION_MISMATCH',
+  'ROLLOUT_KEYS_MISSING',
+  'ROLLOUT_KEYS_UNKNOWN',
+  'CAPABILITY_DISABLED',
+  'ROUTE_UNAVAILABLE',
+  'MANIFEST_VERSION_MISMATCH',
+  'RELEASE_GATE_BLOCKED',
+  'ROLLOUT_MISSING',
+  'ROLLOUT_DISABLED',
+  'INCIDENT_GATE_FAILED',
+] as const;
+
+export type CapabilityLaunchBlockerCode =
+  typeof CAPABILITY_LAUNCH_BLOCKER_CODES[number];
+
+export interface CapabilityLaunchReview {
+  capabilityId: string;
+  label: string;
+  owner: string;
+  rolloutKey: string;
+  releaseStage: ToolCapabilityDefinition['governance']['releaseStage'];
+  safetyTier: ToolCapabilityDefinition['governance']['safetyTier'];
+  recommendationMode: ToolCapabilityDefinition['recommendation']['mode'];
+  state: CapabilityLaunchReviewState;
+  blockers: CapabilityLaunchBlockerCode[];
+  rollout: {
+    cohort: RolloutCohort;
+    rolloutPct: number;
+  } | null;
+  incidentGate: {
+    pass: boolean;
+    activeIncidentCount: number;
+    issues: string[];
+    checkedAt: string;
+  } | null;
+}
+
+const GLOBAL_CAPABILITY_BLOCKERS = new Set<CapabilityLaunchBlockerCode>([
+  'DISCOVERY_DISABLED',
+  'RELEASE_GATES_NOT_ENFORCED',
+  'CONFIGURATION_INVALID',
+  'REGISTRY_VERSION_MISMATCH',
+  'ROLLOUT_KEYS_MISSING',
+  'ROLLOUT_KEYS_UNKNOWN',
+]);
+
+export function buildCapabilityLaunchReviews(
+  capabilities: readonly ToolCapabilityDefinition[],
+  availability: ToolDiscoveryAvailability,
+  gates: readonly GateCheckResult[],
+): CapabilityLaunchReview[] {
+  const gatesByRolloutKey = new Map(
+    gates.map((gate) => [gate.toolKey, gate]),
+  );
+  const globalBlockers = availability.releaseBlockers.filter(
+    (blocker): blocker is CapabilityLaunchBlockerCode =>
+      GLOBAL_CAPABILITY_BLOCKERS.has(blocker as CapabilityLaunchBlockerCode),
+  );
+
+  return capabilities.map((capability) => {
+    const blockers = [...globalBlockers];
+    const gate = gatesByRolloutKey.get(capability.governance.rolloutKey) ?? null;
+    const rollout =
+      availability.rollouts[capability.governance.rolloutKey] ?? null;
+
+    if (availability.disabledToolIds.includes(capability.id)) {
+      blockers.push('CAPABILITY_DISABLED');
+    }
+    if (availability.brokenRouteToolIds.includes(capability.id)) {
+      blockers.push('ROUTE_UNAVAILABLE');
+    }
+    if (availability.manifestVersionMismatchedToolIds.includes(capability.id)) {
+      blockers.push('MANIFEST_VERSION_MISMATCH');
+    }
+    if (availability.releaseGateBlockedToolIds.includes(capability.id)) {
+      blockers.push('RELEASE_GATE_BLOCKED');
+    }
+    if (!rollout) {
+      blockers.push('ROLLOUT_MISSING');
+    } else if (rollout.rolloutPct <= 0) {
+      blockers.push('ROLLOUT_DISABLED');
+    }
+    if (!gate || !gate.pass) {
+      blockers.push('INCIDENT_GATE_FAILED');
+    }
+
+    const uniqueBlockers = Array.from(new Set(blockers));
+    const heldOnly = uniqueBlockers.every((blocker) =>
+      blocker === 'CAPABILITY_DISABLED' || blocker === 'ROLLOUT_DISABLED');
+    const state: CapabilityLaunchReviewState = uniqueBlockers.length === 0
+      ? 'READY'
+      : heldOnly
+        ? 'HELD'
+        : 'BLOCKED';
+
+    return {
+      capabilityId: capability.id,
+      label: capability.presentation.label,
+      owner: capability.owner,
+      rolloutKey: capability.governance.rolloutKey,
+      releaseStage: capability.governance.releaseStage,
+      safetyTier: capability.governance.safetyTier,
+      recommendationMode: capability.recommendation.mode,
+      state,
+      blockers: uniqueBlockers,
+      rollout: rollout
+        ? {
+            cohort: rollout.cohort,
+            rolloutPct: rollout.rolloutPct,
+          }
+        : null,
+      incidentGate: gate
+        ? {
+            pass: gate.pass,
+            activeIncidentCount: gate.activeIncidentCount,
+            issues: gate.issues,
+            checkedAt: gate.checkedAt,
+          }
+        : null,
+    };
+  });
 }
 
 // ============================================================================
@@ -139,6 +278,7 @@ export async function getReleaseSummary(): Promise<{
   passing: number;
   failing: number;
   byRolloutCohort: Record<RolloutCohort, number>;
+  capabilityReviewCounts: Record<CapabilityLaunchReviewState, number>;
   operationalControls: {
     releaseMode: ToolDiscoveryAvailability['releaseMode'];
     failureMode: ToolDiscoveryAvailability['failureMode'];
@@ -158,18 +298,27 @@ export async function getReleaseSummary(): Promise<{
       unknownKeys: string[];
     };
     disabledCapabilityIds: string[];
+    unknownDisabledCapabilityIds: string[];
     brokenRouteCapabilityIds: string[];
+    unknownBrokenRouteCapabilityIds: string[];
     releaseGateBlockedCapabilityIds: string[];
+    unknownReleaseGateBlockedCapabilityIds: string[];
     manifestVersionMismatches: Array<{
       capabilityId: string;
       currentVersion: number;
       expectedVersion: number;
     }>;
   };
+  capabilityReviews: CapabilityLaunchReview[];
   gates: GateCheckResult[];
 }> {
   const gates = await checkAllGates();
   const availability = getToolDiscoveryAvailability();
+  const capabilityReviews = buildCapabilityLaunchReviews(
+    canonicalCapabilityRegistry.capabilities,
+    availability,
+    gates,
+  );
 
   const passing = gates.filter((g) => g.pass).length;
   const failing = gates.length - passing;
@@ -184,12 +333,21 @@ export async function getReleaseSummary(): Promise<{
   for (const gate of gates) {
     byRolloutCohort[gate.cohort] = (byRolloutCohort[gate.cohort] ?? 0) + 1;
   }
+  const capabilityReviewCounts: Record<CapabilityLaunchReviewState, number> = {
+    READY: 0,
+    HELD: 0,
+    BLOCKED: 0,
+  };
+  for (const review of capabilityReviews) {
+    capabilityReviewCounts[review.state] += 1;
+  }
 
   return {
     totalTools: gates.length,
     passing,
     failing,
     byRolloutCohort,
+    capabilityReviewCounts,
     operationalControls: {
       releaseMode: availability.releaseMode,
       failureMode: availability.failureMode,
@@ -207,9 +365,15 @@ export async function getReleaseSummary(): Promise<{
         availability.invalidManifestVersionEntries,
       rolloutKeyParity: availability.rolloutKeyParity,
       disabledCapabilityIds: availability.disabledToolIds,
+      unknownDisabledCapabilityIds:
+        availability.unknownDisabledToolIds,
       brokenRouteCapabilityIds: availability.brokenRouteToolIds,
+      unknownBrokenRouteCapabilityIds:
+        availability.unknownBrokenRouteToolIds,
       releaseGateBlockedCapabilityIds:
         availability.releaseGateBlockedToolIds,
+      unknownReleaseGateBlockedCapabilityIds:
+        availability.unknownReleaseGateBlockedToolIds,
       manifestVersionMismatches: Object.entries(
         availability.manifestVersions,
       ).filter(([capabilityId]) =>
@@ -225,6 +389,7 @@ export async function getReleaseSummary(): Promise<{
           : [];
       }),
     },
+    capabilityReviews,
     gates,
   };
 }

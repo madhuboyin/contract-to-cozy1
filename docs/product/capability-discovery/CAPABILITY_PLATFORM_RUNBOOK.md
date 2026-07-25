@@ -105,6 +105,19 @@ The authenticated availability endpoint and Admin Release Gates report
 users unless the effective mode is `REAL_USER_LAUNCH`, `releaseReady` is true,
 and the remaining WS9 launch gates have independently passed.
 
+Admin Release Gates also assigns every canonical capability a `READY`, `HELD`,
+or `BLOCKED` state. `HELD` is an intentional operator decision
+(`TOOL_DISCOVERY_DISABLED_IDS` or a zero-percent rollout); `BLOCKED` indicates
+a policy, configuration, route, manifest, rollout mapping, or incident failure
+that requires resolution. Review all rows before launch—an aggregate count is
+not a substitute for reviewing the blocker codes.
+
+Containment values must be canonical capability IDs. Unknown values in
+`TOOL_DISCOVERY_DISABLED_IDS`, `TOOL_DISCOVERY_BROKEN_ROUTE_IDS`, or
+`TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS` invalidate the configuration and
+fail closed. Copy IDs from Admin Release Gates or the canonical capability
+registry rather than entering route names or rollout keys.
+
 For an emergency global shutdown:
 
 ```bash

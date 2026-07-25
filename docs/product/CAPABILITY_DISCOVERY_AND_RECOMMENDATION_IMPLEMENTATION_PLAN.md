@@ -1792,6 +1792,31 @@ WS9 human approvals, browser/PWA telemetry checks, accessibility validation,
 kill-switch drills, representative-property smoke tests, and support incident
 exercise remain required.
 
+### CAP-901: Canonical capability launch review
+
+Implemented a capability-centric launch review that automatically evaluates
+every manifest in the canonical registry. Each capability receives one stable
+state:
+
+- `READY` when platform policy, rollout mapping, containment controls, manifest
+  pins, and incident gates permit launch;
+- `HELD` when an operator intentionally disables the capability or sets its
+  rollout to zero; or
+- `BLOCKED` when configuration, route, manifest, explicit release policy, or
+  incident health prevents launch.
+
+Admin Release Gates now reports all 52 capabilities with canonical ID, owner,
+release stage, recommendation mode, safety tier, rollout key/cohort, incident
+status, and stable blocker codes. Unknown IDs in disabled, broken-route, or
+release-gate containment lists are configuration errors and fail closed rather
+than being silently ignored. Because the review iterates the canonical
+registry, a future manifest automatically inherits the launch review and its
+rollout mapping is tested by the standard Product Framework suite.
+
+This slice reviews technical rollout and containment readiness. Human approval
+attestations and the policy-specific material, regulated, safety, commercial,
+and privacy review remain separate WS9 gates.
+
 ---
 
 ## 15. Repository Change Plan

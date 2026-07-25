@@ -24,8 +24,11 @@ export type ToolDiscoveryAvailability = {
   enabled: boolean;
   enforceReleaseGates: boolean;
   disabledToolIds: string[];
+  unknownDisabledToolIds: string[];
   brokenRouteToolIds: string[];
+  unknownBrokenRouteToolIds: string[];
   releaseGateBlockedToolIds: string[];
+  unknownReleaseGateBlockedToolIds: string[];
   registryVersion: string;
   expectedRegistryVersion: string | null;
   registryVersionMatches: boolean;
@@ -141,6 +144,12 @@ export function getToolDiscoveryAvailability(
   const releaseGateBlockedToolIds = readDisabledToolIds(
     env.TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS,
   );
+  const unknownDisabledToolIds = disabledToolIds
+    .filter((capabilityId) => !registry.getById(capabilityId));
+  const unknownBrokenRouteToolIds = brokenRouteToolIds
+    .filter((capabilityId) => !registry.getById(capabilityId));
+  const unknownReleaseGateBlockedToolIds = releaseGateBlockedToolIds
+    .filter((capabilityId) => !registry.getById(capabilityId));
   const manifestVersionConfig = readManifestVersions(
     env.TOOL_DISCOVERY_MANIFEST_VERSIONS,
   );
@@ -191,6 +200,15 @@ export function getToolDiscoveryAvailability(
     ...(invalidManifestVersionEntries.length > 0
       ? ['TOOL_DISCOVERY_MANIFEST_VERSIONS']
       : []),
+    ...(unknownDisabledToolIds.length > 0
+      ? ['TOOL_DISCOVERY_DISABLED_IDS']
+      : []),
+    ...(unknownBrokenRouteToolIds.length > 0
+      ? ['TOOL_DISCOVERY_BROKEN_ROUTE_IDS']
+      : []),
+    ...(unknownReleaseGateBlockedToolIds.length > 0
+      ? ['TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS']
+      : []),
   ];
   const configurationValid = invalidConfigurationEntries.length === 0;
   const releaseBlockers = [
@@ -213,8 +231,11 @@ export function getToolDiscoveryAvailability(
     enabled,
     enforceReleaseGates,
     disabledToolIds,
+    unknownDisabledToolIds,
     brokenRouteToolIds,
+    unknownBrokenRouteToolIds,
     releaseGateBlockedToolIds,
+    unknownReleaseGateBlockedToolIds,
     registryVersion: registry.version,
     expectedRegistryVersion,
     registryVersionMatches,

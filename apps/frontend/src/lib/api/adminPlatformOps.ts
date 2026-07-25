@@ -90,11 +90,40 @@ export interface GateCheckResult {
   checkedAt: string;
 }
 
+export type CapabilityLaunchReviewState = 'READY' | 'HELD' | 'BLOCKED';
+
+export interface CapabilityLaunchReview {
+  capabilityId: string;
+  label: string;
+  owner: string;
+  rolloutKey: string;
+  releaseStage: 'ACTIVE' | 'BETA';
+  safetyTier:
+    | 'LOW_CONSEQUENCE'
+    | 'MATERIAL_FINANCIAL'
+    | 'REGULATED_COVERAGE'
+    | 'SAFETY_EMERGENCY';
+  recommendationMode: 'CONTEXTUAL' | 'CATALOG_ONLY' | 'WORKFLOW_ONLY';
+  state: CapabilityLaunchReviewState;
+  blockers: string[];
+  rollout: {
+    cohort: 'DISABLED' | 'INTERNAL' | 'BETA' | 'FULL';
+    rolloutPct: number;
+  } | null;
+  incidentGate: {
+    pass: boolean;
+    activeIncidentCount: number;
+    issues: string[];
+    checkedAt: string;
+  } | null;
+}
+
 export interface ReleaseGateSummary {
   totalTools: number;
   passing: number;
   failing: number;
   byRolloutCohort: Record<string, number>;
+  capabilityReviewCounts: Record<CapabilityLaunchReviewState, number>;
   operationalControls: {
     releaseMode: 'INTERNAL_BETA' | 'REAL_USER_LAUNCH';
     failureMode: 'BETA_FAIL_OPEN' | 'LAUNCH_FAIL_CLOSED';
@@ -114,14 +143,18 @@ export interface ReleaseGateSummary {
       unknownKeys: string[];
     };
     disabledCapabilityIds: string[];
+    unknownDisabledCapabilityIds: string[];
     brokenRouteCapabilityIds: string[];
+    unknownBrokenRouteCapabilityIds: string[];
     releaseGateBlockedCapabilityIds: string[];
+    unknownReleaseGateBlockedCapabilityIds: string[];
     manifestVersionMismatches: Array<{
       capabilityId: string;
       currentVersion: number;
       expectedVersion: number;
     }>;
   };
+  capabilityReviews: CapabilityLaunchReview[];
   gates: GateCheckResult[];
 }
 

@@ -519,8 +519,11 @@ export type ToolDiscoveryAvailabilityDTO = {
   enabled: boolean;
   enforceReleaseGates: boolean;
   disabledToolIds: string[];
+  unknownDisabledToolIds?: string[];
   brokenRouteToolIds?: string[];
+  unknownBrokenRouteToolIds?: string[];
   releaseGateBlockedToolIds?: string[];
+  unknownReleaseGateBlockedToolIds?: string[];
   registryVersion?: string;
   expectedRegistryVersion?: string | null;
   registryVersionMatches?: boolean;

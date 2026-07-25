@@ -22,6 +22,12 @@ const COHORT_BADGE: Record<string, string> = {
   FULL: 'bg-emerald-50 text-emerald-700',
 };
 
+const REVIEW_BADGE: Record<string, string> = {
+  READY: 'bg-emerald-50 text-emerald-700',
+  HELD: 'bg-slate-100 text-slate-700',
+  BLOCKED: 'bg-rose-50 text-rose-700',
+};
+
 function fmtDate(value: string): string {
   return new Date(value).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 }
@@ -41,11 +47,11 @@ export default function AdminReleaseGatesPage() {
   return (
     <AdminConsoleShell
       title="Release Gates"
-      subtitle="Per-tool rollout status. A gate fails when its flag is missing or the tool has active/critical incidents in the last 24 hours."
+      subtitle="Capability-by-capability launch readiness across policy, rollout, containment, and incident controls."
       chips={
         <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
           <ShieldEllipsis className="h-3 w-3" />
-          {s ? `${s.passing}/${s.totalTools} passing` : 'Loading…'}
+          {s ? `${s.capabilityReviewCounts.READY}/${s.totalTools} ready` : 'Loading…'}
         </span>
       }
     >
@@ -54,6 +60,13 @@ export default function AdminReleaseGatesPage() {
           ? Object.entries(s.byRolloutCohort).map(([cohort, count]) => (
               <span key={cohort} className={`rounded px-2 py-0.5 text-[11px] font-semibold ${COHORT_BADGE[cohort] ?? 'bg-slate-100 text-slate-600'}`}>
                 {cohort}: {count}
+              </span>
+            ))
+          : null}
+        {s
+          ? Object.entries(s.capabilityReviewCounts).map(([state, count]) => (
+              <span key={state} className={`rounded px-2 py-0.5 text-[11px] font-semibold ${REVIEW_BADGE[state] ?? 'bg-slate-100 text-slate-600'}`}>
+                {state}: {count}
               </span>
             ))
           : null}
@@ -158,6 +171,17 @@ export default function AdminReleaseGatesPage() {
               Invalid configuration: {s.operationalControls.invalidConfigurationEntries.join(', ')}
             </p>
           ) : null}
+          {[
+            ['Unknown disabled IDs', s.operationalControls.unknownDisabledCapabilityIds],
+            ['Unknown broken-route IDs', s.operationalControls.unknownBrokenRouteCapabilityIds],
+            ['Unknown release-gate IDs', s.operationalControls.unknownReleaseGateBlockedCapabilityIds],
+          ].map(([label, values]) => (
+            (values as string[]).length > 0 ? (
+              <p key={label as string} className="mt-2 text-xs font-medium text-rose-700">
+                {label as string}: {(values as string[]).join(', ')}
+              </p>
+            ) : null
+          ))}
           {!s.operationalControls.rolloutKeyParity.valid ? (
             <p className="mt-2 text-xs font-medium text-rose-700">
               Missing rollout keys: {s.operationalControls.rolloutKeyParity.missingKeys.join(', ') || 'none'}.
@@ -183,41 +207,51 @@ export default function AdminReleaseGatesPage() {
 
       {s ? (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[640px] text-left text-xs">
+          <table className="w-full min-w-[900px] text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
-                <th className="px-3 py-2.5">Tool</th>
-                <th className="px-3 py-2.5">Gate</th>
+                <th className="px-3 py-2.5">Capability</th>
+                <th className="px-3 py-2.5">Readiness</th>
+                <th className="px-3 py-2.5">Policy</th>
                 <th className="px-3 py-2.5">Cohort</th>
                 <th className="px-3 py-2.5">Rollout</th>
                 <th className="px-3 py-2.5">Active incidents</th>
-                <th className="px-3 py-2.5">Issues</th>
+                <th className="px-3 py-2.5">Blockers</th>
                 <th className="px-3 py-2.5">Checked</th>
               </tr>
             </thead>
             <tbody>
-              {s.gates.map((gate) => (
-                <tr key={gate.toolKey} className="border-b border-slate-50">
+              {s.capabilityReviews.map((review) => (
+                <tr key={review.capabilityId} className="border-b border-slate-50">
                   <td className="px-3 py-2.5">
-                    <p className="font-semibold text-slate-800">{gate.label}</p>
-                    <p className="text-[10px] text-slate-400">{gate.toolKey}</p>
+                    <p className="font-semibold text-slate-800">{review.label}</p>
+                    <p className="text-[10px] text-slate-400">{review.capabilityId} · {review.owner}</p>
                   </td>
                   <td className="px-3 py-2.5">
-                    <Badge className={`text-[10px] ${gate.pass ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                      {gate.pass ? 'PASS' : 'FAIL'}
+                    <Badge className={`text-[10px] ${REVIEW_BADGE[review.state] ?? ''}`}>
+                      {review.state}
                     </Badge>
                   </td>
                   <td className="px-3 py-2.5">
-                    <Badge className={`text-[10px] ${COHORT_BADGE[gate.cohort] ?? ''}`}>{gate.cohort}</Badge>
+                    <p className="text-slate-600">{review.releaseStage} · {review.recommendationMode}</p>
+                    <p className="text-[10px] text-slate-400">{review.safetyTier}</p>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-600">{gate.rolloutPct}%</td>
-                  <td className={`px-3 py-2.5 ${gate.activeIncidentCount > 0 ? 'font-semibold text-rose-700' : 'text-slate-600'}`}>
-                    {gate.activeIncidentCount}
+                  <td className="px-3 py-2.5">
+                    <Badge className={`text-[10px] ${COHORT_BADGE[review.rollout?.cohort ?? 'DISABLED'] ?? ''}`}>
+                      {review.rollout?.cohort ?? 'MISSING'}
+                    </Badge>
+                    <p className="mt-1 text-[10px] text-slate-400">{review.rolloutKey}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-600">{review.rollout?.rolloutPct ?? 0}%</td>
+                  <td className={`px-3 py-2.5 ${(review.incidentGate?.activeIncidentCount ?? 0) > 0 ? 'font-semibold text-rose-700' : 'text-slate-600'}`}>
+                    {review.incidentGate?.activeIncidentCount ?? '—'}
                   </td>
                   <td className="px-3 py-2.5 text-slate-500">
-                    {gate.issues.length === 0 ? '—' : gate.issues.join('; ')}
+                    {review.blockers.length === 0 ? '—' : review.blockers.join(', ')}
                   </td>
-                  <td className="px-3 py-2.5 text-slate-400">{fmtDate(gate.checkedAt)}</td>
+                  <td className="px-3 py-2.5 text-slate-400">
+                    {review.incidentGate ? fmtDate(review.incidentGate.checkedAt) : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
