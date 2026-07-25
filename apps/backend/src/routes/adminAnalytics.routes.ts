@@ -28,6 +28,7 @@ import {
   getCohortsHandler,
   getTopToolsHandler,
   getToolLifecycleFunnelHandler,
+  getRefinanceRadarMetricsHandler,
 } from '../controllers/adminAnalytics.controller';
 
 const router = Router();
@@ -248,6 +249,12 @@ router.get(
   '/admin/analytics/tool-lifecycle',
   validate(OverviewQuerySchema),
   getToolLifecycleFunnelHandler,
+);
+
+router.get(
+  '/admin/analytics/refinance-radar',
+  validate(OverviewQuerySchema),
+  getRefinanceRadarMetricsHandler,
 );
 
 export default router;

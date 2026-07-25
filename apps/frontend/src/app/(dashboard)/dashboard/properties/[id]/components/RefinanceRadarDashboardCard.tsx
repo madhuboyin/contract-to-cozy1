@@ -11,6 +11,7 @@ import { BarChart2, ChevronRight } from 'lucide-react';
 import { MobileCard, StatusChip } from '@/components/mobile/dashboard/MobilePrimitives';
 import {
   getRadarStatus,
+  recordRefinanceTelemetry,
   type RadarStatusAvailable,
 } from '../tools/mortgage-refinance-radar/mortgageRefinanceRadarApi';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
@@ -68,11 +69,17 @@ export function RefinanceRadarPortfolioCard({
       href={`/dashboard/properties/${best.property.id}/tools/mortgage-refinance-radar`}
       className="no-brand-style block"
       onClick={() =>
-        track('action_taken', {
-          tool: 'mortgage-refinance-radar',
-          actionType: 'open_from_home_portfolio',
-          propertyId: best.property.id,
-        })
+        {
+          track('action_taken', {
+            tool: 'mortgage-refinance-radar',
+            actionType: 'open_from_home_portfolio',
+            propertyId: best.property.id,
+          });
+          void recordRefinanceTelemetry(best.property.id, {
+            event: 'HOME_CARD_OPENED',
+            source: 'HOME_PORTFOLIO',
+          });
+        }
       }
     >
       <MobileCard variant="standard" className="space-y-2.5 transition-colors hover:bg-[hsl(var(--mobile-bg-muted))]">

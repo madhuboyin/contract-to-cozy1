@@ -427,6 +427,16 @@ export async function recordRefinanceFeedback(
   await api.post(`/api/properties/${propertyId}/refinance-radar/feedback`, body);
 }
 
+export async function recordRefinanceTelemetry(
+  propertyId: string,
+  body: {
+    event: 'HOME_CARD_OPENED';
+    source: 'HOME_PORTFOLIO' | 'PROPERTY_OVERVIEW';
+  },
+): Promise<void> {
+  await api.post(`/api/properties/${propertyId}/refinance-radar/telemetry`, body);
+}
+
 export async function getSavedScenarios(
   propertyId: string,
 ): Promise<RefinanceScenarioSnapshotDTO[]> {

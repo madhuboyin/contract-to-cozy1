@@ -16,6 +16,7 @@ import {
   rateHistoryQuerySchema,
   refinanceAlertPreferenceSchema,
   refinanceFeedbackSchema,
+  refinanceTelemetrySchema,
   runScenarioSchema,
 } from './validators/refinanceRadar.validators';
 
@@ -190,6 +191,14 @@ router.post(
   propertyAuthMiddleware,
   validateBody(refinanceFeedbackSchema),
   RefinanceRadarController.recordFeedback,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-radar/telemetry',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(refinanceTelemetrySchema),
+  RefinanceRadarController.recordTelemetry,
 );
 
 /**

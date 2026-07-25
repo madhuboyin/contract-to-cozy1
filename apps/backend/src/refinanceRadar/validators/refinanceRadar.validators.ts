@@ -98,6 +98,13 @@ export const refinanceFeedbackSchema = z.object({
 
 export type RefinanceFeedbackBody = z.infer<typeof refinanceFeedbackSchema>;
 
+export const refinanceTelemetrySchema = z.object({
+  event: z.enum(['HOME_CARD_OPENED']),
+  source: z.enum(['HOME_PORTFOLIO', 'PROPERTY_OVERVIEW']),
+});
+
+export type RefinanceTelemetryBody = z.infer<typeof refinanceTelemetrySchema>;
+
 // ─── Alert Preferences ───────────────────────────────────────────────────────
 
 const quietTimeSchema = z

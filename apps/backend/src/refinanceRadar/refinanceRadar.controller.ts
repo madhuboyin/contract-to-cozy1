@@ -12,6 +12,7 @@ import {
   RateHistoryQuery,
   RefinanceAlertPreferenceBody,
   RefinanceFeedbackBody,
+  RefinanceTelemetryBody,
   RunScenarioBody,
 } from './validators/refinanceRadar.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
@@ -324,6 +325,27 @@ export class RefinanceRadarController {
           context: body.context,
         },
         valueText: body.feedback,
+      });
+      res.json({ success: true, data: { recorded: true } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async recordTelemetry(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId } = req.params;
+      const body = req.body as RefinanceTelemetryBody;
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_home_card_opened',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: body.source.toLowerCase(),
+        metadataJson: { event: body.event },
       });
       res.json({ success: true, data: { recorded: true } });
     } catch (err) {

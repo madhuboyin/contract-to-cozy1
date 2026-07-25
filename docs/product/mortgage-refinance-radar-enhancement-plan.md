@@ -111,7 +111,7 @@ scenario metadata JSON, so no schema change or migration is required.
 | Term and objective comparison | Complete | Balanced, lower-payment, faster-payoff, and lower-total-cost modes compare 15-, 20-, and 30-year terms. |
 | Retain, extra-principal, recast, and cash-out alternatives | Complete for planning | Recast and cash-out results remain conditional on servicer/lender eligibility. |
 | Lender-ready Markdown export | Complete | Recomputes against canonical context and exports assumptions, costs, alternatives, questions, and disclaimers as Markdown only. |
-| Funnel and trust instrumentation | Complete for product events | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, and durable alert-suppression outcomes are captured. Reporting dashboards remain an analytics-operations follow-up. |
+| Funnel and trust instrumentation and reporting | Complete | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, durable alert-suppression outcomes, evaluation coverage, duplicate alerts, and freshness guardrails are aggregated through the authorized `/api/admin/analytics/refinance-radar` report. |
 | FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Complete for planning | Explicit Financing loan types drive FHA streamline, VA IRRRL, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, and second-lien coordination pathways. Every pathway lists facts to confirm and avoids approval claims or hard-coded county limits. |
 | Push notifications | Deferred | Requires a configured push provider and consent contract. |
 | Lender-offer and Loan Estimate comparison | Deferred | Begin only after trust and usefulness guardrails demonstrate readiness. |

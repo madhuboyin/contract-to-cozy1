@@ -16,6 +16,7 @@ import { getCohortMetrics } from '../services/adminAnalytics/cohortService';
 import { getPhase1PilotMetrics } from '../services/adminAnalytics/phase1PilotService';
 import { getPhase5PilotMetrics } from '../services/adminAnalytics/phase5PilotService';
 import { decidePhase6PilotAdmission, getPhase6PilotMetrics } from '../services/adminAnalytics/phase6PilotService';
+import { getRefinanceRadarMetrics } from '../services/adminAnalytics/refinanceRadarMetricsService';
 
 // Helper: parse optional Date from express query (validate middleware already transforms)
 function qDate(val: unknown): Date | undefined {
@@ -192,6 +193,22 @@ export async function getToolLifecycleFunnelHandler(
 ): Promise<void> {
   try {
     const data = await getToolLifecycleFunnelMetrics(
+      qDate(req.query.from),
+      qDate(req.query.to),
+    );
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRefinanceRadarMetricsHandler(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const data = await getRefinanceRadarMetrics(
       qDate(req.query.from),
       qDate(req.query.to),
     );
