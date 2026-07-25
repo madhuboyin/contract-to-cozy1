@@ -83,7 +83,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/permitAdapters \
              src/shared/backend/services/taxAssessorAdapters
 RUN mkdir -p src/shared/backend/services/coverage \
-             src/shared/backend/productFramework
+             src/shared/backend/productFramework/capabilities/definitions
 COPY apps/backend/src/services/coverage/contextPolicy.ts src/shared/backend/services/coverage/
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
@@ -291,9 +291,48 @@ COPY apps/backend/src/productFramework/recommendationGovernance.contract.ts \
      apps/backend/src/productFramework/homeAssetDisplay.ts \
      apps/backend/src/productFramework/outcomeLineage.contract.ts \
      src/shared/backend/productFramework/
+# Capability registry/catalog barrel (used by toolLifecycle.ts analytics
+# lineage). Pure data/logic — no route/controller/Prisma coupling — so it's
+# copied wholesale rather than file-by-file. Its external deps (homeAction
+# and recommendationGovernance/Response contracts, modules/propertyContext,
+# services/projectCompliance/workScope) are all already copied above.
+COPY apps/backend/src/productFramework/capabilities/canonicalCapabilityRegistry.ts \
+     apps/backend/src/productFramework/capabilities/capability.contract.ts \
+     apps/backend/src/productFramework/capabilities/capabilityAvailability.ts \
+     apps/backend/src/productFramework/capabilities/capabilityCandidateMatcher.ts \
+     apps/backend/src/productFramework/capabilities/capabilityCatalog.service.ts \
+     apps/backend/src/productFramework/capabilities/capabilityCopyReview.ts \
+     apps/backend/src/productFramework/capabilities/capabilityExplanationBuilder.ts \
+     apps/backend/src/productFramework/capabilities/capabilityGoldenFixtures.ts \
+     apps/backend/src/productFramework/capabilities/capabilityGoldenRanking.ts \
+     apps/backend/src/productFramework/capabilities/capabilityGovernanceDefinition.ts \
+     apps/backend/src/productFramework/capabilities/capabilityGovernancePolicy.ts \
+     apps/backend/src/productFramework/capabilities/capabilityRanking.ts \
+     apps/backend/src/productFramework/capabilities/capabilityReadinessEvaluator.ts \
+     apps/backend/src/productFramework/capabilities/capabilityRecommendationContext.ts \
+     apps/backend/src/productFramework/capabilities/capabilityRegistry.ts \
+     apps/backend/src/productFramework/capabilities/capabilityRelatedResolver.ts \
+     apps/backend/src/productFramework/capabilities/capabilitySmokeCheck.ts \
+     apps/backend/src/productFramework/capabilities/capabilitySuppressionPolicy.ts \
+     apps/backend/src/productFramework/capabilities/index.ts \
+     apps/backend/src/productFramework/capabilities/inspectionCapabilityPolicy.ts \
+     apps/backend/src/productFramework/capabilities/projectComplianceCapabilitySources.ts \
+     apps/backend/src/productFramework/capabilities/projectTrackerCapabilityPolicy.ts \
+     src/shared/backend/productFramework/capabilities/
+COPY apps/backend/src/productFramework/capabilities/definitions/capabilityDefinitionFactory.ts \
+     apps/backend/src/productFramework/capabilities/definitions/decideCompare.ts \
+     apps/backend/src/productFramework/capabilities/definitions/index.ts \
+     apps/backend/src/productFramework/capabilities/definitions/maintainPrevent.ts \
+     apps/backend/src/productFramework/capabilities/definitions/planBudget.ts \
+     apps/backend/src/productFramework/capabilities/definitions/protectMonitor.ts \
+     apps/backend/src/productFramework/capabilities/definitions/saveOptimize.ts \
+     apps/backend/src/productFramework/capabilities/definitions/understandHome.ts \
+     src/shared/backend/productFramework/capabilities/definitions/
 # Copy DIY AI guide service and current Property Context policy used by the worker.
 COPY apps/backend/src/services/diyAiGuide.service.ts src/shared/backend/services/
-COPY apps/backend/src/services/diy/applicabilityPolicy.ts src/shared/backend/services/diy/
+COPY apps/backend/src/services/diy/applicabilityPolicy.ts \
+     apps/backend/src/services/diy/eligibilityPolicy.ts \
+     src/shared/backend/services/diy/
 # W3 (AI/DIY) — diyAiGuide.service.ts now validates the Gemini response
 # against AiGuideGenerationResponseSchema before persisting it.
 COPY apps/backend/src/validators/diy.validators.ts src/shared/backend/validators/
