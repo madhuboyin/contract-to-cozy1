@@ -30,8 +30,16 @@ test('tool lifecycle events use the durable TOOL_USED taxonomy', () => {
   assert.equal(events[0].moduleKey, 'tool_discovery');
   assert.equal(events[0].featureKey, 'coverage-options');
   assert.equal(events[0].source, 'unified_home');
-  assert.equal(events[0].metadataJson.completionKind, 'DECISION_RECORDED');
+  assert.equal(events[0].metadataJson.lifecycleContractVersion, 'capability-lifecycle-v2');
+  assert.equal(events[0].metadataJson.manifestVersion > 0, true);
+  assert.equal(typeof events[0].metadataJson.registryVersion, 'string');
   assert.equal(events[0].metadataJson.recommendationVersion, 'capability-recommendation-v1');
+  assert.equal(events[0].metadataJson.sourceKind, 'DIRECT');
+  assert.equal(events[0].metadataJson.sourceId, 'direct:coverage-options');
+  assert.equal(events[0].metadataJson.readiness, 'UNKNOWN');
+  assert.equal(events[0].metadataJson.rolloutCohort, 'UNKNOWN');
+  assert.equal(events[0].metadataJson.surface, 'unified_home');
+  assert.equal(events[0].metadataJson.completionKind, 'DECISION_RECORDED');
 });
 
 test('tool lifecycle stage names remain queryable without a Prisma enum change', () => {
@@ -44,4 +52,35 @@ test('backend feature aliases converge on the discovery catalog', () => {
   assert.equal(canonicalizeToolLifecycleId('RENOVATION_ADVISOR_SESSION'), 'home-renovation-risk-advisor');
   assert.equal(canonicalizeToolLifecycleId('hoa'), 'hoa-compliance');
   assert.equal(canonicalizeToolLifecycleId('unrelated_backend_feature'), null);
+});
+
+test('canonical lifecycle rejects stale manifests and protects envelope fields', () => {
+  assert.throws(() => buildToolLifecycleAnalyticsEvents({
+    userId: '11111111-1111-4111-8111-111111111111',
+    propertyId: '22222222-2222-4222-8222-222222222222',
+    events: [{
+      toolId: 'coverage-options',
+      stage: 'DISCOVERED',
+      surface: 'property_detail',
+      manifestVersion: 999,
+    }],
+  }), /Stale capability manifest/);
+
+  const [event] = buildToolLifecycleAnalyticsEvents({
+    userId: '11111111-1111-4111-8111-111111111111',
+    propertyId: '22222222-2222-4222-8222-222222222222',
+    events: [{
+      toolId: 'coverage-options',
+      stage: 'DISCOVERED',
+      surface: 'property_detail',
+      sourceKind: 'PROJECT',
+      sourceId: 'project-1',
+      metadata: {
+        canonicalToolId: 'tampered-tool',
+        sourceId: 'tampered-source',
+      },
+    }],
+  });
+  assert.equal(event.metadataJson.canonicalToolId, 'coverage-options');
+  assert.equal(event.metadataJson.sourceId, 'project-1');
 });

@@ -14,6 +14,7 @@ type CapabilityImpressionInput = {
     | 'workflow'
     | 'completion';
   registryVersion: string;
+  manifestVersion?: number | null;
   recommendationReason?: string | null;
   recommendationVersion?: string | null;
   contextVersion?: string | null;
@@ -21,6 +22,10 @@ type CapabilityImpressionInput = {
   sourceEntityType?: string | null;
   sourceEntityId?: string | null;
   journeyId?: string | null;
+  sourceKind?: import('@/types').ToolLifecycleEventDTO['sourceKind'];
+  sourceId?: string | null;
+  readiness?: import('@/types').ToolLifecycleEventDTO['readiness'];
+  rolloutCohort?: import('@/types').ToolLifecycleEventDTO['rolloutCohort'];
   enabled?: boolean;
 };
 
@@ -83,6 +88,10 @@ export function useCapabilityImpression<T extends HTMLElement>(
         propertyId: current.propertyId,
         surface: current.surface,
         toolIds: [current.capabilityId],
+        manifestVersions: current.manifestVersion != null
+          ? [current.manifestVersion]
+          : undefined,
+        registryVersion: current.registryVersion,
         recommendationReasons: current.recommendationReason
           ? [current.recommendationReason]
           : undefined,
@@ -94,6 +103,10 @@ export function useCapabilityImpression<T extends HTMLElement>(
         sourceEntityType: current.sourceEntityType,
         sourceEntityId: current.sourceEntityId,
         journeyId: current.journeyId,
+        sourceKind: current.sourceKind,
+        sourceId: current.sourceId,
+        readiness: current.readiness,
+        rolloutCohort: current.rolloutCohort,
       });
     };
 
@@ -138,6 +151,11 @@ export function useCapabilityImpression<T extends HTMLElement>(
     input.sourceEntityType,
     input.surface,
     input.journeyId,
+    input.manifestVersion,
+    input.readiness,
+    input.rolloutCohort,
+    input.sourceId,
+    input.sourceKind,
   ]);
 
   return React.useCallback((node: T | null) => setElement(node), []);

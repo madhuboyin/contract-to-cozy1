@@ -118,6 +118,7 @@ describe('InlineCapabilitySuggestion', () => {
       propertyId: 'property-1',
       surface: 'workflow',
       registryVersion: 'registry-v12',
+      manifestVersion: 2,
       recommendationReason: 'PROJECT_MATERIAL_RECORD',
       recommendationVersion: 'capability-recommendation-v1',
       contextVersion: 'context-v8',
@@ -125,6 +126,9 @@ describe('InlineCapabilitySuggestion', () => {
       sourceEntityType: 'PROJECT',
       sourceEntityId: 'project-1',
       journeyId: 'journey-1',
+      sourceKind: 'PROJECT',
+      sourceId: 'project-1',
+      readiness: 'READY',
     });
   });
 

@@ -4,6 +4,7 @@ import {
   getDiscoverableTool,
 } from '@/features/tools/toolDiscoveryRegistry';
 import { persistToolLifecycleEvents } from '@/features/tools/toolLifecycleTelemetry';
+import type { ToolLifecycleEventDTO } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Event catalogue
@@ -206,6 +207,8 @@ export interface CtcEventProperties {
     propertyId?: string | null;
     surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow' | 'completion';
     toolIds: string[];
+    manifestVersions?: number[];
+    registryVersion?: string | null;
     recommendationReasons?: string[];
     recommendationVersions?: string[];
     contextVersion?: string | null;
@@ -213,11 +216,17 @@ export interface CtcEventProperties {
     sourceEntityType?: string | null;
     sourceEntityId?: string | null;
     journeyId?: string | null;
+    sourceKind?: ToolLifecycleEventDTO['sourceKind'];
+    sourceId?: string | null;
+    readiness?: ToolLifecycleEventDTO['readiness'];
+    rolloutCohort?: ToolLifecycleEventDTO['rolloutCohort'];
   };
   tool_discovery_clicked: {
     propertyId?: string | null;
     surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow' | 'completion';
     toolId: string;
+    manifestVersion?: number | null;
+    registryVersion?: string | null;
     position?: number;
     recommendationReason?: string | null;
     recommendationVersion?: string | null;
@@ -226,6 +235,10 @@ export interface CtcEventProperties {
     sourceEntityType?: string | null;
     sourceEntityId?: string | null;
     journeyId?: string | null;
+    sourceKind?: ToolLifecycleEventDTO['sourceKind'];
+    sourceId?: string | null;
+    readiness?: ToolLifecycleEventDTO['readiness'];
+    rolloutCohort?: ToolLifecycleEventDTO['rolloutCohort'];
   };
   tool_discovery_catalog_searched: {
     propertyId?: string | null;
@@ -329,13 +342,19 @@ export function track<E extends CtcEventName>(
       toolId: attribution.toolId,
       stage: 'CLICKED',
       surface: attribution.surface,
+      manifestVersion: attribution.manifestVersion,
+      registryVersion: attribution.registryVersion,
       recommendationReason: attribution.recommendationReason,
       recommendationVersion: attribution.recommendationVersion,
       contextVersion: attribution.contextVersion,
+      sourceKind: attribution.sourceKind,
+      sourceId: attribution.sourceId,
       sourceActionId: attribution.sourceActionId,
       sourceEntityType: attribution.sourceEntityType,
       sourceEntityId: attribution.sourceEntityId,
       journeyId: attribution.journeyId,
+      readiness: attribution.readiness,
+      rolloutCohort: attribution.rolloutCohort,
     }]);
   }
 
@@ -345,13 +364,19 @@ export function track<E extends CtcEventName>(
       toolId,
       stage: 'DISCOVERED',
       surface: impression.surface,
+      manifestVersion: impression.manifestVersions?.[index] ?? null,
+      registryVersion: impression.registryVersion,
       recommendationReason: impression.recommendationReasons?.[index] ?? null,
       recommendationVersion: impression.recommendationVersions?.[index] ?? null,
       contextVersion: impression.contextVersion,
+      sourceKind: impression.sourceKind,
+      sourceId: impression.sourceId,
       sourceActionId: impression.sourceActionId,
       sourceEntityType: impression.sourceEntityType,
       sourceEntityId: impression.sourceEntityId,
       journeyId: impression.journeyId,
+      readiness: impression.readiness,
+      rolloutCohort: impression.rolloutCohort,
     })));
   }
 

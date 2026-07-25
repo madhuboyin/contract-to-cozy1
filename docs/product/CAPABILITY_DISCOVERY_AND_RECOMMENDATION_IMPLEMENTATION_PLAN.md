@@ -102,6 +102,7 @@ Status as of July 24, 2026:
 | CAP-605 first integration anchors | Complete | Eleven typed anchors cover the seven initial workflow families through one capability-agnostic adapter; every request delegates selection to the shared server evaluator and inherits its empty-state behavior |
 | CAP-700 feedback endpoint | Complete | Property-authorized, source-bound feedback validates current capability identity and records idempotent opened, dismissed, not-relevant, snoozed, and completed events while delegating Home Action and personalization state changes to their canonical lifecycles |
 | CAP-701 frequency policy | Complete | Evaluator lifecycle aggregation applies source/context-scoped actual-view caps, manifest dismissal cooldowns, renewed-evidence rules for not-relevant and completed feedback, and explicit snooze expiry from Product Analytics without new materialized state |
+| CAP-702 lifecycle canonicalization | Complete | A versioned lifecycle envelope validates canonical capability and manifest identity, protects canonical metadata from caller overrides, carries recommendation and source lineage through contextual surfaces, and explicitly normalizes unattributed legacy/catalog events |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1355,6 +1356,23 @@ Ensure every stage carries:
 - completion kind.
 
 Unknown capability IDs shall be rejected or quarantined from the capability funnel.
+
+Implemented as the `capability-lifecycle-v2` envelope at the shared backend
+analytics boundary. The boundary resolves every ID through the canonical
+registry, rejects unknown IDs and supplied stale manifest versions, and writes
+the current manifest and registry versions after caller metadata so canonical
+identity cannot be overwritten. Recommendation reason/version, bounded source
+kind/ID, context, readiness, rollout cohort, surface, and completion kind are
+normalized for every event. Property and authorized-user ownership continue to
+use the indexed Product Analytics columns.
+
+Contextual Home and Property renderers now forward the complete server-issued
+lineage for actual-view and launch events. Existing catalog and direct emitters
+remain compatible: the backend derives a bounded catalog/direct source and
+uses explicit `unattributed` or `UNKNOWN` values where no recommendation
+decision exists. This keeps funnel queries structurally complete while
+distinguishing genuine recommendation attribution from inferred compatibility
+metadata.
 
 #### CAP-703: Admin Analytics
 

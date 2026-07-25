@@ -61,6 +61,7 @@ export function InlineCapabilitySuggestion({
     propertyId,
     surface,
     registryVersion,
+    manifestVersion: suggestion.manifestVersion,
     recommendationReason: suggestion.reasonCode,
     recommendationVersion: suggestion.recommendationVersion,
     contextVersion: suggestion.contextVersion,
@@ -68,6 +69,9 @@ export function InlineCapabilitySuggestion({
     sourceEntityType: suggestion.source.entityType,
     sourceEntityId: suggestion.source.entityId,
     journeyId: suggestion.source.journeyId,
+    sourceKind: suggestion.source.kind,
+    sourceId: suggestion.source.id,
+    readiness: suggestion.readiness.state,
   });
   const href = appendCapabilityLaunchContext(
     suggestion.launch.href,
@@ -84,6 +88,8 @@ export function InlineCapabilitySuggestion({
       propertyId,
       surface,
       toolId: suggestion.capabilityId,
+      manifestVersion: suggestion.manifestVersion,
+      registryVersion,
       position,
       recommendationReason: suggestion.reasonCode,
       recommendationVersion: suggestion.recommendationVersion,
@@ -92,6 +98,9 @@ export function InlineCapabilitySuggestion({
       sourceEntityType: suggestion.source.entityType,
       sourceEntityId: suggestion.source.entityId,
       journeyId: suggestion.source.journeyId,
+      sourceKind: suggestion.source.kind,
+      sourceId: suggestion.source.id,
+      readiness: suggestion.readiness.state,
     });
     void recordCapabilitySuggestionFeedback({
       propertyId,

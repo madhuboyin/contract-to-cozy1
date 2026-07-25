@@ -17,6 +17,9 @@ import {
 import { resolvePropertyAccess } from '../services/propertyAccess.service';
 import {
   canonicalizeToolLifecycleId,
+  TOOL_LIFECYCLE_READINESS_STATES,
+  TOOL_LIFECYCLE_ROLLOUT_COHORTS,
+  TOOL_LIFECYCLE_SOURCE_KINDS,
   TOOL_LIFECYCLE_STAGES,
 } from '../services/analytics/toolLifecycle';
 
@@ -29,12 +32,19 @@ const toolLifecycleEventSchema = z.object({
   ),
   stage: z.enum(TOOL_LIFECYCLE_STAGES),
   surface: z.string().trim().min(1).max(80),
+  manifestVersion: z.number().int().positive().optional().nullable(),
+  registryVersion: z.string().trim().min(1).max(160).optional().nullable(),
   recommendationReason: z.string().trim().max(240).optional().nullable(),
+  reasonCode: z.string().trim().max(240).optional().nullable(),
   contextVersion: z.string().trim().max(120).optional().nullable(),
+  sourceKind: z.enum(TOOL_LIFECYCLE_SOURCE_KINDS).optional().nullable(),
+  sourceId: z.string().trim().min(1).max(160).optional().nullable(),
   sourceActionId: z.string().trim().max(160).optional().nullable(),
   sourceEntityType: z.string().trim().max(120).optional().nullable(),
   sourceEntityId: z.string().trim().max(160).optional().nullable(),
   journeyId: z.string().trim().max(160).optional().nullable(),
+  readiness: z.enum(TOOL_LIFECYCLE_READINESS_STATES).optional().nullable(),
+  rolloutCohort: z.enum(TOOL_LIFECYCLE_ROLLOUT_COHORTS).optional().nullable(),
   completionKind: z.string().trim().max(80).optional().nullable(),
   outputKey: z.string().trim().max(160).optional().nullable(),
   durationSeconds: z.number().min(0).max(86_400).optional().nullable(),

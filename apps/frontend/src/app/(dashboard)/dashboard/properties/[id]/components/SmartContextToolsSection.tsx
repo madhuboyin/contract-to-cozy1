@@ -38,6 +38,7 @@ function ToolRow({
     propertyId,
     surface: 'property_detail',
     registryVersion,
+    manifestVersion: suggestion.manifestVersion,
     recommendationReason: suggestion.reasonCode,
     recommendationVersion: suggestion.recommendationVersion,
     contextVersion: suggestion.contextVersion,
@@ -45,6 +46,9 @@ function ToolRow({
     sourceEntityType: suggestion.source.entityType,
     sourceEntityId: suggestion.source.entityId,
     journeyId: suggestion.source.journeyId,
+    sourceKind: suggestion.source.kind,
+    sourceId: suggestion.source.id,
+    readiness: suggestion.readiness.state,
   });
   const href = appendCapabilityLaunchContext(
     suggestion.launch.href,
@@ -109,6 +113,8 @@ function ToolRow({
               propertyId,
               surface: 'property_detail',
               toolId: suggestion.capabilityId,
+              manifestVersion: suggestion.manifestVersion,
+              registryVersion,
               position,
               recommendationReason: suggestion.reasonCode,
               recommendationVersion: suggestion.recommendationVersion,
@@ -117,6 +123,9 @@ function ToolRow({
               sourceEntityType: suggestion.source.entityType,
               sourceEntityId: suggestion.source.entityId,
               journeyId: suggestion.source.journeyId,
+              sourceKind: suggestion.source.kind,
+              sourceId: suggestion.source.id,
+              readiness: suggestion.readiness.state,
             });
             if (suggestion.source.actionId) {
               void api.recordHomeActionOpened(
