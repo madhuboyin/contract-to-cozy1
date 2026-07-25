@@ -53,7 +53,7 @@ export function CategorySection({
       {!collapsed && (
         <div className="mt-2">
           {view === 'cards' ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {jobs.map((job) => (
                 <JobCard
                   key={job.key}
