@@ -33,6 +33,10 @@ export const TOOL_LIFECYCLE_ROLLOUT_COHORTS = [
   'FULL',
   'UNKNOWN',
 ] as const;
+export const TOOL_LIFECYCLE_ANALYTICS_AUDIENCES = [
+  'REAL_USER',
+  'SYNTHETIC_QA',
+] as const;
 
 export type ToolLifecycleSourceKind =
   typeof TOOL_LIFECYCLE_SOURCE_KINDS[number];
@@ -40,6 +44,8 @@ export type ToolLifecycleReadiness =
   typeof TOOL_LIFECYCLE_READINESS_STATES[number];
 export type ToolLifecycleRolloutCohort =
   typeof TOOL_LIFECYCLE_ROLLOUT_COHORTS[number];
+export type ToolLifecycleAnalyticsAudience =
+  typeof TOOL_LIFECYCLE_ANALYTICS_AUDIENCES[number];
 
 export {
   canonicalizeToolLifecycleId,
@@ -71,6 +77,7 @@ export type ToolLifecycleEventInput = {
   outputKey?: string | null;
   durationSeconds?: number | null;
   sessionKey?: string | null;
+  analyticsAudience?: ToolLifecycleAnalyticsAudience;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -131,6 +138,7 @@ export function buildToolLifecycleAnalyticsEvents(args: {
       canonicalToolId,
       canonicalSourceKind,
     );
+    const analyticsAudience = event.analyticsAudience ?? 'REAL_USER';
     return ({
     eventType: ProductAnalyticsEventType.TOOL_USED,
     eventName: toolLifecycleEventName(event.stage),
@@ -168,6 +176,18 @@ export function buildToolLifecycleAnalyticsEvents(args: {
       surface: event.surface,
       completionKind: event.completionKind ?? null,
       outputKey: event.outputKey ?? null,
+      analyticsAudience,
+      syntheticQa: analyticsAudience === 'SYNTHETIC_QA',
+      qaRunId:
+        analyticsAudience === 'SYNTHETIC_QA'
+        && typeof event.metadata?.qaRunId === 'string'
+          ? event.metadata.qaRunId
+          : null,
+      smokeCorrelationId:
+        analyticsAudience === 'SYNTHETIC_QA'
+        && typeof event.metadata?.smokeCorrelationId === 'string'
+          ? event.metadata.smokeCorrelationId
+          : null,
     },
     });
   });

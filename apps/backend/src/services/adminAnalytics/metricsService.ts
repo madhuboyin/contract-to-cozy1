@@ -18,11 +18,13 @@ import {
   getToolLifecycleStageTotals,
   getToolLifecycleDimensions,
   getToolLifecycleRepetition,
+  getToolLifecyclePopulationAudit,
 } from './repository';
 import type {
   ToolLifecycleDimensionRow,
   ToolLifecycleFunnelRow as ToolLifecycleFunnelRepositoryRow,
   ToolLifecycleRepetitionRow,
+  ToolLifecyclePopulationAuditRow,
   ToolLifecycleStageTotalRow,
 } from './repository';
 import { resolveDateRange } from './schemas';
@@ -286,11 +288,12 @@ export async function getToolLifecycleFunnelMetrics(
   toRaw: Date | undefined,
 ): Promise<AdminToolLifecycleFunnelResponse> {
   const range = resolveDateRange(fromRaw, toRaw, 30);
-  const [rows, totals, dimensions, repetition] = await Promise.all([
+  const [rows, totals, dimensions, repetition, populationAudit] = await Promise.all([
     getToolLifecycleFunnelRows(range),
     getToolLifecycleStageTotals(range),
     getToolLifecycleDimensions(range),
     getToolLifecycleRepetition(range),
+    getToolLifecyclePopulationAudit(range),
   ]);
 
   return buildToolLifecycleFunnelResponse(
@@ -299,6 +302,7 @@ export async function getToolLifecycleFunnelMetrics(
     totals,
     dimensions,
     repetition,
+    populationAudit,
   );
 }
 
@@ -311,6 +315,12 @@ export function buildToolLifecycleFunnelResponse(
     observedScopes: 0n,
     repeatedScopes: 0n,
     totalImpressions: 0n,
+  },
+  populationAudit: ToolLifecyclePopulationAuditRow = {
+    includedEvents: 0n,
+    includedHomes: 0n,
+    excludedSyntheticQaEvents: 0n,
+    excludedSyntheticQaHomes: 0n,
   },
 ): AdminToolLifecycleFunnelResponse {
 
@@ -375,7 +385,19 @@ export function buildToolLifecycleFunnelResponse(
 
   return {
     period: { from: range.from.toISOString(), to: range.to.toISOString() },
-    metricVersion: 'capability-funnel-v2',
+    metricVersion: 'capability-funnel-v3',
+    population: {
+      audience: 'REAL_USER',
+      denominatorUnit: 'UNIQUE_PROPERTY_BY_STAGE',
+      includedEvents: Number(populationAudit.includedEvents),
+      includedHomes: Number(populationAudit.includedHomes),
+      excludedSyntheticQaEvents: Number(
+        populationAudit.excludedSyntheticQaEvents,
+      ),
+      excludedSyntheticQaHomes: Number(
+        populationAudit.excludedSyntheticQaHomes,
+      ),
+    },
     summary: {
       eligibleHomes,
       actualViewHomes,

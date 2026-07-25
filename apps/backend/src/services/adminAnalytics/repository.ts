@@ -25,10 +25,23 @@
 //   The one exception is countActivatedProperties() which reads Property.activationStatus,
 //   a durable field that is written idempotently by maybeMarkPropertyActivated().
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { DateRange } from './types';
 // Module key to exclude from user-facing metrics (admin's own usage)
 const ADMIN_MODULE_KEY = 'admin_analytics';
+
+// Canonical lifecycle events default to REAL_USER. The legacy marker checks
+// keep older controlled-QA rows out of launch denominators without deleting
+// the append-only source events.
+const TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE = Prisma.sql`
+  (
+    COALESCE("metadataJson"->>'analyticsAudience', 'REAL_USER') = 'SYNTHETIC_QA'
+    OR COALESCE("metadataJson"->>'syntheticQa', 'false') = 'true'
+    OR COALESCE("metadataJson"->>'qaRunId', '') <> ''
+    OR COALESCE("metadataJson"->>'smokeCorrelationId', '') <> ''
+  )
+`;
 
 // ============================================================================
 // ACTIVATION METRICS
@@ -424,6 +437,13 @@ export interface ToolLifecycleRepetitionRow {
   totalImpressions: bigint;
 }
 
+export interface ToolLifecyclePopulationAuditRow {
+  includedEvents: bigint;
+  includedHomes: bigint;
+  excludedSyntheticQaEvents: bigint;
+  excludedSyntheticQaHomes: bigint;
+}
+
 export async function getToolLifecycleFunnelRows(range: DateRange): Promise<ToolLifecycleFunnelRow[]> {
   return prisma.$queryRaw<ToolLifecycleFunnelRow[]>`
     SELECT
@@ -459,6 +479,7 @@ export async function getToolLifecycleFunnelRows(range: DateRange): Promise<Tool
       AND "featureKey" IS NOT NULL
       AND "propertyId" IS NOT NULL
       AND "userId" IS NOT NULL
+      AND NOT ${TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE}
     GROUP BY COALESCE(
       "metadataJson"->>'canonicalToolId',
       "metadataJson"->>'toolId',
@@ -491,6 +512,7 @@ export async function getToolLifecycleStageTotals(range: DateRange): Promise<Too
       )
       AND "propertyId" IS NOT NULL
       AND "userId" IS NOT NULL
+      AND NOT ${TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE}
     GROUP BY "eventName"
   `;
 }
@@ -524,6 +546,7 @@ export async function getToolLifecycleDimensions(
         AND "eventName" IN ('TOOL_ELIGIBLE', 'TOOL_DISCOVERED')
         AND "propertyId" IS NOT NULL
         AND "userId" IS NOT NULL
+        AND NOT ${TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE}
     ),
     eligible AS (
       SELECT * FROM lifecycle WHERE "eventName" = 'TOOL_ELIGIBLE'
@@ -580,6 +603,7 @@ export async function getToolLifecycleRepetition(
         AND "propertyId" IS NOT NULL
         AND "userId" IS NOT NULL
         AND "featureKey" IS NOT NULL
+        AND NOT ${TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE}
       GROUP BY
         "propertyId",
         COALESCE(
@@ -600,5 +624,49 @@ export async function getToolLifecycleRepetition(
     observedScopes: 0n,
     repeatedScopes: 0n,
     totalImpressions: 0n,
+  };
+}
+
+export async function getToolLifecyclePopulationAudit(
+  range: DateRange,
+): Promise<ToolLifecyclePopulationAuditRow> {
+  const rows = await prisma.$queryRaw<ToolLifecyclePopulationAuditRow[]>`
+    SELECT
+      COUNT(*) FILTER (
+        WHERE NOT ${TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE}
+      )::bigint AS "includedEvents",
+      COUNT(DISTINCT "propertyId") FILTER (
+        WHERE NOT ${TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE}
+      )::bigint AS "includedHomes",
+      COUNT(*) FILTER (
+        WHERE ${TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE}
+      )::bigint AS "excludedSyntheticQaEvents",
+      COUNT(DISTINCT "propertyId") FILTER (
+        WHERE ${TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE}
+      )::bigint AS "excludedSyntheticQaHomes"
+    FROM "product_analytics_events"
+    WHERE "occurredAt" >= ${range.from}
+      AND "occurredAt" <= ${range.to}
+      AND "eventType" = 'TOOL_USED'
+      AND "eventName" IN (
+        'TOOL_ELIGIBLE',
+        'TOOL_DISCOVERED',
+        'TOOL_CLICKED',
+        'TOOL_STARTED',
+        'TOOL_OUTPUT_GENERATED',
+        'TOOL_COMPLETED',
+        'TOOL_ABANDONED',
+        'TOOL_NOT_RELEVANT',
+        'TOOL_DISMISSED'
+      )
+      AND "propertyId" IS NOT NULL
+      AND "userId" IS NOT NULL
+      AND "featureKey" IS NOT NULL
+  `;
+  return rows[0] ?? {
+    includedEvents: 0n,
+    includedHomes: 0n,
+    excludedSyntheticQaEvents: 0n,
+    excludedSyntheticQaHomes: 0n,
   };
 }

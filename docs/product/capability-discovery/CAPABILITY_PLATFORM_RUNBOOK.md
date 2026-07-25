@@ -332,6 +332,40 @@ assets rewritten from HTTP to HTTPS before changing observer timeouts. If a
 mobile comparison observes an adjacent stacked card, allow the full exposure
 window before comparing the viewport with emitted events.
 
+## 5.5 Admin Analytics population gate
+
+CAP-906 changes the Tool Discovery Funnel contract to
+`capability-funnel-v3`. Before using the funnel as launch evidence, open Admin
+Analytics for the review window and record:
+
+- the displayed `REAL_USER` included-home and included-event population;
+- excluded synthetic-QA events and homes;
+- eligible and actual-view unique-home counts;
+- actual-view coverage and click-through rates; and
+- the readiness, reason-code, source, and repetition projections.
+
+All funnel projections use the same exclusion predicate. Canonical lifecycle
+events default to `REAL_USER`; only internal server callers can select
+`SYNTHETIC_QA`. The authenticated homeowner ingestion contract strips that
+field, and the canonical envelope overwrites reserved QA markers from arbitrary
+client metadata. Historical rows carrying `syntheticQa`, `qaRunId`, or
+`smokeCorrelationId` remain excluded.
+
+The browser acceptance matrix should produce no database events, and the
+representative-property smoke suppresses eligibility writes. A non-zero
+excluded count therefore requires identifying the controlled emitter and
+matching its run evidence. Do not delete Product Analytics rows to make the
+count zero. Investigate an unexplained increase before launch.
+
+Run the focused contract checks with:
+
+```bash
+cd apps/backend
+node --test \
+  tests/unit/toolLifecycleAnalytics.test.js \
+  tests/unit/adminToolLifecycleMetrics.test.js
+```
+
 ## 6. Incident playbooks
 
 ### 6.1 Broken destination

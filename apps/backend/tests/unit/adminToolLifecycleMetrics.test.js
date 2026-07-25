@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 require('ts-node/register');
 
@@ -48,9 +50,23 @@ test('admin tool lifecycle metrics expose unique-home conversion and abandonment
       repeatedScopes: 3n,
       totalImpressions: 13n,
     },
+    {
+      includedEvents: 72n,
+      includedHomes: 12n,
+      excludedSyntheticQaEvents: 9n,
+      excludedSyntheticQaHomes: 2n,
+    },
   );
 
-  assert.equal(response.metricVersion, 'capability-funnel-v2');
+  assert.equal(response.metricVersion, 'capability-funnel-v3');
+  assert.deepEqual(response.population, {
+    audience: 'REAL_USER',
+    denominatorUnit: 'UNIQUE_PROPERTY_BY_STAGE',
+    includedEvents: 72,
+    includedHomes: 12,
+    excludedSyntheticQaEvents: 9,
+    excludedSyntheticQaHomes: 2,
+  });
   assert.equal(response.summary.actualViewCoverage, 10 / 12);
   assert.equal(response.summary.clickThroughRate, 0.8);
   assert.equal(response.summary.repetitionRate, 0.3);
@@ -68,4 +84,20 @@ test('admin tool lifecycle metrics expose unique-home conversion and abandonment
     { source: 'CATALOG_ONLY', uniqueHomes: 2, totalEvents: 2, share: 0.125 },
   ]);
   assert.equal(response.topReasonCodes[0].reasonCode, 'COVERAGE_GAP');
+});
+
+test('every lifecycle funnel projection shares the synthetic-QA exclusion predicate', () => {
+  const repository = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/adminAnalytics/repository.ts'),
+    'utf8',
+  );
+  const filteredProjectionCount = (
+    repository.match(/AND NOT \$\{TOOL_LIFECYCLE_SYNTHETIC_QA_PREDICATE\}/g)
+    ?? []
+  ).length;
+
+  assert.equal(filteredProjectionCount, 4);
+  assert.match(repository, /getToolLifecyclePopulationAudit/);
+  assert.match(repository, /excludedSyntheticQaEvents/);
+  assert.match(repository, /excludedSyntheticQaHomes/);
 });

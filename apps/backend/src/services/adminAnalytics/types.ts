@@ -176,7 +176,15 @@ export interface ToolLifecycleFunnelToolRow {
 
 export interface AdminToolLifecycleFunnelResponse {
   period: { from: string; to: string };
-  metricVersion: 'capability-funnel-v2';
+  metricVersion: 'capability-funnel-v3';
+  population: {
+    audience: 'REAL_USER';
+    denominatorUnit: 'UNIQUE_PROPERTY_BY_STAGE';
+    includedEvents: number;
+    includedHomes: number;
+    excludedSyntheticQaEvents: number;
+    excludedSyntheticQaHomes: number;
+  };
   summary: {
     eligibleHomes: number;
     actualViewHomes: number;

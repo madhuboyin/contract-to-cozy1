@@ -985,12 +985,20 @@ function ToolLifecycleFunnelSection({
     >
       <div className="mb-4 flex items-center gap-2">
         <Badge variant="outline" className="rounded-full">
-          {data?.metricVersion ?? 'capability-funnel-v2'}
+          {data?.metricVersion ?? 'capability-funnel-v3'}
         </Badge>
         <span className="text-xs text-slate-500">
-          Rates use unique homes; repetition uses property-capability-source-context scopes.
+          Rates use unique real-user homes; repetition uses property-capability-source-context scopes.
         </span>
       </div>
+      {data?.population && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          Population: {num(data.population.includedHomes)} real-user homes and{' '}
+          {num(data.population.includedEvents)} lifecycle events. Excluded{' '}
+          {num(data.population.excludedSyntheticQaEvents)} synthetic QA events across{' '}
+          {num(data.population.excludedSyntheticQaHomes)} homes.
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <OverviewCard label="Eligible homes" value={num(summary?.eligibleHomes)} />
         <OverviewCard

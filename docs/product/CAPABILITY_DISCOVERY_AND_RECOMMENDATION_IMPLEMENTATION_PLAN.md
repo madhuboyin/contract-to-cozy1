@@ -113,6 +113,7 @@ Status as of July 25, 2026:
 | CAP-903 elevated-risk and privacy validation | Complete | Structured material, regulated, safety, commercial, and privacy policy validation fails closed; Financing remains intentionally blocked on unrecorded business terms |
 | CAP-904 authenticated representative-property smoke | Complete | Read-only smoke runner validates at least three named properties, catalog and HOME/PROPERTY suggestion contracts, canonical registry/manifest parity, expected and forbidden outcomes, cache isolation, launch context, and an unauthorized-property probe |
 | CAP-905 supported-browser and mobile-PWA actual-view gate | Complete | Production-build Playwright acceptance validates viewport-qualified lifecycle payloads, no unseen bulk impressions, session deduplication, search behavior, manifest integrity, and standalone mobile behavior across Chromium, Firefox, WebKit, mobile Chrome, and mobile Safari |
+| CAP-906 real-user analytics population gate | Complete | Canonical lifecycle audience metadata and one shared repository predicate exclude synthetic QA from every funnel projection while Admin Analytics reports included and excluded population counts |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1964,6 +1965,33 @@ and production deployments retain the directive.
 Frontend quality-gate CI now installs Chromium, Firefox, and WebKit and runs
 the complete Tool Discovery acceptance matrix. Mobile projects reuse the
 corresponding browser engines with reviewed device profiles.
+
+No database schema, seed, SQL, or migration change is required for this slice.
+
+### CAP-906: Real-user analytics population gate
+
+Admin Tool Discovery Funnel metrics now use an explicit, auditable real-user
+population:
+
+- the canonical lifecycle envelope records a server-owned
+  `analyticsAudience` of `REAL_USER` by default or `SYNTHETIC_QA` for
+  controlled internal emitters;
+- the homeowner lifecycle endpoint cannot set that audience, and reserved QA
+  markers supplied inside arbitrary client metadata are overwritten by the
+  canonical envelope;
+- one shared repository predicate excludes synthetic QA from per-capability
+  rows, stage totals, readiness/reason/source distributions, and repeated
+  recommendation scopes;
+- legacy controlled-QA markers remain excluded so append-only historical rows
+  do not need deletion or rewriting; and
+- `capability-funnel-v3` reports included events/homes and excluded synthetic
+  QA events/homes beside the funnel, making the denominator population visible
+  to operators instead of implicit in SQL.
+
+The authenticated smoke runner continues to suppress eligibility writes, and
+the browser acceptance build continues to divert lifecycle payloads to its
+in-page sink. CAP-906 is a defensive reporting boundary for any other
+controlled QA that deliberately persists lifecycle events.
 
 No database schema, seed, SQL, or migration change is required for this slice.
 

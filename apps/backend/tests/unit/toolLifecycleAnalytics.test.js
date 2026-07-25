@@ -43,6 +43,7 @@ test('tool lifecycle events use the durable TOOL_USED taxonomy', () => {
   assert.equal(events[0].metadataJson.rolloutCohort, 'UNKNOWN');
   assert.equal(events[0].metadataJson.surface, 'unified_home');
   assert.equal(events[0].metadataJson.completionKind, 'DECISION_RECORDED');
+  assert.equal(events[0].metadataJson.analyticsAudience, 'REAL_USER');
 });
 
 test('tool lifecycle stage names remain queryable without a Prisma enum change', () => {
@@ -64,6 +65,13 @@ test('client lifecycle ingestion cannot forge server-owned eligibility', () => {
     ...base,
     stage: 'ELIGIBLE',
   }).success, false);
+
+  const parsed = toolLifecycleEventSchema.parse({
+    ...base,
+    stage: 'DISCOVERED',
+    analyticsAudience: 'SYNTHETIC_QA',
+  });
+  assert.equal(parsed.analyticsAudience, undefined);
 });
 
 test('backend feature aliases converge on the discovery catalog', () => {
@@ -97,9 +105,35 @@ test('canonical lifecycle rejects stale manifests and protects envelope fields',
       metadata: {
         canonicalToolId: 'tampered-tool',
         sourceId: 'tampered-source',
+        analyticsAudience: 'SYNTHETIC_QA',
+        syntheticQa: true,
+        qaRunId: 'forged-qa-run',
+        smokeCorrelationId: 'forged-smoke-run',
       },
     }],
   });
   assert.equal(event.metadataJson.canonicalToolId, 'coverage-options');
   assert.equal(event.metadataJson.sourceId, 'project-1');
+  assert.equal(event.metadataJson.analyticsAudience, 'REAL_USER');
+  assert.equal(event.metadataJson.syntheticQa, false);
+  assert.equal(event.metadataJson.qaRunId, null);
+  assert.equal(event.metadataJson.smokeCorrelationId, null);
+});
+
+test('internal QA lifecycle events carry the canonical exclusion audience', () => {
+  const [event] = buildToolLifecycleAnalyticsEvents({
+    userId: '11111111-1111-4111-8111-111111111111',
+    propertyId: '22222222-2222-4222-8222-222222222222',
+    events: [{
+      toolId: 'coverage-options',
+      stage: 'DISCOVERED',
+      surface: 'controlled_qa',
+      analyticsAudience: 'SYNTHETIC_QA',
+      metadata: { qaRunId: 'cap-906-qa-run' },
+    }],
+  });
+
+  assert.equal(event.metadataJson.analyticsAudience, 'SYNTHETIC_QA');
+  assert.equal(event.metadataJson.syntheticQa, true);
+  assert.equal(event.metadataJson.qaRunId, 'cap-906-qa-run');
 });
