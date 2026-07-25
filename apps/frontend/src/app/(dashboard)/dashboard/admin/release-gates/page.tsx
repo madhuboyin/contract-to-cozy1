@@ -69,6 +69,80 @@ export default function AdminReleaseGatesPage() {
         </Button>
       </div>
 
+      {s ? (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className={s.operationalControls.globalEnabled
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-rose-50 text-rose-700'}
+            >
+              Discovery {s.operationalControls.globalEnabled ? 'enabled' : 'disabled'}
+            </Badge>
+            <Badge className={s.operationalControls.releaseGateEnforced
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-amber-50 text-amber-700'}
+            >
+              Release gates {s.operationalControls.releaseGateEnforced ? 'enforced' : 'advisory'}
+            </Badge>
+            <Badge className={s.operationalControls.rolloutKeyParity.valid
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-rose-50 text-rose-700'}
+            >
+              Rollout parity {s.operationalControls.rolloutKeyParity.valid ? 'valid' : 'invalid'}
+            </Badge>
+            <Badge className={s.operationalControls.registryVersionMatches
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-rose-50 text-rose-700'}
+            >
+              Registry {s.operationalControls.registryVersionMatches ? 'matched' : 'mismatch'}
+            </Badge>
+            <Badge className={s.operationalControls.configurationValid
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-rose-50 text-rose-700'}
+            >
+              Configuration {s.operationalControls.configurationValid ? 'valid' : 'invalid'}
+            </Badge>
+          </div>
+          <p className="mt-3 font-mono text-[11px] text-slate-500">
+            Registry {s.operationalControls.registryVersion}
+            {s.operationalControls.expectedRegistryVersion
+              ? ` · expected ${s.operationalControls.expectedRegistryVersion}`
+              : ' · no deployment pin'}
+          </p>
+          {[
+            ['Disabled capabilities', s.operationalControls.disabledCapabilityIds],
+            ['Broken-route suppression', s.operationalControls.brokenRouteCapabilityIds],
+            ['Release-gate blocks', s.operationalControls.releaseGateBlockedCapabilityIds],
+          ].map(([label, values]) => (
+            (values as string[]).length > 0 ? (
+              <p key={label as string} className="mt-2 text-xs text-slate-600">
+                <span className="font-semibold">{label as string}:</span>{' '}
+                {(values as string[]).join(', ')}
+              </p>
+            ) : null
+          ))}
+          {s.operationalControls.manifestVersionMismatches.length > 0 ? (
+            <p className="mt-2 text-xs font-medium text-rose-700">
+              Manifest pin mismatch:{' '}
+              {s.operationalControls.manifestVersionMismatches.map((entry) =>
+                `${entry.capabilityId} (current ${entry.currentVersion}, expected ${entry.expectedVersion})`,
+              ).join(', ')}
+            </p>
+          ) : null}
+          {s.operationalControls.invalidManifestVersionEntries.length > 0 ? (
+            <p className="mt-2 text-xs font-medium text-rose-700">
+              Invalid manifest pins: {s.operationalControls.invalidManifestVersionEntries.join(', ')}
+            </p>
+          ) : null}
+          {!s.operationalControls.rolloutKeyParity.valid ? (
+            <p className="mt-2 text-xs font-medium text-rose-700">
+              Missing rollout keys: {s.operationalControls.rolloutKeyParity.missingKeys.join(', ') || 'none'}.
+              {' '}Unknown rollout keys: {s.operationalControls.rolloutKeyParity.unknownKeys.join(', ') || 'none'}.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {summaryQ.isLoading ? (
         <div className="flex items-center gap-2 p-6 text-sm text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Checking gates…

@@ -29,6 +29,7 @@ const {
 const {
   buildCapabilityActionSourceMetadata,
   aggregateCapabilityLifecycleEvents,
+  isRecommendationDefinitionOperational,
   getCapabilitySuggestions,
   getCapabilitySuggestionsFromAuthorizedSources,
 } = require('../../src/services/capabilityRecommendation.service.ts');
@@ -49,6 +50,29 @@ const {
 } = require('../../src/middleware/propertyAuth.middleware.ts');
 
 const NOW = '2026-07-24T12:00:00.000Z';
+
+test('CAP-704 paused and out-of-window recommendation definitions are suppressed', () => {
+  const now = new Date(NOW);
+  const active = {
+    status: 'ACTIVE',
+    pausedAt: null,
+    effectiveFrom: new Date('2026-07-01T00:00:00.000Z'),
+    effectiveTo: new Date('2026-08-01T00:00:00.000Z'),
+  };
+  assert.equal(isRecommendationDefinitionOperational(active, now), true);
+  assert.equal(isRecommendationDefinitionOperational({
+    ...active,
+    pausedAt: new Date('2026-07-20T00:00:00.000Z'),
+  }, now), false);
+  assert.equal(isRecommendationDefinitionOperational({
+    ...active,
+    effectiveFrom: new Date('2026-08-01T00:00:00.000Z'),
+  }, now), false);
+  assert.equal(isRecommendationDefinitionOperational({
+    ...active,
+    status: 'RETIRED',
+  }, now), false);
+});
 
 function action(overrides = {}) {
   return {

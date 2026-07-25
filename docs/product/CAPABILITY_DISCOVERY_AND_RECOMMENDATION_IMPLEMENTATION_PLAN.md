@@ -104,6 +104,7 @@ Status as of July 24, 2026:
 | CAP-701 frequency policy | Complete | Evaluator lifecycle aggregation applies source/context-scoped actual-view caps, manifest dismissal cooldowns, renewed-evidence rules for not-relevant and completed feedback, and explicit snooze expiry from Product Analytics without new materialized state |
 | CAP-702 lifecycle canonicalization | Complete | A versioned lifecycle envelope validates canonical capability and manifest identity, protects canonical metadata from caller overrides, carries recommendation and source lineage through contextual surfaces, and explicitly normalizes unattributed legacy/catalog events |
 | CAP-703 admin analytics | Complete | The existing Tool Discovery Funnel now reports server-recorded eligibility, actual-view coverage, engagement and outcome stages, feedback, readiness, reasons, source mix, and repeated recommendation scopes from Product Analytics |
+| CAP-704 operational controls | Complete | Availability now fails closed for configured registry or manifest mismatches, malformed rollback pins, known-broken routes, release-gate blocks, global or per-capability disables, missing cohorts, and paused recommendation definitions; Admin Release Gates exposes control and parity status |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1422,6 +1423,34 @@ Verify:
 - broken-route suppression;
 - version rollback; and
 - governance enforcement.
+
+Implemented through the canonical availability boundary and the existing Admin
+Release Gates workspace. The control contract is:
+
+- `TOOL_DISCOVERY_ENABLED` globally enables or disables discovery;
+- `TOOL_DISCOVERY_DISABLED_IDS` suppresses individual canonical capabilities;
+- `ENFORCE_TOOL_DISCOVERY_RELEASE_GATES` activates cohort and explicit
+  release-gate enforcement;
+- `TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS` suppresses capabilities held by an
+  operator release decision;
+- `TOOL_DISCOVERY_BROKEN_ROUTE_IDS` suppresses known-broken destinations while
+  build-time inventory continues to reject missing canonical pages;
+- `TOOL_DISCOVERY_EXPECTED_REGISTRY_VERSION` pins the deployment to the
+  expected canonical registry hash; and
+- `TOOL_DISCOVERY_MANIFEST_VERSIONS` accepts comma-separated
+  `capability-id:version` pins for controlled deployment and rollback.
+
+Registry, manifest, and malformed pin mismatches fail closed. A rollback is
+performed by restoring the prior application artifact and its matching
+registry/manifest pins; capabilities remain suppressed while code and
+configuration disagree. Rollout-key parity is computed against all 52
+canonical definitions and displayed to operators.
+
+Paused, retired, or out-of-window recommendation definitions are filtered even
+when an older generated recommendation remains active. Canonical governance
+continues to block unavailable capabilities, disallowed safety tiers, missing
+approvals, stale context, and withheld material actions before ranking. No
+database schema change or migration is required.
 
 #### CAP-705: Incident and support runbook
 

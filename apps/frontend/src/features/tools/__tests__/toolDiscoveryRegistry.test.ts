@@ -57,6 +57,34 @@ describe('toolDiscoveryRegistry', () => {
     expect(getDiscoverableTools({ availability }).map((tool) => tool.id)).not.toContain(eventRadar.id);
   });
 
+  it('fails closed for CAP-704 deployment and route controls', () => {
+    const base = {
+      enabled: true,
+      enforceReleaseGates: false,
+      disabledToolIds: [],
+      rollouts: {},
+      generatedAt: '2026-07-20T00:00:00.000Z',
+    };
+    expect(getDiscoverableTools({
+      availability: {
+        ...base,
+        registryVersionMatches: false,
+      },
+    })).toEqual([]);
+    expect(getDiscoverableTools({
+      availability: {
+        ...base,
+        brokenRouteToolIds: ['coverage-options'],
+      },
+    }).map((tool) => tool.id)).not.toContain('coverage-options');
+    expect(getDiscoverableTools({
+      availability: {
+        ...base,
+        manifestVersionMismatchedToolIds: ['coverage-options'],
+      },
+    }).map((tool) => tool.id)).not.toContain('coverage-options');
+  });
+
   it('preserves safe recommendation context in property-aware links', () => {
     const tool = getDiscoverableTool('coverage-options')!;
     const href = tool.buildHref('property-1', {

@@ -515,6 +515,21 @@ export type ToolDiscoveryAvailabilityDTO = {
   enabled: boolean;
   enforceReleaseGates: boolean;
   disabledToolIds: string[];
+  brokenRouteToolIds?: string[];
+  releaseGateBlockedToolIds?: string[];
+  registryVersion?: string;
+  expectedRegistryVersion?: string | null;
+  registryVersionMatches?: boolean;
+  manifestVersions?: Record<string, number>;
+  manifestVersionMismatchedToolIds?: string[];
+  configurationValid?: boolean;
+  manifestVersionConfigValid?: boolean;
+  invalidManifestVersionEntries?: string[];
+  rolloutKeyParity?: {
+    valid: boolean;
+    missingKeys: string[];
+    unknownKeys: string[];
+  };
   rollouts: Record<string, {
     enabled: boolean;
     cohort: 'DISABLED' | 'INTERNAL' | 'BETA' | 'FULL';

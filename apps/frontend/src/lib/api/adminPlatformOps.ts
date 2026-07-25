@@ -95,6 +95,28 @@ export interface ReleaseGateSummary {
   passing: number;
   failing: number;
   byRolloutCohort: Record<string, number>;
+  operationalControls: {
+    globalEnabled: boolean;
+    releaseGateEnforced: boolean;
+    registryVersion: string;
+    expectedRegistryVersion: string | null;
+    registryVersionMatches: boolean;
+    configurationValid: boolean;
+    invalidManifestVersionEntries: string[];
+    rolloutKeyParity: {
+      valid: boolean;
+      missingKeys: string[];
+      unknownKeys: string[];
+    };
+    disabledCapabilityIds: string[];
+    brokenRouteCapabilityIds: string[];
+    releaseGateBlockedCapabilityIds: string[];
+    manifestVersionMismatches: Array<{
+      capabilityId: string;
+      currentVersion: number;
+      expectedVersion: number;
+    }>;
+  };
   gates: GateCheckResult[];
 }
 

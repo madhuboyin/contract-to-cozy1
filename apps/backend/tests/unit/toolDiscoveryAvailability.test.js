@@ -76,6 +76,12 @@ test('tool discovery defaults to beta-open release-gate enforcement', () => {
   assert.equal(result.enabled, true);
   assert.equal(result.enforceReleaseGates, false);
   assert.deepEqual(result.disabledToolIds, []);
+  assert.equal(result.registryVersionMatches, true);
+  assert.deepEqual(result.rolloutKeyParity, {
+    valid: true,
+    missingKeys: [],
+    unknownKeys: [],
+  });
 });
 
 test('tool discovery flags can disable discovery and individual tool ids', () => {
@@ -110,4 +116,57 @@ test('tool discovery availability service supplies the capability adapter', () =
 
   assert.equal(adapter.resolve('material-specs', 'beta-user').available, true);
   assert.equal(adapter.resolve('unknown-tool', 'beta-user').reason, 'UNKNOWN_CAPABILITY');
+});
+
+test('CAP-704 operational controls fail closed for route, gate, registry, and manifest mismatches', () => {
+  const registry = createToolCapabilityRegistry([capability()]);
+  const scenarios = [
+    {
+      env: {
+        TOOL_DISCOVERY_ENABLED: 'true',
+        TOOL_DISCOVERY_BROKEN_ROUTE_IDS: 'material-specs',
+      },
+      reason: 'ROUTE_UNAVAILABLE',
+    },
+    {
+      env: {
+        TOOL_DISCOVERY_ENABLED: 'true',
+        ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: 'true',
+        TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS: 'material-specs',
+      },
+      reason: 'RELEASE_GATE_BLOCKED',
+    },
+    {
+      env: {
+        TOOL_DISCOVERY_ENABLED: 'true',
+        TOOL_DISCOVERY_EXPECTED_REGISTRY_VERSION: 'previous-deployment',
+      },
+      reason: 'REGISTRY_VERSION_MISMATCH',
+    },
+    {
+      env: {
+        TOOL_DISCOVERY_ENABLED: 'true',
+        TOOL_DISCOVERY_MANIFEST_VERSIONS: 'material-specs:2',
+      },
+      reason: 'MANIFEST_VERSION_MISMATCH',
+    },
+    {
+      env: {
+        TOOL_DISCOVERY_ENABLED: 'true',
+        TOOL_DISCOVERY_MANIFEST_VERSIONS: 'invalid-pin',
+      },
+      reason: 'CONFIGURATION_INVALID',
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const adapter = createToolDiscoveryCapabilityAvailabilityAdapter(
+      registry,
+      { env: scenario.env },
+    );
+    assert.equal(
+      adapter.resolve('material-specs', 'beta-user').reason,
+      scenario.reason,
+    );
+  }
 });

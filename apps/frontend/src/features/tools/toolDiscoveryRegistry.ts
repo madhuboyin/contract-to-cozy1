@@ -341,8 +341,15 @@ export function isToolReleased(
   // Availability is deliberately fail-open while beta enforcement is disabled.
   if (!availability) return true;
   if (!availability.enabled) return false;
+  if (availability.configurationValid === false) return false;
+  if (availability.registryVersionMatches === false) return false;
   if (availability.disabledToolIds.includes(tool.id)) return false;
+  if (availability.brokenRouteToolIds?.includes(tool.id)) return false;
+  if (availability.manifestVersionMismatchedToolIds?.includes(tool.id)) {
+    return false;
+  }
   if (!availability.enforceReleaseGates) return true;
+  if (availability.releaseGateBlockedToolIds?.includes(tool.id)) return false;
   if (!tool.rolloutKey) return false;
   return availability.rollouts[tool.rolloutKey]?.enabled === true;
 }

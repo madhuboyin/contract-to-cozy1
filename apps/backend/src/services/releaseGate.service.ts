@@ -6,6 +6,8 @@
 import { prisma } from '../lib/prisma';
 import { TOOL_FLAGS, cohortFromPct, RolloutCohort } from '../config/featureFlags';
 import { logger } from '../lib/logger';
+import { canonicalCapabilityRegistry } from '../productFramework/capabilities';
+import { getToolDiscoveryAvailability } from './toolDiscoveryAvailability.service';
 
 // ============================================================================
 // INTERFACES
@@ -134,9 +136,32 @@ export async function getReleaseSummary(): Promise<{
   passing: number;
   failing: number;
   byRolloutCohort: Record<RolloutCohort, number>;
+  operationalControls: {
+    globalEnabled: boolean;
+    releaseGateEnforced: boolean;
+    registryVersion: string;
+    expectedRegistryVersion: string | null;
+    registryVersionMatches: boolean;
+    configurationValid: boolean;
+    invalidManifestVersionEntries: string[];
+    rolloutKeyParity: {
+      valid: boolean;
+      missingKeys: string[];
+      unknownKeys: string[];
+    };
+    disabledCapabilityIds: string[];
+    brokenRouteCapabilityIds: string[];
+    releaseGateBlockedCapabilityIds: string[];
+    manifestVersionMismatches: Array<{
+      capabilityId: string;
+      currentVersion: number;
+      expectedVersion: number;
+    }>;
+  };
   gates: GateCheckResult[];
 }> {
   const gates = await checkAllGates();
+  const availability = getToolDiscoveryAvailability();
 
   const passing = gates.filter((g) => g.pass).length;
   const failing = gates.length - passing;
@@ -157,6 +182,35 @@ export async function getReleaseSummary(): Promise<{
     passing,
     failing,
     byRolloutCohort,
+    operationalControls: {
+      globalEnabled: availability.enabled,
+      releaseGateEnforced: availability.enforceReleaseGates,
+      registryVersion: availability.registryVersion,
+      expectedRegistryVersion: availability.expectedRegistryVersion,
+      registryVersionMatches: availability.registryVersionMatches,
+      configurationValid: availability.configurationValid,
+      invalidManifestVersionEntries:
+        availability.invalidManifestVersionEntries,
+      rolloutKeyParity: availability.rolloutKeyParity,
+      disabledCapabilityIds: availability.disabledToolIds,
+      brokenRouteCapabilityIds: availability.brokenRouteToolIds,
+      releaseGateBlockedCapabilityIds:
+        availability.releaseGateBlockedToolIds,
+      manifestVersionMismatches: Object.entries(
+        availability.manifestVersions,
+      ).filter(([capabilityId]) =>
+        availability.manifestVersionMismatchedToolIds.includes(capabilityId))
+      .flatMap(([capabilityId, expectedVersion]) => {
+        const capability = canonicalCapabilityRegistry.getById(capabilityId);
+        return capability && capability.version !== expectedVersion
+          ? [{
+              capabilityId,
+              currentVersion: capability.version,
+              expectedVersion,
+            }]
+          : [];
+      }),
+    },
     gates,
   };
 }

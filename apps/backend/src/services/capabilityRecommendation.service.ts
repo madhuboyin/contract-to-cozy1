@@ -304,9 +304,31 @@ async function loadDefaultProjects(
   });
 }
 
+export function isRecommendationDefinitionOperational(
+  definition: {
+    status: string;
+    pausedAt: Date | null;
+    effectiveFrom: Date | null;
+    effectiveTo: Date | null;
+  },
+  now: Date,
+): boolean {
+  return definition.status === 'ACTIVE'
+    && definition.pausedAt === null
+    && (
+      definition.effectiveFrom === null
+      || definition.effectiveFrom <= now
+    )
+    && (
+      definition.effectiveTo === null
+      || definition.effectiveTo >= now
+    );
+}
+
 async function loadDefaultPersonalizationRecommendations(
   propertyId: string,
 ): Promise<CapabilityPersonalizationSource[]> {
+  const now = new Date();
   const recommendations = await prisma.personalizedRecommendation.findMany({
     where: { propertyId, status: 'ACTIVE' },
     select: {
@@ -315,19 +337,30 @@ async function loadDefaultPersonalizationRecommendations(
       ruleVersion: true,
       contentVersion: true,
       lastEvaluatedAt: true,
-      definition: { select: { code: true } },
+      definition: {
+        select: {
+          code: true,
+          status: true,
+          pausedAt: true,
+          effectiveFrom: true,
+          effectiveTo: true,
+        },
+      },
     },
     orderBy: [{ lastEvaluatedAt: 'desc' }, { id: 'asc' }],
     take: 100,
   });
-  return recommendations.map((recommendation) => ({
-    id: recommendation.id,
-    definitionCode: recommendation.definition.code,
-    status: recommendation.status,
-    recommendationVersion:
-      `${recommendation.ruleVersion}:${recommendation.contentVersion}`,
-    lastEvaluatedAt: recommendation.lastEvaluatedAt.toISOString(),
-  }));
+  return recommendations
+    .filter((recommendation) =>
+      isRecommendationDefinitionOperational(recommendation.definition, now))
+    .map((recommendation) => ({
+      id: recommendation.id,
+      definitionCode: recommendation.definition.code,
+      status: recommendation.status,
+      recommendationVersion:
+        `${recommendation.ruleVersion}:${recommendation.contentVersion}`,
+      lastEvaluatedAt: recommendation.lastEvaluatedAt.toISOString(),
+    }));
 }
 
 function metadataValue(

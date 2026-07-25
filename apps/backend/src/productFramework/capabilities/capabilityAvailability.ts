@@ -19,6 +19,11 @@ export type CapabilityAvailabilityPolicy = {
   enabled: boolean;
   enforceReleaseGates: boolean;
   disabledToolIds: readonly string[];
+  brokenRouteToolIds?: readonly string[];
+  releaseGateBlockedToolIds?: readonly string[];
+  configurationValid?: boolean;
+  registryVersionMatches?: boolean;
+  manifestVersions?: Readonly<Record<string, number>>;
   rollouts: Readonly<Record<string, CapabilityRolloutStatus>>;
 };
 
@@ -26,7 +31,12 @@ export const CAPABILITY_UNAVAILABLE_REASONS = [
   'UNKNOWN_CAPABILITY',
   'POLICY_UNAVAILABLE',
   'DISCOVERY_DISABLED',
+  'CONFIGURATION_INVALID',
+  'REGISTRY_VERSION_MISMATCH',
   'CAPABILITY_DISABLED',
+  'ROUTE_UNAVAILABLE',
+  'MANIFEST_VERSION_MISMATCH',
+  'RELEASE_GATE_BLOCKED',
   'ROLLOUT_MISSING',
   'ROLLOUT_DISABLED',
 ] as const;
@@ -93,8 +103,28 @@ export function evaluateCapabilityAvailability(
     return unavailable(capability.id, 'DISCOVERY_DISABLED', true);
   }
 
+  if (policy.configurationValid === false) {
+    return unavailable(capability.id, 'CONFIGURATION_INVALID', true);
+  }
+
+  if (policy.registryVersionMatches === false) {
+    return unavailable(capability.id, 'REGISTRY_VERSION_MISMATCH', true);
+  }
+
   if (policy.disabledToolIds.includes(capability.id)) {
     return unavailable(capability.id, 'CAPABILITY_DISABLED', true);
+  }
+
+  if (policy.brokenRouteToolIds?.includes(capability.id)) {
+    return unavailable(capability.id, 'ROUTE_UNAVAILABLE', true);
+  }
+
+  const pinnedManifestVersion = policy.manifestVersions?.[capability.id];
+  if (
+    pinnedManifestVersion !== undefined
+    && pinnedManifestVersion !== capability.version
+  ) {
+    return unavailable(capability.id, 'MANIFEST_VERSION_MISMATCH', true);
   }
 
   if (!policy.enforceReleaseGates) {
@@ -105,6 +135,10 @@ export function evaluateCapabilityAvailability(
       rollout: policy.rollouts[capability.governance.rolloutKey] ?? null,
       policyApplied: true,
     };
+  }
+
+  if (policy.releaseGateBlockedToolIds?.includes(capability.id)) {
+    return unavailable(capability.id, 'RELEASE_GATE_BLOCKED', true);
   }
 
   const rollout = policy.rollouts[capability.governance.rolloutKey];

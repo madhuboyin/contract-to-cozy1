@@ -312,6 +312,39 @@ test('availability applies global, explicit-disable, and rollout gates in order'
   assert.equal(rolloutDisabled.reason, 'ROLLOUT_DISABLED');
 });
 
+test('CAP-704 operational guards precede cohort availability', () => {
+  const definition = capability();
+  const basePolicy = {
+    enabled: true,
+    enforceReleaseGates: true,
+    disabledToolIds: [],
+    rollouts: {
+      MATERIAL_SPECS: {
+        enabled: true,
+        cohort: 'FULL',
+        rolloutPct: 100,
+      },
+    },
+  };
+
+  assert.equal(evaluateCapabilityAvailability(definition, {
+    ...basePolicy,
+    registryVersionMatches: false,
+  }).reason, 'REGISTRY_VERSION_MISMATCH');
+  assert.equal(evaluateCapabilityAvailability(definition, {
+    ...basePolicy,
+    brokenRouteToolIds: ['material-specs'],
+  }).reason, 'ROUTE_UNAVAILABLE');
+  assert.equal(evaluateCapabilityAvailability(definition, {
+    ...basePolicy,
+    manifestVersions: { 'material-specs': 2 },
+  }).reason, 'MANIFEST_VERSION_MISMATCH');
+  assert.equal(evaluateCapabilityAvailability(definition, {
+    ...basePolicy,
+    releaseGateBlockedToolIds: ['material-specs'],
+  }).reason, 'RELEASE_GATE_BLOCKED');
+});
+
 test('availability adapter filters workflow-only tools and resolves unknown IDs', () => {
   const material = capability();
   const workflow = capability({
