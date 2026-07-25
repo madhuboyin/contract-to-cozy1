@@ -233,16 +233,14 @@ export function JobCard({
               </div>
             )}
           </div>
-        </div>
-      )}
 
-      {SMOKE_CHECKLIST_JOB_KEYS.has(job.key) && (
-        <div className="px-3.5 pb-3.5">
-          <SmokeChecklistPanel
-            job={job}
-            triggering={triggering}
-            onRunScopedLive={(propertyId) => onTrigger(job.key, false, propertyId)}
-          />
+          {SMOKE_CHECKLIST_JOB_KEYS.has(job.key) && (
+            <SmokeChecklistPanel
+              job={job}
+              triggering={triggering}
+              onRunScopedLive={(propertyId) => onTrigger(job.key, false, propertyId)}
+            />
+          )}
         </div>
       )}
     </div>
