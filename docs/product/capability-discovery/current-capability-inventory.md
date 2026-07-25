@@ -32,7 +32,7 @@
 | cost-volatility | Volatility | home, ai | `/dashboard/properties/[id]/tools/cost-volatility` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
 | coverage-intelligence | Coverage Intelligence | ai | `/dashboard/coverage-intelligence` | Verified | SAVE_OPTIMIZE | ACTIVE | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | No | CATALOG_ONLY |
 | coverage-options | Coverage Options | home | `/dashboard/properties/[id]/tools/coverage-options` | Verified | SAVE_OPTIMIZE | ACTIVE | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
-| diy | DIY Project Center | home | `/dashboard/properties/[id]/tools/diy` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
+| diy | DIY Project Center | home | `/dashboard/properties/[id]/tools/diy` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | No | CONTEXTUAL_CANONICAL |
 | do-nothing-simulator | Do-Nothing Simulator | ai | `/dashboard/do-nothing-simulator` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | No | CATALOG_ONLY |
 | documents | Document Vault | ai | `/dashboard/documents` | Verified | PLAN_BUDGET | BETA | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
 | emergency | Emergency Help | ai | `/dashboard/emergency` | Verified | PLAN_BUDGET | BETA | SAFETY_EMERGENCY | PLAN_CREATED | Canonical | No | CATALOG_ONLY |

@@ -32,6 +32,7 @@ type ContextualDefinition = {
   triggerFamily: string;
   reason: string;
   safePartialValue?: boolean;
+  requiresExplicitTrigger?: boolean;
   acceptedContext?: ToolCapabilityDefinition['destination']['acceptedContext'];
   readinessRequirements?: ToolCapabilityDefinition['recommendation']['readinessRequirements'];
 };
@@ -134,6 +135,7 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['MAINTENANCE', 'PROJECT'],
     triggerFamily: 'LOW_RISK_DIY_ELIGIBLE',
     reason: 'A reviewed low-risk task may be suitable for a guided DIY project.',
+    requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'HOME_ACTION', 'PROJECT', 'ISSUE'],
   },
   'hidden-asset-finder': {
@@ -379,6 +381,7 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
         ...(contextual?.readinessRequirements ?? []),
       ],
       safePartialValue: contextual?.safePartialValue ?? false,
+      requiresExplicitTrigger: contextual?.requiresExplicitTrigger ?? false,
       baseScore: contextual ? 60 : 0,
       explicitRelatedCapabilityIds: RELATED_CAPABILITIES[seed.id] ?? [],
       maxImpressionsPer30Days: contextual ? 3 : 0,

@@ -221,6 +221,7 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'home-digital-will': 'ARTIFACT_CREATED',
   'material-specs': 'ARTIFACT_CREATED',
   'plant-advisor': 'OUTPUT_GENERATED',
+  diy: 'DECISION_RECORDED',
 };
 
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {

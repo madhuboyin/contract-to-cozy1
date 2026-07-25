@@ -11,11 +11,19 @@ import AiGuideSheet from '@/components/features/diy/AiGuideSheet';
 import { STATUS_LABELS, STATUS_COLOR } from '@/components/features/diy/DiyUtils';
 import { track } from '@/lib/analytics/events';
 import { toast } from '@/components/ui/use-toast';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
+import {
+  diyProjectSourcePayload,
+  diyPromptFromLaunchContext,
+} from '@/features/tools/diyLaunchContext';
 
 export default function PropertyDiyToolPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const propertyId = params.id;
+  const launchContext = useToolLaunchContext();
+  const sourcePayload = diyProjectSourcePayload(launchContext?.resolved);
+  const contextualPrompt = diyPromptFromLaunchContext(launchContext?.resolved);
 
   const [skillProfile, setSkillProfile] = useState<DiySkillProfile | null>(null);
   const [activeProjects, setActiveProjects] = useState<DiyProjectSummary[]>([]);
@@ -41,16 +49,19 @@ export default function PropertyDiyToolPage() {
         if (guide.status === 'COMPLETED') {
           clearInterval(poll);
           try {
-            const project = await api.createDiyProject(propertyId, { aiGuideId: guide.id });
+            const project = await api.createDiyProject(propertyId, {
+              aiGuideId: guide.id,
+              ...sourcePayload,
+            });
             track('action_completed', { tool: 'diy', actionType: 'create_project', propertyId });
             router.push(`/dashboard/diy/projects/${project.id}?propertyId=${propertyId}`);
           } catch (err: any) {
-            // W3 (AI/DIY): the backend now rejects starting a project for a
-            // HIRE_REQUIRED guide (previously unenforced server-side); this
-            // surfaces that clearly instead of an unhandled failure.
+            // CAP-803: the backend independently enforces reviewed low-risk
+            // eligibility; surface that boundary instead of treating it as
+            // a generic generation failure.
             const code = err?.payload?.error?.code;
             toast({
-              title: code === 'DIY_HIRE_REQUIRED' ? 'Professional required' : 'Could not start project',
+              title: code === 'DIY_NOT_LOW_RISK' ? 'Professional recommended' : 'Could not start project',
               description:
                 err?.message ||
                 'This project could not be started. Please try again or browse a template instead.',
@@ -153,6 +164,7 @@ export default function PropertyDiyToolPage() {
       {showAiSheet && (
         <AiGuideSheet
           propertyId={propertyId}
+          initialPrompt={contextualPrompt}
           onGuideStarted={handleGuideStarted}
           onClose={() => setShowAiSheet(false)}
         />

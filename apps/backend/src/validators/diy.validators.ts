@@ -178,6 +178,8 @@ export const AiGuideGenerationResponseSchema = z.object({
   title: z.string().min(1).max(200),
   summary: z.string().min(1).max(2000),
   category,
+  safetyLevel: z.enum(['LOW', 'MODERATE', 'HIGH']),
+  permitRequirement: z.enum(['REQUIRED', 'NOT_REQUIRED', 'LIKELY_REQUIRED', 'LIKELY_NOT_REQUIRED', 'UNKNOWN', 'DATA_UNAVAILABLE']),
   verdict: z.enum(['DIY_RECOMMENDED', 'BORDERLINE', 'HIRE_RECOMMENDED', 'HIRE_REQUIRED']),
   safetyWarnings: z.array(z.string()).default([]),
   steps: z.array(aiGuideStepSchema).default([]),

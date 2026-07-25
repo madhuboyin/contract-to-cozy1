@@ -5,6 +5,7 @@ import { APIError } from '../middleware/error.middleware';
 import { diyCompletionService } from './diyCompletion.service';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
+import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
 
 const SKILL_RANK: Record<DiySkillLevel, number> = { BEGINNER: 0, INTERMEDIATE: 1, ADVANCED: 2 };
 
@@ -57,6 +58,8 @@ export class DiyService {
 
     const where: Prisma.DiyProjectTemplateWhereInput = {
       status: 'ACTIVE',
+      safetyLevel: 'LOW',
+      permitRequirement: { in: ['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'] },
       ...(categories?.length && { category: { in: categories } }),
       ...(difficulties?.length && { difficultyLevel: { in: difficulties } }),
       ...(maxSkillLevel && {
@@ -74,7 +77,7 @@ export class DiyService {
       }),
     };
 
-    const templates = await prisma.diyProjectTemplate.findMany({
+    const candidates = await prisma.diyProjectTemplate.findMany({
       where,
       orderBy: { title: 'asc' },
       take: limit + 1,
@@ -82,31 +85,55 @@ export class DiyService {
       select: {
         id: true, slug: true, title: true, shortDescription: true,
         category: true, difficultyLevel: true, requiredSkillLevel: true,
-        safetyLevel: true, estimatedMinutes: true,
+        safetyLevel: true, permitRequirement: true, estimatedMinutes: true,
         estimatedMaterialCostMinCents: true, estimatedMaterialCostMaxCents: true,
         professionalCostMinCents: true, professionalCostMaxCents: true,
         tags: true, featuredOrder: true,
       },
     });
 
-    const hasMore = templates.length > limit;
-    if (hasMore) templates.pop();
-    return { items: templates, nextCursor: hasMore ? templates[templates.length - 1]?.id : undefined };
+    const hasMore = candidates.length > limit;
+    const pageCandidates = candidates.slice(0, limit);
+    const templates = pageCandidates.filter((template) =>
+      evaluateDiyEligibility({
+        title: template.title,
+        summary: template.shortDescription,
+        category: template.category,
+        safetyLevel: template.safetyLevel,
+        permitRequirement: template.permitRequirement,
+      }).eligible);
+    return {
+      items: templates,
+      nextCursor: hasMore ? pageCandidates[pageCandidates.length - 1]?.id : undefined,
+    };
   }
 
   async getFeaturedTemplates() {
-    return prisma.diyProjectTemplate.findMany({
-      where: { status: 'ACTIVE', featuredOrder: { not: null } },
+    const templates = await prisma.diyProjectTemplate.findMany({
+      where: {
+        status: 'ACTIVE',
+        safetyLevel: 'LOW',
+        permitRequirement: { in: ['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'] },
+        featuredOrder: { not: null },
+      },
       orderBy: { featuredOrder: 'asc' },
       select: {
         id: true, slug: true, title: true, shortDescription: true,
         category: true, difficultyLevel: true, requiredSkillLevel: true,
-        safetyLevel: true, estimatedMinutes: true,
+        safetyLevel: true, permitRequirement: true, estimatedMinutes: true,
         estimatedMaterialCostMinCents: true, estimatedMaterialCostMaxCents: true,
         professionalCostMinCents: true, professionalCostMaxCents: true,
         tags: true, featuredOrder: true,
       },
     });
+    return templates.filter((template) =>
+      evaluateDiyEligibility({
+        title: template.title,
+        summary: template.shortDescription,
+        category: template.category,
+        safetyLevel: template.safetyLevel,
+        permitRequirement: template.permitRequirement,
+      }).eligible);
   }
 
   async getTemplateDetail(templateId: string) {
@@ -119,6 +146,21 @@ export class DiyService {
       },
     });
     if (!template) throw new APIError('Template not found', 404);
+    const eligibility = evaluateDiyEligibility({
+      title: template.title,
+      summary: template.shortDescription,
+      category: template.category,
+      safetyLevel: template.safetyLevel,
+      permitRequirement: template.permitRequirement,
+    });
+    if (!eligibility.eligible) {
+      throw new APIError(
+        'This template is not eligible for homeowner DIY.',
+        409,
+        'DIY_NOT_LOW_RISK',
+        { eligibility },
+      );
+    }
     return template;
   }
 
@@ -151,6 +193,22 @@ export class DiyService {
         },
       });
       if (!template) throw new APIError('Template not found', 404);
+      const eligibility = evaluateDiyEligibility({
+        title: template.title,
+        summary: template.shortDescription,
+        category: template.category,
+        safetyLevel: template.safetyLevel,
+        permitRequirement: template.permitRequirement,
+        verdict: payload.decisionVerdict,
+      });
+      if (!eligibility.eligible) {
+        throw new APIError(
+          'Only reviewed, low-risk, non-regulated work can be started as a DIY project.',
+          409,
+          'DIY_NOT_LOW_RISK',
+          { eligibility },
+        );
+      }
       const context = await getPropertyContext(
         propertyId,
         { userId },
@@ -236,17 +294,26 @@ export class DiyService {
     if (aiGuideId) {
       const guide = await prisma.diyAiGuide.findFirst({ where: { id: aiGuideId, propertyId } });
       if (!guide || guide.status !== 'COMPLETED') throw new APIError('AI guide not ready', 400);
-      // W3 (AI/DIY — "safety boundary"): the AI is prompted to set
-      // HIRE_REQUIRED for panel/gas-line/structural work, but nothing
-      // enforced that verdict server-side — the template flow has a
-      // frontend-only "canStart" gate for the same concept, and the AI
-      // path had no gate at all, so a well-behaved LLM response was still
-      // just as startable as a DIY_RECOMMENDED one via a direct API call.
-      if (guide.decisionVerdict === 'HIRE_REQUIRED') {
+      // CAP-803: AI output is advisory. Project creation independently
+      // re-evaluates persisted safety, permit, verdict, and excluded-work
+      // facts so unknown or unsafe output fails closed on direct API calls.
+      const eligibility = evaluateDiyEligibility({
+        title: guide.generatedTitle ?? guide.userPrompt,
+        summary: guide.generatedSummary,
+        category: guide.category ?? 'OTHER',
+        safetyLevel: guide.safetyLevel,
+        permitRequirement: guide.permitRequirement,
+        verdict: guide.decisionVerdict,
+        safetyWarnings: Array.isArray(guide.safetyWarningsJson)
+          ? guide.safetyWarningsJson.filter((warning): warning is string => typeof warning === 'string')
+          : [],
+      });
+      if (!eligibility.eligible) {
         throw new APIError(
-          'This project involves work that requires a licensed professional and cannot be started as a DIY project.',
+          'Only reviewed, low-risk, non-regulated work can be started as a DIY project.',
           409,
-          'DIY_HIRE_REQUIRED',
+          'DIY_NOT_LOW_RISK',
+          { eligibility },
         );
       }
       const context = await getPropertyContext(

@@ -9,6 +9,7 @@ import type {
   DiyDifficultyLevel,
   DiySkillLevel,
   DiySafetyLevel,
+  DiyPermitRequirement,
   DiyTemplateStepInput,
   DiyTemplateMaterialInput,
   DiyTemplateToolInput,
@@ -276,14 +277,18 @@ export default function TemplateForm({ templateId, initial }: Props) {
           <Field
             label="Safety Level"
             required
-            help="HIGH triggers a red safety banner for homeowners and causes HIRE_REQUIRED for BEGINNER users regardless of other scores."
+            help="Only reviewed LOW-risk templates with no expected permit are eligible for homeowner discovery and project creation."
           >
             <select value={safetyLevel} onChange={(e) => setSafetyLevel(e.target.value as DiySafetyLevel)} className={selectCls}>
               {SAFETY_LEVELS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </Field>
           <Field label="Permit Requirement" required>
-            <select value={permitRequirement} onChange={(e) => setPermitRequirement(e.target.value)} className={selectCls}>
+            <select
+              value={permitRequirement}
+              onChange={(e) => setPermitRequirement(e.target.value as DiyPermitRequirement)}
+              className={selectCls}
+            >
               {PERMIT_REQUIREMENTS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </Field>

@@ -12418,6 +12418,8 @@ model DiyAiGuide {
 
   generatedTitle     String?
   generatedSummary   String?
+  safetyLevel        DiySafetyLevel?
+  permitRequirement  PermitRequirementStatus?
   stepsJson          Json?
   materialsJson      Json?
   toolsJson          Json?

@@ -224,7 +224,7 @@
       "rolloutKey": "DIY",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
+      "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

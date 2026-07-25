@@ -29,6 +29,39 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   mode,
 ]) => ({
   id,
+  ...(id === 'diy' ? {
+    version: 2,
+    iconName: 'hammer' as const,
+    intentAliases: [
+      'diy project center',
+      'can I do this repair myself',
+      'diy or hire a professional',
+      'low risk home repair',
+      'step by step home maintenance',
+      'turn this finding into a diy project',
+      'save money with a safe diy project',
+    ],
+    homeownerOutcome:
+      'Decide whether reviewed home work is safe to do yourself and start a guided project only when it is low risk.',
+    livingHomeRecordReads: [
+      'property-context',
+      'maintenance-task',
+      'inspection-finding',
+      'service-quote',
+      'diy-skill-profile',
+      'reviewed-diy-template',
+    ],
+    livingHomeRecordWrites: [
+      'diy-decision',
+      'diy-project',
+      'home-event',
+      'maintenance-completion',
+    ],
+    expectedOutput:
+      'A recorded DIY-or-hire decision or a safety-gated project created from reviewed low-risk guidance.',
+    completionSignal: 'diy_decision_recorded_or_project_created',
+    outputEntityTypes: ['PROJECT'] as const,
+  } : {}),
   label,
   description,
   routeTemplate,
@@ -36,6 +69,6 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   rolloutKey,
   releaseStage,
   safetyTier,
-  completionKind: 'PLAN_CREATED' as const,
+  completionKind: id === 'diy' ? 'DECISION_RECORDED' as const : 'PLAN_CREATED' as const,
   mode,
 })));

@@ -336,6 +336,55 @@ function matcherContext(overrides = {}) {
   });
 }
 
+test('CAP-803 explicit-trigger policy does not promote DIY from generic maintenance context', () => {
+  const diy = structuredClone(canonicalCapabilityRegistry.getById('diy'));
+  diy.recommendation.explicitRelatedCapabilityIds = [];
+  const registry = createToolCapabilityRegistry([diy]);
+  const maintenanceAction = action({
+    source: {
+      kind: 'MAINTENANCE',
+      entityId: 'finding-1',
+      version: 'finding-v1',
+    },
+    job: 'MAJOR_MOMENT',
+  });
+  const base = {
+    actions: [maintenanceAction],
+    journeys: [],
+    projects: [],
+    personalizationRecommendations: [],
+    completions: [],
+  };
+  const weak = matchCapabilityCandidates({
+    registry,
+    context: matcherContext({
+      ...base,
+      actionSourceMetadata: [{
+        actionId: 'action-1',
+        sourceEntityType: 'ISSUE',
+      }],
+    }),
+  });
+  assert.deepEqual(weak.candidates, []);
+
+  const reviewed = matchCapabilityCandidates({
+    registry,
+    context: matcherContext({
+      ...base,
+      actionSourceMetadata: [{
+        actionId: 'action-1',
+        sourceEntityType: 'ISSUE',
+        signalIntentFamilies: ['LOW_RISK_DIY_ELIGIBLE'],
+      }],
+    }),
+  });
+  assert.deepEqual(
+    reviewed.candidates.map((candidate) => candidate.capabilityId),
+    ['diy'],
+  );
+  assert.equal(reviewed.candidates[0].primaryMatch.kind, 'SIGNAL_INTENT_FAMILY');
+});
+
 test('CAP-401 matches every reviewed structured source with stable precedence', () => {
   const result = matchCapabilityCandidates({
     registry: matcherRegistry(),

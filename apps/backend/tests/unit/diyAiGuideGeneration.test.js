@@ -136,6 +136,8 @@ function validGuideResponse(overrides = {}) {
     title: 'Fix the fence',
     summary: 'Replace a broken picket.',
     category: 'EXTERIOR',
+    safetyLevel: 'LOW',
+    permitRequirement: 'NOT_REQUIRED',
     verdict: 'DIY_RECOMMENDED',
     safetyWarnings: [],
     steps: [{ stepNumber: 1, title: 'Remove broken picket', description: 'Pry it off carefully.' }],
@@ -202,7 +204,13 @@ test('a malformed AI response (missing required fields) is rejected before persi
 test('a HIRE_REQUIRED verdict with zero steps is still valid (steps are optional when a pro is required)', async () => {
   const { diyAiGuideService, calls } = loadService({
     claimCount: 1,
-    geminiResponseText: validGuideResponse({ verdict: 'HIRE_REQUIRED', steps: [], safetyWarnings: ['Requires a licensed electrician'] }),
+    geminiResponseText: validGuideResponse({
+      safetyLevel: 'HIGH',
+      permitRequirement: 'LIKELY_REQUIRED',
+      verdict: 'HIRE_REQUIRED',
+      steps: [],
+      safetyWarnings: ['Requires a licensed electrician'],
+    }),
   });
 
   await diyAiGuideService.generate('guide-1');

@@ -5,12 +5,13 @@ import { api } from '@/lib/api/client';
 
 interface Props {
   propertyId: string;
+  initialPrompt?: string;
   onGuideStarted: (guideId: string) => void;
   onClose: () => void;
 }
 
-export default function AiGuideSheet({ propertyId, onGuideStarted, onClose }: Props) {
-  const [prompt, setPrompt] = useState('');
+export default function AiGuideSheet({ propertyId, initialPrompt = '', onGuideStarted, onClose }: Props) {
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -78,7 +78,9 @@ export default function TemplateDetailPage() {
     return <div className="p-4 text-sm text-neutral-500">{error ?? 'Template not found'}</div>;
   }
 
-  const canStart = !decision || decision.verdict !== 'HIRE_REQUIRED';
+  const canStart = !decision
+    || decision.verdict === 'DIY_RECOMMENDED'
+    || decision.verdict === 'BORDERLINE';
 
   return (
     <div className="space-y-4 p-4 pb-24">

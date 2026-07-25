@@ -7,6 +7,11 @@ import { diyAiGuideService } from '../services/diyAiGuide.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from '../services/diy/applicabilityPolicy';
+import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
+import {
+  diyDecisionCompletionEvent,
+  diyProjectCompletionEvent,
+} from '../services/analytics/diyLifecycle';
 
 // ── Skill Profile ─────────────────────────────────────────────────────────────
 
@@ -75,6 +80,16 @@ export async function getDiyDecision(req: Request, res: Response, next: NextFunc
       featureKey: AnalyticsFeature.DIY_DECISION,
       metadataJson: { verdict: (result as any)?.verdict, score: (result as any)?.score },
     });
+    void recordToolLifecycleEvents({
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      events: [diyDecisionCompletionEvent({
+        propertyId: req.params.propertyId,
+        verdict: result.verdict,
+        score: result.score,
+        category: req.body.projectCategory,
+      })],
+    });
 
     res.json({ success: true, data: { ...result, applicability } });
   } catch (err) { next(err); }
@@ -93,6 +108,15 @@ export async function createProject(req: Request, res: Response, next: NextFunct
       moduleKey: AnalyticsModule.FINANCIAL,
       featureKey: AnalyticsFeature.DIY_DECISION,
       metadataJson: { actionType: 'create_project', category: (project as any)?.category },
+    });
+    void recordToolLifecycleEvents({
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      events: [diyProjectCompletionEvent({
+        projectId: project.id,
+        category: project.category,
+        decisionVerdict: project.decisionVerdict,
+      })],
     });
 
     res.status(201).json({ success: true, data: { project } });
@@ -222,4 +246,3 @@ export async function adminUpdateTemplate(req: Request, res: Response, next: Nex
     res.json({ success: true, data: { template } });
   } catch (err) { next(err); }
 }
-

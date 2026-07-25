@@ -37,6 +37,16 @@ const MATCH_PRECEDENCE: Record<
   COMPLETION_OUTPUT_RELATIONSHIP: 7,
 };
 
+const EXPLICIT_TRIGGER_MATCH_KINDS = new Set<
+  typeof CAPABILITY_CANDIDATE_MATCH_KINDS[number]
+>([
+  'EXPLICIT_ACTION_CTA',
+  'RECOMMENDATION_DEFINITION',
+  'SIGNAL_INTENT_FAMILY',
+  'JOURNEY_KIND',
+  'PROJECT_KIND',
+]);
+
 const BoundedIdentifier = z.string().trim().min(1).max(160);
 
 const CapabilityCandidateMatchSchema = z.object({
@@ -145,6 +155,10 @@ function addMatches(
       value,
     })));
   if (matches.length === 0) return;
+  if (
+    capability.recommendation.requiresExplicitTrigger
+    && !matches.some((match) => EXPLICIT_TRIGGER_MATCH_KINDS.has(match.kind))
+  ) return;
 
   const key = candidateKey(capability.id, source);
   const existing = candidates.get(key) ?? {

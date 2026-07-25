@@ -8,6 +8,7 @@ import { connection } from './JobQueue.service';
 import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
+import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
 import { knownContextValue } from './propertyContextDecision';
 import { AiGuideGenerationResponseSchema } from '../validators/diy.validators';
 import { APIError } from '../middleware/error.middleware';
@@ -147,6 +148,8 @@ Respond with a JSON object matching this exact schema (no markdown, raw JSON onl
   "title": string,
   "summary": string,
   "category": "HVAC" | "PLUMBING" | "ELECTRICAL" | "PAINTING" | "GENERAL" | "EXTERIOR" | "FLOORING" | "APPLIANCE" | "LANDSCAPING" | "OTHER",
+  "safetyLevel": "LOW" | "MODERATE" | "HIGH",
+  "permitRequirement": "REQUIRED" | "NOT_REQUIRED" | "LIKELY_REQUIRED" | "LIKELY_NOT_REQUIRED" | "UNKNOWN" | "DATA_UNAVAILABLE",
   "verdict": "DIY_RECOMMENDED" | "BORDERLINE" | "HIRE_RECOMMENDED" | "HIRE_REQUIRED",
   "safetyWarnings": string[],
   "steps": [{ "stepNumber": number, "title": string, "description": string, "estimatedMinutes": number | null, "safetyNote": string | null, "tipNote": string | null }],
@@ -194,6 +197,15 @@ If the project involves main electrical panels, gas lines, load-bearing structur
         return;
       }
       const parsed = validation.data;
+      const eligibility = evaluateDiyEligibility({
+        title: parsed.title,
+        summary: parsed.summary,
+        category: parsed.category,
+        safetyLevel: parsed.safetyLevel,
+        permitRequirement: parsed.permitRequirement,
+        verdict: parsed.verdict,
+        safetyWarnings: parsed.safetyWarnings,
+      });
 
       const applicability = evaluateDiyApplicability(context, parsed.category);
       if (applicability.status !== 'APPLICABLE') {
@@ -214,11 +226,15 @@ If the project involves main electrical panels, gas lines, load-bearing structur
           category: parsed.category ?? null,
           generatedTitle: parsed.title ?? null,
           generatedSummary: parsed.summary ?? null,
-          stepsJson: parsed.steps ?? [],
-          materialsJson: parsed.materials ?? [],
-          toolsJson: parsed.tools ?? [],
-          decisionVerdict: parsed.verdict ?? null,
-          safetyWarningsJson: parsed.safetyWarnings ?? [],
+          safetyLevel: parsed.safetyLevel,
+          permitRequirement: parsed.permitRequirement,
+          stepsJson: eligibility.eligible ? parsed.steps ?? [] : [],
+          materialsJson: eligibility.eligible ? parsed.materials ?? [] : [],
+          toolsJson: eligibility.eligible ? parsed.tools ?? [] : [],
+          decisionVerdict: eligibility.eligible ? parsed.verdict : 'HIRE_REQUIRED',
+          safetyWarningsJson: eligibility.eligible
+            ? parsed.safetyWarnings ?? []
+            : [...parsed.safetyWarnings, ...eligibility.reasonCodes],
           promptTokens: response.usageMetadata?.promptTokenCount ?? null,
           completionTokens: response.usageMetadata?.candidatesTokenCount ?? null,
         },

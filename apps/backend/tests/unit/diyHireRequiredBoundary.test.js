@@ -52,6 +52,9 @@ function guide(overrides = {}) {
     generatedSummary: 'Upgrade the main panel',
     category: 'ELECTRICAL',
     decisionVerdict: 'HIRE_REQUIRED',
+    safetyLevel: 'HIGH',
+    permitRequirement: 'LIKELY_REQUIRED',
+    safetyWarningsJson: [],
     stepsJson: [],
     materialsJson: [],
     toolsJson: [],
@@ -66,7 +69,7 @@ test('rejects starting a project from a HIRE_REQUIRED AI guide', async () => {
     () => diyService.createProject('property-1', 'user-1', { aiGuideId: 'guide-1' }),
     (err) => {
       assert.equal(err.statusCode, 409);
-      assert.equal(err.code, 'DIY_HIRE_REQUIRED');
+      assert.equal(err.code, 'DIY_NOT_LOW_RISK');
       return true;
     },
   );
@@ -74,7 +77,15 @@ test('rejects starting a project from a HIRE_REQUIRED AI guide', async () => {
 
 test('does not block a DIY_RECOMMENDED AI guide from starting', async () => {
   const { diyService } = loadService({
-    guide: guide({ decisionVerdict: 'DIY_RECOMMENDED', stepsJson: [{ stepNumber: 1, title: 'Step', description: 'Do it' }] }),
+    guide: guide({
+      generatedTitle: 'Patch a small drywall hole',
+      generatedSummary: 'A routine cosmetic repair',
+      category: 'GENERAL',
+      decisionVerdict: 'DIY_RECOMMENDED',
+      safetyLevel: 'LOW',
+      permitRequirement: 'NOT_REQUIRED',
+      stepsJson: [{ stepNumber: 1, title: 'Step', description: 'Do it' }],
+    }),
   });
 
   // Reaching the $transaction call (which needs a real prisma tx) is out of
@@ -85,21 +96,29 @@ test('does not block a DIY_RECOMMENDED AI guide from starting', async () => {
   await assert.rejects(
     () => diyService.createProject('property-1', 'user-1', { aiGuideId: 'guide-1' }),
     (err) => {
-      assert.notEqual(err.code, 'DIY_HIRE_REQUIRED');
+      assert.notEqual(err.code, 'DIY_NOT_LOW_RISK');
       return true;
     },
   );
 });
 
-test('does not block a HIRE_RECOMMENDED (not HIRE_REQUIRED) verdict', async () => {
+test('blocks HIRE_RECOMMENDED verdicts from project creation', async () => {
   const { diyService } = loadService({
-    guide: guide({ decisionVerdict: 'HIRE_RECOMMENDED', stepsJson: [{ stepNumber: 1, title: 'Step', description: 'Do it' }] }),
+    guide: guide({
+      generatedTitle: 'Patch a small drywall hole',
+      generatedSummary: 'A routine cosmetic repair',
+      category: 'GENERAL',
+      decisionVerdict: 'HIRE_RECOMMENDED',
+      safetyLevel: 'LOW',
+      permitRequirement: 'NOT_REQUIRED',
+      stepsJson: [{ stepNumber: 1, title: 'Step', description: 'Do it' }],
+    }),
   });
 
   await assert.rejects(
     () => diyService.createProject('property-1', 'user-1', { aiGuideId: 'guide-1' }),
     (err) => {
-      assert.notEqual(err.code, 'DIY_HIRE_REQUIRED');
+      assert.equal(err.code, 'DIY_NOT_LOW_RISK');
       return true;
     },
   );

@@ -1610,6 +1610,24 @@ or migration is required. Rollout and rollback remain governed by `HOME_DIGITAL_
   not promote DIY.
 - Recording a decision or creating an eligible DIY project is meaningful completion.
 
+**CAP-803 implementation status: Complete.** The versioned DIY manifest now owns reviewed
+homeowner-language aliases, maintenance/finding/quote/skill/template reads, DIY decision and project
+writes, and `diy_decision_recorded_or_project_created` as a `DECISION_RECORDED` completion.
+Contextual launches carry supported maintenance, incident, and inventory lineage into project
+creation and prefill the custom-guide prompt from resolved Home context without guessing an issue
+identifier's domain. A single server-side eligibility policy now gates template discovery, template
+detail, template project creation, AI guide classification, and AI-backed project creation. It
+fails closed when safety or permit context is unknown, admits only reviewed low-risk and
+non-regulated work, and excludes hazardous electrical, gas, structural, active-water, and
+hazardous-material work even if an upstream verdict is permissive. Decision scoring remains
+available to produce an explicit hire outcome, while only eligible decisions can become DIY
+projects. The reusable `requiresExplicitTrigger` manifest policy also prevents generic
+source-kind or entity matches from promoting DIY without the reviewed
+`LOW_RISK_DIY_ELIGIBLE` trigger. Canonical completion analytics are emitted for both a recorded DIY-or-hire decision and
+creation of an eligible DIY project. `DiyAiGuide` now persists reviewed safety level and permit
+status; the Prisma schema is updated without a migration script, per the project migration policy.
+Rollout and rollback remain governed by `DIY`.
+
 #### Seller Prep
 
 - Sale intent or an active seller journey is required.

@@ -84,11 +84,15 @@ export class DiyDecisionService {
     const factors: DiyDecisionFactor[] = [];
 
     // ── Hard overrides ─────────────────────────────────────────────────────────
-    if (safetyLevel === 'HIGH' && userSkillLevel === 'BEGINNER') {
-      blockers.push('This project has high safety risk and requires more than beginner experience.');
+    if (safetyLevel !== 'LOW') {
+      blockers.push('DIY Project Center only starts projects that have been reviewed as low safety risk.');
     }
-    if (permitRequirement === 'REQUIRED' && safetyLevel === 'HIGH') {
-      blockers.push('A permit is required for this project and safety risk is high — hire a licensed contractor.');
+    if (!['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'].includes(permitRequirement)) {
+      blockers.push(
+        permitRequirement === 'UNKNOWN' || permitRequirement === 'DATA_UNAVAILABLE'
+          ? 'Permit requirements are not confirmed, so this project cannot be recommended for DIY.'
+          : 'This project may require regulated or permitted work — consult a qualified professional.',
+      );
     }
     if (projectCategory === 'ELECTRICAL' && safetyLevel === 'HIGH' && userSkillLevel !== 'ADVANCED') {
       blockers.push('High-risk electrical work requires an advanced skill level or a licensed electrician.');

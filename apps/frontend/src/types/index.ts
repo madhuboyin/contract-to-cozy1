@@ -4199,6 +4199,13 @@ export type DiyDecisionVerdict = 'DIY_RECOMMENDED' | 'BORDERLINE' | 'HIRE_RECOMM
 export type DiyStepStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED';
 export type DiyToolAction = 'ALREADY_OWNED' | 'RENT' | 'BUY';
 export type DiySafetyLevel = 'LOW' | 'MODERATE' | 'HIGH';
+export type DiyPermitRequirement =
+  | 'REQUIRED'
+  | 'NOT_REQUIRED'
+  | 'LIKELY_REQUIRED'
+  | 'LIKELY_NOT_REQUIRED'
+  | 'UNKNOWN'
+  | 'DATA_UNAVAILABLE';
 export type DiyAiGuideStatus = 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED';
 
 export interface DiySkillProfile {
@@ -4282,7 +4289,7 @@ export interface DiyTemplateTool {
 
 export interface DiyTemplateDetail extends DiyTemplateSummary {
   longDescription?: string;
-  permitRequirement: string;
+  permitRequirement: DiyPermitRequirement;
   steps: DiyTemplateStep[];
   materials: DiyTemplateMaterial[];
   tools: DiyTemplateTool[];
@@ -4309,7 +4316,7 @@ export interface DiyDecisionInput {
   projectCategory: DiyProjectCategory;
   difficultyLevel: DiyDifficultyLevel;
   safetyLevel: DiySafetyLevel;
-  permitRequirement: string;
+  permitRequirement: DiyPermitRequirement;
   requiredSkillLevel: DiySkillLevel;
   estimatedMinutes: number;
   requiredToolCanonicalIds: string[];
@@ -4393,6 +4400,8 @@ export interface DiyAiGuide {
   category?: DiyProjectCategory;
   generatedTitle?: string;
   generatedSummary?: string;
+  safetyLevel?: DiySafetyLevel;
+  permitRequirement?: DiyPermitRequirement;
   stepsJson?: object[];
   materialsJson?: object[];
   toolsJson?: object[];
@@ -4455,7 +4464,7 @@ export interface AdminDiyTemplateSummary {
 export interface AdminDiyTemplateDetail extends DiyTemplateDetail {
   slug: string;
   status: DiyTemplateStatus;
-  permitRequirement: string;
+  permitRequirement: DiyPermitRequirement;
   tags: string[];
   featuredOrder?: number;
   geminiPromptHint?: string;
@@ -4500,7 +4509,7 @@ export interface AdminDiyTemplatePayload {
   difficultyLevel: DiyDifficultyLevel;
   requiredSkillLevel: DiySkillLevel;
   safetyLevel: DiySafetyLevel;
-  permitRequirement: string;
+  permitRequirement: DiyPermitRequirement;
   estimatedMinutes: number;
   estimatedMaterialCostMinCents?: number;
   estimatedMaterialCostMaxCents?: number;

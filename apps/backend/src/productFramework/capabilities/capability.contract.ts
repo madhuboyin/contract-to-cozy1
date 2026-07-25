@@ -223,6 +223,7 @@ export const ToolCapabilityDefinitionSchema = z.object({
     expectedOutcome: NonEmptyBoundedString,
     readinessRequirements: z.array(CapabilityReadinessRequirementSchema).max(30),
     safePartialValue: z.boolean().default(false),
+    requiresExplicitTrigger: z.boolean().default(false),
     baseScore: z.number().min(0).max(100),
     explicitRelatedCapabilityIds: z.array(CapabilityIdSchema).max(30),
     maxImpressionsPer30Days: z.number().int().min(0).max(100),
@@ -275,6 +276,19 @@ export const ToolCapabilityDefinitionSchema = z.object({
       code: 'custom',
       path: ['recommendation', 'safePartialValue'],
       message: 'Safe partial value is limited to explicitly reviewed low-consequence contextual capabilities.',
+    });
+  }
+  if (
+    value.recommendation.requiresExplicitTrigger
+    && (
+      value.recommendation.triggerFamilies.length
+      + value.recommendation.recommendationDefinitionCodes.length
+    ) === 0
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['recommendation', 'requiresExplicitTrigger'],
+      message: 'Explicit-trigger capabilities require a reviewed trigger family or recommendation definition.',
     });
   }
   if (
