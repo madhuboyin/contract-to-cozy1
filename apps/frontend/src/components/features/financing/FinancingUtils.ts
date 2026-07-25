@@ -38,5 +38,8 @@ export const MORTGAGE_TYPE_LABELS: Record<MortgageType, string> = {
   FIXED_20: '20-Year Fixed',
   ARM_5: '5/1 ARM',
   ARM_7: '7/1 ARM',
+  FHA_30: '30-Year FHA',
+  VA_30: '30-Year VA',
+  JUMBO_30: '30-Year Jumbo',
   OTHER: 'Other',
 };

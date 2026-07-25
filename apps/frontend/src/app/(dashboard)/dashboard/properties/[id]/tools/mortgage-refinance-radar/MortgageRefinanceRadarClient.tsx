@@ -384,7 +384,8 @@ function EligibilityContextCard({
     context.followUpActions.includes('UPDATE_PROPERTY_VALUE');
   const needsFinancing =
     context.followUpActions.includes('CONFIRM_SECOND_LIEN_BALANCE') ||
-    context.followUpActions.includes('REVIEW_MORTGAGE_INSURANCE');
+    context.followUpActions.includes('REVIEW_MORTGAGE_INSURANCE') ||
+    context.followUpActions.includes('CONFIRM_LOAN_PROGRAM');
 
   return (
     <GlassCard>
@@ -473,6 +474,60 @@ function EligibilityContextCard({
               </li>
             ))}
           </ul>
+        )}
+
+        {context.programPathways.length > 0 && (
+          <div className="mt-5">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                Program pathways to discuss
+              </h4>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Planning ranges—not approval
+              </span>
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {context.programPathways.map((pathway) => (
+                <article
+                  key={pathway.program}
+                  className="rounded-xl border border-indigo-200/70 bg-indigo-50/45 p-3 dark:border-indigo-900/70 dark:bg-indigo-950/20"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h5 className="text-xs font-semibold text-indigo-950 dark:text-indigo-200">
+                      {pathway.title}
+                    </h5>
+                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300">
+                      {pathway.relevance.replace(/_/g, ' ').toLowerCase()}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                    {pathway.summary}
+                  </p>
+                  <details className="mt-2 text-xs">
+                    <summary className="cursor-pointer font-semibold text-indigo-700 dark:text-indigo-300">
+                      Requirements and cautions
+                    </summary>
+                    <p className="mt-2 font-medium text-slate-700 dark:text-slate-300">
+                      Confirm:
+                    </p>
+                    <ul className="mt-1 space-y-1 text-slate-600 dark:text-slate-400">
+                      {pathway.requirementsToConfirm.map((requirement) => (
+                        <li key={requirement}>• {requirement}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 font-medium text-slate-700 dark:text-slate-300">
+                      Cautions:
+                    </p>
+                    <ul className="mt-1 space-y-1 text-amber-800 dark:text-amber-300">
+                      {pathway.cautions.map((caution) => (
+                        <li key={caution}>• {caution}</li>
+                      ))}
+                    </ul>
+                  </details>
+                </article>
+              ))}
+            </div>
+          </div>
         )}
 
         {(needsValue || needsFinancing) && (

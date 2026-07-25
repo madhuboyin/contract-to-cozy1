@@ -1,4 +1,5 @@
 import type { RefinanceScenarioResult } from './types/refinanceRadar.types';
+import type { RefinanceEligibilityContext } from './refinanceEligibilityContext';
 
 function money(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -24,6 +25,7 @@ export function buildRefinanceScenarioMarkdown(input: {
   propertyLabel: string;
   generatedAt: Date;
   result: RefinanceScenarioResult;
+  eligibilityContext?: RefinanceEligibilityContext | null;
 }): string {
   const { result } = input;
   const termRows = result.alternatives.map((alternative) =>
@@ -35,6 +37,20 @@ export function buildRefinanceScenarioMarkdown(input: {
     `| ${safeInline(alternative.label)} | ${money(alternative.monthlyPaymentUsd)} | ` +
     `${money(alternative.upfrontCashUsd)} | ${alternative.payoffMonths} months | ` +
     `${money(alternative.estimatedTotalInterestUsd)} |`,
+  );
+  const programSections = (input.eligibilityContext?.programPathways ?? []).flatMap(
+    (pathway) => [
+      `### ${safeInline(pathway.title)}`,
+      '',
+      `${safeInline(pathway.summary)} **Relevance:** ${pathway.relevance.replace(/_/g, ' ').toLowerCase()}.`,
+      '',
+      '**Confirm:**',
+      ...pathway.requirementsToConfirm.map((item) => `- ${safeInline(item)}`),
+      '',
+      '**Cautions:**',
+      ...pathway.cautions.map((item) => `- ${safeInline(item)}`),
+      '',
+    ],
   );
 
   return [
@@ -85,6 +101,11 @@ export function buildRefinanceScenarioMarkdown(input: {
     '| --- | ---: | ---: | ---: | ---: |',
     ...decisionRows,
     '',
+    '## Program and lien pathways',
+    '',
+    ...(programSections.length > 0
+      ? programSections
+      : ['No program-specific pathway could be identified from the recorded loan facts.', '']),
     '## Questions for a lender or servicer',
     '',
     '- What note rate, APR, points, credits, and cash-to-close apply to this property and borrower?',

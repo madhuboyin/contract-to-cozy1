@@ -4039,6 +4039,9 @@ export type MortgageType =
   | 'FIXED_20'
   | 'ARM_5'
   | 'ARM_7'
+  | 'FHA_30'
+  | 'VA_30'
+  | 'JUMBO_30'
   | 'OTHER';
 
 export type PropertyMortgageStatus = 'UNKNOWN' | 'MORTGAGED' | 'NO_MORTGAGE';

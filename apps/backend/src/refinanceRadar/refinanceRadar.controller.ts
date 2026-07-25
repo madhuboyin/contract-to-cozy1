@@ -267,10 +267,17 @@ export class RefinanceRadarController {
       const propertyLabel = property
         ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`
         : `Property ${propertyId}`;
+      const radarStatus = await service.getCurrentStatus(
+        propertyId,
+        currentContext.contextVersion,
+      );
       const markdown = buildRefinanceScenarioMarkdown({
         propertyLabel,
         generatedAt: new Date(),
         result,
+        eligibilityContext: radarStatus.available
+          ? radarStatus.eligibilityContext
+          : null,
       });
 
       analyticsEmitter.track({

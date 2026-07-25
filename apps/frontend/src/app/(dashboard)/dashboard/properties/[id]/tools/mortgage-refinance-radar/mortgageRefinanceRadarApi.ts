@@ -87,11 +87,32 @@ export type RadarStatusAvailable = {
       | 'WITHIN_CONFIGURED_LIMIT'
       | 'ABOVE_CONFIGURED_LIMIT'
       | 'NOT_CONFIGURED';
+    programPathways: Array<{
+      program:
+        | 'CONVENTIONAL_RATE_TERM'
+        | 'FHA_STREAMLINE'
+        | 'VA_IRRRL'
+        | 'JUMBO_REFINANCE'
+        | 'ARM_TO_FIXED'
+        | 'PMI_REVIEW'
+        | 'SECOND_LIEN_COORDINATION';
+      relevance:
+        | 'CURRENT_LOAN_PATH'
+        | 'POTENTIAL_PATH'
+        | 'CONDITIONAL'
+        | 'NOT_APPLICABLE';
+      title: string;
+      summary: string;
+      requirementsToConfirm: string[];
+      cautions: string[];
+      planningOnly: true;
+    }>;
     warnings: string[];
     followUpActions: Array<
       | 'UPDATE_PROPERTY_VALUE'
       | 'CONFIRM_SECOND_LIEN_BALANCE'
       | 'REVIEW_MORTGAGE_INSURANCE'
+      | 'CONFIRM_LOAN_PROGRAM'
     >;
   };
   disclaimer: string;

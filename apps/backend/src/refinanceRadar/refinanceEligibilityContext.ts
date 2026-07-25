@@ -1,3 +1,8 @@
+import {
+  buildRefinanceProgramGuidance,
+  type RefinanceProgramPathway,
+} from './refinanceProgramGuidance';
+
 export type RefinanceValueSource =
   | 'APPRAISED_VALUE'
   | 'PURCHASE_PRICE_FALLBACK'
@@ -29,11 +34,13 @@ export interface RefinanceEligibilityContext {
   loanType: string;
   conformingLimitUsd: number | null;
   conformingContext: 'WITHIN_CONFIGURED_LIMIT' | 'ABOVE_CONFIGURED_LIMIT' | 'NOT_CONFIGURED';
+  programPathways: RefinanceProgramPathway[];
   warnings: string[];
   followUpActions: Array<
     | 'UPDATE_PROPERTY_VALUE'
     | 'CONFIRM_SECOND_LIEN_BALANCE'
     | 'REVIEW_MORTGAGE_INSURANCE'
+    | 'CONFIRM_LOAN_PROGRAM'
   >;
 }
 
@@ -138,6 +145,7 @@ export function buildRefinanceEligibilityContext(
   }
   if (!input.loanType || input.loanType === 'UNKNOWN') {
     warnings.push('Loan type is not recorded, so program-specific refinance paths cannot be screened.');
+    followUpActions.push('CONFIRM_LOAN_PROGRAM');
   }
 
   if (!estimatedPropertyValueUsd) {
@@ -179,6 +187,18 @@ export function buildRefinanceEligibilityContext(
     );
     followUpActions.push('REVIEW_MORTGAGE_INSURANCE');
   }
+  const programPathways = buildRefinanceProgramGuidance({
+    loanType: input.loanType ?? 'UNKNOWN',
+    occupancyStatus: input.occupancyStatus ?? 'UNKNOWN',
+    firstLienLtvPct,
+    combinedLtvPct,
+    hasMortgageInsurance: input.hasMortgageInsurance,
+    hasSecondMortgage: input.hasSecondMortgage,
+    secondMortgageBalanceUsd: input.hasSecondMortgage
+      ? knownSecondBalance
+      : null,
+    conformingContext,
+  });
 
   return {
     valueSource,
@@ -201,6 +221,7 @@ export function buildRefinanceEligibilityContext(
     loanType: input.loanType ?? 'UNKNOWN',
     conformingLimitUsd,
     conformingContext,
+    programPathways,
     warnings,
     followUpActions: [...new Set(followUpActions)],
   };

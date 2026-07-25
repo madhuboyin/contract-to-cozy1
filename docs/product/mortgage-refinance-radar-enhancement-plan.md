@@ -112,7 +112,7 @@ scenario metadata JSON, so no schema change or migration is required.
 | Retain, extra-principal, recast, and cash-out alternatives | Complete for planning | Recast and cash-out results remain conditional on servicer/lender eligibility. |
 | Lender-ready Markdown export | Complete | Recomputes against canonical context and exports assumptions, costs, alternatives, questions, and disclaimers as Markdown only. |
 | Funnel and trust instrumentation | Complete for product events | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, and durable alert-suppression outcomes are captured. Reporting dashboards remain an analytics-operations follow-up. |
-| FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Pending | Add program-specific eligibility ranges without implying approval. |
+| FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Complete for planning | Explicit Financing loan types drive FHA streamline, VA IRRRL, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, and second-lien coordination pathways. Every pathway lists facts to confirm and avoids approval claims or hard-coded county limits. |
 | Push notifications | Deferred | Requires a configured push provider and consent contract. |
 | Lender-offer and Loan Estimate comparison | Deferred | Begin only after trust and usefulness guardrails demonstrate readiness. |
 
