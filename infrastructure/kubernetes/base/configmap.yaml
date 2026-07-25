@@ -69,6 +69,14 @@ data:
   CAPABILITY_RECOMMENDATIONS_ENABLED: "true"
   ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: "false"
   TOOL_DISCOVERY_DISABLED_IDS: ""
+  # Runtime containment lists. Values are comma-separated canonical
+  # capability IDs; keep the complete intended list when changing one.
+  TOOL_DISCOVERY_BROKEN_ROUTE_IDS: ""
+  TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS: ""
+  # Deployment/rollback guards. The registry hash may remain blank until an
+  # immutable release pins it. Manifest pins use capability-id:version pairs.
+  TOOL_DISCOVERY_EXPECTED_REGISTRY_VERSION: ""
+  TOOL_DISCOVERY_MANIFEST_VERSIONS: ""
 
   # Worker execution policy (apps/backend/src/config/workerExecutionPolicy.ts).
   # Beta defaults per the worker module audit — flip a flag to "true" only

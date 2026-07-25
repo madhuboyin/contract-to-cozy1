@@ -70,6 +70,16 @@ services:
       METRICS_BEARER_TOKEN: ${METRICS_BEARER_TOKEN:-}
       SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-}
       ENFORCE_HUMAN_POLICY_APPROVALS: ${ENFORCE_HUMAN_POLICY_APPROVALS:-false}
+      # Capability discovery operational controls. Keep defaults aligned with
+      # infrastructure/kubernetes/base/configmap.yaml.
+      TOOL_DISCOVERY_ENABLED: ${TOOL_DISCOVERY_ENABLED:-true}
+      CAPABILITY_RECOMMENDATIONS_ENABLED: ${CAPABILITY_RECOMMENDATIONS_ENABLED:-true}
+      ENFORCE_TOOL_DISCOVERY_RELEASE_GATES: ${ENFORCE_TOOL_DISCOVERY_RELEASE_GATES:-false}
+      TOOL_DISCOVERY_DISABLED_IDS: ${TOOL_DISCOVERY_DISABLED_IDS:-}
+      TOOL_DISCOVERY_BROKEN_ROUTE_IDS: ${TOOL_DISCOVERY_BROKEN_ROUTE_IDS:-}
+      TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS: ${TOOL_DISCOVERY_RELEASE_GATE_BLOCKED_IDS:-}
+      TOOL_DISCOVERY_EXPECTED_REGISTRY_VERSION: ${TOOL_DISCOVERY_EXPECTED_REGISTRY_VERSION:-}
+      TOOL_DISCOVERY_MANIFEST_VERSIONS: ${TOOL_DISCOVERY_MANIFEST_VERSIONS:-}
       # Worker execution policy (see apps/backend/src/config/workerExecutionPolicy.ts).
       # The backend needs these too: the admin console's Worker Jobs page
       # evaluates job enabled/disabled state against the backend's own

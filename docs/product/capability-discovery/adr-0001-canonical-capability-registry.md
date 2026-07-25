@@ -82,3 +82,9 @@ launch attribution, and lifecycle metadata.
 - The canonical registry contract rejects duplicate IDs, routes, rollout keys, incomplete
   contextual definitions, invalid completion definitions, and unknown explicit relationships.
 - Later phases demonstrate catalog and recommendation parity before removing legacy authorities.
+
+## Operations
+
+Operational containment, incident diagnosis, rollback, verification, and
+closure procedures are defined in
+[`CAPABILITY_PLATFORM_RUNBOOK.md`](./CAPABILITY_PLATFORM_RUNBOOK.md).

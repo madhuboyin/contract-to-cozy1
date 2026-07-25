@@ -105,6 +105,7 @@ Status as of July 24, 2026:
 | CAP-702 lifecycle canonicalization | Complete | A versioned lifecycle envelope validates canonical capability and manifest identity, protects canonical metadata from caller overrides, carries recommendation and source lineage through contextual surfaces, and explicitly normalizes unattributed legacy/catalog events |
 | CAP-703 admin analytics | Complete | The existing Tool Discovery Funnel now reports server-recorded eligibility, actual-view coverage, engagement and outcome stages, feedback, readiness, reasons, source mix, and repeated recommendation scopes from Product Analytics |
 | CAP-704 operational controls | Complete | Availability now fails closed for configured registry or manifest mismatches, malformed rollback pins, known-broken routes, release-gate blocks, global or per-capability disables, missing cohorts, and paused recommendation definitions; Admin Release Gates exposes control and parity status |
+| CAP-705 incident and support runbook | Complete | The capability platform runbook defines severity, evidence handling, containment, diagnosis, rollback, verification, escalation, and closure for all required discovery and recommendation incident classes |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1471,6 +1472,16 @@ Cover:
 - rollout misconfiguration;
 - registry startup failure; and
 - emergency disable/rollback.
+
+Implemented in
+`docs/product/capability-discovery/CAPABILITY_PLATFORM_RUNBOOK.md`. The runbook
+uses Admin Release Gates, Admin Analytics, the canonical catalog, bounded
+lifecycle lineage, and API logs as its evidence sources. It provides narrow
+per-capability containment, SEV-1 global shutdown, immutable-image rollback
+with registry/manifest pin parity, post-containment checks, and a local release
+gate for every required incident class. The CAP-704 runtime control keys are
+also present in the tracked production ConfigMap so documented procedures map
+to deployable configuration.
 
 ### Exit criteria
 
