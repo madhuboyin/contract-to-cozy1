@@ -1,11 +1,18 @@
 # Backend Dockerfile - Node.js API
 # Multi-stage build optimized for Raspberry Pi (ARM64)
 
+# Pin the multi-architecture Debian base manifest. A floating Alpine tag
+# previously changed the libc/runtime underneath an unchanged application
+# build and exposed an incompatible Prisma native engine.
+ARG NODE_IMAGE=node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+
 # Stage 1: Production dependencies only
-FROM node:22-alpine AS deps
+FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++ openssl openssl-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ openssl libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
@@ -14,11 +21,11 @@ RUN npm ci --only=production && npm cache clean --force
 RUN node -e "const sdk = require('@google/genai'); if (typeof sdk.GoogleGenAI !== 'function') throw new Error('@google/genai CommonJS export is invalid')"
 
 # Stage 2: Prisma generation (isolated — only schema + packages, no source)
-# Uses a glibc (Debian slim) base instead of Alpine/musl for this stage only —
-# generating the client for this schema (270+ models, ~2MB output file) hit a
-# silent short-write truncation on Alpine when built natively on the
-# Raspberry Pi cluster; glibc doesn't exhibit the same issue.
-FROM node:22-slim AS prisma-gen
+# Keep Prisma generation and runtime on the same libc family. Generating the
+# client for this schema (270+ models, ~2MB output file) previously hit a
+# silent short-write truncation on Alpine, and an Alpine runner later failed to
+# load the generated ARM64 musl engine. Debian/glibc avoids both mismatches.
+FROM ${NODE_IMAGE} AS prisma-gen
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -35,10 +42,12 @@ COPY prisma ./prisma
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Stage 3: TypeScript compilation (source only — no COPY .)
-FROM node:22-alpine AS builder
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++ openssl openssl-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ openssl libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY tsconfig*.json ./
@@ -55,18 +64,19 @@ COPY prisma ./prisma
 RUN npm run build
 
 # Stage 4: Runner
-FROM node:22-alpine AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     curl \
     openssl \
-    openssl-dev \
-    libc6-compat \
-    leptonica-dev
+    libssl3 \
+    ca-certificates \
+    liblept5 \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nodejs
@@ -84,6 +94,10 @@ COPY --from=builder /app/package*.json ./
 
 # Recheck the exact dependency tree shipped in the final runtime image.
 RUN node -e "const sdk = require('@google/genai'); if (typeof sdk.GoogleGenAI !== 'function') throw new Error('@google/genai CommonJS export is invalid')"
+# Load the exact Prisma native module shipped in the runner. This catches
+# architecture, libc, OpenSSL, and corrupted-engine failures during image
+# construction instead of after the pod begins serving traffic.
+RUN node -e "const fs=require('fs'); const path=require('path'); const dir=path.resolve('node_modules/.prisma/client'); const engines=fs.readdirSync(dir).filter((name)=>name.startsWith('libquery_engine')&&name.endsWith('.so.node')); if(engines.length!==1) throw new Error('Expected exactly one Prisma query engine, found '+engines.join(',')); require(path.join(dir,engines[0]));"
 
 # Prisma schema (needed for migrations / runtime)
 COPY prisma ./prisma

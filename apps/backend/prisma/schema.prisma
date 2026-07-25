@@ -4,12 +4,10 @@
 
 generator client {
   provider      = "prisma-client-js"
-  // "native" covers local dev (macOS/Linux glibc). The prisma-gen Docker stage
-  // now generates on a glibc (Debian) base — see infrastructure/docker/backend/Dockerfile
-  // — but the builder/runner stages are still Alpine (musl) on ARM64
-  // (Raspberry Pi), so the arm64 musl engine binary must be requested
-  // explicitly or the runtime container won't have a matching query engine.
-  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+  // Docker generation and runtime both use Debian/glibc on the target
+  // architecture. "native" also keeps local development generation aligned
+  // with the developer machine instead of packaging an unused musl engine.
+  binaryTargets = ["native"]
 }
 
 datasource db {

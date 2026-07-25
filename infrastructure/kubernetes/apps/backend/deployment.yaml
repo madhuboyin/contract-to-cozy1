@@ -348,7 +348,11 @@ spec:
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /api/ready
+              # Keep an API image with an unloadable Prisma engine—or an API
+              # pod that cannot reach PostgreSQL—out of the Service. Liveness
+              # remains shallow so a database outage does not restart-loop
+              # otherwise healthy application processes.
+              path: /api/health/deep
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 5
