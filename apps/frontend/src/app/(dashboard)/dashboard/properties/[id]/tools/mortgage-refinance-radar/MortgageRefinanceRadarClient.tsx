@@ -709,6 +709,10 @@ function ScenarioCalculator({
   const [targetRate, setTargetRate] = useState('');
   const [targetTerm, setTargetTerm] = useState<RefinanceScenarioTerm>('THIRTY_YEAR');
   const [closingCost, setClosingCost] = useState('');
+  const [discountPoints, setDiscountPoints] = useState('');
+  const [additionalFees, setAdditionalFees] = useState('');
+  const [lenderCredits, setLenderCredits] = useState('');
+  const [showCostDetails, setShowCostDetails] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RefinanceScenarioResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -720,15 +724,35 @@ function ScenarioCalculator({
       setError('Enter a valid rate between 0.1% and 30%.');
       return;
     }
+    const optionalNumber = (
+      value: string,
+      label: string,
+      maximum: number,
+    ): number | undefined => {
+      if (!value.trim()) return undefined;
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > maximum) {
+        throw new Error(`${label} must be between 0 and ${maximum.toLocaleString()}.`);
+      }
+      return parsed;
+    };
     setRunning(true);
     setError(null);
     setResult(null);
     try {
-      const closingCostAmount = closingCost ? parseFloat(closingCost) : undefined;
+      const closingCostAmount = optionalNumber(closingCost, 'Base closing costs', 500_000);
+      const discountPointsValue = optionalNumber(discountPoints, 'Discount points', 5);
+      const additionalFeesAmount = optionalNumber(additionalFees, 'Additional fees', 500_000);
+      const lenderCreditsAmount = optionalNumber(lenderCredits, 'Lender credits', 500_000);
       const scenario = await runScenario(propertyId, {
         targetRate: rate,
         targetTerm,
-        closingCostAmount: closingCostAmount && !isNaN(closingCostAmount) ? closingCostAmount : undefined,
+        closingCostAmount: closingCostAmount && closingCostAmount > 0
+          ? closingCostAmount
+          : undefined,
+        discountPoints: discountPointsValue,
+        additionalFeesAmount,
+        lenderCreditsAmount,
       });
       setResult(scenario);
       setShowResult(true);
@@ -811,6 +835,75 @@ function ScenarioCalculator({
               className="w-full rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none ring-0 transition focus:border-blue-400 focus:ring-1 focus:ring-blue-300/60 dark:border-slate-700/70 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500"
             />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowCostDetails((value) => !value)}
+            aria-expanded={showCostDetails}
+            className="inline-flex min-h-[36px] items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+          >
+            {showCostDetails ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )}
+            {showCostDetails ? 'Hide' : 'Refine'} cost assumptions
+          </button>
+
+          {showCostDetails && (
+            <div className="grid gap-3 rounded-xl border border-slate-200/70 bg-slate-50/70 p-3 sm:grid-cols-3 dark:border-slate-700/70 dark:bg-slate-900/45">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Discount points
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="0.125"
+                  inputMode="decimal"
+                  value={discountPoints}
+                  onChange={(e) => setDiscountPoints(e.target.value)}
+                  placeholder="e.g. 1"
+                  className="w-full rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">1 point = 1% of balance</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Other fees (USD)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  inputMode="decimal"
+                  value={additionalFees}
+                  onChange={(e) => setAdditionalFees(e.target.value)}
+                  placeholder="Appraisal, title, taxes"
+                  className="w-full rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Lender credits (USD)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  inputMode="decimal"
+                  value={lenderCredits}
+                  onChange={(e) => setLenderCredits(e.target.value)}
+                  placeholder="Reduces cash due"
+                  className="w-full rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <p className="text-[11px] leading-relaxed text-slate-500 sm:col-span-3 dark:text-slate-400">
+                These values model cost impact only. A lender&apos;s official Loan Estimate determines which charges affect disclosed APR.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Error */}
@@ -865,9 +958,14 @@ function ScenarioCalculator({
                     highlight={result.lifetimeSavings > 0 ? 'green' : 'red'}
                   />
                   <KpiTile
-                    label="Closing Costs"
-                    value={usd(result.closingCostUsd)}
-                    sub={`${(result.assumptions.closingCostPctUsed * 100).toFixed(1)}% of balance`}
+                    label="Cash to Close"
+                    value={usd(result.cashToCloseUsd)}
+                    sub="entered net costs"
+                  />
+                  <KpiTile
+                    label="Modeled APR"
+                    value={pct(result.estimatedAprPct, 3)}
+                    sub={`${pct(result.targetRatePct, 3)} note rate`}
                   />
                   <KpiTile
                     label="Payoff Change"
@@ -884,6 +982,41 @@ function ScenarioCalculator({
                     label="Interest Saved"
                     value={usd(result.totalInterestRemainingCurrent - result.totalInterestNewLoan)}
                   />
+                </div>
+
+                <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/60 p-3 text-xs dark:border-slate-700/70 dark:bg-slate-950/30">
+                  <p className="font-semibold text-slate-800 dark:text-slate-200">
+                    Cost and payoff assumptions
+                  </p>
+                  <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-slate-600 sm:grid-cols-2 dark:text-slate-400">
+                    <div className="flex justify-between gap-3">
+                      <dt>Base closing costs</dt>
+                      <dd>{usd(result.costBreakdown.baseClosingCostsUsd)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Points ({result.costBreakdown.discountPoints.toFixed(3)})</dt>
+                      <dd>{usd(result.costBreakdown.discountPointsUsd)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Other entered fees</dt>
+                      <dd>{usd(result.costBreakdown.additionalFeesUsd)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Lender credits</dt>
+                      <dd>−{usd(result.costBreakdown.lenderCreditsUsd)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3 font-medium text-slate-800 dark:text-slate-200">
+                      <dt>Net modeled costs</dt>
+                      <dd>{usd(result.costBreakdown.netClosingCostsUsd)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>Estimated payoff</dt>
+                      <dd>
+                        {freshnessDate(result.currentEstimatedPayoffDate)} →{' '}
+                        {freshnessDate(result.newEstimatedPayoffDate)}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
 
                 {result.disclaimer && (

@@ -11,6 +11,7 @@ const assert = require('node:assert/strict');
 const {
   calcMonthlyPayment,
   calcTotalInterest,
+  calcModeledApr,
   calcRefinanceScenario,
 } = require('../../dist/refinanceRadar/engine/refinanceCalculation.engine');
 
@@ -85,6 +86,12 @@ test('calcTotalInterest — clamped to 0 when payment × term < principal', () =
   // Edge: should never be negative
   const total = calcTotalInterest(100, 10, 2_000_000);
   assert.equal(total, 0);
+});
+
+test('calcModeledApr — matches the note rate with no modeled upfront costs', () => {
+  const principal = 400_000;
+  const payment = calcMonthlyPayment(principal, 5.5, 360);
+  assertClose(calcModeledApr(principal, payment, 360, 0), 5.5, 0.0001);
 });
 
 // ─── calcRefinanceScenario ────────────────────────────────────────────────────
@@ -210,6 +217,53 @@ test('calcRefinanceScenario — closingCostPct clamped at 10%', () => {
     closingCostPct: 0.50, // 50% — should be clamped to 10%
   });
   assertClose(result.effectiveClosingCostUsd, 10_000, 0.001);
+});
+
+test('calcRefinanceScenario — itemizes points, fees, credits, cash to close, and APR', () => {
+  const result = calcRefinanceScenario({
+    loanBalance: 400_000,
+    currentRatePct: 7.0,
+    remainingTermMonths: 360,
+    targetRatePct: 5.5,
+    targetTermMonths: 360,
+    closingCostUsd: 10_000,
+    discountPoints: 1,
+    additionalFeesUsd: 2_000,
+    lenderCreditsUsd: 3_000,
+  });
+
+  assertClose(result.costBreakdown.baseClosingCostsUsd, 10_000, 0.001);
+  assertClose(result.costBreakdown.discountPointsUsd, 4_000, 0.001);
+  assertClose(result.costBreakdown.grossClosingCostsUsd, 16_000, 0.001);
+  assertClose(result.costBreakdown.netClosingCostsUsd, 13_000, 0.001);
+  assertClose(result.effectiveClosingCostUsd, 13_000, 0.001);
+  assertClose(result.cashToCloseUsd, 13_000, 0.001);
+  assert.ok(result.estimatedAprPct > 5.5);
+  assert.equal(result.breakEvenMonths, Math.ceil(13_000 / result.monthlySavings));
+});
+
+test('calcRefinanceScenario — lender credits reduce net cost, break-even, and modeled APR', () => {
+  const withoutCredit = calcRefinanceScenario({
+    loanBalance: 300_000,
+    currentRatePct: 7,
+    remainingTermMonths: 360,
+    targetRatePct: 5.5,
+    targetTermMonths: 360,
+    closingCostUsd: 10_000,
+  });
+  const withCredit = calcRefinanceScenario({
+    loanBalance: 300_000,
+    currentRatePct: 7,
+    remainingTermMonths: 360,
+    targetRatePct: 5.5,
+    targetTermMonths: 360,
+    closingCostUsd: 10_000,
+    lenderCreditsUsd: 4_000,
+  });
+
+  assertClose(withCredit.cashToCloseUsd, 6_000, 0.001);
+  assert.ok(withCredit.breakEvenMonths < withoutCredit.breakEvenMonths);
+  assert.ok(withCredit.estimatedAprPct < withoutCredit.estimatedAprPct);
 });
 
 test('calcRefinanceScenario — term shortening may have negative monthly savings but positive lifetime', () => {

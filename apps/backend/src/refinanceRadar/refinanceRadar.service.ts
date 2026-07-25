@@ -622,6 +622,9 @@ export class RefinanceRadarService {
       targetTerm: RefinanceScenarioTerm;
       closingCostAmount?: number;
       closingCostPercent?: number;
+      discountPoints?: number;
+      additionalFeesAmount?: number;
+      lenderCreditsAmount?: number;
       saveScenario: boolean;
       propertyContextVersion: string;
     },
@@ -660,7 +663,16 @@ export class RefinanceRadarService {
       targetTermMonths,
       closingCostUsd: input.closingCostAmount,
       closingCostPct: input.closingCostPercent,
+      discountPoints: input.discountPoints,
+      additionalFeesUsd: input.additionalFeesAmount,
+      lenderCreditsUsd: input.lenderCreditsAmount,
     });
+    const scenarioDate = new Date();
+    const estimatedPayoffDate = (months: number) => {
+      const value = new Date(scenarioDate);
+      value.setUTCMonth(value.getUTCMonth() + months);
+      return value.toISOString();
+    };
 
     // Persist if requested
     if (input.saveScenario) {
@@ -677,6 +689,12 @@ export class RefinanceRadarService {
           metadataJson: {
             closingCostSource,
             closingCostPctUsed,
+            discountPoints: calcResult.costBreakdown.discountPoints,
+            additionalFeesUsd: calcResult.costBreakdown.additionalFeesUsd,
+            lenderCreditsUsd: calcResult.costBreakdown.lenderCreditsUsd,
+            costBreakdown: { ...calcResult.costBreakdown },
+            estimatedAprPct: calcResult.estimatedAprPct,
+            cashToCloseUsd: calcResult.cashToCloseUsd,
             computedAt: new Date().toISOString(),
             propertyContextVersion: input.propertyContextVersion,
           },
@@ -699,12 +717,25 @@ export class RefinanceRadarService {
       totalInterestRemainingCurrent: calcResult.totalInterestRemainingCurrent,
       totalInterestNewLoan: calcResult.totalInterestNewLoan,
       rateGapPct: calcResult.rateGapPct,
+      estimatedAprPct: calcResult.estimatedAprPct,
+      cashToCloseUsd: calcResult.cashToCloseUsd,
+      costBreakdown: calcResult.costBreakdown,
+      scenarioDate: scenarioDate.toISOString(),
+      currentEstimatedPayoffDate: estimatedPayoffDate(
+        mortgageContext.remainingTermMonths,
+      ),
+      newEstimatedPayoffDate: estimatedPayoffDate(targetTermMonths),
       assumptions: {
         loanBalance: mortgageContext.loanBalance,
         currentRatePct: mortgageContext.currentRatePct,
         remainingTermMonths: mortgageContext.remainingTermMonths,
         closingCostSource,
         closingCostPctUsed,
+        discountPoints: calcResult.costBreakdown.discountPoints,
+        additionalFeesUsd: calcResult.costBreakdown.additionalFeesUsd,
+        lenderCreditsUsd: calcResult.costBreakdown.lenderCreditsUsd,
+        aprMethodology:
+          'MODELED_FROM_NOTE_PAYMENT_AND_NET_UPFRONT_COSTS',
       },
       disclaimer: REFINANCE_DISCLAIMER,
     };

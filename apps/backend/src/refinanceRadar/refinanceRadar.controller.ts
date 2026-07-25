@@ -173,6 +173,9 @@ export class RefinanceRadarController {
         targetTerm: body.targetTerm,
         closingCostAmount: body.closingCostAmount,
         closingCostPercent: body.closingCostPercent,
+        discountPoints: body.discountPoints,
+        additionalFeesAmount: body.additionalFeesAmount,
+        lenderCreditsAmount: body.lenderCreditsAmount,
         saveScenario: body.saveScenario ?? false,
         propertyContextVersion: currentContext.contextVersion,
       });

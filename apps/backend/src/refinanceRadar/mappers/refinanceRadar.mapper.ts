@@ -13,6 +13,7 @@ import {
 import { Decimal } from '@prisma/client/runtime/library';
 import {
   RefinanceOpportunityDTO,
+  RefinanceCostBreakdown,
   RefinanceScenarioSnapshotDTO,
 } from '../types/refinanceRadar.types';
 import { TERM_TO_MONTHS } from '../engine/refinanceCalculation.engine';
@@ -35,6 +36,36 @@ function contextVersion(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
   const value = (metadata as Record<string, unknown>).propertyContextVersion;
   return typeof value === 'string' ? value : null;
+}
+
+function metadataRecord(metadata: unknown): Record<string, unknown> | null {
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : null;
+}
+
+function metadataNumber(metadata: unknown, key: string): number | null {
+  const value = metadataRecord(metadata)?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function costBreakdown(metadata: unknown): RefinanceCostBreakdown | null {
+  const value = metadataRecord(metadata)?.costBreakdown;
+  const record = metadataRecord(value);
+  if (!record) return null;
+  const keys: Array<keyof RefinanceCostBreakdown> = [
+    'baseClosingCostsUsd',
+    'discountPoints',
+    'discountPointsUsd',
+    'additionalFeesUsd',
+    'lenderCreditsUsd',
+    'grossClosingCostsUsd',
+    'netClosingCostsUsd',
+  ];
+  if (keys.some((key) => typeof record[key] !== 'number')) return null;
+  return Object.fromEntries(
+    keys.map((key) => [key, record[key] as number]),
+  ) as unknown as RefinanceCostBreakdown;
 }
 
 // ─── Opportunity ─────────────────────────────────────────────────────────────
@@ -77,5 +108,8 @@ export function mapScenarioToDTO(row: RefinanceScenarioSnapshot): RefinanceScena
     isSaved: row.isSaved,
     createdAt: row.createdAt.toISOString(),
     propertyContextVersion: contextVersion(row.metadataJson),
+    estimatedAprPct: metadataNumber(row.metadataJson, 'estimatedAprPct'),
+    cashToCloseUsd: metadataNumber(row.metadataJson, 'cashToCloseUsd'),
+    costBreakdown: costBreakdown(row.metadataJson),
   };
 }

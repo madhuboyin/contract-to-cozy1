@@ -81,6 +81,47 @@ export interface RefinanceScenarioInput {
   // Closing cost — one of the three; DEFAULT_CLOSING_COST_PCT used if none provided
   closingCostUsd?: number;
   closingCostPct?: number;        // Fraction of balance, e.g., 0.025
+  discountPoints?: number;        // Mortgage points, e.g., 1 = 1% of balance
+  additionalFeesUsd?: number;     // Appraisal, title, taxes, and other entered fees
+  lenderCreditsUsd?: number;      // Credits that reduce cash due at closing
+}
+
+/**
+ * Estimate APR from the note payment and net upfront costs. This is educational
+ * scenario math, not the disclosure APR a lender calculates under Regulation Z.
+ */
+export function calcModeledApr(
+  principalUsd: number,
+  monthlyPayment: number,
+  termMonths: number,
+  netUpfrontCostsUsd: number,
+): number {
+  if (
+    principalUsd <= 0 ||
+    monthlyPayment <= 0 ||
+    termMonths <= 0 ||
+    ![principalUsd, monthlyPayment, termMonths, netUpfrontCostsUsd].every(Number.isFinite)
+  ) {
+    return 0;
+  }
+  const amountFinanced = Math.max(1, principalUsd - Math.max(0, netUpfrontCostsUsd));
+  const presentValue = (monthlyRate: number) => {
+    if (monthlyRate === 0) return monthlyPayment * termMonths;
+    return (
+      monthlyPayment *
+      (1 - Math.pow(1 + monthlyRate, -termMonths)) /
+      monthlyRate
+    );
+  };
+
+  let low = 0;
+  let high = 0.30 / 12;
+  for (let i = 0; i < 80; i += 1) {
+    const midpoint = (low + high) / 2;
+    if (presentValue(midpoint) > amountFinanced) low = midpoint;
+    else high = midpoint;
+  }
+  return ((low + high) / 2) * 12 * 100;
 }
 
 /**
@@ -104,6 +145,9 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
     targetTermMonths,
     closingCostUsd,
     closingCostPct,
+    discountPoints,
+    additionalFeesUsd,
+    lenderCreditsUsd,
   } = input;
 
   // ── Input guardrails — clamp to safe ranges ──
@@ -117,15 +161,31 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
       ? Math.min(Math.max(closingCostPct, 0), 0.10)
       : undefined;
 
-  // ── Effective closing cost ──
-  let effectiveClosingCostUsd: number;
+  // ── Detailed cost layer ──
+  let baseClosingCostsUsd: number;
   if (closingCostUsd !== undefined && closingCostUsd > 0) {
-    effectiveClosingCostUsd = Math.min(closingCostUsd, loanBalance); // never exceed balance
+    baseClosingCostsUsd = Math.min(closingCostUsd, loanBalance);
   } else if (safeClosingCostPct !== undefined && safeClosingCostPct > 0) {
-    effectiveClosingCostUsd = loanBalance * safeClosingCostPct;
+    baseClosingCostsUsd = loanBalance * safeClosingCostPct;
   } else {
-    effectiveClosingCostUsd = loanBalance * DEFAULT_CLOSING_COST_PCT;
+    baseClosingCostsUsd = loanBalance * DEFAULT_CLOSING_COST_PCT;
   }
+  const safeDiscountPoints = Math.min(Math.max(discountPoints ?? 0, 0), 5);
+  const discountPointsUsd = loanBalance * (safeDiscountPoints / 100);
+  const safeAdditionalFeesUsd = Math.min(
+    Math.max(additionalFeesUsd ?? 0, 0),
+    loanBalance,
+  );
+  const safeLenderCreditsUsd = Math.min(
+    Math.max(lenderCreditsUsd ?? 0, 0),
+    loanBalance,
+  );
+  const grossClosingCostsUsd =
+    baseClosingCostsUsd + discountPointsUsd + safeAdditionalFeesUsd;
+  const effectiveClosingCostUsd = Math.max(
+    0,
+    grossClosingCostsUsd - safeLenderCreditsUsd,
+  );
 
   // ── Monthly payments ──
   const currentMonthlyPayment =
@@ -165,6 +225,12 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
 
   const rateGapPct = safeCurrentRatePct - safeTargetRatePct;
   const payoffDeltaMonths = safeTargetTermMonths - safeRemainingTermMonths;
+  const estimatedAprPct = calcModeledApr(
+    loanBalance,
+    newMonthlyPayment,
+    safeTargetTermMonths,
+    effectiveClosingCostUsd,
+  );
 
   return {
     rateGapPct,
@@ -177,5 +243,16 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
     totalInterestNewLoan,
     lifetimeSavings,
     payoffDeltaMonths,
+    estimatedAprPct,
+    cashToCloseUsd: effectiveClosingCostUsd,
+    costBreakdown: {
+      baseClosingCostsUsd,
+      discountPoints: safeDiscountPoints,
+      discountPointsUsd,
+      additionalFeesUsd: safeAdditionalFeesUsd,
+      lenderCreditsUsd: safeLenderCreditsUsd,
+      grossClosingCostsUsd,
+      netClosingCostsUsd: effectiveClosingCostUsd,
+    },
   };
 }

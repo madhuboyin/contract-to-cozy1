@@ -68,6 +68,14 @@ independent fail-closed controls—`REFINANCE_EXTERNAL_ALERTS_ENABLED` and
 `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED`—must both be exactly `true`; therefore
 external delivery remains off by default. Existing notification policy applies
 the homeowner's cadence, timezone, and quiet hours once the alert is admitted.
+The scenario planner's first expanded-assumptions slice is also implemented.
+Homeowners can itemize discount points, lender credits, and appraisal/title/tax
+or other fees instead of relying on one opaque cost value. Results distinguish
+gross and net modeled costs, cash to close, note rate versus modeled APR, and
+the current versus refinanced payoff date. Saved scenarios retain this detail
+in the existing metadata JSON, so no database schema change or migration is
+required. APR remains clearly labeled as an educational estimate rather than a
+lender disclosure.
 
 ## Executive recommendation
 

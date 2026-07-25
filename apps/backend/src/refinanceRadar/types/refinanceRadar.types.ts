@@ -34,6 +34,19 @@ export interface RefinanceCalcResult {
   totalInterestNewLoan: number;
   lifetimeSavings: number;          // Net interest savings after closing costs
   payoffDeltaMonths: number;        // new term vs remaining current term (negative = faster payoff)
+  estimatedAprPct: number;          // Modeled APR including entered net upfront costs
+  cashToCloseUsd: number;
+  costBreakdown: RefinanceCostBreakdown;
+}
+
+export interface RefinanceCostBreakdown {
+  baseClosingCostsUsd: number;
+  discountPoints: number;
+  discountPointsUsd: number;
+  additionalFeesUsd: number;
+  lenderCreditsUsd: number;
+  grossClosingCostsUsd: number;
+  netClosingCostsUsd: number;
 }
 
 /**
@@ -171,6 +184,12 @@ export interface RefinanceScenarioResult {
   totalInterestRemainingCurrent: number;
   totalInterestNewLoan: number;
   rateGapPct: number;
+  estimatedAprPct: number;
+  cashToCloseUsd: number;
+  costBreakdown: RefinanceCostBreakdown;
+  scenarioDate: string;
+  currentEstimatedPayoffDate: string;
+  newEstimatedPayoffDate: string;
   assumptions: ScenarioAssumptions;
   disclaimer: string;
 }
@@ -181,6 +200,10 @@ export interface ScenarioAssumptions {
   remainingTermMonths: number;
   closingCostSource: 'PROVIDED_AMOUNT' | 'PROVIDED_PCT' | 'DEFAULT_2_5_PCT';
   closingCostPctUsed: number;
+  discountPoints: number;
+  additionalFeesUsd: number;
+  lenderCreditsUsd: number;
+  aprMethodology: 'MODELED_FROM_NOTE_PAYMENT_AND_NET_UPFRONT_COSTS';
 }
 
 export interface RefinanceScenarioSnapshotDTO {
@@ -196,6 +219,9 @@ export interface RefinanceScenarioSnapshotDTO {
   isSaved: boolean;
   createdAt: string;
   propertyContextVersion: string | null;
+  estimatedAprPct: number | null;
+  cashToCloseUsd: number | null;
+  costBreakdown: RefinanceCostBreakdown | null;
 }
 
 export interface MortgageRateSnapshotDTO {

@@ -50,6 +50,21 @@ export const runScenarioSchema = z
       .positive('closingCostPercent must be positive')
       .max(0.2, 'closingCostPercent must be a fraction (e.g., 0.025 for 2.5%)')
       .optional(),
+    discountPoints: z
+      .number()
+      .min(0, 'discountPoints cannot be negative')
+      .max(5, 'discountPoints cannot exceed 5 points')
+      .optional(),
+    additionalFeesAmount: z
+      .number()
+      .min(0, 'additionalFeesAmount cannot be negative')
+      .max(500_000, 'additionalFeesAmount seems unrealistic')
+      .optional(),
+    lenderCreditsAmount: z
+      .number()
+      .min(0, 'lenderCreditsAmount cannot be negative')
+      .max(500_000, 'lenderCreditsAmount seems unrealistic')
+      .optional(),
     saveScenario: z.boolean().optional().default(false),
   })
   .refine(

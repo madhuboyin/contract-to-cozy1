@@ -91,6 +91,9 @@ export type RefinanceOpportunityDTO = {
   closingCostAssumptionUsd: number | null;
   remainingTermMonths: number | null;
   createdAt: string;
+  estimatedAprPct: number | null;
+  cashToCloseUsd: number | null;
+  costBreakdown: RefinanceCostBreakdown | null;
 };
 
 export type ScenarioAssumptions = {
@@ -99,6 +102,20 @@ export type ScenarioAssumptions = {
   remainingTermMonths: number;
   closingCostSource: 'PROVIDED_AMOUNT' | 'PROVIDED_PCT' | 'DEFAULT_2_5_PCT';
   closingCostPctUsed: number;
+  discountPoints: number;
+  additionalFeesUsd: number;
+  lenderCreditsUsd: number;
+  aprMethodology: 'MODELED_FROM_NOTE_PAYMENT_AND_NET_UPFRONT_COSTS';
+};
+
+export type RefinanceCostBreakdown = {
+  baseClosingCostsUsd: number;
+  discountPoints: number;
+  discountPointsUsd: number;
+  additionalFeesUsd: number;
+  lenderCreditsUsd: number;
+  grossClosingCostsUsd: number;
+  netClosingCostsUsd: number;
 };
 
 export type RefinanceScenarioResult = {
@@ -117,6 +134,12 @@ export type RefinanceScenarioResult = {
   totalInterestRemainingCurrent: number;
   totalInterestNewLoan: number;
   rateGapPct: number;
+  estimatedAprPct: number;
+  cashToCloseUsd: number;
+  costBreakdown: RefinanceCostBreakdown;
+  scenarioDate: string;
+  currentEstimatedPayoffDate: string;
+  newEstimatedPayoffDate: string;
   assumptions: ScenarioAssumptions;
   disclaimer: string;
 };
@@ -133,6 +156,9 @@ export type RefinanceScenarioSnapshotDTO = {
   lifetimeSavings: number | null;
   isSaved: boolean;
   createdAt: string;
+  estimatedAprPct: number | null;
+  cashToCloseUsd: number | null;
+  costBreakdown: RefinanceCostBreakdown | null;
 };
 
 export type MortgageRateSnapshotDTO = {
@@ -259,6 +285,9 @@ export async function runScenario(
     targetRate: number;
     targetTerm: RefinanceScenarioTerm;
     closingCostAmount?: number;
+    discountPoints?: number;
+    additionalFeesAmount?: number;
+    lenderCreditsAmount?: number;
     saveScenario?: boolean;
   },
 ): Promise<RefinanceScenarioResult> {
