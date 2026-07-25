@@ -143,7 +143,21 @@ const LifecycleSummarySchema = z.object({
   impressionCount30Days: z.number().int().nonnegative(),
   lastImpressionAt: z.string().datetime().nullable(),
   lastDismissedAt: z.string().datetime().nullable(),
+  lastNotRelevantAt: z.string().datetime().nullable().default(null),
+  lastNotRelevantSourceActionId: OptionalIdentifier.default(null),
+  lastNotRelevantSourceVersion: OptionalIdentifier.default(null),
+  lastNotRelevantContextVersion: OptionalIdentifier.default(null),
+  snoozedUntil: z.string().datetime().nullable().default(null),
   lastCompletedAt: z.string().datetime().nullable(),
+  lastCompletedSourceActionId: OptionalIdentifier.default(null),
+  lastCompletedSourceVersion: OptionalIdentifier.default(null),
+  lastCompletedContextVersion: OptionalIdentifier.default(null),
+  impressionScopes30Days: z.array(z.object({
+    sourceActionId: OptionalIdentifier.default(null),
+    contextVersion: OptionalIdentifier.default(null),
+    count: z.number().int().positive(),
+    lastImpressionAt: z.string().datetime(),
+  })).max(200).default([]),
 });
 
 const ExplicitSourceContextSchema = z.object({

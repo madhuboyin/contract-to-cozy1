@@ -17,6 +17,8 @@ export const CAPABILITY_SUPPRESSION_REASON_CODES = [
   'SOURCE_ACTION_TERMINAL',
   'SOURCE_ACTION_STALE',
   'RECENTLY_DISMISSED',
+  'NOT_RELEVANT_WITHOUT_RENEWED_RELEVANCE',
+  'SNOOZED_UNTIL',
   'FREQUENCY_CAP_REACHED',
   'COMPLETED_WITHOUT_RENEWED_RELEVANCE',
   'POLICY_BLOCKED',
@@ -83,10 +85,55 @@ function recentlyDismissed(input: {
 
 function hasRenewedRelevance(
   candidate: GovernedCapabilityCandidate,
-  lastCompletedAt: string,
+  context: CapabilityRecommendationContext,
+  previous: {
+    occurredAt: string;
+    sourceActionId: string | null;
+    sourceVersion: string | null;
+    contextVersion: string | null;
+  },
 ): boolean {
+  if (
+    previous.sourceActionId
+    && candidate.source.actionId !== previous.sourceActionId
+  ) {
+    return true;
+  }
+  if (
+    previous.contextVersion
+    && context.contextVersion !== previous.contextVersion
+  ) {
+    return true;
+  }
+  if (
+    previous.sourceVersion
+    && candidate.source.sourceVersion
+    && candidate.source.sourceVersion !== previous.sourceVersion
+  ) {
+    return true;
+  }
+  // A Home Action's evaluation timestamp can advance when the feed is rebuilt
+  // without new evidence. Require a lineage/version/context change instead.
+  if (candidate.source.kind === 'HOME_ACTION') return false;
   return candidate.source.observedAt !== null
-    && Date.parse(candidate.source.observedAt) > Date.parse(lastCompletedAt);
+    && Date.parse(candidate.source.observedAt) > Date.parse(previous.occurredAt);
+}
+
+export function scopedImpressionCount(input: {
+  capabilityId: string;
+  sourceActionId: string | null;
+  context: CapabilityRecommendationContext;
+}): number {
+  const lifecycle = lifecycleFor(input.capabilityId, input.context);
+  if (!lifecycle) return 0;
+  if (lifecycle.impressionScopes30Days.length === 0) {
+    return lifecycle.impressionCount30Days;
+  }
+  return lifecycle.impressionScopes30Days
+    .filter((scope) =>
+      scope.sourceActionId === input.sourceActionId
+      && scope.contextVersion === input.context.contextVersion)
+    .reduce((total, scope) => total + scope.count, 0);
 }
 
 function baseSuppressionReasons(input: {
@@ -119,15 +166,40 @@ function baseSuppressionReasons(input: {
     reasons.push('RECENTLY_DISMISSED');
   }
   if (
-    lifecycle
-    && lifecycle.impressionCount30Days
+    lifecycle?.lastNotRelevantAt
+    && !hasRenewedRelevance(candidate, context, {
+      occurredAt: lifecycle.lastNotRelevantAt,
+      sourceActionId: lifecycle.lastNotRelevantSourceActionId,
+      sourceVersion: lifecycle.lastNotRelevantSourceVersion,
+      contextVersion: lifecycle.lastNotRelevantContextVersion,
+    })
+  ) {
+    reasons.push('NOT_RELEVANT_WITHOUT_RENEWED_RELEVANCE');
+  }
+  if (
+    lifecycle?.snoozedUntil
+    && Date.parse(lifecycle.snoozedUntil) > Date.parse(context.generatedAt)
+  ) {
+    reasons.push('SNOOZED_UNTIL');
+  }
+  if (
+    lifecycle && scopedImpressionCount({
+      capabilityId: candidate.capabilityId,
+      sourceActionId: candidate.source.actionId,
+      context,
+    })
       >= capability.recommendation.maxImpressionsPer30Days
   ) {
     reasons.push('FREQUENCY_CAP_REACHED');
   }
   if (
     lifecycle?.lastCompletedAt
-    && !hasRenewedRelevance(candidate, lifecycle.lastCompletedAt)
+    && !hasRenewedRelevance(candidate, context, {
+      occurredAt: lifecycle.lastCompletedAt,
+      sourceActionId: lifecycle.lastCompletedSourceActionId,
+      sourceVersion: lifecycle.lastCompletedSourceVersion,
+      contextVersion: lifecycle.lastCompletedContextVersion,
+    })
   ) {
     reasons.push('COMPLETED_WITHOUT_RENEWED_RELEVANCE');
   }

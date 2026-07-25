@@ -28,6 +28,7 @@ const {
 } = require('../fixtures/productFramework/goldenTestHomes.js');
 const {
   buildCapabilityActionSourceMetadata,
+  aggregateCapabilityLifecycleEvents,
   getCapabilitySuggestions,
   getCapabilitySuggestionsFromAuthorizedSources,
 } = require('../../src/services/capabilityRecommendation.service.ts');
@@ -976,13 +977,13 @@ test('CAP-404 enforces dismissal cooldown and impression frequency caps', () => 
 });
 
 test('CAP-404 allows renewed relevance after completion and suppresses older signals', () => {
-  const contextFor = (lastEvaluatedAt) => governedCoverageContext({
+  const contextFor = (lastEvaluatedAt, sourceVersion = 'action-v2') => governedCoverageContext({
     actions: [action({
       lastEvaluatedAt,
       source: {
         kind: 'COVERAGE',
         entityId: 'item-1',
-        version: 'action-v2',
+        version: sourceVersion,
       },
       job: 'DECIDE',
     })],
@@ -996,6 +997,9 @@ test('CAP-404 allows renewed relevance after completion and suppresses older sig
       lastImpressionAt: null,
       lastDismissedAt: null,
       lastCompletedAt: '2026-07-22T12:00:00.000Z',
+      lastCompletedSourceActionId: 'action-1',
+      lastCompletedSourceVersion: 'action-v2',
+      lastCompletedContextVersion: 'context-v7',
     }],
   });
 
@@ -1004,7 +1008,7 @@ test('CAP-404 allows renewed relevance after completion and suppresses older sig
     'coverage-options',
   );
   const renewedSignal = candidateById(
-    suppress(contextFor('2026-07-23T12:00:00.000Z')),
+    suppress(contextFor('2026-07-23T12:00:00.000Z', 'action-v3')),
     'coverage-options',
   );
   assert.equal(
@@ -1017,6 +1021,169 @@ test('CAP-404 allows renewed relevance after completion and suppresses older sig
     suppressed: false,
     reasonCodes: [],
   });
+});
+
+test('CAP-701 scopes frequency caps to the same source action and context version', () => {
+  const lifecycle = [{
+    capabilityId: 'coverage-options',
+    impressionCount30Days: 6,
+    lastImpressionAt: '2026-07-23T12:00:00.000Z',
+    lastDismissedAt: null,
+    lastCompletedAt: null,
+    impressionScopes30Days: [
+      {
+        sourceActionId: 'action-old',
+        contextVersion: 'context-v7',
+        count: 3,
+        lastImpressionAt: '2026-07-22T12:00:00.000Z',
+      },
+      {
+        sourceActionId: 'action-1',
+        contextVersion: 'context-v6',
+        count: 3,
+        lastImpressionAt: '2026-07-23T12:00:00.000Z',
+      },
+    ],
+  }];
+  const renewedScope = candidateById(
+    suppress(governedCoverageContext({ lifecycle })),
+    'coverage-options',
+  );
+  assert.equal(
+    renewedScope.suppression.reasonCodes.includes('FREQUENCY_CAP_REACHED'),
+    false,
+  );
+
+  lifecycle[0].impressionScopes30Days.push({
+    sourceActionId: 'action-1',
+    contextVersion: 'context-v7',
+    count: 3,
+    lastImpressionAt: '2026-07-24T10:00:00.000Z',
+  });
+  const cappedScope = candidateById(
+    suppress(governedCoverageContext({ lifecycle })),
+    'coverage-options',
+  );
+  assert.equal(
+    cappedScope.suppression.reasonCodes.includes('FREQUENCY_CAP_REACHED'),
+    true,
+  );
+});
+
+test('CAP-701 applies not-relevant renewal and explicit snooze expiry', () => {
+  const contextFor = (
+    lastEvaluatedAt,
+    generatedAt = NOW,
+    sourceVersion = 'action-v2',
+  ) =>
+    governedCoverageContext({
+      propertyContext: propertyContext({ generatedAt }),
+      actions: [action({
+        lastEvaluatedAt,
+        source: {
+          kind: 'COVERAGE',
+          entityId: 'item-1',
+          version: sourceVersion,
+        },
+        job: 'DECIDE',
+      })],
+      actionSourceMetadata: [{
+        actionId: 'action-1',
+        signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
+      }],
+      lifecycle: [{
+        capabilityId: 'coverage-options',
+        impressionCount30Days: 0,
+        lastImpressionAt: null,
+        lastDismissedAt: null,
+        lastNotRelevantAt: '2026-07-22T12:00:00.000Z',
+        lastNotRelevantSourceActionId: 'action-1',
+        lastNotRelevantSourceVersion: 'action-v2',
+        lastNotRelevantContextVersion: 'context-v7',
+        snoozedUntil: '2026-07-25T12:00:00.000Z',
+        lastCompletedAt: null,
+      }],
+    });
+
+  const stale = candidateById(
+    suppress(contextFor('2026-07-21T12:00:00.000Z')),
+    'coverage-options',
+  );
+  assert.equal(
+    stale.suppression.reasonCodes.includes(
+      'NOT_RELEVANT_WITHOUT_RENEWED_RELEVANCE',
+    ),
+    true,
+  );
+  assert.equal(
+    stale.suppression.reasonCodes.includes('SNOOZED_UNTIL'),
+    true,
+  );
+
+  const renewedAfterExpiry = candidateById(
+    suppress(contextFor(
+      '2026-07-23T12:00:00.000Z',
+      '2026-07-26T12:00:00.000Z',
+      'action-v3',
+    )),
+    'coverage-options',
+  );
+  assert.equal(
+    renewedAfterExpiry.suppression.reasonCodes.includes(
+      'NOT_RELEVANT_WITHOUT_RENEWED_RELEVANCE',
+    ),
+    false,
+  );
+  assert.equal(
+    renewedAfterExpiry.suppression.reasonCodes.includes('SNOOZED_UNTIL'),
+    false,
+  );
+});
+
+test('CAP-701 aggregates lifecycle feedback and scoped actual-view events', () => {
+  const events = aggregateCapabilityLifecycleEvents([
+    {
+      featureKey: 'coverage-options',
+      eventName: 'TOOL_DISCOVERED',
+      occurredAt: new Date('2026-07-20T12:00:00.000Z'),
+      metadataJson: {
+        sourceActionId: 'action-1',
+        contextVersion: 'context-v7',
+      },
+    },
+    {
+      featureKey: 'coverage-options',
+      eventName: 'TOOL_DISCOVERED',
+      occurredAt: new Date('2026-07-21T12:00:00.000Z'),
+      metadataJson: {
+        sourceActionId: 'action-1',
+        contextVersion: 'context-v7',
+      },
+    },
+    {
+      featureKey: 'coverage-options',
+      eventName: 'TOOL_NOT_RELEVANT',
+      occurredAt: new Date('2026-07-22T12:00:00.000Z'),
+      metadataJson: {},
+    },
+    {
+      featureKey: 'coverage-options',
+      eventName: 'TOOL_SNOOZED',
+      occurredAt: new Date('2026-07-23T12:00:00.000Z'),
+      metadataJson: { snoozedUntil: '2026-07-30T12:00:00.000Z' },
+    },
+  ]);
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].impressionCount30Days, 2);
+  assert.deepEqual(events[0].impressionScopes30Days, [{
+    sourceActionId: 'action-1',
+    contextVersion: 'context-v7',
+    count: 2,
+    lastImpressionAt: '2026-07-21T12:00:00.000Z',
+  }]);
+  assert.equal(events[0].lastNotRelevantAt, '2026-07-22T12:00:00.000Z');
+  assert.equal(events[0].snoozedUntil, '2026-07-30T12:00:00.000Z');
 });
 
 test('CAP-404 suppresses equivalent outcomes for one source deterministically', () => {

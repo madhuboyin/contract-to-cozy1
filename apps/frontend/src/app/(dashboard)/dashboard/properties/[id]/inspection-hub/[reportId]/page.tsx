@@ -18,6 +18,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../../components/route-templates/DetailTemplate';
+import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
 
 const SEVERITY_STYLES: Record<InspectionFindingSeverity, { chip: 'danger' | 'elevated' | 'info' | 'good'; label: string; border: string }> = {
   SAFETY:        { chip: 'danger',   label: 'Safety',        border: 'border-rose-200 bg-rose-50' },
@@ -319,10 +320,17 @@ export default function ReportDetailPage() {
 
         {/* Confirmed success banner */}
         {(confirmed || report?.status === 'CONFIRMED') && (
-          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
-            <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-            Report confirmed — findings have been applied to your property records.
-          </div>
+          <>
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+              <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+              Report confirmed — findings have been applied to your property records.
+            </div>
+            <CapabilityDiscoveryAnchor
+              anchor="INSPECTION_RESULT"
+              propertyId={propertyId}
+              entityId={reportId}
+            />
+          </>
         )}
 
         {/* Safety warning banner */}

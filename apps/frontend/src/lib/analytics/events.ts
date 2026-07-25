@@ -209,6 +209,10 @@ export interface CtcEventProperties {
     recommendationReasons?: string[];
     recommendationVersions?: string[];
     contextVersion?: string | null;
+    sourceActionId?: string | null;
+    sourceEntityType?: string | null;
+    sourceEntityId?: string | null;
+    journeyId?: string | null;
   };
   tool_discovery_clicked: {
     propertyId?: string | null;
@@ -344,6 +348,10 @@ export function track<E extends CtcEventName>(
       recommendationReason: impression.recommendationReasons?.[index] ?? null,
       recommendationVersion: impression.recommendationVersions?.[index] ?? null,
       contextVersion: impression.contextVersion,
+      sourceActionId: impression.sourceActionId,
+      sourceEntityType: impression.sourceEntityType,
+      sourceEntityId: impression.sourceEntityId,
+      journeyId: impression.journeyId,
     })));
   }
 

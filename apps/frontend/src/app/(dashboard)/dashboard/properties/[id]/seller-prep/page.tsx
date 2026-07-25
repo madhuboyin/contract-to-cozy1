@@ -23,6 +23,7 @@ import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
 import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
 import { SellerPrepDisclaimer } from "@/components/seller-prep/SellerPrepDisclaimer";
 import { useMilestones } from "@/hooks/useMilestones";
+import { CapabilityDiscoveryAnchor } from "@/features/tools/CapabilityDiscoveryAnchor";
 // Note: this page used to mount its own seller-prep-scoped FeedbackWidget
 // here. That's superseded by the app-wide FeedbackWidget now mounted once
 // in app/(dashboard)/layout.tsx — kept here would double-mount it on this page.
@@ -257,6 +258,12 @@ export default function SellerPrepPage() {
       </div>
 
       <SellerPrepDisclaimer />
+
+      <CapabilityDiscoveryAnchor
+        anchor="SELLER_INTENT_ACTIVE"
+        propertyId={propertyId as string}
+        entityId={propertyId as string}
+      />
 
       {/* Main Redesigned Dashboard Content */}
       <SellerPrepOverview

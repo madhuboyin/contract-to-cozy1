@@ -15,6 +15,10 @@ import {
   CapabilityCompletionNextInputSchema,
   recordCapabilityCompletionAndResolveNext,
 } from '../services/capabilityCompletion.service';
+import {
+  CapabilityFeedbackInputSchema,
+  recordCapabilityFeedback,
+} from '../services/capabilityFeedback.service';
 import type { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
 
@@ -265,6 +269,61 @@ router.post(
         error: {
           code: 'CAPABILITY_COMPLETION_UNAVAILABLE',
           message: 'The next capability is temporarily unavailable.',
+        },
+      });
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/capability-suggestions/feedback',
+  authenticate,
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res: Response): Promise<void> => {
+    const parsed = CapabilityFeedbackInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_CAPABILITY_FEEDBACK',
+          message: 'The capability feedback event is invalid.',
+          details: parsed.error.flatten(),
+        },
+      });
+      return;
+    }
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' },
+      });
+      return;
+    }
+    try {
+      const data = await recordCapabilityFeedback({
+        ...parsed.data,
+        propertyId: req.params.propertyId,
+        userId,
+      });
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Vary', 'Authorization, Cookie');
+      res.status(data.status === 'RECORDED' ? 201 : 200).json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      logger.error(
+        { err: error, propertyId: req.params.propertyId, userId },
+        'Failed to record capability feedback',
+      );
+      res.status(409).json({
+        success: false,
+        error: {
+          code: 'CAPABILITY_FEEDBACK_REJECTED',
+          message: error instanceof Error
+            ? error.message
+            : 'The capability feedback decision could not be applied.',
         },
       });
     }

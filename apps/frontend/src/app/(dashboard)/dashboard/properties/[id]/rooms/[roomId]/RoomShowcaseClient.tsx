@@ -41,6 +41,7 @@ import {
   getRoomPlantAdvisorState,
 } from '../../tools/plant-advisor/plantAdvisorApi';
 import type { RoomPlantRecommendationDTO } from '../../tools/plant-advisor/types';
+import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
 
 const MilestoneCelebration = dynamic(
   () => import('@/components/ui/MilestoneCelebration').then((m) => m.MilestoneCelebration),
@@ -123,6 +124,7 @@ export default function RoomShowcaseClient() {
   const [scanSessionsLoading, setScanSessionsLoading] = useState(false);
   const [historySessionId, setHistorySessionId] = useState<string | null>(null);
   const [scanHistoryOpen, setScanHistoryOpen] = useState(false);
+  const [completedRoomSetupId, setCompletedRoomSetupId] = useState<string | null>(null);
 
   const itemsSectionRef = useRef<HTMLElement | null>(null);
 
@@ -405,7 +407,16 @@ export default function RoomShowcaseClient() {
           roomId={roomId}
           roomName={room?.name}
           initialSessionId={historySessionId}
+          onCompleted={() => setCompletedRoomSetupId(roomId)}
         />
+
+        {completedRoomSetupId ? (
+          <CapabilityDiscoveryAnchor
+            anchor="ROOM_SETUP_COMPLETED"
+            propertyId={propertyId}
+            entityId={completedRoomSetupId}
+          />
+        ) : null}
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           <div className="w-full space-y-4 xl:col-span-8">

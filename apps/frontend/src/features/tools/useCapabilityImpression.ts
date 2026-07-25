@@ -17,6 +17,10 @@ type CapabilityImpressionInput = {
   recommendationReason?: string | null;
   recommendationVersion?: string | null;
   contextVersion?: string | null;
+  sourceActionId?: string | null;
+  sourceEntityType?: string | null;
+  sourceEntityId?: string | null;
+  journeyId?: string | null;
   enabled?: boolean;
 };
 
@@ -30,6 +34,8 @@ function impressionKey(input: CapabilityImpressionInput): string {
     input.surface,
     input.propertyId ?? 'global',
     input.capabilityId,
+    input.sourceActionId ?? 'no-action',
+    input.contextVersion ?? 'no-context',
   ].join(':');
 }
 
@@ -39,6 +45,7 @@ export function useCapabilityImpression<T extends HTMLElement>(
   const [element, setElement] = React.useState<T | null>(null);
   const inputRef = React.useRef(input);
   inputRef.current = input;
+  const dedupeKey = impressionKey(input);
 
   React.useEffect(() => {
     if (!element || input.enabled === false || typeof IntersectionObserver === 'undefined') {
@@ -48,7 +55,7 @@ export function useCapabilityImpression<T extends HTMLElement>(
     let visibleEnough = false;
     let timer: number | null = null;
     let recorded = false;
-    const key = impressionKey(input);
+    const key = dedupeKey;
 
     try {
       recorded = window.sessionStorage.getItem(key) === '1';
@@ -83,6 +90,10 @@ export function useCapabilityImpression<T extends HTMLElement>(
           ? [current.recommendationVersion]
           : undefined,
         contextVersion: current.contextVersion,
+        sourceActionId: current.sourceActionId,
+        sourceEntityType: current.sourceEntityType,
+        sourceEntityId: current.sourceEntityId,
+        journeyId: current.journeyId,
       });
     };
 
@@ -114,6 +125,7 @@ export function useCapabilityImpression<T extends HTMLElement>(
     };
   }, [
     element,
+    dedupeKey,
     input.capabilityId,
     input.contextVersion,
     input.enabled,
@@ -121,7 +133,11 @@ export function useCapabilityImpression<T extends HTMLElement>(
     input.recommendationReason,
     input.recommendationVersion,
     input.registryVersion,
+    input.sourceActionId,
+    input.sourceEntityId,
+    input.sourceEntityType,
     input.surface,
+    input.journeyId,
   ]);
 
   return React.useCallback((node: T | null) => setElement(node), []);

@@ -6,6 +6,7 @@ import {
 import {
   CapabilitySuppressionResultSchema,
   SuppressedCapabilityCandidateSchema,
+  scopedImpressionCount,
   type CapabilitySuppressionResult,
   type SuppressedCapabilityCandidate,
 } from './capabilitySuppressionPolicy';
@@ -176,8 +177,13 @@ function noveltyScore(input: {
   );
   if (!lifecycle) return CAPABILITY_RANKING_COMPONENT_WEIGHTS.novelty;
   const maximum = input.capability.recommendation.maxImpressionsPer30Days;
+  const impressionCount = scopedImpressionCount({
+    capabilityId: input.candidate.capabilityId,
+    sourceActionId: input.candidate.source.actionId,
+    context: input.context,
+  });
   const impressionNovelty = maximum > 0
-    ? 1 - Math.min(1, lifecycle.impressionCount30Days / maximum)
+    ? 1 - Math.min(1, impressionCount / maximum)
     : 0;
   const completionFactor = lifecycle.lastCompletedAt ? 0.5 : 1;
   return roundScore(

@@ -185,7 +185,7 @@ export default function InventoryItemDrawer(props: {
   initialRoomId?: string | null;
   initialCategory?: InventoryItemCategory | null;
   highlightRecallMatchId?: string | null;
-  onSaved: () => void;
+  onSaved: (result?: { itemId: string; created: boolean }) => void;
   existingItems?: InventoryItem[];
 }) {
   const router = useRouter();
@@ -821,6 +821,9 @@ useEffect(() => {
 
     setSaving(true);
     try {
+      let savedItemId = props.initialItem?.id ?? '';
+      let created = false;
+
       // Determine which date field to send based on category
       let installedOnValue: string | null = null;
       let purchasedOnValue: string | null = null;
@@ -897,8 +900,12 @@ useEffect(() => {
           }
 
           await updateInventoryItem(props.propertyId, createdItemId, payload);
+          savedItemId = createdItemId;
+          created = true;
         } else {
-          await createInventoryItem(props.propertyId, payload);
+          const createdItem = await createInventoryItem(props.propertyId, payload);
+          savedItemId = createdItem.id;
+          created = true;
         }
       }
 
@@ -910,7 +917,9 @@ useEffect(() => {
         }
       }
 
-      props.onSaved();
+      props.onSaved(
+        savedItemId ? { itemId: savedItemId, created } : undefined,
+      );
     } catch (error: any) {
       console.error('Failed to save inventory item:', error);
       setSaveError(error?.message || 'Save failed. Please try again.');

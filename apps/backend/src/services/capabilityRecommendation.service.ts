@@ -328,6 +328,129 @@ async function loadDefaultCompletions(
   });
 }
 
+type CapabilityLifecycleAnalyticsEvent = {
+  featureKey: string | null;
+  eventName: string | null;
+  occurredAt: Date;
+  metadataJson: unknown;
+};
+
+function lifecycleMetadata(
+  value: unknown,
+): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function optionalLifecycleString(
+  metadata: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = metadata[key];
+  return typeof value === 'string' && value.trim()
+    ? value.trim()
+    : null;
+}
+
+export function aggregateCapabilityLifecycleEvents(
+  events: readonly CapabilityLifecycleAnalyticsEvent[],
+): CapabilityLifecycleSummary[] {
+  const byCapability = new Map<string, CapabilityLifecycleAnalyticsEvent[]>();
+  for (const event of events) {
+    if (!event.featureKey) continue;
+    const group = byCapability.get(event.featureKey) ?? [];
+    group.push(event);
+    byCapability.set(event.featureKey, group);
+  }
+
+  return [...byCapability.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([capabilityId, capabilityEvents]) => {
+      const chronological = [...capabilityEvents].sort(
+        (left, right) => left.occurredAt.getTime() - right.occurredAt.getTime(),
+      );
+      const impressions = chronological.filter(
+        (event) => event.eventName === 'TOOL_DISCOVERED',
+      );
+      const scopeMap = new Map<string, {
+        sourceActionId: string | null;
+        contextVersion: string | null;
+        count: number;
+        lastImpressionAt: Date;
+      }>();
+      for (const impression of impressions) {
+        const metadata = lifecycleMetadata(impression.metadataJson);
+        const sourceActionId = optionalLifecycleString(metadata, 'sourceActionId');
+        const contextVersion = optionalLifecycleString(metadata, 'contextVersion');
+        const key = `${sourceActionId ?? ''}\u0000${contextVersion ?? ''}`;
+        const existing = scopeMap.get(key);
+        scopeMap.set(key, {
+          sourceActionId,
+          contextVersion,
+          count: (existing?.count ?? 0) + 1,
+          lastImpressionAt: impression.occurredAt,
+        });
+      }
+      const latest = (eventName: string) =>
+        [...chronological].reverse().find(
+          (event) => event.eventName === eventName,
+        ) ?? null;
+      const lastSnooze = latest('TOOL_SNOOZED');
+      const lastNotRelevant = latest('TOOL_NOT_RELEVANT');
+      const lastCompleted = latest('TOOL_COMPLETED');
+      const lastNotRelevantMetadata = lifecycleMetadata(
+        lastNotRelevant?.metadataJson,
+      );
+      const lastCompletedMetadata = lifecycleMetadata(
+        lastCompleted?.metadataJson,
+      );
+      const snoozedUntil = lastSnooze
+        ? optionalLifecycleString(
+            lifecycleMetadata(lastSnooze.metadataJson),
+            'snoozedUntil',
+          )
+        : null;
+
+      return {
+        capabilityId,
+        impressionCount30Days: impressions.length,
+        lastImpressionAt:
+          impressions.at(-1)?.occurredAt.toISOString() ?? null,
+        lastDismissedAt:
+          latest('TOOL_DISMISSED')?.occurredAt.toISOString() ?? null,
+        lastNotRelevantAt:
+          lastNotRelevant?.occurredAt.toISOString() ?? null,
+        lastNotRelevantSourceActionId:
+          optionalLifecycleString(lastNotRelevantMetadata, 'sourceActionId'),
+        lastNotRelevantSourceVersion:
+          optionalLifecycleString(lastNotRelevantMetadata, 'sourceVersion'),
+        lastNotRelevantContextVersion:
+          optionalLifecycleString(lastNotRelevantMetadata, 'contextVersion'),
+        snoozedUntil:
+          snoozedUntil && Number.isFinite(Date.parse(snoozedUntil))
+            ? new Date(snoozedUntil).toISOString()
+            : null,
+        lastCompletedAt:
+          lastCompleted?.occurredAt.toISOString() ?? null,
+        lastCompletedSourceActionId:
+          optionalLifecycleString(lastCompletedMetadata, 'sourceActionId'),
+        lastCompletedSourceVersion:
+          optionalLifecycleString(lastCompletedMetadata, 'sourceVersion'),
+        lastCompletedContextVersion:
+          optionalLifecycleString(lastCompletedMetadata, 'contextVersion'),
+        impressionScopes30Days: [...scopeMap.values()]
+          .sort((left, right) =>
+            (left.sourceActionId ?? '').localeCompare(right.sourceActionId ?? '')
+            || (left.contextVersion ?? '').localeCompare(right.contextVersion ?? ''))
+          .map((scope) => ({
+            ...scope,
+            lastImpressionAt: scope.lastImpressionAt.toISOString(),
+          })),
+      };
+    });
+}
+
 async function loadDefaultLifecycle(
   propertyId: string,
   userId: string,
@@ -336,60 +459,39 @@ async function loadDefaultLifecycle(
 ): Promise<CapabilityLifecycleSummary[]> {
   const capabilityIds = registry.capabilities.map((capability) => capability.id);
   const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const [recentImpressions, latestCompletions] = await Promise.all([
-    prisma.productAnalyticsEvent.groupBy({
-      by: ['featureKey'],
-      where: {
-        propertyId,
-        userId,
-        moduleKey: 'tool_discovery',
-        featureKey: { in: capabilityIds },
-        eventName: 'TOOL_DISCOVERED',
-        occurredAt: { gte: since },
-      },
-      _count: { _all: true },
-      _max: { occurredAt: true },
-    }),
-    prisma.productAnalyticsEvent.findMany({
-      where: {
-        propertyId,
-        userId,
-        moduleKey: 'tool_discovery',
-        featureKey: { in: capabilityIds },
-        eventName: 'TOOL_COMPLETED',
-      },
-      select: { featureKey: true, occurredAt: true },
-      orderBy: [{ occurredAt: 'desc' }, { id: 'asc' }],
-      distinct: ['featureKey'],
-    }),
-  ]);
-  const impressionByCapability = new Map(
-    recentImpressions.flatMap((group) =>
-      group.featureKey
-        ? [[group.featureKey, {
-            count: group._count._all,
-            lastAt: group._max.occurredAt,
-          }] as const]
-        : []),
-  );
-  const completionByCapability = new Map(
-    latestCompletions.flatMap((event) =>
-      event.featureKey ? [[event.featureKey, event.occurredAt] as const] : []),
-  );
-  return [...new Set([
-    ...impressionByCapability.keys(),
-    ...completionByCapability.keys(),
-  ])].sort().map((capabilityId) => {
-    const impressions = impressionByCapability.get(capabilityId);
-    return {
-      capabilityId,
-      impressionCount30Days: impressions?.count ?? 0,
-      lastImpressionAt: impressions?.lastAt?.toISOString() ?? null,
-      lastDismissedAt: null,
-      lastCompletedAt:
-        completionByCapability.get(capabilityId)?.toISOString() ?? null,
-    };
+  const events = await prisma.productAnalyticsEvent.findMany({
+    where: {
+      propertyId,
+      userId,
+      moduleKey: 'tool_discovery',
+      featureKey: { in: capabilityIds },
+      OR: [
+        {
+          eventName: 'TOOL_DISCOVERED',
+          occurredAt: { gte: since },
+        },
+        {
+          eventName: {
+            in: [
+              'TOOL_DISMISSED',
+              'TOOL_NOT_RELEVANT',
+              'TOOL_SNOOZED',
+              'TOOL_COMPLETED',
+            ],
+          },
+        },
+      ],
+    },
+    select: {
+      featureKey: true,
+      eventName: true,
+      occurredAt: true,
+      metadataJson: true,
+    },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'asc' }],
+    take: 5_000,
   });
+  return aggregateCapabilityLifecycleEvents(events);
 }
 
 function countFactValue(snapshot: PropertyContextSnapshot, key: string): number | null {

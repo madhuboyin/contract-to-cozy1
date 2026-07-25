@@ -18,13 +18,22 @@ type Props = {
   roomId: string;
   roomName?: string | null;
   initialSessionId?: string | null;
+  onCompleted?: (sessionId: string) => void;
 };
 
 function safeArray(v: any): any[] {
   return Array.isArray(v) ? v : [];
 }
 
-export default function RoomScanModal({ open, onClose, propertyId, roomId, roomName, initialSessionId }: Props) {
+export default function RoomScanModal({
+  open,
+  onClose,
+  propertyId,
+  roomId,
+  roomName,
+  initialSessionId,
+  onCompleted,
+}: Props) {
   // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURNS
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -173,6 +182,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
     try {
       await bulkConfirmInventoryDrafts(propertyId, effectiveSelectedIds);
+      if (sessionId) onCompleted?.(sessionId);
       onClose();
       resetAll();
     } catch (e: any) {

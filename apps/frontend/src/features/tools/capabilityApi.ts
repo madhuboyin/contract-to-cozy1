@@ -1,6 +1,9 @@
 import { api } from '@/lib/api/client';
 import type {
+  CapabilityFeedbackResponseDTO,
+  CapabilityFeedbackTypeDTO,
   CapabilityCompletionNextResponseDTO,
+  CapabilitySuggestionDTO,
   CapabilitySuggestionResponseDTO,
   CapabilitySuggestionSurfaceDTO,
 } from '@/types';
@@ -11,6 +14,40 @@ import type {
   CapabilityContextType,
   RelatedCapabilitiesResponse,
 } from './capabilityTypes';
+
+const FEEDBACK_SURFACE = {
+  unified_home: 'HOME',
+  property_detail: 'PROPERTY',
+  workflow: 'WORKFLOW',
+  completion: 'COMPLETION',
+} as const;
+
+export async function recordCapabilitySuggestionFeedback(input: {
+  propertyId: string;
+  registryVersion: string;
+  surface: keyof typeof FEEDBACK_SURFACE;
+  suggestion: CapabilitySuggestionDTO;
+  type: CapabilityFeedbackTypeDTO;
+  eventId?: string;
+  reasonCode?: 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER' | null;
+  snoozedUntil?: string | null;
+}): Promise<CapabilityFeedbackResponseDTO> {
+  return api.recordCapabilitySuggestionFeedback(input.propertyId, {
+    eventId: input.eventId ?? crypto.randomUUID(),
+    suggestionId: input.suggestion.suggestionId,
+    capabilityId: input.suggestion.capabilityId,
+    manifestVersion: input.suggestion.manifestVersion,
+    registryVersion: input.registryVersion,
+    recommendationVersion: input.suggestion.recommendationVersion,
+    contextVersion: input.suggestion.contextVersion,
+    surface: FEEDBACK_SURFACE[input.surface],
+    type: input.type,
+    reasonCode: input.reasonCode,
+    snoozedUntil: input.snoozedUntil,
+    readiness: input.suggestion.readiness.state,
+    source: input.suggestion.source,
+  });
+}
 
 export type CapabilityCompletionNextRequest = {
   propertyId: string;

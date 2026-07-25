@@ -15,6 +15,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../../components/route-templates/DetailTemplate';
+import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
 
 const SEVERITY_CHIP: Record<string, 'danger' | 'elevated' | 'info' | 'good'> = {
   SAFETY: 'danger', MAJOR: 'elevated', MINOR: 'info', MONITOR: 'info', INFORMATIONAL: 'good',
@@ -144,6 +145,7 @@ export default function OpenItemsPage() {
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [systemFilter, setSystemFilter] = useState('ALL');
   const [resolvingFinding, setResolvingFinding] = useState<InspectionFinding | null>(null);
+  const [resolvedFindingId, setResolvedFindingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -218,6 +220,14 @@ export default function OpenItemsPage() {
           <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</div>
         )}
 
+        {resolvedFindingId ? (
+          <CapabilityDiscoveryAnchor
+            anchor="INSPECTION_FINDING_COMPLETED"
+            propertyId={propertyId}
+            entityId={resolvedFindingId}
+          />
+        ) : null}
+
         {loading ? (
           <div className="flex h-32 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-200 border-t-slate-600" />
@@ -279,6 +289,7 @@ export default function OpenItemsPage() {
           finding={resolvingFinding}
           propertyId={propertyId}
           onResolved={() => {
+            setResolvedFindingId(resolvingFinding.id);
             setResolvingFinding(null);
             load();
           }}

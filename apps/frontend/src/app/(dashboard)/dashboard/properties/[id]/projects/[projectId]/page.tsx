@@ -24,6 +24,10 @@ import {
   projectStatusTone,
   milestoneStatusTone,
 } from '../ProjectTrackerHelpers';
+import {
+  CapabilityDiscoveryAnchor,
+  type CapabilityDiscoveryAnchorName,
+} from '@/features/tools/CapabilityDiscoveryAnchor';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft', PLANNING: 'Planning', IN_PROGRESS: 'In Progress',
@@ -76,6 +80,14 @@ export default function ProjectDashboardPage() {
 
   const completedMilestones = p.milestones?.filter(m => m.status === 'COMPLETE').length ?? 0;
   const totalMilestones = p.milestones?.length ?? 0;
+  const discoveryAnchor: CapabilityDiscoveryAnchorName =
+    p.status === 'COMPLETED'
+      ? 'PROJECT_COMPLETED'
+      : p.contractDocumentKey
+        ? 'CONTRACT_UPLOADED'
+        : p.contractorId || p.contractorName
+          ? 'CONTRACTOR_SELECTED'
+          : 'PROJECT_CREATED';
 
   async function handleStatusChange(newStatus: string) {
     if (!project) return;
@@ -108,6 +120,13 @@ export default function ProjectDashboardPage() {
       </div>
 
       <ProjectNav propertyId={propertyId} projectId={projectId} />
+
+      <CapabilityDiscoveryAnchor
+        anchor={discoveryAnchor}
+        propertyId={propertyId}
+        entityId={projectId}
+        journeyId={p.guidanceJourneyId}
+      />
 
       {p.outcomeStatus && (
         <div className={`rounded-xl border p-3 ${p.outcomeStatus === 'VERIFIED_SUCCESS' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>

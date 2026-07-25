@@ -29,6 +29,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
+import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 // --- Document Type Constants for UI ---
@@ -48,9 +49,14 @@ function useCanonicalPropertyId(): string | undefined {
 }
 
 // --- AI Smart Upload Component ---
+type DocumentIngestionResult = {
+  documentId: string;
+  propertyId?: string | null;
+};
+
 interface AISmartUploadProps {
   properties: Property[];
-  onUploadSuccess: () => void;
+  onUploadSuccess: (result?: DocumentIngestionResult) => void;
   onClose: () => void;
 }
 
@@ -63,6 +69,7 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
   const [success, setSuccess] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
   const { toast } = useToast();
   const propertyId = useCanonicalPropertyId();
 
@@ -94,6 +101,7 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
     setInsights(null);
     setWarranty(null);
     setSuccess(false);
+    setUploadedDocumentId(null);
 
     if (selectedFile.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -114,6 +122,7 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
       const response = await api.analyzeDocument(file, selectedPropertyId, true);
 
       if (response.success && response.data) {
+        setUploadedDocumentId(String(response.data.document?.id ?? '') || null);
         setInsights(response.data.insights);
         setWarranty(response.data.warranty);
         setSuccess(true);
@@ -291,7 +300,10 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
           <div className="pt-3 border-t border-green-300 flex gap-2">
             <Button
               onClick={() => {
-                onUploadSuccess();
+                onUploadSuccess(uploadedDocumentId ? {
+                  documentId: uploadedDocumentId,
+                  propertyId: selectedPropertyId,
+                } : undefined);
                 onClose();
               }}
               className="flex-1"
@@ -345,7 +357,7 @@ interface DocumentUploadModalProps {
     properties: Property[];
     warranties: Warranty[];
     policies: InsurancePolicy[];
-    onUploadSuccess: () => void;
+    onUploadSuccess: (result?: DocumentIngestionResult) => void;
     onClose: () => void;
 }
 
@@ -413,7 +425,10 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
 
     if (res.success) {
       toast({ title: 'Document Uploaded', description: `"${res.data.name}" linked successfully.` });
-      onUploadSuccess();
+      onUploadSuccess({
+        documentId: res.data.id,
+        propertyId: res.data.propertyId,
+      });
     } else {
       toast({
         title: 'Upload Failed',
@@ -521,6 +536,8 @@ export default function DocumentsPage() {
   const [uploadMode, setUploadMode] = useState<'ai' | 'standard'>('ai');
   const [filterType, setFilterType] = useState<string | 'ALL'>('ALL');
   const [filterParentType, setFilterParentType] = useState<string | 'ALL'>('ALL');
+  const [ingestedDocument, setIngestedDocument] =
+    useState<DocumentIngestionResult | null>(null);
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -627,14 +644,22 @@ export default function DocumentsPage() {
     [filteredDocuments]
   );
 
-  const handleUploadSuccess = () => {
-      setIsUploadModalOpen(false);
-      fetchDependencies();
+  const handleUploadSuccess = (result?: DocumentIngestionResult) => {
+    if (result?.documentId) setIngestedDocument(result);
+    setIsUploadModalOpen(false);
+    fetchDependencies();
   };
 
   return (
     <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       <OnboardingReturnBanner />
+      {ingestedDocument && (ingestedDocument.propertyId || activePropertyId) ? (
+        <CapabilityDiscoveryAnchor
+          anchor="DOCUMENT_INGESTED"
+          propertyId={(ingestedDocument.propertyId || activePropertyId)!}
+          entityId={ingestedDocument.documentId}
+        />
+      ) : null}
       {activePropertyId && (
         <Button
             variant="link"

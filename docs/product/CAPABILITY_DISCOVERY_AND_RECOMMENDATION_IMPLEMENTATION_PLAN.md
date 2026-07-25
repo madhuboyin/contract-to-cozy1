@@ -99,6 +99,9 @@ Status as of July 24, 2026:
 | CAP-602 inline suggestion primitive | Complete | Shared non-modal renderer consumes one server suggestion, preserves launch lineage and actual-view telemetry, and exposes dismiss or not-relevant controls only through caller-provided handlers |
 | CAP-603 inline integration contract | Complete | Shared slot accepts only property, canonical source entity, optional action/journey, completion event, and placement context; it requests one server-selected capability and renders nothing for loading, failure, or empty results |
 | CAP-604 post-completion resolver | Complete | Authenticated record-and-resolve endpoint validates canonical completion/output compatibility, awaits lifecycle persistence, evaluates against the exact output with action hierarchy and recent-completion suppression, and returns zero or one next step plus Explore Tools |
+| CAP-605 first integration anchors | Complete | Eleven typed anchors cover the seven initial workflow families through one capability-agnostic adapter; every request delegates selection to the shared server evaluator and inherits its empty-state behavior |
+| CAP-700 feedback endpoint | Complete | Property-authorized, source-bound feedback validates current capability identity and records idempotent opened, dismissed, not-relevant, snoozed, and completed events while delegating Home Action and personalization state changes to their canonical lifecycles |
+| CAP-701 frequency policy | Complete | Evaluator lifecycle aggregation applies source/context-scoped actual-view caps, manifest dismissal cooldowns, renewed-evidence rules for not-relevant and completed feedback, and explicit snooze expiry from Product Analytics without new materialized state |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1241,6 +1244,18 @@ Add shared request points, without activating every candidate yet, to:
 
 Each anchor shall have a no-suggestion state with no empty promotional container.
 
+Implementation: a named, typed adapter maps eleven meaningful workflow moments
+across the seven initial feature families to canonical source entities, then
+delegates to the CAP-603 shared slot. Inspection results and resolved findings,
+project creation/completion, room setup, inventory and document ingestion,
+quote results, active seller intent, contractor selection, and contract upload
+now provide durable source identity without naming or selecting a destination
+capability. Consequently, future registry capabilities inherit these request
+points whenever the server evaluator deems them eligible. The shared slot
+continues to return `null` for loading, failure, and no-suggestion responses, so
+these anchors do not create empty promotional containers or block the owning
+workflow.
+
 ### Exit criteria
 
 - Related suggestions no longer require the manual context mapping.
@@ -1281,6 +1296,18 @@ Add idempotent feedback for:
 Reuse canonical Home Action or personalization lifecycle when the suggestion is backed by those
 records. Do not create contradictory state.
 
+Implementation: the property-authorized feedback contract binds each event to
+the exact suggestion, manifest, registry, recommendation, context, surface,
+readiness, and source lineage that produced it. A PostgreSQL transaction-scoped
+advisory lock serializes the client-generated event ID against the existing
+append-only Product Analytics log, returning the original receipt for retries
+without adding a materialized feedback table. Home Action-backed feedback
+executes the existing interaction or command lifecycle, retaining supported
+command and safety gates; personalization-backed feedback reuses the existing
+idempotent recommendation feedback use case. The shared inline renderer records
+opens automatically, and inline slots persist Dismiss and Not relevant before
+removing a card from the current surface.
+
 #### CAP-701: Frequency policy
 
 Initial policy:
@@ -1296,6 +1323,20 @@ Initial policy:
 
 Use Product Analytics and existing lifecycle state initially. Add materialized state only after
 measured need and a separate data-model review.
+
+Implementation: actual-view events now preserve source action, source entity,
+journey, and context lineage, and browser-session deduplication includes source
+action plus context version so genuinely changed relevance can be measured.
+The evaluator aggregates the latest 5,000 property/user lifecycle events into
+bounded per-capability state, including 30-day impression scopes, dismissal,
+not-relevant, snooze, and completion timestamps. Frequency suppression counts
+only impressions with the candidate's current source action and context
+version. Dismissal uses the capability manifest cooldown; not-relevant and
+completion remain suppressed until the candidate has newer observed source
+evidence; snooze remains suppressed until its explicit expiry. Home
+Action-backed safety decisions continue through the CAP-700 canonical command
+path, where unsupported safety dismissal or deferral is rejected before a
+capability feedback event is recorded.
 
 #### CAP-702: Lifecycle canonicalization
 

@@ -26,6 +26,7 @@ import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref
 import { track } from '@/lib/analytics/events';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
+import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
 
 type SearchParamSource = { get(name: string): string | null };
 
@@ -464,6 +465,14 @@ export default function QuoteComparisonWorkspaceClient() {
       summary={
         <div className="space-y-3">
           <PropertyContextStatusNotice context={propertyContext} title="Quote comparison context" />
+          {recommendedQuote ? (
+            <CapabilityDiscoveryAnchor
+              anchor="QUOTE_ANALYSIS_RESULT"
+              propertyId={propertyId}
+              entityId={recommendedQuote.serviceRadarCheckId ?? recommendedQuote.id}
+              journeyId={guidanceJourneyId || undefined}
+            />
+          ) : null}
           <ResultHeroCard
             eyebrow="Compare"
             title="Quote Decision Snapshot"

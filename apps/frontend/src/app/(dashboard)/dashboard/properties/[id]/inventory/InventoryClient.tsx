@@ -33,6 +33,7 @@ import {
   MobileInventoryItemCard,
 } from '../../../components/inventory/MobileInventorySections';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
+import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
 import ItemCard from '@/components/shared/ItemCard';
 import {
   EmptyStateCard,
@@ -160,6 +161,7 @@ export default function InventoryClient() {
   const [autoOpenedFromUrl, setAutoOpenedFromUrl] = useState(false);
   const [autoScrolledFromUrl, setAutoScrolledFromUrl] = useState(false);
   const [highlightItemId, setHighlightItemId] = useState<string | null>(null);
+  const [ingestedItemId, setIngestedItemId] = useState<string | null>(null);
 
   const [recallMatchesByItemId, setRecallMatchesByItemId] = useState<Record<string, any[]>>({});
 
@@ -423,6 +425,16 @@ export default function InventoryClient() {
 
   return (
     <>
+      {ingestedItemId ? (
+        <div className="mx-auto w-full max-w-7xl px-4 pt-3 sm:px-6">
+          <CapabilityDiscoveryAnchor
+            anchor="INVENTORY_ITEM_INGESTED"
+            propertyId={propertyId}
+            entityId={ingestedItemId}
+          />
+        </div>
+      ) : null}
+
       <div className="md:hidden">
         <MobilePageContainer className="mobile-stack-sections pb-[calc(8rem+env(safe-area-inset-bottom))]">
           <MobileSection className="pt-1">
@@ -801,8 +813,9 @@ export default function InventoryClient() {
         initialRoomId={roomIdFromUrl}
         initialCategory={categoryFromUrl}
         highlightRecallMatchId={highlightRecallMatchId}
-        onSaved={async () => {
+        onSaved={async (result) => {
           setDrawerOpen(false);
+          if (result?.created) setIngestedItemId(result.itemId);
           await refreshAll();
         }}
         existingItems={items}

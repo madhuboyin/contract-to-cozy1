@@ -5,12 +5,12 @@ import { ArrowRight } from 'lucide-react';
 import type { CapabilitySuggestionDTO } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api/client';
 import { track } from '@/lib/analytics/events';
 import { cn } from '@/lib/utils';
 import { appendCapabilityLaunchContext } from './capabilityCatalog';
 import { resolveCapabilityIcon } from './capabilityIconRegistry';
 import { capabilitySuggestionLaunchContext } from './capabilitySuggestionLaunchContext';
+import { recordCapabilitySuggestionFeedback } from './capabilityApi';
 import type { ToolDiscoverySurface } from './toolDiscoveryRegistry';
 import { useCapabilityImpression } from './useCapabilityImpression';
 
@@ -64,6 +64,10 @@ export function InlineCapabilitySuggestion({
     recommendationReason: suggestion.reasonCode,
     recommendationVersion: suggestion.recommendationVersion,
     contextVersion: suggestion.contextVersion,
+    sourceActionId: suggestion.source.actionId,
+    sourceEntityType: suggestion.source.entityType,
+    sourceEntityId: suggestion.source.entityId,
+    journeyId: suggestion.source.journeyId,
   });
   const href = appendCapabilityLaunchContext(
     suggestion.launch.href,
@@ -89,12 +93,13 @@ export function InlineCapabilitySuggestion({
       sourceEntityId: suggestion.source.entityId,
       journeyId: suggestion.source.journeyId,
     });
-    if (suggestion.source.actionId) {
-      void api.recordHomeActionOpened(
-        propertyId,
-        suggestion.source.actionId,
-      ).catch(() => undefined);
-    }
+    void recordCapabilitySuggestionFeedback({
+      propertyId,
+      registryVersion,
+      surface,
+      suggestion,
+      type: 'OPENED',
+    }).catch(() => undefined);
     onOpen?.(suggestion);
   };
 

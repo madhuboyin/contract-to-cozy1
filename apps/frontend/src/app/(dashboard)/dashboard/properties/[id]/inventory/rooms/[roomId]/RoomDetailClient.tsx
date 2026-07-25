@@ -31,6 +31,7 @@ import { getHealthOverlay, getRoomConfig, getScoreColorHex, getStatusColor, getS
 import { humanizeLabel } from '@/lib/utils/string';
 import { getRoomPlantAdvisorState } from '../../../tools/plant-advisor/plantAdvisorApi';
 import type { RoomPlantRecommendationDTO } from '../../../tools/plant-advisor/types';
+import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
 
 type Tab = 'profile' | 'checklist' | 'timeline';
 
@@ -268,6 +269,7 @@ export default function RoomDetailClient() {
   const [scanSessions, setScanSessions] = useState<any[]>([]);
   const [scanSessionsLoading, setScanSessionsLoading] = useState(false);
   const [historySessionId, setHistorySessionId] = useState<string | null>(null);
+  const [completedRoomSetupId, setCompletedRoomSetupId] = useState<string | null>(null);
   const [plantAdvisorRecommendations, setPlantAdvisorRecommendations] = useState<
     RoomPlantRecommendationDTO[]
   >([]);
@@ -459,6 +461,14 @@ export default function RoomDetailClient() {
       initial="hidden"
       animate="visible"
     >
+      {completedRoomSetupId ? (
+        <CapabilityDiscoveryAnchor
+          anchor="ROOM_SETUP_COMPLETED"
+          propertyId={propertyId}
+          entityId={completedRoomSetupId}
+        />
+      ) : null}
+
       <motion.div
         variants={staggerItem}
         className="overflow-hidden rounded-2xl border border-gray-200 bg-white/80 shadow-xl shadow-slate-900/5 backdrop-blur-md"
@@ -716,6 +726,7 @@ export default function RoomDetailClient() {
         roomId={roomId}
         roomName={room?.name}
         initialSessionId={historySessionId}
+        onCompleted={() => setCompletedRoomSetupId(roomId)}
       />
 
       {summaryLoading ? <p className="px-1 text-xs text-gray-500">Updating room data...</p> : null}

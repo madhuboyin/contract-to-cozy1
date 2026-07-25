@@ -123,6 +123,7 @@ import {
   HomeActionCommand,
   HomeActionFeedDTO,
   CapabilityCompletionNextResponseDTO,
+  CapabilitySuggestionDTO,
   CapabilitySuggestionResponseDTO,
   CapabilitySuggestionSurfaceDTO,
   UnifiedHomeDTO,
@@ -2917,6 +2918,35 @@ class APIClient {
     throw new APIError(
       'Failed to record capability completion',
       'CAPABILITY_COMPLETION_ERROR',
+    );
+  }
+
+  async recordCapabilitySuggestionFeedback(
+    propertyId: string,
+    input: {
+      eventId: string;
+      suggestionId: string;
+      capabilityId: string;
+      manifestVersion: number;
+      registryVersion: string;
+      recommendationVersion: 'capability-recommendation-v1';
+      contextVersion: string;
+      surface: CapabilitySuggestionSurfaceDTO;
+      type: import('@/types').CapabilityFeedbackTypeDTO;
+      reasonCode?: 'ALREADY_DONE' | 'TOO_EXPENSIVE' | 'NOT_APPLICABLE' | 'BAD_TIMING' | 'WRONG_PROFILE' | 'OTHER' | null;
+      snoozedUntil?: string | null;
+      readiness: 'READY' | 'NEEDS_CONTEXT';
+      source: CapabilitySuggestionDTO['source'];
+    },
+  ): Promise<import('@/types').CapabilityFeedbackResponseDTO> {
+    const response = await this.request<import('@/types').CapabilityFeedbackResponseDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/capability-suggestions/feedback`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    if (response.success && response.data) return response.data;
+    throw new APIError(
+      'Failed to record capability feedback',
+      'CAPABILITY_FEEDBACK_ERROR',
     );
   }
 

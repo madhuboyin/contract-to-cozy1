@@ -41,6 +41,10 @@ function ToolRow({
     recommendationReason: suggestion.reasonCode,
     recommendationVersion: suggestion.recommendationVersion,
     contextVersion: suggestion.contextVersion,
+    sourceActionId: suggestion.source.actionId,
+    sourceEntityType: suggestion.source.entityType,
+    sourceEntityId: suggestion.source.entityId,
+    journeyId: suggestion.source.journeyId,
   });
   const href = appendCapabilityLaunchContext(
     suggestion.launch.href,

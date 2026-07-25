@@ -27,7 +27,13 @@ class MockIntersectionObserver {
   thresholds = [0.5];
 }
 
-function Fixture() {
+function Fixture({
+  contextVersion = 'context-v1',
+  sourceActionId = 'action-1',
+}: {
+  contextVersion?: string;
+  sourceActionId?: string;
+} = {}) {
   const ref = useCapabilityImpression<HTMLDivElement>({
     capabilityId: 'material-specs',
     propertyId: 'property-1',
@@ -35,6 +41,11 @@ function Fixture() {
     registryVersion: 'registry-v1',
     recommendationReason: 'PROJECT_CONTEXT_PRESENT',
     recommendationVersion: 'capability-recommendation-v1',
+    contextVersion,
+    sourceActionId,
+    sourceEntityType: 'PROJECT',
+    sourceEntityId: 'project-1',
+    journeyId: 'journey-1',
   });
   return <div ref={ref}>Material Specs</div>;
 }
@@ -94,6 +105,11 @@ describe('useCapabilityImpression', () => {
       toolIds: ['material-specs'],
       recommendationReasons: ['PROJECT_CONTEXT_PRESENT'],
       recommendationVersions: ['capability-recommendation-v1'],
+      contextVersion: 'context-v1',
+      sourceActionId: 'action-1',
+      sourceEntityType: 'PROJECT',
+      sourceEntityId: 'project-1',
+      journeyId: 'journey-1',
     }));
   });
 
@@ -126,5 +142,21 @@ describe('useCapabilityImpression', () => {
       jest.advanceTimersByTime(1_000);
     });
     expect(track).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a fresh actual view when source action or context changes', () => {
+    const first = render(<Fixture />);
+    act(() => {
+      intersect(1);
+      jest.advanceTimersByTime(750);
+    });
+    first.unmount();
+
+    render(<Fixture contextVersion="context-v2" />);
+    act(() => {
+      intersect(1);
+      jest.advanceTimersByTime(750);
+    });
+    expect(track).toHaveBeenCalledTimes(2);
   });
 });

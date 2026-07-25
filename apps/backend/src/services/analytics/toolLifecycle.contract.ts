@@ -7,6 +7,9 @@ export const TOOL_LIFECYCLE_STAGES = [
   'OUTPUT_GENERATED',
   'COMPLETED',
   'ABANDONED',
+  'DISMISSED',
+  'NOT_RELEVANT',
+  'SNOOZED',
 ] as const;
 
 export type ToolLifecycleStage = typeof TOOL_LIFECYCLE_STAGES[number];

@@ -3,7 +3,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { CapabilitySuggestionDTO } from '@/types';
 
 const mockTrack = jest.fn();
-const mockRecordHomeActionOpened = jest.fn(() => Promise.resolve());
+const mockRecordCapabilitySuggestionFeedback = jest.fn(
+  (_input: unknown) => Promise.resolve(),
+);
 const mockUseCapabilityImpression = jest.fn((_input: unknown) => jest.fn());
 
 jest.mock('next/link', () => {
@@ -20,8 +22,10 @@ jest.mock('next/link', () => {
   };
 });
 jest.mock('@/lib/analytics/events', () => ({ track: mockTrack }));
-jest.mock('@/lib/api/client', () => ({
-  api: { recordHomeActionOpened: mockRecordHomeActionOpened },
+jest.mock('@/features/tools/capabilityApi', () => ({
+  recordCapabilitySuggestionFeedback: (
+    input: unknown,
+  ) => mockRecordCapabilitySuggestionFeedback(input),
 }));
 jest.mock('@/features/tools/useCapabilityImpression', () => ({
   useCapabilityImpression: (input: unknown) => mockUseCapabilityImpression(input),
@@ -86,7 +90,7 @@ function suggestion(
 describe('InlineCapabilitySuggestion', () => {
   beforeEach(() => {
     mockTrack.mockClear();
-    mockRecordHomeActionOpened.mockClear();
+    mockRecordCapabilitySuggestionFeedback.mockClear();
     mockUseCapabilityImpression.mockClear();
   });
 
@@ -117,6 +121,10 @@ describe('InlineCapabilitySuggestion', () => {
       recommendationReason: 'PROJECT_MATERIAL_RECORD',
       recommendationVersion: 'capability-recommendation-v1',
       contextVersion: 'context-v8',
+      sourceActionId: 'action-1',
+      sourceEntityType: 'PROJECT',
+      sourceEntityId: 'project-1',
+      journeyId: 'journey-1',
     });
   });
 
@@ -162,10 +170,13 @@ describe('InlineCapabilitySuggestion', () => {
         journeyId: 'journey-1',
       }),
     );
-    expect(mockRecordHomeActionOpened).toHaveBeenCalledWith(
-      'property-1',
-      'action-1',
-    );
+    expect(mockRecordCapabilitySuggestionFeedback).toHaveBeenCalledWith({
+      propertyId: 'property-1',
+      registryVersion: 'registry-v12',
+      surface: 'workflow',
+      suggestion: value,
+      type: 'OPENED',
+    });
     expect(onOpen).toHaveBeenCalledWith(value);
   });
 

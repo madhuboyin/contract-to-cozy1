@@ -411,6 +411,20 @@ export type CapabilitySuggestionResponseDTO = {
   suggestions: CapabilitySuggestionDTO[];
 };
 
+export type CapabilityFeedbackTypeDTO =
+  | 'OPENED'
+  | 'DISMISSED'
+  | 'NOT_RELEVANT'
+  | 'SNOOZED'
+  | 'COMPLETED';
+
+export type CapabilityFeedbackResponseDTO = {
+  status: 'RECORDED' | 'DUPLICATE';
+  eventId: string;
+  type: CapabilityFeedbackTypeDTO;
+  recordedAt: string;
+};
+
 export type CapabilityCompletionNextResponseDTO = {
   contractVersion: 'capability-completion-next-v1';
   propertyId: string;
@@ -515,7 +529,10 @@ export type ToolLifecycleStageDTO =
   | 'STARTED'
   | 'OUTPUT_GENERATED'
   | 'COMPLETED'
-  | 'ABANDONED';
+  | 'ABANDONED'
+  | 'DISMISSED'
+  | 'NOT_RELEVANT'
+  | 'SNOOZED';
 
 export type ToolLifecycleEventDTO = {
   toolId: string;
