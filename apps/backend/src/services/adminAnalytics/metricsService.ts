@@ -16,9 +16,13 @@ import {
   getTopTools,
   getToolLifecycleFunnelRows,
   getToolLifecycleStageTotals,
+  getToolLifecycleDimensions,
+  getToolLifecycleRepetition,
 } from './repository';
 import type {
+  ToolLifecycleDimensionRow,
   ToolLifecycleFunnelRow as ToolLifecycleFunnelRepositoryRow,
+  ToolLifecycleRepetitionRow,
   ToolLifecycleStageTotalRow,
 } from './repository';
 import { resolveDateRange } from './schemas';
@@ -282,18 +286,32 @@ export async function getToolLifecycleFunnelMetrics(
   toRaw: Date | undefined,
 ): Promise<AdminToolLifecycleFunnelResponse> {
   const range = resolveDateRange(fromRaw, toRaw, 30);
-  const [rows, totals] = await Promise.all([
+  const [rows, totals, dimensions, repetition] = await Promise.all([
     getToolLifecycleFunnelRows(range),
     getToolLifecycleStageTotals(range),
+    getToolLifecycleDimensions(range),
+    getToolLifecycleRepetition(range),
   ]);
 
-  return buildToolLifecycleFunnelResponse(range, rows, totals);
+  return buildToolLifecycleFunnelResponse(
+    range,
+    rows,
+    totals,
+    dimensions,
+    repetition,
+  );
 }
 
 export function buildToolLifecycleFunnelResponse(
   range: { from: Date; to: Date },
   rows: ToolLifecycleFunnelRepositoryRow[],
   totals: ToolLifecycleStageTotalRow[],
+  dimensions: ToolLifecycleDimensionRow[] = [],
+  repetition: ToolLifecycleRepetitionRow = {
+    observedScopes: 0n,
+    repeatedScopes: 0n,
+    totalImpressions: 0n,
+  },
 ): AdminToolLifecycleFunnelResponse {
 
   const stages = totals.map((row) => ({
@@ -303,30 +321,108 @@ export function buildToolLifecycleFunnelResponse(
   }));
 
   const tools = rows.map((row) => {
+    const eligibleHomes = Number(row.eligibleHomes);
     const discoveredHomes = Number(row.discoveredHomes);
     const clickedHomes = Number(row.clickedHomes);
     const startedHomes = Number(row.startedHomes);
     const outputHomes = Number(row.outputHomes);
     const completedHomes = Number(row.completedHomes);
     const abandonedHomes = Number(row.abandonedHomes);
+    const notRelevantHomes = Number(row.notRelevantHomes);
+    const dismissedHomes = Number(row.dismissedHomes);
     return {
       toolId: row.toolId,
       label: labelForFeature(row.toolId),
+      eligibleHomes,
       discoveredHomes,
       clickedHomes,
       startedHomes,
       outputHomes,
       completedHomes,
       abandonedHomes,
+      notRelevantHomes,
+      dismissedHomes,
+      actualViewCoverage:
+        eligibleHomes > 0 ? discoveredHomes / eligibleHomes : null,
       clickThroughRate: discoveredHomes > 0 ? clickedHomes / discoveredHomes : null,
       startRate: clickedHomes > 0 ? startedHomes / clickedHomes : null,
       completionRate: startedHomes > 0 ? completedHomes / startedHomes : null,
     };
   });
 
+  const totalFor = (stage: ToolLifecycleStageKey): number =>
+    stages.find((row) => row.stage === stage)?.uniqueHomes ?? 0;
+  const eligibleHomes = totalFor('ELIGIBLE');
+  const actualViewHomes = totalFor('DISCOVERED');
+  const clickedHomes = totalFor('CLICKED');
+  const observedRecommendationScopes = Number(repetition.observedScopes);
+  const repeatedRecommendationScopes = Number(repetition.repeatedScopes);
+  const dimensionRows = (dimension: ToolLifecycleDimensionRow['dimension']) =>
+    dimensions.filter((row) => row.dimension === dimension);
+  const withShare = (rowsToShare: ToolLifecycleDimensionRow[]) => {
+    const total = rowsToShare.reduce(
+      (sum, row) => sum + Number(row.totalEvents),
+      0,
+    );
+    return rowsToShare.map((row) => ({
+      uniqueHomes: Number(row.uniqueHomes),
+      totalEvents: Number(row.totalEvents),
+      share: total > 0 ? Number(row.totalEvents) / total : 0,
+    }));
+  };
+  const readinessRows = dimensionRows('READINESS');
+  const sourceRows = dimensionRows('SOURCE');
+
   return {
     period: { from: range.from.toISOString(), to: range.to.toISOString() },
+    metricVersion: 'capability-funnel-v2',
+    summary: {
+      eligibleHomes,
+      actualViewHomes,
+      actualViewCoverage:
+        eligibleHomes > 0 ? actualViewHomes / eligibleHomes : null,
+      clickedHomes,
+      clickThroughRate:
+        actualViewHomes > 0 ? clickedHomes / actualViewHomes : null,
+      startedHomes: totalFor('STARTED'),
+      outputHomes: totalFor('OUTPUT_GENERATED'),
+      completedHomes: totalFor('COMPLETED'),
+      abandonedHomes: totalFor('ABANDONED'),
+      notRelevantHomes: totalFor('NOT_RELEVANT'),
+      dismissedHomes: totalFor('DISMISSED'),
+      repetitionRate:
+        observedRecommendationScopes > 0
+          ? repeatedRecommendationScopes / observedRecommendationScopes
+          : null,
+      observedRecommendationScopes,
+      repeatedRecommendationScopes,
+    },
     stages,
     tools,
+    readinessDistribution: readinessRows
+      .map((row, index) => ({
+        readiness: row.value,
+        ...withShare(readinessRows)[index],
+      }))
+      .sort((left, right) => right.totalEvents - left.totalEvents),
+    topReasonCodes: dimensionRows('REASON')
+      .map((row) => ({
+        reasonCode: row.value,
+        uniqueHomes: Number(row.uniqueHomes),
+        totalEvents: Number(row.totalEvents),
+      }))
+      .sort((left, right) =>
+        right.totalEvents - left.totalEvents
+        || left.reasonCode.localeCompare(right.reasonCode))
+      .slice(0, 10),
+    sourceDistribution: sourceRows
+      .map((row, index) => ({
+        source: row.value as
+          | 'CONTEXTUAL'
+          | 'CATALOG_ONLY'
+          | 'UNATTRIBUTED',
+        ...withShare(sourceRows)[index],
+      }))
+      .sort((left, right) => right.totalEvents - left.totalEvents),
   };
 }

@@ -140,12 +140,15 @@ export interface AdminTopToolsResponse {
 }
 
 export type ToolLifecycleStageKey =
+  | 'ELIGIBLE'
   | 'DISCOVERED'
   | 'CLICKED'
   | 'STARTED'
   | 'OUTPUT_GENERATED'
   | 'COMPLETED'
-  | 'ABANDONED';
+  | 'ABANDONED'
+  | 'NOT_RELEVANT'
+  | 'DISMISSED';
 
 export interface ToolLifecycleStageMetric {
   stage: ToolLifecycleStageKey;
@@ -156,12 +159,16 @@ export interface ToolLifecycleStageMetric {
 export interface ToolLifecycleFunnelToolRow {
   toolId: string;
   label: string;
+  eligibleHomes: number;
   discoveredHomes: number;
   clickedHomes: number;
   startedHomes: number;
   outputHomes: number;
   completedHomes: number;
   abandonedHomes: number;
+  notRelevantHomes: number;
+  dismissedHomes: number;
+  actualViewCoverage: number | null;
   clickThroughRate: number | null;
   startRate: number | null;
   completionRate: number | null;
@@ -169,6 +176,40 @@ export interface ToolLifecycleFunnelToolRow {
 
 export interface AdminToolLifecycleFunnelResponse {
   period: { from: string; to: string };
+  metricVersion: 'capability-funnel-v2';
+  summary: {
+    eligibleHomes: number;
+    actualViewHomes: number;
+    actualViewCoverage: number | null;
+    clickedHomes: number;
+    clickThroughRate: number | null;
+    startedHomes: number;
+    outputHomes: number;
+    completedHomes: number;
+    abandonedHomes: number;
+    notRelevantHomes: number;
+    dismissedHomes: number;
+    repetitionRate: number | null;
+    observedRecommendationScopes: number;
+    repeatedRecommendationScopes: number;
+  };
   stages: ToolLifecycleStageMetric[];
   tools: ToolLifecycleFunnelToolRow[];
+  readinessDistribution: Array<{
+    readiness: string;
+    uniqueHomes: number;
+    totalEvents: number;
+    share: number;
+  }>;
+  topReasonCodes: Array<{
+    reasonCode: string;
+    uniqueHomes: number;
+    totalEvents: number;
+  }>;
+  sourceDistribution: Array<{
+    source: 'CONTEXTUAL' | 'CATALOG_ONLY' | 'UNATTRIBUTED';
+    uniqueHomes: number;
+    totalEvents: number;
+    share: number;
+  }>;
 }

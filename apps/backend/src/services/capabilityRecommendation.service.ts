@@ -31,7 +31,11 @@ import type { RankedHomeAction } from './homeActions.service';
 import {
   createToolDiscoveryCapabilityAvailabilityAdapter,
 } from './toolDiscoveryAvailability.service';
-import { canonicalizeToolLifecycleId } from './analytics/toolLifecycle';
+import {
+  canonicalizeToolLifecycleId,
+  recordToolLifecycleEvents,
+  type ToolLifecycleEventInput,
+} from './analytics/toolLifecycle';
 import { detectCoverageGaps } from './coverageGap.service';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
 
@@ -74,6 +78,63 @@ export interface CapabilityRecommendationDependencies {
     includeWorkflowOnly: boolean,
   ) => string[];
   now: () => Date;
+  recordEligibility?: (input: {
+    userId: string;
+    propertyId: string;
+    events: ToolLifecycleEventInput[];
+  }) => Promise<unknown>;
+}
+
+const LIFECYCLE_SURFACE_BY_RECOMMENDATION_SURFACE: Record<
+  CapabilitySuggestionSurface,
+  string
+> = {
+  HOME: 'unified_home',
+  PROPERTY: 'property_detail',
+  WORKFLOW: 'workflow',
+  RELATED: 'workflow',
+  COMPLETION: 'completion',
+};
+
+async function recordEligibleSuggestions(
+  input: CapabilitySuggestionsInput,
+  response: CapabilitySuggestionResponse,
+  recorder: NonNullable<
+    CapabilityRecommendationDependencies['recordEligibility']
+  >,
+): Promise<void> {
+  if (response.suggestions.length === 0) return;
+  try {
+    await recorder({
+      userId: input.userId,
+      propertyId: input.propertyId,
+      events: response.suggestions.map((suggestion) => ({
+        toolId: suggestion.capabilityId,
+        stage: 'ELIGIBLE',
+        surface:
+          LIFECYCLE_SURFACE_BY_RECOMMENDATION_SURFACE[response.surface],
+        manifestVersion: suggestion.manifestVersion,
+        registryVersion: response.registryVersion,
+        recommendationReason: suggestion.reasonCode,
+        reasonCode: suggestion.reasonCode,
+        recommendationVersion: suggestion.recommendationVersion,
+        contextVersion: suggestion.contextVersion,
+        sourceKind: suggestion.source.kind,
+        sourceId: suggestion.source.id,
+        sourceActionId: suggestion.source.actionId,
+        sourceEntityType: suggestion.source.entityType,
+        sourceEntityId: suggestion.source.entityId,
+        journeyId: suggestion.source.journeyId,
+        readiness: suggestion.readiness.state,
+      })),
+    });
+  } catch (error) {
+    logger.warn('Capability eligibility analytics could not be recorded', {
+      propertyId: input.propertyId,
+      surface: input.surface,
+      error,
+    });
+  }
 }
 
 function normalizedPath(href: string): string {
@@ -554,6 +615,7 @@ function defaultDependencies(
         .listAvailable({ userId, includeWorkflowOnly })
         .map((capability) => capability.id),
     now,
+    recordEligibility: recordToolLifecycleEvents,
   };
 }
 
@@ -751,11 +813,19 @@ async function evaluateCapabilitySuggestions(
     context,
     suppressionResult,
   });
-  return buildCapabilitySuggestionResponse({
+  const response = buildCapabilitySuggestionResponse({
     registry: dependencies.registry,
     context,
     rankingResult,
   });
+  if (dependencies.recordEligibility) {
+    await recordEligibleSuggestions(
+      input,
+      response,
+      dependencies.recordEligibility,
+    );
+  }
+  return response;
 }
 
 export async function getCapabilitySuggestions(

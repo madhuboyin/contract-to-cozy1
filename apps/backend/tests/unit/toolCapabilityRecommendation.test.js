@@ -1775,6 +1775,41 @@ test('CAP-407 orchestrates CAP-400 through CAP-406 into the API response', async
   assert.equal(result.suggestions[0].source.id, 'action-1');
 });
 
+test('CAP-703 records selected recommendation eligibility with canonical lineage', async () => {
+  const recorded = [];
+  await getCapabilitySuggestions({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    surface: 'HOME',
+    limit: 3,
+  }, capabilityApiDependencies({
+    recordEligibility: async (input) => {
+      recorded.push(input);
+    },
+  }));
+
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].propertyId, 'property-1');
+  assert.equal(recorded[0].userId, 'user-1');
+  assert.deepEqual(recorded[0].events.map((event) => ({
+    toolId: event.toolId,
+    stage: event.stage,
+    surface: event.surface,
+    sourceKind: event.sourceKind,
+    sourceId: event.sourceId,
+    reasonCode: event.reasonCode,
+    readiness: event.readiness,
+  })), [{
+    toolId: 'coverage-options',
+    stage: 'ELIGIBLE',
+    surface: 'unified_home',
+    sourceKind: 'HOME_ACTION',
+    sourceId: 'action-1',
+    reasonCode: 'COVERAGE_GAPS_PRESENT',
+    readiness: 'READY',
+  }]);
+});
+
 test('CAP-500 evaluates Unified Home suggestions from its authorized source snapshot', async () => {
   let requiredSourceReloads = 0;
   const sharedPropertyContext = propertyContext({

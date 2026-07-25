@@ -973,29 +973,47 @@ function ToolLifecycleFunnelSection({
   if (q.isLoading) return <Section title="Tool discovery funnel" icon={Sparkles}><TableSkeleton rows={6} /></Section>;
   if (q.isError) return <Section title="Tool discovery funnel" icon={Sparkles}><ErrorBanner message="Unable to load tool lifecycle data." /></Section>;
 
-  const stages = q.data?.stages ?? [];
-  const tools = q.data?.tools ?? [];
-  const stageOrder = ['DISCOVERED', 'CLICKED', 'STARTED', 'OUTPUT_GENERATED', 'COMPLETED', 'ABANDONED'] as const;
-  const stageByKey = new Map(stages.map((stage) => [stage.stage, stage]));
+  const data = q.data;
+  const tools = data?.tools ?? [];
+  const summary = data?.summary;
 
   return (
     <Section
       title="Tool discovery funnel"
-      description="Durable, database-backed movement from contextual discovery to meaningful completion."
+      description="Eligible recommendation coverage, actual-view engagement, outcomes, feedback, and source quality from the canonical lifecycle."
       icon={Sparkles}
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {stageOrder.map((stage) => (
-          <div key={stage} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              {stage.replace(/_/g, ' ')}
-            </p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">
-              {num(stageByKey.get(stage)?.uniqueHomes ?? 0)}
-            </p>
-            <p className="text-xs text-slate-500">unique homes</p>
-          </div>
-        ))}
+      <div className="mb-4 flex items-center gap-2">
+        <Badge variant="outline" className="rounded-full">
+          {data?.metricVersion ?? 'capability-funnel-v2'}
+        </Badge>
+        <span className="text-xs text-slate-500">
+          Rates use unique homes; repetition uses property-capability-source-context scopes.
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        <OverviewCard label="Eligible homes" value={num(summary?.eligibleHomes)} />
+        <OverviewCard
+          label="Actual-view coverage"
+          value={pct(summary?.actualViewCoverage)}
+          sub={`${num(summary?.actualViewHomes)} homes viewed`}
+        />
+        <OverviewCard
+          label="Click-through"
+          value={pct(summary?.clickThroughRate)}
+          sub={`${num(summary?.clickedHomes)} homes clicked`}
+        />
+        <OverviewCard label="Started" value={num(summary?.startedHomes)} />
+        <OverviewCard label="Output generated" value={num(summary?.outputHomes)} />
+        <OverviewCard label="Completed" value={num(summary?.completedHomes)} />
+        <OverviewCard label="Abandoned" value={num(summary?.abandonedHomes)} />
+        <OverviewCard label="Not relevant" value={num(summary?.notRelevantHomes)} />
+        <OverviewCard label="Dismissed" value={num(summary?.dismissedHomes)} />
+        <OverviewCard
+          label="Repetition rate"
+          value={pct(summary?.repetitionRate)}
+          sub={`${num(summary?.repeatedRecommendationScopes)} repeated scopes`}
+        />
       </div>
 
       {tools.length === 0 ? (
@@ -1009,12 +1027,16 @@ function ToolLifecycleFunnelSection({
               <TableHeader>
                 <TableRow>
                   <TableHead>Tool</TableHead>
-                  <TableHead className="text-right">Discovered</TableHead>
+                  <TableHead className="text-right">Eligible</TableHead>
+                  <TableHead className="text-right">Viewed</TableHead>
+                  <TableHead className="text-right">Coverage</TableHead>
                   <TableHead className="text-right">Clicked</TableHead>
                   <TableHead className="text-right">Started</TableHead>
                   <TableHead className="text-right">Output</TableHead>
                   <TableHead className="text-right">Completed</TableHead>
                   <TableHead className="text-right">Abandoned</TableHead>
+                  <TableHead className="text-right">Not relevant</TableHead>
+                  <TableHead className="text-right">Dismissed</TableHead>
                   <TableHead className="text-right">Click rate</TableHead>
                   <TableHead className="text-right">Completion rate</TableHead>
                 </TableRow>
@@ -1026,12 +1048,16 @@ function ToolLifecycleFunnelSection({
                       <p className="font-medium text-slate-900">{tool.label}</p>
                       <p className="font-mono text-[10px] text-slate-400">{tool.toolId}</p>
                     </TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.eligibleHomes)}</TableCell>
                     <TableCell className="text-right tabular-nums">{num(tool.discoveredHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{pct(tool.actualViewCoverage)}</TableCell>
                     <TableCell className="text-right tabular-nums">{num(tool.clickedHomes)}</TableCell>
                     <TableCell className="text-right tabular-nums">{num(tool.startedHomes)}</TableCell>
                     <TableCell className="text-right tabular-nums">{num(tool.outputHomes)}</TableCell>
                     <TableCell className="text-right tabular-nums">{num(tool.completedHomes)}</TableCell>
                     <TableCell className="text-right tabular-nums">{num(tool.abandonedHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.notRelevantHomes)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{num(tool.dismissedHomes)}</TableCell>
                     <TableCell className="text-right tabular-nums">{pct(tool.clickThroughRate)}</TableCell>
                     <TableCell className="text-right tabular-nums">{pct(tool.completionRate)}</TableCell>
                   </TableRow>
@@ -1041,6 +1067,53 @@ function ToolLifecycleFunnelSection({
           </div>
         </ScrollFadeX>
       )}
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <p className="text-sm font-semibold text-slate-900">Readiness distribution</p>
+          <div className="mt-3 space-y-2">
+            {(data?.readinessDistribution ?? []).map((row) => (
+              <div key={row.readiness} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-600">{row.readiness.replace(/_/g, ' ')}</span>
+                <span className="tabular-nums text-slate-900">{pct(row.share)}</span>
+              </div>
+            ))}
+            {(data?.readinessDistribution.length ?? 0) === 0 && (
+              <p className="text-sm text-slate-500">No eligibility readiness data.</p>
+            )}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <p className="text-sm font-semibold text-slate-900">Recommendation source</p>
+          <div className="mt-3 space-y-2">
+            {(data?.sourceDistribution ?? []).map((row) => (
+              <div key={row.source} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-600">{row.source.replace(/_/g, ' ')}</span>
+                <span className="tabular-nums text-slate-900">{pct(row.share)}</span>
+              </div>
+            ))}
+            {(data?.sourceDistribution.length ?? 0) === 0 && (
+              <p className="text-sm text-slate-500">No eligibility source data.</p>
+            )}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <p className="text-sm font-semibold text-slate-900">Top reason codes</p>
+          <div className="mt-3 space-y-2">
+            {(data?.topReasonCodes ?? []).slice(0, 5).map((row) => (
+              <div key={row.reasonCode} className="flex items-center justify-between gap-3 text-sm">
+                <span className="truncate text-slate-600" title={row.reasonCode}>
+                  {row.reasonCode.replace(/_/g, ' ')}
+                </span>
+                <span className="tabular-nums text-slate-900">{num(row.uniqueHomes)}</span>
+              </div>
+            ))}
+            {(data?.topReasonCodes.length ?? 0) === 0 && (
+              <p className="text-sm text-slate-500">No recommendation reason data.</p>
+            )}
+          </div>
+        </div>
+      </div>
     </Section>
   );
 }

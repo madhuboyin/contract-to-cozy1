@@ -103,6 +103,7 @@ Status as of July 24, 2026:
 | CAP-700 feedback endpoint | Complete | Property-authorized, source-bound feedback validates current capability identity and records idempotent opened, dismissed, not-relevant, snoozed, and completed events while delegating Home Action and personalization state changes to their canonical lifecycles |
 | CAP-701 frequency policy | Complete | Evaluator lifecycle aggregation applies source/context-scoped actual-view caps, manifest dismissal cooldowns, renewed-evidence rules for not-relevant and completed feedback, and explicit snooze expiry from Product Analytics without new materialized state |
 | CAP-702 lifecycle canonicalization | Complete | A versioned lifecycle envelope validates canonical capability and manifest identity, protects canonical metadata from caller overrides, carries recommendation and source lineage through contextual surfaces, and explicitly normalizes unattributed legacy/catalog events |
+| CAP-703 admin analytics | Complete | The existing Tool Discovery Funnel now reports server-recorded eligibility, actual-view coverage, engagement and outcome stages, feedback, readiness, reasons, source mix, and repeated recommendation scopes from Product Analytics |
 
 Explore Tools and homeowner command search now use the canonical catalog by default. Set
 `CAPABILITY_CATALOG_SOURCE=legacy` only for the temporary internal-beta rollback.
@@ -1393,6 +1394,21 @@ Extend the existing Tool Discovery Funnel with:
 - contextual versus catalog-only source.
 
 Do not replace the existing Product Analytics store.
+
+Implemented as `capability-funnel-v2` on the existing admin analytics endpoint
+and dashboard. Selected server recommendations emit canonical
+`TOOL_ELIGIBLE` events before delivery; the public lifecycle ingestion route
+rejects that server-owned stage. This establishes the eligible-home
+denominator needed to distinguish recommendation availability from actual
+viewport-qualified discovery.
+
+The funnel reports unique-home eligibility, actual-view coverage,
+click-through, starts, generated outputs, completions, abandonment,
+not-relevant feedback, and dismissals. It also groups eligibility by readiness
+and reviewed reason code, compares contextual and catalog-only actual views,
+and measures repetition across the same property, capability, source, and
+context scope. All queries continue to use `product_analytics_events`; no new
+analytics table, schema change, or migration is required.
 
 #### CAP-704: Operational controls
 

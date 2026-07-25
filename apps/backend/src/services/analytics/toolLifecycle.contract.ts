@@ -1,6 +1,7 @@
 export const TOOL_LIFECYCLE_MODULE = 'tool_discovery';
 
 export const TOOL_LIFECYCLE_STAGES = [
+  'ELIGIBLE',
   'DISCOVERED',
   'CLICKED',
   'STARTED',

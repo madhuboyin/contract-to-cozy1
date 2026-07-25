@@ -394,18 +394,34 @@ export async function getTopTools(range: DateRange, topN: number): Promise<TopTo
 
 export interface ToolLifecycleFunnelRow {
   toolId: string;
+  eligibleHomes: bigint;
   discoveredHomes: bigint;
   clickedHomes: bigint;
   startedHomes: bigint;
   outputHomes: bigint;
   completedHomes: bigint;
   abandonedHomes: bigint;
+  notRelevantHomes: bigint;
+  dismissedHomes: bigint;
 }
 
 export interface ToolLifecycleStageTotalRow {
   stage: string;
   uniqueHomes: bigint;
   totalEvents: bigint;
+}
+
+export interface ToolLifecycleDimensionRow {
+  dimension: 'READINESS' | 'REASON' | 'SOURCE';
+  value: string;
+  uniqueHomes: bigint;
+  totalEvents: bigint;
+}
+
+export interface ToolLifecycleRepetitionRow {
+  observedScopes: bigint;
+  repeatedScopes: bigint;
+  totalImpressions: bigint;
 }
 
 export async function getToolLifecycleFunnelRows(range: DateRange): Promise<ToolLifecycleFunnelRow[]> {
@@ -416,23 +432,29 @@ export async function getToolLifecycleFunnelRows(range: DateRange): Promise<Tool
         "metadataJson"->>'toolId',
         REPLACE("featureKey", '_', '-')
       ) AS "toolId",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_ELIGIBLE')::bigint AS "eligibleHomes",
       COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_DISCOVERED')::bigint AS "discoveredHomes",
       COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_CLICKED')::bigint AS "clickedHomes",
       COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_STARTED')::bigint AS "startedHomes",
       COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_OUTPUT_GENERATED')::bigint AS "outputHomes",
       COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_COMPLETED')::bigint AS "completedHomes",
-      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_ABANDONED')::bigint AS "abandonedHomes"
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_ABANDONED')::bigint AS "abandonedHomes",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_NOT_RELEVANT')::bigint AS "notRelevantHomes",
+      COUNT(DISTINCT "propertyId") FILTER (WHERE "eventName" = 'TOOL_DISMISSED')::bigint AS "dismissedHomes"
     FROM "product_analytics_events"
     WHERE "occurredAt" >= ${range.from}
       AND "occurredAt" <= ${range.to}
       AND "eventType" = 'TOOL_USED'
       AND "eventName" IN (
+        'TOOL_ELIGIBLE',
         'TOOL_DISCOVERED',
         'TOOL_CLICKED',
         'TOOL_STARTED',
         'TOOL_OUTPUT_GENERATED',
         'TOOL_COMPLETED',
-        'TOOL_ABANDONED'
+        'TOOL_ABANDONED',
+        'TOOL_NOT_RELEVANT',
+        'TOOL_DISMISSED'
       )
       AND "featureKey" IS NOT NULL
       AND "propertyId" IS NOT NULL
@@ -442,7 +464,7 @@ export async function getToolLifecycleFunnelRows(range: DateRange): Promise<Tool
       "metadataJson"->>'toolId',
       REPLACE("featureKey", '_', '-')
     )
-    ORDER BY "startedHomes" DESC, "clickedHomes" DESC, "discoveredHomes" DESC
+    ORDER BY "eligibleHomes" DESC, "discoveredHomes" DESC, "clickedHomes" DESC
   `;
 }
 
@@ -457,15 +479,126 @@ export async function getToolLifecycleStageTotals(range: DateRange): Promise<Too
       AND "occurredAt" <= ${range.to}
       AND "eventType" = 'TOOL_USED'
       AND "eventName" IN (
+        'TOOL_ELIGIBLE',
         'TOOL_DISCOVERED',
         'TOOL_CLICKED',
         'TOOL_STARTED',
         'TOOL_OUTPUT_GENERATED',
         'TOOL_COMPLETED',
-        'TOOL_ABANDONED'
+        'TOOL_ABANDONED',
+        'TOOL_NOT_RELEVANT',
+        'TOOL_DISMISSED'
       )
       AND "propertyId" IS NOT NULL
       AND "userId" IS NOT NULL
     GROUP BY "eventName"
   `;
+}
+
+export async function getToolLifecycleDimensions(
+  range: DateRange,
+): Promise<ToolLifecycleDimensionRow[]> {
+  return prisma.$queryRaw<ToolLifecycleDimensionRow[]>`
+    WITH lifecycle AS (
+      SELECT
+        "propertyId",
+        "eventName",
+        COALESCE(NULLIF("metadataJson"->>'readiness', ''), 'UNKNOWN') AS readiness,
+        COALESCE(NULLIF("metadataJson"->>'reasonCode', ''), 'UNATTRIBUTED') AS reason,
+        CASE
+          WHEN "metadataJson"->>'sourceKind' = 'CATALOG' THEN 'CATALOG_ONLY'
+          WHEN "metadataJson"->>'sourceKind' IN (
+            'HOME_ACTION',
+            'JOURNEY',
+            'PROJECT',
+            'PROPERTY_CONTEXT',
+            'PERSONALIZATION',
+            'COMPLETION'
+          ) THEN 'CONTEXTUAL'
+          ELSE 'UNATTRIBUTED'
+        END AS source
+      FROM "product_analytics_events"
+      WHERE "occurredAt" >= ${range.from}
+        AND "occurredAt" <= ${range.to}
+        AND "eventType" = 'TOOL_USED'
+        AND "eventName" IN ('TOOL_ELIGIBLE', 'TOOL_DISCOVERED')
+        AND "propertyId" IS NOT NULL
+        AND "userId" IS NOT NULL
+    ),
+    eligible AS (
+      SELECT * FROM lifecycle WHERE "eventName" = 'TOOL_ELIGIBLE'
+    ),
+    actual_views AS (
+      SELECT * FROM lifecycle WHERE "eventName" = 'TOOL_DISCOVERED'
+    )
+    SELECT
+      'READINESS'::text AS dimension,
+      readiness AS value,
+      COUNT(DISTINCT "propertyId")::bigint AS "uniqueHomes",
+      COUNT(*)::bigint AS "totalEvents"
+    FROM eligible
+    GROUP BY readiness
+    UNION ALL
+    SELECT
+      'REASON'::text AS dimension,
+      reason AS value,
+      COUNT(DISTINCT "propertyId")::bigint AS "uniqueHomes",
+      COUNT(*)::bigint AS "totalEvents"
+    FROM eligible
+    GROUP BY reason
+    UNION ALL
+    SELECT
+      'SOURCE'::text AS dimension,
+      source AS value,
+      COUNT(DISTINCT "propertyId")::bigint AS "uniqueHomes",
+      COUNT(*)::bigint AS "totalEvents"
+    FROM actual_views
+    GROUP BY source
+  `;
+}
+
+export async function getToolLifecycleRepetition(
+  range: DateRange,
+): Promise<ToolLifecycleRepetitionRow> {
+  const rows = await prisma.$queryRaw<ToolLifecycleRepetitionRow[]>`
+    WITH impression_scopes AS (
+      SELECT
+        "propertyId",
+        COALESCE(
+          "metadataJson"->>'canonicalToolId',
+          "metadataJson"->>'toolId',
+          REPLACE("featureKey", '_', '-')
+        ) AS "toolId",
+        COALESCE("metadataJson"->>'sourceId', '') AS "sourceId",
+        COALESCE("metadataJson"->>'contextVersion', '') AS "contextVersion",
+        COUNT(*)::bigint AS impressions
+      FROM "product_analytics_events"
+      WHERE "occurredAt" >= ${range.from}
+        AND "occurredAt" <= ${range.to}
+        AND "eventType" = 'TOOL_USED'
+        AND "eventName" = 'TOOL_DISCOVERED'
+        AND "propertyId" IS NOT NULL
+        AND "userId" IS NOT NULL
+        AND "featureKey" IS NOT NULL
+      GROUP BY
+        "propertyId",
+        COALESCE(
+          "metadataJson"->>'canonicalToolId',
+          "metadataJson"->>'toolId',
+          REPLACE("featureKey", '_', '-')
+        ),
+        COALESCE("metadataJson"->>'sourceId', ''),
+        COALESCE("metadataJson"->>'contextVersion', '')
+    )
+    SELECT
+      COUNT(*)::bigint AS "observedScopes",
+      COUNT(*) FILTER (WHERE impressions > 1)::bigint AS "repeatedScopes",
+      COALESCE(SUM(impressions), 0)::bigint AS "totalImpressions"
+    FROM impression_scopes
+  `;
+  return rows[0] ?? {
+    observedScopes: 0n,
+    repeatedScopes: 0n,
+    totalImpressions: 0n,
+  };
 }

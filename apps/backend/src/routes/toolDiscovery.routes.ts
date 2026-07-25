@@ -25,12 +25,15 @@ import {
 
 const router = Router();
 
-const toolLifecycleEventSchema = z.object({
+export const toolLifecycleEventSchema = z.object({
   toolId: z.string().trim().min(1).max(120).refine(
     (value) => canonicalizeToolLifecycleId(value) === value,
     'Unknown or non-canonical tool ID.',
   ),
-  stage: z.enum(TOOL_LIFECYCLE_STAGES),
+  stage: z.enum(TOOL_LIFECYCLE_STAGES).refine(
+    (stage) => stage !== 'ELIGIBLE',
+    'Eligibility events are server generated.',
+  ),
   surface: z.string().trim().min(1).max(80),
   manifestVersion: z.number().int().positive().optional().nullable(),
   registryVersion: z.string().trim().min(1).max(160).optional().nullable(),

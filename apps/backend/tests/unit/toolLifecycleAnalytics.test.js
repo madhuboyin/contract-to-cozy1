@@ -8,6 +8,9 @@ const {
   canonicalizeToolLifecycleId,
   toolLifecycleEventName,
 } = require('../../src/services/analytics/toolLifecycle.ts');
+const {
+  toolLifecycleEventSchema,
+} = require('../../src/routes/toolDiscovery.routes.ts');
 
 test('tool lifecycle events use the durable TOOL_USED taxonomy', () => {
   const events = buildToolLifecycleAnalyticsEvents({
@@ -43,8 +46,24 @@ test('tool lifecycle events use the durable TOOL_USED taxonomy', () => {
 });
 
 test('tool lifecycle stage names remain queryable without a Prisma enum change', () => {
+  assert.equal(toolLifecycleEventName('ELIGIBLE'), 'TOOL_ELIGIBLE');
   assert.equal(toolLifecycleEventName('DISCOVERED'), 'TOOL_DISCOVERED');
   assert.equal(toolLifecycleEventName('OUTPUT_GENERATED'), 'TOOL_OUTPUT_GENERATED');
+});
+
+test('client lifecycle ingestion cannot forge server-owned eligibility', () => {
+  const base = {
+    toolId: 'coverage-options',
+    surface: 'unified_home',
+  };
+  assert.equal(toolLifecycleEventSchema.safeParse({
+    ...base,
+    stage: 'DISCOVERED',
+  }).success, true);
+  assert.equal(toolLifecycleEventSchema.safeParse({
+    ...base,
+    stage: 'ELIGIBLE',
+  }).success, false);
 });
 
 test('backend feature aliases converge on the discovery catalog', () => {
