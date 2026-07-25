@@ -57,7 +57,6 @@ export function evaluateFinancialContext(
     typeof mortgageProfile.currentMortgageBalanceCents === 'number' &&
     typeof mortgageProfile.interestRateBps === 'number' &&
     typeof mortgageProfile.remainingTermMonths === 'number' &&
-    typeof mortgageProfile.mortgageBalanceAsOfDate === 'string' &&
     mortgageProfile.remainingTermMonths > 0,
   );
   const mortgageModeling = hasMortgageInputs

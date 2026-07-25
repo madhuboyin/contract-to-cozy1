@@ -49,7 +49,6 @@ test('mortgage calculations require one complete canonical financing profile', (
       currentMortgageBalanceCents: 32500000,
       interestRateBps: 675,
       remainingTermMonths: 312,
-      mortgageBalanceAsOfDate: NOW.toISOString(),
     },
     'financial.financingProfile': { purchasePriceCents: 45000000 },
   }));
@@ -105,6 +104,20 @@ test('mortgage consumers are routed through PropertyFinancingProfile', () => {
   const refinance = read('../../src/refinanceRadar/refinanceRadar.service.ts');
   assert.match(refinance, /propertyFinancingProfile\.findUnique/);
   assert.doesNotMatch(refinance, /PropertyFinanceSnapshot/);
+});
+
+test('refinance home signals use only the current open radar opportunity', () => {
+  const collector = read('../../src/modules/gazette/services/gazetteSignalCollector.service.ts');
+  const refinanceCollector = collector.slice(
+    collector.indexOf('private static async _collectRefinance'),
+    collector.indexOf('private static async _collectNeighborhood'),
+  );
+
+  assert.match(refinanceCollector, /propertyRefinanceRadarState\.findUnique/);
+  assert.match(refinanceCollector, /radarState\?\.radarState === 'OPEN'/);
+  assert.match(refinanceCollector, /radarState\.currentOpportunity/);
+  assert.doesNotMatch(refinanceCollector, /refinanceOpportunity\.findFirst/);
+  assert.match(refinanceCollector, /tools\/mortgage-refinance-radar/);
 });
 
 test('FINANCIAL context exposes canonical facts without projecting scenario assumptions', () => {

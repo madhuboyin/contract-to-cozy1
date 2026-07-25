@@ -387,17 +387,16 @@ export class GazetteSignalCollectorService {
   private static async _collectRefinance(
     propertyId: string,
   ): Promise<SourceSignal[]> {
-    const opportunity = await prisma.refinanceOpportunity.findFirst({
-      where: {
-        propertyId,
-        radarState: 'OPEN' as any,
-      },
-      orderBy: { createdAt: 'desc' },
+    const radarState = await prisma.propertyRefinanceRadarState.findUnique({
+      where: { propertyId },
+      include: { currentOpportunity: true },
     });
+    const opportunity =
+      radarState?.radarState === 'OPEN' ? radarState.currentOpportunity : null;
 
     if (!opportunity) return [];
 
-    const monthlySavings = (opportunity as any).monthlySavings ?? 0;
+    const monthlySavings = opportunity.monthlySavings.toNumber();
     const normalizedFinancialImpact = Math.min(1.0, monthlySavings / 500);
 
     return [
@@ -410,16 +409,16 @@ export class GazetteSignalCollectorService {
         headlineHint: `Refinance opportunity: save $${Math.round(monthlySavings)}/month`,
         supportingFacts: {
           monthlySavings,
-          currentRate: (opportunity as any).currentRatePct ?? null,
-          newRate: (opportunity as any).newRatePct ?? null,
-          breakEvenMonths: (opportunity as any).breakEvenMonths ?? null,
-          estimatedSavings: (opportunity as any).totalSavingsEstimate ?? null,
+          currentRate: opportunity.currentRate,
+          newRate: opportunity.marketRate,
+          breakEvenMonths: opportunity.breakEvenMonths,
+          estimatedSavings: opportunity.lifetimeSavings.toNumber(),
         },
         urgency: 0.7,
         financialImpact: normalizedFinancialImpact,
         confidence: 0.8,
         engagement: 0.75,
-        primaryDeepLink: `/dashboard/properties/${propertyId}/tools/refinance-radar`,
+        primaryDeepLink: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`,
         shareSafe: true,
       } satisfies SourceSignal,
     ];

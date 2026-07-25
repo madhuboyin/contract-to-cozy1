@@ -1,6 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/mortgage-refinance-radar/mortgageRefinanceRadarApi.ts
 import { api } from '@/lib/api/client';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
+import type { PropertyFinancingProfile } from '@/types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,19 @@ export async function getSavedScenarios(
 ): Promise<RefinanceScenarioSnapshotDTO[]> {
   const res = await api.get(`/api/properties/${propertyId}/refinance-scenario/saved`);
   return (res.data?.scenarios as RefinanceScenarioSnapshotDTO[]) ?? [];
+}
+
+/**
+ * Read the canonical mortgage profile owned by Financing Center.
+ *
+ * The radar deliberately does not maintain a second copy of these inputs.
+ * This read lets the unavailable state preserve and display facts the user
+ * has already supplied instead of presenting a blank duplicate form.
+ */
+export async function getFinancingMortgageProfile(
+  propertyId: string,
+): Promise<PropertyFinancingProfile | null> {
+  return api.getFinancingProfile(propertyId);
 }
 
 export async function saveFinancingProfile(

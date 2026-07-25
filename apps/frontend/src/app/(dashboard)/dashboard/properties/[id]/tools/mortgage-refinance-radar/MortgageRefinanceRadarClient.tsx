@@ -18,6 +18,7 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import {
   evaluateRadar,
+  getFinancingMortgageProfile,
   getRadarStatus,
   getRateHistory,
   runScenario,
@@ -29,6 +30,7 @@ import {
   type RefinanceScenarioResult,
   type RefinanceScenarioTerm,
 } from './mortgageRefinanceRadarApi';
+import type { PropertyFinancingProfile } from '@/types';
 import { Button } from '@/components/ui/button';
 import RouteStateCard from '@/components/system/RouteStateCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
@@ -610,18 +612,40 @@ const TERM_MONTH_OPTIONS: { label: string; value: number }[] = [
   { label: '30 years', value: 360 },
 ];
 
+function initialTermSelection(profile: PropertyFinancingProfile | null): {
+  preset: string;
+  custom: string;
+} {
+  const value = profile?.remainingTermMonths;
+  if (value == null) return { preset: '', custom: '' };
+  return TERM_MONTH_OPTIONS.some((option) => option.value === value)
+    ? { preset: String(value), custom: '' }
+    : { preset: 'custom', custom: String(value) };
+}
+
 function MortgageSetupForm({
   propertyId,
+  initial,
   onSaved,
 }: {
   propertyId: string;
+  initial: PropertyFinancingProfile | null;
   onSaved: () => Promise<void>;
 }) {
-  const [balance, setBalance] = useState('');
-  const [ratePct, setRatePct] = useState('');
-  const [termMonths, setTermMonths] = useState('');
-  const [customTerm, setCustomTerm] = useState('');
-  const [monthlyPayment, setMonthlyPayment] = useState('');
+  const initialTerm = initialTermSelection(initial);
+  const [balance, setBalance] = useState(
+    initial?.currentMortgageBalanceCents != null
+      ? String(initial.currentMortgageBalanceCents / 100)
+      : '',
+  );
+  const [ratePct, setRatePct] = useState(
+    initial?.interestRateBps != null ? String(initial.interestRateBps / 100) : '',
+  );
+  const [termMonths, setTermMonths] = useState(initialTerm.preset);
+  const [customTerm, setCustomTerm] = useState(initialTerm.custom);
+  const [monthlyPayment, setMonthlyPayment] = useState(
+    initial?.monthlyPaymentCents != null ? String(initial.monthlyPaymentCents / 100) : '',
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -685,7 +709,9 @@ function MortgageSetupForm({
           </h3>
         </div>
         <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
-          Enter your current mortgage details to enable the refinance radar.
+          {initial
+            ? 'We pulled the mortgage details already saved in Financing. Complete any missing fields to enable the refinance radar.'
+            : 'Enter your current mortgage details to enable the refinance radar.'}
         </p>
 
         <div className="space-y-4">
@@ -860,6 +886,7 @@ export default function MortgageRefinanceRadarClient() {
   const [evaluating, setEvaluating] = useState(false);
   const [data, setData] = useState<RadarStatusDTO | null>(null);
   const [rateData, setRateData] = useState<RateHistoryDTO | null>(null);
+  const [mortgageProfile, setMortgageProfile] = useState<PropertyFinancingProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reqRef = useRef(0);
@@ -872,13 +899,31 @@ export default function MortgageRefinanceRadarClient() {
     setRateData(null);
     try {
       const reqId = ++reqRef.current;
-      const [status, rates] = await Promise.all([
+      const [initialStatus, rates, profile] = await Promise.all([
         getRadarStatus(propertyId),
         getRateHistory(propertyId, 12).catch(() => null),
+        getFinancingMortgageProfile(propertyId).catch(() => null),
       ]);
       if (reqId !== reqRef.current) return;
+
+      const hasCompleteCanonicalMortgage = Boolean(
+        profile &&
+        profile.currentMortgageBalanceCents != null &&
+        profile.interestRateBps != null &&
+        profile.remainingTermMonths != null,
+      );
+      const status =
+        initialStatus &&
+        !initialStatus.available &&
+        (initialStatus as RadarStatusUnavailable).reason === 'MISSING_MORTGAGE_DATA' &&
+        hasCompleteCanonicalMortgage
+          ? await evaluateRadar(propertyId).catch(() => initialStatus)
+          : initialStatus;
+      if (reqId !== reqRef.current) return;
+
       setData(status);
       setRateData(rates);
+      setMortgageProfile(profile);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load radar data');
     } finally {
@@ -1011,7 +1056,13 @@ export default function MortgageRefinanceRadarClient() {
       {/* Unavailable */}
       {data && !data.available && !loading && (
         (data as RadarStatusUnavailable).reason === 'MISSING_MORTGAGE_DATA'
-          ? <MortgageSetupForm propertyId={propertyId} onSaved={handleEvaluate} />
+          ? (
+            <MortgageSetupForm
+              propertyId={propertyId}
+              initial={mortgageProfile}
+              onSaved={handleEvaluate}
+            />
+          )
           : <UnavailableCard reason={(data as RadarStatusUnavailable).reason} />
       )}
 
