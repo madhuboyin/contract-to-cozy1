@@ -4,6 +4,7 @@
 // These define internal domain objects and API response shapes.
 
 import { RefinanceConfidenceLevel, RefinanceRadarState, RefinanceScenarioTerm } from '@prisma/client';
+import type { RefinanceFreshnessContract } from '../refinanceFreshness';
 
 // ─── Internal Domain Objects ─────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ export interface MortgageInputContext {
   currentRatePct: number;       // Annual rate as percentage (e.g., 6.25)
   remainingTermMonths: number;
   currentMonthlyPayment?: number; // Optional — computed from amortization if absent
+  mortgageDataAsOf?: string | null;
 }
 
 /**
@@ -95,7 +97,7 @@ export interface LoanProductRate {
 
 // ─── Service Return Types ────────────────────────────────────────────────────
 
-export interface RadarStatusResponse {
+export interface RadarStatusResponse extends RefinanceFreshnessContract {
   available: true;
   radarState: RefinanceRadarState;
   confidenceLevel: RefinanceConfidenceLevel | null;

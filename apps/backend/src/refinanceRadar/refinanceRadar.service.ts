@@ -47,6 +47,7 @@ import {
   detectRefinanceTransition,
   mapRefinanceTransitionDomainEvent,
 } from './refinanceRadarTransition';
+import { buildRefinanceFreshness } from './refinanceFreshness';
 
 // ─── Phase-3: Loan product spread modeling ───────────────────────────────────
 // These spreads are historical median differentials off the 30yr conventional
@@ -144,6 +145,7 @@ export class RefinanceRadarService {
       currentMonthlyPayment: profile.monthlyPaymentCents == null
         ? undefined
         : profile.monthlyPaymentCents / 100,
+      mortgageDataAsOf: profile.mortgageBalanceAsOfDate?.toISOString() ?? null,
     };
   }
 
@@ -385,6 +387,11 @@ export class RefinanceRadarService {
       latestSnapshot?.rate30yr ?? evalResult.marketRatePct,
       latestSnapshot?.rate15yr ?? (evalResult.marketRatePct - 0.75),
     );
+    const freshness = buildRefinanceFreshness({
+      mortgageDataAsOf: mortgageContext.mortgageDataAsOf,
+      marketDataAsOf: latestSnapshot?.date ?? null,
+      marketDataSource: latestSnapshot?.source ?? null,
+    });
 
     return {
       available: true,
@@ -407,6 +414,7 @@ export class RefinanceRadarService {
       triggerRatePct: evalResult.triggerRatePct,
       triggerRateExplanation: evalResult.triggerRateExplanation,
       topDecisionFactors: evalResult.topDecisionFactors,
+      ...freshness,
       disclaimer: REFINANCE_DISCLAIMER,
       rateDataFreshnessAt: latestSnapshot?.date ?? null,
       loanProducts,
@@ -459,6 +467,11 @@ export class RefinanceRadarService {
       marketRate30yr,
       latestSnapshot?.rate15yr ?? Math.max(0, marketRate30yr - 0.75),
     );
+    const freshness = buildRefinanceFreshness({
+      mortgageDataAsOf: mortgageContext.mortgageDataAsOf,
+      marketDataAsOf: latestSnapshot?.date ?? null,
+      marketDataSource: latestSnapshot?.source ?? null,
+    });
 
     return {
       available: true,
@@ -482,6 +495,7 @@ export class RefinanceRadarService {
       triggerRatePct: currentExplanation.triggerRatePct,
       triggerRateExplanation: currentExplanation.triggerRateExplanation,
       topDecisionFactors: currentExplanation.topDecisionFactors,
+      ...freshness,
       disclaimer: REFINANCE_DISCLAIMER,
       rateDataFreshnessAt: latestSnapshot?.date ?? null,
       loanProducts,

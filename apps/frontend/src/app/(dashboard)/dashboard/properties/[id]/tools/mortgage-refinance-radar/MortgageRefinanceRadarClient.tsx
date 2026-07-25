@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   ChevronDown,
@@ -13,6 +14,8 @@ import {
   Minus,
   Calculator,
   Info,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
@@ -62,6 +65,14 @@ function months(value: number | null | undefined): string {
   if (yrs === 0) return `${mos}mo`;
   if (mos === 0) return `${yrs}yr`;
   return `${yrs}yr ${mos}mo`;
+}
+
+function freshnessDate(value: string | null | undefined): string {
+  if (!value) return 'Not recorded';
+  const parsed = new Date(value.length === 10 ? `${value}T00:00:00.000Z` : value);
+  return Number.isNaN(parsed.getTime())
+    ? 'Not recorded'
+    : parsed.toLocaleDateString();
 }
 
 const TERM_LABELS: Record<RefinanceScenarioTerm, string> = {
@@ -308,6 +319,116 @@ function KeyMetricsCard({ data }: { data: RadarStatusAvailable }) {
           <span>Remaining: {months(data.remainingTermMonths)}</span>
           <span>Closing cost est.: {usd(data.closingCostAssumptionUsd)}</span>
         </div>
+      </div>
+    </GlassCard>
+  );
+}
+
+function FreshnessBadge({
+  state,
+}: {
+  state: 'CURRENT' | 'AGING' | 'STALE' | 'UNKNOWN' | undefined;
+}) {
+  const styles = {
+    CURRENT: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300',
+    AGING: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+    STALE: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300',
+    UNKNOWN: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300',
+  } as const;
+  const resolved = state ?? 'UNKNOWN';
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${styles[resolved]}`}>
+      {resolved.toLowerCase()}
+    </span>
+  );
+}
+
+function DataFreshnessCard({
+  data,
+  propertyId,
+}: {
+  data: RadarStatusAvailable;
+  propertyId: string;
+}) {
+  const isReady = data.alertReadiness === 'READY';
+  const warnings = data.freshnessWarnings ?? [];
+
+  return (
+    <GlassCard>
+      <div className="space-y-4 p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Data freshness
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Fresh inputs are required before future alerts can leave the product.
+            </p>
+          </div>
+          <div className={`flex items-center gap-1.5 text-xs font-semibold ${
+            isReady
+              ? 'text-emerald-700 dark:text-emerald-300'
+              : 'text-amber-700 dark:text-amber-300'
+          }`}>
+            {isReady
+              ? <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              : <AlertTriangle className="h-4 w-4" aria-hidden="true" />}
+            {isReady ? 'Alert inputs ready' : 'Alert review needed'}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-slate-200/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Mortgage balance
+              </p>
+              <FreshnessBadge state={data.mortgageDataFreshness} />
+            </div>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              As of {freshnessDate(data.mortgageDataAsOf)}
+            </p>
+            {data.mortgageDataAgeDays != null && (
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                {data.mortgageDataAgeDays} days old
+              </p>
+            )}
+          </div>
+          <div className="rounded-xl border border-slate-200/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Market benchmark
+              </p>
+              <FreshnessBadge state={data.marketDataFreshness} />
+            </div>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              As of {freshnessDate(data.marketDataAsOf)}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              {data.marketDataSource ?? 'Source unavailable'}
+              {data.marketDataAgeDays != null ? ` · ${data.marketDataAgeDays} days old` : ''}
+            </p>
+          </div>
+        </div>
+
+        {warnings.length > 0 && (
+          <ul className="space-y-1.5" aria-label="Freshness warnings">
+            {warnings.map((warning) => (
+              <li key={warning} className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-200">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                {warning}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {data.alertReadiness === 'REVIEW_MORTGAGE_DATA' && (
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/dashboard/properties/${propertyId}/tools/financing/profile`}>
+              Confirm mortgage balance
+            </Link>
+          </Button>
+        )}
       </div>
     </GlassCard>
   );
@@ -946,7 +1067,10 @@ export default function MortgageRefinanceRadarClient() {
     confidenceLabel: available?.confidenceLevel
       ? `${available.confidenceLevel.toLowerCase()} fit from current loan context`
       : 'Model fit pending evaluation',
-    freshnessLabel: trustDateLabel(available?.lastEvaluatedAt, 'Evaluate now to refresh'),
+    freshnessLabel: available?.alertReadiness === 'READY'
+      ? trustDateLabel(available.lastEvaluatedAt, 'Evaluate now to refresh')
+      : available?.freshnessWarnings?.[0] ??
+        trustDateLabel(available?.lastEvaluatedAt, 'Evaluate now to refresh'),
     sourceLabel: 'Mortgage profile + market rate snapshots + refinance analysis',
   });
 
@@ -1079,7 +1203,12 @@ export default function MortgageRefinanceRadarClient() {
           {/* 2. Key metrics */}
           <KeyMetricsCard data={available} />
 
-          {/* 3. Scenario planner */}
+          {/* 3. Data freshness and monitoring readiness */}
+          {available.alertReadiness && (
+            <DataFreshnessCard data={available} propertyId={propertyId} />
+          )}
+
+          {/* 4. Scenario planner */}
           <ScenarioCalculator propertyId={propertyId} contextData={available} />
 
           {/* 3b. Steps to act — shown when opportunity is open */}

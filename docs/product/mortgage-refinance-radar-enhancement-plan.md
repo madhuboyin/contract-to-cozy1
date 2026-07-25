@@ -46,6 +46,12 @@ explicitly opt-in step. The radar now also calculates the highest approximate
 current saved assumptions. Fresh and read-only status responses expose that
 personalized monitoring threshold plus the top three ordered decision factors;
 the UI labels the result as modeled market context rather than a lender quote.
+Status responses now also classify the saved mortgage balance and weekly market
+benchmark as CURRENT, AGING, STALE, or UNKNOWN. An external-alert-readiness
+contract fails closed for any non-current market input or an unverified,
+aging, or stale mortgage balance, while keeping in-product monitoring and
+estimates available with calm warnings and a direct path to confirm the
+canonical Financing record.
 
 ## Executive recommendation
 

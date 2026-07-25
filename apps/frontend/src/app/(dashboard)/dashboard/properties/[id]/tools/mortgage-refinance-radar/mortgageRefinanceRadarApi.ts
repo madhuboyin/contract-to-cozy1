@@ -48,6 +48,15 @@ export type RadarStatusAvailable = {
   triggerRatePct?: number | null;
   triggerRateExplanation?: string;
   topDecisionFactors?: string[];
+  mortgageDataAsOf?: string | null;
+  mortgageDataFreshness?: 'CURRENT' | 'AGING' | 'STALE' | 'UNKNOWN';
+  mortgageDataAgeDays?: number | null;
+  marketDataAsOf?: string | null;
+  marketDataFreshness?: 'CURRENT' | 'AGING' | 'STALE' | 'UNKNOWN';
+  marketDataAgeDays?: number | null;
+  marketDataSource?: string | null;
+  alertReadiness?: 'READY' | 'REVIEW_MORTGAGE_DATA' | 'WAITING_FOR_MARKET_DATA';
+  freshnessWarnings?: string[];
   disclaimer: string;
 };
 
