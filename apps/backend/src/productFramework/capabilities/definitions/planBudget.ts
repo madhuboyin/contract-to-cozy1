@@ -161,6 +161,38 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
     completionSignal: 'hoa_approval_record_created',
     outputEntityTypes: ['DOCUMENT'] as const,
   } : {}),
+  ...(id === 'inspection-hub' ? {
+    version: 2,
+    iconName: 'file-check' as const,
+    intentAliases: [
+      'inspection hub',
+      'upload home inspection report',
+      'review inspection findings',
+      'track inspection issues',
+      'pre purchase inspection report',
+      'annual home inspection',
+      'what did my home inspector find',
+    ],
+    homeownerOutcome:
+      'Turn a professional inspection report into reviewed, trackable findings and durable follow-up actions.',
+    livingHomeRecordReads: [
+      'property-context',
+      'inspection-document',
+      'inspection-journey',
+      'inspection-report',
+      'inspection-finding',
+    ],
+    livingHomeRecordWrites: [
+      'inspection-report',
+      'inspection-finding',
+      'inspection-write-back',
+      'finding-resolution',
+    ],
+    expectedOutput:
+      'A structured inspection report with extracted findings ready for homeowner review and confirmation.',
+    completionSignal: 'inspection_findings_extracted',
+    outputEntityTypes: ['ISSUE'] as const,
+  } : {}),
   label,
   description,
   routeTemplate,
@@ -168,6 +200,11 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   rolloutKey,
   releaseStage,
   safetyTier,
-  completionKind: id === 'diy' ? 'DECISION_RECORDED' as const : 'PLAN_CREATED' as const,
+  completionKind:
+    id === 'diy'
+      ? 'DECISION_RECORDED' as const
+      : id === 'inspection-hub'
+        ? 'ARTIFACT_CREATED' as const
+        : 'PLAN_CREATED' as const,
   mode,
 })));

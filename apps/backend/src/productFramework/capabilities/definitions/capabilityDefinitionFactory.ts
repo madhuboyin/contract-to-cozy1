@@ -196,6 +196,8 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['GUIDANCE', 'PROJECT'],
     triggerFamily: 'INSPECTION_DOCUMENT_AVAILABLE',
     reason: 'An inspection report or ownership journey has findings to organize and track.',
+    recommendationDefinitionCodes: ['INSPECTION_DOCUMENT_AVAILABLE'],
+    requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'DOCUMENT', 'ISSUE', 'JOURNEY'],
   },
   'insurance-trend': {

@@ -1677,6 +1677,21 @@ governed by `PERMITS` and `HOA_COMPLIANCE`.
 - Uploading an unrelated document does not.
 - Successful extraction into tracked findings is meaningful completion.
 
+**CAP-806 implementation status: Complete.** The versioned Inspection Hub manifest now owns
+homeowner-language aliases, inspection document/journey/report/finding reads, durable report,
+finding, write-back, and resolution writes, and `inspection_findings_extracted` as an
+`ARTIFACT_CREATED` completion. Recommendation generation creates a typed document source only for
+`INSPECTION_REPORT` documents or an unconfirmed extracted report; receipts, invoices, contracts,
+and other unrelated uploads cannot promote the tool. A bounded reviewed set of inspection-led
+buyer and ownership journeys supplies the alternative contextual trigger, while
+`requiresExplicitTrigger` prevents generic guidance, project, or document entity matches from
+creating a suggestion. Property-scoped redirect, hub, and upload routes preserve the complete
+recommendation query contract. Uploads persist action, document, and journey lineage on the
+inspection report. Canonical `TOOL_COMPLETED` analytics are emitted only after extraction creates
+at least one durable `InspectionFinding`; a PDF with zero findings is not counted as meaningful
+completion. The Prisma schema is updated without a migration script, per the project migration
+policy. Rollout and rollback remain governed by `INSPECTION_HUB`.
+
 #### Project Tracker
 
 - Contractor selection, contract upload, or explicit project creation creates a valid suggestion.

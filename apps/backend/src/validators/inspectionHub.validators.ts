@@ -26,6 +26,10 @@ export const UploadReportBodySchema = z.object({
   inspectorName: z.string().optional(),
   inspectorLicense: z.string().optional(),
   inspectorCompany: z.string().optional(),
+  sourceActionId: z.string().trim().min(1).max(160).optional(),
+  sourceEntityType: z.string().trim().min(1).max(160).optional(),
+  sourceEntityId: z.string().trim().min(1).max(160).optional(),
+  sourceJourneyId: z.string().trim().min(1).max(160).optional(),
 });
 
 export const UpdateFindingSchema = z.object({

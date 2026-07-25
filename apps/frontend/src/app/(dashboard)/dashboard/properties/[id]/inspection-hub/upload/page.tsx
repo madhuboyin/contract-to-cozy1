@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, FileText, Upload } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,10 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../../components/route-templates/DetailTemplate';
 import { track } from '@/lib/analytics/events';
+import {
+  inspectionHubLaunchQuery,
+  inspectionUploadLineage,
+} from '@/features/tools/inspectionHubLaunchContext';
 
 const REPORT_TYPES = [
   { value: 'GENERAL', label: 'General Home Inspection' },
@@ -29,7 +33,11 @@ const REPORT_TYPES = [
 export default function UploadInspectionReportPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const launchQuery = inspectionHubLaunchQuery(searchParams);
+  const launchSuffix = launchQuery ? `?${launchQuery}` : '';
+  const launchLineage = inspectionUploadLineage(searchParams);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -62,9 +70,12 @@ export default function UploadInspectionReportPage() {
         inspectorName: inspectorName || undefined,
         inspectorLicense: inspectorLicense || undefined,
         inspectorCompany: inspectorCompany || undefined,
+        ...launchLineage,
       });
       track('action_completed', { tool: 'inspection-hub', actionType: 'upload_report', propertyId });
-      router.push(`/dashboard/properties/${propertyId}/inspection-hub/${reportId}`);
+      router.push(
+        `/dashboard/properties/${propertyId}/inspection-hub/${reportId}${launchSuffix}`,
+      );
     } catch (e: any) {
       setError(e?.message ?? 'Upload failed. Please try again.');
       setUploading(false);
@@ -74,7 +85,7 @@ export default function UploadInspectionReportPage() {
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-2xl lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}/inspection-hub`}>
+        <Link href={`/dashboard/properties/${propertyId}/inspection-hub${launchSuffix}`}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Inspection Hub
         </Link>

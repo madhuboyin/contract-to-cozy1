@@ -4868,6 +4868,10 @@ class APIClient {
       inspectorName?: string;
       inspectorLicense?: string;
       inspectorCompany?: string;
+      sourceActionId?: string;
+      sourceEntityType?: string;
+      sourceEntityId?: string;
+      sourceJourneyId?: string;
     },
   ): Promise<{ reportId: string }> {
     const formData = new FormData();
@@ -4877,6 +4881,10 @@ class APIClient {
     if (meta.inspectorName) formData.append('inspectorName', meta.inspectorName);
     if (meta.inspectorLicense) formData.append('inspectorLicense', meta.inspectorLicense);
     if (meta.inspectorCompany) formData.append('inspectorCompany', meta.inspectorCompany);
+    if (meta.sourceActionId) formData.append('sourceActionId', meta.sourceActionId);
+    if (meta.sourceEntityType) formData.append('sourceEntityType', meta.sourceEntityType);
+    if (meta.sourceEntityId) formData.append('sourceEntityId', meta.sourceEntityId);
+    if (meta.sourceJourneyId) formData.append('sourceJourneyId', meta.sourceJourneyId);
     const res = await this.formDataRequest<{ data: { reportId: string } }>(
       `/api/properties/${propertyId}/inspection-hub/reports`,
       formData,

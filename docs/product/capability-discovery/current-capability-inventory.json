@@ -557,7 +557,7 @@
       "rolloutKey": "INSPECTION_HUB",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
+      "completionKind": "ARTIFACT_CREATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

@@ -50,7 +50,7 @@
 | home-risk-replay | Home Risk Replay | home, ai | `/dashboard/properties/[id]/tools/home-risk-replay` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-savings | Home Savings Check | ai | `/dashboard/home-savings` | Verified | SAVE_OPTIMIZE | ACTIVE | LOW_CONSEQUENCE | OUTPUT_GENERATED | Canonical | No | CATALOG_ONLY |
 | home-timeline | Home Timeline | home | `/dashboard/properties/[id]/timeline` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CATALOG_ONLY |
-| inspection-hub | Inspection Hub | home | `/dashboard/properties/[id]/inspection-hub` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
+| inspection-hub | Inspection Hub | home | `/dashboard/properties/[id]/inspection-hub` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
 | insurance-trend | Insurance Trend | home, ai | `/dashboard/properties/[id]/tools/insurance-trend` | Verified | SAVE_OPTIMIZE | BETA | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | material-specs | Material Specs | home | `/dashboard/properties/[id]/materials` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | modifications | Home Upgrades | ai | `/dashboard/modifications` | Verified | PLAN_BUDGET | BETA | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |

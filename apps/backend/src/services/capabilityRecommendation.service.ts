@@ -15,6 +15,9 @@ import {
   matchCapabilityCandidates,
   rankCapabilityCandidates,
   enrichProjectComplianceCapabilitySources,
+  inspectionDocumentCapabilitySource,
+  inspectionJourneyTrigger,
+  inspectionReportCapabilitySource,
   type BuildCapabilityRecommendationContextInput,
   type CapabilityActionSourceMetadata,
   type CapabilityCompletionSource,
@@ -233,9 +236,16 @@ async function loadDefaultJourneys(
     const reviewedTrigger = recommendedId
       ? registry.getById(recommendedId)?.recommendation.triggerFamilies[0]
       : null;
+    const reviewedInspectionTrigger = inspectionJourneyTrigger(
+      journey.journeyTypeKey,
+    );
     return {
       id: journey.id,
-      kind: reviewedTrigger ?? journey.journeyTypeKey ?? 'GUIDANCE_JOURNEY',
+      kind:
+        reviewedInspectionTrigger
+        ?? reviewedTrigger
+        ?? journey.journeyTypeKey
+        ?? 'GUIDANCE_JOURNEY',
       status: 'ACTIVE',
       stage: String(journey.decisionStage),
       sourceEntityType:
@@ -331,28 +341,40 @@ async function loadDefaultPersonalizationRecommendations(
   propertyId: string,
 ): Promise<CapabilityPersonalizationSource[]> {
   const now = new Date();
-  const recommendations = await prisma.personalizedRecommendation.findMany({
-    where: { propertyId, status: 'ACTIVE' },
-    select: {
-      id: true,
-      status: true,
-      ruleVersion: true,
-      contentVersion: true,
-      lastEvaluatedAt: true,
-      definition: {
-        select: {
-          code: true,
-          status: true,
-          pausedAt: true,
-          effectiveFrom: true,
-          effectiveTo: true,
+  const [recommendations, inspectionReport, inspectionDocument] = await Promise.all([
+    prisma.personalizedRecommendation.findMany({
+      where: { propertyId, status: 'ACTIVE' },
+      select: {
+        id: true,
+        status: true,
+        ruleVersion: true,
+        contentVersion: true,
+        lastEvaluatedAt: true,
+        definition: {
+          select: {
+            code: true,
+            status: true,
+            pausedAt: true,
+            effectiveFrom: true,
+            effectiveTo: true,
+          },
         },
       },
-    },
-    orderBy: [{ lastEvaluatedAt: 'desc' }, { id: 'asc' }],
-    take: 100,
-  });
-  return recommendations
+      orderBy: [{ lastEvaluatedAt: 'desc' }, { id: 'asc' }],
+      take: 100,
+    }),
+    prisma.inspectionReport.findFirst({
+      where: { propertyId, status: { in: ['PROCESSING', 'REVIEW_PENDING'] } },
+      select: { id: true, updatedAt: true },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    }),
+    prisma.document.findFirst({
+      where: { propertyId, type: 'INSPECTION_REPORT' },
+      select: { id: true, type: true, updatedAt: true },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    }),
+  ]);
+  const activeRecommendations = recommendations
     .filter((recommendation) =>
       isRecommendationDefinitionOperational(recommendation.definition, now))
     .map((recommendation) => ({
@@ -363,6 +385,14 @@ async function loadDefaultPersonalizationRecommendations(
         `${recommendation.ruleVersion}:${recommendation.contentVersion}`,
       lastEvaluatedAt: recommendation.lastEvaluatedAt.toISOString(),
     }));
+  const inspectionSource = inspectionReport
+    ? inspectionReportCapabilitySource(inspectionReport)
+    : inspectionDocument
+      ? inspectionDocumentCapabilitySource(inspectionDocument)
+      : null;
+  return inspectionSource
+    ? [...activeRecommendations, inspectionSource]
+    : activeRecommendations;
 }
 
 function metadataValue(

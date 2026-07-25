@@ -143,9 +143,15 @@ export interface IngestArgs {
   inspectorName?: string;
   inspectorLicense?: string;
   inspectorCompany?: string;
+  sourceActionId?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  sourceJourneyId?: string;
 }
 
-export async function ingestInspectionReport(args: IngestArgs): Promise<string> {
+export async function ingestInspectionReport(
+  args: IngestArgs,
+): Promise<{ reportId: string; findingCount: number }> {
   const { propertyId, userId, pdfBuffer, fileName, reportType, inspectionDate } = args;
 
   // Upload PDF to S3 (best-effort — fall back to a local key on error)
@@ -176,14 +182,20 @@ export async function ingestInspectionReport(args: IngestArgs): Promise<string> 
       sourceFileKey,
       status: 'PROCESSING',
       extractionModel: 'gemini-1.5-flash',
+      sourceActionId: args.sourceActionId,
+      sourceEntityType: args.sourceEntityType,
+      sourceEntityId: args.sourceEntityId,
+      sourceJourneyId: args.sourceJourneyId,
     },
   });
 
   logger.info({ reportId: report.id }, '[INSPECTION] Created report, starting extraction');
 
+  let findingCount = 0;
   try {
     const pdfText = await extractPdfText(pdfBuffer);
     const findings = await callGemini(pdfText);
+    findingCount = findings.length;
 
     if (findings.length > 0) {
       await prisma.inspectionFinding.createMany({
@@ -232,5 +244,5 @@ export async function ingestInspectionReport(args: IngestArgs): Promise<string> 
     throw err;
   }
 
-  return report.id;
+  return { reportId: report.id, findingCount };
 }

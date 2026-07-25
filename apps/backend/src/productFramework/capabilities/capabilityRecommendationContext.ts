@@ -123,6 +123,8 @@ const PersonalizationSourceSchema = z.object({
   status: BoundedIdentifier,
   recommendationVersion: BoundedIdentifier,
   contextVersion: OptionalIdentifier.default(null),
+  sourceEntityType: OptionalIdentifier.default(null),
+  sourceEntityId: OptionalIdentifier.default(null),
   lastEvaluatedAt: z.string().datetime(),
 });
 

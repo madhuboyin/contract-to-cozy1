@@ -2166,7 +2166,7 @@ test('CAP-604 records a verified completion before resolving one next step', asy
     propertyId: 'property-1',
     userId: 'user-1',
     capabilityId: 'material-specs',
-    completionKind: 'OUTPUT_VIEWED',
+    completionKind: 'ARTIFACT_CREATED',
     outputEntityType: 'DOCUMENT',
     outputEntityId: 'document-1',
     sourceActionId: 'action-1',
@@ -2182,7 +2182,7 @@ test('CAP-604 records a verified completion before resolving one next step', asy
         toolId: 'material-specs',
         stage: 'COMPLETED',
         surface: 'workflow',
-        manifestVersion: 1,
+        manifestVersion: 2,
         registryVersion: canonicalCapabilityRegistry.version,
         sourceKind: 'COMPLETION',
         sourceId: 'document-1',
@@ -2190,7 +2190,7 @@ test('CAP-604 records a verified completion before resolving one next step', asy
         sourceEntityType: 'DOCUMENT',
         sourceEntityId: 'document-1',
         journeyId: null,
-        completionKind: 'OUTPUT_VIEWED',
+        completionKind: 'ARTIFACT_CREATED',
         outputKey: 'document-1',
         durationSeconds: null,
         metadata: {
@@ -2210,7 +2210,7 @@ test('CAP-604 records a verified completion before resolving one next step', asy
         actionId: 'action-1',
         entityType: 'DOCUMENT',
         entityId: 'document-1',
-        eventType: 'OUTPUT_VIEWED',
+        eventType: 'ARTIFACT_CREATED',
       });
       return {
         contractVersion: 'capability-suggestions-v1',
@@ -2236,7 +2236,7 @@ test('CAP-604 records a verified completion before resolving one next step', asy
 test('CAP-604 rejects unverified completion kinds and output identities', async () => {
   assert.equal(CapabilityCompletionNextBodySchema.safeParse({
     capabilityId: 'material-specs',
-    completionKind: 'OUTPUT_VIEWED',
+    completionKind: 'ARTIFACT_CREATED',
     outputEntityType: 'DOCUMENT',
     outputEntityId: 'document-1',
   }).success, true);
@@ -2248,7 +2248,7 @@ test('CAP-604 rejects unverified completion kinds and output identities', async 
   }).success, false);
   assert.equal(CapabilityCompletionNextBodySchema.safeParse({
     capabilityId: 'material-specs',
-    completionKind: 'OUTPUT_VIEWED',
+    completionKind: 'ARTIFACT_CREATED',
     outputEntityType: 'PROJECT',
     outputEntityId: 'project-1',
   }).success, false);

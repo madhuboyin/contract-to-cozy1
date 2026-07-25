@@ -252,8 +252,8 @@ export function matchCapabilityCandidates(input: {
       kind: 'PERSONALIZATION',
       id: recommendation.id,
       actionId: null,
-      entityType: null,
-      entityId: recommendation.id,
+      entityType: recommendation.sourceEntityType,
+      entityId: recommendation.sourceEntityId ?? recommendation.id,
       sourceVersion: recommendation.recommendationVersion,
       observedAt: recommendation.lastEvaluatedAt,
     };

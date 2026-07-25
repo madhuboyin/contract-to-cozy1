@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, ChevronRight, ClipboardList, Plus, Upload } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import type { InspectionHubSummary, InspectionReportSummary } from '@/types';
@@ -17,6 +17,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../components/route-templates/DetailTemplate';
 import { track } from '@/lib/analytics/events';
+import { inspectionHubLaunchQuery } from '@/features/tools/inspectionHubLaunchContext';
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
   GENERAL: 'General Home',
@@ -59,6 +60,9 @@ function fmtDate(dt?: string | null) {
 export default function InspectionHubPage() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const launchQuery = inspectionHubLaunchQuery(searchParams);
+  const launchSuffix = launchQuery ? `?${launchQuery}` : '';
 
   const [hub, setHub] = useState<InspectionHubSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,7 +145,7 @@ export default function InspectionHubPage() {
         <MobileFilterSurface>
           <MobileActionRow>
             <Button className="min-h-[44px] gap-1.5" asChild>
-              <Link href={`/dashboard/properties/${propertyId}/inspection-hub/upload`}>
+              <Link href={`/dashboard/properties/${propertyId}/inspection-hub/upload${launchSuffix}`}>
                 <Upload className="h-4 w-4" />
                 Upload Report
               </Link>

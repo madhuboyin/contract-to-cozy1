@@ -1,14 +1,20 @@
 'use client';
 import { useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { inspectionHubLaunchQuery } from '@/features/tools/inspectionHubLaunchContext';
 
 export default function InspectionHubToolPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const launchQuery = searchParams.toString();
 
   useEffect(() => {
-    router.replace(`/dashboard/properties/${params.id}/inspection-hub`);
-  }, [params.id, router]);
+    const query = inspectionHubLaunchQuery(new URLSearchParams(launchQuery));
+    router.replace(
+      `/dashboard/properties/${params.id}/inspection-hub${query ? `?${query}` : ''}`,
+    );
+  }, [launchQuery, params.id, router]);
 
   return (
     <div className="flex h-48 items-center justify-center">

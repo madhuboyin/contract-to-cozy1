@@ -13084,6 +13084,10 @@ model InspectionReport {
   safetyFindings  Int                    @default(0)
   majorFindings   Int                    @default(0)
   extractionModel String?
+  sourceActionId   String?
+  sourceEntityType String?
+  sourceEntityId   String?
+  sourceJourneyId  String?
 
   createdAt   DateTime  @default(now())
   processedAt DateTime?
@@ -13096,6 +13100,7 @@ model InspectionReport {
 
   @@index([propertyId, inspectionDate(sort: Desc)])
   @@index([propertyId, status])
+  @@index([sourceEntityType, sourceEntityId])
   @@map("inspection_reports_v2")
 }
 

@@ -6,6 +6,11 @@ import { applyWriteBacks, getWriteBackPreview } from '../services/inspectionWrit
 import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getProtectionContextDecisions } from '../services/protection/context';
+import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
+import {
+  hasTrackableInspectionFindings,
+  inspectionFindingsCompletionEvent,
+} from '../services/analytics/inspectionHubLifecycle';
 
 // ── Hub overview ──────────────────────────────────────────────────────────────
 
@@ -54,7 +59,7 @@ export async function uploadReport(req: Request, res: Response, next: NextFuncti
     const userId = req.user!.userId;
     const { reportType, inspectionDate, inspectorName, inspectorLicense, inspectorCompany } = req.body;
 
-    const reportId = await ingestInspectionReport({
+    const { reportId, findingCount } = await ingestInspectionReport({
       propertyId: req.params.propertyId,
       userId,
       pdfBuffer: req.file.buffer,
@@ -64,6 +69,10 @@ export async function uploadReport(req: Request, res: Response, next: NextFuncti
       inspectorName,
       inspectorLicense,
       inspectorCompany,
+      sourceActionId: req.body.sourceActionId,
+      sourceEntityType: req.body.sourceEntityType,
+      sourceEntityId: req.body.sourceEntityId,
+      sourceJourneyId: req.body.sourceJourneyId,
     });
 
     analyticsEmitter.track({
@@ -72,10 +81,24 @@ export async function uploadReport(req: Request, res: Response, next: NextFuncti
       propertyId: req.params.propertyId,
       moduleKey: AnalyticsModule.INSPECTION,
       featureKey: AnalyticsFeature.INSPECTION_HUB,
-      metadataJson: { actionType: 'upload_report', reportType },
+      metadataJson: { actionType: 'upload_report', reportType, findingCount },
     });
+    if (hasTrackableInspectionFindings(findingCount)) {
+      void recordToolLifecycleEvents({
+        userId,
+        propertyId: req.params.propertyId,
+        events: [inspectionFindingsCompletionEvent({
+          reportId,
+          findingCount,
+          sourceActionId: req.body.sourceActionId,
+          sourceEntityType: req.body.sourceEntityType,
+          sourceEntityId: req.body.sourceEntityId,
+          sourceJourneyId: req.body.sourceJourneyId,
+        })],
+      });
+    }
 
-    res.status(201).json({ success: true, data: { reportId } });
+    res.status(201).json({ success: true, data: { reportId, findingCount } });
   } catch (err) { next(err); }
 }
 
