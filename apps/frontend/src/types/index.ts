@@ -3913,7 +3913,7 @@ export interface MaterialSpec {
   dimensions?: string | null; material?: string | null; supplier?: string | null; supplierUrl?: string | null;
   purchaseDate?: string | null; quantityPurchased?: string | null; lotBatch?: string | null;
   notes?: string | null; isActive: boolean;
-  linkedInventoryItemId?: string | null;
+  linkedInventoryItemId?: string | null; projectId?: string | null;
   createdAt: string; updatedAt: string;
   photos: MaterialSpecPhoto[];
   room?: { id: string; name: string } | null;

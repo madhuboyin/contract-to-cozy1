@@ -7,6 +7,7 @@ import {
 
 type CapabilitySeed = {
   id: string;
+  version?: number;
   label: string;
   description: string;
   routeTemplate: string;
@@ -17,6 +18,13 @@ type CapabilitySeed = {
   completionKind: ToolCapabilityDefinition['lifecycle']['completionKind'];
   mode: CapabilityRecommendationMode;
   iconName?: ToolCapabilityDefinition['presentation']['iconName'];
+  intentAliases?: ToolCapabilityDefinition['presentation']['intentAliases'];
+  homeownerOutcome?: string;
+  livingHomeRecordReads?: ToolCapabilityDefinition['productFramework']['livingHomeRecordReads'];
+  livingHomeRecordWrites?: ToolCapabilityDefinition['productFramework']['livingHomeRecordWrites'];
+  expectedOutput?: string;
+  completionSignal?: string;
+  outputEntityTypes?: ToolCapabilityDefinition['lifecycle']['outputEntityTypes'];
 };
 
 type ContextualDefinition = {
@@ -277,6 +285,7 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'home-risk-replay': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-timeline': ['home-risk-replay', 'home-event-radar', 'seller-prep'],
   'insurance-trend': ['true-cost', 'cost-volatility', 'home-risk-replay'],
+  'material-specs': ['project-tracker', 'inspection-hub', 'home-digital-twin'],
   'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'true-cost'],
   'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
   'negotiation-shield': ['service-price-radar', 'cost-explainer', 'true-cost'],
@@ -321,14 +330,17 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
 
   return defineToolCapability({
     id: seed.id,
-    version: 1,
+    version: seed.version ?? 1,
     owner: 'Homeowner Product',
     presentation: {
       label: seed.label,
       shortDescription: seed.description,
       longDescription: `${seed.description} The capability uses the current Home Record and preserves the homeowner's context across the workflow.`,
       iconName: seed.iconName ?? ICON_BY_OUTCOME[seed.outcomeCategory],
-      intentAliases: [seed.label.toLowerCase(), seed.id.replace(/-/g, ' ')],
+      intentAliases: seed.intentAliases ?? [
+        seed.label.toLowerCase(),
+        seed.id.replace(/-/g, ' '),
+      ],
       outcomeCategory: seed.outcomeCategory,
       badges: seed.releaseStage === 'BETA' ? ['BETA'] : [],
     },
@@ -336,10 +348,12 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       primaryJob,
       secondaryJobs: [],
       primaryDestination: DESTINATION_BY_OUTCOME[seed.outcomeCategory],
-      homeownerOutcome: output,
+      homeownerOutcome: seed.homeownerOutcome ?? output,
       expectedTimeToValue: '2–5 minutes',
-      livingHomeRecordReads: requiresProperty ? ['property-context'] : [],
-      livingHomeRecordWrites: [],
+      livingHomeRecordReads:
+        seed.livingHomeRecordReads
+        ?? (requiresProperty ? ['property-context'] : []),
+      livingHomeRecordWrites: seed.livingHomeRecordWrites ?? [],
     },
     destination: {
       routeTemplate: seed.routeTemplate,
@@ -357,7 +371,7 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       reasonTemplates: contextual
         ? { [contextual.triggerFamily]: contextual.reason }
         : {},
-      expectedOutcome: output,
+      expectedOutcome: seed.homeownerOutcome ?? output,
       readinessRequirements: [
         ...(requiresProperty
           ? [{ kind: 'PROPERTY' as const, reason: 'Select a property first.' }]
@@ -378,10 +392,13 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       commercialAction: seed.id === 'financing',
     },
     lifecycle: {
-      expectedOutput: output,
+      expectedOutput: seed.expectedOutput ?? output,
       completionKind: seed.completionKind,
-      completionSignal: completionSignal(seed),
-      outputEntityTypes: OUTPUT_ENTITY_TYPES[seed.id] ?? [],
+      completionSignal: seed.completionSignal ?? completionSignal(seed),
+      outputEntityTypes:
+        seed.outputEntityTypes
+        ?? OUTPUT_ENTITY_TYPES[seed.id]
+        ?? [],
     },
   });
 }

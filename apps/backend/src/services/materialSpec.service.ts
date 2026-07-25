@@ -84,6 +84,15 @@ export class MaterialSpecService {
     if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
   }
 
+  private async assertProjectBelongs(propertyId: string, projectId?: string | null) {
+    if (!projectId) return;
+    const project = await prisma.projectRecord.findFirst({
+      where: { id: projectId, propertyId },
+      select: { id: true },
+    });
+    if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+  }
+
   // ── List / Search ─────────────────────────────────────────────────────────
 
   async listSpecs(
@@ -186,9 +195,11 @@ export class MaterialSpecService {
     notes?: string | null;
     isActive?: boolean;
     linkedInventoryItemId?: string | null;
+    projectId?: string | null;
   }) {
     await this.assertRoomBelongs(propertyId, payload.roomId);
     await this.assertInventoryItemBelongs(propertyId, payload.linkedInventoryItemId);
+    await this.assertProjectBelongs(propertyId, payload.projectId);
 
     // Auto-populate colorHex from paint brand lookup if missing
     let colorHex = payload.colorHex ?? null;
@@ -221,6 +232,7 @@ export class MaterialSpecService {
         notes: payload.notes ?? null,
         isActive: payload.isActive ?? true,
         linkedInventoryItemId: payload.linkedInventoryItemId ?? null,
+        projectId: payload.projectId ?? null,
       },
       include: {
         photos: { orderBy: { sortOrder: 'asc' } },
@@ -235,6 +247,7 @@ export class MaterialSpecService {
     await this.assertSpecBelongs(propertyId, specId);
     if (payload.roomId !== undefined) await this.assertRoomBelongs(propertyId, payload.roomId);
     if (payload.linkedInventoryItemId !== undefined) await this.assertInventoryItemBelongs(propertyId, payload.linkedInventoryItemId);
+    if (payload.projectId !== undefined) await this.assertProjectBelongs(propertyId, payload.projectId);
 
     // Re-run color lookup if colorCode changed and colorHex not explicitly set
     const updateData: Prisma.MaterialSpecUpdateInput = {};
@@ -261,6 +274,11 @@ export class MaterialSpecService {
     if (payload.linkedInventoryItemId !== undefined) {
       updateData.inventoryItem = payload.linkedInventoryItemId
         ? { connect: { id: payload.linkedInventoryItemId } }
+        : { disconnect: true };
+    }
+    if (payload.projectId !== undefined) {
+      updateData.project = payload.projectId
+        ? { connect: { id: payload.projectId } }
         : { disconnect: true };
     }
 

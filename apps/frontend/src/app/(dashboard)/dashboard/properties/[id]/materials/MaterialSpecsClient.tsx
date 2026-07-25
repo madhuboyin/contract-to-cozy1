@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Plus, Search, X } from 'lucide-react';
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
+import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 import {
   createExport,
   createSpec,
@@ -35,6 +36,7 @@ import {
   searchSpecs,
   type CreateSpecInput,
 } from './materialSpecApi';
+import { materialSpecLaunchPrefill } from './materialSpecLaunchContext';
 
 const CATEGORY_LABELS: Record<MaterialCategory, string> = {
   PAINT: 'Paint',
@@ -124,9 +126,17 @@ interface SpecFormProps {
   isEdit?: boolean;
   onSuccess: (spec: MaterialSpec) => void;
   onCancel: () => void;
+  sourceContextLabel?: string;
 }
 
-function SpecForm({ propertyId, initialValues, isEdit, onSuccess, onCancel }: SpecFormProps) {
+function SpecForm({
+  propertyId,
+  initialValues,
+  isEdit,
+  onSuccess,
+  onCancel,
+  sourceContextLabel,
+}: SpecFormProps) {
   const [label, setLabel] = useState(initialValues?.label ?? '');
   const [category, setCategory] = useState<MaterialCategory>(initialValues?.category ?? 'PAINT');
   const [scopeLevel, setScopeLevel] = useState<MaterialScopeLevel>(initialValues?.scopeLevel ?? 'PROPERTY');
@@ -169,6 +179,7 @@ function SpecForm({ propertyId, initialValues, isEdit, onSuccess, onCancel }: Sp
         sku: sku || null,
         supplier: supplier || null,
         notes: notes || null,
+        projectId: initialValues?.projectId ?? null,
         purchaseDate: purchaseDate || null,
         quantityPurchased: quantityPurchased || null,
       };
@@ -191,6 +202,11 @@ function SpecForm({ propertyId, initialValues, isEdit, onSuccess, onCancel }: Sp
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4">
+      {sourceContextLabel ? (
+        <div className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-900">
+          This record will stay linked to: <span className="font-medium">{sourceContextLabel}</span>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="spec-label">Label <span className="text-red-500">*</span></Label>
         <Input id="spec-label" value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Living Room Walls" required />
@@ -305,6 +321,7 @@ export default function MaterialSpecsClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const router = useRouter();
+  const toolLaunchContext = useToolLaunchContext();
 
   const [specs, setSpecs] = useState<MaterialSpec[]>([]);
   const [loading, setLoading] = useState(true);
@@ -319,6 +336,20 @@ export default function MaterialSpecsClient() {
   const [exporting, setExporting] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appliedLaunchContextRef = useRef<string | null>(null);
+  const launchPrefill = useMemo(() => materialSpecLaunchPrefill({
+    toolId: toolLaunchContext?.toolId,
+    resolved: toolLaunchContext?.resolved,
+  }), [toolLaunchContext?.toolId, toolLaunchContext?.resolved]);
+
+  useEffect(() => {
+    const sourceId = launchPrefill?.initialValues.projectId
+      ?? launchPrefill?.initialValues.roomId
+      ?? null;
+    if (!sourceId || appliedLaunchContextRef.current === sourceId) return;
+    appliedLaunchContextRef.current = sourceId;
+    setAddSheetOpen(true);
+  }, [launchPrefill]);
 
   const loadSpecs = useCallback(async (query: string, category: MaterialCategory | null) => {
     if (!propertyId) return;
@@ -500,6 +531,8 @@ export default function MaterialSpecsClient() {
           {addSheetOpen && (
             <SpecForm
               propertyId={propertyId}
+              initialValues={launchPrefill?.initialValues}
+              sourceContextLabel={launchPrefill?.sourceLabel}
               onSuccess={handleSpecCreated}
               onCancel={() => setAddSheetOpen(false)}
             />

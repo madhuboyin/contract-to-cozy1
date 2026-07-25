@@ -52,7 +52,7 @@ test('canonical explicit relationships retain the reviewed cutover baseline', ()
   const relationshipOwners = canonicalCapabilityRegistry.capabilities
     .filter((capability) =>
       capability.recommendation.explicitRelatedCapabilityIds.length > 0);
-  assert.equal(relationshipOwners.length, 31);
+  assert.equal(relationshipOwners.length, 32);
   assert.ok(relationshipOwners.every((capability) =>
     capability.recommendation.explicitRelatedCapabilityIds.length === 3));
 

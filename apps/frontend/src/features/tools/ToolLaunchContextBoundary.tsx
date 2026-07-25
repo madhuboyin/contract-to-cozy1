@@ -28,10 +28,10 @@ export type ToolLaunchContextValue = {
 } | null;
 
 const Context = createContext<ToolLaunchContextValue>(null);
-const PROPERTY_TOOL_PATH = /^\/dashboard\/properties\/([^/]+)\/tools\//;
+const PROPERTY_PATH = /^\/dashboard\/properties\/([^/]+)(?:\/|$)/;
 
 function readPropertyId(pathname: string, selectedPropertyId?: string | null): string | null {
-  const match = pathname.match(PROPERTY_TOOL_PATH);
+  const match = pathname.match(PROPERTY_PATH);
   if (match?.[1]) return decodeURIComponent(match[1]);
   return selectedPropertyId ?? null;
 }

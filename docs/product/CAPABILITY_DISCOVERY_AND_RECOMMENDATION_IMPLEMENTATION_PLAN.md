@@ -1554,6 +1554,15 @@ Each capability requires:
 - The suggestion pre-fills project or room context.
 - Creating or updating a material record is meaningful completion.
 
+**CAP-800 implementation status: Complete.** The versioned Material Specs manifest now owns reviewed
+homeowner-language aliases, its durable Home Record read/write contract, and
+`material_specification_saved` as an `ARTIFACT_CREATED` completion. Completed-renovation golden
+fixtures provide the contextual project suggestion and lineage. Recommendation launches now open the
+creation workflow with a validated `projectId` or `roomId`; the existing `MaterialSpec.projectId`
+relation is used, so this slice requires no schema change or migration. Create and update APIs emit
+canonical `TOOL_COMPLETED` lifecycle events with the material record output key, operation, source
+lineage, and Home Record write identity. Rollout and rollback remain governed by `MATERIAL_SPECS`.
+
 #### Plant Advisor
 
 - A compatible room/light source can create a suggestion.

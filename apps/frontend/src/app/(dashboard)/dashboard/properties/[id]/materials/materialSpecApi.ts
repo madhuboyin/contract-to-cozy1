@@ -65,6 +65,7 @@ export interface CreateSpecInput {
   quantityPurchased?: string | null;
   lotBatch?: string | null;
   notes?: string | null;
+  projectId?: string | null;
 }
 
 export async function createSpec(propertyId: string, body: CreateSpecInput): Promise<MaterialSpec> {

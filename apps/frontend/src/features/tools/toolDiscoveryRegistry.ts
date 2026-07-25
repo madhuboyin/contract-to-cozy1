@@ -218,6 +218,10 @@ const COMPLETION_KIND_BY_CATEGORY: Record<ToolOutcomeCategory, ToolCompletionKin
   UNDERSTAND_HOME: 'OUTPUT_VIEWED',
 };
 
+const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
+  'material-specs': 'ARTIFACT_CREATED',
+};
+
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {
   if (!context) return href;
   const params = new URLSearchParams();
@@ -261,7 +265,9 @@ function policyFor(id: string, category: ToolOutcomeCategory) {
       ...(REQUIREMENT_OVERRIDES[id] ?? {}),
     },
     expectedOutput: OUTPUT_BY_CATEGORY[category],
-    completionKind: COMPLETION_KIND_BY_CATEGORY[category],
+    completionKind:
+      COMPLETION_KIND_OVERRIDES[id]
+      ?? COMPLETION_KIND_BY_CATEGORY[category],
     completionSignal: 'workflow_completed' as const,
   };
 }

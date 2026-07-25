@@ -19,7 +19,7 @@
     "overlappingEntries": 25,
     "distinctCapabilities": 52,
     "routeVerified": 52,
-    "canonicalRelationshipCoverage": 31,
+    "canonicalRelationshipCoverage": 32,
     "contextualCapabilities": 24,
     "workflowOnly": 1,
     "lifecycleCanonicalized": 52,
@@ -594,9 +594,9 @@
       "rolloutKey": "MATERIAL_SPECS",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_VIEWED",
+      "completionKind": "ARTIFACT_CREATED",
       "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": false,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {

@@ -201,6 +201,7 @@ function buildInventory() {
   const homeOutcomeByGroup = parseStringMap(discoverySource, 'HOME_OUTCOME_BY_GROUP');
   const aiOutcomeByGroup = parseStringMap(discoverySource, 'AI_OUTCOME_BY_GROUP');
   const completionByCategory = parseStringMap(discoverySource, 'COMPLETION_KIND_BY_CATEGORY');
+  const completionOverrides = parseStringMap(discoverySource, 'COMPLETION_KIND_OVERRIDES');
   const canonicalRelationshipIds = parseRelationshipOwnerIds(
     read(backendCapabilityFactoryPath),
   );
@@ -251,7 +252,10 @@ function buildInventory() {
           : id === 'emergency'
             ? 'SAFETY_EMERGENCY'
             : 'LOW_CONSEQUENCE',
-      completionKind: completionByCategory[outcomeCategory] ?? null,
+      completionKind:
+        completionOverrides[id]
+        ?? completionByCategory[outcomeCategory]
+        ?? null,
       lifecycleCanonicalized: lifecycleCanonicalIds.has(id),
       canonicalRelationshipCoverage: canonicalRelationshipIds.has(id),
       recommendationDisposition,

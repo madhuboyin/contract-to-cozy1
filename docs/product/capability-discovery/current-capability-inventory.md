@@ -12,7 +12,7 @@
 | Overlapping entries | 25 |
 | Distinct capabilities | 52 |
 | Canonical routes verified | 52 |
-| Canonical explicit-relationship coverage | 31 |
+| Canonical explicit-relationship coverage | 32 |
 | Canonical contextual capabilities | 24 |
 | Workflow-only | 1 |
 | Backend lifecycle canonicalized | 52 |
@@ -52,7 +52,7 @@
 | home-timeline | Home Timeline | home | `/dashboard/properties/[id]/timeline` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CATALOG_ONLY |
 | inspection-hub | Inspection Hub | home | `/dashboard/properties/[id]/inspection-hub` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
 | insurance-trend | Insurance Trend | home, ai | `/dashboard/properties/[id]/tools/insurance-trend` | Verified | SAVE_OPTIMIZE | BETA | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
-| material-specs | Material Specs | home | `/dashboard/properties/[id]/materials` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CONTEXTUAL_CANONICAL |
+| material-specs | Material Specs | home | `/dashboard/properties/[id]/materials` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | modifications | Home Upgrades | ai | `/dashboard/modifications` | Verified | PLAN_BUDGET | BETA | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
 | mortgage-refinance-radar | Mortgage Refinance Radar | home, ai | `/dashboard/properties/[id]/tools/mortgage-refinance-radar` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
 | negotiation-shield | Negotiation Shield | home, ai | `/dashboard/properties/[id]/tools/negotiation-shield` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |

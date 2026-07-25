@@ -29,6 +29,7 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
   },
   {
     id: 'material-specs',
+    version: 2,
     label: 'Material Specs',
     description: 'Record finishes, products, colors, and supplier details.',
     routeTemplate: '/dashboard/properties/[id]/materials',
@@ -36,8 +37,29 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
     rolloutKey: 'MATERIAL_SPECS',
     releaseStage: 'ACTIVE',
     safetyTier: 'LOW_CONSEQUENCE',
-    completionKind: 'OUTPUT_VIEWED',
+    completionKind: 'ARTIFACT_CREATED',
     mode: 'CONTEXTUAL',
     iconName: 'layers',
+    intentAliases: [
+      'material specs',
+      'what paint did i use',
+      'find my paint color',
+      'match a repair finish',
+      'room finishes',
+      'tile flooring and product details',
+      'material document',
+    ],
+    homeownerOutcome:
+      'Keep a reusable record of the exact finishes and products used in each room or project.',
+    livingHomeRecordReads: [
+      'property-context',
+      'project-record',
+      'room-record',
+    ],
+    livingHomeRecordWrites: ['material-specification'],
+    expectedOutput:
+      'A durable material specification linked to its property, room, or project context.',
+    completionSignal: 'material_specification_saved',
+    outputEntityTypes: ['DOCUMENT'],
   },
 ]);
