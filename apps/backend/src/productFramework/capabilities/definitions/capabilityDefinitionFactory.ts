@@ -255,6 +255,7 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['PROJECT'],
     triggerFamily: 'PROJECT_EXECUTION_STARTED',
     reason: 'Contractor selection, a contract upload, or a project start needs ongoing tracking.',
+    requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'PROJECT', 'DOCUMENT', 'JOURNEY'],
   },
   'sell-hold-rent': {

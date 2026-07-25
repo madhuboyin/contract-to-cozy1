@@ -10,6 +10,12 @@ import { evaluateFeatureContext } from '../modules/propertyContext/application/e
 import { APIError } from '../middleware/error.middleware';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
+import {
+  hasTrackableProjectMilestone,
+  projectMilestonePlanCompletionEvent,
+  projectProgressCompletionEvent,
+} from '../services/analytics/projectTrackerLifecycle';
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -115,6 +121,23 @@ export async function createProject(req: Request, res: Response, next: NextFunct
       featureKey: AnalyticsFeature.PROJECT_TRACKER,
       metadataJson: { actionType: 'create_project', projectId: (data as any)?.id },
     });
+    const firstMilestone = (data as any).milestones?.[0];
+    if (hasTrackableProjectMilestone(firstMilestone)) {
+      void recordToolLifecycleEvents({
+        userId: req.user!.userId,
+        propertyId: req.params.propertyId,
+        events: [projectMilestonePlanCompletionEvent({
+          projectId: (data as any).id,
+          milestoneId: firstMilestone.id,
+          operation: 'project_created_with_milestone',
+          sourceActionId: req.body.sourceActionId,
+          sourceEntityType: req.body.sourceEntityType,
+          sourceEntityId: req.body.sourceEntityId,
+          sourceJourneyId:
+            req.body.sourceJourneyId ?? req.body.guidanceJourneyId,
+        })],
+      });
+    }
 
     res.status(201).json({ success: true, data, propertyContext });
   } catch (err) { next(err); }
@@ -164,6 +187,25 @@ export async function listMilestones(req: Request, res: Response, next: NextFunc
 export async function createMilestone(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.createMilestone(req.params.projectId, req.params.propertyId, req.body);
+    const project = await svc.getProjectDetail(
+      req.params.projectId,
+      req.params.propertyId,
+    );
+    void recordToolLifecycleEvents({
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      events: [projectMilestonePlanCompletionEvent({
+        projectId: req.params.projectId,
+        milestoneId: (data as any).id,
+        operation: 'milestone_added',
+        sourceActionId: (project as any).sourceActionId,
+        sourceEntityType: (project as any).sourceEntityType,
+        sourceEntityId: (project as any).sourceEntityId,
+        sourceJourneyId:
+          (project as any).sourceJourneyId
+          ?? (project as any).guidanceJourneyId,
+      })],
+    });
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -183,6 +225,25 @@ export async function completeMilestone(req: Request, res: Response, next: NextF
       req.params.milestoneId, req.params.projectId, req.params.propertyId,
       req.user!.userId, req.body,
     );
+    const project = await svc.getProjectDetail(
+      req.params.projectId,
+      req.params.propertyId,
+    );
+    void recordToolLifecycleEvents({
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      events: [projectProgressCompletionEvent({
+        projectId: req.params.projectId,
+        milestoneId: req.params.milestoneId,
+        requiresPhotoEvidence: (data as any).requiresPhotoEvidence,
+        sourceActionId: (project as any).sourceActionId,
+        sourceEntityType: (project as any).sourceEntityType,
+        sourceEntityId: (project as any).sourceEntityId,
+        sourceJourneyId:
+          (project as any).sourceJourneyId
+          ?? (project as any).guidanceJourneyId,
+      })],
+    });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

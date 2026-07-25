@@ -223,6 +223,7 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'plant-advisor': 'OUTPUT_GENERATED',
   diy: 'DECISION_RECORDED',
   'inspection-hub': 'ARTIFACT_CREATED',
+  'project-tracker': 'ACTION_COMPLETED',
 };
 
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {

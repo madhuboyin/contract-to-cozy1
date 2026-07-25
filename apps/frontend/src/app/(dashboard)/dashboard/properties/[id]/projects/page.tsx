@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ChevronRight, Plus } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import type { ProjectRecord } from '@/types';
@@ -22,6 +22,7 @@ import {
   Spinner,
   ErrorBanner,
 } from './ProjectTrackerHelpers';
+import { projectTrackerLaunchQuery } from '@/features/tools/projectTrackerLaunchContext';
 
 function projectStatusLabel(s: ProjectRecord['status']) {
   const labels: Record<string, string> = {
@@ -34,6 +35,9 @@ function projectStatusLabel(s: ProjectRecord['status']) {
 export default function ProjectsHubPage() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const launchQuery = projectTrackerLaunchQuery(searchParams);
+  const launchSuffix = launchQuery ? `?${launchQuery}` : '';
 
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +93,7 @@ export default function ProjectsHubPage() {
 
         <div className="flex justify-end">
           <Button className="min-h-[44px] gap-1.5" asChild>
-            <Link href={`/dashboard/properties/${propertyId}/projects/new`}>
+            <Link href={`/dashboard/properties/${propertyId}/projects/new${launchSuffix}`}>
               <Plus className="h-4 w-4" />
               New Project
             </Link>

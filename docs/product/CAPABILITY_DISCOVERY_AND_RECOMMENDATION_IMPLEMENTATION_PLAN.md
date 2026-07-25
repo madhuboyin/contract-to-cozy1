@@ -1699,6 +1699,22 @@ policy. Rollout and rollback remain governed by `INSPECTION_HUB`.
 - Creating a project with at least one milestone or recording verified project progress is
   meaningful completion.
 
+**CAP-807 implementation status: Complete.** The versioned Project Tracker manifest now owns
+homeowner-language aliases, contractor/contract/journey/permit/finding reads, durable project
+execution writes, and `project_created_with_milestone_or_progress_verified` as an
+`ACTION_COMPLETED` completion. Every active `ProjectRecord` supplies the reviewed
+`PROJECT_EXECUTION_STARTED` trigger, covering contractor selection, contract-backed handoff, and
+explicit project creation before work reaches `IN_PROGRESS`. The reusable
+`requiresExplicitTrigger` policy prevents generic maintenance, project-shaped entities, and
+unrelated reminders from promoting the tool without an explicit tracked project or reviewed CTA.
+Action, contract/entity, and journey lineage now flows through the project hub and creation form
+and is persisted on the project record. A bare draft does not count as completion. Canonical
+`TOOL_COMPLETED` analytics begin when a project has a durable milestone—at initial creation or
+when the first milestone is added—and continue for authenticated milestone completion, including
+whether required photo evidence was enforced. The Prisma schema is updated without a migration
+script, per the project migration policy. Rollout and rollback remain governed by
+`PROJECT_TRACKER`.
+
 ### Exit criteria
 
 - All nine capabilities inherit catalog, search, contextual evaluation, related suggestions,

@@ -13423,6 +13423,10 @@ model ProjectRecord {
   fundingMode           ProjectFundingMode     @default(SELF_PAID)
   complexity            ProjectComplexity      @default(MAJOR)
   recommendationVersion String?
+  sourceActionId        String?
+  sourceEntityType      String?
+  sourceEntityId        String?
+  sourceJourneyId       String?
 
   // Provider-selection integrity captured before a guided commercial handoff.
   providerRankingRationale String?
@@ -13518,6 +13522,7 @@ model ProjectRecord {
   @@index([inventoryItemId])
   @@index([priceFinalizationId])
   @@index([bookingId])
+  @@index([sourceEntityType, sourceEntityId])
   @@map("project_records")
 }
 

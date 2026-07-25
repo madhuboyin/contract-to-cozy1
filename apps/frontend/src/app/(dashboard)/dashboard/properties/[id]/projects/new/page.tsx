@@ -15,6 +15,10 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { PROJECT_TYPE_OPTIONS, ErrorBanner } from '../ProjectTrackerHelpers';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import {
+  projectTrackerLaunchQuery,
+  projectTrackerLineage,
+} from '@/features/tools/projectTrackerLaunchContext';
 
 type ProjectFormState = {
   name: string;
@@ -42,7 +46,11 @@ export default function NewProjectPage() {
   const propertyId = params.id;
   const router = useRouter();
   const searchParams = useSearchParams();
-  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceJourneyId =
+    searchParams.get('guidanceJourneyId') ?? searchParams.get('journeyId');
+  const launchLineage = projectTrackerLineage(searchParams);
+  const launchQuery = projectTrackerLaunchQuery(searchParams);
+  const launchSuffix = launchQuery ? `?${launchQuery}` : '';
   const inventoryItemId = searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
   const guidedIssue = searchParams.get('issueType');
   const providerId = searchParams.get('providerId');
@@ -172,8 +180,11 @@ export default function NewProjectPage() {
         serviceCategory: serviceCategory || undefined,
         providerRankingRationale: form.providerRankingRationale.trim() || undefined,
         commercialDisclosure,
+        ...launchLineage,
       });
-      router.push(`/dashboard/properties/${propertyId}/projects/${project.id}`);
+      router.push(
+        `/dashboard/properties/${propertyId}/projects/${project.id}${launchSuffix}`,
+      );
     } catch (e: any) {
       setError(e?.message ?? 'Failed to create project');
       setSaving(false);
@@ -183,7 +194,7 @@ export default function NewProjectPage() {
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-2xl lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}/projects`}>
+        <Link href={`/dashboard/properties/${propertyId}/projects${launchSuffix}`}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to projects
         </Link>

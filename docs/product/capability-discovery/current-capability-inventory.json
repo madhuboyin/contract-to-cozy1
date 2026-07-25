@@ -761,7 +761,7 @@
       "rolloutKey": "PROJECT_TRACKER",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
+      "completionKind": "ACTION_COMPLETED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

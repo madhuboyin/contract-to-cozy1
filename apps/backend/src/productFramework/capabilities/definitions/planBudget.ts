@@ -193,6 +193,42 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
     completionSignal: 'inspection_findings_extracted',
     outputEntityTypes: ['ISSUE'] as const,
   } : {}),
+  ...(id === 'project-tracker' ? {
+    version: 2,
+    iconName: 'list-checks' as const,
+    intentAliases: [
+      'project tracker',
+      'track my contractor project',
+      'home renovation timeline',
+      'track project milestones',
+      'track contractor payments',
+      'manage change orders',
+      'project progress photos',
+      'home project warranty',
+    ],
+    homeownerOutcome:
+      'Turn a selected contractor, signed scope, or explicit home project into a durable execution record from milestones through warranty.',
+    livingHomeRecordReads: [
+      'property-context',
+      'contractor-selection',
+      'project-contract',
+      'guidance-journey',
+      'permit-record',
+      'inspection-finding',
+    ],
+    livingHomeRecordWrites: [
+      'project-record',
+      'project-milestone',
+      'project-progress',
+      'project-payment',
+      'project-change-order',
+      'project-warranty',
+    ],
+    expectedOutput:
+      'A tracked home project with milestones, progress evidence, financial changes, and completion records.',
+    completionSignal: 'project_created_with_milestone_or_progress_verified',
+    outputEntityTypes: ['PROJECT'] as const,
+  } : {}),
   label,
   description,
   routeTemplate,
@@ -205,6 +241,8 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
       ? 'DECISION_RECORDED' as const
       : id === 'inspection-hub'
         ? 'ARTIFACT_CREATED' as const
+        : id === 'project-tracker'
+          ? 'ACTION_COMPLETED' as const
         : 'PLAN_CREATED' as const,
   mode,
 })));

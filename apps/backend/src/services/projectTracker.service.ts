@@ -436,6 +436,10 @@ export async function createProject(propertyId: string, data: any) {
         fundingMode: projectData.fundingMode ?? 'SELF_PAID',
         complexity: projectData.complexity ?? 'MAJOR',
         recommendationVersion: projectData.recommendationVersion ?? journey?.templateVersion,
+        sourceActionId: projectData.sourceActionId,
+        sourceEntityType: projectData.sourceEntityType,
+        sourceEntityId: projectData.sourceEntityId,
+        sourceJourneyId: projectData.sourceJourneyId,
         providerRankingRationale: projectData.providerRankingRationale,
         commercialDisclosure: projectData.commercialDisclosure,
         credentialCheck: projectData.contractorId ? {

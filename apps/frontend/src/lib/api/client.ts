@@ -5042,6 +5042,10 @@ class APIClient {
     fundingMode?: 'SELF_PAID' | 'COVERED' | 'MIXED';
     complexity?: 'MINOR' | 'MAJOR';
     recommendationVersion?: string;
+    sourceActionId?: string;
+    sourceEntityType?: string;
+    sourceEntityId?: string;
+    sourceJourneyId?: string;
     providerRankingRationale?: string;
     commercialDisclosure?: {
       involvesCommercialAction: boolean;

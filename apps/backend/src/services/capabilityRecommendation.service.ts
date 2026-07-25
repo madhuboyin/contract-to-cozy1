@@ -18,6 +18,7 @@ import {
   inspectionDocumentCapabilitySource,
   inspectionJourneyTrigger,
   inspectionReportCapabilitySource,
+  projectTrackerSignalFamilies,
   type BuildCapabilityRecommendationContextInput,
   type CapabilityActionSourceMetadata,
   type CapabilityCompletionSource,
@@ -300,15 +301,7 @@ async function loadDefaultProjects(
       kind: String(project.projectType),
       status: project.status === 'DRAFT' ? 'PLANNING' : String(project.status),
       milestoneKind,
-      signalIntentFamilies: [
-        'ACTIVE_PROJECT_MOMENT',
-        ...(project.status === 'IN_PROGRESS'
-          ? ['PROJECT_EXECUTION_STARTED']
-          : []),
-        ...(milestoneKind === 'PERMIT_INSPECTION'
-          ? ['PERMIT_RELEVANT_PROJECT']
-          : []),
-      ],
+      signalIntentFamilies: projectTrackerSignalFamilies({ milestoneKind }),
       sourceEntityType: 'PROJECT',
       sourceEntityId: project.id,
       observedAt: project.updatedAt.toISOString(),
