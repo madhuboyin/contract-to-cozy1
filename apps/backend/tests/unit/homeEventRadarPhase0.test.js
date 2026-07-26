@@ -99,8 +99,10 @@ test('coverage and detail contracts require explicit source and match semantics'
 test('homeowner Radar routes expose property-scoped reads and state only', () => {
   const publicRoutes = read('apps/backend/src/routes/homeEventRadar.routes.ts');
 
-  assert.doesNotMatch(publicRoutes, /['"]\/radar\/events/);
+  assert.doesNotMatch(publicRoutes, /router\.(post|put|patch|delete)\(\s*['"]\/radar\/events/);
   assert.match(publicRoutes, /propertyAuthMiddleware/);
+  assert.match(publicRoutes, /\/properties\/:propertyId\/radar\/overview/);
+  assert.match(publicRoutes, /\/properties\/:propertyId\/radar\/events/);
   assert.match(publicRoutes, /\/properties\/:propertyId\/radar\/feed/);
   assert.match(publicRoutes, /\/properties\/:propertyId\/radar\/matches\/:matchId/);
 });

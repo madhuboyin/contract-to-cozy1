@@ -9,6 +9,10 @@ import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourn
 import { prisma } from '../config/database';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { recordAdminAction } from '../services/adminAudit.service';
+import {
+  radarQueryService,
+  type RadarUserState,
+} from '../modules/homeEventRadar/services/radarQuery.service';
 
 const service = new HomeEventRadarService();
 
@@ -128,6 +132,83 @@ export async function getRadarEvent(req: CustomRequest, res: Response, next: Nex
 // ---------------------------------------------------------------------------
 // Property-scoped endpoints
 // ---------------------------------------------------------------------------
+
+export async function getRadarOverview(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { userId } = requireUser(req);
+    const data = await radarQueryService.getOverview(req.params.propertyId, userId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRadarCoverage(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    requireUser(req);
+    const data = await radarQueryService.getCoverage(req.params.propertyId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRadarCounts(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { userId } = requireUser(req);
+    const data = await radarQueryService.getCounts(req.params.propertyId, userId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listRadarEvents(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { userId } = requireUser(req);
+    const { propertyId } = req.params;
+    const data = await radarQueryService.listFeed(propertyId, userId, {
+      limit: req.query.limit ? Number(req.query.limit) : 40,
+      cursor: req.query.cursor ? String(req.query.cursor) : undefined,
+      state: req.query.state ? String(req.query.state) as RadarUserState : undefined,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRadarEventDetail(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { userId } = requireUser(req);
+    const data = await radarQueryService.getDetail(
+      req.params.propertyId,
+      req.params.matchId,
+      userId,
+    );
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRadarStateView(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { userId } = requireUser(req);
+    const data = await radarQueryService.getStateView(
+      req.params.propertyId,
+      userId,
+      req.params.state as RadarUserState,
+      {
+        limit: req.query.limit ? Number(req.query.limit) : 40,
+        cursor: req.query.cursor ? String(req.query.cursor) : undefined,
+      },
+    );
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
 
 /**
  * GET /properties/:propertyId/radar/feed

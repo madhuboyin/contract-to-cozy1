@@ -110,6 +110,32 @@ export const listRadarFeedQuerySchema = z.object({
 });
 
 /**
+ * Query for canonical homeowner event views. Additional domain filters are
+ * intentionally deferred to HER-402; this slice owns pagination and user-state
+ * projections only.
+ */
+export const listRadarEventsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(40),
+  cursor: z.string().trim().min(1).optional(),
+  state: z.enum(PROPERTY_RADAR_USER_STATES).optional(),
+});
+
+export const listRadarEventsRequestSchema = z.object({
+  body: z.unknown().optional(),
+  query: listRadarEventsQuerySchema,
+  params: z.object({ propertyId: z.string().min(1) }).passthrough(),
+});
+
+export const listRadarStateViewRequestSchema = z.object({
+  body: z.unknown().optional(),
+  query: listRadarEventsQuerySchema.omit({ state: true }),
+  params: z.object({
+    propertyId: z.string().min(1),
+    state: z.enum(PROPERTY_RADAR_USER_STATES),
+  }).passthrough(),
+});
+
+/**
  * Body for PATCH /properties/:propertyId/radar/matches/:matchId/state
  */
 export const updateRadarStateBodySchema = z.object({

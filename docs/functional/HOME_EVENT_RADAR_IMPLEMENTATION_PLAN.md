@@ -43,7 +43,8 @@
 | HER-305 Property reconciliation | Complete; DB application pending | Database-backed domain events durably reconcile property creation, geography, relevant facts, responsibility, Radar action state, and canonical completion changes through bounded active-event pages with shared retries and structured outcomes |
 | HER-306 Scheduled safety-net reconciliation | Complete; DB application pending | Hourly leased sweeps resume revision/property cursors, retry capped Radar dead letters, materialize missing/stale coverage, expire visibility/material markers, support dry-run/property smoke scope, and report structured partial/failure outcomes |
 | HER-307 Tax routing correction | Complete; DB application pending | Coverage-type-aware city/county-FIPS/state routing, one-load source caching, validated and timeout-bound Socrata queries, address-confidence evidence, finite TTL, durable canonical ingestion, structured outcomes, dry-run/property scope, and an explicit disabled-until-pilot gate are implemented |
-| HER-400+ | Not started | Homeowner query APIs, stable pagination, filters, actions, and operations remain |
+| HER-400 Query service | Complete | Canonical property-scoped overview, coverage, authoritative counts, feed, pure-read detail, and user-state views consume materialized Radar projections without synchronous source refresh or reprioritization |
+| HER-401+ | Not started | Stable composite-cursor pagination, server-backed filters, coverage-aware UI, actions, notifications, accessibility, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1088,6 +1089,13 @@ Create dedicated read/query service for:
 
 Do not refresh unrelated shared signals synchronously during every feed request. Source/match state
 must already be materialized.
+
+**Implemented:** `RadarQueryService` now owns canonical homeowner reads for overview, materialized
+coverage, authoritative lifecycle/user-state counts, event feed, event detail, and state views.
+These endpoints coexist with the legacy feed/detail API until HER-403 migrates the page. Canonical
+GETs do not refresh sources, recompute priority or freshness, create action records, or implicitly
+change user state. The temporary ID-only continuation cursor is explicitly superseded by the
+composite ordering cursor required in HER-401.
 
 ### HER-401 — Stable server pagination
 

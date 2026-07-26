@@ -355,9 +355,24 @@ export const radarRecommendedActionSchema = z.object({
   incidentProjectionId: z.string().min(1).nullable().optional(),
 });
 
+export const radarProjectedActionSchema = z.object({
+  code: z.string().min(1).max(128),
+  label: z.string().min(1).max(500),
+  priority: z.enum(['high', 'medium', 'low']),
+  responsibilityScope: z.string().min(1).max(128).optional(),
+  responsibleParty: z.string().min(1).max(128).optional(),
+  applicability: z.enum(['owner_action', 'coordinate', 'verify_responsibility']).optional(),
+});
+
+export const radarMatchedSystemSchema = z.object({
+  type: z.string().min(1).max(128),
+  relevance: z.enum(['high', 'medium', 'low']),
+});
+
 export const radarFeedItemSchema = z.object({
   id: z.string().min(1),
   propertyMatchId: z.string().min(1),
+  eventId: z.string().min(1),
   eventType: z.string().min(1),
   sourceFamily: radarSourceFamilySchema,
   title: z.string().min(1),
@@ -366,43 +381,97 @@ export const radarFeedItemSchema = z.object({
   impact: radarImpactSchema,
   confidence: radarConfidenceSchema.optional(),
   priorityBand: radarPriorityBandSchema,
+  priorityScore: z.number().min(0).max(100),
   matchLifecycleStatus: radarMatchLifecycleStatusSchema,
   sourceFreshnessStatus: radarSourceFreshnessStatusSchema,
+  sourceFreshnessReason: z.string().nullable(),
   isSourceStale: z.boolean(),
   isMaterialUpdate: z.boolean(),
   lifecycleStatus: radarLifecycleStatusSchema,
   effectiveAt: z.iso.datetime({ offset: true }),
   expiresAt: z.iso.datetime({ offset: true }).nullable(),
   sourceName: z.string().min(1),
-  userState: z.enum(['new', 'seen', 'saved', 'dismissed']),
+  provider: z.string().nullable(),
+  userState: z.enum(['new', 'seen', 'saved', 'dismissed', 'acted_on']),
+});
+
+export const radarMonitoringStateSchema = z.enum([
+  'ACTIVE',
+  'PARTIAL',
+  'DEGRADED',
+  'UNCOVERED',
+  'SETUP_NEEDED',
+]);
+
+export const radarFeedStateSchema = z.enum([
+  'HAS_EVENTS',
+  'CONFIRMED_CLEAR',
+  'PARTIAL_COVERAGE',
+  'DEGRADED',
+  'UNCOVERED',
+]);
+
+export const radarCategoryCoverageSchema = z.object({
+  family: radarSourceFamilySchema,
+  status: z.enum(['covered', 'not_covered', 'disabled', 'failed', 'stale', 'unknown']),
+  sourceDefinitionIds: z.array(z.string().min(1)),
+  sourceNames: z.array(z.string().min(1)),
+  detail: z.string().min(1).max(1_000),
+  evaluatedAt: z.iso.datetime({ offset: true }).nullable(),
+  dataFreshThrough: z.iso.datetime({ offset: true }).nullable(),
+});
+
+export const radarCountsSchema = z.object({
+  active: z.number().int().nonnegative(),
+  new: z.number().int().nonnegative(),
+  upcoming: z.number().int().nonnegative(),
+  recentlyEnded: z.number().int().nonnegative(),
+  saved: z.number().int().nonnegative(),
+  dismissed: z.number().int().nonnegative(),
+});
+
+export const radarPropertyContextEnvelopeSchema = z.object({
+  propertyId: z.string().min(1),
+  contextVersion: z.union([z.string(), z.number()]),
+  decision: z.unknown(),
 });
 
 export const radarOverviewResponseSchema = z.object({
   propertyId: z.string().min(1),
   generatedAt: z.iso.datetime({ offset: true }),
-  coverage: radarCoverageSchema,
-  counts: z.object({
-    active: z.number().int().nonnegative(),
-    new: z.number().int().nonnegative(),
-    saved: z.number().int().nonnegative(),
-    dismissed: z.number().int().nonnegative(),
-  }),
+  monitoringState: radarMonitoringStateSchema,
+  lastSuccessfulCheckAt: z.iso.datetime({ offset: true }).nullable(),
+  coverage: z.array(radarCategoryCoverageSchema),
+  counts: radarCountsSchema,
+  propertyContext: radarPropertyContextEnvelopeSchema,
 });
 
 export const radarFeedResponseSchema = z.object({
   propertyId: z.string().min(1),
-  generatedAt: z.iso.datetime({ offset: true }),
-  coverage: radarCoverageSchema,
   items: z.array(radarFeedItemSchema),
-  nextCursor: z.string().min(1).nullable(),
+  pageInfo: z.object({
+    hasNextPage: z.boolean(),
+    endCursor: z.string().min(1).nullable(),
+  }),
+  totalCount: z.number().int().nonnegative(),
+  feedState: radarFeedStateSchema,
+  asOf: z.iso.datetime({ offset: true }),
 });
 
 export const radarDetailResponseSchema = radarFeedItemSchema.extend({
-  geography: normalizedGeographySchema,
-  matchExplanation: radarMatchExplanationSchema,
-  recommendedActions: z.array(radarRecommendedActionSchema),
+  geography: normalizedGeographySchema.nullable(),
+  matchExplanation: radarMatchExplanationSchema.nullable(),
+  impactSummary: z.string().nullable(),
+  impactFactors: z.record(z.string(), z.unknown()).nullable(),
+  matchedSystems: z.array(radarMatchedSystemSchema),
+  recommendedActions: z.array(radarProjectedActionSchema),
   canonicalUrl: z.url().nullable(),
   observedAt: z.iso.datetime({ offset: true }),
+  sourceEvidence: z.object({
+    providerEventId: z.string().nullable(),
+    providerRevision: z.string().nullable(),
+    revisionIdentity: z.string().nullable(),
+  }),
 });
 
 export type RadarSourceFamily = z.infer<typeof radarSourceFamilySchema>;
@@ -418,6 +487,9 @@ export type RadarCoverage = z.infer<typeof radarCoverageSchema>;
 export type RadarMatchExplanation = z.infer<typeof radarMatchExplanationSchema>;
 export type RadarPriorityDiagnostics = z.infer<typeof radarPriorityDiagnosticsSchema>;
 export type RadarRecommendedAction = z.infer<typeof radarRecommendedActionSchema>;
+export type RadarMonitoringState = z.infer<typeof radarMonitoringStateSchema>;
+export type RadarFeedState = z.infer<typeof radarFeedStateSchema>;
+export type RadarCounts = z.infer<typeof radarCountsSchema>;
 export type RadarOverviewResponse = z.infer<typeof radarOverviewResponseSchema>;
 export type RadarFeedResponse = z.infer<typeof radarFeedResponseSchema>;
 export type RadarDetailResponse = z.infer<typeof radarDetailResponseSchema>;

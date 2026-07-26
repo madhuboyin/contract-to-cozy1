@@ -7,6 +7,12 @@ import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 import {
+  getRadarOverview,
+  getRadarCoverage,
+  getRadarCounts,
+  listRadarEvents,
+  getRadarEventDetail,
+  getRadarStateView,
   listRadarFeed,
   getRadarMatchDetail,
   updateRadarMatchState,
@@ -14,6 +20,8 @@ import {
 } from '../controllers/homeEventRadar.controller';
 
 import {
+  listRadarEventsRequestSchema,
+  listRadarStateViewRequestSchema,
   listRadarFeedQuerySchema,
   updateRadarStateBodySchema,
   trackHomeEventRadarEventBodySchema,
@@ -28,6 +36,44 @@ router.use(authenticate);
 // Property-scoped routes
 // These require the authenticated user to own the property.
 // ---------------------------------------------------------------------------
+
+router.get(
+  '/properties/:propertyId/radar/overview',
+  propertyAuthMiddleware,
+  getRadarOverview,
+);
+
+router.get(
+  '/properties/:propertyId/radar/coverage',
+  propertyAuthMiddleware,
+  getRadarCoverage,
+);
+
+router.get(
+  '/properties/:propertyId/radar/counts',
+  propertyAuthMiddleware,
+  getRadarCounts,
+);
+
+router.get(
+  '/properties/:propertyId/radar/events',
+  propertyAuthMiddleware,
+  validate(listRadarEventsRequestSchema),
+  listRadarEvents,
+);
+
+router.get(
+  '/properties/:propertyId/radar/events/:matchId',
+  propertyAuthMiddleware,
+  getRadarEventDetail,
+);
+
+router.get(
+  '/properties/:propertyId/radar/states/:state(new|seen|saved|dismissed|acted_on)',
+  propertyAuthMiddleware,
+  validate(listRadarStateViewRequestSchema),
+  getRadarStateView,
+);
 
 /**
  * GET /properties/:propertyId/radar/feed
