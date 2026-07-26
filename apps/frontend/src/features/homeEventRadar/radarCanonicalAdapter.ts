@@ -18,8 +18,9 @@ function legacyImpact(impact: RadarCanonicalFeedItem['impact']): RadarImpactLeve
 }
 
 /**
- * Temporary compatibility projection for the existing card/detail components.
- * HER-404 replaces those components with canonical DTO consumption.
+ * Temporary compatibility projection for the legacy detail sheet.
+ * The feed card consumes the canonical DTO as of HER-404; HER-405 removes this
+ * final projection when detail moves to the canonical endpoint.
  */
 export function toLegacyRadarFeedItem(
   item: RadarCanonicalFeedItem,

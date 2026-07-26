@@ -4,35 +4,56 @@
 // Compact feed row for a single property-event match.
 
 import * as React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ArrowRight, ChevronRight, Clock3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dashboard/mobileDesignTokens';
-import type { RadarFeedItem as RadarFeedItemType } from '@/types';
+import type { RadarCanonicalFeedItem } from '@/types';
 import {
-  SEVERITY_COLOR,
-  SEVERITY_DOT,
-  SEVERITY_LABELS,
-  IMPACT_COLOR,
-  IMPACT_LABELS,
+  CANONICAL_IMPACT_COLOR,
+  CANONICAL_IMPACT_LABELS,
+  CANONICAL_SEVERITY_COLOR,
+  CANONICAL_SEVERITY_DOT,
+  CANONICAL_SEVERITY_LABELS,
   formatEventType,
   eventTypeIcon,
-  formatRadarDate,
+  formatRadarTiming,
 } from './RadarUtils';
 
 interface Props {
-  item: RadarFeedItemType;
-  onClick: (item: RadarFeedItemType) => void;
+  item: RadarCanonicalFeedItem;
+  onClick: (item: RadarCanonicalFeedItem) => void;
 }
 
 export function RadarFeedItem({ item, onClick }: Props) {
-  const isNew = item.state === 'new';
-  const isDismissed = item.state === 'dismissed';
-  const isRecentlyEnded = item.timingGroup === 'recently_ended';
+  const isNew = item.userState === 'new';
+  const isDismissed = item.userState === 'dismissed';
+  const isRecentlyEnded = item.matchLifecycleStatus === 'recently_ended';
+  const timing = formatRadarTiming(item);
+  const primaryAction = item.isMaterialUpdate ? 'Review update' : 'View details';
+  const sourceLabel =
+    item.provider && item.provider.toLocaleLowerCase() !== item.sourceName.toLocaleLowerCase()
+      ? `${item.sourceName} · ${item.provider}`
+      : item.sourceName;
+  const limitedConfidence =
+    item.confidence === 'low'
+      ? 'Limited confidence'
+      : item.confidence === 'medium'
+        ? 'Moderate confidence'
+        : null;
+  const accessibleLabel = [
+    `${primaryAction}: ${item.title}.`,
+    `Source ${sourceLabel}.`,
+    `${CANONICAL_SEVERITY_LABELS[item.severity]}.`,
+    `${CANONICAL_IMPACT_LABELS[item.impact]}.`,
+    `${timing}.`,
+    limitedConfidence ? `${limitedConfidence}.` : null,
+    item.isSourceStale ? 'Source reporting is delayed.' : null,
+  ].filter(Boolean).join(' ');
 
   return (
     <button
       type="button"
-      aria-label={item.title ?? 'View event details'}
+      aria-label={accessibleLabel}
       onClick={() => onClick(item)}
       className={cn(
         'w-full text-left block',
@@ -45,7 +66,7 @@ export function RadarFeedItem({ item, onClick }: Props) {
         isNew && 'border-l-2 border-l-[hsl(var(--mobile-brand-strong))]'
       )}
     >
-      {/* Row 1: icon + title + date + chevron */}
+      {/* Row 1: icon + title + source + chevron */}
       <div className="flex items-start gap-3">
         <span className="mt-0.5 text-xl leading-none shrink-0" aria-hidden>
           {eventTypeIcon(item.eventType)}
@@ -62,14 +83,20 @@ export function RadarFeedItem({ item, onClick }: Props) {
               {item.title}
             </p>
             <div className="flex shrink-0 items-center gap-1">
-              <span className={cn('text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-                {formatRadarDate(item.startAt)}
-              </span>
               <ChevronRight className="h-3.5 w-3.5 text-[hsl(var(--mobile-text-muted))]" />
             </div>
           </div>
 
-          {/* Row 2: chips */}
+          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+            Source: {sourceLabel}
+          </p>
+
+          <p className={cn('mb-0 mt-1.5 flex items-start gap-1.5 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+            <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>{timing}</span>
+          </p>
+
+          {/* Row 2: authoritative event and match attributes */}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {/* Event type */}
             <span
@@ -86,26 +113,24 @@ export function RadarFeedItem({ item, onClick }: Props) {
             <span
               className={cn(
                 'inline-flex items-center gap-1 rounded-full border px-2 py-0.5',
-                SEVERITY_COLOR[item.severity],
+                CANONICAL_SEVERITY_COLOR[item.severity],
                 MOBILE_TYPE_TOKENS.chip
               )}
             >
-              <span className={cn('h-1.5 w-1.5 rounded-full', SEVERITY_DOT[item.severity])} />
-              {SEVERITY_LABELS[item.severity]}
+              <span className={cn('h-1.5 w-1.5 rounded-full', CANONICAL_SEVERITY_DOT[item.severity])} />
+              {CANONICAL_SEVERITY_LABELS[item.severity]}
             </span>
 
             {/* Impact */}
-            {item.impactLevel !== 'none' && (
-              <span
-                className={cn(
-                  'inline-flex items-center rounded-full border px-2 py-0.5',
-                  IMPACT_COLOR[item.impactLevel],
-                  MOBILE_TYPE_TOKENS.chip
-                )}
-              >
-                {IMPACT_LABELS[item.impactLevel]}
-              </span>
-            )}
+            <span
+              className={cn(
+                'inline-flex items-center rounded-full border px-2 py-0.5',
+                CANONICAL_IMPACT_COLOR[item.impact],
+                MOBILE_TYPE_TOKENS.chip
+              )}
+            >
+              {CANONICAL_IMPACT_LABELS[item.impact]}
+            </span>
 
             {/* New badge */}
             {isNew && (
@@ -120,7 +145,7 @@ export function RadarFeedItem({ item, onClick }: Props) {
               </span>
             )}
 
-            {item.state === 'saved' && (
+            {item.userState === 'saved' && (
               <span
                 className={cn(
                   'inline-flex items-center rounded-full border px-2 py-0.5',
@@ -167,19 +192,39 @@ export function RadarFeedItem({ item, onClick }: Props) {
                 Source delayed
               </span>
             )}
+
+            {limitedConfidence && (
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-full border px-2 py-0.5',
+                  'border-violet-200 bg-violet-50 text-violet-700',
+                  MOBILE_TYPE_TOKENS.chip
+                )}
+              >
+                {limitedConfidence}
+              </span>
+            )}
           </div>
 
           {/* Row 3: impact summary */}
-          {item.impactSummary ? (
+          {item.summary ? (
             <p
               className={cn(
                 'mb-0 mt-2 line-clamp-2 text-[hsl(var(--mobile-text-secondary))]',
                 MOBILE_TYPE_TOKENS.caption
               )}
             >
-              {item.impactSummary}
+              {item.summary}
             </p>
           ) : null}
+
+          <span
+            aria-hidden
+            className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[hsl(var(--mobile-brand-strong))]"
+          >
+            {primaryAction}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </span>
         </div>
       </div>
     </button>

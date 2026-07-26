@@ -26,6 +26,7 @@ import { track } from '@/lib/analytics/events';
 import type {
   Property,
   RadarCategoryCoverage,
+  RadarCanonicalFeedItem,
   RadarFeedItem as RadarFeedItemType,
   RadarMonitoringState,
   RadarOverview,
@@ -600,16 +601,13 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     staleTime: 5 * 60 * 1000,
   });
 
-  const allItems: RadarFeedItemType[] = React.useMemo(() => {
-    if (!propertyId) return [];
-    return (feedQuery.data?.pages.flatMap((page) => page?.items ?? []) ?? []).map((canonicalItem) => {
-      const item = toLegacyRadarFeedItem(canonicalItem, propertyId);
-      return {
-        ...item,
-        state: stateOverrides[item.propertyRadarMatchId] ?? item.state,
-      };
-    });
-  }, [feedQuery.data, propertyId, stateOverrides]);
+  const allItems: RadarCanonicalFeedItem[] = React.useMemo(
+    () => (feedQuery.data?.pages.flatMap((page) => page?.items ?? []) ?? []).map((item) => ({
+      ...item,
+      userState: stateOverrides[item.propertyMatchId] ?? item.userState,
+    })),
+    [feedQuery.data, stateOverrides],
+  );
 
   const visibleItems = allItems;
 
@@ -684,12 +682,17 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   // Handlers
   // -------------------------------------------------------------------------
 
-  function handleItemClick(item: RadarFeedItemType) {
+  function handleItemClick(item: RadarCanonicalFeedItem) {
     // Optimistically mark as seen
-    if (item.state === 'new') {
-      setStateOverrides((prev) => ({ ...prev, [item.propertyRadarMatchId]: 'seen' }));
+    if (item.userState === 'new') {
+      setStateOverrides((prev) => ({ ...prev, [item.propertyMatchId]: 'seen' }));
     }
-    setSelectedItem(item);
+    if (propertyId) {
+      setSelectedItem(toLegacyRadarFeedItem({
+        ...item,
+        userState: item.userState === 'new' ? 'seen' : item.userState,
+      }, propertyId));
+    }
   }
 
   function handleSheetClose() {
@@ -750,7 +753,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
 
   const newCount = filter === 'all'
     ? (overviewQuery.data?.counts.new ?? 0)
-    : allItems.filter((item) => item.state === 'new').length;
+    : allItems.filter((item) => item.userState === 'new').length;
 
   return (
     <MobilePageContainer className="space-y-5 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -856,7 +859,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
             ) : (
               <div className="space-y-5">
                 {TIMING_GROUPS.map((group) => {
-                  const items = visibleItems.filter((item) => item.timingGroup === group.key);
+                  const items = visibleItems.filter((item) => item.matchLifecycleStatus === group.key);
                   if (items.length === 0) return null;
                   return (
                     <section key={group.key} aria-labelledby={`radar-${group.key}`}>
@@ -869,7 +872,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
                       <div className="space-y-3 lg:space-y-4">
                         {items.map((item) => (
                           <RadarFeedItem
-                            key={item.propertyRadarMatchId}
+                            key={item.propertyMatchId}
                             item={item}
                             onClick={handleItemClick}
                           />

@@ -1,7 +1,14 @@
 // apps/frontend/src/components/features/homeEventRadar/RadarUtils.ts
 // Shared pure helpers for Home Event Radar UI.
 
-import type { RadarSeverity, RadarImpactLevel, RadarUserState } from '@/types';
+import type {
+  RadarCanonicalFeedItem,
+  RadarCanonicalImpact,
+  RadarCanonicalSeverity,
+  RadarImpactLevel,
+  RadarSeverity,
+  RadarUserState,
+} from '@/types';
 
 // ---------------------------------------------------------------------------
 // Severity
@@ -31,6 +38,33 @@ export const SEVERITY_DOT: Record<RadarSeverity, string> = {
   critical: 'bg-red-500',
 };
 
+export const CANONICAL_SEVERITY_LABELS: Record<RadarCanonicalSeverity, string> = {
+  info: 'Information',
+  low: 'Low severity',
+  moderate: 'Moderate severity',
+  high: 'High severity',
+  severe: 'Severe',
+  extreme: 'Extreme',
+};
+
+export const CANONICAL_SEVERITY_COLOR: Record<RadarCanonicalSeverity, string> = {
+  info: 'bg-sky-50 text-sky-700 border-sky-200',
+  low: 'bg-blue-50 text-blue-700 border-blue-200',
+  moderate: 'bg-amber-50 text-amber-700 border-amber-200',
+  high: 'bg-orange-50 text-orange-800 border-orange-200',
+  severe: 'bg-red-50 text-red-700 border-red-200',
+  extreme: 'bg-red-100 text-red-800 border-red-300',
+};
+
+export const CANONICAL_SEVERITY_DOT: Record<RadarCanonicalSeverity, string> = {
+  info: 'bg-sky-400',
+  low: 'bg-blue-400',
+  moderate: 'bg-amber-400',
+  high: 'bg-orange-500',
+  severe: 'bg-red-500',
+  extreme: 'bg-red-700',
+};
+
 // ---------------------------------------------------------------------------
 // Impact level
 // ---------------------------------------------------------------------------
@@ -47,6 +81,22 @@ export const IMPACT_COLOR: Record<RadarImpactLevel, string> = {
   watch: 'bg-sky-50 text-sky-700 border-sky-200',
   moderate: 'bg-amber-50 text-amber-700 border-amber-200',
   high: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+
+export const CANONICAL_IMPACT_LABELS: Record<RadarCanonicalImpact, string> = {
+  none: 'No property impact',
+  low: 'Low property impact',
+  moderate: 'Moderate property impact',
+  high: 'High property impact',
+  critical: 'Critical property impact',
+};
+
+export const CANONICAL_IMPACT_COLOR: Record<RadarCanonicalImpact, string> = {
+  none: 'bg-gray-50 text-gray-600 border-gray-200',
+  low: 'bg-sky-50 text-sky-700 border-sky-200',
+  moderate: 'bg-amber-50 text-amber-700 border-amber-200',
+  high: 'bg-rose-50 text-rose-700 border-rose-200',
+  critical: 'bg-red-100 text-red-800 border-red-300',
 };
 
 // ---------------------------------------------------------------------------
@@ -164,4 +214,25 @@ export function formatRadarDate(iso: string): string {
   } catch {
     return '';
   }
+}
+
+export function formatRadarDateTime(iso: string): string {
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) return 'Timing unavailable';
+  return value.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export function formatRadarTiming(
+  item: Pick<RadarCanonicalFeedItem, 'effectiveAt' | 'expiresAt'>,
+): string {
+  const effective = `Effective ${formatRadarDateTime(item.effectiveAt)}`;
+  return item.expiresAt
+    ? `${effective} · Expires ${formatRadarDateTime(item.expiresAt)}`
+    : `${effective} · No expiration listed`;
 }

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-304 implemented |
+| Status | In progress — HER-404 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -47,7 +47,8 @@
 | HER-401 Stable pagination | Complete | Versioned property/state-bound base64url cursors encode the snapshot plus lifecycle, priority band/score, effective time, and ID; typed keyset predicates and concurrent-insert fixtures prove deterministic page boundaries |
 | HER-402 Server filters/totals | Complete | Canonical repeatable filters cover lifecycle, source family, normalized provider severity, property impact, confidence, personal state, and material New/Updated attention; normalized filters bind cursors and the same predicate drives the page and authoritative total |
 | HER-403 Coverage-aware UI | Complete | The page consumes canonical overview/events, distinguishes every monitoring and feed state, renders materialized category coverage/freshness and last success, disables unavailable filters, preserves errors as errors, and pages with the stable cursor |
-| HER-404+ | Not started | Canonical event cards/detail, deep links, actions, notifications, accessibility, and operations remain |
+| HER-404 Event feed and card | Complete | Canonical cards expose source provenance, exact effective/expiration timing, provider severity, property impact, limited confidence, freshness, material updates, and an accessible primary detail action |
+| HER-405+ | Not started | Canonical detail, deep links, actions, notifications, accessibility acceptance, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1177,6 +1178,14 @@ Update card with:
 - updated state;
 - primary action;
 - accessible label.
+
+**Implemented:** feed cards now consume `RadarCanonicalFeedItem` directly rather than the legacy
+projection. Each card names the source/provider, renders explicit effective and expiration
+timestamps, keeps provider severity separate from property impact, discloses low or medium
+confidence and delayed sources, identifies New/Updated/Ended/Saved states, and provides a visible
+View details or Review update action. The entire card is a minimum-size native button with a
+descriptive accessible name containing the event, source, severity, impact, timing, confidence,
+and freshness context. The narrow legacy adapter remains only at the HER-405 detail-sheet boundary.
 
 ### HER-405 — Event detail
 
