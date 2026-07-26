@@ -27,6 +27,7 @@ interface Props {
 export function RadarFeedItem({ item, onClick }: Props) {
   const isNew = item.state === 'new';
   const isDismissed = item.state === 'dismissed';
+  const isRecentlyEnded = item.timingGroup === 'recently_ended';
 
   return (
     <button
@@ -128,6 +129,18 @@ export function RadarFeedItem({ item, onClick }: Props) {
                 )}
               >
                 Saved
+              </span>
+            )}
+
+            {isRecentlyEnded && (
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-full border px-2 py-0.5',
+                  'border-slate-200 bg-slate-50 text-slate-600',
+                  MOBILE_TYPE_TOKENS.chip
+                )}
+              >
+                Ended
               </span>
             )}
           </div>

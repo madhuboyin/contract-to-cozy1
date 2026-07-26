@@ -1035,9 +1035,10 @@ NWS preserves CAP identity and polygon evidence; freeze forecasts use stable pro
 and resolve only after a successful warm forecast. The durable match consumer validates each
 event revision, scans candidates in bounded resumable pages, and retries each property scope
 independently. Property-scoped freeze events can now populate the Radar feed. NWS polygon coverage
-still depends on HER-300's indexed geospatial matcher. HER-204's unique Incident bridge is now
-complete; HER-205 is the next delivery slice and will converge weather supersession, expiration,
-resolution, and stale-event behavior.
+still depends on HER-300's indexed geospatial matcher. HER-205 now resolves or retracts referenced
+NWS identities, expires authoritative end times, gates stale cleanup behind a fully successful
+fetch, and retains terminal matches in a 72-hour Recently Ended feed group. Provider failures never
+imply resolution. HER-206 weather end-to-end acceptance is the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

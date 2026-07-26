@@ -72,6 +72,8 @@ function lifecycleStatus(
 ): CanonicalRadarObservation['lifecycleStatus'] {
   if (context.lifecycleStatus) return context.lifecycleStatus;
   if (alert.messageType?.toLowerCase() === 'cancel') return 'retracted';
+  const providerEnd = alert.ends ?? alert.expires;
+  if (providerEnd && Date.parse(providerEnd) <= Date.parse(context.observedAt)) return 'expired';
   if (alert.messageType?.toLowerCase() === 'update') return 'updated';
   return 'active';
 }

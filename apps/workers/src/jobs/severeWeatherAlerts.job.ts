@@ -27,6 +27,10 @@ import { iterateAllProperties } from '../lib/paginateProperties';
 import { logger, type AppLogger } from '../lib/logger';
 import { nwsFetchOutcomeTotal } from '../lib/metrics';
 import { nwsRadarAdapter } from '../radar/nwsRadarAdapter';
+import {
+  nwsLifecycleConvergenceService,
+  type NwsLifecycleConvergenceService,
+} from '../radar/nwsLifecycleConvergence';
 
 const NWS_SOURCE_KEY = 'nws-active-alerts';
 
@@ -40,12 +44,14 @@ type PropertyRow = {
 type RegistryPort = Pick<typeof radarSourceRegistryService, 'register'>;
 type RunPort = Pick<typeof radarSourceRunService, 'begin' | 'complete'>;
 type IngestQueuePort = Pick<typeof radarIngestQueueService, 'enqueue'>;
+type LifecyclePort = Pick<NwsLifecycleConvergenceService, 'buildObservations'>;
 
 export interface SevereWeatherAlertsDeps {
   severeWeatherAlertService: Pick<typeof severeWeatherAlertService, 'getActiveAlerts'>;
   registry: RegistryPort;
   runs: RunPort;
   ingestQueue: IngestQueuePort;
+  lifecycle: LifecyclePort;
   logger: AppLogger;
   iterateAllProperties: typeof iterateAllProperties;
   getPropertyGeo: typeof getPropertyGeo;
@@ -59,6 +65,7 @@ const defaultDeps: SevereWeatherAlertsDeps = {
   registry: radarSourceRegistryService,
   runs: radarSourceRunService,
   ingestQueue: radarIngestQueueService,
+  lifecycle: nwsLifecycleConvergenceService,
   logger,
   iterateAllProperties,
   getPropertyGeo,
@@ -236,7 +243,7 @@ export async function severeWeatherAlertsJob(
         smokeCorrelationId,
       });
       createdOrUpdated += 1;
-      if (enqueued.lifecycleStatus === 'resolved' || enqueued.lifecycleStatus === 'retracted') {
+      if (['resolved', 'expired', 'retracted'].includes(enqueued.lifecycleStatus)) {
         resolved += 1;
       }
     } catch (error) {
@@ -249,12 +256,72 @@ export async function severeWeatherAlertsJob(
     }
   }
 
+  let lifecycleObservations = 0;
+  const lifecycleReasonCounts: Record<string, number> = {};
+  if (!dryRun && fetchSucceeded > 0) {
+    try {
+      const staleAfterHours = Number.parseInt(
+        deps.env.RADAR_NWS_STALE_AFTER_HOURS ?? '',
+        10,
+      );
+      const closures = await deps.lifecycle.buildObservations({
+        sourceDefinitionId: source.id,
+        observedAt: startedAt,
+        currentAlerts: [...uniqueAlerts.values()].map(({ alert }) => alert),
+        // A partial or failed fetch never supplies enough negative evidence
+        // to run the missing-end-time safety net.
+        allowStaleSafetyNet: fetchFailed === 0,
+        staleAfterHours,
+      });
+      lifecycleObservations = closures.length;
+      for (const closure of closures) {
+        try {
+          const enqueued = await deps.ingestQueue.enqueue({
+            observation: closure.observation,
+            sourceRunId: begun.run.id,
+            correlationId,
+            enqueuedAt: deps.now().toISOString(),
+            smokeCorrelationId,
+          });
+          createdOrUpdated += 1;
+          resolved += 1;
+          lifecycleReasonCounts[closure.reason] =
+            (lifecycleReasonCounts[closure.reason] ?? 0) + 1;
+          if (!['resolved', 'expired', 'retracted'].includes(enqueued.lifecycleStatus)) {
+            throw new Error(
+              `Lifecycle convergence produced non-terminal status ${enqueued.lifecycleStatus}`,
+            );
+          }
+        } catch (error) {
+          const normalized = error instanceof Error ? error : new Error(String(error));
+          errors.push(normalized);
+          deps.logger.error(
+            {
+              err: normalized,
+              radarEventId: closure.radarEventId,
+              reason: closure.reason,
+            },
+            '[SevereWeatherAlerts] NWS lifecycle observation rejected',
+          );
+        }
+      }
+    } catch (error) {
+      const normalized = error instanceof Error ? error : new Error(String(error));
+      errors.push(normalized);
+      deps.logger.error(
+        { err: normalized },
+        '[SevereWeatherAlerts] NWS lifecycle convergence failed',
+      );
+    }
+  }
+
+  const observationsReceived = uniqueAlerts.size + lifecycleObservations;
   let sourceRunStatus: 'success' | 'successful_empty' | 'partial' | 'failed' | 'skipped';
   if (alertsCache.size === 0) sourceRunStatus = 'skipped';
   else if (fetchSucceeded === 0) sourceRunStatus = 'failed';
-  else if (uniqueAlerts.size > 0 && errors.length === uniqueAlerts.size) sourceRunStatus = 'failed';
+  else if (observationsReceived > 0 && errors.length === observationsReceived) sourceRunStatus = 'failed';
   else if (fetchFailed > 0 || errors.length > 0) sourceRunStatus = 'partial';
-  else if (uniqueAlerts.size === 0) sourceRunStatus = 'successful_empty';
+  else if (observationsReceived === 0) sourceRunStatus = 'successful_empty';
   else sourceRunStatus = 'success';
 
   if (!dryRun) {
@@ -271,7 +338,7 @@ export async function severeWeatherAlertsJob(
       status: sourceRunStatus,
       finishedAt: deps.now(),
       dataFreshThrough: fetchSucceeded > 0 ? startedAt : undefined,
-      observationsReceived: uniqueAlerts.size,
+      observationsReceived,
       observationsRejected: errors.length,
       eventsCreated: 0,
       eventsUpdated: 0,
@@ -291,6 +358,9 @@ export async function severeWeatherAlertsJob(
         fetchFailed,
         queryPoints: alertsCache.size,
         observationsQueued: createdOrUpdated,
+        lifecycleObservations,
+        lifecycleReasonCounts,
+        staleSafetyNetEligible: fetchFailed === 0 && fetchSucceeded > 0,
       },
     });
   }
@@ -303,6 +373,7 @@ export async function severeWeatherAlertsJob(
     fetchSucceeded,
     fetchFailed,
     uniqueAlerts: uniqueAlerts.size,
+    lifecycleObservations,
     queued: dryRun ? 0 : createdOrUpdated,
     rejected: errors.length,
   };

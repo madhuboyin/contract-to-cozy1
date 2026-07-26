@@ -3149,6 +3149,8 @@ export interface VaultShareLinkResponse {
 export type RadarUserState = 'new' | 'seen' | 'saved' | 'dismissed' | 'acted_on';
 export type RadarSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 export type RadarImpactLevel = 'none' | 'watch' | 'moderate' | 'high';
+export type RadarLifecycleStatus = 'active' | 'updated' | 'resolved' | 'expired' | 'retracted';
+export type RadarTimingGroup = 'now' | 'upcoming' | 'recently_ended';
 
 export interface RadarFeedItem {
   propertyRadarMatchId: string;
@@ -3161,6 +3163,8 @@ export interface RadarFeedItem {
   severity: RadarSeverity;
   startAt: string;
   endAt: string | null;
+  lifecycleStatus: RadarLifecycleStatus;
+  timingGroup: RadarTimingGroup;
   impactLevel: RadarImpactLevel;
   impactSummary: string | null;
   isVisible: boolean;

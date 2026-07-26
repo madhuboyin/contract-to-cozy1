@@ -60,6 +60,7 @@ function fakeDeps({
   properties = [property()],
   fetchByZip = { '08536': { outcome: 'ok', alerts: [alert()] } },
   ingestOutcome = 'created',
+  lifecycleClosures = [],
 } = {}) {
   const calls = {
     fetches: [],
@@ -67,6 +68,7 @@ function fakeDeps({
     begins: [],
     completions: [],
     ingestions: [],
+    lifecycleInputs: [],
   };
   const deps = {
     severeWeatherAlertService: {
@@ -112,6 +114,12 @@ function fakeDeps({
           payloadFingerprint: 'fingerprint-1',
           lifecycleStatus: input.observation.lifecycleStatus,
         };
+      },
+    },
+    lifecycle: {
+      async buildObservations(input) {
+        calls.lifecycleInputs.push(input);
+        return lifecycleClosures;
       },
     },
     logger: noopLogger,
@@ -162,6 +170,7 @@ test('failed NWS fetch records failed source health and never resolves or ingest
     const result = await severeWeatherAlertsJob(undefined, deps);
 
     assert.equal(calls.ingestions.length, 0);
+    assert.equal(calls.lifecycleInputs.length, 0);
     assert.equal(result.resolved, 0);
     assert.equal(result.sourceRunStatus, 'failed');
     assert.equal(calls.completions[0].input.status, 'failed');
@@ -180,6 +189,29 @@ test('confirmed successful empty NWS fetch records successful-empty, not failure
   assert.equal(result.sourceRunStatus, 'successful_empty');
   assert.equal(calls.completions[0].input.status, 'successful_empty');
   assert.deepEqual(calls.completions[0].input.dataFreshThrough, new Date('2026-07-26T14:05:00Z'));
+});
+
+test('successful empty provider response can enqueue evidence-backed expiration', async () => {
+  const { calls, deps } = fakeDeps({
+    fetchByZip: { '08536': { outcome: 'ok', alerts: [] } },
+    lifecycleClosures: [{
+      radarEventId: 'prior-radar-event',
+      reason: 'provider_expiration',
+      observation: { lifecycleStatus: 'expired' },
+    }],
+  });
+
+  const result = await severeWeatherAlertsJob(undefined, deps);
+
+  assert.equal(result.sourceRunStatus, 'success');
+  assert.equal(result.lifecycleObservations, 1);
+  assert.equal(result.resolved, 1);
+  assert.equal(calls.ingestions.length, 1);
+  assert.equal(calls.completions[0].input.observationsReceived, 1);
+  assert.equal(
+    calls.completions[0].input.metadataJson.lifecycleReasonCounts.provider_expiration,
+    1,
+  );
 });
 
 test('mixed fetch outcomes remain partial while successful observations ingest', async () => {
@@ -206,6 +238,7 @@ test('mixed fetch outcomes remain partial while successful observations ingest',
   assert.equal(result.fetchFailed, 1);
   assert.equal(calls.ingestions.length, 1);
   assert.equal(calls.completions[0].input.status, 'partial');
+  assert.equal(calls.lifecycleInputs[0].allowStaleSafetyNet, false);
   assert.match(calls.completions[0].input.errorMessage, /1 NWS fetch/);
 });
 

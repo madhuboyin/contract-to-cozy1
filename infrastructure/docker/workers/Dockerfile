@@ -92,6 +92,7 @@ RUN mkdir -p src/shared/backend/services/coverage \
 COPY apps/backend/src/services/coverage/contextPolicy.ts src/shared/backend/services/coverage/
 COPY apps/backend/src/modules/homeEventRadar/domain/propertyGeography.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarObservationIdentity.ts src/shared/backend/modules/homeEventRadar/domain/
+COPY apps/backend/src/modules/homeEventRadar/domain/radarVisibility.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/contracts/ src/shared/backend/modules/homeEventRadar/contracts/
 COPY apps/backend/src/modules/homeEventRadar/services/radarSourceRegistry.service.ts \
      apps/backend/src/modules/homeEventRadar/services/radarSourceRun.service.ts \

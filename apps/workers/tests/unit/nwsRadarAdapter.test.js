@@ -148,3 +148,13 @@ test('NWS adapter preserves MultiPolygon CAP geography', async () => {
     geoJson: multiPolygon,
   });
 });
+
+test('NWS adapter marks an observation expired when its authoritative end has passed', async () => {
+  const observation = await nwsRadarAdapter.normalize(
+    alert(),
+    adapterCase('already ended', alert(), {
+      observedAt: '2026-07-26T17:00:00Z',
+    }).context,
+  );
+  assert.equal(observation.lifecycleStatus, 'expired');
+});

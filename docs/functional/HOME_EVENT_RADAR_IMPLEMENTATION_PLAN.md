@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-204 implemented |
+| Status | In progress — HER-205 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -33,7 +33,8 @@
 | HER-202 Durable ingest consumer | Complete; DB application pending | Versioned canonical jobs use deterministic same-run identity, bounded retries with jitter, retained failure history, payload limits, metrics, a global kill switch, bounded concurrency, and graceful shutdown; NWS, freeze, and test fixtures enqueue through it |
 | HER-203 Durable match consumer | Complete; DB application pending | Versioned revision-driven scan jobs dispatch deterministic, independently retryable property scopes through bounded cursor pages; canonical property/postal/admin discovery, terminal outcomes, metrics, kill switch, bounded concurrency, retained failures, and graceful shutdown are wired |
 | HER-204 Incident promotion bridge | Complete; DB application pending | One dedicated projection service owns match-linked create/update/close behavior, persists revision/source/provider provenance, maps impact and explicit confidence, resolves through IncidentService, and leaves Guidance exclusively on the idempotent Incident bridge |
-| HER-205+ | Not started | Weather lifecycle convergence, advanced geospatial matching, homeowner APIs, actions, and operations remain |
+| HER-205 Weather lifecycle convergence | Complete | NWS references resolve or retract prior canonical identities, provider end times expire events, failed fetches never imply resolution, stale fallback requires a fully successful run, and terminal matches remain in Recently Ended for 72 hours |
+| HER-206+ | Not started | Weather end-to-end acceptance, advanced geospatial matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -704,6 +705,18 @@ Implement:
 - conservative failure;
 - stale safety net;
 - canonical Recently Ended retention.
+
+Implementation note: NWS lifecycle reconciliation reads only active/updated events for the exact
+source and emits new canonical terminal observations through the durable ingest queue; it never
+mutates canonical events directly. CAP update references explicitly resolve the referenced
+provider identity, CAP cancellations retract it, and authoritative provider end timestamps expire
+it. Already-ended observations are normalized as expired on arrival. The 48-hour no-end-time
+safety net is bounded by `RADAR_NWS_STALE_AFTER_HOURS` (6–168 hours) and is eligible only after a
+fully successful fetch cycle; failed and partial cycles cannot infer absence. Reconciliation is
+bounded and cursor-paged, preserves prior immutable raw evidence, and uses deterministic synthetic
+provider revisions for replay safety. Terminal property matches retain visibility for 72 hours and
+the homeowner feed now presents Now, Upcoming, and Recently Ended groups. No Prisma schema change
+or migration was required.
 
 ### HER-206 — Weather end-to-end acceptance
 

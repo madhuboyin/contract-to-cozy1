@@ -9,6 +9,10 @@ import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
 import { propertyWhereForRadarEvent } from '../modules/homeEventRadar/services/radarMatchDiscovery.service';
 import { radarIncidentPromotionService } from '../modules/homeEventRadar/services/radarIncidentPromotion.service';
+import {
+  radarMatchVisibleFrom,
+  radarMatchVisibleUntil,
+} from '../modules/homeEventRadar/domain/radarVisibility';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -578,6 +582,8 @@ export async function runMatchingForEvent(
   for (const property of properties) {
     try {
       const impact = computeImpact(event, property);
+      const visibleFrom = radarMatchVisibleFrom(event);
+      const visibleUntil = radarMatchVisibleUntil(event);
 
       const match = await db.propertyRadarMatch.upsert({
         where: {
@@ -596,8 +602,8 @@ export async function runMatchingForEvent(
           recommendedActionsJson: impact.recommendedActionsJson,
           matchedSystemsJson: impact.matchedSystemsJson,
           isVisible: true,
-          visibleFrom: event.startAt,
-          visibleUntil: event.endAt ?? null,
+          visibleFrom,
+          visibleUntil,
         },
         update: {
           matchScore: impact.matchScore.toFixed(4),
@@ -607,8 +613,8 @@ export async function runMatchingForEvent(
           recommendedActionsJson: impact.recommendedActionsJson,
           matchedSystemsJson: impact.matchedSystemsJson,
           isVisible: true,
-          visibleFrom: event.startAt,
-          visibleUntil: event.endAt ?? null,
+          visibleFrom,
+          visibleUntil,
         },
       });
 

@@ -8,6 +8,7 @@ import { logSharedDataEvent } from './sharedDataObservability.service';
 import { applyBoundedSignalPriorityBoost } from './signalPriorityBoost.service';
 import { getProtectionContextDecisions } from './protection/context';
 import type { FeatureDecision } from '../modules/propertyContext';
+import { radarTimingGroup } from '../modules/homeEventRadar/domain/radarVisibility';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -47,6 +48,8 @@ function serializeMatchFeedItem(match: any, state: any | null): Record<string, u
     severity: event?.severity ?? null,
     startAt: event?.startAt instanceof Date ? event.startAt.toISOString() : (event?.startAt ?? null),
     endAt: event?.endAt ? (event.endAt instanceof Date ? event.endAt.toISOString() : event.endAt) : null,
+    lifecycleStatus: event?.status ?? null,
+    timingGroup: event ? radarTimingGroup(event) : null,
     impactLevel: match.impactLevel,
     impactSummary: match.impactSummary ?? null,
     isVisible: match.isVisible,
@@ -274,21 +277,21 @@ export class HomeEventRadarService {
     };
   }> {
     const limit = Math.min(query.limit ?? 40, 100);
+    const now = new Date();
 
     const where: Record<string, unknown> = {
       propertyId,
       isVisible: true,
+      AND: [
+        { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] },
+        { OR: [{ visibleUntil: null }, { visibleUntil: { gt: now } }] },
+      ],
     };
 
     if (!query.includeResolved) {
       where.radarEvent = {
-        status: 'active',
+        status: { in: ['active', 'updated'] },
       };
-      const now = new Date();
-      where.AND = [
-        { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] },
-        { OR: [{ visibleUntil: null }, { visibleUntil: { gt: now } }] },
-      ];
     }
 
     if (query.severity) {

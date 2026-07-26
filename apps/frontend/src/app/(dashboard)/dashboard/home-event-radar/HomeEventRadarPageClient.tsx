@@ -56,6 +56,12 @@ const FILTER_TO_TYPES: Record<FilterKey, string[] | null> = {
   tax: ['tax_reassessment', 'tax_rate_change'],
 };
 
+const TIMING_GROUPS = [
+  { key: 'now', label: 'Now' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'recently_ended', label: 'Recently Ended' },
+] as const;
+
 function matchesFilter(item: RadarFeedItemType, filter: FilterKey): boolean {
   if (filter === 'all') return true;
   const types = FILTER_TO_TYPES[filter];
@@ -437,7 +443,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     queryKey: ['radar-feed', propertyId],
     queryFn: async () => {
       if (!propertyId) return null;
-      return api.getRadarFeed(propertyId, { limit: 50 });
+      return api.getRadarFeed(propertyId, { includeResolved: true, limit: 50 });
     },
     enabled: !!propertyId,
     staleTime: 3 * 60 * 1000,
@@ -670,14 +676,30 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
                 <DismissedNotice count={dismissedCount} onShow={() => setShowDismissed(true)} />
               </>
             ) : (
-              <div className="space-y-3 lg:space-y-4">
-                {visibleItems.map((item) => (
-                  <RadarFeedItem
-                    key={item.propertyRadarMatchId}
-                    item={item}
-                    onClick={handleItemClick}
-                  />
-                ))}
+              <div className="space-y-5">
+                {TIMING_GROUPS.map((group) => {
+                  const items = visibleItems.filter((item) => item.timingGroup === group.key);
+                  if (items.length === 0) return null;
+                  return (
+                    <section key={group.key} aria-labelledby={`radar-${group.key}`}>
+                      <h3
+                        id={`radar-${group.key}`}
+                        className="mb-2 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--mobile-text-muted))]"
+                      >
+                        {group.label}
+                      </h3>
+                      <div className="space-y-3 lg:space-y-4">
+                        {items.map((item) => (
+                          <RadarFeedItem
+                            key={item.propertyRadarMatchId}
+                            item={item}
+                            onClick={handleItemClick}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
                 <DismissedNotice
                   count={dismissedCount}
                   onShow={() => setShowDismissed((v) => !v)}
