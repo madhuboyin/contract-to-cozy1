@@ -245,6 +245,17 @@ export function aggregateRefinanceRadarMetrics(input: RefinanceRadarMetricsInput
           event.eventName === 'refinance_loan_estimate_extracted' &&
           record(event.metadataJson).extractionMethod === 'IMAGE_OCR',
       ).length,
+      loanEstimatePagesProcessed: input.analyticsEvents
+        .filter(
+          (event) => event.eventName === 'refinance_loan_estimate_extracted',
+        )
+        .reduce((sum, event) => {
+          const pageCount = record(event.metadataJson).pageCount;
+          return sum +
+            (typeof pageCount === 'number' && Number.isFinite(pageCount)
+              ? pageCount
+              : 1);
+        }, 0),
       loanEstimateMarkdownExports: eventCount(
         'refinance_loan_estimate_markdown_exported',
       ),

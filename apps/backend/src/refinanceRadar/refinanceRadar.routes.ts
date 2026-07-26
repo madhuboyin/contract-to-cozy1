@@ -11,9 +11,10 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
   apiRateLimiter,
+  ocrRateLimiter,
   uploadRateLimiter,
 } from '../middleware/rateLimiter.middleware';
-import { validatePdfOrImageUpload } from '../utils/documentValidator.util';
+import { validateDocumentArrayUpload } from '../utils/documentValidator.util';
 import { RefinanceRadarController } from './refinanceRadar.controller';
 import {
   compareLoanEstimatesSchema,
@@ -234,8 +235,9 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   uploadRateLimiter,
-  loanEstimateUpload.single('file'),
-  validatePdfOrImageUpload,
+  ocrRateLimiter,
+  loanEstimateUpload.array('files', 3),
+  validateDocumentArrayUpload,
   RefinanceRadarController.extractLoanEstimate,
 );
 

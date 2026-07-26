@@ -305,26 +305,41 @@ export function LoanEstimateComparisonCard({
     }
   }
 
-  async function extractPdf(file: File | null) {
-    if (!file) return;
+  async function extractDocuments(fileList: FileList | null) {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) return;
+    if (files.length > 3) {
+      setError('Upload one PDF or up to three image pages.');
+      return;
+    }
+    const acceptedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+    ];
+    if (files.some((file) => !acceptedTypes.includes(file.type))) {
+      setError('Choose PDF, JPEG, PNG, or WEBP Loan Estimate pages.');
+      return;
+    }
+    if (files.some((file) => file.size > 10 * 1024 * 1024)) {
+      setError('Each Loan Estimate file must be 10 MB or smaller.');
+      return;
+    }
     if (
-      ![
-        'application/pdf',
-        'image/jpeg',
-        'image/jpg',
-        'image/png',
-        'image/webp',
-      ].includes(file.type)
+      files.some((file) => file.type === 'application/pdf') &&
+      files.length > 1
     ) {
-      setError('Choose a PDF, JPEG, PNG, or WEBP Loan Estimate.');
+      setError('Upload one PDF or up to three image pages, not a mixed batch.');
       return;
     }
     setExtracting(true);
     setError(null);
     setMessage(null);
-    setUploadedFileName(file.name);
+    setUploadedFileName(files.map((file) => file.name).join(' · '));
     try {
-      setExtraction(await extractRefinanceLoanEstimate(propertyId, file));
+      setExtraction(await extractRefinanceLoanEstimate(propertyId, files));
     } catch (caught) {
       setExtraction(null);
       setError(
@@ -503,23 +518,24 @@ export function LoanEstimateComparisonCard({
             <div>
               <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-900 dark:text-blue-200">
                 <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-                Prefill from a Loan Estimate PDF
+                Prefill from a Loan Estimate
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-blue-800 dark:text-blue-300">
-                The file is read in memory and is not retained. PDFs use their
-                text layer; JPEG, PNG, and WEBP pages use local OCR. Every value
-                requires your review.
+                Upload one PDF or up to three JPEG, PNG, or WEBP images in page
+                order. Files are read in memory and not retained. Images use
+                local OCR, and every value requires your review.
               </p>
             </div>
             <label className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-lg border border-blue-300 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300">
-              {extracting ? 'Reading document…' : 'Choose PDF or image'}
+              {extracting ? 'Reading document…' : 'Choose PDF or page images'}
               <input
                 type="file"
                 accept="application/pdf,.pdf,image/jpeg,image/png,image/webp"
+                multiple
                 disabled={extracting}
                 className="sr-only"
                 onChange={(event) => {
-                  void extractPdf(event.target.files?.[0] ?? null);
+                  void extractDocuments(event.target.files);
                   event.target.value = '';
                 }}
               />
@@ -542,6 +558,9 @@ export function LoanEstimateComparisonCard({
                         : ` · document confidence ${extraction.documentConfidencePct.toFixed(0)}%`
                     }`
                   : 'PDF text layer'}
+                {' · '}
+                {extraction.pageCount}{' '}
+                {extraction.pageCount === 1 ? 'page' : 'pages'}
               </p>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {Object.entries(extraction.fields).map(([key, field]) => (

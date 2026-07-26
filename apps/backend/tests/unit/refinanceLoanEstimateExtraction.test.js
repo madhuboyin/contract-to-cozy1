@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   extractLoanEstimateFieldsFromText,
   extractLoanEstimateFieldsFromOcrText,
+  combineLoanEstimateExtractions,
 } = require('../../dist/refinanceRadar/refinanceLoanEstimateExtraction.service');
 
 const sample = `
@@ -86,4 +87,42 @@ test('caps OCR-derived fields at medium confidence and identifies the method', (
   assert.equal(result.fields.loanAmountUsd.confidence, 'MEDIUM');
   assert.match(result.fields.loanAmountUsd.sourceLabel, /OCR/);
   assert.ok(result.warnings.some((warning) => /OCR can confuse/i.test(warning)));
+});
+
+test('merges the strongest fields across image pages and preserves page provenance', () => {
+  const pageOne = extractLoanEstimateFieldsFromOcrText(`
+    ${'Loan Estimate '.repeat(10)}
+    Loan Amount $300,000
+    Loan Term 30 years
+    Product Fixed Rate
+    Interest Rate 5.750%
+    Monthly Principal & Interest $1,905.42
+  `, 90);
+  const pageThree = extractLoanEstimateFieldsFromOcrText(`
+    ${'Loan Estimate '.repeat(10)}
+    Annual Percentage Rate (APR) 5.982%
+    In 5 Years $125,582 Total you will have paid.
+    $26,773 Principal you will have paid off.
+  `, 80);
+  const result = combineLoanEstimateExtractions([pageOne, pageThree]);
+  assert.equal(result.pageCount, 2);
+  assert.equal(result.fields.loanAmountUsd.value, 300000);
+  assert.equal(result.fields.aprPct.value, 5.982);
+  assert.match(result.fields.aprPct.sourceLabel, /page 2/);
+  assert.equal(result.documentConfidencePct, 85);
+  assert.ok(result.warnings.some((warning) => /same Loan Estimate revision/i.test(warning)));
+});
+
+test('warns when equally confident pages contain conflicting values', () => {
+  const pageOne = extractLoanEstimateFieldsFromOcrText(`
+    ${'Loan Estimate '.repeat(10)}
+    Loan Amount $300,000
+  `, 90);
+  const pageTwo = extractLoanEstimateFieldsFromOcrText(`
+    ${'Loan Estimate '.repeat(10)}
+    Loan Amount $310,000
+  `, 90);
+  const result = combineLoanEstimateExtractions([pageOne, pageTwo]);
+  assert.equal(result.fields.loanAmountUsd.value, 300000);
+  assert.ok(result.warnings.some((warning) => /Conflicting loan amount values/i.test(warning)));
 });

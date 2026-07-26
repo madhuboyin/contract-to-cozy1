@@ -377,6 +377,7 @@ export type RefinanceLoanEstimateExtraction = {
   textLayerDetected: boolean;
   extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR';
   documentConfidencePct: number | null;
+  pageCount: number;
   reviewRequired: true;
   warnings: string[];
 };
@@ -484,10 +485,10 @@ export async function exportLoanEstimateComparisonMarkdown(
 
 export async function extractRefinanceLoanEstimate(
   propertyId: string,
-  file: File,
+  files: File[],
 ): Promise<RefinanceLoanEstimateExtraction> {
   const form = new FormData();
-  form.append('file', file);
+  files.forEach((file) => form.append('files', file));
   const res = await api.postFormData<{
     extraction: RefinanceLoanEstimateExtraction;
   }>(

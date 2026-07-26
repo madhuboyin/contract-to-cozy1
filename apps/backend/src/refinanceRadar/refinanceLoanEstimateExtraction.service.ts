@@ -28,6 +28,7 @@ export interface RefinanceLoanEstimateExtraction {
   textLayerDetected: boolean;
   extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR';
   documentConfidencePct: number | null;
+  pageCount: number;
   reviewRequired: true;
   warnings: string[];
 }
@@ -242,8 +243,135 @@ export function extractLoanEstimateFieldsFromText(
     textLayerDetected,
     extractionMethod: 'PDF_TEXT',
     documentConfidencePct: null,
+    pageCount: 1,
     reviewRequired: true,
     warnings,
+  };
+}
+
+const EXTRACTION_CONFIDENCE_RANK: Record<
+  LoanEstimateExtractionConfidence,
+  number
+> = {
+  MISSING: 0,
+  MEDIUM: 1,
+  HIGH: 2,
+};
+
+const EXTRACTION_FIELD_LABELS: Record<
+  keyof RefinanceLoanEstimateExtraction['fields'],
+  string
+> = {
+  loanAmountUsd: 'loan amount',
+  loanTermYears: 'loan term',
+  loanType: 'loan type',
+  noteRatePct: 'interest rate',
+  aprPct: 'APR',
+  monthlyPrincipalAndInterestUsd: 'monthly principal and interest',
+  loanCostsUsd: 'total loan costs',
+  lenderCreditsUsd: 'lender credits',
+  cashToCloseUsd: 'cash to close',
+  fiveYearTotalPaidUsd: 'five-year total paid',
+  fiveYearPrincipalPaidUsd: 'five-year principal paid',
+};
+
+export function combineLoanEstimateExtractions(
+  extractions: RefinanceLoanEstimateExtraction[],
+): RefinanceLoanEstimateExtraction {
+  if (extractions.length === 0) {
+    throw new APIError(
+      'At least one Loan Estimate page is required.',
+      400,
+      'LOAN_ESTIMATE_FILE_REQUIRED',
+    );
+  }
+  if (extractions.length === 1) return extractions[0];
+
+  const fieldKeys = Object.keys(extractions[0].fields) as Array<
+    keyof RefinanceLoanEstimateExtraction['fields']
+  >;
+  const fields = Object.fromEntries(
+    fieldKeys.map((key) => {
+      let selected = extractions[0].fields[key];
+      let selectedPage = 0;
+      extractions.slice(1).forEach((extraction, offset) => {
+        const candidate = extraction.fields[key];
+        if (
+          EXTRACTION_CONFIDENCE_RANK[candidate.confidence] >
+          EXTRACTION_CONFIDENCE_RANK[selected.confidence]
+        ) {
+          selected = candidate as typeof selected;
+          selectedPage = offset + 1;
+        }
+      });
+      return [
+        key,
+        selected.value == null
+          ? selected
+          : {
+              ...selected,
+              sourceLabel: `${selected.sourceLabel} (page ${selectedPage + 1})`,
+            },
+      ];
+    }),
+  ) as unknown as RefinanceLoanEstimateExtraction['fields'];
+  const requiredKeys: Array<keyof typeof fields> = [
+    'loanAmountUsd',
+    'loanTermYears',
+    'loanType',
+    'noteRatePct',
+    'aprPct',
+    'monthlyPrincipalAndInterestUsd',
+    'loanCostsUsd',
+    'lenderCreditsUsd',
+    'cashToCloseUsd',
+  ];
+  const confidences = extractions
+    .map((extraction) => extraction.documentConfidencePct)
+    .filter((value): value is number => value != null);
+  const requiredFieldsFound = requiredKeys.filter(
+    (key) => fields[key].value != null,
+  ).length;
+  const conflictingFields = fieldKeys.filter((key) => {
+    const values = extractions
+      .map((extraction) => extraction.fields[key].value)
+      .filter((value) => value != null)
+      .map(String);
+    return new Set(values).size > 1;
+  });
+  return {
+    fields,
+    extractedFieldCount: Object.values(fields).filter(
+      (field) => field.value != null,
+    ).length,
+    requiredFieldCount: requiredKeys.length,
+    requiredFieldsFound,
+    textLayerDetected: extractions.every(
+      (extraction) => extraction.textLayerDetected,
+    ),
+    extractionMethod: extractions.some(
+      (extraction) => extraction.extractionMethod === 'IMAGE_OCR',
+    )
+      ? 'IMAGE_OCR'
+      : 'PDF_TEXT',
+    documentConfidencePct:
+      confidences.length === 0
+        ? null
+        : confidences.reduce((sum, value) => sum + value, 0) /
+          confidences.length,
+    pageCount: extractions.reduce(
+      (sum, extraction) => sum + extraction.pageCount,
+      0,
+    ),
+    reviewRequired: true,
+    warnings: [
+      ...new Set(extractions.flatMap((extraction) => extraction.warnings)),
+      ...conflictingFields.map(
+        (key) =>
+          `Conflicting ${EXTRACTION_FIELD_LABELS[key]} values were found across the uploaded pages. The first highest-confidence value was retained; verify it against the document.`,
+      ),
+      `Values were merged from ${extractions.length} pages. Confirm that every page belongs to the same Loan Estimate revision.`,
+    ],
   };
 }
 
@@ -284,6 +412,7 @@ export function extractLoanEstimateFieldsFromOcrText(
       documentConfidencePct == null
         ? null
         : Math.max(0, Math.min(100, documentConfidencePct)),
+    pageCount: 1,
     warnings,
   };
 }
@@ -294,7 +423,13 @@ export async function extractLoanEstimateFromPdf(
   try {
     const pdfParse = require('pdf-parse');
     const parsed = await pdfParse(buffer);
-    return extractLoanEstimateFieldsFromText(parsed.text ?? '');
+    return {
+      ...extractLoanEstimateFieldsFromText(parsed.text ?? ''),
+      pageCount:
+        typeof parsed.numpages === 'number' && parsed.numpages > 0
+          ? parsed.numpages
+          : 1,
+    };
   } catch {
     throw new APIError(
       'The Loan Estimate PDF could not be read. Confirm that it is a valid, unencrypted PDF or enter the values manually.',

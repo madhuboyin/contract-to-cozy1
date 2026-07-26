@@ -36,7 +36,10 @@ import {
   listSavedRefinanceLoanEstimateComparisons,
   saveRefinanceLoanEstimateComparison,
 } from './refinanceLoanEstimateSnapshot.service';
-import { extractLoanEstimateFromUpload } from './refinanceLoanEstimateExtraction.service';
+import {
+  combineLoanEstimateExtractions,
+  extractLoanEstimateFromUpload,
+} from './refinanceLoanEstimateExtraction.service';
 import { buildRefinanceLoanEstimateComparisonMarkdown } from './refinanceLoanEstimateMarkdown';
 
 const service = new RefinanceRadarService();
@@ -56,17 +59,33 @@ export class RefinanceRadarController {
     try {
       const userId = requireUserId(req);
       const { propertyId } = req.params;
-      if (!req.file) {
+      const files = Array.isArray(req.files)
+        ? req.files as Express.Multer.File[]
+        : [];
+      if (files.length === 0) {
         throw new APIError(
-          'A Loan Estimate PDF is required.',
+          'At least one Loan Estimate PDF or image page is required.',
           400,
           'LOAN_ESTIMATE_FILE_REQUIRED',
         );
       }
-      const extraction = await extractLoanEstimateFromUpload(
-        req.file.buffer,
-        req.file.mimetype,
-      );
+      if (
+        files.some((file) => file.mimetype === 'application/pdf') &&
+        files.length > 1
+      ) {
+        throw new APIError(
+          'Upload one PDF or up to three image pages, not a mixed batch.',
+          400,
+          'LOAN_ESTIMATE_MIXED_UPLOAD',
+        );
+      }
+      const pageExtractions = [];
+      for (const file of files) {
+        pageExtractions.push(
+          await extractLoanEstimateFromUpload(file.buffer, file.mimetype),
+        );
+      }
+      const extraction = combineLoanEstimateExtractions(pageExtractions);
       analyticsEmitter.track({
         eventType: AnalyticsEvent.ACTION_COMPLETED,
         eventName: 'refinance_loan_estimate_extracted',
@@ -74,12 +93,16 @@ export class RefinanceRadarController {
         propertyId,
         moduleKey: AnalyticsModule.FINANCIAL,
         featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
-        source: 'loan_estimate_pdf',
+        source:
+          extraction.extractionMethod === 'IMAGE_OCR'
+            ? 'loan_estimate_image_ocr'
+            : 'loan_estimate_pdf_text',
         metadataJson: {
           extractedFieldCount: extraction.extractedFieldCount,
           requiredFieldsFound: extraction.requiredFieldsFound,
           textLayerDetected: extraction.textLayerDetected,
           extractionMethod: extraction.extractionMethod,
+          pageCount: extraction.pageCount,
         },
       });
       res.json({ success: true, data: { extraction } });
