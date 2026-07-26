@@ -106,6 +106,7 @@ function match(overrides = {}) {
     matcherVersion: 'geo-v1',
     propertyGeographyVersion: 3,
     incident: null,
+    taskLinks: [],
     states: [],
     feedback: [],
     radarEvent: {
@@ -337,6 +338,12 @@ test('detail is a pure persisted-projection read and exposes revision provenance
   assert.equal(detail.recommendedActions[0].registryVersion, 'radar-actions-v1');
   assert.equal(detail.recommendedActions[0].completionEvidence, 'user_attestation');
   assert.equal(detail.recommendedActions[0].safetyClassification, 'property_protection');
+  assert.deepEqual(detail.recommendedActions[0].supportedTaskOperations, [
+    'create_task',
+    'create_reminder',
+    'link_existing_task',
+  ]);
+  assert.equal(detail.recommendedActions[0].taskLink, null);
   assert.deepEqual(detail.recommendedActions[0].destination, {
     kind: 'informational',
     href: null,
@@ -347,6 +354,40 @@ test('detail is a pure persisted-projection read and exposes revision provenance
   assert.equal(detail.matcherVersion, 'geo-v1');
   assert.equal(detail.userFeedback, null);
   assert.deepEqual(writes, []);
+  assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
+});
+
+test('detail projects a durable maintenance-task link onto its reviewed action', async () => {
+  const linkedMatch = match({
+    taskLinks: [{
+      id: 'link-1',
+      propertyRadarMatchId: 'match-1',
+      actionCode: 'SECURE_OUTDOOR_ITEMS',
+      linkType: 'create_reminder',
+      dueDateSource: 'event_effective',
+      dueAt: new Date('2026-07-26T14:00:00.000Z'),
+      createdAt: new Date('2026-07-26T12:00:00.000Z'),
+      updatedAt: new Date('2026-07-26T12:00:00.000Z'),
+      maintenanceTask: {
+        id: 'task-1',
+        propertyId: 'property-1',
+        title: 'Reminder: Secure loose items',
+        status: 'PENDING',
+        nextDueDate: new Date('2026-07-26T14:00:00.000Z'),
+        assignedToUserId: 'user-1',
+      },
+    }],
+  });
+  const { service } = serviceWith({ matches: [linkedMatch] });
+
+  const detail = await service.getDetail('property-1', 'match-1', 'user-1');
+
+  assert.equal(detail.recommendedActions[0].taskLink.task.id, 'task-1');
+  assert.equal(detail.recommendedActions[0].taskLink.operation, 'create_reminder');
+  assert.match(
+    detail.recommendedActions[0].taskLink.task.href,
+    /radarMatchId=match-1/,
+  );
   assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
 });
 

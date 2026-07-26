@@ -65,6 +65,10 @@ export type RadarActionRequiredContext =
   | 'event_id'
   | 'official_source_url'
   | 'responsibility_scope';
+export type RadarActionTaskOperation =
+  | 'create_task'
+  | 'create_reminder'
+  | 'link_existing_task';
 
 type InformationalDestination = {
   kind: 'informational';
@@ -100,6 +104,7 @@ export interface RadarActionDefinition {
   responsibilityApplicability: RadarActionResponsibilityApplicability;
   completionEvidence: RadarActionCompletionEvidence;
   safetyClassification: RadarActionSafetyClassification;
+  supportedTaskOperations: readonly RadarActionTaskOperation[];
 }
 
 export interface RadarStoredAction {
@@ -122,6 +127,7 @@ export interface RadarProjectedAction {
   completionEvidence: RadarActionCompletionEvidence;
   safetyClassification: RadarActionSafetyClassification;
   targetCapability: string | null;
+  supportedTaskOperations: RadarActionTaskOperation[];
   destination: {
     kind: 'informational' | 'internal' | 'external';
     href: string | null;
@@ -167,9 +173,13 @@ const OFFICIAL_SOURCE: OfficialSourceDestination = {
 };
 
 function reviewedAction(
-  definition: RadarActionDefinition,
+  definition: Omit<RadarActionDefinition, 'supportedTaskOperations'>,
 ): RadarActionDefinition {
-  return definition;
+  const supportedTaskOperations: readonly RadarActionTaskOperation[] =
+    definition.completionEvidence === 'user_attestation'
+      ? ['create_task', 'create_reminder', 'link_existing_task']
+      : ['create_reminder'];
+  return { ...definition, supportedTaskOperations };
 }
 
 export const RADAR_ACTION_DEFINITIONS: readonly RadarActionDefinition[] = [
@@ -261,6 +271,13 @@ function validateDefinitions(
       )
     ) {
       throw new Error(`Incoherent Radar action policy: ${definition.code}`);
+    }
+    if (
+      definition.supportedTaskOperations.length === 0
+      || new Set(definition.supportedTaskOperations).size
+        !== definition.supportedTaskOperations.length
+    ) {
+      throw new Error(`Invalid Radar task operations: ${definition.code}`);
     }
     byCode.set(definition.code, Object.freeze(definition));
   }
@@ -396,6 +413,7 @@ export function projectRadarActions(input: {
       completionEvidence: definition.completionEvidence,
       safetyClassification: definition.safetyClassification,
       targetCapability: definition.destination.targetCapability,
+      supportedTaskOperations: [...definition.supportedTaskOperations],
       destination: { kind, href },
     }];
   });

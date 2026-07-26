@@ -139,6 +139,12 @@ function detail(item: ReturnType<typeof feedItem>, feedback: Record<string, unkn
       completionEvidence: 'user_attestation',
       safetyClassification: 'property_protection',
       targetCapability: null,
+      supportedTaskOperations: [
+        'create_task',
+        'create_reminder',
+        'link_existing_task',
+      ],
+      taskLink: null,
       destination: { kind: 'informational', href: null },
     }],
     canonicalUrl: 'https://www.weather.gov/',

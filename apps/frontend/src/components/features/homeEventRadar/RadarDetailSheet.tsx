@@ -7,9 +7,12 @@ import {
   AlertTriangle,
   Bookmark,
   BookmarkCheck,
+  CalendarClock,
   CheckCircle2,
   ExternalLink,
   EyeOff,
+  Link2,
+  ListPlus,
   MapPin,
   RotateCcw,
 } from 'lucide-react';
@@ -134,6 +137,233 @@ export function formatRadarGeography(geography: RadarNormalizedGeography | null)
     case 'polygon':
       return 'This property is inside the provider-defined event area.';
   }
+}
+
+type RadarRecommendedAction = RadarCanonicalDetail['recommendedActions'][number];
+
+function RadarTaskControls({
+  action,
+  propertyId,
+  matchId,
+}: {
+  action: RadarRecommendedAction;
+  propertyId: string;
+  matchId: string;
+}) {
+  const queryClient = useQueryClient();
+  const [showOptions, setShowOptions] = React.useState(false);
+  const [showCandidates, setShowCandidates] = React.useState(false);
+  const [dueAt, setDueAt] = React.useState('');
+  const [selectedTaskId, setSelectedTaskId] = React.useState('');
+  const [assigneeUserId, setAssigneeUserId] = React.useState('');
+
+  const membersQuery = useQuery({
+    queryKey: ['household-members', propertyId],
+    queryFn: () => api.listHouseholdMembers(propertyId),
+    enabled: showOptions && !action.taskLink,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const candidatesQuery = useQuery({
+    queryKey: ['radar-task-candidates', propertyId, matchId, action.code],
+    queryFn: () => api.getRadarTaskCandidates(propertyId, matchId, action.code),
+    enabled: showCandidates && !action.taskLink,
+    staleTime: 30_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (
+      input: Parameters<typeof api.createOrLinkRadarTask>[3],
+    ) => api.createOrLinkRadarTask(propertyId, matchId, action.code, input),
+    onSuccess: () => {
+      setShowOptions(false);
+      setShowCandidates(false);
+      void queryClient.invalidateQueries({
+        queryKey: ['radar-event-detail', propertyId, matchId],
+      });
+      trackRadarSheetEvent(propertyId, 'TASK_INTEGRATION_COMPLETED', {
+        property_event_match_id: matchId,
+        action_code: action.code,
+      });
+    },
+    onError: () => {
+      trackRadarSheetEvent(propertyId, 'ERROR', {
+        stage: 'task_integration',
+        action_code: action.code,
+      });
+    },
+  });
+
+  const requestedDueAt = (): string | null => (
+    dueAt ? new Date(dueAt).toISOString() : null
+  );
+
+  if (action.taskLink) {
+    return (
+      <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+        <p className="mb-0 text-xs font-semibold text-emerald-900">
+          {action.taskLink.operation === 'create_reminder' ? 'Reminder created' : 'Maintenance task linked'}
+        </p>
+        <Link
+          href={action.taskLink.task.href}
+          className="mt-1 inline-flex min-h-[44px] items-center gap-1.5 text-xs font-semibold text-emerald-800 underline underline-offset-2"
+        >
+          Open {action.taskLink.task.title}
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+        {action.taskLink.task.nextDueDate ? (
+          <p className="mb-0 text-xs text-emerald-800">
+            Due {formatRadarDateTime(action.taskLink.task.nextDueDate)}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (action.supportedTaskOperations.length === 0) return null;
+
+  return (
+    <div className="mt-3 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
+      {!showOptions ? (
+        <button
+          type="button"
+          onClick={() => setShowOptions(true)}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] px-3 py-2 text-xs font-semibold text-[hsl(var(--mobile-brand-strong))]"
+        >
+          <ListPlus className="h-4 w-4" aria-hidden />
+          Plan this action
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-[hsl(var(--mobile-text-secondary))]">
+            Due date (optional; Radar uses event timing when safe)
+            <input
+              type="datetime-local"
+              value={dueAt}
+              onChange={(event) => {
+                setDueAt(event.target.value);
+                mutation.reset();
+              }}
+              className="mt-1 min-h-[44px] w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-xs font-medium text-[hsl(var(--mobile-text-secondary))]">
+            Assign to (optional)
+            <select
+              value={assigneeUserId}
+              onChange={(event) => {
+                setAssigneeUserId(event.target.value);
+                mutation.reset();
+              }}
+              className="mt-1 min-h-[44px] w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm"
+            >
+              <option value="">Unassigned</option>
+              {membersQuery.data?.map((member) => (
+                <option key={member.id} value={member.userId}>
+                  {member.displayName
+                    || `${member.user.firstName} ${member.user.lastName}`.trim()
+                    || member.user.email}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {action.supportedTaskOperations.includes('create_task') ? (
+              <button
+                type="button"
+                disabled={mutation.isPending}
+                onClick={() => mutation.mutate({
+                  operation: 'create_task',
+                  dueAt: requestedDueAt(),
+                  assigneeUserId: assigneeUserId || null,
+                })}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-xs font-semibold"
+              >
+                <ListPlus className="h-4 w-4" aria-hidden />
+                Add task
+              </button>
+            ) : null}
+            {action.supportedTaskOperations.includes('create_reminder') ? (
+              <button
+                type="button"
+                disabled={mutation.isPending}
+                onClick={() => mutation.mutate({
+                  operation: 'create_reminder',
+                  dueAt: requestedDueAt(),
+                  assigneeUserId: assigneeUserId || null,
+                })}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-xs font-semibold"
+              >
+                <CalendarClock className="h-4 w-4" aria-hidden />
+                Set reminder
+              </button>
+            ) : null}
+            {action.supportedTaskOperations.includes('link_existing_task') ? (
+              <button
+                type="button"
+                disabled={mutation.isPending}
+                onClick={() => setShowCandidates((current) => !current)}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-xs font-semibold"
+              >
+                <Link2 className="h-4 w-4" aria-hidden />
+                Link existing
+              </button>
+            ) : null}
+          </div>
+          {showCandidates ? (
+            <div className="space-y-2">
+              {candidatesQuery.isLoading ? (
+                <p className="mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">Loading tasks…</p>
+              ) : candidatesQuery.data?.length ? (
+                <>
+                  <label className="sr-only" htmlFor={`radar-task-${matchId}-${action.code}`}>
+                    Existing maintenance task
+                  </label>
+                  <select
+                    id={`radar-task-${matchId}-${action.code}`}
+                    value={selectedTaskId}
+                    onChange={(event) => setSelectedTaskId(event.target.value)}
+                    className="min-h-[44px] w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose a task</option>
+                    {candidatesQuery.data.map((task) => (
+                      <option key={task.id} value={task.id}>{task.title}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!selectedTaskId || mutation.isPending}
+                    onClick={() => mutation.mutate({
+                      operation: 'link_existing_task',
+                      maintenanceTaskId: selectedTaskId,
+                      assigneeUserId: assigneeUserId || null,
+                    })}
+                    className="inline-flex min-h-[44px] items-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Link selected task
+                  </button>
+                </>
+              ) : (
+                <p className="mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">
+                  No active maintenance tasks are available to link.
+                </p>
+              )}
+            </div>
+          ) : null}
+          {mutation.isPending ? (
+            <p role="status" className="mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">Saving…</p>
+          ) : null}
+          {mutation.isError ? (
+            <p role="alert" className="mb-0 text-xs text-rose-600">
+              {mutation.error instanceof Error
+                ? mutation.error.message
+                : 'Could not save this task. Please try again.'}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function DetailLoading() {
@@ -388,6 +618,11 @@ function DetailContent({
                         Informational recommendation
                       </p>
                     )}
+                    <RadarTaskControls
+                      action={action}
+                      propertyId={propertyId}
+                      matchId={detail.propertyMatchId}
+                    />
                   </div>
                 </div>
               </div>

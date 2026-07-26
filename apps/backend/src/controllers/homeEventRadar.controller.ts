@@ -14,6 +14,7 @@ import {
   type RadarUserState,
 } from '../modules/homeEventRadar/services/radarQuery.service';
 import { radarInteractionService } from '../modules/homeEventRadar/services/radarInteraction.service';
+import { radarTaskIntegrationService } from '../modules/homeEventRadar/services/radarTaskIntegration.service';
 import { listRadarEventsQuerySchema } from '../validators/homeEventRadar.validators';
 
 const service = new HomeEventRadarService();
@@ -368,6 +369,60 @@ export async function submitRadarMatchFeedback(
     });
 
     res.json({ success: true, data: { feedback } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createOrLinkRadarTask(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { userId } = requireUser(req);
+    const { propertyId, matchId, actionCode } = req.params;
+    const result = await radarTaskIntegrationService.createOrLink(
+      propertyId,
+      matchId,
+      actionCode,
+      userId,
+      req.body,
+    );
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.RISK,
+      featureKey: AnalyticsFeature.HOME_EVENT_RADAR,
+      metadataJson: {
+        actionType: req.body.operation,
+        matchId,
+        actionCode,
+        maintenanceTaskId: (result.link.task as Record<string, unknown>).id,
+        deduped: result.deduped,
+      },
+    });
+    res.status(result.deduped ? 200 : 201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listRadarTaskCandidates(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    requireUser(req);
+    const { propertyId, matchId, actionCode } = req.params;
+    const tasks = await radarTaskIntegrationService.listCandidateTasks(
+      propertyId,
+      matchId,
+      actionCode,
+    );
+    res.json({ success: true, data: { tasks } });
   } catch (err) {
     next(err);
   }

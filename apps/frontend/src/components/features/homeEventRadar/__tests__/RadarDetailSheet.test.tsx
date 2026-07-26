@@ -15,6 +15,28 @@ jest.mock('@/lib/api/client', () => ({
       createdAt: '2026-07-26T12:00:00.000Z',
       updatedAt: '2026-07-26T12:00:00.000Z',
     }),
+    createOrLinkRadarTask: jest.fn().mockResolvedValue({
+      deduped: false,
+      link: {
+        id: 'link-1',
+        actionCode: 'SECURE_OUTDOOR_ITEMS',
+        operation: 'create_task',
+        dueAt: '2026-07-26T18:00:00.000Z',
+        dueDateSource: 'event_effective',
+        task: {
+          id: 'task-1',
+          title: 'Secure loose items',
+          status: 'PENDING',
+          nextDueDate: '2026-07-26T18:00:00.000Z',
+          assignedToUserId: null,
+          href: '/dashboard/maintenance?taskId=task-1',
+        },
+        createdAt: '2026-07-26T12:00:00.000Z',
+        updatedAt: '2026-07-26T12:00:00.000Z',
+      },
+    }),
+    getRadarTaskCandidates: jest.fn().mockResolvedValue([]),
+    listHouseholdMembers: jest.fn().mockResolvedValue([]),
   },
 }));
 
@@ -75,6 +97,12 @@ const detail: RadarCanonicalDetail = {
     completionEvidence: 'user_attestation',
     safetyClassification: 'property_protection',
     targetCapability: null,
+    supportedTaskOperations: [
+      'create_task',
+      'create_reminder',
+      'link_existing_task',
+    ],
+    taskLink: null,
     destination: { kind: 'informational', href: null },
   }],
   canonicalUrl: 'https://www.weather.gov/example',
@@ -212,6 +240,52 @@ describe('RadarDetailSheet', () => {
       'rel',
       'noopener noreferrer',
     );
+  });
+
+  it('creates a maintenance task from a reviewed Radar action', async () => {
+    jest.mocked(api.getRadarEventDetail).mockResolvedValue(detail);
+    renderSheet();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Plan this action' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
+
+    await waitFor(() => expect(api.createOrLinkRadarTask).toHaveBeenCalledWith(
+      'property-1',
+      'match-1',
+      'SECURE_OUTDOOR_ITEMS',
+      { operation: 'create_task', dueAt: null, assigneeUserId: null },
+    ));
+  });
+
+  it('loads active maintenance tasks and links the selected task', async () => {
+    jest.mocked(api.getRadarEventDetail).mockResolvedValue(detail);
+    jest.mocked(api.getRadarTaskCandidates).mockResolvedValue([{
+      id: 'existing-task',
+      title: 'Inspect roof',
+      status: 'PENDING',
+      priority: 'MEDIUM',
+      nextDueDate: null,
+      assignedToUserId: null,
+    }]);
+    renderSheet();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Plan this action' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Link existing' }));
+    fireEvent.change(await screen.findByLabelText('Existing maintenance task'), {
+      target: { value: 'existing-task' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Link selected task' }));
+
+    await waitFor(() => expect(api.createOrLinkRadarTask).toHaveBeenCalledWith(
+      'property-1',
+      'match-1',
+      'SECURE_OUTDOOR_ITEMS',
+      {
+        operation: 'link_existing_task',
+        maintenanceTaskId: 'existing-task',
+        assigneeUserId: null,
+      },
+    ));
   });
 
   it('keeps detail failures explicit and offers retry', async () => {

@@ -127,6 +127,11 @@ test('reviewed projection exposes only bounded fields and registry-owned destina
     completionEvidence: 'user_attestation',
     safetyClassification: 'property_protection',
     targetCapability: null,
+    supportedTaskOperations: [
+      'create_task',
+      'create_reminder',
+      'link_existing_task',
+    ],
     destination: { kind: 'informational', href: null },
   });
 });

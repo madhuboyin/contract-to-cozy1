@@ -67,7 +67,9 @@ export async function processMaintenanceReminders(options: {
       continue;
     }
 
-    const userId = task.property.homeownerProfile?.userId;
+    // Assigned household members own their task reminders. Unassigned tasks
+    // retain the established primary-homeowner fallback.
+    const userId = task.assignedToUserId ?? task.property.homeownerProfile?.userId;
     if (!userId) {
       skipped += 1;
       continue;

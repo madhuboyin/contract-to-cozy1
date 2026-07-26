@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-500 implemented |
+| Status | In progress — HER-501 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -53,7 +53,8 @@
 | HER-407 State and feedback | Complete; DB application pending | Property-authorized idempotent personal-state writes persist seen/save/dismiss/addressed transitions, explicitly restore dismissed matches, audit transitions, and capture one bounded structured feedback response per user/match |
 | HER-408 Frontend acceptance | Complete | Fixture-gated production route exercises the real page and API client across Chromium, Firefox, WebKit, Pixel, and iPhone profiles; monitoring states, filters, pagination, detail, deep links, retries, state/feedback, and accessibility semantics are automated |
 | HER-500 Action registry | Complete | Versioned fail-closed registry covers every emitted action code, validates capability routes and policy metadata, enforces family/impact/confidence eligibility, and projects only registry-owned informational/internal/official destinations with lineage |
-| HER-501+ | Not started | Task/reminder integration, tool/provider handoffs, notifications, Guidance, additional sources, and operations remain |
+| HER-501 Task/reminder integration | Complete; DB application pending | Reviewed Radar actions create or link canonical maintenance tasks, use bounded event-aware due-date policy, support household assignment, persist idempotent match/action/task lineage, and expose task continuity in event detail |
+| HER-502+ | Not started | Tool/provider handoffs, notifications, Guidance, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1356,6 +1357,25 @@ Support:
 - household assignee;
 - due date derived from event onset/expiration when safe;
 - lineage back to match.
+
+**Implemented:** Reviewed action definitions explicitly declare whether they support task creation,
+reminder creation, and existing-task linking. Contributor-authorized, property-scoped endpoints
+revalidate the action through the fail-closed registry, validate optional assignees against
+household membership, and reject cross-property or cancelled maintenance tasks. Tasks and reminders
+use the canonical `PropertyMaintenanceTask` workflow, including its reminder scheduler; one stable
+action key and one match/action link make retries idempotent.
+
+A pure bounded due-date policy accepts homeowner dates only from five minutes to one year ahead,
+uses a future event onset within 90 days when safe, or chooses a priority-aware response window
+capped by an active event's expiration within 30 days. Reminders fail explicitly when neither
+provider timing nor a homeowner date is safe; ordinary tasks may remain undated. The new
+`PropertyRadarTaskLink` projection persists operation, due-date provenance, actor, match, action,
+and maintenance-task lineage. Event detail returns the durable link, and the homeowner sheet can
+create tasks/reminders, select an optional household assignee, select an active task to link, and
+continue into maintenance. The canonical reminder worker delivers assigned task reminders to that
+household member and retains the primary-homeowner fallback for unassigned tasks. Prisma schema
+changes are included without a migration script; the repository owner must apply the database
+schema before runtime deployment.
 
 ### HER-502 — Tool and provider handoffs
 

@@ -3364,6 +3364,50 @@ export type RadarNormalizedGeography =
   | { type: 'administrative_area'; countryCode: string; level: string; name: string; code?: string }
   | { type: 'polygon'; geoJson: Record<string, unknown> };
 
+export type RadarActionTaskOperation =
+  | 'create_task'
+  | 'create_reminder'
+  | 'link_existing_task';
+
+export interface RadarTaskLink {
+  id: string;
+  actionCode: string;
+  operation: RadarActionTaskOperation;
+  dueAt: string | null;
+  dueDateSource:
+    | 'user_provided'
+    | 'event_effective'
+    | 'event_expiration'
+    | 'active_window'
+    | null;
+  task: {
+    id: string;
+    title: string;
+    status: string;
+    nextDueDate: string | null;
+    assignedToUserId: string | null;
+    href: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RadarTaskCandidate {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  nextDueDate: string | null;
+  assignedToUserId: string | null;
+}
+
+export interface RadarTaskIntegrationInput {
+  operation: RadarActionTaskOperation;
+  maintenanceTaskId?: string | null;
+  dueAt?: string | null;
+  assigneeUserId?: string | null;
+}
+
 export interface RadarCanonicalDetail extends RadarCanonicalFeedItem {
   geography: RadarNormalizedGeography | null;
   matchExplanation: {
@@ -3414,6 +3458,8 @@ export interface RadarCanonicalDetail extends RadarCanonicalFeedItem {
       | 'financial_review'
       | 'official_instruction';
     targetCapability: string | null;
+    supportedTaskOperations: RadarActionTaskOperation[];
+    taskLink: RadarTaskLink | null;
     destination: {
       kind: 'informational' | 'internal' | 'external';
       href: string | null;

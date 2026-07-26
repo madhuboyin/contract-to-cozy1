@@ -15,6 +15,9 @@ import {
   RADAR_MUTABLE_USER_STATES,
   RADAR_USER_STATES,
 } from '../modules/homeEventRadar/domain/radarInteraction';
+import {
+  RADAR_ACTION_CODES,
+} from '../modules/homeEventRadar/domain/radarActionRegistry';
 
 // ---------------------------------------------------------------------------
 // Enum value arrays (mirrors Prisma schema; avoids dependency on
@@ -215,6 +218,51 @@ export const submitRadarFeedbackBodySchema = z.object({
   feedbackType: z.enum(RADAR_FEEDBACK_TYPES),
   comment: radarFeedbackCommentSchema.optional().default(null),
 }).strict();
+
+export const radarTaskIntegrationBodySchema = z.object({
+  operation: z.enum([
+    'create_task',
+    'create_reminder',
+    'link_existing_task',
+  ]),
+  maintenanceTaskId: z.string().trim().min(1).max(128).optional().nullable(),
+  dueAt: z.iso.datetime({ offset: true }).optional().nullable(),
+  assigneeUserId: z.string().trim().min(1).max(128).optional().nullable(),
+}).strict().superRefine((value, context) => {
+  if (value.operation === 'link_existing_task' && !value.maintenanceTaskId) {
+    context.addIssue({
+      code: 'custom',
+      path: ['maintenanceTaskId'],
+      message: 'maintenanceTaskId is required when linking an existing task',
+    });
+  }
+  if (value.operation !== 'link_existing_task' && value.maintenanceTaskId) {
+    context.addIssue({
+      code: 'custom',
+      path: ['maintenanceTaskId'],
+      message: 'maintenanceTaskId is only accepted when linking an existing task',
+    });
+  }
+  if (value.operation === 'link_existing_task' && value.dueAt) {
+    context.addIssue({
+      code: 'custom',
+      path: ['dueAt'],
+      message: 'dueAt is managed by the existing task when linking',
+    });
+  }
+});
+
+export const radarTaskActionParamsSchema = z.object({
+  propertyId: z.string().min(1),
+  matchId: z.string().min(1),
+  actionCode: z.enum(RADAR_ACTION_CODES),
+});
+
+export const radarTaskActionRequestSchema = z.object({
+  body: z.unknown().optional(),
+  query: z.unknown().optional(),
+  params: radarTaskActionParamsSchema,
+});
 
 /**
  * Body for POST /properties/:propertyId/radar/events  (analytics tracking)

@@ -520,6 +520,37 @@ export const radarDetailResponseSchema = radarFeedItemSchema.extend({
       'official_instruction',
     ]),
     targetCapability: z.string().min(1).max(120).nullable(),
+    supportedTaskOperations: z.array(z.enum([
+      'create_task',
+      'create_reminder',
+      'link_existing_task',
+    ])).min(1).max(3),
+    taskLink: z.object({
+      id: z.string().min(1),
+      actionCode: z.string().min(1).max(128),
+      operation: z.enum([
+        'create_task',
+        'create_reminder',
+        'link_existing_task',
+      ]),
+      dueAt: z.iso.datetime({ offset: true }).nullable(),
+      dueDateSource: z.enum([
+        'user_provided',
+        'event_effective',
+        'event_expiration',
+        'active_window',
+      ]).nullable(),
+      task: z.object({
+        id: z.string().min(1),
+        title: z.string().min(1),
+        status: z.string().min(1),
+        nextDueDate: z.iso.datetime({ offset: true }).nullable(),
+        assignedToUserId: z.string().nullable(),
+        href: z.string().min(1),
+      }),
+      createdAt: z.iso.datetime({ offset: true }),
+      updatedAt: z.iso.datetime({ offset: true }),
+    }).nullable(),
     destination: z.object({
       kind: z.enum(['informational', 'internal', 'external']),
       href: z.string().min(1).nullable(),

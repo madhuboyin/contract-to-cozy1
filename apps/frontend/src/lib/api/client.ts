@@ -111,6 +111,9 @@ import {
   RadarFeedbackType,
   RadarFeedbackRecord,
   RadarInteractionStateRecord,
+  RadarTaskCandidate,
+  RadarTaskIntegrationInput,
+  RadarTaskLink,
   ResolutionCenterPayload,
   EnvironmentReportDTO,
   FoundationType,
@@ -4127,6 +4130,30 @@ class APIClient {
       { feedbackType, comment: comment ?? null },
     );
     return response.data.feedback;
+  }
+
+  async createOrLinkRadarTask(
+    propertyId: string,
+    matchId: string,
+    actionCode: string,
+    input: RadarTaskIntegrationInput,
+  ): Promise<{ link: RadarTaskLink; deduped: boolean }> {
+    const response = await this.post<{ link: RadarTaskLink; deduped: boolean }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/events/${encodeURIComponent(matchId)}/actions/${encodeURIComponent(actionCode)}/task`,
+      input,
+    );
+    return response.data;
+  }
+
+  async getRadarTaskCandidates(
+    propertyId: string,
+    matchId: string,
+    actionCode: string,
+  ): Promise<RadarTaskCandidate[]> {
+    const response = await this.get<{ tasks: RadarTaskCandidate[] }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/events/${encodeURIComponent(matchId)}/actions/${encodeURIComponent(actionCode)}/task-candidates`,
+    );
+    return response.data?.tasks ?? [];
   }
 
   // ==========================================================================

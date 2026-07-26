@@ -25,6 +25,7 @@ import {
   type RadarStoredAction,
 } from '../domain/radarActionRegistry';
 import { serializeRadarFeedback } from './radarInteraction.service';
+import { serializeRadarTaskLink } from './radarTaskIntegration.service';
 
 export type RadarMonitoringState =
   | 'ACTIVE'
@@ -230,7 +231,7 @@ function detailActions(value: unknown, match: any) {
   const storedActions = storedArray(value, 'actions')
     .map(storedRecord)
     .filter((entry): entry is Record<string, unknown> => entry !== null);
-  return projectRadarActions({
+  const actions = projectRadarActions({
     storedActions: storedActions as RadarStoredAction[],
     sourceFamily: normalizeSourceFamily(
       match.radarEvent.sourceDefinition?.family,
@@ -249,6 +250,15 @@ function detailActions(value: unknown, match: any) {
     matchId: String(match.id),
     eventId: String(match.radarEvent.id),
     officialSourceUrl: match.radarEvent.canonicalUrl ?? null,
+  });
+  return actions.map((action) => {
+    const link = match.taskLinks?.find(
+      (candidate: any) => candidate.actionCode === action.code,
+    );
+    return {
+      ...action,
+      taskLink: link ? serializeRadarTaskLink(link) : null,
+    };
   });
 }
 
@@ -549,6 +559,9 @@ export class RadarQueryService {
         },
         states: { where: { userId }, take: 1 },
         feedback: { where: { userId }, take: 1 },
+        taskLinks: {
+          include: { maintenanceTask: true },
+        },
         incident: {
           select: {
             id: true,

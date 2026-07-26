@@ -2,7 +2,10 @@
 
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import {
+  propertyAuthMiddleware,
+  requireHouseholdRole,
+} from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
@@ -17,6 +20,8 @@ import {
   getRadarMatchDetail,
   updateRadarMatchState,
   submitRadarMatchFeedback,
+  createOrLinkRadarTask,
+  listRadarTaskCandidates,
   trackHomeEventRadarEvent,
 } from '../controllers/homeEventRadar.controller';
 
@@ -26,6 +31,8 @@ import {
   listRadarFeedQuerySchema,
   updateRadarStateBodySchema,
   submitRadarFeedbackBodySchema,
+  radarTaskActionRequestSchema,
+  radarTaskIntegrationBodySchema,
   trackHomeEventRadarEventBodySchema,
 } from '../validators/homeEventRadar.validators';
 
@@ -119,6 +126,22 @@ router.post(
   propertyAuthMiddleware,
   validateBody(submitRadarFeedbackBodySchema),
   submitRadarMatchFeedback,
+);
+
+router.get(
+  '/properties/:propertyId/radar/events/:matchId/actions/:actionCode/task-candidates',
+  propertyAuthMiddleware,
+  validate(radarTaskActionRequestSchema),
+  listRadarTaskCandidates,
+);
+
+router.post(
+  '/properties/:propertyId/radar/events/:matchId/actions/:actionCode/task',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validate(radarTaskActionRequestSchema),
+  validateBody(radarTaskIntegrationBodySchema),
+  createOrLinkRadarTask,
 );
 
 /**

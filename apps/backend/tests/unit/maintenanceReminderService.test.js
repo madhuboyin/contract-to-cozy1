@@ -69,6 +69,7 @@ function task(overrides = {}) {
     status: 'PENDING',
     nextDueDate: new Date('2026-07-20T00:00:00.000Z'),
     remindedForDueDate: null,
+    assignedToUserId: null,
     actionKey: 'property-1:TEMPLATE:hvac-filter',
     property: { homeownerProfile: { userId: 'user-1' } },
     ...overrides,
@@ -116,6 +117,18 @@ test('uses routine category/urgency for a task due well outside the material win
   const calls = getCreateCalls();
   assert.equal(calls[0].category, 'MAINTENANCE');
   assert.equal(calls[0].urgency, 'ROUTINE');
+});
+
+test('delivers an assigned task reminder to the household assignee', async () => {
+  const { service, getCreateCalls } = loadService({
+    tasks: [task({ assignedToUserId: 'household-user-2' })],
+  });
+
+  await service.processMaintenanceReminders({
+    now: new Date('2026-07-19T00:00:00.000Z'),
+  });
+
+  assert.equal(getCreateCalls()[0].userId, 'household-user-2');
 });
 
 test('skips a task already reminded for its current due date (idempotency)', async () => {

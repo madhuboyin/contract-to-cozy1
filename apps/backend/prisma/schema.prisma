@@ -1752,6 +1752,7 @@ model User {
   radarStates                      PropertyRadarState[]
   radarFeedback                    PropertyRadarFeedback[]
   radarNotificationPreferences     PropertyRadarNotificationPreference[]
+  radarTaskLinksCreated            PropertyRadarTaskLink[] @relation("RadarTaskLinkCreator")
   createdHomeTwinScenarios         HomeTwinScenario[]
   assumptionSetsCreated            AssumptionSet[]
 
@@ -2472,6 +2473,7 @@ model PropertyMaintenanceTask {
   // Task assignment
   assignedToUserId String?
   assignedTo       User?   @relation("MaintenanceTaskAssignee", fields: [assignedToUserId], references: [id])
+  radarTaskLinks   PropertyRadarTaskLink[]
 
   // Relations
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -9455,7 +9457,23 @@ enum PropertyRadarActionType {
   mark_checked
   open_related_system
   open_related_tool
+  create_maintenance_task
+  create_reminder
+  link_maintenance_task
   share
+}
+
+enum PropertyRadarTaskLinkType {
+  create_task
+  create_reminder
+  link_existing_task
+}
+
+enum PropertyRadarDueDateSource {
+  user_provided
+  event_effective
+  event_expiration
+  active_window
 }
 
 // ============================================================================
@@ -9697,10 +9715,11 @@ model PropertyRadarMatch {
   property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   radarEvent RadarEvent @relation(fields: [radarEventId], references: [id], onDelete: Cascade)
 
-  states   PropertyRadarState[]
-  actions  PropertyRadarAction[]
-  feedback PropertyRadarFeedback[]
-  incident Incident?
+  states    PropertyRadarState[]
+  actions   PropertyRadarAction[]
+  feedback  PropertyRadarFeedback[]
+  taskLinks PropertyRadarTaskLink[]
+  incident  Incident?
 
   @@unique([propertyId, radarEventId])
   @@index([propertyId])
@@ -9753,6 +9772,29 @@ model PropertyRadarAction {
   @@index([actionType])
   @@index([createdAt])
   @@map("property_radar_actions")
+}
+
+model PropertyRadarTaskLink {
+  id                   String                     @id @default(uuid())
+  propertyRadarMatchId String
+  actionCode           String
+  maintenanceTaskId    String
+  linkType             PropertyRadarTaskLinkType
+  dueDateSource        PropertyRadarDueDateSource?
+  dueAt                DateTime?
+  createdByUserId      String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  propertyRadarMatch PropertyRadarMatch      @relation(fields: [propertyRadarMatchId], references: [id], onDelete: Cascade)
+  maintenanceTask    PropertyMaintenanceTask @relation(fields: [maintenanceTaskId], references: [id], onDelete: Cascade)
+  createdByUser      User?                   @relation("RadarTaskLinkCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyRadarMatchId, actionCode])
+  @@index([maintenanceTaskId])
+  @@index([createdByUserId, createdAt(sort: Desc)])
+  @@index([linkType, createdAt(sort: Desc)])
+  @@map("property_radar_task_links")
 }
 
 model PropertyRadarFeedback {
