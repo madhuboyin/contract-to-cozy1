@@ -42,7 +42,8 @@
 | HER-304 Match lifecycle | Complete; DB application pending | Revision-aware material updates, Now/Upcoming/Recently Ended state, source freshness, terminal retention, retraction/Incident closure, and explicit no-longer-applicable reconciliation are persisted and exposed safely |
 | HER-305 Property reconciliation | Complete; DB application pending | Database-backed domain events durably reconcile property creation, geography, relevant facts, responsibility, Radar action state, and canonical completion changes through bounded active-event pages with shared retries and structured outcomes |
 | HER-306 Scheduled safety-net reconciliation | Complete; DB application pending | Hourly leased sweeps resume revision/property cursors, retry capped Radar dead letters, materialize missing/stale coverage, expire visibility/material markers, support dry-run/property smoke scope, and report structured partial/failure outcomes |
-| HER-307+ | Not started | Tax routing correction, homeowner APIs, actions, and operations remain |
+| HER-307 Tax routing correction | Complete; DB application pending | Coverage-type-aware city/county-FIPS/state routing, one-load source caching, validated and timeout-bound Socrata queries, address-confidence evidence, finite TTL, durable canonical ingestion, structured outcomes, dry-run/property scope, and an explicit disabled-until-pilot gate are implemented |
+| HER-400+ | Not started | Homeowner query APIs, stable pagination, filters, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1027,6 +1028,38 @@ Before tax pilot:
 - validate parcel/address confidence;
 - add lifecycle/TTL rather than open-ended forever;
 - return structured run results.
+
+Implementation note: tax ingestion now resolves the exact normalized key required by each
+`TaxAssessorDataSource.coverageType`: `US-{STATE}-{city-slug}` for `CITY`,
+`US-{STATE}-COUNTY-{5-digit-FIPS}` for `COUNTY`, and `US-{STATE}` for `STATE`. Active source rows
+are loaded and validated once per run, indexed in memory, and selected by most-specific coverage
+(city, then county, then state). Identical source/address requests share one in-run provider call.
+The canonical Radar source registration materializes matching city, county, and state coverage;
+`RadarSourceCoverage` therefore adds reviewed `city`/`cityName` support. No migration script was
+created.
+
+`SocrataTaxAdapter` now rejects non-Socrata sources, non-HTTPS base URLs, malformed Socrata
+dataset IDs, unsafe or incomplete field mappings, unsafe filter identifiers, non-scalar filters,
+and invalid TTL controls before network access. Every resolved request also passes the shared SSRF
+guard. SoQL values are escaped, identifiers are
+allowlisted, requests and response-body reads share an eight-second abort timeout, pagination and
+rate-limit retries remain bounded, and malformed response bodies fail closed. Returned records
+must match the queried house number, address-token threshold, and postal code when the provider
+supplies one. Accepted records persist `medium`/`high` match confidence and whether parcel evidence
+was present; unmatched rows cannot become property-scoped events.
+
+Tax observations now use the same immutable, durable `radarIngestQueueService` boundary and source
+run accounting as weather rather than directly upserting `RadarEvent` and synchronously matching.
+Each event has a reviewed 120-day default TTL (source-configurable only from 30 through 365 days);
+already-stale assessments enter as `expired`, so no assessment remains active forever. Provider
+failure preserves prior lifecycle. Runs distinguish success, verified empty, partial, failed, and
+skipped, with exact jurisdiction, coverage, fetch, raw-record, queue, and rejection counts.
+Dry-run and allowlisted property smoke scope perform validation/fetching without registry,
+bookkeeping, queue, or canonical writes.
+
+The job registry sets `defaultEnabledInBeta: false`, and the deployment continues to leave external
+ingestion disabled. Enabling tax requires both an accepted real pilot source/configuration and an
+explicit worker policy override; code completion alone does not activate the provider.
 
 **Phase 3 exit gate**
 

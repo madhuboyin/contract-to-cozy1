@@ -325,7 +325,14 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
       smokeCorrelationId: result.smokeCorrelationId,
     };
   },
-  'tax-assessment-ingest':           async () => { await ingestTaxAssessmentEventsJob(); },
+  'tax-assessment-ingest':           async (opts) => {
+    const result = await ingestTaxAssessmentEventsJob(opts);
+    logger.info(
+      { ...result },
+      `[tax-assessment-ingest] status=${result.sourceRunStatus} covered=${result.coveredProperties} fetched=${result.fetchSucceeded} queued=${result.queued} failed=${result.failed}`,
+    );
+    return result;
+  },
   'radar-safety-net-reconciliation': async (opts) => {
     const result = await radarSafetyNetReconciliationJob(opts);
     logger.info(

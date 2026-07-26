@@ -9296,6 +9296,7 @@ enum RadarSourceCoverageType {
   global
   country
   state
+  city
   county
   postal_code
   polygon
@@ -9515,6 +9516,7 @@ model RadarSourceCoverage {
   coverageType       RadarSourceCoverageType
   countryCode        String?
   stateCode          String?
+  cityName           String?
   countyFips         String?
   postalCode         String?
   centerLatitude     Float?
@@ -9533,6 +9535,7 @@ model RadarSourceCoverage {
 
   @@index([sourceDefinitionId, coverageType])
   @@index([countryCode, stateCode, countyFips])
+  @@index([countryCode, stateCode, cityName])
   @@index([postalCode])
   @@index([geometry], type: Gist)
   @@map("radar_source_coverage")

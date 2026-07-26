@@ -230,7 +230,7 @@ Admin-managed per-county/municipal open-data config, mirroring `PermitDataSource
 | `datasetId` | String? | |
 | `apiKeyEnvVar` | String? | Env var name holding the API key, if required |
 | `coverageType` | `PermitDataSourceCoverageType` | CITY / COUNTY / STATE |
-| `normalizedCoverageKey` | String (unique) | e.g. `US-NJ-princeton` — same normalization scheme as the permit pipeline |
+| `normalizedCoverageKey` | String (unique) | CITY `US-NJ-princeton`; COUNTY `US-NJ-COUNTY-34021`; STATE `US-NJ` |
 | `fieldMappingJson` | Json | Source field → canonical field mapping |
 | `queryFilterJson` | Json? | Optional extra SoQL filter |
 | `lastFetchAt` / `lastFetchError` / `totalAssessmentsFetched` | | Fetch bookkeeping |
@@ -381,18 +381,18 @@ Property tax reassessment data, fetched from county Socrata open-data portals �
 **Data flow:**
 ```text
 TaxAssessorDataSource (jurisdiction config, per county)
+        ↓  (coverageType → city/county-FIPS/state key; active sources loaded once)
+socrataTaxAdapter.fetchAssessments()  — validated/escaped SoQL + timeout + pagination + 429 backoff
         ↓
-socrataTaxAdapter.fetchAssessments()  — HTTP + pagination + 429 backoff
+address-confident RawTaxAssessmentRecord[]  — unmatched/ambiguous rows withheld
         ↓
-RawTaxAssessmentRecord[]
+normalizeTaxAssessmentRecord()  — severity + property evidence + bounded lifecycle/TTL
         ↓
-normalizeTaxAssessmentRecord()  — assessed-value change % drives severity tiering
+CanonicalRadarObservation (family: tax, eventType: tax_reassessment)
         ↓
-CanonicalRadarSignal (eventType: 'tax_reassessment', sourceType: 'tax_assessor_feed')
+radarIngestQueueService.enqueue()  — durable, deterministic, retryable boundary
         ↓
-upsertCanonicalRadarEvent()  — shared helper, also used by the dummy job
-        ↓
-radar_events
+immutable revision ingestion + resumable property matching
         ↓
 runMatchingForEvent(...)
         ↓
@@ -404,19 +404,25 @@ property_radar_matches  (+ Incident promotion if moderate/high impact)
 | File | Purpose |
 |---|---|
 | `apps/backend/src/services/taxAssessorAdapters/taxAssessmentTypes.ts` | Shared types (`TaxAssessorDataSourceConfig`, `PropertyAddress`, `RawTaxAssessmentRecord`) |
-| `apps/backend/src/services/taxAssessorAdapters/socrataTaxAdapter.ts` | Socrata HTTP client — address-filtered SoQL query, pagination, 429 backoff/retry |
-| `apps/backend/src/services/taxAssessmentFetch.service.ts` | Per-property jurisdiction routing (`normalizedCoverageKey` lookup); skips properties with no configured jurisdiction; logs and skips (does not abort the batch) on a single jurisdiction's fetch failure |
-| `apps/workers/src/radar/normalizeTaxAssessment.ts` | Raw Socrata row → `CanonicalRadarSignal`; severity tiers by assessed-value change % (`≥15%` → high, `≥5%` → medium, else low) |
+| `apps/backend/src/services/taxAssessorAdapters/socrataTaxAdapter.ts` | Validated Socrata HTTP client — SSRF guard, safe address-filtered SoQL, eight-second timeout, confidence filtering, bounded pagination, and 429 retry |
+| `apps/backend/src/services/taxAssessmentFetch.service.ts` | One-load coverage routing and in-run request caching across CITY, county FIPS, and STATE sources; isolated fetch/bookkeeping outcomes |
+| `apps/workers/src/radar/normalizeTaxAssessment.ts` | Address-confident row → canonical durable observation; severity tiers by assessed-value change and a 30–365-day bounded TTL |
 | `apps/workers/src/radar/upsertCanonicalRadarEvent.ts` | Shared `RadarEvent` upsert helper (extracted from the dummy job so both paths share one implementation) |
-| `apps/workers/src/jobs/ingestTaxAssessmentEvents.job.ts` | Cron job: paginates all properties (`iterateAllProperties`), fetches + normalizes + upserts + triggers matching per jurisdiction-matched property |
+| `apps/workers/src/jobs/ingestTaxAssessmentEvents.job.ts` | Cron job: registers exact source coverage, records source-run health, normalizes and queues canonical observations, and returns structured outcomes |
 
 **Cron registration:** `tax-assessment-ingest` in `workerJobRegistry.ts` (category `RISK_SAFETY`), wired into `CRON_HANDLERS` in `worker.ts`. Weekly, Mondays 6:00 AM (county tax rolls update infrequently). Override via `TAX_ASSESSMENT_INGEST_CRON` env var, following the same `CRON_ENV_OVERRIDES` pattern as other adjustable jobs.
 
 **Guidance journey:** new `tax_reassessment_resolution` journey template — see [Guidance Journey Integration](#guidance-journey-integration).
 
-**Setup required before this fetches anything:** at least one real `TaxAssessorDataSource` row must be configured (real Socrata `baseUrl`/`datasetId`/`fieldMappingJson` for a specific county). No rows are seeded by default. This is a rollout prerequisite, not a code gap.
+**Setup required before this fetches anything:** at least one accepted real
+`TaxAssessorDataSource` row must be configured with a valid coverage key, Socrata
+`baseUrl`/`datasetId`, field mapping, and address column. No rows are seeded by default. The worker
+job is additionally `defaultEnabledInBeta: false`, external ingestion remains disabled, and an
+explicit policy override is required after pilot acceptance.
 
-**Tests:** `apps/workers/tests/unit/normalizeTaxAssessment.test.js` (pure-function coverage of severity tiering, dedupe key, summary formatting — run via `node --test`).
+**Tests:** adapter/routing tests cover every accepted coverage type, source validation, safe SoQL,
+timeouts, address confidence, batching, and caching. Worker tests cover TTL/severity normalization,
+durable queueing, source-run outcomes, dry-run isolation, and failure semantics.
 
 ---
 
@@ -1047,7 +1053,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 ## Current Limitations
 
-- Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
+- Three real external source paths exist: tax reassessment (code-complete but disabled pending an accepted configured pilot), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
 - Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed. `match-lifecycle-v1` persists Now/Upcoming/Recently Ended, independently marks source freshness, detects homeowner-material revisions, and closes matches/Incidents that no longer intersect current property geography. Property creation, geography/fact/responsibility changes, Radar mitigation state, and canonical completion changes publish durable database-backed reconciliation events that replay active events in bounded cursor pages. An hourly leased safety net resumes incomplete revision/property pages, retries capped Radar dead letters, materializes source coverage, and expires visibility/material-update markers without interpreting source failure as clear.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
@@ -1078,8 +1084,8 @@ lifecycle. The Incident bridge now carries authoritative revision-scoped weather
 existing Incident evaluator can activate eligible notifications. HER-300 indexed geospatial
 matching, HER-301's pure impact rules, HER-302's bounded confidence engine, HER-303's
 ordering-only priority engine, HER-304's revision-aware match lifecycle, HER-305's durable
-property reconciliation, and HER-306's scheduled safety net are complete. HER-307 tax routing
-correction is the next delivery slice.
+property reconciliation, HER-306's scheduled safety net, and HER-307's fail-closed tax routing
+correction are complete. Phase 4 homeowner query APIs are the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

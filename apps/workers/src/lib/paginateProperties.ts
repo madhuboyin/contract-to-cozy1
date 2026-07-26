@@ -7,6 +7,7 @@ export type PropertyForGeoJobs = {
   zipCode: string | null;
   city: string | null;
   state: string | null;
+  countyFips: string | null;
   latitude: number | null;
   longitude: number | null;
   geocodedZipCode: string | null;
@@ -33,6 +34,7 @@ export async function* iterateAllProperties(
         zipCode: true,
         city: true,
         state: true,
+        countyFips: true,
         latitude: true,
         longitude: true,
         geocodedZipCode: true,

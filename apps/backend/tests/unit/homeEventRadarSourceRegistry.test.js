@@ -49,6 +49,7 @@ function coverage(overrides = {}) {
     coverageType: 'postal_code',
     countryCode: 'US',
     stateCode: null,
+    cityName: null,
     countyFips: null,
     postalCode: '08536',
     centerLatitude: null,
@@ -205,6 +206,29 @@ test('coverage evaluation distinguishes covered, uncovered, and unknown geograph
   assert.equal(
     registry.coverageDecision(radiusSource, { id: 'property-3' }, evaluatedAt).status,
     'unknown',
+  );
+});
+
+test('city coverage requires both normalized city and state', () => {
+  const cityCoverage = coverage({
+    coverageType: 'city',
+    stateCode: 'NJ',
+    cityName: 'Plainsboro Township',
+    postalCode: null,
+  });
+  assert.equal(
+    coverageEntryMatchesProperty(
+      cityCoverage,
+      { id: 'property-1', city: 'plainsboro township', state: 'nj' },
+    ),
+    true,
+  );
+  assert.equal(
+    coverageEntryMatchesProperty(
+      cityCoverage,
+      { id: 'property-2', city: 'Plainsboro Township', state: 'PA' },
+    ),
+    false,
   );
 });
 

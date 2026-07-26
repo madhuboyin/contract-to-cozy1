@@ -186,9 +186,10 @@ export const radarSourceDefinitionSchema = z.object({
 });
 
 const radarSourceCoverageRegistrationSchema = z.object({
-  coverageType: z.enum(['global', 'country', 'state', 'county', 'postal_code', 'polygon', 'radius']),
+  coverageType: z.enum(['global', 'country', 'state', 'city', 'county', 'postal_code', 'polygon', 'radius']),
   countryCode: z.string().length(2).transform((value) => value.toUpperCase()).optional(),
   stateCode: z.string().min(2).max(3).transform((value) => value.toUpperCase()).optional(),
+  cityName: z.string().min(1).max(160).optional(),
   countyFips: z.string().regex(/^\d{5}$/).optional(),
   postalCode: z.string().min(2).max(16).optional(),
   centerLatitude: z.number().min(-90).max(90).optional(),
@@ -205,6 +206,7 @@ const radarSourceCoverageRegistrationSchema = z.object({
   const required: Partial<Record<typeof value.coverageType, Array<keyof typeof value>>> = {
     country: ['countryCode'],
     state: ['countryCode', 'stateCode'],
+    city: ['countryCode', 'stateCode', 'cityName'],
     county: ['countryCode', 'countyFips'],
     postal_code: ['countryCode', 'postalCode'],
     polygon: ['geometryGeoJson'],

@@ -118,12 +118,24 @@ test('temporary Radar operations require the complete admin authorization chain 
 
 test('worker safety policies remain fail-closed for dummy and unreviewed tax ingestion', () => {
   const worker = read('apps/workers/src/worker.ts');
+  const registry = read('apps/backend/src/config/workerJobRegistry.ts');
+  const taxJob = read('apps/workers/src/jobs/ingestTaxAssessmentEvents.job.ts');
   const configMap = read('infrastructure/kubernetes/base/configmap.yaml');
 
   assert.match(worker, /DUMMY_INGEST_ENV_FLAGS[\s\S]*RADAR_DUMMY_INGEST_ENABLED/);
   assert.match(worker, /NODE_ENV === 'production'[\s\S]*Refusing to start: dummy-ingest flags enabled in production/);
   assert.match(configMap, /WORKER_EXTERNAL_INGEST_ENABLED: "false"/);
   assert.doesNotMatch(configMap, /WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED: "true"/);
+  assert.match(
+    registry,
+    /key: 'tax-assessment-ingest'[\s\S]*?defaultEnabledInBeta: false/,
+  );
+  assert.match(taxJob, /deps\.ingestQueue\.enqueue/);
+  assert.match(taxJob, /deps\.runs\.complete/);
+  assert.doesNotMatch(
+    taxJob,
+    /upsertCanonicalRadarEvent|runMatchingForEvent|radarEvent\.upsert/,
+  );
 });
 
 test('weather lifecycle guards preserve unknown rather than projecting provider failures as clear', () => {

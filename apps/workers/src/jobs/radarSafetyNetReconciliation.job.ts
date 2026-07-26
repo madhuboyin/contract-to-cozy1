@@ -125,6 +125,7 @@ function sourceFreshThrough(source: any): Date | null {
 function propertySelect() {
   return {
     id: true,
+    city: true,
     state: true,
     zipCode: true,
     normalizedZipCode: true,

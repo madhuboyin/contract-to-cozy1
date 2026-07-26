@@ -18,6 +18,7 @@ export type RadarCoverageProperty = {
   id: string;
   countryCode?: string | null;
   state?: string | null;
+  city?: string | null;
   normalizedZipCode?: string | null;
   zipCode?: string | null;
   countyFips?: string | null;
@@ -40,6 +41,7 @@ type CoverageRecord = {
   coverageType: string;
   countryCode: string | null;
   stateCode: string | null;
+  cityName: string | null;
   countyFips: string | null;
   postalCode: string | null;
   centerLatitude: number | null;
@@ -166,6 +168,12 @@ export function coverageEntryMatchesProperty(
         normalized(coverage.countryCode) === normalized(property.countryCode ?? 'US') &&
         normalized(coverage.stateCode) === normalized(property.state)
       );
+    case 'city':
+      return (
+        normalized(coverage.countryCode) === normalized(property.countryCode ?? 'US') &&
+        normalized(coverage.stateCode) === normalized(property.state) &&
+        normalized(coverage.cityName) === normalized(property.city)
+      );
     case 'county':
       return (
         normalized(coverage.countryCode) === normalized(property.countryCode ?? 'US') &&
@@ -207,6 +215,7 @@ export class RadarSourceRegistryService {
       coverageType: entry.coverageType,
       countryCode: entry.countryCode ?? null,
       stateCode: entry.stateCode ?? null,
+      cityName: entry.cityName ?? null,
       countyFips: entry.countyFips ?? null,
       postalCode: entry.postalCode ?? null,
       centerLatitude: entry.centerLatitude ?? null,

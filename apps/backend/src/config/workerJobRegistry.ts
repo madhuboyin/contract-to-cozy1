@@ -542,11 +542,10 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     key: 'tax-assessment-ingest',
     name: 'Tax Assessment Ingest',
     description:
-      'Fetches real property tax reassessment data from configured county Socrata open-data ' +
-      'portals (TaxAssessorDataSource) and writes it into RadarEvent — the Home Event Radar ' +
-      'unified ingestion layer. High-impact assessments are promoted into Incident + a guidance ' +
-      'journey via homeEventRadarMatcher.service.ts. Properties in unconfigured jurisdictions ' +
-      'are skipped. Override schedule via TAX_ASSESSMENT_INGEST_CRON env var.',
+      'Fetches reviewed property tax reassessment data from configured Socrata city, county-FIPS, ' +
+      'or state sources and queues canonical Radar observations with bounded lifecycle and exact ' +
+      'source-run outcomes. Remains disabled until a pilot source passes acceptance. Override ' +
+      'schedule via TAX_ASSESSMENT_INGEST_CRON env var.',
     category: 'RISK_SAFETY',
     schedule: 'Weekly, Mondays at 6:00 AM',
     cronExpression: '0 6 * * 1',
@@ -556,8 +555,8 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     triggerSupported: true,
     impact: 'HOMEOWNER_STATE',
     customerJob: 'DECIDE',
-    defaultEnabledInBeta: true,
-    supportsDryRun: false,
+    defaultEnabledInBeta: false,
+    supportsDryRun: true,
     supportsPropertyScope: true,
     externalProvider: 'County Socrata open-data portals',
     humanApprovalClass: 'NONE',

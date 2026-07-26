@@ -4,13 +4,17 @@
 
 export interface TaxAssessorDataSourceConfig {
   id: string;
+  name: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'ERROR' | 'RATE_LIMITED';
   fieldMappingJson: unknown;
   queryFilterJson: unknown;
   apiKeyEnvVar: string | null;
-  adapterType: string;
+  adapterType: 'SOCRATA' | 'ACCELA' | 'CUSTOM';
   slug: string;
   baseUrl: string;
   datasetId: string | null;
+  coverageType: 'CITY' | 'COUNTY' | 'STATE';
+  normalizedCoverageKey: string;
 }
 
 export interface PropertyAddress {
@@ -18,7 +22,10 @@ export interface PropertyAddress {
   city: string;
   state: string;
   postalCode?: string;
+  countyFips?: string;
 }
+
+export type TaxAssessmentMatchConfidence = 'medium' | 'high';
 
 export interface RawTaxAssessmentRecord {
   externalId: string;
@@ -28,5 +35,23 @@ export interface RawTaxAssessmentRecord {
   assessmentDate?: string;
   taxYear?: string;
   situsAddress?: string;
+  situsPostalCode?: string;
+  matchConfidence: TaxAssessmentMatchConfidence;
+  matchMethod: 'address' | 'address_with_parcel_evidence';
   rawData: Record<string, unknown>;
 }
+
+export type TaxAssessmentSourceValidation = {
+  valid: boolean;
+  errors: string[];
+};
+
+export type TaxAssessmentCoverageRegistration =
+  | { coverageType: 'state'; countryCode: 'US'; stateCode: string }
+  | { coverageType: 'county'; countryCode: 'US'; countyFips: string }
+  | {
+      coverageType: 'city';
+      countryCode: 'US';
+      stateCode: string;
+      cityName: string;
+    };
