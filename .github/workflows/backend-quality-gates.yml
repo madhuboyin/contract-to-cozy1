@@ -7,6 +7,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  BACKEND_IMAGE: ghcr.io/madhuboyin/contract-to-cozy/backend
+
+concurrency:
+  group: backend-quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   integration-smoke:
     name: Backend Integration Smoke
@@ -40,3 +47,42 @@ jobs:
       # bundled schema before the image can be published.
       - name: Backend Docker image packaging
         run: docker build --target runner -f ../../infrastructure/docker/backend/Dockerfile .
+
+  publish-backend-arm64:
+    name: Publish backend ARM64 image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: integration-smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and publish verified backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: apps/backend
+          file: infrastructure/docker/backend/Dockerfile
+          target: runner
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}

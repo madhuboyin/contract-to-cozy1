@@ -44,4 +44,13 @@ test('backend quality gates build the production runner image', () => {
     workflow,
     /docker build --target runner -f \.\.\/\.\.\/infrastructure\/docker\/backend\/Dockerfile \./,
   );
+  assert.match(workflow, /needs: integration-smoke/);
+  assert.match(workflow, /group: backend-quality-\$\{\{ github\.ref \}\}/);
+  assert.match(workflow, /cancel-in-progress: true/);
+  assert.match(workflow, /packages: write/);
+  assert.match(workflow, /uses: docker\/setup-qemu-action@v4/);
+  assert.match(workflow, /uses: docker\/build-push-action@v7/);
+  assert.match(workflow, /platforms: linux\/arm64/);
+  assert.match(workflow, /\$\{\{ env\.BACKEND_IMAGE \}\}:latest/);
+  assert.match(workflow, /\$\{\{ env\.BACKEND_IMAGE \}\}:\$\{\{ github\.sha \}\}/);
 });
