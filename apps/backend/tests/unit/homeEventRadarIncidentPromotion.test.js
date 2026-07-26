@@ -171,6 +171,30 @@ test('explicit low confidence remains awareness-only and resolves a prior projec
   }]);
 });
 
+test('HER-302 promotion boundary requires medium confidence', async () => {
+  const belowBoundary = harness();
+  const ignored = await belowBoundary.service.project(input({
+    match: {
+      ...input().match,
+      confidence: 'low',
+      confidenceScore: '0.5999',
+    },
+  }));
+  assert.deepEqual(ignored, { outcome: 'not_promotable', incidentId: null });
+  assert.equal(belowBoundary.calls.upsert.length, 0);
+
+  const atBoundary = harness();
+  const promoted = await atBoundary.service.project(input({
+    match: {
+      ...input().match,
+      confidence: 'medium',
+      confidenceScore: '0.6000',
+    },
+  }));
+  assert.deepEqual(promoted, { outcome: 'created', incidentId: 'incident-1' });
+  assert.equal(atBoundary.calls.upsert.length, 1);
+});
+
 test('closed Incidents are never reopened by a delayed active revision', async () => {
   const { service, calls } = harness({ id: 'incident-existing', status: 'RESOLVED' });
   const result = await service.project(input());
@@ -208,7 +232,7 @@ test('impact and explicit confidence map conservatively without inventing unknow
   assert.equal(radarIncidentConfidence('verified', null), 100);
   assert.equal(radarIncidentConfidence('low', null), 35);
   assert.equal(radarIncidentConfidence(null, null), null);
-  assert.equal(radarIncidentConfidence(null, '0.7340'), 73);
+  assert.equal(radarIncidentConfidence(null, '0.7340'), 73.4);
 });
 
 test('weather promotion carries authoritative revision evidence while non-weather does not', () => {

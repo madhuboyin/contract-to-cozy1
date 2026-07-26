@@ -612,14 +612,17 @@ Core business logic class:
 
 #### `HomeEventRadarMatcherService` (`homeEventRadarMatcher.service.ts`)
 
-Rules-based matching and impact computation engine, **now also the Incident promotion trigger point**:
+Database orchestration for indexed geography, pure impact/confidence computation, persistence, and
+the Incident promotion trigger:
 
 **Location Matching Strategies:**
 - `property` — Exact property ID match
-- `zip` — Zip code match against property address
-- `city` — Case-insensitive city name match
-- `state` — Case-insensitive state code match
-- `county` / `polygon` — Placeholder only, not implemented in the current matcher
+- `point` / `radius` — Indexed canonical-point distance
+- `zip` — Normalized five-digit ZIP
+- `city` — Case-insensitive city plus state
+- `county` — Exact county FIPS
+- `state` — Exact normalized state code
+- `polygon` — Indexed canonical point-in-Polygon/MultiPolygon, including boundaries
 
 **Score Calculation:**
 
@@ -644,30 +647,34 @@ Scores are adjusted up/down based on property characteristics. Final score is cl
 | < 0.65 | moderate | **Yes** |
 | ≥ 0.65 | high | **Yes** |
 
-**Per-Event-Type Impact Computers:**
+Event-family calculations are pure `impact-v1` rules. Only confirmed facts may adjust impact;
+unknown facts are retained as missing evidence, explicit system installation dates are required for
+age drivers, and canonical responsibility directs recommended work to the owner, shared party,
+association, or landlord.
 
-| Function | Event Type | Key Property Signals |
-|---|---|---|
-| `computeWeatherHail()` | hail | Roof age, roof material |
-| `computeWeatherFreeze()` | freeze | Pipe insulation, irrigation type, HVAC type |
-| `computeWeatherHeatWave()` | heat_wave | AC presence, HVAC age |
-| `computeWeatherWind()` | wind | Roof age, structural vulnerability |
-| `computeWeatherFloodRain()` | heavy_rain / flood_risk | Drainage, foundation type |
-| `computeAirQualitySmoke()` | air_quality / wildfire_smoke | HVAC filter age, air purifier presence |
-| `computePowerSurgeRisk()` | power_surge_risk | Surge protector presence, electrical panel age |
-| `computeInsuranceMarket()` | insurance_market | Coverage type, premium history |
-| `computeUtilityOutage()` | utility_outage | Heating fuel type, backup generator presence |
-| `computeUtilityRateChange()` | utility_rate_change | Utility providers, usage patterns |
-| `computeTaxEvent()` | tax_reassessment / tax_rate_change | Assessment history — **its 3 recommended actions (`REVIEW_ASSESSMENT`/`PREPARE_APPEAL`/`UPDATE_BUDGET`) are what the new `tax_reassessment_resolution` guidance journey's 3 steps mirror** |
-| `computeGeneric()` | other / fallback | Severity-only scoring |
+Confidence is a separate pure `confidence-v1` result:
+
+| Component | Weight |
+|---|---:|
+| Reviewed source/run health | 25% |
+| Geographic precision | 25% |
+| Freshness against the source window | 20% |
+| Relevant property-fact completeness | 15% |
+| Reviewed domain evidence | 15% |
+
+High is 0.80+, Medium is 0.60–0.7999, and Low is below 0.60. The numeric score is an
+evidence-quality diagnostic, not a probability. Low-confidence matches remain visible but do not
+promote to Incidents.
 
 **Match Output Fields:**
 - `matchScore` — Float, 4 decimal places
 - `impactLevel` — none / watch / moderate / high
 - `impactSummary` — Human-readable one-liner
-- `impactFactorsJson` — Array of `{ code: string, effect: 'increase' | 'decrease' | 'neutral', description: string }`
-- `recommendedActionsJson` — Array of `{ code: string, label: string, priority: 'high' | 'medium' | 'low' }`
+- `impactFactorsJson` — Rule version, event/property inputs, stable drivers, missing facts, and responsibility decisions
+- `recommendedActionsJson` — Stable action code, label, priority, scope, responsible party, and applicability
 - `matchedSystemsJson` — Array of `{ type: string, relevance: 'high' | 'medium' | 'low' }`
+- `confidence` / `confidenceScore` — High/Medium/Low plus the bounded internal diagnostic
+- `matchExplanationJson` — Geographic reason, confidence components, missing-evidence reasons, and homeowner explanation
 
 **Promotion service:** `RadarIncidentPromotionService.project(...)` — see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge).
 
@@ -1015,7 +1022,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 - Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
-- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Confidence and priority remain pending.
+- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Priority remains pending.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
@@ -1042,8 +1049,8 @@ imply resolution. HER-206 now supplies an exact-count weather acceptance matrix 
 updates, replay, supersession, resolution, empty/failure semantics, and the complete freeze
 lifecycle. The Incident bridge now carries authoritative revision-scoped weather signals so the
 existing Incident evaluator can activate eligible notifications. HER-300 indexed geospatial
-matching and HER-301's pure, traceable, responsibility-aware impact rules are complete; HER-302's
-bounded confidence engine is the next delivery slice.
+matching, HER-301's pure impact rules, and HER-302's bounded confidence engine are complete;
+HER-303's ordering-only priority engine is the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

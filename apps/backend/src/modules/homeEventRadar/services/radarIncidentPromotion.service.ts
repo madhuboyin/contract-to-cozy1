@@ -122,7 +122,7 @@ export function radarIncidentConfidence(
   const score = decimalToNumber(confidenceScore);
   if (score !== null) {
     const decimalScore = score <= 1 ? score * 100 : score;
-    return Math.min(100, Math.max(0, Math.round(decimalScore)));
+    return Math.min(100, Math.max(0, Number(decimalScore.toFixed(2))));
   }
   switch (confidence) {
     case 'verified':
@@ -166,10 +166,10 @@ function isPromotableImpact(impactLevel: string): boolean {
 }
 
 function isPromotionConfidenceEligible(confidence: number | null): boolean {
-  // Matching confidence is populated by HER-302. Until then null remains
-  // unknown (not falsely upgraded or rejected); explicit scores below the
-  // reviewed 50% floor stay awareness-only in Radar.
-  return confidence === null || confidence >= 50;
+  // HER-302 bands scores below 60% as low confidence. Those matches remain
+  // visible for awareness but cannot create or retain an Incident. Null is
+  // retained only for pre-engine/backward-compatible records.
+  return confidence === null || confidence >= 60;
 }
 
 function incidentTypeKey(eventType: string): string {

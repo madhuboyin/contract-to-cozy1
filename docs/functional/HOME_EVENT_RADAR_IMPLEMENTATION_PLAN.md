@@ -37,7 +37,8 @@
 | HER-206 Weather end-to-end acceptance | Complete | Deterministic watch, warning, escalation, extended/replayed expiration, supersession, resolution, failed/successful empty, and freeze lifecycle fixtures assert exact event/revision/match/Incident/Journey/notification-decision totals and representative in-process p95 |
 | HER-300 Geographic matcher | Complete; DB application pending | Exact property, bounded point/radius distance, normalized ZIP, city/state, county FIPS, state, and Polygon/MultiPolygon matching now use conservative canonical rules; spatial scans use indexed PostGIS queries and matches persist deterministic explanations |
 | HER-301 Impact-rule refactor | Complete | Event-family calculations are pure and deterministic; nullable facts remain unknown, explicit system dates replace construction-year inference, driver codes are registered, responsibility redirects actions, and every output records rule/fact lineage |
-| HER-302+ | Not started | Confidence scoring, priority, reconciliation, homeowner APIs, actions, and operations remain |
+| HER-302 Confidence engine | Complete | Five fixed bounded components score source, geography, freshness, relevant property completeness, and domain evidence; matches persist an internal score and band plus homeowner-readable evidence gaps, and low confidence remains Radar-only |
+| HER-303+ | Not started | Priority, reconciliation, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -858,6 +859,22 @@ Return:
 - High/Medium/Low band;
 - missing-fact reasons;
 - homeowner explanation.
+
+Implementation note: the pure `domain/radarConfidence.ts` engine records `confidence-v1` and uses
+five fixed weights that sum to one: source 25%, geography 25%, freshness 20%, relevant property
+completeness 15%, and reviewed domain evidence 15%. Component values are individually bounded and
+the four-decimal aggregate is an internal evidence diagnostic, not a probability of loss. Source
+confidence uses the reviewed definition, operational health, and originating run; geography
+preserves exact-property, polygon, bounded-radius, ZIP, city/state, county-FIPS, and state
+precision; freshness decays only across the registered source window; property completeness reads
+the exact `impact-v1` fact trace; and domain evidence distinguishes reviewed family rules from the
+generic awareness fallback. Scores map to High at 0.80+, Medium at 0.60–0.7999, and Low below
+0.60. Every component retains reason codes, while missing source/property/freshness evidence is
+translated into calm homeowner copy. Match detail exposes the band and explanation; the numeric
+score remains persisted for internal decisions and diagnostics. Matcher lineage is now
+`geography-v1+impact-v1+confidence-v1`. Low-band matches stay visible in Radar but cannot create or
+retain an Incident; the medium boundary is evaluated from the unrounded score. No schema change or
+migration script was required.
 
 ### HER-303 — Priority engine
 

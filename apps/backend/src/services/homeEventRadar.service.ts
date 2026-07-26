@@ -52,6 +52,7 @@ function serializeMatchFeedItem(match: any, state: any | null): Record<string, u
     timingGroup: event ? radarTimingGroup(event) : null,
     impactLevel: match.impactLevel,
     impactSummary: match.impactSummary ?? null,
+    confidence: match.confidence ?? null,
     isVisible: match.isVisible,
     state: state?.state ?? 'new',
     createdAt: match.createdAt instanceof Date ? match.createdAt.toISOString() : match.createdAt,
@@ -71,6 +72,16 @@ function serializeMatchDetail(match: any, state: any | null): Record<string, unk
     impactFactorsJson: match.impactFactorsJson ?? null,
     recommendedActionsJson: match.recommendedActionsJson ?? null,
     matchedSystemsJson: match.matchedSystemsJson ?? null,
+    confidence: match.confidence ?? null,
+    matchExplanation: match.matchExplanationJson ?? null,
+    matcherVersion: match.matcherVersion ?? null,
+    lastEvaluatedAt: match.lastEvaluatedAt
+      ? (
+          match.lastEvaluatedAt instanceof Date
+            ? match.lastEvaluatedAt.toISOString()
+            : match.lastEvaluatedAt
+        )
+      : null,
     isVisible: match.isVisible,
     visibleFrom: match.visibleFrom ? (match.visibleFrom instanceof Date ? match.visibleFrom.toISOString() : match.visibleFrom) : null,
     visibleUntil: match.visibleUntil ? (match.visibleUntil instanceof Date ? match.visibleUntil.toISOString() : match.visibleUntil) : null,

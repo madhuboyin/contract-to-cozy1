@@ -269,7 +269,7 @@ test('database matcher delegates impact decisions and loads canonical responsibi
   assert.match(source, /responsibilities:\s*\{\s*select:\s*\{\s*scope: true,\s*party: true/s);
   assert.match(
     source,
-    /matcherVersion = `\$\{matchExplanation\.matcherVersion\}\+\$\{impact\.ruleVersion\}`/,
+    /geographicExplanation\.matcherVersion,\s*impact\.ruleVersion/s,
   );
   assert.doesNotMatch(source, /function computeWeather|function computeImpact/);
 });

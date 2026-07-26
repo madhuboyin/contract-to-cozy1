@@ -19,6 +19,7 @@ import {
   computeRadarImpact,
   type RadarImpactPropertyInput,
 } from '../modules/homeEventRadar/domain/radarImpactRules';
+import { computeRadarConfidence } from '../modules/homeEventRadar/domain/radarConfidence';
 
 interface PropertySnapshot extends RadarImpactPropertyInput {
   normalizedZipCode: string | null;
@@ -108,7 +109,31 @@ export async function runMatchingForEvent(
   },
 ): Promise<{ matched: number; skipped: number; failedPropertyIds: string[] }> {
   const db = prisma as any;
-  const event = await db.radarEvent.findUnique({ where: { id: eventId } });
+  const event = await db.radarEvent.findUnique({
+    where: { id: eventId },
+    include: {
+      sourceDefinition: {
+        select: {
+          isEnabled: true,
+          freshnessSeconds: true,
+          health: {
+            select: {
+              status: true,
+              lastSuccessAt: true,
+              dataFreshThrough: true,
+            },
+          },
+        },
+      },
+      sourceRun: {
+        select: {
+          status: true,
+          finishedAt: true,
+          dataFreshThrough: true,
+        },
+      },
+    },
+  });
   if (!event || event.status === 'archived') {
     return { matched: 0, skipped: 0, failedPropertyIds: [] };
   }
@@ -122,10 +147,33 @@ export async function runMatchingForEvent(
     try {
       const evaluatedAt = new Date();
       const impact = computeRadarImpact(event, property, evaluatedAt);
+      const confidence = computeRadarConfidence(
+        event,
+        impact.impactFactorsJson,
+        evaluatedAt,
+      );
       const visibleFrom = radarMatchVisibleFrom(event);
       const visibleUntil = radarMatchVisibleUntil(event);
-      const matchExplanation = explainRadarGeographicMatch(event, property, evaluatedAt);
-      const matcherVersion = `${matchExplanation.matcherVersion}+${impact.ruleVersion}`;
+      const geographicExplanation = explainRadarGeographicMatch(
+        event,
+        property,
+        evaluatedAt,
+      );
+      const matcherVersion = [
+        geographicExplanation.matcherVersion,
+        impact.ruleVersion,
+        confidence.version,
+      ].join('+');
+      const matchExplanation = {
+        ...geographicExplanation,
+        matcherVersion,
+        confidence: confidence.band,
+        confidenceVersion: confidence.version,
+        confidenceScore: confidence.score,
+        confidenceComponents: confidence.components,
+        missingFactReasons: confidence.missingFactReasons,
+        homeownerExplanation: confidence.homeownerExplanation,
+      };
 
       const match = await db.propertyRadarMatch.upsert({
         where: {
@@ -143,6 +191,8 @@ export async function runMatchingForEvent(
           impactFactorsJson: impact.impactFactorsJson,
           recommendedActionsJson: impact.recommendedActionsJson,
           matchedSystemsJson: impact.matchedSystemsJson,
+          confidence: confidence.band,
+          confidenceScore: confidence.score.toFixed(4),
           matchExplanationJson: matchExplanation,
           matcherVersion,
           propertyGeographyVersion: property.geographyVersion,
@@ -158,6 +208,8 @@ export async function runMatchingForEvent(
           impactFactorsJson: impact.impactFactorsJson,
           recommendedActionsJson: impact.recommendedActionsJson,
           matchedSystemsJson: impact.matchedSystemsJson,
+          confidence: confidence.band,
+          confidenceScore: confidence.score.toFixed(4),
           matchExplanationJson: matchExplanation,
           matcherVersion,
           propertyGeographyVersion: property.geographyVersion,
@@ -181,6 +233,8 @@ export async function runMatchingForEvent(
           impactLevel: impact.impactLevel,
           impactSummary: impact.impactSummary,
           impactRuleVersion: impact.ruleVersion,
+          confidence: confidence.band,
+          confidenceVersion: confidence.version,
         },
       });
 
@@ -203,6 +257,10 @@ export async function runMatchingForEvent(
           impactSummary: impact.impactSummary,
           matchScore: impact.matchScore,
           impactFactorsJson: impact.impactFactorsJson,
+          confidence: confidence.band,
+          confidenceScore: confidence.score,
+          matcherVersion,
+          matchExplanationJson: matchExplanation,
         },
         revision,
       });
