@@ -5,6 +5,7 @@ const {
   extractLoanEstimateFieldsFromText,
   extractLoanEstimateFieldsFromOcrText,
   combineLoanEstimateExtractions,
+  extractLoanEstimateFromPdf,
 } = require('../../dist/refinanceRadar/refinanceLoanEstimateExtraction.service');
 
 const sample = `
@@ -45,11 +46,11 @@ test('extracts standardized Loan Estimate comparison fields for review', () => {
   assert.equal(result.reviewRequired, true);
 });
 
-test('fails open to manual review when a scanned PDF has no text layer', () => {
+test('identifies documents that require OCR when no text layer is present', () => {
   const result = extractLoanEstimateFieldsFromText(' ');
   assert.equal(result.textLayerDetected, false);
   assert.equal(result.extractedFieldCount, 0);
-  assert.ok(result.warnings.some((warning) => /OCR is not enabled/i.test(warning)));
+  assert.ok(result.warnings.some((warning) => /OCR is required/i.test(warning)));
 });
 
 test('marks fallback five-year values as medium confidence', () => {
@@ -89,6 +90,13 @@ test('caps OCR-derived fields at medium confidence and identifies the method', (
   assert.ok(result.warnings.some((warning) => /OCR can confuse/i.test(warning)));
 });
 
+test('distinguishes scanned PDF OCR from uploaded page-image OCR', () => {
+  const result = extractLoanEstimateFieldsFromOcrText(sample, 82, 'PDF_OCR');
+  assert.equal(result.extractionMethod, 'PDF_OCR');
+  assert.equal(result.documentConfidencePct, 82);
+  assert.equal(result.fields.loanAmountUsd.confidence, 'MEDIUM');
+});
+
 test('merges the strongest fields across image pages and preserves page provenance', () => {
   const pageOne = extractLoanEstimateFieldsFromOcrText(`
     ${'Loan Estimate '.repeat(10)}
@@ -125,4 +133,36 @@ test('warns when equally confident pages contain conflicting values', () => {
   const result = combineLoanEstimateExtractions([pageOne, pageTwo]);
   assert.equal(result.fields.loanAmountUsd.value, 300000);
   assert.ok(result.warnings.some((warning) => /Conflicting loan amount values/i.test(warning)));
+});
+
+test('renders and OCRs a scanned Loan Estimate PDF in memory', async () => {
+  const sharp = require('sharp');
+  const { PDFDocument } = require('pdf-lib');
+  const svg = Buffer.from(`
+    <svg width="1600" height="2100" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1600" height="2100" fill="white"/>
+      <g fill="black" font-family="Arial, sans-serif" font-size="64">
+        <text x="100" y="180">Loan Estimate</text>
+        <text x="100" y="360">Loan Amount $300,000</text>
+        <text x="100" y="500">Loan Term 30 years</text>
+        <text x="100" y="640">Product Fixed Rate</text>
+        <text x="100" y="780">Interest Rate 5.750%</text>
+        <text x="100" y="920">Monthly Principal &amp; Interest $1,905.42</text>
+      </g>
+    </svg>
+  `);
+  const png = await sharp(svg).png().toBuffer();
+  const document = await PDFDocument.create();
+  const image = await document.embedPng(png);
+  const page = document.addPage([612, 792]);
+  page.drawImage(image, { x: 0, y: 0, width: 612, height: 792 });
+
+  const result = await extractLoanEstimateFromPdf(
+    Buffer.from(await document.save()),
+  );
+  assert.equal(result.extractionMethod, 'PDF_OCR');
+  assert.equal(result.pageCount, 1);
+  assert.equal(result.fields.loanAmountUsd.value, 300000);
+  assert.equal(result.fields.noteRatePct.value, 5.75);
+  assert.ok(result.warnings.some((warning) => /scanned PDF/i.test(warning)));
 });

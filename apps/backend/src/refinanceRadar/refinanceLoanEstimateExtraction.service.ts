@@ -26,7 +26,7 @@ export interface RefinanceLoanEstimateExtraction {
   requiredFieldCount: number;
   requiredFieldsFound: number;
   textLayerDetected: boolean;
-  extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR';
+  extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR' | 'PDF_OCR';
   documentConfidencePct: number | null;
   pageCount: number;
   reviewRequired: true;
@@ -226,7 +226,7 @@ export function extractLoanEstimateFieldsFromText(
   ];
   if (!textLayerDetected) {
     warnings.push(
-      'This PDF does not appear to contain a usable text layer. Enter the values manually; scanned-document OCR is not enabled in this slice.',
+      'This document does not appear to contain a usable text layer. OCR is required, and every populated value must be verified against the original.',
     );
   }
   if (requiredFieldsFound < requiredKeys.length) {
@@ -350,10 +350,14 @@ export function combineLoanEstimateExtractions(
       (extraction) => extraction.textLayerDetected,
     ),
     extractionMethod: extractions.some(
-      (extraction) => extraction.extractionMethod === 'IMAGE_OCR',
+      (extraction) => extraction.extractionMethod === 'PDF_OCR',
     )
-      ? 'IMAGE_OCR'
-      : 'PDF_TEXT',
+      ? 'PDF_OCR'
+      : extractions.some(
+            (extraction) => extraction.extractionMethod === 'IMAGE_OCR',
+          )
+        ? 'IMAGE_OCR'
+        : 'PDF_TEXT',
     documentConfidencePct:
       confidences.length === 0
         ? null
@@ -378,6 +382,7 @@ export function combineLoanEstimateExtractions(
 export function extractLoanEstimateFieldsFromOcrText(
   rawText: string,
   documentConfidencePct: number | null,
+  extractionMethod: 'IMAGE_OCR' | 'PDF_OCR' = 'IMAGE_OCR',
 ): RefinanceLoanEstimateExtraction {
   const extraction = extractLoanEstimateFieldsFromText(rawText);
   const fields = Object.fromEntries(
@@ -407,7 +412,7 @@ export function extractLoanEstimateFieldsFromOcrText(
     ...extraction,
     fields,
     textLayerDetected: false,
-    extractionMethod: 'IMAGE_OCR',
+    extractionMethod,
     documentConfidencePct:
       documentConfidencePct == null
         ? null
@@ -420,16 +425,10 @@ export function extractLoanEstimateFieldsFromOcrText(
 export async function extractLoanEstimateFromPdf(
   buffer: Buffer,
 ): Promise<RefinanceLoanEstimateExtraction> {
+  let parsed: { text?: string; numpages?: number };
   try {
     const pdfParse = require('pdf-parse');
-    const parsed = await pdfParse(buffer);
-    return {
-      ...extractLoanEstimateFieldsFromText(parsed.text ?? ''),
-      pageCount:
-        typeof parsed.numpages === 'number' && parsed.numpages > 0
-          ? parsed.numpages
-          : 1,
-    };
+    parsed = await pdfParse(buffer);
   } catch {
     throw new APIError(
       'The Loan Estimate PDF could not be read. Confirm that it is a valid, unencrypted PDF or enter the values manually.',
@@ -437,46 +436,157 @@ export async function extractLoanEstimateFromPdf(
       'LOAN_ESTIMATE_PDF_UNREADABLE',
     );
   }
+
+  const textExtraction = {
+    ...extractLoanEstimateFieldsFromText(parsed.text ?? ''),
+    pageCount:
+      typeof parsed.numpages === 'number' && parsed.numpages > 0
+        ? parsed.numpages
+        : 1,
+  };
+  if (textExtraction.textLayerDetected) return textExtraction;
+
+  try {
+    return await extractLoanEstimateFromScannedPdf(buffer);
+  } catch (error) {
+    if (error instanceof APIError) throw error;
+    throw new APIError(
+      'The scanned Loan Estimate PDF could not be read with OCR. Try uploading up to three clear page images or enter the values manually.',
+      422,
+      'LOAN_ESTIMATE_PDF_OCR_UNREADABLE',
+    );
+  }
+}
+
+type LoanEstimateOcrWorker = {
+  setParameters(parameters: Record<string, string>): Promise<unknown>;
+  recognize(image: Buffer): Promise<{
+    data?: { text?: string; confidence?: number };
+  }>;
+  terminate(): Promise<unknown>;
+};
+
+async function preprocessLoanEstimateImage(buffer: Buffer): Promise<Buffer> {
+  try {
+    const { default: sharp } = await import('sharp');
+    return await sharp(buffer, { failOn: 'none' })
+      .rotate()
+      .resize({ width: 2400, withoutEnlargement: false })
+      .grayscale()
+      .normalize()
+      .sharpen({ sigma: 1 })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+  } catch {
+    // Tesseract can read JPEG and PNG buffers directly. Image preprocessing
+    // improves recognition but must not be a hard dependency.
+    return buffer;
+  }
+}
+
+async function createLoanEstimateOcrWorker(): Promise<LoanEstimateOcrWorker> {
+  const { createWorker } = await import('tesseract.js');
+  const language = require('@tesseract.js-data/eng') as {
+    code: string;
+    gzip: boolean;
+    langPath: string;
+  };
+  const worker = (await createWorker(language.code, 1, {
+    langPath: language.langPath,
+    gzip: language.gzip,
+    cacheMethod: 'none',
+  })) as LoanEstimateOcrWorker;
+  await worker.setParameters({
+    tessedit_pageseg_mode: '6',
+    preserve_interword_spaces: '1',
+    user_defined_dpi: '300',
+  });
+  return worker;
+}
+
+async function recognizeLoanEstimatePage(
+  worker: LoanEstimateOcrWorker,
+  buffer: Buffer,
+  extractionMethod: 'IMAGE_OCR' | 'PDF_OCR',
+): Promise<RefinanceLoanEstimateExtraction> {
+  const result = await worker.recognize(
+    await preprocessLoanEstimateImage(buffer),
+  );
+  return extractLoanEstimateFieldsFromOcrText(
+    String(result?.data?.text ?? ''),
+    typeof result?.data?.confidence === 'number'
+      ? result.data.confidence
+      : null,
+    extractionMethod,
+  );
+}
+
+type PdfImageDocument = {
+  length: number;
+  getPage(pageNumber: number): Promise<Buffer>;
+  destroy(): Promise<void>;
+};
+
+const importEsmModule = new Function(
+  'specifier',
+  'return import(specifier)',
+) as (specifier: string) => Promise<{
+  pdf(
+    input: Buffer,
+    options: { scale: number },
+  ): Promise<PdfImageDocument>;
+}>;
+
+export async function extractLoanEstimateFromScannedPdf(
+  buffer: Buffer,
+): Promise<RefinanceLoanEstimateExtraction> {
+  const { pdf } = await importEsmModule('pdf-to-img');
+  const document = await pdf(buffer, { scale: 2.5 });
+  try {
+    if (document.length > 3) {
+      throw new APIError(
+        'Scanned Loan Estimate PDFs are limited to three pages. Upload the official three-page Loan Estimate or up to three page images.',
+        422,
+        'LOAN_ESTIMATE_PDF_PAGE_LIMIT',
+      );
+    }
+    const worker = await createLoanEstimateOcrWorker();
+    try {
+      const pageExtractions: RefinanceLoanEstimateExtraction[] = [];
+      for (let pageNumber = 1; pageNumber <= document.length; pageNumber += 1) {
+        pageExtractions.push(
+          await recognizeLoanEstimatePage(
+            worker,
+            await document.getPage(pageNumber),
+            'PDF_OCR',
+          ),
+        );
+      }
+      const extraction = combineLoanEstimateExtractions(pageExtractions);
+      return {
+        ...extraction,
+        extractionMethod: 'PDF_OCR',
+        pageCount: document.length,
+        warnings: [
+          ...extraction.warnings,
+          'This scanned PDF was rendered and read with OCR. Verify every populated value against the original Loan Estimate.',
+        ],
+      };
+    } finally {
+      await worker.terminate();
+    }
+  } finally {
+    await document.destroy();
+  }
 }
 
 export async function extractLoanEstimateFromImage(
   buffer: Buffer,
 ): Promise<RefinanceLoanEstimateExtraction> {
+  let worker: LoanEstimateOcrWorker | null = null;
   try {
-    let preprocessed = buffer;
-    try {
-      const { default: sharp } = await import('sharp');
-      preprocessed = await sharp(buffer, { failOn: 'none' })
-        .rotate()
-        .resize({ width: 2400, withoutEnlargement: false })
-        .grayscale()
-        .normalize()
-        .sharpen({ sigma: 1 })
-        .png({ compressionLevel: 9 })
-        .toBuffer();
-    } catch {
-      // Tesseract can read JPEG and PNG buffers directly. Image
-      // preprocessing improves recognition but must not be a hard dependency
-      // for the review-first intake path.
-    }
-    const { createWorker } = await import('tesseract.js');
-    const worker: any = await createWorker('eng');
-    try {
-      await worker.setParameters({
-        tessedit_pageseg_mode: '6',
-        preserve_interword_spaces: '1',
-        user_defined_dpi: '300',
-      });
-      const result = await worker.recognize(preprocessed);
-      return extractLoanEstimateFieldsFromOcrText(
-        String(result?.data?.text ?? ''),
-        typeof result?.data?.confidence === 'number'
-          ? result.data.confidence
-          : null,
-      );
-    } finally {
-      await worker.terminate();
-    }
+    worker = await createLoanEstimateOcrWorker();
+    return await recognizeLoanEstimatePage(worker, buffer, 'IMAGE_OCR');
   } catch (error) {
     if (error instanceof APIError) throw error;
     throw new APIError(
@@ -484,6 +594,8 @@ export async function extractLoanEstimateFromImage(
       422,
       'LOAN_ESTIMATE_IMAGE_UNREADABLE',
     );
+  } finally {
+    if (worker) await worker.terminate();
   }
 }
 

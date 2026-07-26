@@ -522,8 +522,8 @@ export function LoanEstimateComparisonCard({
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-blue-800 dark:text-blue-300">
                 Upload one PDF or up to three JPEG, PNG, or WEBP images in page
-                order. Files are read in memory and not retained. Images use
-                local OCR, and every value requires your review.
+                order. Files are read in memory and not retained. Scanned PDFs
+                and images use local OCR, and every value requires your review.
               </p>
             </div>
             <label className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-lg border border-blue-300 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300">
@@ -551,8 +551,12 @@ export function LoanEstimateComparisonCard({
               </p>
               <p className="text-[11px] text-slate-600 dark:text-slate-300">
                 Method:{' '}
-                {extraction.extractionMethod === 'IMAGE_OCR'
-                  ? `Image OCR${
+                {extraction.extractionMethod !== 'PDF_TEXT'
+                  ? `${
+                      extraction.extractionMethod === 'PDF_OCR'
+                        ? 'Scanned PDF OCR'
+                        : 'Image OCR'
+                    }${
                       extraction.documentConfidencePct == null
                         ? ''
                         : ` · document confidence ${extraction.documentConfidencePct.toFixed(0)}%`

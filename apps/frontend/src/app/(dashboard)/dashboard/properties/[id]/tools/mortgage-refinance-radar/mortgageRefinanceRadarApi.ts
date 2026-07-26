@@ -375,7 +375,7 @@ export type RefinanceLoanEstimateExtraction = {
   requiredFieldCount: number;
   requiredFieldsFound: number;
   textLayerDetected: boolean;
-  extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR';
+  extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR' | 'PDF_OCR';
   documentConfidencePct: number | null;
   pageCount: number;
   reviewRequired: true;

@@ -96,7 +96,9 @@ export class RefinanceRadarController {
         source:
           extraction.extractionMethod === 'IMAGE_OCR'
             ? 'loan_estimate_image_ocr'
-            : 'loan_estimate_pdf_text',
+            : extraction.extractionMethod === 'PDF_OCR'
+              ? 'loan_estimate_pdf_ocr'
+              : 'loan_estimate_pdf_text',
         metadataJson: {
           extractedFieldCount: extraction.extractedFieldCount,
           requiredFieldsFound: extraction.requiredFieldsFound,
