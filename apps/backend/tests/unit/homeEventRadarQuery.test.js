@@ -73,7 +73,17 @@ function match(overrides = {}) {
     propertyId: 'property-1',
     impactLevel: 'watch',
     impactSummary: 'Protect outdoor equipment.',
-    impactFactorsJson: { drivers: [{ code: 'WIND' }] },
+    impactFactorsJson: {
+      drivers: [{
+        code: 'WIND',
+        effect: 'increase',
+        description: 'Strong wind can affect exposed roof components.',
+      }],
+      missingFacts: [{
+        factKey: 'property.roofReplacementYear',
+        reasonCode: 'ROOF_AGE_UNKNOWN',
+      }],
+    },
     recommendedActionsJson: {
       actions: [{ code: 'SECURE', label: 'Secure loose items', priority: 'high' }],
     },
@@ -87,7 +97,11 @@ function match(overrides = {}) {
     sourceFreshnessStatus: 'fresh',
     sourceFreshnessReason: 'SOURCE_WITHIN_FRESHNESS_WINDOW',
     isMaterialUpdate: false,
+    materialUpdatedAt: null,
     matchExplanationJson: null,
+    matcherVersion: 'geo-v1',
+    propertyGeographyVersion: 3,
+    incident: null,
     states: [],
     radarEvent: {
       id: 'event-1',
@@ -118,6 +132,7 @@ function match(overrides = {}) {
         effectiveAt: new Date('2026-07-26T14:00:00.000Z'),
         expiresAt: new Date('2026-07-26T20:00:00.000Z'),
         observedAt: new Date('2026-07-26T11:30:00.000Z'),
+        createdAt: new Date('2026-07-26T11:31:00.000Z'),
         normalizedJson: {
           geography: { type: 'postal_code', countryCode: 'US', postalCode: '08536' },
         },
@@ -169,6 +184,9 @@ function serviceWith(overrides = {}) {
     },
     propertyRadarAction: {
       create: async (args) => writes.push(['action.create', args]),
+    },
+    guidanceJourney: {
+      findFirst: async () => overrides.guidance ?? null,
     },
   };
   return {
@@ -309,8 +327,46 @@ test('detail is a pure persisted-projection read and exposes revision provenance
   assert.equal(detail.userState, 'new');
   assert.equal(detail.geography.type, 'postal_code');
   assert.equal(detail.sourceEvidence.revisionIdentity, 'revision-identity-1');
+  assert.equal(detail.revision.receivedAt, '2026-07-26T11:31:00.000Z');
   assert.equal(detail.recommendedActions[0].code, 'SECURE');
+  assert.deepEqual(detail.recommendedActions[0].destination, {
+    kind: 'informational',
+    href: null,
+  });
   assert.equal(detail.matchedSystems[0].type, 'roof');
+  assert.equal(detail.missingFacts[0].factKey, 'property.roofReplacementYear');
+  assert.equal(detail.propertyGeographyVersion, 3);
+  assert.equal(detail.matcherVersion, 'geo-v1');
+  assert.deepEqual(writes, []);
+  assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
+});
+
+test('detail projects related Incident and Guidance without mutating either system', async () => {
+  const linked = match({
+    incident: {
+      id: 'incident-1',
+      status: 'ACTIVE',
+      title: 'Wind preparation',
+      summary: 'Prepare exposed areas.',
+      updatedAt: new Date('2026-07-26T11:40:00.000Z'),
+    },
+  });
+  const { service, writes } = serviceWith({
+    matches: [linked],
+    guidance: {
+      id: 'journey-1',
+      status: 'ACTIVE',
+      currentStepKey: 'secure-outdoor-items',
+      updatedAt: new Date('2026-07-26T11:42:00.000Z'),
+    },
+  });
+
+  const detail = await service.getDetail('property-1', 'match-1', 'user-1');
+
+  assert.equal(detail.relatedIncident.id, 'incident-1');
+  assert.equal(detail.relatedGuidance.id, 'journey-1');
+  assert.match(detail.relatedIncident.href, /incidents\/incident-1$/);
+  assert.match(detail.relatedGuidance.href, /journeyId=journey-1$/);
   assert.deepEqual(writes, []);
   assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
 });

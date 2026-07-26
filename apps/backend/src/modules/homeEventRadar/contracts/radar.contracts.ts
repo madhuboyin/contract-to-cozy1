@@ -480,14 +480,47 @@ export const radarDetailResponseSchema = radarFeedItemSchema.extend({
   impactSummary: z.string().nullable(),
   impactFactors: z.record(z.string(), z.unknown()).nullable(),
   matchedSystems: z.array(radarMatchedSystemSchema),
-  recommendedActions: z.array(radarProjectedActionSchema),
+  recommendedActions: z.array(radarProjectedActionSchema.extend({
+    destination: z.object({
+      kind: z.enum(['informational', 'internal', 'external']),
+      href: z.string().min(1).nullable(),
+    }),
+  })),
   canonicalUrl: z.url().nullable(),
   observedAt: z.iso.datetime({ offset: true }),
+  revision: z.object({
+    observedAt: z.iso.datetime({ offset: true }),
+    receivedAt: z.iso.datetime({ offset: true }),
+    materialUpdatedAt: z.iso.datetime({ offset: true }).nullable(),
+  }),
   sourceEvidence: z.object({
     providerEventId: z.string().nullable(),
     providerRevision: z.string().nullable(),
     revisionIdentity: z.string().nullable(),
   }),
+  missingFacts: z.array(z.object({
+    factKey: z.string().min(1).max(160),
+    reasonCode: z.string().min(1).max(160),
+    detail: z.string().min(1).max(500),
+    correctionPath: z.string().min(1),
+  })),
+  propertyGeographyVersion: z.number().int().nonnegative().nullable(),
+  matcherVersion: z.string().nullable(),
+  relatedIncident: z.object({
+    id: z.string().min(1),
+    status: z.string().min(1),
+    title: z.string().min(1),
+    summary: z.string().nullable(),
+    updatedAt: z.iso.datetime({ offset: true }),
+    href: z.string().min(1),
+  }).nullable(),
+  relatedGuidance: z.object({
+    id: z.string().min(1),
+    status: z.string().min(1),
+    currentStepKey: z.string().nullable(),
+    updatedAt: z.iso.datetime({ offset: true }),
+    href: z.string().min(1),
+  }).nullable(),
 });
 
 export type RadarSourceFamily = z.infer<typeof radarSourceFamilySchema>;

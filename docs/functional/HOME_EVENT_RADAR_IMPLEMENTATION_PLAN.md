@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-404 implemented |
+| Status | In progress — HER-405 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -48,7 +48,8 @@
 | HER-402 Server filters/totals | Complete | Canonical repeatable filters cover lifecycle, source family, normalized provider severity, property impact, confidence, personal state, and material New/Updated attention; normalized filters bind cursors and the same predicate drives the page and authoritative total |
 | HER-403 Coverage-aware UI | Complete | The page consumes canonical overview/events, distinguishes every monitoring and feed state, renders materialized category coverage/freshness and last success, disables unavailable filters, preserves errors as errors, and pages with the stable cursor |
 | HER-404 Event feed and card | Complete | Canonical cards expose source provenance, exact effective/expiration timing, provider severity, property impact, limited confidence, freshness, material updates, and an accessible primary detail action |
-| HER-405+ | Not started | Canonical detail, deep links, actions, notifications, accessibility acceptance, and operations remain |
+| HER-405 Event detail | Complete | The canonical detail projection and sheet expose official source evidence, revision timing, geography, impact/confidence factors, missing-fact correction paths, systems, safe actions, Incident/Guidance continuity, and explicit retryable errors |
+| HER-406+ | Not started | Deep links, state/feedback, actions, notifications, accessibility acceptance, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1202,6 +1203,16 @@ Add:
 - actions/destinations;
 - related Incident/Guidance;
 - explicit detail error/retry.
+
+**Implemented:** the canonical `/radar/events/:matchId` read model now returns provider revision
+timing, normalized missing facts with property correction paths, safe action destination
+classification, persisted matcher/geography versions, and linked Incident/Guidance summaries. The
+detail sheet consumes that contract directly and renders official descriptions and source links,
+effective/provider-observed/material-update/expiration timing, geographic explanations, impact and
+limited confidence, confirmed drivers, missing facts, affected systems, responsibility-aware
+informational actions, and resolution destinations. Detail failures remain explicit with an
+in-sheet retry and never fall back to fabricated evidence. The final legacy feed-to-detail adapter
+and its compatibility test have been removed. No database schema change is required.
 
 ### HER-406 — Deep links
 

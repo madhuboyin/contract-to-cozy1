@@ -1,39 +1,50 @@
 'use client';
 
-// apps/frontend/src/components/features/homeEventRadar/RadarDetailSheet.tsx
-// Bottom sheet / side panel for a single event's full detail.
-
 import * as React from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bookmark, BookmarkCheck, X, CheckCircle2, EyeOff } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bookmark,
+  BookmarkCheck,
+  CheckCircle2,
+  ExternalLink,
+  EyeOff,
+  MapPin,
+  RotateCcw,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
 } from '@/components/ui/sheet';
-import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dashboard/mobileDesignTokens';
-import type { RadarFeedItem, RadarUserState } from '@/types';
 import {
-  SEVERITY_COLOR,
-  SEVERITY_LABELS,
-  SEVERITY_DOT,
-  IMPACT_COLOR,
-  IMPACT_LABELS,
-  formatEventType,
-  eventTypeIcon,
-  formatRadarDate,
-  formatSystemType,
+  MOBILE_CARD_RADIUS,
+  MOBILE_TYPE_TOKENS,
+} from '@/components/mobile/dashboard/mobileDesignTokens';
+import type {
+  RadarCanonicalDetail,
+  RadarCanonicalFeedItem,
+  RadarNormalizedGeography,
+  RadarUserState,
+} from '@/types';
+import {
   ACTION_PRIORITY_COLOR,
   ACTION_PRIORITY_LABEL,
+  CANONICAL_IMPACT_COLOR,
+  CANONICAL_IMPACT_LABELS,
+  CANONICAL_SEVERITY_COLOR,
+  CANONICAL_SEVERITY_DOT,
+  CANONICAL_SEVERITY_LABELS,
+  eventTypeIcon,
+  formatEventType,
+  formatRadarDateTime,
+  formatSystemType,
 } from './RadarUtils';
-
-// ---------------------------------------------------------------------------
-// Analytics helpers (local to sheet)
-// ---------------------------------------------------------------------------
 
 function trackRadarSheetEvent(
   propertyId: string,
@@ -52,7 +63,7 @@ function trackRadarSheetEvent(
 }
 
 interface Props {
-  item: RadarFeedItem | null;
+  item: RadarCanonicalFeedItem | null;
   propertyId: string;
   onClose: () => void;
   onStateChange?: (matchId: string, state: RadarUserState) => void;
@@ -61,42 +72,337 @@ interface Props {
   guidanceSignalIntentFamily?: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Small inline chips
-// ---------------------------------------------------------------------------
-
 function Chip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5',
-        MOBILE_TYPE_TOKENS.chip,
-        className
-      )}
-    >
+    <span className={cn(
+      'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5',
+      MOBILE_TYPE_TOKENS.chip,
+      className,
+    )}>
       {children}
     </span>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Section wrapper used inside the sheet
-// ---------------------------------------------------------------------------
-
-function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+function DetailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="space-y-2">
+    <section className="space-y-2">
       <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
         {title}
       </h3>
       {children}
+    </section>
+  );
+}
+
+function humanize(value: string): string {
+  return value
+    .replace(/^property\./, '')
+    .replaceAll('_', ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (character) => character.toUpperCase());
+}
+
+export function formatRadarGeography(geography: RadarNormalizedGeography | null): string {
+  if (!geography) return 'The provider did not supply a displayable coverage area.';
+  switch (geography.type) {
+    case 'property':
+      return 'Matched directly to this property.';
+    case 'postal_code':
+      return `Matched to postal code ${geography.postalCode}.`;
+    case 'administrative_area':
+      return `Matched to the ${geography.level.replaceAll('_', ' ')} area ${geography.name}.`;
+    case 'point':
+      return 'Matched to a provider location near this property.';
+    case 'radius':
+      return `Matched within the provider's ${Math.round(geography.radiusMeters / 1_609.344)} mile coverage radius.`;
+    case 'polygon':
+      return 'This property is inside the provider-defined event area.';
+  }
+}
+
+function DetailLoading() {
+  return (
+    <div aria-label="Loading event details" className="space-y-3">
+      {[80, 60, 90, 72].map((width) => (
+        <div
+          key={width}
+          className="h-4 animate-pulse rounded-md bg-[hsl(var(--mobile-border-subtle))]"
+          style={{ width: `${width}%` }}
+        />
+      ))}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
+function DetailError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      role="alert"
+      className={cn(MOBILE_CARD_RADIUS, 'border border-rose-200 bg-rose-50 p-4')}
+    >
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" aria-hidden />
+        <div>
+          <p className="mb-0 text-sm font-semibold text-rose-900">Unable to load event details</p>
+          <p className="mb-0 mt-1 text-xs text-rose-800">
+            The summary card remains available, but detailed source and property-match evidence
+            could not be loaded.
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-rose-300 bg-white px-3 py-2 text-sm font-semibold text-rose-800"
+          >
+            <RotateCcw className="h-4 w-4" aria-hidden />
+            Retry details
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailContent({
+  detail,
+  propertyId,
+}: {
+  detail: RadarCanonicalDetail;
+  propertyId: string;
+}) {
+  const drivers = detail.impactFactors?.drivers ?? [];
+  const explanation = detail.matchExplanation;
+  const confidenceLimited = detail.confidence === 'low' || detail.confidence === 'medium';
+
+  return (
+    <>
+      {detail.isSourceStale ? (
+        <div className={cn(MOBILE_CARD_RADIUS, 'border border-amber-200 bg-amber-50 px-4 py-3')}>
+          <p className={cn('mb-0 text-amber-900', MOBILE_TYPE_TOKENS.caption)}>
+            The source has not refreshed within its usual window. The latest status may be delayed.
+          </p>
+        </div>
+      ) : null}
+
+      <DetailSection title="Official event details">
+        <div className={cn(MOBILE_CARD_RADIUS, 'border border-[hsl(var(--mobile-border-subtle))] bg-white p-4')}>
+          <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+            {detail.summary}
+          </p>
+          <p className="mb-0 mt-3 text-xs text-[hsl(var(--mobile-text-muted))]">
+            Source: {detail.sourceName}{detail.provider ? ` · ${detail.provider}` : ''}
+          </p>
+          {detail.canonicalUrl ? (
+            <a
+              href={detail.canonicalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex min-h-[44px] items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
+            >
+              Open official source
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </a>
+          ) : (
+            <p className="mb-0 mt-2 text-xs text-[hsl(var(--mobile-text-muted))]">
+              No external source link was supplied.
+            </p>
+          )}
+        </div>
+      </DetailSection>
+
+      <DetailSection title="Event timing">
+        <dl className={cn(MOBILE_CARD_RADIUS, 'grid gap-3 border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm')}>
+          <div>
+            <dt className="text-xs text-[hsl(var(--mobile-text-muted))]">Effective</dt>
+            <dd className="mt-0.5 text-[hsl(var(--mobile-text-primary))]">{formatRadarDateTime(detail.effectiveAt)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-[hsl(var(--mobile-text-muted))]">Provider observed</dt>
+            <dd className="mt-0.5 text-[hsl(var(--mobile-text-primary))]">{formatRadarDateTime(detail.revision.observedAt)}</dd>
+          </div>
+          {detail.revision.materialUpdatedAt ? (
+            <div>
+              <dt className="text-xs text-[hsl(var(--mobile-text-muted))]">Property match updated</dt>
+              <dd className="mt-0.5 text-[hsl(var(--mobile-text-primary))]">{formatRadarDateTime(detail.revision.materialUpdatedAt)}</dd>
+            </div>
+          ) : null}
+          <div>
+            <dt className="text-xs text-[hsl(var(--mobile-text-muted))]">Expires</dt>
+            <dd className="mt-0.5 text-[hsl(var(--mobile-text-primary))]">
+              {detail.expiresAt ? formatRadarDateTime(detail.expiresAt) : 'No expiration supplied'}
+            </dd>
+          </div>
+        </dl>
+      </DetailSection>
+
+      <DetailSection title="Why this event matches">
+        <div className={cn(MOBILE_CARD_RADIUS, 'border border-[hsl(var(--mobile-border-subtle))] bg-white p-4')}>
+          <p className="mb-0 flex items-start gap-2 text-sm text-[hsl(var(--mobile-text-primary))]">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-brand-strong))]" aria-hidden />
+            <span>{explanation?.homeownerExplanation ?? formatRadarGeography(detail.geography)}</span>
+          </p>
+          {explanation?.reasons?.length ? (
+            <ul className="mb-0 mt-3 space-y-1 pl-5 text-xs text-[hsl(var(--mobile-text-secondary))]">
+              {explanation.reasons.map((reason) => <li key={reason} className="list-disc">{reason}</li>)}
+            </ul>
+          ) : null}
+        </div>
+      </DetailSection>
+
+      <DetailSection title="Impact on your home">
+        <div className={cn(
+          MOBILE_CARD_RADIUS,
+          'border p-4',
+          detail.impact === 'critical' || detail.impact === 'high'
+            ? 'border-rose-200 bg-rose-50'
+            : detail.impact === 'moderate'
+              ? 'border-amber-200 bg-amber-50'
+              : 'border-[hsl(var(--mobile-border-subtle))] bg-white',
+        )}>
+          <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+            {CANONICAL_IMPACT_LABELS[detail.impact]}
+          </p>
+          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+            {detail.impactSummary ?? 'This event is shown for awareness based on the available property evidence.'}
+          </p>
+          {confidenceLimited ? (
+            <p className="mb-0 mt-3 text-xs font-medium text-violet-700">
+              {detail.confidence === 'low' ? 'Limited' : 'Moderate'} confidence — review the missing facts below before acting.
+            </p>
+          ) : (
+            <p className="mb-0 mt-3 text-xs text-[hsl(var(--mobile-text-muted))]">
+              Confidence: {detail.confidence ?? 'not rated'}
+            </p>
+          )}
+        </div>
+      </DetailSection>
+
+      {drivers.length > 0 ? (
+        <DetailSection title="Confirmed impact factors">
+          <div className="space-y-2">
+            {drivers.map((driver) => (
+              <div key={driver.code} className={cn(MOBILE_CARD_RADIUS, 'border border-[hsl(var(--mobile-border-subtle))] bg-white px-3.5 py-3')}>
+                <p className="mb-0 text-xs font-semibold text-[hsl(var(--mobile-text-muted))]">
+                  {driver.effect === 'increase' ? 'Increases impact' : driver.effect === 'decrease' ? 'Reduces impact' : 'Context'}
+                </p>
+                <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.caption)}>
+                  {driver.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </DetailSection>
+      ) : null}
+
+      {detail.missingFacts.length > 0 || explanation?.missingFactReasons?.length ? (
+        <DetailSection title="Details that would improve confidence">
+          <div className="space-y-2">
+            {detail.missingFacts.map((fact) => (
+              <div key={`${fact.factKey}-${fact.reasonCode}`} className={cn(MOBILE_CARD_RADIUS, 'border border-violet-200 bg-violet-50 px-3.5 py-3')}>
+                <p className="mb-0 text-sm text-violet-950">{fact.detail}</p>
+                <Link
+                  href={fact.correctionPath}
+                  className="mt-2 inline-flex min-h-[44px] items-center text-xs font-semibold text-violet-800 underline underline-offset-2"
+                >
+                  Review {humanize(fact.factKey)}
+                </Link>
+              </div>
+            ))}
+            {explanation?.missingFactReasons?.map((reason) => (
+              <p key={`${reason.component}-${reason.code}`} className="mb-0 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-3 text-sm text-violet-950">
+                {reason.detail}
+              </p>
+            ))}
+          </div>
+        </DetailSection>
+      ) : null}
+
+      {detail.matchedSystems.length > 0 ? (
+        <DetailSection title="Affected home systems">
+          <div className="flex flex-wrap gap-2">
+            {detail.matchedSystems.map((system) => (
+              <Chip
+                key={`${system.type}-${system.relevance}`}
+                className={system.relevance === 'high'
+                  ? 'border-rose-200 bg-rose-50 text-rose-700'
+                  : system.relevance === 'medium'
+                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-600'}
+              >
+                {formatSystemType(system.type)} · {system.relevance}
+              </Chip>
+            ))}
+          </div>
+        </DetailSection>
+      ) : null}
+
+      {detail.recommendedActions.length > 0 ? (
+        <DetailSection title="Recommended actions">
+          <div className="space-y-2">
+            {detail.recommendedActions.map((action) => (
+              <div key={action.code} className={cn(MOBILE_CARD_RADIUS, 'border border-[hsl(var(--mobile-border-subtle))] bg-white px-3.5 py-3')}>
+                <div className="flex items-start gap-3">
+                  <Chip className={ACTION_PRIORITY_COLOR[action.priority]}>
+                    {ACTION_PRIORITY_LABEL[action.priority]}
+                  </Chip>
+                  <div className="min-w-0">
+                    <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+                      {action.label}
+                    </p>
+                    {action.responsibleParty ? (
+                      <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+                        Responsibility: {humanize(action.responsibleParty)}
+                      </p>
+                    ) : null}
+                    {action.destination.href ? (
+                      <Link href={action.destination.href} className="mt-2 inline-flex min-h-[44px] items-center text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2">
+                        Continue
+                      </Link>
+                    ) : (
+                      <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+                        Informational recommendation
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DetailSection>
+      ) : null}
+
+      {detail.relatedIncident || detail.relatedGuidance ? (
+        <DetailSection title="Related resolution">
+          <div className="space-y-2">
+            {detail.relatedIncident ? (
+              <Link href={detail.relatedIncident.href} className={cn(MOBILE_CARD_RADIUS, 'block min-h-[44px] border border-[hsl(var(--mobile-border-subtle))] bg-white p-3.5')}>
+                <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">{detail.relatedIncident.title}</p>
+                <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">Incident · {humanize(detail.relatedIncident.status)}</p>
+              </Link>
+            ) : null}
+            {detail.relatedGuidance ? (
+              <Link href={detail.relatedGuidance.href} className={cn(MOBILE_CARD_RADIUS, 'block min-h-[44px] border border-[hsl(var(--mobile-border-subtle))] bg-white p-3.5')}>
+                <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">Open guidance</p>
+                <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">Status · {humanize(detail.relatedGuidance.status)}</p>
+              </Link>
+            ) : null}
+          </div>
+        </DetailSection>
+      ) : null}
+
+      <p className="mb-0 text-[11px] text-[hsl(var(--mobile-text-muted))]">
+        Match rules: {detail.matcherVersion ?? 'not recorded'} · Property geography version:{' '}
+        {detail.propertyGeographyVersion ?? 'not recorded'} · Property {propertyId.slice(0, 8)}
+      </p>
+    </>
+  );
+}
 
 export function RadarDetailSheet({
   item,
@@ -110,156 +416,109 @@ export function RadarDetailSheet({
   const queryClient = useQueryClient();
   const isOpen = item !== null;
   const [isDesktop, setIsDesktop] = React.useState(false);
+  const openedMatchRef = React.useRef<string | null>(null);
+  const actionsViewedMatchRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-
     const media = window.matchMedia('(min-width: 1024px)');
     const sync = () => setIsDesktop(media.matches);
     sync();
-
     media.addEventListener('change', sync);
     return () => media.removeEventListener('change', sync);
   }, []);
 
-  // Analytics: fire EVENT_OPENED once per unique match open
-  const openedMatchRef = React.useRef<string | null>(null);
-  // Analytics: fire ACTIONS_VIEWED once per detail load with actions
-  const actionsViewedMatchRef = React.useRef<string | null>(null);
-
-  // Fetch full detail when sheet opens
   const detailQuery = useQuery({
-    queryKey: ['radar-match-detail', propertyId, item?.propertyRadarMatchId],
+    queryKey: ['radar-event-detail', propertyId, item?.propertyMatchId],
     queryFn: async () => {
-      if (!item) return null;
-      return api.getRadarMatchDetail(propertyId, item.propertyRadarMatchId);
+      if (!item) throw new Error('No Radar event selected.');
+      return api.getRadarEventDetail(propertyId, item.propertyMatchId);
     },
-    enabled: isOpen && !!item?.propertyRadarMatchId,
+    enabled: isOpen && !!item?.propertyMatchId,
     staleTime: 2 * 60 * 1000,
+    retry: 1,
+    retryDelay: 250,
   });
 
   const detail = detailQuery.data;
-  const currentState = detail?.state ?? item?.state ?? 'new';
+  const currentState = detail?.userState ?? item?.userState ?? 'new';
 
-  // Analytics: EVENT_OPENED — once per unique match
   React.useEffect(() => {
-    if (!item || !propertyId) return;
-    const matchId = item.propertyRadarMatchId;
-    if (openedMatchRef.current === matchId) return;
-    openedMatchRef.current = matchId;
+    if (!item || !propertyId || openedMatchRef.current === item.propertyMatchId) return;
+    openedMatchRef.current = item.propertyMatchId;
     trackRadarSheetEvent(propertyId, 'EVENT_OPENED', {
-      property_event_match_id: matchId,
-      home_event_id: item.radarEventId ?? undefined,
+      property_event_match_id: item.propertyMatchId,
+      home_event_id: item.eventId,
       event_type: item.eventType,
       severity: item.severity,
-      impact_level: item.impactLevel,
-      prior_state: item.state,
+      impact_level: item.impact,
+      prior_state: item.userState,
     });
   }, [item, propertyId]);
 
-  // Analytics: ACTIONS_VIEWED — once per match when detail loads with actions
-  const actions = detail?.recommendedActionsJson?.actions ?? [];
-  const systems = detail?.matchedSystemsJson?.systems ?? [];
-  const drivers = detail?.impactFactorsJson?.drivers ?? [];
-  const event = detail?.event;
-
   React.useEffect(() => {
-    if (!item || !propertyId || detailQuery.isLoading || actions.length === 0) return;
-    const matchId = item.propertyRadarMatchId;
-    if (actionsViewedMatchRef.current === matchId) return;
-    actionsViewedMatchRef.current = matchId;
+    if (!item || !detail || detail.recommendedActions.length === 0
+      || actionsViewedMatchRef.current === item.propertyMatchId) return;
+    actionsViewedMatchRef.current = item.propertyMatchId;
     trackRadarSheetEvent(propertyId, 'ACTIONS_VIEWED', {
-      property_event_match_id: matchId,
-      event_type: item.eventType,
-      impact_level: item.impactLevel,
-      action_count: actions.length,
+      property_event_match_id: item.propertyMatchId,
+      action_count: detail.recommendedActions.length,
     });
-  }, [item, propertyId, detailQuery.isLoading, actions.length]);
+  }, [detail, item, propertyId]);
 
-  // State mutation
   const stateMutation = useMutation({
     mutationFn: async (newState: RadarUserState) => {
       if (!item) return;
       await api.updateRadarMatchState(
         propertyId,
-        item.propertyRadarMatchId,
+        item.propertyMatchId,
         newState,
         undefined,
-        {
-          guidanceJourneyId,
-          guidanceStepKey,
-          guidanceSignalIntentFamily,
-        }
+        { guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily },
       );
     },
     onSuccess: (_data, newState) => {
       if (!item) return;
-      queryClient.invalidateQueries({ queryKey: ['radar-feed', propertyId] });
-      queryClient.invalidateQueries({ queryKey: ['radar-match-detail', propertyId, item.propertyRadarMatchId] });
-      if (newState === 'dismissed') onClose();
-      onStateChange?.(item.propertyRadarMatchId, newState);
-      // Analytics: STATE_CHANGED
+      queryClient.invalidateQueries({ queryKey: ['radar-events', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['radar-event-detail', propertyId, item.propertyMatchId] });
+      onStateChange?.(item.propertyMatchId, newState);
       trackRadarSheetEvent(propertyId, 'STATE_CHANGED', {
-        property_event_match_id: item.propertyRadarMatchId,
-        event_type: item.eventType,
-        severity: item.severity,
-        impact_level: item.impactLevel,
+        property_event_match_id: item.propertyMatchId,
         new_state: newState,
         prior_state: currentState,
       });
+      if (newState === 'dismissed') onClose();
     },
     onError: () => {
-      if (!item) return;
-      trackRadarSheetEvent(propertyId, 'ERROR', {
-        stage: 'state_change',
-        error_type: 'unknown',
-        event_type: item.eventType,
-      });
+      trackRadarSheetEvent(propertyId, 'ERROR', { stage: 'state_change' });
     },
   });
 
-  function handleSave() {
-    const next: RadarUserState = currentState === 'saved' ? 'seen' : 'saved';
-    stateMutation.mutate(next);
-  }
-
-  function handleDismiss() {
-    stateMutation.mutate('dismissed');
-    // Sheet closes on success (via onSuccess handler above)
-  }
-
-  function handleMarkActed() {
-    stateMutation.mutate('acted_on');
-  }
-
   const isSaved = currentState === 'saved';
   const isActedOn = currentState === 'acted_on';
-  const sheetSide = isDesktop ? 'right' : 'bottom';
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent
-        side={sheetSide}
+        side={isDesktop ? 'right' : 'bottom'}
         className={cn(
           'overflow-y-auto px-0 pt-0',
           isDesktop
             ? 'h-full w-full max-w-[560px] pb-0 sm:max-w-[560px]'
-            : 'max-h-[92dvh] rounded-t-[24px] pb-[env(safe-area-inset-bottom)]'
+            : 'max-h-[92dvh] rounded-t-[24px] pb-[env(safe-area-inset-bottom)]',
         )}
       >
-        {/* Drag handle */}
         {!isDesktop ? (
-          <div className="flex justify-center pt-3 pb-1">
+          <div className="flex justify-center pb-1 pt-3" aria-hidden>
             <div className="h-1 w-10 rounded-full bg-[hsl(var(--mobile-border-subtle))]" />
           </div>
         ) : null}
 
-        {item && (
+        {item ? (
           <div className="px-5 pb-8">
-            {/* Header */}
             <SheetHeader className="mb-5 text-left">
               <div className="flex items-start gap-3">
-                <span className="text-2xl leading-none mt-1 shrink-0" aria-hidden>
+                <span className="mt-1 shrink-0 text-2xl leading-none" aria-hidden>
                   {eventTypeIcon(item.eventType)}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -267,230 +526,81 @@ export function RadarDetailSheet({
                     {item.title}
                   </SheetTitle>
                   <SheetDescription className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
-                    {formatRadarDate(item.startAt)}
-                    {item.endAt ? ` – ${formatRadarDate(item.endAt)}` : ''}
+                    {item.sourceName}{item.provider ? ` · ${item.provider}` : ''}
                   </SheetDescription>
                 </div>
               </div>
-
-              {/* Chips */}
               <div className="mt-3 flex flex-wrap gap-1.5">
-                <Chip className={SEVERITY_COLOR[item.severity]}>
-                  <span className={cn('h-1.5 w-1.5 rounded-full', SEVERITY_DOT[item.severity])} />
-                  {SEVERITY_LABELS[item.severity]}
+                <Chip className={CANONICAL_SEVERITY_COLOR[item.severity]}>
+                  <span className={cn('h-1.5 w-1.5 rounded-full', CANONICAL_SEVERITY_DOT[item.severity])} />
+                  {CANONICAL_SEVERITY_LABELS[item.severity]}
                 </Chip>
-                <Chip
-                  className="bg-[hsl(var(--mobile-bg-muted))] text-[hsl(var(--mobile-text-secondary))] border-[hsl(var(--mobile-border-subtle))]"
-                >
+                <Chip className={CANONICAL_IMPACT_COLOR[item.impact]}>
+                  {CANONICAL_IMPACT_LABELS[item.impact]}
+                </Chip>
+                <Chip className="border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] text-[hsl(var(--mobile-text-secondary))]">
                   {formatEventType(item.eventType)}
                 </Chip>
-                {item.impactLevel !== 'none' && (
-                  <Chip className={IMPACT_COLOR[item.impactLevel]}>
-                    {IMPACT_LABELS[item.impactLevel]}
-                  </Chip>
-                )}
-                {(detail?.isMaterialUpdate ?? item.isMaterialUpdate) && (
-                  <Chip className="border-sky-200 bg-sky-50 text-sky-700">
-                    Updated
-                  </Chip>
-                )}
-                {(detail?.isSourceStale ?? item.isSourceStale) && (
-                  <Chip className="border-amber-200 bg-amber-50 text-amber-700">
-                    Source update delayed
-                  </Chip>
-                )}
+                {item.isMaterialUpdate ? <Chip className="border-sky-200 bg-sky-50 text-sky-700">Updated</Chip> : null}
               </div>
             </SheetHeader>
 
             <div className="space-y-6">
+              {detailQuery.isLoading ? <DetailLoading /> : null}
+              {detailQuery.isError ? <DetailError onRetry={() => void detailQuery.refetch()} /> : null}
+              {detail ? <DetailContent detail={detail} propertyId={propertyId} /> : null}
 
-              {(detail?.isSourceStale ?? item.isSourceStale) && (
-                <div
-                  className={cn(
-                    MOBILE_CARD_RADIUS,
-                    'border border-amber-200 bg-amber-50 px-4 py-3'
-                  )}
-                >
-                  <p className={cn('mb-0 text-amber-900', MOBILE_TYPE_TOKENS.caption)}>
-                    The source has not refreshed within its usual window. This event remains visible,
-                    but its latest status may be delayed.
-                  </p>
-                </div>
-              )}
-
-              {/* Impact summary */}
-              <DetailSection title="Impact on your home">
-                <div
-                  className={cn(
-                    MOBILE_CARD_RADIUS,
-                    'border p-4',
-                    item.impactLevel === 'high'
-                      ? 'border-rose-200 bg-rose-50'
-                      : item.impactLevel === 'moderate'
-                        ? 'border-amber-200 bg-amber-50'
-                        : 'border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-card-bg))]'
-                  )}
-                >
-                  <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
-                    {item.impactSummary ?? event?.summary ?? (
-                    item.impactLevel === 'watch' || item.impactLevel === 'none'
-                      ? 'This event has been flagged for your awareness. Direct impact on your property may be limited based on current data.'
-                      : 'Impact details for your property are being assessed.'
-                  )}
-                  </p>
-                </div>
-              </DetailSection>
-
-              {/* Why it matters — drivers */}
-              {drivers.length > 0 && (
-                <DetailSection title="Why this matters to your home">
-                  <div className="space-y-2">
-                    {drivers.map((d, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          MOBILE_CARD_RADIUS,
-                          'border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-card-bg))] px-3.5 py-3'
-                        )}
-                      >
-                        <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.caption)}>
-                          {d.description}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </DetailSection>
-              )}
-
-              {/* Affected systems */}
-              {systems.length > 0 && (
-                <DetailSection title="Affected home systems">
-                  <div className="flex flex-wrap gap-2">
-                    {systems.map((s, i) => (
-                      <Chip
-                        key={i}
-                        className={
-                          s.relevance === 'high'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : s.relevance === 'medium'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-gray-50 text-gray-600 border-gray-200'
-                        }
-                      >
-                        {formatSystemType(s.type)}
-                      </Chip>
-                    ))}
-                  </div>
-                </DetailSection>
-              )}
-
-              {/* Recommended actions */}
-              {actions.length > 0 && (
-                <DetailSection title="Recommended actions">
-                  <div className="space-y-2">
-                    {actions.map((action, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          MOBILE_CARD_RADIUS,
-                          'flex items-start gap-3 border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-card-bg))] px-3.5 py-3'
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'mt-0.5 shrink-0 inline-flex items-center rounded-full border px-1.5 py-0.5',
-                            MOBILE_TYPE_TOKENS.chip,
-                            ACTION_PRIORITY_COLOR[action.priority]
-                          )}
-                        >
-                          {ACTION_PRIORITY_LABEL[action.priority]}
-                        </span>
-                        <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
-                          {action.label}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </DetailSection>
-              )}
-
-              {/* Loading skeleton for detail */}
-              {detailQuery.isLoading && (
-                <div className="space-y-3">
-                  {[80, 60, 90].map((w) => (
-                    <div
-                      key={w}
-                      className="h-4 animate-pulse rounded-md bg-[hsl(var(--mobile-border-subtle))]"
-                      style={{ width: `${w}%` }}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* State actions */}
               <div className="border-t border-[hsl(var(--mobile-border-subtle))] pt-4">
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     aria-pressed={isSaved}
                     disabled={stateMutation.isPending}
-                    onClick={handleSave}
+                    onClick={() => stateMutation.mutate(isSaved ? 'seen' : 'saved')}
                     className={cn(
-                      'flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center transition-colors',
+                      'flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center',
                       isSaved
                         ? 'border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] text-[hsl(var(--mobile-brand-strong))]'
-                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]'
+                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]',
                     )}
                   >
-                    {isSaved
-                      ? <BookmarkCheck className="h-4 w-4" />
-                      : <Bookmark className="h-4 w-4" />
-                    }
-                    <span className="text-[11px] font-medium leading-none">
-                      {isSaved ? 'Saved' : 'Save'}
-                    </span>
+                    {isSaved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+                    <span className="text-[11px] font-medium">{isSaved ? 'Saved' : 'Save'}</span>
                   </button>
-
                   <button
                     type="button"
                     aria-pressed={isActedOn}
                     disabled={stateMutation.isPending || isActedOn}
-                    onClick={handleMarkActed}
+                    onClick={() => stateMutation.mutate('acted_on')}
                     className={cn(
-                      'flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center transition-colors',
+                      'flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center',
                       isActedOn
                         ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]'
+                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]',
                     )}
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-[11px] font-medium leading-none">
-                      {isActedOn ? 'Done' : 'Mark done'}
-                    </span>
+                    <span className="text-[11px] font-medium">{isActedOn ? 'Done' : 'Mark done'}</span>
                   </button>
-
                   <button
                     type="button"
                     disabled={stateMutation.isPending}
-                    onClick={handleDismiss}
-                    className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 py-2.5 text-center text-[hsl(var(--mobile-text-secondary))] transition-colors"
+                    onClick={() => stateMutation.mutate('dismissed')}
+                    className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 py-2.5 text-center text-[hsl(var(--mobile-text-secondary))]"
                   >
                     <EyeOff className="h-4 w-4" />
-                    <span className="text-[11px] font-medium leading-none">Dismiss</span>
+                    <span className="text-[11px] font-medium">Dismiss</span>
                   </button>
                 </div>
-
-                {/* Mutation error feedback */}
-                {stateMutation.isError && (
-                  <p className="mt-2 text-center text-xs text-rose-600">
+                {stateMutation.isError ? (
+                  <p role="alert" className="mt-2 text-center text-xs text-rose-600">
                     Could not save changes. Please try again.
                   </p>
-                )}
+                ) : null}
               </div>
-
             </div>
           </div>
-        )}
+        ) : null}
       </SheetContent>
     </Sheet>
   );

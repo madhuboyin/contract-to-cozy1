@@ -3334,6 +3334,92 @@ export interface RadarCanonicalFeedItem {
   userState: RadarUserState;
 }
 
+export type RadarNormalizedGeography =
+  | { type: 'property'; propertyId: string }
+  | { type: 'point'; latitude: number; longitude: number }
+  | { type: 'radius'; center: { latitude: number; longitude: number }; radiusMeters: number }
+  | { type: 'postal_code'; countryCode: string; postalCode: string }
+  | { type: 'administrative_area'; countryCode: string; level: string; name: string; code?: string }
+  | { type: 'polygon'; geoJson: Record<string, unknown> };
+
+export interface RadarCanonicalDetail extends RadarCanonicalFeedItem {
+  geography: RadarNormalizedGeography | null;
+  matchExplanation: {
+    matcherVersion: string;
+    matchedAt: string;
+    matchType: string;
+    confidence: RadarConfidence;
+    homeownerExplanation?: string;
+    distanceMeters?: number | null;
+    reasons: string[];
+    propertyFactsUsed: string[];
+    missingFactReasons?: Array<{
+      component: string;
+      code: string;
+      detail: string;
+    }>;
+  } | null;
+  impactSummary: string | null;
+  impactFactors: {
+    drivers?: RadarImpactDriver[];
+    missingFacts?: Array<{ factKey: string; reasonCode: string }>;
+    responsibilityDecisions?: Array<{
+      scope: string;
+      party: string;
+      decision: string;
+    }>;
+    [key: string]: unknown;
+  } | null;
+  matchedSystems: RadarMatchedSystem[];
+  recommendedActions: Array<{
+    code: string;
+    label: string;
+    priority: 'high' | 'medium' | 'low';
+    responsibilityScope?: string;
+    responsibleParty?: string;
+    applicability?: 'owner_action' | 'coordinate' | 'verify_responsibility';
+    destination: {
+      kind: 'informational' | 'internal' | 'external';
+      href: string | null;
+    };
+  }>;
+  canonicalUrl: string | null;
+  observedAt: string;
+  revision: {
+    observedAt: string;
+    receivedAt: string;
+    materialUpdatedAt: string | null;
+  };
+  sourceEvidence: {
+    providerEventId: string | null;
+    providerRevision: string | null;
+    revisionIdentity: string | null;
+  };
+  missingFacts: Array<{
+    factKey: string;
+    reasonCode: string;
+    detail: string;
+    correctionPath: string;
+  }>;
+  propertyGeographyVersion: number | null;
+  matcherVersion: string | null;
+  relatedIncident: {
+    id: string;
+    status: string;
+    title: string;
+    summary: string | null;
+    updatedAt: string;
+    href: string;
+  } | null;
+  relatedGuidance: {
+    id: string;
+    status: string;
+    currentStepKey: string | null;
+    updatedAt: string;
+    href: string;
+  } | null;
+}
+
 export interface RadarAppliedFilters {
   lifecycle: Array<'now' | 'upcoming' | 'recently_ended'>;
   sourceFamily: RadarSourceFamily[];

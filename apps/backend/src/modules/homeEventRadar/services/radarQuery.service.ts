@@ -188,6 +188,52 @@ function storedArray(value: unknown, key: string): unknown[] {
   return [];
 }
 
+function storedRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function displayCode(value: unknown): string {
+  return String(value ?? 'Missing property detail')
+    .replace(/^property\./, '')
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (character: string) => character.toUpperCase());
+}
+
+function detailMissingFacts(match: any): Array<Record<string, string>> {
+  const factors = storedRecord(match.impactFactorsJson);
+  const facts = Array.isArray(factors?.missingFacts) ? factors.missingFacts : [];
+  const correctionPath = `/dashboard/properties/${encodeURIComponent(match.propertyId)}/edit`;
+  return facts.flatMap((value) => {
+    const fact = storedRecord(value);
+    if (!fact?.factKey) return [];
+    return [{
+      factKey: String(fact.factKey),
+      reasonCode: String(fact.reasonCode ?? 'PROPERTY_FACT_MISSING'),
+      detail: `${displayCode(fact.factKey)} is missing or unverified.`,
+      correctionPath,
+    }];
+  });
+}
+
+function detailActions(value: unknown): Array<Record<string, unknown>> {
+  return storedArray(value, 'actions').flatMap((entry) => {
+    const action = storedRecord(entry);
+    if (!action?.code || !action?.label || !['high', 'medium', 'low'].includes(String(action.priority))) {
+      return [];
+    }
+    return [{
+      ...action,
+      code: String(action.code),
+      label: String(action.label),
+      priority: String(action.priority),
+      destination: { kind: 'informational', href: null },
+    }];
+  });
+}
+
 function serializeFeedItem(match: any, state?: any): Record<string, unknown> {
   const event = match.radarEvent;
   const revision = latestRevision(match);
@@ -484,11 +530,48 @@ export class RadarQueryService {
           },
         },
         states: { where: { userId }, take: 1 },
+        incident: {
+          select: {
+            id: true,
+            status: true,
+            title: true,
+            summary: true,
+            updatedAt: true,
+          },
+        },
       },
     });
     if (!match) throw new APIError('Radar match not found', 404, 'RADAR_MATCH_NOT_FOUND');
 
     const revision = latestRevision(match);
+    const incident = match.incident ?? null;
+    const guidance = incident && this.db.guidanceJourney?.findFirst
+      ? await this.db.guidanceJourney.findFirst({
+          where: {
+            propertyId,
+            primarySignal: {
+              is: {
+                sourceEntityType: 'INCIDENT',
+                sourceEntityId: incident.id,
+              },
+            },
+          },
+          select: {
+            id: true,
+            status: true,
+            currentStepKey: true,
+            updatedAt: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+        })
+      : null;
+    const observedAt = iso(revision?.observedAt ?? match.radarEvent.observedAt) as string;
+    const receivedAt = iso(
+      revision?.createdAt
+      ?? revision?.observedAt
+      ?? match.radarEvent.createdAt
+      ?? match.radarEvent.observedAt,
+    ) as string;
     return {
       ...serializeFeedItem(match, match.states?.[0]),
       geography: storedGeography(match),
@@ -496,14 +579,39 @@ export class RadarQueryService {
       impactSummary: match.impactSummary ?? null,
       impactFactors: match.impactFactorsJson ?? null,
       matchedSystems: storedArray(match.matchedSystemsJson, 'systems'),
-      recommendedActions: storedArray(match.recommendedActionsJson, 'actions'),
+      recommendedActions: detailActions(match.recommendedActionsJson),
       canonicalUrl: match.radarEvent.canonicalUrl ?? null,
-      observedAt: iso(revision?.observedAt ?? match.radarEvent.observedAt),
+      observedAt,
+      revision: {
+        observedAt,
+        receivedAt,
+        materialUpdatedAt: iso(match.materialUpdatedAt),
+      },
       sourceEvidence: {
         providerEventId: match.radarEvent.providerEventId ?? null,
         providerRevision: revision?.providerRevision ?? match.radarEvent.providerRevision ?? null,
         revisionIdentity: revision?.revisionIdentity ?? null,
       },
+      missingFacts: detailMissingFacts(match),
+      propertyGeographyVersion: match.propertyGeographyVersion ?? null,
+      matcherVersion: match.matcherVersion
+        ?? storedRecord(match.matchExplanationJson)?.matcherVersion
+        ?? null,
+      relatedIncident: incident ? {
+        id: String(incident.id),
+        status: String(incident.status),
+        title: String(incident.title),
+        summary: incident.summary ?? null,
+        updatedAt: iso(incident.updatedAt),
+        href: `/dashboard/properties/${encodeURIComponent(propertyId)}/incidents/${encodeURIComponent(incident.id)}`,
+      } : null,
+      relatedGuidance: guidance ? {
+        id: String(guidance.id),
+        status: String(guidance.status),
+        currentStepKey: guidance.currentStepKey ?? null,
+        updatedAt: iso(guidance.updatedAt),
+        href: `/dashboard/properties/${encodeURIComponent(propertyId)}/guidance/step?journeyId=${encodeURIComponent(guidance.id)}`,
+      } : null,
     };
   }
 }

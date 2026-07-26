@@ -106,7 +106,7 @@ import {
   RadarOverview,
   RadarCanonicalFeed,
   RadarCanonicalFeedParams,
-  RadarMatchDetail,
+  RadarCanonicalDetail,
   RadarUserState,
   ResolutionCenterPayload,
   EnvironmentReportDTO,
@@ -4083,11 +4083,12 @@ class APIClient {
     return res.data;
   }
 
-  async getRadarMatchDetail(propertyId: string, matchId: string): Promise<RadarMatchDetail | null> {
-    const res = await this.get<{ detail: RadarMatchDetail }>(
-      `/api/properties/${propertyId}/radar/matches/${matchId}`
+  async getRadarEventDetail(propertyId: string, matchId: string): Promise<RadarCanonicalDetail> {
+    const res = await this.get<RadarCanonicalDetail>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/events/${encodeURIComponent(matchId)}`
     );
-    return res.data?.detail ?? null;
+    if (!res.data) throw new Error('Radar event details were unavailable.');
+    return res.data;
   }
 
   async updateRadarMatchState(

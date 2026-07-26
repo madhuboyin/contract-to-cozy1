@@ -27,7 +27,6 @@ import type {
   Property,
   RadarCategoryCoverage,
   RadarCanonicalFeedItem,
-  RadarFeedItem as RadarFeedItemType,
   RadarMonitoringState,
   RadarOverview,
   RadarSourceFamily,
@@ -45,7 +44,6 @@ import {
   RADAR_FAMILY_LABELS,
   RADAR_MONITORING_PRESENTATION,
 } from '@/features/homeEventRadar/radarAvailabilityCopy';
-import { toLegacyRadarFeedItem } from '@/features/homeEventRadar/radarCanonicalAdapter';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
@@ -527,7 +525,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
       : null;
 
   const [filter, setFilter] = React.useState<FilterKey>('all');
-  const [selectedItem, setSelectedItem] = React.useState<RadarFeedItemType | null>(null);
+  const [selectedItem, setSelectedItem] = React.useState<RadarCanonicalFeedItem | null>(null);
   const [showDismissed, setShowDismissed] = React.useState(false);
 
   // Local override map: matchId → state (for optimistic UI without refetch)
@@ -687,12 +685,10 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     if (item.userState === 'new') {
       setStateOverrides((prev) => ({ ...prev, [item.propertyMatchId]: 'seen' }));
     }
-    if (propertyId) {
-      setSelectedItem(toLegacyRadarFeedItem({
-        ...item,
-        userState: item.userState === 'new' ? 'seen' : item.userState,
-      }, propertyId));
-    }
+    setSelectedItem({
+      ...item,
+      userState: item.userState === 'new' ? 'seen' : item.userState,
+    });
   }
 
   function handleSheetClose() {
@@ -702,7 +698,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   function handleStateChange(matchId: string, state: RadarUserState) {
     setStateOverrides((prev) => ({ ...prev, [matchId]: state }));
     // Also update the selected item if it's still open
-    setSelectedItem((prev) => (prev?.propertyRadarMatchId === matchId ? { ...prev, state } : prev));
+    setSelectedItem((prev) => (prev?.propertyMatchId === matchId ? { ...prev, userState: state } : prev));
     if (propertyId) {
       track('action_completed', { tool: 'home-event-radar', actionType: `state_${state}`, propertyId });
     }
