@@ -976,7 +976,7 @@ registerShutdownHandler('permitDisclosureWorker', () => permitDisclosureWorker.c
 // =============================================================================
 // GUARDRAIL: QA/E2E dummy-ingest jobs must never run in production. These
 // generate synthetic fixture data (RadarEvent, HomeRiskEvent, NeighborhoodEvent)
-// that is indistinguishable from real signals to end users once ingested.
+// that must remain explicitly labeled and isolated from real provider data.
 // A prior incident shipped RADAR_DUMMY_INGEST_ENABLED=true to the prod
 // deployment manifest, seeding fake weather/risk events into production for
 // real users — fail fast here instead of relying on manifest review alone.
@@ -993,8 +993,8 @@ if (process.env.NODE_ENV === 'production') {
     logger.error(
       { enabledInProd },
       '[STARTUP-GUARDRAIL] QA/E2E dummy-ingest flags are enabled with NODE_ENV=production. ' +
-        'Refusing to start — these jobs seed synthetic fixture data that is visually ' +
-        'indistinguishable from real signals once ingested. Set these to "false" in the ' +
+        'Refusing to start — these jobs seed synthetic fixture data and are never allowed ' +
+        'in production, even with explicit Test data labels. Set these to "false" in the ' +
         'production deployment manifest.',
     );
     throw new Error(

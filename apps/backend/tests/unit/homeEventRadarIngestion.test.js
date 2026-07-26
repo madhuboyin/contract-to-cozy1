@@ -176,7 +176,11 @@ test('creates an exact-source event, immutable revision, and deterministic match
 test('same revision and payload is a no-op but safely retries the same match job', async () => {
   const harness = createHarness();
   const first = await harness.service.ingest(observation(), context);
-  const duplicate = await harness.service.ingest(observation(), context);
+  const duplicate = await harness.service.ingest(observation({
+    // A replay in a later run has new receipt provenance but identical provider
+    // revision material and must remain idempotent.
+    observedAt: '2026-07-26T12:30:00Z',
+  }), context);
 
   assert.equal(duplicate.outcome, 'duplicate');
   assert.equal(harness.state.eventCreates, 1);

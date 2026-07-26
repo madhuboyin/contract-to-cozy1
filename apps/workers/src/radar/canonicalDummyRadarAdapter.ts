@@ -22,7 +22,9 @@ function utcTimestamp(value: string, field: string): string {
   return timestamp.toISOString();
 }
 
-function sourceFamily(sourceType: DummyRadarRawSignal['provider']): RadarSourceFamily {
+export function dummyRadarSourceFamily(
+  sourceType: DummyRadarRawSignal['provider'],
+): RadarSourceFamily {
   switch (sourceType) {
     case 'weather_provider':
       return 'weather';
@@ -96,15 +98,19 @@ export const canonicalDummyRadarAdapter: RadarSourceAdapter<
       typeof signal.raw.providerRevision === 'string' && signal.raw.providerRevision.trim()
         ? signal.raw.providerRevision.trim()
         : undefined;
+    const headline = signal.headline.trim();
+    const title = headline.startsWith('[Test data]')
+      ? headline
+      : `[Test data] ${headline}`;
 
     const observation = canonicalRadarObservationSchema.parse({
       schemaVersion: 1,
       sourceDefinitionId: context.sourceDefinitionId,
       providerEventId: signal.providerEventId.trim(),
       providerRevision,
-      sourceFamily: sourceFamily(signal.provider),
+      sourceFamily: dummyRadarSourceFamily(signal.provider),
       eventType: signal.signalType,
-      title: signal.headline.trim(),
+      title,
       summary: signal.summary?.trim() ||
         `Test ${signal.signalType.split('_').join(' ')} signal from the reviewed fixture provider.`,
       severity: severity(signal.severity),

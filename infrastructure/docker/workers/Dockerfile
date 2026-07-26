@@ -72,6 +72,8 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/modules/gazette/dto \
              src/shared/backend/modules/gazette/mappers \
              src/shared/backend/modules/homeEventRadar/domain \
+             src/shared/backend/modules/homeEventRadar/services \
+             src/shared/backend/modules/homeEventRadar/queues \
              src/shared/backend/modules/propertyContext/domain \
              src/shared/backend/modules/propertyContext/application \
              src/shared/backend/modules/propertyContext/catalog \
@@ -91,6 +93,12 @@ COPY apps/backend/src/services/coverage/contextPolicy.ts src/shared/backend/serv
 COPY apps/backend/src/modules/homeEventRadar/domain/propertyGeography.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarObservationIdentity.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/contracts/ src/shared/backend/modules/homeEventRadar/contracts/
+COPY apps/backend/src/modules/homeEventRadar/services/radarSourceRegistry.service.ts \
+     apps/backend/src/modules/homeEventRadar/services/radarSourceRun.service.ts \
+     apps/backend/src/modules/homeEventRadar/services/radarEventIngestion.service.ts \
+     src/shared/backend/modules/homeEventRadar/services/
+COPY apps/backend/src/modules/homeEventRadar/queues/radarMatch.queue.ts \
+     src/shared/backend/modules/homeEventRadar/queues/
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts apps/backend/src/config/workerExecutionPolicy.ts apps/backend/src/config/appConfig.ts apps/backend/src/config/smokeTestConfig.ts src/shared/backend/config/

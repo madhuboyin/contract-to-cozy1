@@ -32,7 +32,11 @@ export function radarValueFingerprint(value: unknown): string {
 }
 
 export function radarObservationFingerprint(observation: CanonicalRadarObservation): string {
-  return radarValueFingerprint(observation);
+  // observedAt is receipt provenance, not provider revision material. The same
+  // provider revision can be observed again during a later source run and must
+  // remain idempotent rather than conflict solely because delivery time changed.
+  const { observedAt: _observedAt, ...revisionMaterial } = observation;
+  return radarValueFingerprint(revisionMaterial);
 }
 
 export function radarRevisionIdentity(

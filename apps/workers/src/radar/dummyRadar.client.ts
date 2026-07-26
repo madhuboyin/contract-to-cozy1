@@ -14,16 +14,30 @@ type TargetProperty = {
   zipCode: string;
 };
 
-function isoAtOffset(hoursOffset: number): string {
-  return new Date(Date.now() + hoursOffset * 60 * 60 * 1000).toISOString();
+const FIXTURE_REVISION_CADENCE_MS = 30 * 60 * 1_000;
+
+export function fixtureRevisionAnchor(now = new Date()): Date {
+  if (!Number.isFinite(now.getTime())) throw new TypeError('Fixture clock must be a valid date');
+  return new Date(
+    Math.floor(now.getTime() / FIXTURE_REVISION_CADENCE_MS) * FIXTURE_REVISION_CADENCE_MS,
+  );
 }
 
-function dayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+function isoAtOffset(anchor: Date, hoursOffset: number): string {
+  return new Date(anchor.getTime() + hoursOffset * 60 * 60 * 1000).toISOString();
 }
 
-function buildSignalId(scopeKey: string, type: DummyRadarRawSignal['signalType'], geographyType: DummyRadarRawSignal['geography']['type']): string {
-  return `dummy:${dayKey()}:${geographyType}:${scopeKey}:${type}`;
+function dayKey(anchor: Date): string {
+  return anchor.toISOString().slice(0, 10);
+}
+
+function buildSignalId(
+  anchor: Date,
+  scopeKey: string,
+  type: DummyRadarRawSignal['signalType'],
+  geographyType: DummyRadarRawSignal['geography']['type'],
+): string {
+  return `dummy:${dayKey(anchor)}:${geographyType}:${scopeKey}:${type}`;
 }
 
 function renderTemplate(template: string | null | undefined, property: TargetProperty): string | null {
@@ -77,8 +91,13 @@ function groupPropertiesByZip(properties: TargetProperty[]): TargetProperty[][] 
   return Array.from(groups.values());
 }
 
-export async function fetchDummyRadarSignals(properties: TargetProperty[]): Promise<DummyRadarRawSignal[]> {
+export async function fetchDummyRadarSignals(
+  properties: TargetProperty[],
+  now = new Date(),
+): Promise<DummyRadarRawSignal[]> {
   const signals: DummyRadarRawSignal[] = [];
+  const revisionAnchor = fixtureRevisionAnchor(now);
+  const revisionIdentity = `fixture-v1:${revisionAnchor.toISOString()}`;
   const fixtureSet = resolveFixtureSet();
   const fixtures = loadFixtures(fixtureSet);
   const groups = fixtureSet === 'property_scoped'
@@ -92,7 +111,12 @@ export async function fetchDummyRadarSignals(properties: TargetProperty[]): Prom
     for (const fixture of fixtures) {
       const geographyType = fixture.geographyType ?? 'property';
       const geographyKey = geographyKeyForType(geographyType, primaryProperty);
-      const providerEventId = buildSignalId(geographyKey, fixture.signalType, geographyType);
+      const providerEventId = buildSignalId(
+        revisionAnchor,
+        geographyKey,
+        fixture.signalType,
+        geographyType,
+      );
       signals.push({
         provider: fixture.provider,
         providerEventId,
@@ -100,9 +124,9 @@ export async function fetchDummyRadarSignals(properties: TargetProperty[]): Prom
         headline: renderTemplate(fixture.headlineTemplate, primaryProperty) ?? `Test radar signal for ${primaryProperty.address}`,
         summary: renderTemplate(fixture.summaryTemplate, primaryProperty),
         severity: fixture.severity,
-        startsAt: isoAtOffset(fixture.startOffsetHours),
+        startsAt: isoAtOffset(revisionAnchor, fixture.startOffsetHours),
         endsAt: fixture.endOffsetHours !== undefined && fixture.endOffsetHours !== null
-          ? isoAtOffset(fixture.endOffsetHours)
+          ? isoAtOffset(revisionAnchor, fixture.endOffsetHours)
           : null,
         geography: {
           type: geographyType,
@@ -111,6 +135,9 @@ export async function fetchDummyRadarSignals(properties: TargetProperty[]): Prom
         raw: {
           seed: true,
           seedType: 'dummy_radar_signal',
+          testData: true,
+          testDataLabel: 'Test data',
+          providerRevision: revisionIdentity,
           fixtureSet,
           fixtureSignalType: fixture.signalType,
           targetPropertyIds,
@@ -121,7 +148,7 @@ export async function fetchDummyRadarSignals(properties: TargetProperty[]): Prom
             state: primaryProperty.state,
             zipCode: primaryProperty.zipCode,
           },
-          generatedAt: new Date().toISOString(),
+          generatedAt: revisionAnchor.toISOString(),
         },
       });
     }

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-105 implemented |
+| Status | In progress — Phase 1 implemented in code |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -27,7 +27,7 @@
 | HER-103 Source run and health service | Complete; DB application pending | Idempotent attempts, explicit success/empty/partial/failed/skipped outcomes, health transitions, and zero-coverage skip |
 | HER-104 Canonical ingestion service | Complete; DB application pending | Validated exact-source identity, immutable revisions, deterministic fingerprints, lifecycle/stale guards, provenance, serializable per-observation transactions, and idempotent match enqueue |
 | HER-105 Source adapter harness | Complete | Shared conformance runner verifies canonical output, exact-source/revision identity, UTC dates, URL allowlisting, geography, lifecycle mappings, persistable evidence, and invalid-payload rejection |
-| HER-106 | Not started; adapter groundwork complete | Canonical dummy adapter exists and passes conformance; fixture job still needs source-run, ingestion queue, matching, and test-data convergence |
+| HER-106 Test-only fixture provider | Complete; DB application pending | Deterministic canonical fixtures use family-specific test sources, source-run health, immutable ingestion/revision, match enqueue, production rejection, bounded property scope, and explicit Test data labeling |
 | Phase 2+ | Not started | Live-provider convergence, durable matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
@@ -532,8 +532,7 @@ fingerprint/revision functions used by ingestion. A conforming adapter must prov
 resolution and supersession cases, reject declared invalid inputs, emit UTC timestamps and
 normalized geography, keep exact-source identity stable across revisions, and restrict any
 canonical source link to a reviewed HTTPS host. `canonicalDummyRadarAdapter.ts` is the first
-conforming adapter and provides the implementation bridge for HER-106 without changing the
-currently scheduled fixture job in this slice.
+conforming adapter and is now the normalization boundary used by the HER-106 fixture job.
 
 ### HER-106 — Test-only fixture provider
 
@@ -544,7 +543,18 @@ Refactor dummy Radar fixtures to use the same canonical observation and queues. 
 - visual “Test data” marking outside production;
 - allowlisted property scope.
 
+Implementation note: `ingestRadarSignals.job.ts` no longer upserts `RadarEvent` or invokes the
+legacy matcher directly. It registers family-specific `manual_import` test sources, begins and
+completes source runs, normalizes deterministic 30-minute fixture revisions, and calls the
+canonical ingestion service that enqueues revision-scoped matching. Every source, event title,
+payload, and run carries explicit Test data provenance. The job rejects production independently
+of the worker startup guard and bounds selection to explicit IDs or reviewed ZIP allowlists.
+Reset and reseed procedures are documented in
+`docs/operations/HOME_EVENT_RADAR_TEST_FIXTURES.md`.
+
 **Phase 1 exit gate**
+
+Satisfied in code; database schema application remains owner-managed:
 
 - schema and source services implemented;
 - one fixture source completes ingest → revision → match enqueue;
