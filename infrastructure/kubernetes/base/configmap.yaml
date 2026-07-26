@@ -88,6 +88,13 @@ data:
   # baseline since there's no record of why; revisit if this should be
   # reviewed as a fresh group-flag decision rather than grandfathered in.
   WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: "true"
+  REFINANCE_EXTERNAL_ALERTS_ENABLED: "false"
+  # Web Push remains off until an internal cohort and VAPID configuration are
+  # approved. WEB_PUSH_VAPID_PRIVATE_KEY belongs in app-secrets, not here.
+  WEB_PUSH_DELIVERY_ENABLED: "false"
+  REFINANCE_PUSH_ALERTS_ENABLED: "false"
+  WEB_PUSH_VAPID_SUBJECT: ""
+  WEB_PUSH_VAPID_PUBLIC_KEY: ""
   # Deliberately kept "false" (not synced from live's "true") — the
   # WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED / WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED
   # per-job overrides below replace the group flag for those two jobs so

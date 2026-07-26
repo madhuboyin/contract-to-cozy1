@@ -11,6 +11,7 @@ const {
 } = require('@prisma/client');
 const {
   areRefinanceExternalAlertsEnabled,
+  isRefinancePreferenceDeliveryEnabled,
   processRefinanceTransitionAlert,
   REFINANCE_EXTERNAL_ALERT_COOLDOWN_DAYS,
 } = require('../../src/jobs/refinanceTransitionAlert.job.ts');
@@ -27,14 +28,19 @@ function context(overrides = {}) {
     preference: {
       homeEnabled: true,
       emailEnabled: true,
-      pushAvailable: false,
+      pushEnabled: false,
+      pushAvailable: true,
+      hasActivePushSubscription: false,
+      pushPublicKey: 'public-key',
       cadence: NotificationCadence.IMMEDIATE,
       sensitivity: NotificationSensitivity.CONSERVATIVE,
       quietStart: '21:00',
       quietEnd: '07:00',
       timezone: 'America/New_York',
       explicitEmailConsent: true,
+      explicitPushConsent: false,
       externalDeliveryEnabled: false,
+      pushDeliveryEnabled: false,
     },
     ...overrides,
   };
@@ -79,6 +85,41 @@ test('refinance external alerts require both fail-closed feature flags', () => {
     REFINANCE_EXTERNAL_ALERTS_ENABLED: 'true',
     WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: 'true',
   }), true);
+});
+
+test('channel rollout must match the channel that received explicit consent', () => {
+  const emailPreference = context().preference;
+  assert.equal(
+    isRefinancePreferenceDeliveryEnabled(emailPreference, {
+      WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: 'true',
+      REFINANCE_PUSH_ALERTS_ENABLED: 'true',
+      WEB_PUSH_DELIVERY_ENABLED: 'true',
+      WEB_PUSH_VAPID_SUBJECT: 'mailto:operations@example.com',
+      WEB_PUSH_VAPID_PUBLIC_KEY: 'public-key',
+      WEB_PUSH_VAPID_PRIVATE_KEY: 'private-key',
+    }),
+    false,
+  );
+  assert.equal(
+    isRefinancePreferenceDeliveryEnabled(
+      {
+        ...emailPreference,
+        emailEnabled: false,
+        explicitEmailConsent: false,
+        pushEnabled: true,
+        explicitPushConsent: true,
+      },
+      {
+        WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: 'true',
+        REFINANCE_PUSH_ALERTS_ENABLED: 'true',
+        WEB_PUSH_DELIVERY_ENABLED: 'true',
+        WEB_PUSH_VAPID_SUBJECT: 'mailto:operations@example.com',
+        WEB_PUSH_VAPID_PUBLIC_KEY: 'public-key',
+        WEB_PUSH_VAPID_PRIVATE_KEY: 'private-key',
+      },
+    ),
+    true,
+  );
 });
 
 test('suppresses before loading financial context while delivery is disabled', async () => {

@@ -320,6 +320,7 @@ const quietTimeSchema = z
 export const refinanceAlertPreferenceSchema = z
   .object({
     emailEnabled: z.boolean(),
+    pushEnabled: z.boolean().default(false),
     cadence: z.nativeEnum(NotificationCadence),
     sensitivity: z.nativeEnum(NotificationSensitivity),
     quietStart: quietTimeSchema.nullable().optional(),
@@ -335,24 +336,66 @@ export const refinanceAlertPreferenceSchema = z
         message: 'quietStart and quietEnd must be provided together',
       });
     }
-    if (!value.emailEnabled && value.cadence !== NotificationCadence.MUTED) {
+    if (
+      !value.emailEnabled &&
+      !value.pushEnabled &&
+      value.cadence !== NotificationCadence.MUTED
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['cadence'],
-        message: 'cadence must be MUTED when email alerts are disabled',
+        message: 'cadence must be MUTED when external alerts are disabled',
       });
     }
-    if (value.emailEnabled && value.cadence === NotificationCadence.MUTED) {
+    if (
+      (value.emailEnabled || value.pushEnabled) &&
+      value.cadence === NotificationCadence.MUTED
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['cadence'],
-        message: 'choose a delivery cadence when email alerts are enabled',
+        message: 'choose a delivery cadence when external alerts are enabled',
       });
     }
   });
 
 export type RefinanceAlertPreferenceBody = z.infer<
   typeof refinanceAlertPreferenceSchema
+>;
+
+const pushKeySchema = z
+  .string()
+  .trim()
+  .min(16)
+  .max(512)
+  .regex(/^[A-Za-z0-9_-]+$/, 'push key must use base64url encoding');
+
+export const refinancePushSubscriptionSchema = z
+  .object({
+    endpoint: z.string().url().max(4096).refine(
+      (value) => value.startsWith('https://'),
+      'push endpoint must use HTTPS',
+    ),
+    keys: z.object({
+      p256dh: pushKeySchema,
+      auth: pushKeySchema,
+    }).strict(),
+    explicitConsent: z.literal(true),
+  })
+  .strict();
+
+export type RefinancePushSubscriptionBody = z.infer<
+  typeof refinancePushSubscriptionSchema
+>;
+
+export const refinancePushSubscriptionRevokeSchema = z
+  .object({
+    endpoint: z.string().url().max(4096),
+  })
+  .strict();
+
+export type RefinancePushSubscriptionRevokeBody = z.infer<
+  typeof refinancePushSubscriptionRevokeSchema
 >;
 
 // ─── History / List Query ──────────────────────────────────────────────────────

@@ -23,6 +23,8 @@ import {
   ingestRateSnapshotSchema,
   rateHistoryQuerySchema,
   refinanceAlertPreferenceSchema,
+  refinancePushSubscriptionRevokeSchema,
+  refinancePushSubscriptionSchema,
   refinanceFeedbackSchema,
   refinanceTelemetrySchema,
   runScenarioSchema,
@@ -117,6 +119,22 @@ router.put(
   propertyAuthMiddleware,
   validateBody(refinanceAlertPreferenceSchema),
   RefinanceRadarController.updateAlertPreference,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-radar/push-subscriptions',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(refinancePushSubscriptionSchema),
+  RefinanceRadarController.registerPushSubscription,
+);
+
+router.delete(
+  '/properties/:propertyId/refinance-radar/push-subscriptions',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(refinancePushSubscriptionRevokeSchema),
+  RefinanceRadarController.revokePushSubscription,
 );
 
 // ─── Property-Scoped: History & Insights ────────────────────────────────────

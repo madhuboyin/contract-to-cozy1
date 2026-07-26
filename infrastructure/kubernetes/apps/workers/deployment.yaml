@@ -42,6 +42,37 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_OUTBOUND_NOTIFICATIONS_ENABLED
+            - name: REFINANCE_EXTERNAL_ALERTS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REFINANCE_EXTERNAL_ALERTS_ENABLED
+            - name: WEB_PUSH_DELIVERY_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WEB_PUSH_DELIVERY_ENABLED
+            - name: REFINANCE_PUSH_ALERTS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REFINANCE_PUSH_ALERTS_ENABLED
+            - name: WEB_PUSH_VAPID_SUBJECT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WEB_PUSH_VAPID_SUBJECT
+            - name: WEB_PUSH_VAPID_PUBLIC_KEY
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WEB_PUSH_VAPID_PUBLIC_KEY
+            - name: WEB_PUSH_VAPID_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: WEB_PUSH_VAPID_PRIVATE_KEY
+                  optional: true
             - name: WORKER_EXTERNAL_INGEST_ENABLED
               valueFrom:
                 configMapKeyRef:

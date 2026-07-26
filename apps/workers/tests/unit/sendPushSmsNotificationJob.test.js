@@ -21,8 +21,14 @@ const { sendSmsNotificationJob } = require('../../src/jobs/sendSmsNotification.j
 
 const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
-function fakeDeps({ delivery, aggregationAllows = true }) {
-  const calls = { updates: [] };
+function fakeDeps({
+  delivery,
+  aggregationAllows = true,
+  deliveryEnabled = false,
+  subscriptions = [],
+  send = async () => ({ statusCode: 201, headers: {}, body: '' }),
+}) {
+  const calls = { updates: [], subscriptionUpdates: [], sends: [] };
   const deps = {
     prisma: {
       notificationDelivery: {
@@ -32,19 +38,89 @@ function fakeDeps({ delivery, aggregationAllows = true }) {
           return { id: args.where.id, ...args.data };
         },
       },
+      pushSubscription: {
+        findMany: async () => subscriptions,
+        update: async (args) => {
+          calls.subscriptionUpdates.push(args);
+          return null;
+        },
+      },
     },
     logger: noopLogger,
     filterDeliveriesByAggregationPolicy: async (deliveries) => (aggregationAllows ? deliveries : []),
+    deliveryEnabled: () => deliveryEnabled,
+    send: async (...args) => {
+      calls.sends.push(args);
+      return send(...args);
+    },
   };
   return { deps, calls };
 }
+
+test('push: sends a minimal payload and marks the delivery SENT', async () => {
+  const { deps, calls } = fakeDeps({
+    delivery: pendingDelivery({
+      notification: {
+        id: 'notification-1',
+        userId: 'user-1',
+        title: 'Review your refinance window',
+        message: 'A qualified opportunity is ready to review.',
+        actionUrl: '/dashboard/properties/property-1/tools/mortgage-refinance-radar',
+      },
+    }),
+    deliveryEnabled: true,
+    subscriptions: [{
+      id: 'subscription-1',
+      endpoint: 'https://push.example.test/device',
+      p256dh: 'public-key',
+      auth: 'auth-secret',
+    }],
+  });
+
+  await sendPushNotificationJob('delivery-1', deps);
+
+  assert.equal(calls.sends.length, 1);
+  const payload = JSON.parse(calls.sends[0][1]);
+  assert.deepEqual(Object.keys(payload).sort(), ['body', 'title', 'url']);
+  assert.equal(calls.updates.at(-1).data.status, 'SENT');
+});
+
+test('push: revokes an expired subscription after a provider 410', async () => {
+  const providerError = Object.assign(new Error('Gone'), { statusCode: 410 });
+  const { deps, calls } = fakeDeps({
+    delivery: pendingDelivery({
+      notification: {
+        id: 'notification-1',
+        userId: 'user-1',
+        title: 'Refinance update',
+        message: 'Review the latest assumptions.',
+        actionUrl: '/',
+      },
+    }),
+    deliveryEnabled: true,
+    subscriptions: [{
+      id: 'subscription-1',
+      endpoint: 'https://push.example.test/expired',
+      p256dh: 'public-key',
+      auth: 'auth-secret',
+    }],
+    send: async () => { throw providerError; },
+  });
+
+  await assert.rejects(
+    () => sendPushNotificationJob('delivery-1', deps),
+    /PUSH_DELIVERY_FAILED/,
+  );
+  assert.equal(calls.subscriptionUpdates.length, 1);
+  assert.equal(calls.updates.at(-1).data.status, 'FAILED');
+});
 
 function pendingDelivery(overrides = {}) {
   return { id: 'delivery-1', status: 'PENDING', notification: { id: 'notification-1' }, ...overrides };
 }
 
 for (const [label, job, tag] of [
-  ['push', sendPushNotificationJob, 'PUSH_NOT_IMPLEMENTED'],
+  ['push', sendPushNotificationJob, 'PUSH_NOT_CONFIGURED'],
   ['sms', sendSmsNotificationJob, 'SMS_NOT_IMPLEMENTED'],
 ]) {
   test(`${label}: marks a PENDING delivery SKIPPED and throws instead of silently completing`, async () => {

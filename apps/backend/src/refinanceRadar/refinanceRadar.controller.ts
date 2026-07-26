@@ -13,6 +13,8 @@ import {
   IngestRateSnapshotBody,
   RateHistoryQuery,
   RefinanceAlertPreferenceBody,
+  RefinancePushSubscriptionBody,
+  RefinancePushSubscriptionRevokeBody,
   RefinanceFeedbackBody,
   RefinanceTelemetryBody,
   RunScenarioBody,
@@ -27,6 +29,8 @@ import {
 } from '../services/financialContext/context';
 import {
   getRefinanceAlertPreference,
+  registerRefinancePushSubscription,
+  revokeRefinancePushSubscription,
   updateRefinanceAlertPreference,
 } from './refinanceAlertPreference.service';
 import { buildRefinanceScenarioMarkdown } from './refinanceScenarioMarkdown';
@@ -365,6 +369,39 @@ export class RefinanceRadarController {
         req.body as RefinanceAlertPreferenceBody,
       );
       res.json({ success: true, data: { preference } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async registerPushSubscription(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      await registerRefinancePushSubscription(
+        userId,
+        req.body as RefinancePushSubscriptionBody,
+        req.get('user-agent'),
+      );
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async revokePushSubscription(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const { endpoint } = req.body as RefinancePushSubscriptionRevokeBody;
+      await revokeRefinancePushSubscription(userId, endpoint);
+      res.status(204).send();
     } catch (err) {
       next(err);
     }

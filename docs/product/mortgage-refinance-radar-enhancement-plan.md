@@ -55,11 +55,12 @@ aging, or stale mortgage balance, while keeping in-product monitoring and
 estimates available with calm warnings and a direct path to confirm the
 canonical Financing record. Property-scoped alert preferences now keep Home
 monitoring always on, require explicit email opt-in, offer immediate/digest
-cadence, quiet hours, and conservative/balanced/early sensitivity, and expose
-push as unavailable until a provider exists. Refinance no longer inherits
-legacy email defaults. External delivery remains disabled during the pilot;
-the stored preference and policy contract are ready for a later cooldown-gated
-delivery slice.
+cadence, quiet hours, and conservative/balanced/early sensitivity. Push is
+available only when a VAPID public key is configured. Permission is requested
+only after an explicit homeowner action, browser subscriptions are stored per
+user and device, and the property preference is confirmed separately.
+Refinance no longer inherits legacy email defaults. External delivery remains
+disabled during the pilot; email and push have independent rollout gates.
 The guarded delivery consumer is now implemented for durable OPEN and material
 UPDATE events. It reloads canonical property state at consumption time,
 addresses only the owning homeowner, requires the explicit property-scoped
@@ -70,6 +71,14 @@ independent fail-closed controls—`REFINANCE_EXTERNAL_ALERTS_ENABLED` and
 `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED`—must both be exactly `true`; therefore
 external delivery remains off by default. Existing notification policy applies
 the homeowner's cadence, timezone, and quiet hours once the alert is admitted.
+The Web Push worker sends only title, calm summary text, and a product deep
+link; mortgage balance, rate, savings, and other sensitive figures are
+excluded. Expired subscriptions are revoked after provider 404/410 responses.
+Delivery requires `WEB_PUSH_DELIVERY_ENABLED`,
+`REFINANCE_PUSH_ALERTS_ENABLED`, `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED`, and
+complete VAPID subject/public/private configuration. The Prisma subscription
+model is included, but no migration script is generated; schema deployment
+remains an operator action.
 The scenario planner's first expanded-assumptions slice is also implemented.
 Homeowners can itemize discount points, lender credits, and appraisal/title/tax
 or other fees instead of relying on one opaque cost value. Results distinguish
@@ -113,7 +122,7 @@ scenario metadata JSON, so no schema change or migration is required.
 | Lender-ready Markdown export | Complete | Recomputes against canonical context and exports assumptions, costs, alternatives, questions, and disclaimers as Markdown only. |
 | Funnel and trust instrumentation and reporting | Complete | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, durable alert-suppression outcomes, evaluation coverage, duplicate alerts, and freshness guardrails are aggregated through the authorized `/api/admin/analytics/refinance-radar` report. |
 | FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Complete for planning | Explicit Financing loan types drive FHA streamline, VA IRRRL, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, and second-lien coordination pathways. Every pathway lists facts to confirm and avoids approval claims or hard-coded county limits. |
-| Push notifications | Deferred | Requires a configured push provider and consent contract. |
+| Push notifications | Implemented; rollout gated | Explicit browser consent, persisted per-device subscriptions, property-scoped PUSH preferences, VAPID delivery, minimal payloads, stale-subscription cleanup, and fail-closed rollout controls are implemented. Operators must apply the Prisma schema and configure VAPID keys and rollout flags. |
 | Lender-offer and Loan Estimate comparison | Reviewed comparison and homeowner-controlled handoff complete | Homeowners can compare two to four official Loan Estimates using loan amount, disclosed APR, principal-and-interest payment, estimated total payment, monthly mortgage insurance, lender costs/credits, cash to close, and page-3 five-year totals. Cash to close is recorded as from or to the borrower and is ranked only when every offer is cash-from-borrower with the same amount, product, and term; unknown, mixed, or cash-to-borrower disclosures remain visible but cannot earn a misleading lowest-cash badge. Readable direction text is extracted from page 2, and all exports preserve the direction. Total-payment rankings appear only when every offer supplies that field, and the interface separates mortgage insurance plus lender-estimated tax, insurance, and escrow assumptions from P&I. Page-1 extraction prefills readable Projected Payments values and warns about mortgage insurance or incomplete all-in payment context. Section A discount points are captured as both percentage and dollars, checked against the loan amount, and shown separately from net loan costs so a bought-down rate is not mistaken for a free advantage. Page-2 extraction prefills readable points, while incomplete or inconsistent point disclosures require review. For offers with the same amount, product, and term, the comparison quantifies how long a lower monthly principal-and-interest payment takes to recover additional net loan costs; it also warns when a higher-cost offer does not lower payment. The tradeoff is explicitly limited to disclosed net loan costs and P&I and excludes taxes, insurance, escrow, future refinancing, and time value of money. The comparison records each disclosure's issue date, rate-lock status, and lock expiration; it warns on older disclosures, expired or incomplete locks, different issue dates, and mixed locked/floating offers. Saved comparisons are re-evaluated when read so time-sensitive lock warnings do not freeze at save time. A text-layer or scanned PDF, or up to three image pages, can prefill an editable offer through a non-retained, magic-byte-validated upload, including the standardized page-1 issue date when readable. Scanned PDFs are safely capped at three pages; PDF and image pages use sequential local OCR, expose field provenance, and cap every OCR-derived field at medium confidence. Standard page sections are detected automatically, with visible completeness, duplicate-page, and ordering checks before comparison. Every extracted field requires explicit review before comparison or saving. Different loan amounts and unlike terms fail visibly as comparison warnings. Homeowners can export a Markdown-only review package with lender questions and an apples-to-apples verification checklist. After selecting one offer and completing explicit figure, comparability, and manual-sharing acknowledgements, the homeowner can also download a selected-lender discussion brief. That brief intentionally omits competitor identities and is never transmitted by ContractToCozy. Comparisons remain transient by default, persist only after an explicit Save action, and can be permanently deleted through a two-step property-scoped control. Any future transactional lender delivery remains gated. |
 
 ## Executive recommendation
@@ -123,10 +132,12 @@ scenario metadata JSON, so no schema change or migration is required.
 The feature now has the calculation, orchestration, Home promotion, proactive
 data capture, explainability, Markdown export, feedback, and official
 Loan Estimate comparison foundations required for an always-on product.
-Remaining product work is concentrated in push-provider integration and any
-future transactional lender delivery/provider integration. The exports are
-deliberately Markdown-only and keep the homeowner in control of any external
-sharing.
+Remaining product work is operational: apply the PushSubscription schema,
+provision VAPID configuration, run an internal Web Push/email cohort, and
+approve rollout only after delivery, duplicate, opt-out, and freshness
+guardrails pass. Any future transactional lender delivery remains deliberately
+gated. Exports remain Markdown-only and keep the homeowner in control of
+external sharing.
 
 - Treat Financing Center as the only owner of mortgage facts; never ask users to duplicate known information.
 

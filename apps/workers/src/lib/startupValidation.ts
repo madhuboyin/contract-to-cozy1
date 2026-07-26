@@ -134,6 +134,17 @@ export async function validateStartupDependencies(deps: StartupValidationDeps = 
         throw new Error('SMTP_HOST and SMTP_PASS are required — at least one OUTBOUND-impact job is enabled');
       }
     }),
+    runCheck('web-push', env.WEB_PUSH_DELIVERY_ENABLED === 'true', async () => {
+      if (
+        !env.WEB_PUSH_VAPID_SUBJECT ||
+        !env.WEB_PUSH_VAPID_PUBLIC_KEY ||
+        !env.WEB_PUSH_VAPID_PRIVATE_KEY
+      ) {
+        throw new Error(
+          'WEB_PUSH_VAPID_SUBJECT, WEB_PUSH_VAPID_PUBLIC_KEY, and WEB_PUSH_VAPID_PRIVATE_KEY are required when Web Push delivery is enabled',
+        );
+      }
+    }),
     runCheck('s3', isAnyS3JobEnabled(), async () => {
       if (!env.S3_BUCKET) {
         throw new Error('S3_BUCKET is required — at least one export/disclosure job that writes to S3 is enabled');

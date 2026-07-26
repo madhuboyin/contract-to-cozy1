@@ -51,6 +51,10 @@ const CLEAR_FLAGS = {
   NODE_ENV: 'test',
   SMTP_HOST: undefined,
   SMTP_PASS: undefined,
+  WEB_PUSH_DELIVERY_ENABLED: undefined,
+  WEB_PUSH_VAPID_SUBJECT: undefined,
+  WEB_PUSH_VAPID_PUBLIC_KEY: undefined,
+  WEB_PUSH_VAPID_PRIVATE_KEY: undefined,
   S3_BUCKET: undefined,
   GEMINI_API_KEY: undefined,
 };
@@ -130,6 +134,45 @@ test('smtp passes once SMTP_HOST and SMTP_PASS are set and the OUTBOUND group is
       const smtp = results.find((r) => r.name === 'smtp');
       assert.equal(smtp.required, true);
       assert.equal(smtp.ok, true);
+    },
+  );
+});
+
+test('web push fails closed when enabled without complete VAPID configuration', async () => {
+  await withEnv(
+    { ...CLEAR_FLAGS, WEB_PUSH_DELIVERY_ENABLED: 'true' },
+    async () => {
+      const { validateStartupDependencies } = freshModule();
+      const results = await validateStartupDependencies({
+        checkDatabaseConnectivity: async () => {},
+        checkRedisConnectivity: async () => {},
+      });
+      const push = results.find((result) => result.name === 'web-push');
+      assert.equal(push.required, true);
+      assert.equal(push.ok, false);
+      assert.match(push.detail, /WEB_PUSH_VAPID_SUBJECT/);
+    },
+  );
+});
+
+test('web push startup validation passes with complete VAPID configuration', async () => {
+  await withEnv(
+    {
+      ...CLEAR_FLAGS,
+      WEB_PUSH_DELIVERY_ENABLED: 'true',
+      WEB_PUSH_VAPID_SUBJECT: 'mailto:operations@example.com',
+      WEB_PUSH_VAPID_PUBLIC_KEY: 'public-key',
+      WEB_PUSH_VAPID_PRIVATE_KEY: 'private-key',
+    },
+    async () => {
+      const { validateStartupDependencies } = freshModule();
+      const results = await validateStartupDependencies({
+        checkDatabaseConnectivity: async () => {},
+        checkRedisConnectivity: async () => {},
+      });
+      const push = results.find((result) => result.name === 'web-push');
+      assert.equal(push.required, true);
+      assert.equal(push.ok, true);
     },
   );
 });

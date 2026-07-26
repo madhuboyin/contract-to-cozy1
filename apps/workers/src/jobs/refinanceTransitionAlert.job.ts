@@ -56,6 +56,9 @@ export interface RefinanceTransitionAlertDeps {
   ): Promise<boolean>;
   createNotification(input: CreateAlertInput): Promise<unknown>;
   deliveryEnabled(): boolean;
+  preferenceDeliveryEnabled?(
+    preference: RefinanceAlertPreferenceDTO,
+  ): boolean;
   now(): Date;
 }
 
@@ -63,9 +66,37 @@ export function areRefinanceExternalAlertsEnabled(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   return (
-    env[REFINANCE_EXTERNAL_ALERT_FLAG] === 'true' &&
-    areWorkerOutboundNotificationsEnabled(env)
+    areWorkerOutboundNotificationsEnabled(env) &&
+    (
+      env[REFINANCE_EXTERNAL_ALERT_FLAG] === 'true' ||
+      (
+        env.REFINANCE_PUSH_ALERTS_ENABLED === 'true' &&
+        env.WEB_PUSH_DELIVERY_ENABLED === 'true'
+      )
+    )
   );
+}
+
+export function isRefinancePreferenceDeliveryEnabled(
+  preference: RefinanceAlertPreferenceDTO,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (!areWorkerOutboundNotificationsEnabled(env)) return false;
+  const emailEnabled =
+    preference.emailEnabled &&
+    preference.explicitEmailConsent &&
+    env.REFINANCE_EXTERNAL_ALERTS_ENABLED === 'true';
+  const pushEnabled =
+    preference.pushEnabled &&
+    preference.explicitPushConsent &&
+    env.REFINANCE_PUSH_ALERTS_ENABLED === 'true' &&
+    env.WEB_PUSH_DELIVERY_ENABLED === 'true' &&
+    Boolean(
+      env.WEB_PUSH_VAPID_SUBJECT &&
+      env.WEB_PUSH_VAPID_PUBLIC_KEY &&
+      env.WEB_PUSH_VAPID_PRIVATE_KEY,
+    );
+  return emailEnabled || pushEnabled;
 }
 
 async function loadContext(
@@ -95,24 +126,34 @@ async function loadContext(
   if (!property) return null;
 
   const ownerUserId = property.homeownerProfile.userId;
-  const storedPreference = await prisma.notificationPreference.findUnique({
-    where: {
-      userId_scopeKey_category_channel: {
+  const [storedPreferences, activePushSubscription] = await Promise.all([
+    prisma.notificationPreference.findMany({
+      where: {
         userId: ownerUserId,
         scopeKey: `PROPERTY:${propertyId}`,
         category: 'REFINANCE',
-        channel: NotificationChannel.EMAIL,
       },
-    },
-    select: {
-      enabled: true,
-      cadence: true,
-      sensitivity: true,
-      quietStart: true,
-      quietEnd: true,
-      timezone: true,
-    },
-  });
+      select: {
+        channel: true,
+        enabled: true,
+        cadence: true,
+        sensitivity: true,
+        quietStart: true,
+        quietEnd: true,
+        timezone: true,
+      },
+    }),
+    prisma.pushSubscription.findFirst({
+      where: { userId: ownerUserId, revokedAt: null },
+      select: { id: true },
+    }),
+  ]);
+  const emailPreference = storedPreferences.find(
+    (item) => item.channel === NotificationChannel.EMAIL,
+  );
+  const pushPreference = storedPreferences.find(
+    (item) => item.channel === NotificationChannel.PUSH,
+  );
 
   return {
     propertyId,
@@ -127,14 +168,23 @@ async function loadContext(
     marketDataSource:
       property.refinanceRadarState?.lastRateSnapshot?.source ?? null,
     preference: mapRefinanceAlertPreference(
-      storedPreference
+      emailPreference
         ? {
-            ...storedPreference,
-            cadence: storedPreference.cadence as NotificationCadence,
+            ...emailPreference,
+            cadence: emailPreference.cadence as NotificationCadence,
             sensitivity:
-              storedPreference.sensitivity as NotificationSensitivity | null,
+              emailPreference.sensitivity as NotificationSensitivity | null,
           }
         : null,
+      pushPreference
+        ? {
+            ...pushPreference,
+            cadence: pushPreference.cadence as NotificationCadence,
+            sensitivity:
+              pushPreference.sensitivity as NotificationSensitivity | null,
+          }
+        : null,
+      Boolean(activePushSubscription),
     ),
   };
 }
@@ -156,7 +206,14 @@ const defaultDeps: RefinanceTransitionAlertDeps = {
           entityId: propertyId,
           createdAt: { gte: since },
           deliveries: {
-            some: { channel: NotificationChannel.EMAIL },
+            some: {
+              channel: {
+                in: [
+                  NotificationChannel.EMAIL,
+                  NotificationChannel.PUSH,
+                ],
+              },
+            },
           },
         },
         select: { id: true },
@@ -164,6 +221,7 @@ const defaultDeps: RefinanceTransitionAlertDeps = {
     ),
   createNotification: (input) => NotificationService.create(input),
   deliveryEnabled: areRefinanceExternalAlertsEnabled,
+  preferenceDeliveryEnabled: isRefinancePreferenceDeliveryEnabled,
   now: () => new Date(),
 };
 
@@ -237,11 +295,13 @@ export async function processRefinanceTransitionAlert(
     },
     now,
   );
+  const preferenceDeliveryEnabled =
+    deps.preferenceDeliveryEnabled?.(context.preference) ?? deliveryEnabled;
   const decision = decideRefinanceExternalAlert({
     preference: context.preference,
     alertReadiness: freshness.alertReadiness,
     confidenceLevel: context.confidenceLevel,
-    deliveryEnabled,
+    deliveryEnabled: preferenceDeliveryEnabled,
     cooldownActive,
   });
   if (!decision.eligible) {

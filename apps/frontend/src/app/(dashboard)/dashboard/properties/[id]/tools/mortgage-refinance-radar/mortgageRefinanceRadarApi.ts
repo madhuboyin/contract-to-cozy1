@@ -291,14 +291,19 @@ export type OpportunityHistoryDTO = {
 export type RefinanceAlertPreferenceDTO = {
   homeEnabled: true;
   emailEnabled: boolean;
-  pushAvailable: false;
+  pushEnabled: boolean;
+  pushAvailable: boolean;
+  hasActivePushSubscription: boolean;
+  pushPublicKey: string | null;
   cadence: 'IMMEDIATE' | 'DAILY_DIGEST' | 'WEEKLY_BRIEF' | 'MUTED';
   sensitivity: 'CONSERVATIVE' | 'BALANCED' | 'EARLY';
   quietStart: string | null;
   quietEnd: string | null;
   timezone: string;
   explicitEmailConsent: boolean;
+  explicitPushConsent: boolean;
   externalDeliveryEnabled: boolean;
+  pushDeliveryEnabled: boolean;
 };
 
 export type RefinanceLoanEstimateInput = {
@@ -481,6 +486,7 @@ export async function updateRefinanceAlertPreference(
   preference: Pick<
     RefinanceAlertPreferenceDTO,
     | 'emailEnabled'
+    | 'pushEnabled'
     | 'cadence'
     | 'sensitivity'
     | 'quietStart'
@@ -493,6 +499,62 @@ export async function updateRefinanceAlertPreference(
     preference,
   );
   return res.data.preference as RefinanceAlertPreferenceDTO;
+}
+
+export async function registerRefinancePushSubscription(
+  propertyId: string,
+  subscription: PushSubscription,
+): Promise<void> {
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+    throw new Error('The browser returned an incomplete push subscription.');
+  }
+  await api.post(
+    `/api/properties/${propertyId}/refinance-radar/push-subscriptions`,
+    {
+      endpoint: json.endpoint,
+      keys: {
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth,
+      },
+      explicitConsent: true,
+    },
+  );
+}
+
+function decodeVapidPublicKey(value: string): Uint8Array<ArrayBuffer> {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const bytes = window.atob(base64);
+  return Uint8Array.from(bytes, (character) => character.charCodeAt(0));
+}
+
+export async function ensureRefinancePushSubscription(
+  propertyId: string,
+  publicKey: string,
+): Promise<PushSubscription> {
+  if (
+    typeof window === 'undefined' ||
+    !('serviceWorker' in navigator) ||
+    !('PushManager' in window) ||
+    !('Notification' in window)
+  ) {
+    throw new Error('Push notifications are not supported by this browser.');
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    throw new Error('Browser notification permission was not granted.');
+  }
+  const registration = await navigator.serviceWorker.register('/sw.js');
+  const existing = await registration.pushManager.getSubscription();
+  const subscription =
+    existing ??
+    await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: decodeVapidPublicKey(publicKey),
+    });
+  await registerRefinancePushSubscription(propertyId, subscription);
+  return subscription;
 }
 
 export async function compareRefinanceLoanEstimates(

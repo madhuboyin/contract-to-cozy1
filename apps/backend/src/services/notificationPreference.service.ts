@@ -9,7 +9,26 @@ import {
 } from '../productFramework/notificationPolicy.contract';
 
 const IMMEDIATE_CATEGORIES = new Set<NotificationCategory>(['SAFETY', 'ACTIVE_DAMAGE', 'MATERIAL_DEADLINE', 'WORKFLOW']);
-const PILOT_DELIVERY_CHANNELS = new Set<keyof typeof NotificationChannel>(['IN_APP', 'EMAIL']);
+function isDeliveryChannelSupported(
+  channel: keyof typeof NotificationChannel,
+  category: NotificationCategory,
+): boolean {
+  if (channel === 'IN_APP') return true;
+  if (channel === 'EMAIL') {
+    return (
+      category !== 'REFINANCE' ||
+      process.env.REFINANCE_EXTERNAL_ALERTS_ENABLED === 'true'
+    );
+  }
+  if (channel !== 'PUSH') return false;
+  return (
+    process.env.WEB_PUSH_DELIVERY_ENABLED === 'true' &&
+    (
+      category !== 'REFINANCE' ||
+      process.env.REFINANCE_PUSH_ALERTS_ENABLED === 'true'
+    )
+  );
+}
 
 export function inferNotificationCategory(type: string): NotificationCategory {
   const normalized = type.toUpperCase();
@@ -108,7 +127,7 @@ export async function resolveNotificationPolicy(input: {
   const channels = [...new Set([...channelDefaults, ...configuredChannels])].map((channel) => {
     const preference = preferences.find((candidate) => candidate.channel === channel);
     const critical = urgency === 'CRITICAL';
-    const supported = PILOT_DELIVERY_CHANNELS.has(channel);
+    const supported = isDeliveryChannelSupported(channel, category);
     const enabled = supported && (critical && channel === 'IN_APP' ? true : preference?.enabled ?? channelDefaults.includes(channel));
     const cadence = (preference?.cadence ?? defaultCadence) as Cadence;
     const quiet = preference ? isQuietNow(preference, input.now ?? new Date()) : false;

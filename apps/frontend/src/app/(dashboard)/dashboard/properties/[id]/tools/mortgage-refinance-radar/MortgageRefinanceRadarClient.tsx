@@ -25,6 +25,7 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import {
   evaluateRadar,
+  ensureRefinancePushSubscription,
   exportScenarioMarkdown,
   getRefinanceAlertPreference,
   getFinancingMortgageProfile,
@@ -676,6 +677,7 @@ function AlertPreferencesCard({
   const [preference, setPreference] =
     useState<RefinanceAlertPreferenceDTO | null>(null);
   const [saving, setSaving] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -699,7 +701,11 @@ function AlertPreferencesCard({
     try {
       const saved = await updateRefinanceAlertPreference(propertyId, {
         emailEnabled: preference.emailEnabled,
-        cadence: preference.emailEnabled ? preference.cadence : 'MUTED',
+        pushEnabled: preference.pushEnabled,
+        cadence:
+          preference.emailEnabled || preference.pushEnabled
+            ? preference.cadence
+            : 'MUTED',
         sensitivity: preference.sensitivity,
         quietStart: preference.quietStart,
         quietEnd: preference.quietEnd,
@@ -708,9 +714,9 @@ function AlertPreferencesCard({
       });
       setPreference(saved);
       setMessage(
-        saved.externalDeliveryEnabled
-          ? 'Preferences saved. Eligible email alerts are active.'
-          : 'Preferences saved. Email delivery remains disabled during the pilot.',
+        saved.externalDeliveryEnabled || saved.pushDeliveryEnabled
+          ? 'Preferences saved. Eligible external alerts are active.'
+          : 'Preferences saved. External delivery remains disabled during the pilot.',
       );
     } catch (error) {
       setMessage(
@@ -718,6 +724,48 @@ function AlertPreferencesCard({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function togglePush(enabled: boolean) {
+    if (!preference) return;
+    if (!enabled) {
+      setPreference({
+        ...preference,
+        pushEnabled: false,
+        cadence: preference.emailEnabled ? preference.cadence : 'MUTED',
+      });
+      return;
+    }
+    if (!preference.pushPublicKey) {
+      setMessage('Push alerts are not configured yet.');
+      return;
+    }
+    setSubscribing(true);
+    setMessage(null);
+    try {
+      await ensureRefinancePushSubscription(
+        propertyId,
+        preference.pushPublicKey,
+      );
+      setPreference({
+        ...preference,
+        pushEnabled: true,
+        hasActivePushSubscription: true,
+        cadence:
+          preference.cadence === 'MUTED' ? 'IMMEDIATE' : preference.cadence,
+      });
+      setMessage(
+        'Browser permission granted. Save preferences to opt in to refinance push alerts.',
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to enable push notifications.',
+      );
+    } finally {
+      setSubscribing(false);
     }
   }
 
@@ -733,9 +781,10 @@ function AlertPreferencesCard({
             Refinance alert preferences
           </h3>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {preference?.externalDeliveryEnabled
-              ? 'Home monitoring stays on. Email is explicit opt-in and follows your cadence and quiet hours.'
-              : 'Home monitoring stays on. Email is explicit opt-in and will activate only after the delivery pilot is approved.'}
+            {preference?.externalDeliveryEnabled ||
+            preference?.pushDeliveryEnabled
+              ? 'Home monitoring stays on. Email and push are explicit opt-in and follow your cadence and quiet hours.'
+              : 'Home monitoring stays on. External channels require explicit opt-in and activate only after their delivery rollout is approved.'}
           </p>
         </div>
 
@@ -774,17 +823,34 @@ function AlertPreferencesCard({
               </span>
             </span>
           </label>
-          <div className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-slate-50/60 p-3 opacity-70 dark:border-slate-700/70 dark:bg-slate-900/30">
-            <input type="checkbox" disabled className="mt-1" aria-label="Push alerts unavailable" />
+          <label className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={preference?.pushEnabled ?? false}
+              disabled={
+                !preference ||
+                !preference.pushAvailable ||
+                subscribing
+              }
+              onChange={(event) => void togglePush(event.target.checked)}
+              aria-label="Push refinance alerts"
+            />
             <span>
               <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
                 <Smartphone className="h-3.5 w-3.5" aria-hidden="true" /> Push
               </span>
               <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">
-                Available after a push provider is integrated.
+                {!preference?.pushAvailable
+                  ? 'Available after Web Push keys are configured.'
+                  : subscribing
+                    ? 'Waiting for browser permission…'
+                    : preference.pushDeliveryEnabled
+                      ? 'Receive qualified refinance alerts on this device.'
+                      : 'Opt in now; delivery activates with the push rollout.'}
               </span>
             </span>
-          </div>
+          </label>
         </div>
 
         {preference && (
@@ -805,10 +871,10 @@ function AlertPreferencesCard({
               </select>
             </label>
             <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
-              Email cadence
+              External alert cadence
               <select
                 value={preference.cadence}
-                disabled={!preference.emailEnabled}
+                disabled={!preference.emailEnabled && !preference.pushEnabled}
                 onChange={(event) => setPreference({
                   ...preference,
                   cadence: event.target.value as RefinanceAlertPreferenceDTO['cadence'],
@@ -825,7 +891,7 @@ function AlertPreferencesCard({
               <input
                 type="time"
                 value={preference.quietStart ?? '21:00'}
-                disabled={!preference.emailEnabled}
+                disabled={!preference.emailEnabled && !preference.pushEnabled}
                 onChange={(event) => setPreference({ ...preference, quietStart: event.target.value })}
                 className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
               />
@@ -835,7 +901,7 @@ function AlertPreferencesCard({
               <input
                 type="time"
                 value={preference.quietEnd ?? '07:00'}
-                disabled={!preference.emailEnabled}
+                disabled={!preference.emailEnabled && !preference.pushEnabled}
                 onChange={(event) => setPreference({ ...preference, quietEnd: event.target.value })}
                 className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
               />

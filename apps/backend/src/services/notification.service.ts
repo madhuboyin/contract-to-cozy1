@@ -241,6 +241,10 @@ export class NotificationService {
               'SEND_PUSH_NOTIFICATION',
               { notificationDeliveryId: delivery.id }
             );
+            await prisma.notificationDelivery.update({
+              where: { id: delivery.id },
+              data: { enqueuedAt: new Date() },
+            });
             break;
 
           case NotificationChannel.SMS:

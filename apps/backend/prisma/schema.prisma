@@ -1723,6 +1723,7 @@ model User {
   messages                         Message[]
   notifications                    Notification[]
   canonicalNotificationPreferences NotificationPreference[]
+  pushSubscriptions                PushSubscription[]
   notificationOutcomes             NotificationOutcome[]
   favorites                        Favorite[]
   refreshTokenSessions             RefreshTokenSession[]
@@ -5407,6 +5408,23 @@ model NotificationPreference {
   @@unique([userId, scopeKey, category, channel])
   @@index([userId, propertyId, category])
   @@map("notification_preferences")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("push_subscriptions")
 }
 
 model NotificationOutcome {
