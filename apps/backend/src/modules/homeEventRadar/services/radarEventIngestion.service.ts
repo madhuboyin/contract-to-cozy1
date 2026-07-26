@@ -7,13 +7,12 @@ import {
   type NormalizedGeography,
 } from '../contracts';
 import {
+  enqueueRadarMatchRoot,
   getRadarMatchQueue,
-  RADAR_MATCH_JOB_NAME,
   type RadarMatchJobPayload,
 } from '../queues/radarMatch.queue';
 import {
   normalizeRadarJsonValue,
-  radarMatchJobId,
   radarObservationFingerprint,
   radarRevisionIdentity,
   radarValueFingerprint,
@@ -405,28 +404,16 @@ export class RadarEventIngestionService {
       return { outcome: 'created' as const, event, revision, lifecycleStatus };
     });
 
-    const matchJobId = radarMatchJobId(
-      observation.sourceDefinitionId,
-      observation.providerEventId,
+    const matchJobId = await enqueueRadarMatchRoot(this.queueProvider(), {
+      radarEventId: persisted.event.id,
+      radarEventRevisionId: persisted.revision.id,
       revisionIdentity,
-    );
-    await this.queueProvider().add(
-      RADAR_MATCH_JOB_NAME,
-      {
-        radarEventId: persisted.event.id,
-        radarEventRevisionId: persisted.revision.id,
-        revisionIdentity,
-        sourceDefinitionId: observation.sourceDefinitionId,
-        sourceRunId: context.sourceRunId,
-        lifecycleStatus: persisted.lifecycleStatus,
-        correlationId: context.correlationId,
-      },
-      {
-        jobId: matchJobId,
-        attempts: 5,
-        backoff: { type: 'exponential', delay: 5_000 },
-      },
-    );
+      sourceDefinitionId: observation.sourceDefinitionId,
+      sourceRunId: context.sourceRunId,
+      lifecycleStatus: persisted.lifecycleStatus,
+      correlationId: context.correlationId,
+      providerEventId: observation.providerEventId,
+    });
 
     return {
       outcome: persisted.outcome,

@@ -993,7 +993,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 ## Current Limitations
 
 - Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
-- Durable canonical ingestion is implemented for NWS, freeze, and test fixtures. Durable matching is still pending, so accepted events do not yet guarantee a populated homeowner feed.
+- Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Property/postal/admin scopes are matched through resumable pages with independently retryable property jobs; polygon NWS alerts still await indexed geospatial matching.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - `county` and `polygon` matching are not implemented.
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
@@ -1006,13 +1006,16 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 Tracked from the "unified live-signal surface" initiative (2026-07-10). Phase 1 (promotion bridge + tax reassessment) is **done** — everything below is what's left.
 
-### Phase 2 — Weather convergence (provider adapters complete; durable processing pending)
+### Phase 2 — Weather convergence (provider adapters and durable processing complete)
 
 `severeWeatherAlertsJob` and `freezeRiskIncidentsJob` now enqueue only canonical radar observations
 through the durable ingest consumer.
 NWS preserves CAP identity and polygon evidence; freeze forecasts use stable property-scoped identity
-and resolve only after a successful warm forecast. The durable match consumer remains the next
-delivery slice before the weather feed can be considered operationally complete.
+and resolve only after a successful warm forecast. The durable match consumer validates each
+event revision, scans candidates in bounded resumable pages, and retries each property scope
+independently. Property-scoped freeze events can now populate the Radar feed. NWS polygon coverage
+still depends on HER-300's indexed geospatial matcher; HER-204 is the next delivery slice and will
+extract Incident promotion into its single durable bridge.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-202 implemented |
+| Status | In progress — HER-203 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -31,7 +31,8 @@
 | HER-200 NWS adapter | Complete; DB application pending | NWS CAP alerts now use source runs and canonical ingestion with shared identity, polygon/MultiPolygon geography, full provider evidence, conservative health semantics, and no direct Incident/Guidance writes |
 | HER-201 Freeze forecast adapter | Complete; DB application pending | Open-Meteo forecasts now use source runs and canonical property-scoped ingestion with stable identity, immutable refresh revisions, verified warm resolution, conservative failure semantics, and no direct Incident/Guidance writes |
 | HER-202 Durable ingest consumer | Complete; DB application pending | Versioned canonical jobs use deterministic same-run identity, bounded retries with jitter, retained failure history, payload limits, metrics, a global kill switch, bounded concurrency, and graceful shutdown; NWS, freeze, and test fixtures enqueue through it |
-| HER-203+ | Not started | Durable matching, homeowner APIs, actions, and operations remain |
+| HER-203 Durable match consumer | Complete; DB application pending | Versioned revision-driven scan jobs dispatch deterministic, independently retryable property scopes through bounded cursor pages; canonical property/postal/admin discovery, terminal outcomes, metrics, kill switch, bounded concurrency, retained failures, and graceful shutdown are wired |
+| HER-204+ | Not started | Incident bridge extraction, weather lifecycle convergence, advanced geospatial matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -652,6 +653,18 @@ Implement matching consumer separately from ingestion:
 - retry of failed property scopes;
 - structured outcome;
 - no unbounded all-property transaction.
+
+Implementation note: the durable consumer uses one versioned queue contract with two explicit
+scope types. A revision-driven `scan` scope validates event/revision ownership, reads at most a
+bounded cursor page of candidate property IDs, and dispatches deterministic `property` scopes plus
+at most one continuation. Each property scope executes independently and throws on a property
+failure so BullMQ retries only that property; replayed scans produce the same child job identities.
+Canonical property, postal-code, state, and county identifiers are parsed without broadening or
+guessing. Point, radius, and polygon scopes terminate as `unsupported_geography` until HER-300
+provides indexed PostGIS matching. The consumer has five exponential attempts with jitter,
+retained completed/failed history, lag/duration/outcome/property/retry/dead-letter metrics, a
+fail-closed `RADAR_MATCH_ENABLED` switch, bounded page-size and concurrency configuration, and
+graceful Worker/Queue shutdown. No database schema change was required.
 
 ### HER-204 — Incident promotion bridge
 

@@ -106,6 +106,53 @@ export const radarIngestDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const radarMatchOutcomesTotal = new Counter({
+  name: 'radar_match_outcomes_total',
+  help: 'Durable Radar matching outcomes by scan or property scope',
+  labelNames: ['scope', 'outcome'] as const,
+  registers: [register],
+});
+
+export const radarMatchPropertiesTotal = new Counter({
+  name: 'radar_match_properties_total',
+  help: 'Property-scoped Radar matching outcomes',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
+export const radarMatchFailuresTotal = new Counter({
+  name: 'radar_match_failures_total',
+  help: 'Failed durable Radar matching attempts by bounded error class',
+  labelNames: ['error_class'] as const,
+  registers: [register],
+});
+
+export const radarMatchRetriesTotal = new Counter({
+  name: 'radar_match_retries_total',
+  help: 'Radar match jobs that remain eligible for BullMQ retry',
+  registers: [register],
+});
+
+export const radarMatchDeadLetterTotal = new Counter({
+  name: 'radar_match_dead_letter_total',
+  help: 'Radar match jobs that exhausted their bounded BullMQ attempts',
+  registers: [register],
+});
+
+export const radarMatchLagSeconds = new Histogram({
+  name: 'radar_match_lag_seconds',
+  help: 'Time from Radar match scope enqueue to durable matching start',
+  buckets: [0.1, 0.5, 1, 5, 15, 30, 60, 300, 900],
+  registers: [register],
+});
+
+export const radarMatchDurationSeconds = new Histogram({
+  name: 'radar_match_duration_seconds',
+  help: 'Duration of a durable Radar scan or property match scope',
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 30],
+  registers: [register],
+});
+
 // ─── Severe weather alerts job metrics ───────────────────────────────────────
 
 export const nwsFetchOutcomeTotal = new Counter({

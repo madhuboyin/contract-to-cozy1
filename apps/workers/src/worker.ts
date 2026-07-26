@@ -98,6 +98,8 @@ import {
   cronJobLastSuccessTimestamp,
   radarIngestDeadLetterTotal,
   radarIngestRetriesTotal,
+  radarMatchDeadLetterTotal,
+  radarMatchRetriesTotal,
 } from './lib/metrics';
 import {
   getRadarIngestQueue,
@@ -107,10 +109,27 @@ import {
   type RadarIngestJobPayload,
 } from '@worker-shared/modules/homeEventRadar/queues/radarIngest.queue';
 import {
+  getRadarMatchQueue,
+  isRadarMatchEnabled,
+  RADAR_MATCH_JOB_NAME,
+  RADAR_MATCH_QUEUE_NAME,
+  type RadarMatchJobPayload,
+} from '@worker-shared/modules/homeEventRadar/queues/radarMatch.queue';
+import {
   isFinalRadarIngestAttempt,
   processRadarIngestJob,
   radarIngestConcurrency,
 } from './radar/radarIngestConsumer';
+import {
+  runMatchingForEvent,
+} from '@worker-shared/services/homeEventRadarMatcher.service';
+import { listMatchingPropertyIdsForEventPage } from '@worker-shared/modules/homeEventRadar/services/radarMatchDiscovery.service';
+import {
+  isFinalRadarMatchAttempt,
+  processRadarMatchJob,
+  radarMatchConcurrency,
+  radarMatchPageSize,
+} from './radar/radarMatchConsumer';
 
 // =============================================================================
 // FIX: Update queue configuration to match backend
@@ -651,6 +670,100 @@ function startWorker() {
   } else {
     logger.warn(
       '[RADAR-INGEST] Durable ingestion disabled by RADAR_INGEST_ENABLED=false',
+    );
+  }
+  if (isRadarMatchEnabled(process.env)) {
+    const radarMatchWorker = new Worker<RadarMatchJobPayload>(
+      RADAR_MATCH_QUEUE_NAME,
+      (job) => processRadarMatchJob(job, {
+        queue: getRadarMatchQueue(),
+        listPage: listMatchingPropertyIdsForEventPage,
+        matchProperties: runMatchingForEvent,
+        now: () => new Date(),
+      }),
+      {
+        connection: redisConnection,
+        concurrency: radarMatchConcurrency(),
+        lockDuration: 120_000,
+        lockRenewTime: 30_000,
+      },
+    );
+    radarMatchWorker.on('ready', () => {
+      logger.info(
+        `[RADAR-MATCH] Durable consumer ready for ${RADAR_MATCH_QUEUE_NAME} ` +
+        `(concurrency=${radarMatchConcurrency()}, pageSize=${radarMatchPageSize()})`,
+      );
+    });
+    radarMatchWorker.on('active', (job) => {
+      jobsActiveGauge.inc({ queue: RADAR_MATCH_QUEUE_NAME });
+      (job as unknown as Record<string, unknown>).__metricStart = process.hrtime();
+    });
+    radarMatchWorker.on('completed', (job, result) => {
+      const start = (job as unknown as Record<string, unknown>).__metricStart as
+        [number, number] | undefined;
+      if (start) {
+        const [seconds, nanoseconds] = process.hrtime(start);
+        jobDurationSeconds.observe(
+          { queue: RADAR_MATCH_QUEUE_NAME, job_name: RADAR_MATCH_JOB_NAME },
+          seconds + nanoseconds / 1e9,
+        );
+      }
+      jobsActiveGauge.dec({ queue: RADAR_MATCH_QUEUE_NAME });
+      jobsProcessedTotal.inc({
+        queue: RADAR_MATCH_QUEUE_NAME,
+        job_name: RADAR_MATCH_JOB_NAME,
+        status: 'completed',
+      });
+      logger.info(
+        {
+          jobId: job.id,
+          radarEventId: job.data.radarEventId,
+          radarEventRevisionId: job.data.radarEventRevisionId,
+          scopeType: job.data.scopeType,
+          result,
+        },
+        '[RADAR-MATCH] Durable match scope completed',
+      );
+    });
+    radarMatchWorker.on('failed', (job, error) => {
+      jobsActiveGauge.dec({ queue: RADAR_MATCH_QUEUE_NAME });
+      jobsProcessedTotal.inc({
+        queue: RADAR_MATCH_QUEUE_NAME,
+        job_name: RADAR_MATCH_JOB_NAME,
+        status: 'failed',
+      });
+      const finalAttempt = isFinalRadarMatchAttempt(job);
+      if (finalAttempt) radarMatchDeadLetterTotal.inc();
+      else radarMatchRetriesTotal.inc();
+      logger.error(
+        {
+          err: error,
+          jobId: job?.id,
+          radarEventId: job?.data.radarEventId,
+          radarEventRevisionId: job?.data.radarEventRevisionId,
+          scopeType: job?.data.scopeType,
+          propertyId: job?.data.scopeType === 'property' ? job.data.propertyId : undefined,
+          attemptsMade: job?.attemptsMade,
+          maxAttempts: job?.opts.attempts,
+          finalAttempt,
+          failureHistory: finalAttempt ? 'retained_in_bullmq_failed_set' : 'retry_scheduled',
+        },
+        finalAttempt
+          ? '[RADAR-MATCH] Scope exhausted retries and entered retained failure history'
+          : '[RADAR-MATCH] Scope failed; bounded retry scheduled',
+      );
+      void alertOnJobFailure(RADAR_MATCH_QUEUE_NAME, job, error);
+    });
+    radarMatchWorker.on('error', (error) => {
+      logger.error({ err: error }, '[RADAR-MATCH] Durable consumer error');
+    });
+    registerShutdownHandler('radarMatchWorker', () => radarMatchWorker.close());
+    registerShutdownHandler('radarMatchQueue', async () => {
+      await getRadarMatchQueue().close?.();
+    });
+  } else {
+    logger.warn(
+      '[RADAR-MATCH] Durable matching disabled by RADAR_MATCH_ENABLED=false',
     );
   }
   // =============================================================================
@@ -1308,6 +1421,7 @@ const KNOWN_QUEUE_NAMES = new Set<string>([
   'generate-permit-disclosure-queue',
   'cron-trigger-queue',
   RADAR_INGEST_QUEUE_NAME,
+  RADAR_MATCH_QUEUE_NAME,
 ]);
 
 // =============================================================================

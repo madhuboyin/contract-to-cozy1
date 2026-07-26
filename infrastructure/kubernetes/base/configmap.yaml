@@ -108,6 +108,11 @@ data:
   # enablement so reviewed NWS/freeze jobs can share one bounded consumer.
   RADAR_INGEST_ENABLED: "true"
   RADAR_INGEST_CONCURRENCY: "4"
+  # Durable event/revision matching uses bounded scan pages and independently
+  # retryable property scopes.
+  RADAR_MATCH_ENABLED: "true"
+  RADAR_MATCH_CONCURRENCY: "8"
+  RADAR_MATCH_PAGE_SIZE: "100"
   WORKER_MUTATING_SWEEPS_ENABLED: "false"
   WORKER_MANUAL_TRIGGERS_ENABLED: "true"
   # Synced from live 2026-07-24 (was "false" here, "true" on the cluster).

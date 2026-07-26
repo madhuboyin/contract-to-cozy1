@@ -9,6 +9,7 @@ import { buildUnifiedEventEnvelope } from './eventSignalProjection.service';
 import { signalService } from './signal.service';
 import { IncidentService } from './incidents/incident.service';
 import { logger } from '../lib/logger';
+import { propertyWhereForRadarEvent } from '../modules/homeEventRadar/services/radarMatchDiscovery.service';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -531,35 +532,8 @@ async function findMatchingProperties(
   event: any,
   propertyIdFilter?: string[] | null,
 ): Promise<PropertySnapshot[]> {
-  const locationType: string = String(event.locationType);
-  const locationKey: string = String(event.locationKey);
-
-  let where: Record<string, unknown> = {};
-
-  switch (locationType) {
-    case 'property':
-      where = { id: locationKey };
-      break;
-    case 'zip':
-      where = { zipCode: locationKey };
-      break;
-    case 'city':
-      where = { city: { equals: locationKey, mode: 'insensitive' } };
-      break;
-    case 'state':
-      where = { state: { equals: locationKey, mode: 'insensitive' } };
-      break;
-    case 'county':
-    case 'polygon':
-      // Evidence-backed deferral: Property has no canonical county identifier,
-      // and Radar polygon events do not yet have an approved GeoJSON/SRID
-      // contract. Never broaden these events to city/ZIP matches or infer a
-      // boundary; see PHASE8_DEFERRED_EVIDENCE.md.
-      return [];
-    default:
-      return [];
-  }
-
+  let where = propertyWhereForRadarEvent(event);
+  if (!where) return [];
   if (propertyIdFilter && propertyIdFilter.length > 0) {
     where = { AND: [where, { id: { in: propertyIdFilter } }] };
   }
@@ -581,18 +555,19 @@ async function findMatchingProperties(
 export async function runMatchingForEvent(
   eventId: string,
   propertyIdFilter?: string[] | null,
-): Promise<{ matched: number; skipped: number }> {
+): Promise<{ matched: number; skipped: number; failedPropertyIds: string[] }> {
   const db = prisma as any;
 
   const event = await db.radarEvent.findUnique({ where: { id: eventId } });
-  if (!event) return { matched: 0, skipped: 0 };
+  if (!event) return { matched: 0, skipped: 0, failedPropertyIds: [] };
 
-  if (event.status === 'archived') return { matched: 0, skipped: 0 };
+  if (event.status === 'archived') return { matched: 0, skipped: 0, failedPropertyIds: [] };
 
   const properties = await findMatchingProperties(event, propertyIdFilter);
 
   let matched = 0;
   let skipped = 0;
+  const failedPropertyIds: string[] = [];
 
   for (const property of properties) {
     try {
@@ -664,10 +639,11 @@ export async function runMatchingForEvent(
     } catch (err) {
       logger.error({ propertyId: property.id, err }, '[RadarMatcher] Failed to upsert match for property');
       skipped++;
+      failedPropertyIds.push(property.id);
     }
   }
 
-  return { matched, skipped };
+  return { matched, skipped, failedPropertyIds };
 }
 
 // ---------------------------------------------------------------------------

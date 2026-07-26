@@ -96,6 +96,7 @@ COPY apps/backend/src/modules/homeEventRadar/contracts/ src/shared/backend/modul
 COPY apps/backend/src/modules/homeEventRadar/services/radarSourceRegistry.service.ts \
      apps/backend/src/modules/homeEventRadar/services/radarSourceRun.service.ts \
      apps/backend/src/modules/homeEventRadar/services/radarEventIngestion.service.ts \
+     apps/backend/src/modules/homeEventRadar/services/radarMatchDiscovery.service.ts \
      src/shared/backend/modules/homeEventRadar/services/
 COPY apps/backend/src/modules/homeEventRadar/queues/radarMatch.queue.ts \
      apps/backend/src/modules/homeEventRadar/queues/radarIngest.queue.ts \
