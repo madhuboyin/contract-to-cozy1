@@ -1117,13 +1117,30 @@ interface RadarFeedDTO {
     endCursor: string | null;
   };
   totalCount: number;
+  appliedFilters: {
+    lifecycle: Array<'now' | 'upcoming' | 'recently_ended'>;
+    sourceFamily: RadarSourceFamily[];
+    severity: Array<'info' | 'low' | 'moderate' | 'high' | 'severe'>;
+    impact: Array<'none' | 'low' | 'moderate' | 'high'>;
+    confidence: Array<'low' | 'medium' | 'high' | 'verified'>;
+    state: Array<'new' | 'seen' | 'saved' | 'dismissed' | 'acted_on'>;
+    attention: Array<'new' | 'updated'>;
+  };
   feedState: 'HAS_EVENTS' | 'CONFIRMED_CLEAR' | 'PARTIAL_COVERAGE' | 'DEGRADED' | 'UNCOVERED';
   asOf: string;
 }
 ```
 
-Cursor shall encode all ordering columns, such as priority band, effective time, creation time, and
-ID. It shall not filter by ID alone while sorting by another column.
+Cursor shall encode every ordering column: match lifecycle group, priority band, exact persisted
+priority score, canonical effective time, and deterministic match ID. It shall also bind the
+first-page snapshot and normalized filter scope. It shall not filter by ID alone while sorting by
+another column.
+
+Feed filters shall accept repeatable or comma-separated query values. The server shall normalize
+their order, return the effective values in `appliedFilters`, bind the cursor to that normalized
+filter scope, and calculate `totalCount` from the complete filtered snapshot before applying the
+cursor boundary or page limit. `attention=updated` shall mean a material property-match update, not
+merely the existence of a newer provider revision.
 
 ### 16.5 Detail DTO
 

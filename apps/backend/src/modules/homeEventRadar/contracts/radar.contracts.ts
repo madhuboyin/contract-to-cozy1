@@ -416,6 +416,16 @@ export const radarFeedCursorSchema = z.string()
   .max(2_048)
   .regex(/^[A-Za-z0-9_-]+$/);
 
+export const radarAppliedFiltersSchema = z.object({
+  lifecycle: z.array(radarMatchLifecycleStatusSchema.exclude(['no_longer_applicable'])),
+  sourceFamily: z.array(radarSourceFamilySchema),
+  severity: z.array(z.enum(['info', 'low', 'moderate', 'high', 'severe'])),
+  impact: z.array(radarImpactSchema.exclude(['critical'])),
+  confidence: z.array(radarConfidenceSchema),
+  state: z.array(z.enum(['new', 'seen', 'saved', 'dismissed', 'acted_on'])),
+  attention: z.array(z.enum(['new', 'updated'])),
+});
+
 export const radarCategoryCoverageSchema = z.object({
   family: radarSourceFamilySchema,
   status: z.enum(['covered', 'not_covered', 'disabled', 'failed', 'stale', 'unknown']),
@@ -459,6 +469,7 @@ export const radarFeedResponseSchema = z.object({
     endCursor: radarFeedCursorSchema.nullable(),
   }),
   totalCount: z.number().int().nonnegative(),
+  appliedFilters: radarAppliedFiltersSchema,
   feedState: radarFeedStateSchema,
   asOf: z.iso.datetime({ offset: true }),
 });

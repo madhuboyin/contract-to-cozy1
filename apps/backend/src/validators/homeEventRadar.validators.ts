@@ -1,5 +1,14 @@
 // apps/backend/src/validators/homeEventRadar.validators.ts
 import { z } from 'zod';
+import {
+  RADAR_FILTER_ATTENTION,
+  RADAR_FILTER_CONFIDENCE,
+  RADAR_FILTER_IMPACTS,
+  RADAR_FILTER_LIFECYCLES,
+  RADAR_FILTER_SEVERITIES,
+  RADAR_FILTER_SOURCE_FAMILIES,
+  RADAR_FILTER_USER_STATES,
+} from '../modules/homeEventRadar/domain/radarFeedFilters';
 
 // ---------------------------------------------------------------------------
 // Enum value arrays (mirrors Prisma schema; avoids dependency on
@@ -110,10 +119,17 @@ export const listRadarFeedQuerySchema = z.object({
 });
 
 /**
- * Query for canonical homeowner event views. Additional domain filters are
- * intentionally deferred to HER-402; this slice owns pagination and user-state
- * projections only.
+ * Query for canonical homeowner event views. Lists accept either repeated
+ * query parameters or comma-separated values.
  */
+function radarFilterValues(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  const raw = Array.isArray(value) ? value : [value];
+  return raw.flatMap((entry) => String(entry).split(','))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 export const listRadarEventsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(40),
   cursor: z.string()
@@ -122,7 +138,34 @@ export const listRadarEventsQuerySchema = z.object({
     .max(2_048)
     .regex(/^[A-Za-z0-9_-]+$/, 'cursor must use base64url encoding')
     .optional(),
-  state: z.enum(PROPERTY_RADAR_USER_STATES).optional(),
+  lifecycle: z.preprocess(
+    radarFilterValues,
+    z.array(z.enum(RADAR_FILTER_LIFECYCLES)).min(1).max(3).optional(),
+  ),
+  sourceFamily: z.preprocess(
+    radarFilterValues,
+    z.array(z.enum(RADAR_FILTER_SOURCE_FAMILIES)).min(1).max(7).optional(),
+  ),
+  severity: z.preprocess(
+    radarFilterValues,
+    z.array(z.enum(RADAR_FILTER_SEVERITIES)).min(1).max(5).optional(),
+  ),
+  impact: z.preprocess(
+    radarFilterValues,
+    z.array(z.enum(RADAR_FILTER_IMPACTS)).min(1).max(4).optional(),
+  ),
+  confidence: z.preprocess(
+    radarFilterValues,
+    z.array(z.enum(RADAR_FILTER_CONFIDENCE)).min(1).max(4).optional(),
+  ),
+  state: z.preprocess(
+    radarFilterValues,
+    z.array(z.enum(RADAR_FILTER_USER_STATES)).min(1).max(5).optional(),
+  ),
+  attention: z.preprocess(
+    radarFilterValues,
+    z.array(z.enum(RADAR_FILTER_ATTENTION)).min(1).max(2).optional(),
+  ),
 });
 
 export const listRadarEventsRequestSchema = z.object({

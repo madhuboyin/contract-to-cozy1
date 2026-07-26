@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 
-export const RADAR_FEED_CURSOR_VERSION = 1 as const;
+export const RADAR_FEED_CURSOR_VERSION = 2 as const;
 
 export const RADAR_FEED_LIFECYCLE_ORDER = [
   'now',
@@ -28,7 +28,7 @@ export type RadarFeedPriorityBand = (typeof RADAR_FEED_PRIORITY_ORDER)[number];
 
 export type RadarFeedCursorScope = {
   propertyId: string;
-  state: string | null;
+  filterKey: string;
 };
 
 export type RadarFeedOrderingTuple = {
@@ -92,17 +92,14 @@ function parsePayload(value: unknown): RadarFeedCursor {
   if (typeof payload.r !== 'string' || payload.r.length < 1 || payload.r.length > 128) {
     throw new RadarFeedCursorError('Cursor property scope is invalid');
   }
-  if (
-    payload.s !== null
-    && (typeof payload.s !== 'string' || payload.s.length < 1 || payload.s.length > 32)
-  ) {
-    throw new RadarFeedCursorError('Cursor state scope is invalid');
+  if (typeof payload.q !== 'string' || payload.q.length > 1_024) {
+    throw new RadarFeedCursorError('Cursor filter scope is invalid');
   }
 
   return {
     version: RADAR_FEED_CURSOR_VERSION,
     propertyId: payload.r,
-    state: payload.s as string | null,
+    filterKey: payload.q,
     snapshotAt: payload.a,
     lifecycleStatus: payload.l as RadarFeedLifecycle,
     priorityBand: payload.b as RadarFeedPriorityBand,
@@ -120,7 +117,7 @@ export function encodeRadarFeedCursor(
   const cursor = parsePayload({
     v: RADAR_FEED_CURSOR_VERSION,
     r: scope.propertyId,
-    s: scope.state,
+    q: scope.filterKey,
     a: snapshotAt,
     l: tuple.lifecycleStatus,
     b: tuple.priorityBand,
@@ -131,7 +128,7 @@ export function encodeRadarFeedCursor(
   const payload = {
     v: cursor.version,
     r: cursor.propertyId,
-    s: cursor.state,
+    q: cursor.filterKey,
     a: cursor.snapshotAt,
     l: cursor.lifecycleStatus,
     b: cursor.priorityBand,
@@ -164,7 +161,7 @@ export function decodeRadarFeedCursor(
   const cursor = parsePayload(decoded);
   if (
     cursor.propertyId !== expectedScope.propertyId
-    || cursor.state !== expectedScope.state
+    || cursor.filterKey !== expectedScope.filterKey
   ) {
     throw new RadarFeedCursorError('Cursor does not belong to this feed');
   }
@@ -231,7 +228,7 @@ export function radarFeedOrderingTuple(match: {
   return parsePayload({
     v: RADAR_FEED_CURSOR_VERSION,
     r: 'tuple-validation',
-    s: null,
+    q: '',
     a: '2000-01-01T00:00:00.000Z',
     l: lifecycleStatus,
     b: priorityBand,

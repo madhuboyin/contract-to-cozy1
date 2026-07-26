@@ -129,6 +129,8 @@ function match(overrides = {}) {
 
 function serviceWith(overrides = {}) {
   const writes = [];
+  const matchFindCalls = [];
+  const matchCountCalls = [];
   const coverageRows = overrides.coverageRows ?? [coverageRow()];
   const matches = overrides.matches ?? [match()];
   const db = {
@@ -139,9 +141,13 @@ function serviceWith(overrides = {}) {
       findMany: async () => coverageRows,
     },
     propertyRadarMatch: {
-      findMany: async () => matches,
+      findMany: async (args) => {
+        matchFindCalls.push(args);
+        return matches;
+      },
       findFirst: async () => matches[0] ?? null,
       count: async ({ where }) => {
+        matchCountCalls.push(where);
         if (where.lifecycleStatus === 'now') return 4;
         if (where.lifecycleStatus === 'upcoming') return 2;
         if (where.lifecycleStatus === 'recently_ended') return 1;
@@ -167,6 +173,8 @@ function serviceWith(overrides = {}) {
   };
   return {
     writes,
+    matchFindCalls,
+    matchCountCalls,
     db,
     service: new RadarQueryService({
       db,
@@ -234,7 +242,7 @@ test('feed uses persisted priority and freshness and reports total independently
   assert.equal(feed.pageInfo.hasNextPage, true);
   const cursor = decodeRadarFeedCursor(feed.pageInfo.endCursor, {
     propertyId: 'property-1',
-    state: null,
+    filterKey: JSON.stringify(feed.appliedFilters),
   });
   assert.deepEqual({
     lifecycleStatus: cursor.lifecycleStatus,
@@ -253,6 +261,45 @@ test('feed uses persisted priority and freshness and reports total independently
   });
   assert.equal(feed.feedState, 'HAS_EVENTS');
   assert.equal(radarFeedResponseSchema.safeParse(feed).success, true);
+});
+
+test('filtered total is authoritative, page-independent, and cursor-bound to filters', async () => {
+  const fixture = serviceWith({
+    matches: [match(), match({ id: 'match-2' })],
+    totalCount: 23,
+  });
+  const filters = {
+    lifecycle: ['now', 'upcoming'],
+    sourceFamily: ['weather'],
+    severity: ['severe'],
+    impact: ['low'],
+    confidence: ['medium'],
+    state: ['new', 'saved'],
+    attention: ['updated'],
+  };
+  const feed = await fixture.service.listFeed(
+    'property-1',
+    'user-1',
+    { limit: 1, ...filters },
+  );
+
+  assert.equal(feed.items.length, 1);
+  assert.equal(feed.totalCount, 23);
+  assert.deepEqual(feed.appliedFilters, filters);
+  assert.deepEqual(fixture.matchFindCalls[0].where.AND[1], fixture.matchCountCalls[0].AND[1]);
+  assert.deepEqual(fixture.matchCountCalls[0].AND[1].AND[0], {
+    lifecycleStatus: { in: ['now', 'upcoming'] },
+  });
+  assert.equal(radarFeedResponseSchema.safeParse(feed).success, true);
+
+  await assert.rejects(
+    fixture.service.listFeed('property-1', 'user-1', {
+      ...filters,
+      severity: ['high'],
+      cursor: feed.pageInfo.endCursor,
+    }),
+    (error) => error.code === 'RADAR_CURSOR_INVALID',
+  );
 });
 
 test('detail is a pure persisted-projection read and exposes revision provenance', async () => {
@@ -284,7 +331,7 @@ test('state views apply server-side user-state predicates', async () => {
   );
 
   assert.deepEqual(capturedWhere.AND[1].states, {
-    some: { userId: 'user-1', state: 'saved' },
+    some: { userId: 'user-1', state: { in: ['saved'] } },
   });
   assert.equal(result.feedState, 'HAS_EVENTS');
 });

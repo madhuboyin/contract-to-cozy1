@@ -16,7 +16,16 @@ const {
 } = require('../../src/modules/homeEventRadar/services/radarQuery.service');
 
 const SNAPSHOT = '2026-07-26T12:00:00.000Z';
-const SCOPE = { propertyId: 'property-1', state: null };
+const EMPTY_FILTER_KEY = JSON.stringify({
+  lifecycle: [],
+  sourceFamily: [],
+  severity: [],
+  impact: [],
+  confidence: [],
+  state: [],
+  attention: [],
+});
+const SCOPE = { propertyId: 'property-1', filterKey: EMPTY_FILTER_KEY };
 
 function tuple(id, overrides = {}) {
   return {
@@ -38,7 +47,7 @@ test('cursor round-trips every ordering column, snapshot, and feed scope', () =>
   assert.deepEqual(decoded, {
     version: RADAR_FEED_CURSOR_VERSION,
     propertyId: 'property-1',
-    state: null,
+    filterKey: EMPTY_FILTER_KEY,
     snapshotAt: SNAPSHOT,
     ...ordering,
   });
@@ -47,11 +56,11 @@ test('cursor round-trips every ordering column, snapshot, and feed scope', () =>
 test('cursor rejects malformed, unsupported, and cross-feed payloads', () => {
   const encoded = encodeRadarFeedCursor(tuple('match-9'), SCOPE, SNAPSHOT);
   assert.throws(
-    () => decodeRadarFeedCursor(encoded, { propertyId: 'property-2', state: null }),
+    () => decodeRadarFeedCursor(encoded, { propertyId: 'property-2', filterKey: EMPTY_FILTER_KEY }),
     /does not belong/,
   );
   assert.throws(
-    () => decodeRadarFeedCursor(encoded, { propertyId: 'property-1', state: 'saved' }),
+    () => decodeRadarFeedCursor(encoded, { propertyId: 'property-1', filterKey: '{"state":["saved"]}' }),
     /does not belong/,
   );
   assert.throws(() => decodeRadarFeedCursor('not-json', SCOPE), /payload is invalid/);
@@ -59,7 +68,7 @@ test('cursor rejects malformed, unsupported, and cross-feed payloads', () => {
   const unsupported = Buffer.from(JSON.stringify({
     v: 99,
     r: 'property-1',
-    s: null,
+    q: EMPTY_FILTER_KEY,
     a: SNAPSHOT,
     l: 'now',
     b: 'high',
@@ -112,9 +121,9 @@ test('keyset boundary includes every lower tuple and excludes prior/equal tuples
   }
 
   const where = buildRadarFeedCursorWhere({
-    version: 1,
+    version: RADAR_FEED_CURSOR_VERSION,
     propertyId: 'property-1',
-    state: null,
+    filterKey: EMPTY_FILTER_KEY,
     snapshotAt: SNAPSHOT,
     ...cursor,
   });

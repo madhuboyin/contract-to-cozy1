@@ -45,7 +45,8 @@
 | HER-307 Tax routing correction | Complete; DB application pending | Coverage-type-aware city/county-FIPS/state routing, one-load source caching, validated and timeout-bound Socrata queries, address-confidence evidence, finite TTL, durable canonical ingestion, structured outcomes, dry-run/property scope, and an explicit disabled-until-pilot gate are implemented |
 | HER-400 Query service | Complete | Canonical property-scoped overview, coverage, authoritative counts, feed, pure-read detail, and user-state views consume materialized Radar projections without synchronous source refresh or reprioritization |
 | HER-401 Stable pagination | Complete | Versioned property/state-bound base64url cursors encode the snapshot plus lifecycle, priority band/score, effective time, and ID; typed keyset predicates and concurrent-insert fixtures prove deterministic page boundaries |
-| HER-402+ | Not started | Server-backed filters, coverage-aware UI, actions, notifications, accessibility, and operations remain |
+| HER-402 Server filters/totals | Complete | Canonical repeatable filters cover lifecycle, source family, normalized provider severity, property impact, confidence, personal state, and material New/Updated attention; normalized filters bind cursors and the same predicate drives the page and authoritative total |
+| HER-403+ | Not started | Coverage-aware UI, event cards/detail, actions, notifications, accessibility, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1132,6 +1133,15 @@ Implement filters for:
 - new/updated.
 
 Return authoritative counts independent of the loaded page.
+
+**Implemented:** canonical event and state-view queries accept repeated or comma-separated
+`lifecycle`, `sourceFamily`, `severity`, `impact`, `confidence`, `state`, and `attention` values.
+API severity (`moderate`, `severe`) and impact (`low`) values are translated to their persisted
+projection enums before querying. `attention=updated` uses only `isMaterialUpdate`; it never treats
+an immaterial provider revision as a homeowner update. Missing per-user state remains
+authoritatively New. Filters are normalized into deterministic order, returned as
+`appliedFilters`, and included in the cursor scope. The feed query and `totalCount` share the same
+pre-pagination predicate, so the total is independent of loaded page size and continuation cursor.
 
 ### HER-403 — Coverage-aware UI
 

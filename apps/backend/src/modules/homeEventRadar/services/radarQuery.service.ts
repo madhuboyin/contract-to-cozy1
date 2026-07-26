@@ -10,6 +10,13 @@ import {
   RADAR_FEED_ORDER_BY,
   RadarFeedCursorError,
 } from '../domain/radarFeedCursor';
+import {
+  buildRadarFeedFilterWhere,
+  normalizeRadarFeedFilters,
+  radarFeedFilterKey,
+  type RadarFeedFilters,
+  type RadarFilterUserState,
+} from '../domain/radarFeedFilters';
 
 export type RadarMonitoringState =
   | 'ACTIVE'
@@ -25,7 +32,7 @@ export type RadarFeedState =
   | 'DEGRADED'
   | 'UNCOVERED';
 
-export type RadarUserState = 'new' | 'seen' | 'saved' | 'dismissed' | 'acted_on';
+export type RadarUserState = RadarFilterUserState;
 
 type QueryDependencies = {
   db?: any;
@@ -33,10 +40,9 @@ type QueryDependencies = {
   loadPropertyContext?: typeof getProtectionContextDecisions;
 };
 
-type FeedOptions = {
+export type RadarFeedOptions = RadarFeedFilters & {
   limit?: number;
   cursor?: string;
-  state?: RadarUserState;
 };
 
 const FAMILY_ORDER = [
@@ -148,19 +154,6 @@ function visibleMatchWhere(
       { OR: [{ visibleUntil: null }, { visibleUntil: { gt: now } }] },
     ],
   };
-}
-
-function stateFilter(userId: string, state?: RadarUserState): Record<string, unknown> | null {
-  if (!state) return null;
-  if (state === 'new') {
-    return {
-      OR: [
-        { states: { none: { userId } } },
-        { states: { some: { userId, state: 'new' } } },
-      ],
-    };
-  }
-  return { states: { some: { userId, state } } };
 }
 
 function latestRevision(match: any): any | null {
@@ -383,11 +376,12 @@ export class RadarQueryService {
   async listFeed(
     propertyId: string,
     userId: string,
-    options: FeedOptions = {},
+    options: RadarFeedOptions = {},
   ): Promise<Record<string, unknown>> {
     await this.requireProperty(propertyId);
     const limit = Math.min(Math.max(options.limit ?? 40, 1), 100);
-    const scope = { propertyId, state: options.state ?? null };
+    const filters = normalizeRadarFeedFilters(options);
+    const scope = { propertyId, filterKey: radarFeedFilterKey(filters) };
     let cursor;
     try {
       cursor = options.cursor ? decodeRadarFeedCursor(options.cursor, scope) : null;
@@ -399,13 +393,13 @@ export class RadarQueryService {
     }
     const snapshotAt = cursor ? new Date(cursor.snapshotAt) : this.clock();
     const base = visibleMatchWhere(propertyId, snapshotAt, snapshotAt);
-    const selectedState = stateFilter(userId, options.state);
+    const filterWhere = buildRadarFeedFilterWhere(userId, filters);
     const cursorWhere = cursor ? buildRadarFeedCursorWhere(cursor) : null;
     const where: Record<string, unknown> = {
-      AND: [base, ...(selectedState ? [selectedState] : []), ...(cursorWhere ? [cursorWhere] : [])],
+      AND: [base, ...(filterWhere ? [filterWhere] : []), ...(cursorWhere ? [cursorWhere] : [])],
     };
     const countWhere: Record<string, unknown> = {
-      AND: [base, ...(selectedState ? [selectedState] : [])],
+      AND: [base, ...(filterWhere ? [filterWhere] : [])],
     };
 
     const [matches, totalCount, overallVisibleCount, coverage] = await Promise.all([
@@ -429,9 +423,7 @@ export class RadarQueryService {
         take: limit + 1,
       }),
       this.db.propertyRadarMatch.count({ where: countWhere }),
-      selectedState
-        ? this.db.propertyRadarMatch.count({ where: base })
-        : this.db.propertyRadarMatch.count({ where: base }),
+      this.db.propertyRadarMatch.count({ where: base }),
       this.getCoverage(propertyId),
     ]);
 
@@ -453,6 +445,7 @@ export class RadarQueryService {
           : null,
       },
       totalCount,
+      appliedFilters: filters,
       feedState: deriveFeedState(
         overallVisibleCount,
         coverage.monitoringState as RadarMonitoringState,
@@ -465,9 +458,9 @@ export class RadarQueryService {
     propertyId: string,
     userId: string,
     state: RadarUserState,
-    options: Omit<FeedOptions, 'state'> = {},
+    options: Omit<RadarFeedOptions, 'state'> = {},
   ): Promise<Record<string, unknown>> {
-    return this.listFeed(propertyId, userId, { ...options, state });
+    return this.listFeed(propertyId, userId, { ...options, state: [state] });
   }
 
   async getDetail(

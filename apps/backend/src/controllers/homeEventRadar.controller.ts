@@ -13,6 +13,7 @@ import {
   radarQueryService,
   type RadarUserState,
 } from '../modules/homeEventRadar/services/radarQuery.service';
+import { listRadarEventsQuerySchema } from '../validators/homeEventRadar.validators';
 
 const service = new HomeEventRadarService();
 
@@ -167,11 +168,8 @@ export async function listRadarEvents(req: CustomRequest, res: Response, next: N
   try {
     const { userId } = requireUser(req);
     const { propertyId } = req.params;
-    const data = await radarQueryService.listFeed(propertyId, userId, {
-      limit: req.query.limit ? Number(req.query.limit) : 40,
-      cursor: req.query.cursor ? String(req.query.cursor) : undefined,
-      state: req.query.state ? String(req.query.state) as RadarUserState : undefined,
-    });
+    const query = listRadarEventsQuerySchema.parse(req.query);
+    const data = await radarQueryService.listFeed(propertyId, userId, query);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -195,14 +193,12 @@ export async function getRadarEventDetail(req: CustomRequest, res: Response, nex
 export async function getRadarStateView(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { userId } = requireUser(req);
+    const query = listRadarEventsQuerySchema.omit({ state: true }).parse(req.query);
     const data = await radarQueryService.getStateView(
       req.params.propertyId,
       userId,
       req.params.state as RadarUserState,
-      {
-        limit: req.query.limit ? Number(req.query.limit) : 40,
-        cursor: req.query.cursor ? String(req.query.cursor) : undefined,
-      },
+      query,
     );
     res.json({ success: true, data });
   } catch (err) {
