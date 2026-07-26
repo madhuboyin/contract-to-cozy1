@@ -8,6 +8,7 @@ require('ts-node/register/transpile-only');
 const {
   RadarIncidentPromotionService,
   radarIncidentConfidence,
+  radarIncidentSignals,
   radarIncidentSeverity,
 } = require('../../src/modules/homeEventRadar/services/radarIncidentPromotion.service');
 
@@ -59,8 +60,8 @@ function harness(existing = null) {
       calls.lookup.push(matchId);
       return existing;
     },
-    async upsertIncident(value) {
-      calls.upsert.push(value);
+    async upsertIncident(value, signals) {
+      calls.upsert.push({ value, signals });
       return { id: existing?.id ?? 'incident-1' };
     },
     async setStatus(id, status) {
@@ -78,7 +79,7 @@ test('creates one match-linked Incident with complete revision/source provenance
   assert.deepEqual(result, { outcome: 'created', incidentId: 'incident-1' });
   assert.deepEqual(calls.lookup, ['match-1']);
   assert.equal(calls.upsert.length, 1);
-  const incident = calls.upsert[0];
+  const incident = calls.upsert[0].value;
   assert.equal(incident.propertyRadarMatchId, 'match-1');
   assert.equal(incident.sourceType, 'RADAR_EVENT');
   assert.equal(incident.typeKey, 'RADAR_FREEZE');
@@ -92,6 +93,9 @@ test('creates one match-linked Incident with complete revision/source provenance
   assert.equal(incident.details.providerEventId, 'provider-event-1');
   assert.equal(incident.details.providerRevision, 'provider-revision-1');
   assert.equal(incident.details.matcherVersion, 'rules-v1');
+  assert.equal(calls.upsert[0].signals.length, 1);
+  assert.equal(calls.upsert[0].signals[0].signalType, 'WEATHER_FORECAST_MIN_TEMP');
+  assert.equal(calls.upsert[0].signals[0].externalRef, 'provider:provider-revision-1');
 });
 
 test('updates the same open match linkage without creating a second identity', async () => {
@@ -100,7 +104,7 @@ test('updates the same open match linkage without creating a second identity', a
 
   assert.deepEqual(result, { outcome: 'updated', incidentId: 'incident-existing' });
   assert.equal(calls.upsert.length, 1);
-  assert.equal(calls.upsert[0].propertyRadarMatchId, 'match-1');
+  assert.equal(calls.upsert[0].value.propertyRadarMatchId, 'match-1');
   assert.equal(calls.setStatus.length, 0);
 });
 
@@ -205,6 +209,27 @@ test('impact and explicit confidence map conservatively without inventing unknow
   assert.equal(radarIncidentConfidence('low', null), 35);
   assert.equal(radarIncidentConfidence(null, null), null);
   assert.equal(radarIncidentConfidence(null, '0.7340'), 73);
+});
+
+test('weather promotion carries authoritative revision evidence while non-weather does not', () => {
+  const weatherSignals = radarIncidentSignals(input(), 98);
+  assert.equal(weatherSignals.length, 1);
+  assert.equal(weatherSignals[0].signalType, 'WEATHER_FORECAST_MIN_TEMP');
+  assert.equal(weatherSignals[0].confidence, 98);
+  assert.equal(weatherSignals[0].payload.radarEventId, 'event-1');
+  assert.equal(weatherSignals[0].payload.radarEventRevisionId, 'revision-1');
+
+  assert.deepEqual(radarIncidentSignals(input({
+    event: { ...input().event, eventType: 'tax_reassessment' },
+  }), 90), []);
+  assert.deepEqual(radarIncidentSignals(input({
+    event: {
+      ...input().event,
+      eventType: 'weather',
+      providerEventId: 'unreviewed-provider-event',
+      canonicalUrl: 'https://weather.example.test/event',
+    },
+  }), 90), []);
 });
 
 test('matcher delegates to the dedicated bridge and Guidance remains Incident-owned', () => {

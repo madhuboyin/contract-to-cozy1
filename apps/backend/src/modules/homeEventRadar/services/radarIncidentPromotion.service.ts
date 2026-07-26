@@ -2,8 +2,12 @@ import {
   IncidentSeverity,
   IncidentSourceType,
   IncidentStatus,
+  SignalType,
 } from '@prisma/client';
-import type { CreateIncidentInput } from '../../../types/incidents.types';
+import type {
+  AddIncidentSignalInput,
+  CreateIncidentInput,
+} from '../../../types/incidents.types';
 
 type RadarLifecycleStatus =
   | 'active'
@@ -64,14 +68,17 @@ export type RadarIncidentPromotionResult =
 
 export type RadarIncidentPromotionPort = {
   getIncidentByRadarMatchId(propertyRadarMatchId: string): Promise<LinkedIncident | null>;
-  upsertIncident(input: CreateIncidentInput): Promise<{ id: string } | null>;
+  upsertIncident(
+    input: CreateIncidentInput,
+    signals?: AddIncidentSignalInput[],
+  ): Promise<{ id: string } | null>;
   setStatus(id: string, status: IncidentStatus): Promise<{ id: string }>;
 };
 
 const defaultIncidentPort: RadarIncidentPromotionPort = {
   getIncidentByRadarMatchId: (id) =>
     incidentService().getIncidentByRadarMatchId(id),
-  upsertIncident: (input) => incidentService().upsertIncident(input),
+  upsertIncident: (input, signals) => incidentService().upsertIncident(input, signals),
   setStatus: (id, status) => incidentService().setStatus(id, status),
 };
 
@@ -167,6 +174,72 @@ function isPromotionConfidenceEligible(confidence: number | null): boolean {
 
 function incidentTypeKey(eventType: string): string {
   return `RADAR_${eventType.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+}
+
+const WEATHER_EVENT_TYPES = new Set([
+  'weather',
+  'flood_risk',
+  'heat_wave',
+  'freeze',
+  'hail',
+  'heavy_rain',
+  'wind',
+]);
+
+export function radarIncidentSignals(
+  input: RadarIncidentPromotionInput,
+  confidence: number | null,
+): AddIncidentSignalInput[] {
+  const eventType = input.event.eventType.trim().toLowerCase();
+  if (!WEATHER_EVENT_TYPES.has(eventType)) return [];
+  const isFreezeForecast =
+    eventType === 'freeze' ||
+    input.event.providerEventId?.startsWith('open-meteo:freeze-risk:') === true;
+  let canonicalHost: string | null = null;
+  try {
+    canonicalHost = input.event.canonicalUrl
+      ? new URL(input.event.canonicalUrl).hostname.toLowerCase()
+      : null;
+  } catch {
+    canonicalHost = null;
+  }
+  const isNwsAlert =
+    canonicalHost === 'api.weather.gov' ||
+    input.event.providerEventId?.startsWith('urn:oid:') === true;
+  if (!isFreezeForecast && !isNwsAlert) return [];
+  const externalRef =
+    input.revision?.revisionIdentity ??
+    input.event.providerRevision ??
+    input.event.providerEventId ??
+    input.event.id;
+  return [{
+    signalType: isFreezeForecast
+      ? SignalType.WEATHER_FORECAST_MIN_TEMP
+      : SignalType.WEATHER_ALERT_NWS,
+    externalRef,
+    observedAt: input.event.observedAt ?? new Date(),
+    payload: {
+      radarEventId: input.event.id,
+      radarEventRevisionId: input.revision?.radarEventRevisionId ?? null,
+      revisionIdentity: input.revision?.revisionIdentity ?? null,
+      sourceDefinitionId:
+        input.revision?.sourceDefinitionId ??
+        input.event.sourceDefinitionId ??
+        null,
+      sourceRunId:
+        input.revision?.sourceRunId ??
+        input.event.sourceRunId ??
+        null,
+      providerEventId: input.event.providerEventId ?? null,
+      providerRevision: input.event.providerRevision ?? null,
+      eventType,
+      eventSeverity: input.event.severity,
+      lifecycleStatus: input.event.status,
+      impactLevel: input.match.impactLevel,
+      matchScore: decimalToNumber(input.match.matchScore),
+    },
+    confidence,
+  }];
 }
 
 export class RadarIncidentPromotionService {
@@ -265,7 +338,7 @@ export class RadarIncidentPromotionService {
       },
       fingerprint: `property:${input.propertyId}|RADAR_MATCH:${input.match.id}`,
       recurrenceKey: `radar-event:${input.event.id}`,
-    });
+    }, radarIncidentSignals(input, confidence));
     if (!incident) {
       throw new Error(`Incident projection returned no incident for Radar match ${input.match.id}`);
     }

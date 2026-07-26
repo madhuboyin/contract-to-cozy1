@@ -1038,7 +1038,11 @@ independently. Property-scoped freeze events can now populate the Radar feed. NW
 still depends on HER-300's indexed geospatial matcher. HER-205 now resolves or retracts referenced
 NWS identities, expires authoritative end times, gates stale cleanup behind a fully successful
 fetch, and retains terminal matches in a 72-hour Recently Ended feed group. Provider failures never
-imply resolution. HER-206 weather end-to-end acceptance is the next delivery slice.
+imply resolution. HER-206 now supplies an exact-count weather acceptance matrix covering provider
+updates, replay, supersession, resolution, empty/failure semantics, and the complete freeze
+lifecycle. The Incident bridge now carries authoritative revision-scoped weather signals so the
+existing Incident evaluator can activate eligible notifications. HER-300 indexed geospatial
+matching is the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

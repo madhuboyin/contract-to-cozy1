@@ -8,6 +8,7 @@
     "build:docker": "tsc --project tsconfig.docker.json && tsc-alias -p tsconfig.docker.json",
     "start": "node dist/worker.js",
     "test": "node --require ts-node/register --require tsconfig-paths/register --test $(find tests -type f -name '*.test.js')",
+    "test:home-event-radar:acceptance": "node --require ts-node/register --require tsconfig-paths/register --test tests/acceptance/homeEventRadarWeather.acceptance.test.js",
     "lint:notification-boundary": "node scripts/check-notification-boundary.js",
     "lint:worker-import-boundary": "node scripts/check-worker-import-boundary.js",
     "postinstall": "npx prisma generate && cp -r ../backend/node_modules/@prisma/client node_modules/ && mkdir -p node_modules/.prisma && cp -r ../backend/node_modules/.prisma/client node_modules/.prisma/ || true"

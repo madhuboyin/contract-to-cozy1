@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-205 implemented |
+| Status | In progress — HER-206 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -34,7 +34,8 @@
 | HER-203 Durable match consumer | Complete; DB application pending | Versioned revision-driven scan jobs dispatch deterministic, independently retryable property scopes through bounded cursor pages; canonical property/postal/admin discovery, terminal outcomes, metrics, kill switch, bounded concurrency, retained failures, and graceful shutdown are wired |
 | HER-204 Incident promotion bridge | Complete; DB application pending | One dedicated projection service owns match-linked create/update/close behavior, persists revision/source/provider provenance, maps impact and explicit confidence, resolves through IncidentService, and leaves Guidance exclusively on the idempotent Incident bridge |
 | HER-205 Weather lifecycle convergence | Complete | NWS references resolve or retract prior canonical identities, provider end times expire events, failed fetches never imply resolution, stale fallback requires a fully successful run, and terminal matches remain in Recently Ended for 72 hours |
-| HER-206+ | Not started | Weather end-to-end acceptance, advanced geospatial matching, homeowner APIs, actions, and operations remain |
+| HER-206 Weather end-to-end acceptance | Complete | Deterministic watch, warning, escalation, extended/replayed expiration, supersession, resolution, failed/successful empty, and freeze lifecycle fixtures assert exact event/revision/match/Incident/Journey/notification-decision totals and representative in-process p95 |
+| HER-300+ | Not started | Advanced geospatial matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -748,6 +749,24 @@ Assert exact counts of:
 - duplicate Incident/Journey count is zero;
 - provider failure does not clear alerts;
 - p95 test latency objective is met in representative fixtures.
+
+Implementation note: `homeEventRadarWeather.acceptance.test.js` drives the real NWS and Open-Meteo
+normalizers, canonical identity/lifecycle functions, NWS supersession convergence, severe-weather
+source-run empty/failure semantics, and the dedicated Incident promotion bridge through a
+deterministic in-memory persistence boundary. The golden sequence asserts exactly three canonical
+events, ten immutable revisions, three property matches, three Incidents, three Incident-owned
+Guidance Journeys, four notification-eligible decisions, and seven suppressed decisions. It also
+replays an identical provider revision, proves zero duplicate Incident/Journey identities, closes
+all three projected Incidents, and enforces a five-second representative in-process p95 ceiling.
+Run it with `npm run test:home-event-radar:acceptance` from `apps/workers`.
+
+The acceptance trace found and fixed a real bridge defect: Radar-created Incidents previously
+carried provenance only in `details`, so the Incident evaluator saw no authoritative weather
+signal, assigned insufficient confidence, and never activated notification eligibility. Weather
+promotion now attaches revision-scoped `WEATHER_ALERT_NWS` or
+`WEATHER_FORECAST_MIN_TEMP` Incident signals while non-weather Radar promotion remains unchanged.
+The provider jobs still have no direct Incident/Guidance path. No Prisma schema change or migration
+was required.
 
 ---
 
