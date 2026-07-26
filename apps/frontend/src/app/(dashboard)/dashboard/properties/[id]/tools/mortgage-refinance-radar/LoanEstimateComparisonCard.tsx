@@ -3,19 +3,23 @@
 import { useEffect, useState } from 'react';
 import {
   FileSpreadsheet,
+  FileCheck2,
   FolderOpen,
   Plus,
   RefreshCw,
   Save,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import {
   compareRefinanceLoanEstimates,
+  extractRefinanceLoanEstimate,
   getSavedRefinanceLoanEstimateComparisons,
   saveRefinanceLoanEstimateComparison,
   type LoanEstimateMetric,
   type RefinanceLoanEstimateComparison,
   type RefinanceLoanEstimateInput,
+  type RefinanceLoanEstimateExtraction,
   type SavedRefinanceLoanEstimateComparison,
 } from './mortgageRefinanceRadarApi';
 
@@ -54,7 +58,7 @@ function blankOffer(number: number): OfferDraft {
     aprPct: '',
     monthlyPrincipalAndInterestUsd: '',
     loanCostsUsd: '',
-    lenderCreditsUsd: '0',
+    lenderCreditsUsd: '',
     cashToCloseUsd: '',
     fiveYearTotalPaidUsd: '',
     fiveYearPrincipalPaidUsd: '',
@@ -246,10 +250,14 @@ export function LoanEstimateComparisonCard({
     SavedRefinanceLoanEstimateComparison[]
   >([]);
   const [saveLabel, setSaveLabel] = useState('');
+  const [extraction, setExtraction] =
+    useState<RefinanceLoanEstimateExtraction | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [extracting, setExtracting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -284,6 +292,84 @@ export function LoanEstimateComparisonCard({
     } finally {
       setRunning(false);
     }
+  }
+
+  async function extractPdf(file: File | null) {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      setError('Choose a PDF Loan Estimate.');
+      return;
+    }
+    setExtracting(true);
+    setError(null);
+    setMessage(null);
+    setUploadedFileName(file.name);
+    try {
+      setExtraction(await extractRefinanceLoanEstimate(propertyId, file));
+    } catch (caught) {
+      setExtraction(null);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'The Loan Estimate could not be read.',
+      );
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  function applyExtraction() {
+    if (!extraction) return;
+    const fields = extraction.fields;
+    const targetIndex = offers.findIndex(
+      (offer) =>
+        !offer.noteRatePct &&
+        !offer.aprPct &&
+        !offer.monthlyPrincipalAndInterestUsd,
+    );
+    const base =
+      targetIndex >= 0
+        ? offers[targetIndex]
+        : offers.length < 4
+          ? blankOffer(nextOfferNumber++)
+          : null;
+    if (!base) {
+      setError(
+        'The comparison already has four offers. Remove one before applying this extraction.',
+      );
+      return;
+    }
+    const value = (field: { value: unknown }) =>
+      field.value == null ? '' : String(field.value);
+    const reviewedDraft: OfferDraft = {
+      ...base,
+      loanTermYears:
+        fields.loanTermYears.value == null
+          ? base.loanTermYears
+          : value(fields.loanTermYears),
+      loanType: fields.loanType.value ?? base.loanType,
+      noteRatePct: value(fields.noteRatePct),
+      aprPct: value(fields.aprPct),
+      monthlyPrincipalAndInterestUsd: value(
+        fields.monthlyPrincipalAndInterestUsd,
+      ),
+      loanCostsUsd: value(fields.loanCostsUsd),
+      lenderCreditsUsd: value(fields.lenderCreditsUsd),
+      cashToCloseUsd: value(fields.cashToCloseUsd),
+      fiveYearTotalPaidUsd: value(fields.fiveYearTotalPaidUsd),
+      fiveYearPrincipalPaidUsd: value(fields.fiveYearPrincipalPaidUsd),
+    };
+    setOffers((current) =>
+      targetIndex >= 0
+        ? current.map((offer, index) =>
+            index === targetIndex ? reviewedDraft : offer,
+          )
+        : [...current, reviewedDraft],
+    );
+    setComparison(null);
+    setMessage(
+      'Extracted values were added to an editable offer. Review every field against the PDF before comparing.',
+    );
   }
 
   async function saveComparison() {
@@ -335,6 +421,81 @@ export function LoanEstimateComparisonCard({
             Copy the same fields from each lender&apos;s standardized form. Values
             stay in this comparison and are not saved.
           </p>
+        </div>
+
+        <div className="rounded-xl border border-blue-200/70 bg-blue-50/50 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-900 dark:text-blue-200">
+                <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                Prefill from a Loan Estimate PDF
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-blue-800 dark:text-blue-300">
+                The PDF is read in memory and is not retained. Text-layer PDFs
+                only; every value requires your review.
+              </p>
+            </div>
+            <label className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-lg border border-blue-300 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300">
+              {extracting ? 'Reading PDF…' : 'Choose PDF'}
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                disabled={extracting}
+                className="sr-only"
+                onChange={(event) => {
+                  void extractPdf(event.target.files?.[0] ?? null);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+
+          {extraction && (
+            <div className="mt-3 space-y-3 border-t border-blue-200/70 pt-3 dark:border-blue-900/60">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <FileCheck2 className="h-3.5 w-3.5" aria-hidden="true" />
+                {uploadedFileName} — {extraction.requiredFieldsFound}/
+                {extraction.requiredFieldCount} required fields found
+              </p>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {Object.entries(extraction.fields).map(([key, field]) => (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-2.5 py-2 text-[11px] dark:bg-slate-900/60"
+                  >
+                    <span className="text-slate-600 dark:text-slate-300">
+                      {field.sourceLabel}
+                    </span>
+                    <span
+                      className={
+                        field.confidence === 'HIGH'
+                          ? 'font-semibold text-emerald-700 dark:text-emerald-300'
+                          : field.confidence === 'MEDIUM'
+                            ? 'font-semibold text-amber-700 dark:text-amber-300'
+                            : 'font-semibold text-slate-500'
+                      }
+                    >
+                      {field.value == null ? 'Not found' : String(field.value)}
+                      {' · '}
+                      {field.confidence}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <ul className="space-y-1 text-[11px] text-amber-800 dark:text-amber-300">
+                {extraction.warnings.map((warning) => (
+                  <li key={warning}>• {warning}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={applyExtraction}
+                className="inline-flex min-h-[38px] items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700"
+              >
+                Apply to editable offer
+              </button>
+            </div>
+          )}
         </div>
 
         {offers.map((offer, index) => (

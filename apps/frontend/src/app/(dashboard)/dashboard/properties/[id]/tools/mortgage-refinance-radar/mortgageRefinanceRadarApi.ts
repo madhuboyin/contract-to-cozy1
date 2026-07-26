@@ -348,6 +348,35 @@ export type SavedRefinanceLoanEstimateComparison = {
   updatedAt: string;
 };
 
+export type LoanEstimateExtractionConfidence = 'HIGH' | 'MEDIUM' | 'MISSING';
+
+export type LoanEstimateExtractedField<T> = {
+  value: T | null;
+  confidence: LoanEstimateExtractionConfidence;
+  sourceLabel: string;
+};
+
+export type RefinanceLoanEstimateExtraction = {
+  fields: {
+    loanTermYears: LoanEstimateExtractedField<number>;
+    loanType: LoanEstimateExtractedField<'FIXED' | 'ARM' | 'OTHER'>;
+    noteRatePct: LoanEstimateExtractedField<number>;
+    aprPct: LoanEstimateExtractedField<number>;
+    monthlyPrincipalAndInterestUsd: LoanEstimateExtractedField<number>;
+    loanCostsUsd: LoanEstimateExtractedField<number>;
+    lenderCreditsUsd: LoanEstimateExtractedField<number>;
+    cashToCloseUsd: LoanEstimateExtractedField<number>;
+    fiveYearTotalPaidUsd: LoanEstimateExtractedField<number>;
+    fiveYearPrincipalPaidUsd: LoanEstimateExtractedField<number>;
+  };
+  extractedFieldCount: number;
+  requiredFieldCount: number;
+  requiredFieldsFound: number;
+  textLayerDetected: boolean;
+  reviewRequired: true;
+  warnings: string[];
+};
+
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export async function getRadarStatus(
@@ -431,6 +460,24 @@ export async function compareRefinanceLoanEstimates(
     { offers },
   );
   return res.data.comparison as RefinanceLoanEstimateComparison;
+}
+
+export async function extractRefinanceLoanEstimate(
+  propertyId: string,
+  file: File,
+): Promise<RefinanceLoanEstimateExtraction> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await api.postFormData<{
+    extraction: RefinanceLoanEstimateExtraction;
+  }>(
+    `/api/properties/${propertyId}/refinance-radar/loan-estimates/extract`,
+    form,
+  );
+  if (!res.success || !('data' in res)) {
+    throw new Error('The Loan Estimate could not be extracted.');
+  }
+  return res.data.extraction;
 }
 
 export async function saveRefinanceLoanEstimateComparison(

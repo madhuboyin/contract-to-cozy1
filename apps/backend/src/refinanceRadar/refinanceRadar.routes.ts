@@ -5,10 +5,15 @@
 // Admin ingestion route uses authenticate + requireRole(ADMIN).
 
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
-import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import {
+  apiRateLimiter,
+  uploadRateLimiter,
+} from '../middleware/rateLimiter.middleware';
+import { validatePdfUpload } from '../utils/documentValidator.util';
 import { RefinanceRadarController } from './refinanceRadar.controller';
 import {
   compareLoanEstimatesSchema,
@@ -23,6 +28,17 @@ import {
 } from './validators/refinanceRadar.validators';
 
 const router = Router();
+const loanEstimateUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    if (file.mimetype === 'application/pdf') {
+      callback(null, true);
+    } else {
+      callback(new Error('Only PDF Loan Estimates are accepted.'));
+    }
+  },
+});
 
 router.use(apiRateLimiter);
 
@@ -193,6 +209,16 @@ router.post(
   propertyAuthMiddleware,
   validateBody(compareLoanEstimatesSchema),
   RefinanceRadarController.compareLoanEstimates,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-radar/loan-estimates/extract',
+  authenticate,
+  propertyAuthMiddleware,
+  uploadRateLimiter,
+  loanEstimateUpload.single('file'),
+  validatePdfUpload,
+  RefinanceRadarController.extractLoanEstimate,
 );
 
 router.post(

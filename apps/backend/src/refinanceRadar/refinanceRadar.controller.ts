@@ -35,6 +35,7 @@ import {
   listSavedRefinanceLoanEstimateComparisons,
   saveRefinanceLoanEstimateComparison,
 } from './refinanceLoanEstimateSnapshot.service';
+import { extractLoanEstimateFromPdf } from './refinanceLoanEstimateExtraction.service';
 
 const service = new RefinanceRadarService();
 
@@ -45,6 +46,42 @@ function requireUserId(req: AuthRequest): string {
 }
 
 export class RefinanceRadarController {
+  static async extractLoanEstimate(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId } = req.params;
+      if (!req.file) {
+        throw new APIError(
+          'A Loan Estimate PDF is required.',
+          400,
+          'LOAN_ESTIMATE_FILE_REQUIRED',
+        );
+      }
+      const extraction = await extractLoanEstimateFromPdf(req.file.buffer);
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_loan_estimate_extracted',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'loan_estimate_pdf',
+        metadataJson: {
+          extractedFieldCount: extraction.extractedFieldCount,
+          requiredFieldsFound: extraction.requiredFieldsFound,
+          textLayerDetected: extraction.textLayerDetected,
+        },
+      });
+      res.json({ success: true, data: { extraction } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async compareLoanEstimates(
     req: AuthRequest,
     res: Response,
