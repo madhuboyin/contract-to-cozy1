@@ -8,7 +8,10 @@ version: '3.9'
 
 services:
   postgres:
-    image: postgres:15-alpine
+    # PostGIS-enabled Alpine build (multi-arch); required for Home Event
+    # Radar geography columns. On an existing volume run once:
+    #   CREATE EXTENSION IF NOT EXISTS postgis;
+    image: imresamu/postgis:15-3.4-alpine
     container_name: contracttocozy-postgres
     restart: unless-stopped
     environment:

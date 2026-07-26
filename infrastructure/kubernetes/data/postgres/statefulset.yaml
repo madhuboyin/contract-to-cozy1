@@ -56,7 +56,10 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:15-alpine
+          # Multi-arch (arm64) Alpine build of Postgres 15 with PostGIS.
+          # Stays on musl libc so existing text collations/indexes from
+          # postgres:15-alpine remain valid on the same data volume.
+          image: imresamu/postgis:15-3.4-alpine
           ports:
             - containerPort: 5432
           env:
