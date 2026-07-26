@@ -16,6 +16,7 @@ const {
   parseDockerfileCopyRules,
   resolveAvailableSharedModules,
   findImportViolationsFromSources,
+  findCopiedRelativeImportViolationsFromSources,
   findMissingCopySources,
 } = require('../../scripts/check-worker-import-boundary.js');
 
@@ -103,6 +104,40 @@ test('findImportViolationsFromSources ignores imports that are not @worker-share
   ];
   const violations = findImportViolationsFromSources(entries, new Set());
   assert.equal(violations.length, 0);
+});
+
+test('copied backend relative imports fail when their image sibling is absent', () => {
+  const entries = [{
+    sourceFile: 'apps/backend/src/refinanceRadar/service.ts',
+    imageFile: 'src/shared/backend/refinanceRadar/service.ts',
+    source: `import type { Input } from './validators/input.validators';`,
+  }];
+  const violations = findCopiedRelativeImportViolationsFromSources(
+    entries,
+    new Set(['src/shared/backend/refinanceRadar/service']),
+  );
+  assert.deepEqual(violations, [{
+    file: 'apps/backend/src/refinanceRadar/service.ts',
+    spec: './validators/input.validators',
+    expectedImageModule:
+      'src/shared/backend/refinanceRadar/validators/input.validators',
+  }]);
+});
+
+test('copied backend relative imports pass when the image sibling is copied', () => {
+  const entries = [{
+    sourceFile: 'apps/backend/src/refinanceRadar/service.ts',
+    imageFile: 'src/shared/backend/refinanceRadar/service.ts',
+    source: `import type { Input } from './validators/input.validators';`,
+  }];
+  const available = new Set([
+    'src/shared/backend/refinanceRadar/service',
+    'src/shared/backend/refinanceRadar/validators/input.validators',
+  ]);
+  assert.equal(
+    findCopiedRelativeImportViolationsFromSources(entries, available).length,
+    0,
+  );
 });
 
 test('findMissingCopySources reports a COPY source that does not exist on disk', () => {

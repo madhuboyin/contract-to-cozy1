@@ -22,17 +22,13 @@
  *   1. Every apps/workers/src file's `@worker-shared/X` import has a
  *      matching Dockerfile `COPY` instruction that lands a file at the
  *      corresponding src/shared/backend/X(.ts) path in the image.
- *   2. Every backend source file the Dockerfile's `COPY` instructions
+ *   2. Every relative import inside a copied backend module resolves to
+ *      another module available in the assembled shared tree. This catches
+ *      the otherwise Docker-only TS2307 failure where a copied file gains a
+ *      new `./sibling` dependency but the sibling is omitted from COPY.
+ *   3. Every backend source file the Dockerfile's `COPY` instructions
  *      reference still exists on disk (catches a copied file being
  *      renamed/deleted without updating the Dockerfile).
- *
- * Known gap (documented, not silently swept under the rug): a backend file
- * that IS already copied into the image (e.g. diyAiGuide.service.ts,
- * permitFetch.service.ts, RiskAssessment.service.ts) can itself gain a NEW
- * `@worker-shared/X` (or old-style relative) backend-reaching import — this
- * script does not trace into those files' own imports. When editing one of
- * the Dockerfile's copied backend files, manually verify new imports
- * resolve inside the copied tree.
  */
 
 const fs = require('fs');
@@ -169,6 +165,51 @@ function findImportViolations(files, availableSharedModules) {
   return findImportViolationsFromSources(entries, availableSharedModules);
 }
 
+function copiedSharedSourceEntries(copyRules) {
+  const entries = [];
+  for (const { sources, dest } of copyRules) {
+    if (!dest.startsWith('src/shared/')) continue;
+    const destIsDir = dest.endsWith('/') || sources.length > 1;
+    const destDir = dest.endsWith('/') ? dest.slice(0, -1) : dest;
+    for (const sourceFile of sources) {
+      if (!sourceFile.endsWith('.ts')) continue;
+      const imageFile = destIsDir
+        ? `${destDir}/${path.basename(sourceFile)}`
+        : dest;
+      const absoluteSource = path.join(REPO_ROOT, sourceFile);
+      if (!fs.existsSync(absoluteSource)) continue;
+      entries.push({
+        sourceFile,
+        imageFile,
+        source: fs.readFileSync(absoluteSource, 'utf8'),
+      });
+    }
+  }
+  return entries;
+}
+
+function findCopiedRelativeImportViolationsFromSources(
+  entries,
+  availableSharedModules,
+) {
+  const violations = [];
+  for (const { sourceFile, imageFile, source } of entries) {
+    for (const spec of importsFromSource(source)) {
+      if (!spec.startsWith('.')) continue;
+      const resolved = path.posix
+        .normalize(path.posix.join(path.posix.dirname(imageFile), spec))
+        .replace(/\.(?:js|ts)$/, '');
+      if (
+        !availableSharedModules.has(resolved) &&
+        !availableSharedModules.has(`${resolved}/index`)
+      ) {
+        violations.push({ file: sourceFile, spec, expectedImageModule: resolved });
+      }
+    }
+  }
+  return violations;
+}
+
 function findMissingCopySources(copySources) {
   return copySources.filter((src) => !fs.existsSync(path.join(REPO_ROOT, src)));
 }
@@ -181,9 +222,18 @@ if (require.main === module) {
 
   const files = collectTsFiles(SRC_ROOT);
   const importViolations = findImportViolations(files, availableSharedModules);
+  const copiedRelativeImportViolations =
+    findCopiedRelativeImportViolationsFromSources(
+      copiedSharedSourceEntries(copyRules),
+      availableSharedModules,
+    );
   const missingCopySources = findMissingCopySources(copySources);
 
-  if (importViolations.length > 0 || missingCopySources.length > 0) {
+  if (
+    importViolations.length > 0 ||
+    copiedRelativeImportViolations.length > 0 ||
+    missingCopySources.length > 0
+  ) {
     console.error('[worker-import-boundary] FAIL');
     if (importViolations.length > 0) {
       console.error('\n@worker-shared imports with no matching Dockerfile COPY destination');
@@ -196,6 +246,20 @@ if (require.main === module) {
         'infrastructure/docker/workers/Dockerfile so the alias resolves inside the image too.\n' +
         'See feedback_workers_docker_curated_copy_list for the pattern.'
       );
+    }
+    if (copiedRelativeImportViolations.length > 0) {
+      console.error(
+        '\nCopied backend modules with unresolved relative imports',
+      );
+      console.error(
+        '(these compile locally but fail after Docker assembles src/shared/backend):',
+      );
+      for (const violation of copiedRelativeImportViolations) {
+        console.error(
+          `  - ${violation.file}: import '${violation.spec}' ` +
+          `(expected ${violation.expectedImageModule})`,
+        );
+      }
     }
     if (missingCopySources.length > 0) {
       console.error('\nDockerfile COPY instructions reference backend source files that no longer exist:');
@@ -218,9 +282,11 @@ module.exports = {
   parseDockerfileCopyRules,
   parseDockerfileBackendCopySources,
   resolveAvailableSharedModules,
+  copiedSharedSourceEntries,
   importsFromSource,
   findImportViolations,
   findImportViolationsFromSources,
+  findCopiedRelativeImportViolationsFromSources,
   findMissingCopySources,
   SRC_ROOT,
   DOCKERFILE_PATH,

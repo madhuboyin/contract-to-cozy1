@@ -81,6 +81,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/refinanceRadar/config \
              src/shared/backend/refinanceRadar/mappers \
              src/shared/backend/refinanceRadar/types \
+             src/shared/backend/refinanceRadar/validators \
              src/shared/backend/services/permitAdapters \
              src/shared/backend/services/taxAssessorAdapters
 RUN mkdir -p src/shared/backend/services/coverage \
@@ -241,8 +242,12 @@ COPY apps/backend/src/refinanceRadar/refinanceRadar.service.ts \
      apps/backend/src/refinanceRadar/refinanceAlertRollout.ts \
      apps/backend/src/refinanceRadar/refinanceFreshness.ts \
      apps/backend/src/refinanceRadar/refinanceEligibilityContext.ts \
+     apps/backend/src/refinanceRadar/refinanceProgramGuidance.ts \
+     apps/backend/src/refinanceRadar/refinanceAlternativeComparison.ts \
      apps/backend/src/refinanceRadar/refinanceObjectiveComparison.ts \
      src/shared/backend/refinanceRadar/
+COPY apps/backend/src/refinanceRadar/validators/refinanceRadar.validators.ts \
+     src/shared/backend/refinanceRadar/validators/
 COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts \
      apps/backend/src/refinanceRadar/engine/refinanceCalculation.engine.ts \
      apps/backend/src/refinanceRadar/engine/refinanceRadar.engine.ts \
