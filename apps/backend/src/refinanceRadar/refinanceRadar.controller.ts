@@ -32,6 +32,7 @@ import { buildRefinanceScenarioMarkdown } from './refinanceScenarioMarkdown';
 import { prisma } from '../lib/prisma';
 import { compareRefinanceLoanEstimates } from './refinanceLoanEstimateComparison';
 import {
+  deleteSavedRefinanceLoanEstimateComparison,
   listSavedRefinanceLoanEstimateComparisons,
   saveRefinanceLoanEstimateComparison,
 } from './refinanceLoanEstimateSnapshot.service';
@@ -206,6 +207,42 @@ export class RefinanceRadarController {
           req.params.propertyId,
         );
       res.json({ success: true, data: { savedComparisons } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async deleteSavedLoanEstimateComparison(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId, comparisonId } = req.params;
+      const deleted = await deleteSavedRefinanceLoanEstimateComparison(
+        propertyId,
+        comparisonId,
+      );
+      if (!deleted) {
+        throw new APIError(
+          'Saved Loan Estimate comparison not found.',
+          404,
+          'LOAN_ESTIMATE_COMPARISON_NOT_FOUND',
+        );
+      }
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_loan_estimate_comparison_deleted',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'saved_loan_estimate_comparison',
+        metadataJson: {},
+      });
+      res.status(204).send();
     } catch (err) {
       next(err);
     }

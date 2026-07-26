@@ -522,6 +522,15 @@ export async function getSavedRefinanceLoanEstimateComparisons(
   );
 }
 
+export async function deleteSavedRefinanceLoanEstimateComparison(
+  propertyId: string,
+  comparisonId: string,
+): Promise<void> {
+  await api.delete(
+    `/api/properties/${propertyId}/refinance-radar/loan-estimates/saved/${comparisonId}`,
+  );
+}
+
 export async function runScenario(
   propertyId: string,
   body: {

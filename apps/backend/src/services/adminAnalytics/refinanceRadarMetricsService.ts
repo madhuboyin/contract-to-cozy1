@@ -243,6 +243,9 @@ export function aggregateRefinanceRadarMetrics(input: RefinanceRadarMetricsInput
       loanEstimateMarkdownExports: eventCount(
         'refinance_loan_estimate_markdown_exported',
       ),
+      loanEstimateComparisonsDeleted: eventCount(
+        'refinance_loan_estimate_comparison_deleted',
+      ),
     },
     decisionQuality: {
       medianProjectedMonthlySavingsUsd: median(opportunitySavings),

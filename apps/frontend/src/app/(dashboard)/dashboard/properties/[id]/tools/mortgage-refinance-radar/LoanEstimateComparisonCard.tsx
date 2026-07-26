@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import {
   compareRefinanceLoanEstimates,
+  deleteSavedRefinanceLoanEstimateComparison,
   exportLoanEstimateComparisonMarkdown,
   extractRefinanceLoanEstimate,
   getSavedRefinanceLoanEstimateComparisons,
@@ -266,6 +267,8 @@ export function LoanEstimateComparisonCard({
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -446,6 +449,28 @@ export function LoanEstimateComparisonCard({
     setSaveLabel(item.label ?? '');
     setError(null);
     setMessage(`Loaded ${item.label ?? 'saved comparison'}.`);
+  }
+
+  async function deleteSaved(item: SavedRefinanceLoanEstimateComparison) {
+    setDeletingId(item.id);
+    setError(null);
+    setMessage(null);
+    try {
+      await deleteSavedRefinanceLoanEstimateComparison(propertyId, item.id);
+      setSavedComparisons((current) =>
+        current.filter((comparison) => comparison.id !== item.id),
+      );
+      setPendingDeleteId(null);
+      setMessage(`${item.label ?? 'Saved comparison'} was permanently deleted.`);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'The saved comparison could not be deleted.',
+      );
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -754,13 +779,48 @@ export function LoanEstimateComparisonCard({
                   <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                     {item.offers.map((offer) => offer.lenderName).join(' · ')}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => loadSaved(item)}
-                    className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300"
-                  >
-                    Load comparison
-                  </button>
+                  {pendingDeleteId === item.id ? (
+                    <div className="mt-2 rounded-lg bg-rose-50 p-2 dark:bg-rose-950/25">
+                      <p className="text-[11px] font-medium text-rose-800 dark:text-rose-300">
+                        Permanently delete this saved comparison?
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteId(null)}
+                          disabled={deletingId === item.id}
+                          className="text-xs font-semibold text-slate-600 disabled:opacity-50 dark:text-slate-300"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteSaved(item)}
+                          disabled={deletingId === item.id}
+                          className="text-xs font-semibold text-rose-700 disabled:opacity-50 dark:text-rose-300"
+                        >
+                          {deletingId === item.id ? 'Deleting…' : 'Delete permanently'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => loadSaved(item)}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300"
+                      >
+                        Load comparison
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingDeleteId(item.id)}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-300"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

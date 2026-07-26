@@ -62,3 +62,23 @@ export async function listSavedRefinanceLoanEstimateComparisons(
     });
   return rows.map(mapSnapshot);
 }
+
+export interface LoanEstimateComparisonDeleteStore {
+  refinanceLoanEstimateComparisonSnapshot: {
+    deleteMany(input: {
+      where: { id: string; propertyId: string };
+    }): Promise<{ count: number }>;
+  };
+}
+
+export async function deleteSavedRefinanceLoanEstimateComparison(
+  propertyId: string,
+  comparisonId: string,
+  store: LoanEstimateComparisonDeleteStore = prisma,
+): Promise<boolean> {
+  const result =
+    await store.refinanceLoanEstimateComparisonSnapshot.deleteMany({
+      where: { id: comparisonId, propertyId },
+    });
+  return result.count > 0;
+}

@@ -244,6 +244,13 @@ router.get(
   RefinanceRadarController.getSavedLoanEstimateComparisons,
 );
 
+router.delete(
+  '/properties/:propertyId/refinance-radar/loan-estimates/saved/:comparisonId',
+  authenticate,
+  propertyAuthMiddleware,
+  RefinanceRadarController.deleteSavedLoanEstimateComparison,
+);
+
 router.post(
   '/properties/:propertyId/refinance-radar/feedback',
   authenticate,
