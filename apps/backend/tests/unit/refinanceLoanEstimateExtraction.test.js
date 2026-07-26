@@ -6,6 +6,8 @@ const {
   extractLoanEstimateFieldsFromOcrText,
   combineLoanEstimateExtractions,
   extractLoanEstimateFromPdf,
+  detectLoanEstimatePages,
+  analyzeLoanEstimatePageSet,
 } = require('../../dist/refinanceRadar/refinanceLoanEstimateExtraction.service');
 
 const sample = `
@@ -43,6 +45,8 @@ test('extracts standardized Loan Estimate comparison fields for review', () => {
   assert.equal(result.fields.fiveYearTotalPaidUsd.value, 125582);
   assert.equal(result.fields.fiveYearPrincipalPaidUsd.value, 26773);
   assert.equal(result.requiredFieldsFound, result.requiredFieldCount);
+  assert.deepEqual(result.pageIntegrity.detectedPages, [1, 2, 3]);
+  assert.equal(result.pageIntegrity.status, 'COMPLETE');
   assert.equal(result.reviewRequired, true);
 });
 
@@ -118,7 +122,10 @@ test('merges the strongest fields across image pages and preserves page provenan
   assert.equal(result.fields.aprPct.value, 5.982);
   assert.match(result.fields.aprPct.sourceLabel, /page 2/);
   assert.equal(result.documentConfidencePct, 85);
+  assert.equal(result.pageIntegrity.status, 'PARTIAL');
+  assert.deepEqual(result.pageIntegrity.missingPages, [2]);
   assert.ok(result.warnings.some((warning) => /same Loan Estimate revision/i.test(warning)));
+  assert.ok(result.warnings.some((warning) => /Page 2 was not detected/i.test(warning)));
 });
 
 test('warns when equally confident pages contain conflicting values', () => {
@@ -133,6 +140,25 @@ test('warns when equally confident pages contain conflicting values', () => {
   const result = combineLoanEstimateExtractions([pageOne, pageTwo]);
   assert.equal(result.fields.loanAmountUsd.value, 300000);
   assert.ok(result.warnings.some((warning) => /Conflicting loan amount values/i.test(warning)));
+});
+
+test('classifies duplicate and out-of-order Loan Estimate page sets', () => {
+  assert.deepEqual(
+    detectLoanEstimatePages(`
+      Loan Terms
+      Loan Amount $300,000
+      Interest Rate 5.75%
+    `),
+    [1],
+  );
+  const duplicate = analyzeLoanEstimatePageSet([1, 2, 2, 3]);
+  assert.equal(duplicate.status, 'DUPLICATE');
+  assert.deepEqual(duplicate.duplicatePages, [2]);
+
+  const outOfOrder = analyzeLoanEstimatePageSet([3, 1, 2]);
+  assert.equal(outOfOrder.status, 'OUT_OF_ORDER');
+  assert.equal(outOfOrder.outOfOrder, true);
+  assert.deepEqual(outOfOrder.missingPages, []);
 });
 
 test('renders and OCRs a scanned Loan Estimate PDF in memory', async () => {

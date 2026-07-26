@@ -105,6 +105,7 @@ export class RefinanceRadarController {
           textLayerDetected: extraction.textLayerDetected,
           extractionMethod: extraction.extractionMethod,
           pageCount: extraction.pageCount,
+          pageSetStatus: extraction.pageIntegrity.status,
         },
       });
       res.json({ success: true, data: { extraction } });

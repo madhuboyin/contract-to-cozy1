@@ -378,6 +378,18 @@ export type RefinanceLoanEstimateExtraction = {
   extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR' | 'PDF_OCR';
   documentConfidencePct: number | null;
   pageCount: number;
+  pageIntegrity?: {
+    status:
+      | 'COMPLETE'
+      | 'PARTIAL'
+      | 'DUPLICATE'
+      | 'OUT_OF_ORDER'
+      | 'UNVERIFIED';
+    detectedPages: Array<1 | 2 | 3>;
+    missingPages: Array<1 | 2 | 3>;
+    duplicatePages: Array<1 | 2 | 3>;
+    outOfOrder: boolean;
+  };
   reviewRequired: true;
   warnings: string[];
 };

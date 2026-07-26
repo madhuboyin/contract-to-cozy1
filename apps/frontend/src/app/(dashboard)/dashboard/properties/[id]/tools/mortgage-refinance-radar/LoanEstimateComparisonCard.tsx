@@ -566,6 +566,22 @@ export function LoanEstimateComparisonCard({
                 {extraction.pageCount}{' '}
                 {extraction.pageCount === 1 ? 'page' : 'pages'}
               </p>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                Page check:{' '}
+                <span className="font-semibold">
+                  {extraction.pageIntegrity
+                    ? extraction.pageIntegrity.status
+                        .toLowerCase()
+                        .replaceAll('_', ' ')
+                    : 'unavailable'}
+                </span>
+                {extraction.pageIntegrity &&
+                extraction.pageIntegrity.detectedPages.length > 0
+                  ? ` · detected ${extraction.pageIntegrity.detectedPages.join(', ')}`
+                  : extraction.pageIntegrity
+                    ? ' · no standard page number verified'
+                    : ''}
+              </p>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {Object.entries(extraction.fields).map(([key, field]) => (
                   <div

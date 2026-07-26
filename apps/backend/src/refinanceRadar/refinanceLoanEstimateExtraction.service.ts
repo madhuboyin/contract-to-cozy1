@@ -1,6 +1,21 @@
 import { APIError } from '../middleware/error.middleware';
 
 export type LoanEstimateExtractionConfidence = 'HIGH' | 'MEDIUM' | 'MISSING';
+export type LoanEstimatePageNumber = 1 | 2 | 3;
+export type LoanEstimatePageSetStatus =
+  | 'COMPLETE'
+  | 'PARTIAL'
+  | 'DUPLICATE'
+  | 'OUT_OF_ORDER'
+  | 'UNVERIFIED';
+
+export type LoanEstimatePageIntegrity = {
+  status: LoanEstimatePageSetStatus;
+  detectedPages: LoanEstimatePageNumber[];
+  missingPages: LoanEstimatePageNumber[];
+  duplicatePages: LoanEstimatePageNumber[];
+  outOfOrder: boolean;
+};
 
 export type LoanEstimateExtractedField<T> = {
   value: T | null;
@@ -29,6 +44,7 @@ export interface RefinanceLoanEstimateExtraction {
   extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR' | 'PDF_OCR';
   documentConfidencePct: number | null;
   pageCount: number;
+  pageIntegrity: LoanEstimatePageIntegrity;
   reviewRequired: true;
   warnings: string[];
 }
@@ -61,6 +77,106 @@ function matchNumber(
     }
   }
   return missing(sourceLabel);
+}
+
+const LOAN_ESTIMATE_PAGE_SIGNALS: Record<
+  LoanEstimatePageNumber,
+  RegExp[]
+> = {
+  1: [
+    /\bLOAN\s+TERMS?\b/i,
+    /\bPROJECTED\s+PAYMENTS?\b/i,
+    /\bCOSTS?\s+AT\s+CLOSING\b/i,
+    /\bLOAN\s+AMOUNT\b/i,
+    /\bINTEREST\s+RATE\b/i,
+  ],
+  2: [
+    /\bCLOSING\s+COST\s+DETAILS\b/i,
+    /\bTOTAL\s+LOAN\s+COSTS\b/i,
+    /\bORIGINATION\s+CHARGES\b/i,
+    /\bOTHER\s+COSTS\b/i,
+    /\bCALCULATING\s+CASH\s+TO\s+CLOSE\b/i,
+    /\bLENDER\s+CREDITS\b/i,
+  ],
+  3: [
+    /\bCOMPARISONS?\b/i,
+    /\bIN\s+5\s+YEARS\b/i,
+    /\bANNUAL\s+PERCENTAGE\s+RATE\b/i,
+    /\bOTHER\s+CONSIDERATIONS\b/i,
+    /\bCONFIRM\s+RECEIPT\b/i,
+  ],
+};
+
+export function detectLoanEstimatePages(
+  rawText: string,
+): LoanEstimatePageNumber[] {
+  return ([1, 2, 3] as LoanEstimatePageNumber[]).filter((pageNumber) => {
+    const score = LOAN_ESTIMATE_PAGE_SIGNALS[pageNumber].filter((pattern) =>
+      pattern.test(rawText),
+    ).length;
+    return score >= 2;
+  });
+}
+
+export function analyzeLoanEstimatePageSet(
+  detectedPages: LoanEstimatePageNumber[],
+): LoanEstimatePageIntegrity {
+  const expectedPages: LoanEstimatePageNumber[] = [1, 2, 3];
+  const duplicatePages = expectedPages.filter(
+    (pageNumber) =>
+      detectedPages.filter((detected) => detected === pageNumber).length > 1,
+  );
+  const missingPages = expectedPages.filter(
+    (pageNumber) => !detectedPages.includes(pageNumber),
+  );
+  const outOfOrder = detectedPages.some(
+    (pageNumber, index) =>
+      index > 0 && pageNumber < detectedPages[index - 1],
+  );
+  const status: LoanEstimatePageSetStatus =
+    detectedPages.length === 0
+      ? 'UNVERIFIED'
+      : duplicatePages.length > 0
+        ? 'DUPLICATE'
+        : outOfOrder
+          ? 'OUT_OF_ORDER'
+          : missingPages.length > 0
+            ? 'PARTIAL'
+            : 'COMPLETE';
+  return {
+    status,
+    detectedPages,
+    missingPages,
+    duplicatePages,
+    outOfOrder,
+  };
+}
+
+function pageIntegrityWarnings(
+  integrity: LoanEstimatePageIntegrity,
+): string[] {
+  const warnings: string[] = [];
+  if (integrity.status === 'UNVERIFIED') {
+    warnings.push(
+      'Loan Estimate page check: Standard page 1–3 sections could not be verified. Confirm the document is an official Loan Estimate.',
+    );
+  }
+  if (integrity.duplicatePages.length > 0) {
+    warnings.push(
+      `Loan Estimate page check: Duplicate page ${integrity.duplicatePages.join(', ')} detected. Replace duplicate images before relying on the comparison.`,
+    );
+  }
+  if (integrity.outOfOrder) {
+    warnings.push(
+      'Loan Estimate page check: Pages appear out of order. Upload page images in page 1, 2, 3 order.',
+    );
+  }
+  if (integrity.missingPages.length > 0 && integrity.status !== 'UNVERIFIED') {
+    warnings.push(
+      `Loan Estimate page check: Page ${integrity.missingPages.join(', ')} was not detected, so some comparison fields may be missing.`,
+    );
+  }
+  return warnings;
 }
 
 function extractFiveYearValues(text: string): {
@@ -115,6 +231,9 @@ export function extractLoanEstimateFieldsFromText(
   rawText: string,
 ): RefinanceLoanEstimateExtraction {
   const text = rawText.replace(/\u00a0/g, ' ').replace(/\r/g, '\n');
+  const pageIntegrity = analyzeLoanEstimatePageSet(
+    detectLoanEstimatePages(text),
+  );
   const term = matchNumber(
     text,
     [
@@ -234,6 +353,7 @@ export function extractLoanEstimateFieldsFromText(
       `${requiredKeys.length - requiredFieldsFound} required comparison field(s) were not found and must be entered manually.`,
     );
   }
+  warnings.push(...pageIntegrityWarnings(pageIntegrity));
 
   return {
     fields,
@@ -244,6 +364,7 @@ export function extractLoanEstimateFieldsFromText(
     extractionMethod: 'PDF_TEXT',
     documentConfidencePct: null,
     pageCount: 1,
+    pageIntegrity,
     reviewRequired: true,
     warnings,
   };
@@ -339,6 +460,11 @@ export function combineLoanEstimateExtractions(
       .map(String);
     return new Set(values).size > 1;
   });
+  const pageIntegrity = analyzeLoanEstimatePageSet(
+    extractions.flatMap(
+      (extraction) => extraction.pageIntegrity.detectedPages,
+    ),
+  );
   return {
     fields,
     extractedFieldCount: Object.values(fields).filter(
@@ -367,9 +493,15 @@ export function combineLoanEstimateExtractions(
       (sum, extraction) => sum + extraction.pageCount,
       0,
     ),
+    pageIntegrity,
     reviewRequired: true,
     warnings: [
-      ...new Set(extractions.flatMap((extraction) => extraction.warnings)),
+      ...new Set(
+        extractions
+          .flatMap((extraction) => extraction.warnings)
+          .filter((warning) => !warning.startsWith('Loan Estimate page check:')),
+      ),
+      ...pageIntegrityWarnings(pageIntegrity),
       ...conflictingFields.map(
         (key) =>
           `Conflicting ${EXTRACTION_FIELD_LABELS[key]} values were found across the uploaded pages. The first highest-confidence value was retained; verify it against the document.`,
@@ -400,7 +532,10 @@ export function extractLoanEstimateFieldsFromOcrText(
   const warnings = [
     'OCR can confuse digits, punctuation, and column order. Verify every populated value against the image.',
     ...extraction.warnings.filter(
-      (warning) => !/PDF does not appear|OCR is not enabled/i.test(warning),
+      (warning) =>
+        !/does not appear to contain a usable text layer|OCR is required/i.test(
+          warning,
+        ),
     ),
   ];
   if (rawText.trim().length < 100) {

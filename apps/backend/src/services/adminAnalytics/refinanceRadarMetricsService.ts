@@ -250,6 +250,18 @@ export function aggregateRefinanceRadarMetrics(input: RefinanceRadarMetricsInput
           event.eventName === 'refinance_loan_estimate_extracted' &&
           record(event.metadataJson).extractionMethod === 'PDF_OCR',
       ).length,
+      loanEstimatePageSetIssues: input.analyticsEvents.filter((event) => {
+        if (event.eventName !== 'refinance_loan_estimate_extracted') {
+          return false;
+        }
+        const status = record(event.metadataJson).pageSetStatus;
+        return (
+          typeof status === 'string' &&
+          ['PARTIAL', 'DUPLICATE', 'OUT_OF_ORDER', 'UNVERIFIED'].includes(
+            status,
+          )
+        );
+      }).length,
       loanEstimatePagesProcessed: input.analyticsEvents
         .filter(
           (event) => event.eventName === 'refinance_loan_estimate_extracted',

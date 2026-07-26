@@ -80,10 +80,12 @@ test('aggregates refinance activation, coverage, funnel, quality, and guardrails
       analytics('refinance_loan_estimate_extracted', 'property-1', {
         extractionMethod: 'IMAGE_OCR',
         pageCount: 3,
+        pageSetStatus: 'COMPLETE',
       }),
       analytics('refinance_loan_estimate_extracted', 'property-1', {
         extractionMethod: 'PDF_OCR',
         pageCount: 3,
+        pageSetStatus: 'PARTIAL',
       }),
       analytics('refinance_loan_estimate_markdown_exported'),
       analytics('refinance_loan_estimate_comparison_deleted'),
@@ -121,6 +123,7 @@ test('aggregates refinance activation, coverage, funnel, quality, and guardrails
   assert.equal(metrics.funnel.loanEstimateDocumentsExtracted, 2);
   assert.equal(metrics.funnel.loanEstimateImageOcrExtractions, 1);
   assert.equal(metrics.funnel.loanEstimatePdfOcrExtractions, 1);
+  assert.equal(metrics.funnel.loanEstimatePageSetIssues, 1);
   assert.equal(metrics.funnel.loanEstimatePagesProcessed, 6);
   assert.equal(metrics.funnel.loanEstimateMarkdownExports, 1);
   assert.equal(metrics.funnel.loanEstimateComparisonsDeleted, 1);
