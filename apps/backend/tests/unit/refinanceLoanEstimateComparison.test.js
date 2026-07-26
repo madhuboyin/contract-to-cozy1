@@ -20,6 +20,7 @@ function offer(overrides = {}) {
     loanCostsUsd: 8000,
     lenderCreditsUsd: 1000,
     cashToCloseUsd: 9000,
+    cashToCloseDirection: 'FROM_BORROWER',
     fiveYearTotalPaidUsd: 125000,
     fiveYearPrincipalPaidUsd: 26000,
     issuedDate: '2026-07-20',
@@ -214,6 +215,30 @@ test('does not rank total payment when any offer is missing it', () => {
   assert.ok(
     result.offers[1].cautions.some(
       (line) => /add the estimated total payment/i.test(line),
+    ),
+  );
+});
+
+test('does not rank cash to close when direction differs', () => {
+  const result = compareRefinanceLoanEstimates([
+    offer(),
+    offer({
+      id: 'offer-b',
+      lenderName: 'Lender B',
+      cashToCloseUsd: 15000,
+      cashToCloseDirection: 'TO_BORROWER',
+    }),
+  ]);
+
+  assert.equal(result.leaders.CASH_TO_CLOSE, undefined);
+  assert.ok(
+    result.offers[1].cautions.some(
+      (line) => /cash to the borrower/i.test(line),
+    ),
+  );
+  assert.ok(
+    result.summary.some(
+      (line) => /cash to close is shown but not ranked/i.test(line),
     ),
   );
 });

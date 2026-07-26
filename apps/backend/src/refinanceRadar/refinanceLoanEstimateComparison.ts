@@ -14,6 +14,7 @@ export interface RefinanceLoanEstimateInput {
   discountPointsPct?: number;
   discountPointsUsd?: number;
   cashToCloseUsd: number;
+  cashToCloseDirection?: 'FROM_BORROWER' | 'TO_BORROWER' | 'UNKNOWN';
   fiveYearTotalPaidUsd?: number;
   fiveYearPrincipalPaidUsd?: number;
   issuedDate?: string;
@@ -172,6 +173,16 @@ export function compareRefinanceLoanEstimates(
         );
       }
     }
+    const cashDirection = offer.cashToCloseDirection ?? 'UNKNOWN';
+    if (cashDirection === 'UNKNOWN') {
+      cautions.push(
+        'Cash-to-close direction is unknown. Confirm whether the disclosed amount is from or to the borrower.',
+      );
+    } else if (cashDirection === 'TO_BORROWER') {
+      cautions.push(
+        'This disclosure shows cash to the borrower. Confirm cash-out proceeds, payoff amounts, and whether every offer uses the same requested cash-out.',
+      );
+    }
     if (!offer.issuedDate) {
       cautions.push(
         'Add the Loan Estimate issue date to confirm that every offer reflects a comparable market window.',
@@ -228,8 +239,23 @@ export function compareRefinanceLoanEstimates(
       (offer) => offer.monthlyPrincipalAndInterestUsd,
     ),
     NET_LOAN_COSTS: minimumOfferIds(offers, (offer) => offer.netLoanCostsUsd),
-    CASH_TO_CLOSE: minimumOfferIds(offers, (offer) => offer.cashToCloseUsd),
   };
+  const cashToCloseComparable =
+    offers.every(
+      (offer) => offer.cashToCloseDirection === 'FROM_BORROWER',
+    ) &&
+    new Set(
+      offers.map(
+        (offer) =>
+          `${Math.round(offer.loanAmountUsd * 100)}:${offer.loanType}:${offer.loanTermYears}`,
+      ),
+    ).size === 1;
+  if (cashToCloseComparable) {
+    leaders.CASH_TO_CLOSE = minimumOfferIds(
+      offers,
+      (offer) => offer.cashToCloseUsd,
+    );
+  }
   const hasCompleteTotalPayments = offers.every(
     (offer) => offer.estimatedTotalMonthlyPaymentUsd != null,
   );
@@ -382,6 +408,11 @@ export function compareRefinanceLoanEstimates(
   if (lockStatuses.size > 1) {
     summary.push(
       'The offers do not share the same rate-lock status. Locked and floating terms are not directly comparable.',
+    );
+  }
+  if (!cashToCloseComparable) {
+    summary.push(
+      'Cash to close is shown but not ranked because direction, loan amount, product, or term is not fully aligned. Cash to the borrower is not equivalent to a lower upfront cost.',
     );
   }
   return {

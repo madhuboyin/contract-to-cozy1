@@ -317,6 +317,7 @@ export type RefinanceLoanEstimateInput = {
   discountPointsPct?: number;
   discountPointsUsd?: number;
   cashToCloseUsd: number;
+  cashToCloseDirection?: 'FROM_BORROWER' | 'TO_BORROWER' | 'UNKNOWN';
   fiveYearTotalPaidUsd?: number;
   fiveYearPrincipalPaidUsd?: number;
   issuedDate?: string;
@@ -390,6 +391,9 @@ export type RefinanceLoanEstimateExtraction = {
     discountPointsPct: LoanEstimateExtractedField<number>;
     discountPointsUsd: LoanEstimateExtractedField<number>;
     cashToCloseUsd: LoanEstimateExtractedField<number>;
+    cashToCloseDirection: LoanEstimateExtractedField<
+      'FROM_BORROWER' | 'TO_BORROWER' | 'UNKNOWN'
+    >;
     fiveYearTotalPaidUsd: LoanEstimateExtractedField<number>;
     fiveYearPrincipalPaidUsd: LoanEstimateExtractedField<number>;
     issuedDate: LoanEstimateExtractedField<string>;

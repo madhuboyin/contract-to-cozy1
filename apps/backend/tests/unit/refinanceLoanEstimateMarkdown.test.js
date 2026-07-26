@@ -23,6 +23,7 @@ function offer(overrides = {}) {
     discountPointsPct: 0.5,
     discountPointsUsd: 1500,
     cashToCloseUsd: 9000,
+    cashToCloseDirection: 'FROM_BORROWER',
     fiveYearTotalPaidUsd: 125000,
     fiveYearPrincipalPaidUsd: 26000,
     issuedDate: '2026-07-20',
@@ -83,6 +84,7 @@ test('exports only the selected lender in a homeowner-controlled discussion brie
   assert.match(markdown, /Discount points: 0\.500% \/ \$1,500/);
   assert.match(markdown, /Estimated total monthly payment: \$2,420/);
   assert.match(markdown, /Monthly mortgage insurance: \$120/);
+  assert.match(markdown, /Cash to close: \$9,000 from borrower/);
   assert.match(markdown, /\[x\] The selected figures were checked/);
   assert.match(markdown, /did not send it to a lender/i);
   assert.match(markdown, /not a commitment, acceptance, application/i);

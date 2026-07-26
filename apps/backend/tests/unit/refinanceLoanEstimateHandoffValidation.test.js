@@ -22,6 +22,7 @@ function offer(id) {
     discountPointsPct: 0.5,
     discountPointsUsd: 1500,
     cashToCloseUsd: 9000,
+    cashToCloseDirection: 'FROM_BORROWER',
     issuedDate: '2026-07-20',
     rateLockStatus: 'LOCKED',
     rateLockExpirationDate: '2026-08-20',

@@ -26,7 +26,7 @@ Closing Cost Details
 0.500% of Loan Amount (Points) $1,500.00
 D. TOTAL LOAN COSTS (A + B + C) $8,427.00
 Lender Credits -$1,250.00
-Cash to Close $12,054.00
+Cash to Close $12,054.00 From Borrower
 
 Comparisons
 In 5 Years $125,582 Total you will have paid in principal, interest,
@@ -50,6 +50,7 @@ test('extracts standardized Loan Estimate comparison fields for review', () => {
   assert.equal(result.fields.discountPointsUsd.value, 1500);
   assert.equal(result.fields.lenderCreditsUsd.value, 1250);
   assert.equal(result.fields.cashToCloseUsd.value, 12054);
+  assert.equal(result.fields.cashToCloseDirection.value, 'FROM_BORROWER');
   assert.equal(result.fields.fiveYearTotalPaidUsd.value, 125582);
   assert.equal(result.fields.fiveYearPrincipalPaidUsd.value, 26773);
   assert.equal(result.fields.issuedDate.value, '2026-07-20');

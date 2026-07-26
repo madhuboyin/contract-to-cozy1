@@ -44,6 +44,9 @@ type OfferDraft = {
   discountPointsPct: string;
   discountPointsUsd: string;
   cashToCloseUsd: string;
+  cashToCloseDirection: NonNullable<
+    RefinanceLoanEstimateInput['cashToCloseDirection']
+  >;
   fiveYearTotalPaidUsd: string;
   fiveYearPrincipalPaidUsd: string;
   issuedDate: string;
@@ -58,7 +61,7 @@ const METRIC_LABELS: Record<LoanEstimateMetric, string> = {
   MONTHLY_PRINCIPAL_AND_INTEREST: 'Lowest P&I',
   ESTIMATED_TOTAL_MONTHLY_PAYMENT: 'Lowest estimated total payment',
   NET_LOAN_COSTS: 'Lowest net costs',
-  CASH_TO_CLOSE: 'Lowest cash to close',
+  CASH_TO_CLOSE: 'Lowest disclosed cash from borrower',
   FIVE_YEAR_BORROWING_COST: 'Lowest 5-year cost',
 };
 
@@ -81,6 +84,7 @@ function blankOffer(number: number): OfferDraft {
     discountPointsPct: '',
     discountPointsUsd: '',
     cashToCloseUsd: '',
+    cashToCloseDirection: 'UNKNOWN',
     fiveYearTotalPaidUsd: '',
     fiveYearPrincipalPaidUsd: '',
     issuedDate: '',
@@ -116,6 +120,7 @@ function toDraft(offer: RefinanceLoanEstimateInput): OfferDraft {
     discountPointsUsd:
       offer.discountPointsUsd == null ? '' : String(offer.discountPointsUsd),
     cashToCloseUsd: String(offer.cashToCloseUsd),
+    cashToCloseDirection: offer.cashToCloseDirection ?? 'UNKNOWN',
     fiveYearTotalPaidUsd:
       offer.fiveYearTotalPaidUsd == null
         ? ''
@@ -147,6 +152,16 @@ function lockLabel(offer: RefinanceLoanEstimateInput): string {
   }
   if (offer.rateLockStatus === 'NOT_LOCKED') return 'Not locked';
   return 'Lock status unknown';
+}
+
+function cashToCloseLabel(offer: RefinanceLoanEstimateInput): string {
+  if (offer.cashToCloseDirection === 'FROM_BORROWER') {
+    return `${currency(offer.cashToCloseUsd)} from borrower`;
+  }
+  if (offer.cashToCloseDirection === 'TO_BORROWER') {
+    return `${currency(offer.cashToCloseUsd)} to borrower`;
+  }
+  return `${currency(offer.cashToCloseUsd)}; direction unknown`;
 }
 
 function numberValue(value: string, label: string): number {
@@ -213,6 +228,7 @@ function toInput(offer: OfferDraft): RefinanceLoanEstimateInput {
     ...(discountPointsPct != null ? { discountPointsPct } : {}),
     ...(discountPointsUsd != null ? { discountPointsUsd } : {}),
     cashToCloseUsd: numberValue(offer.cashToCloseUsd, 'Cash to close'),
+    cashToCloseDirection: offer.cashToCloseDirection,
     ...(fiveYearTotal
       ? {
           fiveYearTotalPaidUsd: Number(fiveYearTotal),
@@ -358,6 +374,20 @@ function OfferFields({
             />
           </label>
         ))}
+        <label className="text-xs text-slate-600 dark:text-slate-300">
+          Cash-to-close direction
+          <select
+            value={offer.cashToCloseDirection}
+            onChange={(event) =>
+              set('cashToCloseDirection', event.target.value)
+            }
+            className={inputClass}
+          >
+            <option value="UNKNOWN">Confirm from/to borrower</option>
+            <option value="FROM_BORROWER">From borrower</option>
+            <option value="TO_BORROWER">To borrower</option>
+          </select>
+        </label>
       </div>
       {canRemove && (
         <button
@@ -544,6 +574,8 @@ export function LoanEstimateComparisonCard({
       discountPointsPct: value(fields.discountPointsPct),
       discountPointsUsd: value(fields.discountPointsUsd),
       cashToCloseUsd: value(fields.cashToCloseUsd),
+      cashToCloseDirection:
+        fields.cashToCloseDirection.value ?? base.cashToCloseDirection,
       fiveYearTotalPaidUsd: value(fields.fiveYearTotalPaidUsd),
       fiveYearPrincipalPaidUsd: value(fields.fiveYearPrincipalPaidUsd),
       issuedDate:
@@ -975,7 +1007,7 @@ export function LoanEstimateComparisonCard({
                         )}
                       </td>
                       <td className="py-3 pr-3">
-                        {currency(offer.cashToCloseUsd)}
+                        {cashToCloseLabel(offer)}
                       </td>
                       <td className="py-3">
                         {currency(offer.fiveYearBorrowingCostUsd)}

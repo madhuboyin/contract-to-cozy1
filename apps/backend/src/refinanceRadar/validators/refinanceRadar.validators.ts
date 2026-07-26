@@ -130,6 +130,9 @@ const loanEstimateOfferSchema = z
     discountPointsPct: z.number().min(0).max(10).optional(),
     discountPointsUsd: z.number().min(0).max(1_000_000).optional(),
     cashToCloseUsd: z.number().min(0).max(10_000_000),
+    cashToCloseDirection: z
+      .enum(['FROM_BORROWER', 'TO_BORROWER', 'UNKNOWN'])
+      .optional(),
     fiveYearTotalPaidUsd: z.number().min(0).max(20_000_000).optional(),
     fiveYearPrincipalPaidUsd: z.number().min(0).max(20_000_000).optional(),
     issuedDate: loanEstimateDateSchema.optional(),

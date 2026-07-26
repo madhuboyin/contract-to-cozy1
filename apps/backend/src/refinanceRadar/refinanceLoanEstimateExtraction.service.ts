@@ -38,6 +38,9 @@ export interface RefinanceLoanEstimateExtraction {
     discountPointsPct: LoanEstimateExtractedField<number>;
     discountPointsUsd: LoanEstimateExtractedField<number>;
     cashToCloseUsd: LoanEstimateExtractedField<number>;
+    cashToCloseDirection: LoanEstimateExtractedField<
+      'FROM_BORROWER' | 'TO_BORROWER' | 'UNKNOWN'
+    >;
     fiveYearTotalPaidUsd: LoanEstimateExtractedField<number>;
     fiveYearPrincipalPaidUsd: LoanEstimateExtractedField<number>;
     issuedDate: LoanEstimateExtractedField<string>;
@@ -107,6 +110,41 @@ function matchDate(
         sourceLabel,
       };
     }
+  }
+  return missing(sourceLabel);
+}
+
+function extractCashToCloseDirection(
+  text: string,
+): RefinanceLoanEstimateExtraction['fields']['cashToCloseDirection'] {
+  const sourceLabel =
+    'Calculating Cash to Close — amount direction';
+  const amount = String.raw`\$?\s*[\d,]+(?:\.\d{1,2})?`;
+  const fromBorrowerPatterns = [
+    new RegExp(
+      String.raw`Cash\s+to\s+Close[ \t:$]*${amount}[ \t]+From\s+Borrower\b`,
+      'i',
+    ),
+    new RegExp(
+      String.raw`Cash\s+to\s+Close[ \t:]+From\s+Borrower[ \t:$]*${amount}`,
+      'i',
+    ),
+  ];
+  const toBorrowerPatterns = [
+    new RegExp(
+      String.raw`Cash\s+to\s+Close[ \t:$]*${amount}[ \t]+To\s+Borrower\b`,
+      'i',
+    ),
+    new RegExp(
+      String.raw`Cash\s+to\s+Close[ \t:]+To\s+Borrower[ \t:$]*${amount}`,
+      'i',
+    ),
+  ];
+  if (fromBorrowerPatterns.some((pattern) => pattern.test(text))) {
+    return { value: 'FROM_BORROWER', confidence: 'HIGH', sourceLabel };
+  }
+  if (toBorrowerPatterns.some((pattern) => pattern.test(text))) {
+    return { value: 'TO_BORROWER', confidence: 'HIGH', sourceLabel };
   }
   return missing(sourceLabel);
 }
@@ -383,6 +421,7 @@ export function extractLoanEstimateFieldsFromText(
       ],
       'Calculating Cash to Close — Cash to Close',
     ),
+    cashToCloseDirection: extractCashToCloseDirection(text),
     fiveYearTotalPaidUsd: fiveYear.total,
     fiveYearPrincipalPaidUsd: fiveYear.principal,
     issuedDate: matchDate(
@@ -468,6 +507,7 @@ const EXTRACTION_FIELD_LABELS: Record<
   discountPointsPct: 'discount-points percentage',
   discountPointsUsd: 'discount-points charge',
   cashToCloseUsd: 'cash to close',
+  cashToCloseDirection: 'cash-to-close direction',
   fiveYearTotalPaidUsd: 'five-year total paid',
   fiveYearPrincipalPaidUsd: 'five-year principal paid',
   issuedDate: 'issue date',

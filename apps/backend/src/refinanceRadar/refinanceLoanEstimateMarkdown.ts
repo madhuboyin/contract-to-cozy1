@@ -41,6 +41,16 @@ function pointsLabel(offer: RefinanceLoanEstimateInput): string {
   return `${offer.discountPointsPct == null ? 'percentage missing' : pct(offer.discountPointsPct)} / ${offer.discountPointsUsd == null ? 'amount missing' : money(offer.discountPointsUsd)}`;
 }
 
+function cashToCloseLabel(offer: RefinanceLoanEstimateInput): string {
+  if (offer.cashToCloseDirection === 'FROM_BORROWER') {
+    return `${money(offer.cashToCloseUsd)} from borrower`;
+  }
+  if (offer.cashToCloseDirection === 'TO_BORROWER') {
+    return `${money(offer.cashToCloseUsd)} to borrower`;
+  }
+  return `${money(offer.cashToCloseUsd)}; direction unknown`;
+}
+
 const HANDOFF_METRIC_LABELS: Record<LoanEstimateMetric, string> = {
   APR: 'lowest disclosed APR',
   MONTHLY_PRINCIPAL_AND_INTEREST:
@@ -48,7 +58,7 @@ const HANDOFF_METRIC_LABELS: Record<LoanEstimateMetric, string> = {
   ESTIMATED_TOTAL_MONTHLY_PAYMENT:
     'lowest estimated total monthly payment',
   NET_LOAN_COSTS: 'lowest net loan costs',
-  CASH_TO_CLOSE: 'lowest cash to close',
+  CASH_TO_CLOSE: 'lowest disclosed cash from borrower',
   FIVE_YEAR_BORROWING_COST: 'lowest disclosed five-year borrowing cost',
 };
 
@@ -71,7 +81,7 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
       `${money(offer.estimatedTotalMonthlyPaymentUsd ?? null)} | ` +
       `${money(offer.monthlyMortgageInsuranceUsd ?? null)} | ` +
       `${money(offer.netLoanCostsUsd)} | ${pointsLabel(offer)} | ` +
-      `${money(offer.cashToCloseUsd)} | ` +
+      `${cashToCloseLabel(offer)} | ` +
       `${money(offer.fiveYearBorrowingCostUsd)} |`,
   );
   const cautionLines = comparison.offers.flatMap((offer) =>
@@ -128,7 +138,8 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     '- [ ] APR, monthly principal and interest, and page-3 five-year values were copied from the same revision of each Loan Estimate.',
     '- [ ] Estimated total payment, mortgage insurance, taxes, insurance, and escrow assumptions were compared separately from principal and interest.',
     '- [ ] Section A origination charges, points, lender credits, and total loan costs are understood.',
-    '- [ ] Cash to close is separated from prepaid taxes, insurance, initial escrow, and payoff-related timing.',
+    '- [ ] Cash-to-close direction is confirmed, and cash from versus cash to the borrower is not treated as the same outcome.',
+    '- [ ] Cash to close is separated from prepaid taxes, insurance, initial escrow, cash-out proceeds, and payoff-related timing.',
     '- [ ] Mortgage insurance, balloon payment, prepayment penalty, and adjustable-rate features are confirmed.',
     '- [ ] A revised Loan Estimate will be requested if loan amount, rate, credits, or product terms change.',
     '',
@@ -225,7 +236,7 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
     `- Lender credits: ${money(selected.lenderCreditsUsd)}`,
     `- Discount points: ${pointsLabel(selected)}`,
     `- Net loan costs: ${money(selected.netLoanCostsUsd)}`,
-    `- Cash to close: ${money(selected.cashToCloseUsd)}`,
+    `- Cash to close: ${cashToCloseLabel(selected)}`,
     `- Five-year borrowing cost: ${money(selected.fiveYearBorrowingCostUsd)}`,
     '',
     '## Private comparison context',
