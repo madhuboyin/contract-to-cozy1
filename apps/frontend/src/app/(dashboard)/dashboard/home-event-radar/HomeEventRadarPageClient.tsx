@@ -28,6 +28,11 @@ import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
+import {
+  getRadarEmptyStateCopy,
+  RADAR_INTERIM_COVERAGE,
+  RADAR_INTERIM_MONITORING_COPY,
+} from '@/features/homeEventRadar/radarAvailabilityCopy';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
@@ -88,7 +93,7 @@ function RadarHero({ propertyAddress }: { propertyAddress?: string }) {
           </p>
           {propertyAddress && (
             <p className={cn('mb-0 mt-1.5 text-[hsl(var(--mobile-brand-strong))]', MOBILE_TYPE_TOKENS.caption)}>
-              Monitoring: {propertyAddress}
+              Selected property: {propertyAddress}
             </p>
           )}
         </div>
@@ -132,7 +137,7 @@ function RadarDesktopSidebar({
           </div>
           <div className="min-w-0">
             <p className={cn('mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]')}>
-              Monitoring
+              Selected property
             </p>
             <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
               Current property context
@@ -176,7 +181,7 @@ function RadarDesktopSidebar({
           <div>
             <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">How radar works</p>
             <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-              Home Event Radar monitors recent weather, insurance, utility, and tax signals that may matter to this home.
+              {RADAR_INTERIM_MONITORING_COPY}
             </p>
             <p className={cn('mb-0 mt-3 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
               Event severity reflects the signal itself. Impact reflects what it may mean for this specific property.
@@ -228,16 +233,60 @@ function FilterChips({
 // Empty states
 // ---------------------------------------------------------------------------
 
-function RadarEmptyState({ filtered }: { filtered?: boolean }) {
+function RadarEmptyState({ filtered = false, propertyId }: { filtered?: boolean; propertyId: string }) {
+  const copy = getRadarEmptyStateCopy(filtered);
+
   return (
     <EmptyStateCard
-      title={filtered ? 'No events in this category' : 'No events detected'}
-      description={
-        filtered
-          ? 'Try switching to "All" to see all matched events for your property.'
-          : 'Home Event Radar monitors weather, insurance market shifts, utility outages, and tax signals. Events matched to your property will appear here.'
+      title={copy.title}
+      description={copy.description}
+      action={
+        filtered ? undefined : (
+          <Link
+            href={`/dashboard/properties/${encodeURIComponent(propertyId)}/incidents`}
+            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+          >
+            View Incidents
+          </Link>
+        )
       }
     />
+  );
+}
+
+function RadarCoverageNotice() {
+  return (
+    <MobileSection>
+      <div
+        className={cn(
+          MOBILE_CARD_RADIUS,
+          'border border-[hsl(var(--mobile-border-subtle))] bg-white p-4'
+        )}
+      >
+        <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+          Current source availability
+        </p>
+        <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+          Coverage is being unified. An unavailable source is not evidence that no event exists.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {RADAR_INTERIM_COVERAGE.map((source) => (
+            <div
+              key={source.key}
+              className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">{source.label}</p>
+                <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-[hsl(var(--mobile-text-secondary))]">
+                  {source.status}
+                </span>
+              </div>
+              <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">{source.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </MobileSection>
   );
 }
 
@@ -565,6 +614,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
           />
 
           <PropertyContextStatusNotice context={feedQuery.data?.propertyContext} title="Event matching context" />
+          <RadarCoverageNotice />
 
           <MobileSection className="space-y-3 lg:space-y-4">
             <div className="lg:hidden">
@@ -616,7 +666,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
               />
             ) : visibleItems.length === 0 ? (
               <>
-                <RadarEmptyState filtered={filter !== 'all'} />
+                <RadarEmptyState filtered={filter !== 'all'} propertyId={propertyId} />
                 <DismissedNotice count={dismissedCount} onShow={() => setShowDismissed(true)} />
               </>
             ) : (

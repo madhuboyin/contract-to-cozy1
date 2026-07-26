@@ -8,6 +8,7 @@ import { logger } from '../lib/logger';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { prisma } from '../config/database';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { recordAdminAction } from '../services/adminAudit.service';
 
 const service = new HomeEventRadarService();
 
@@ -29,19 +30,35 @@ function requireUser(req: CustomRequest): { userId: string } {
 }
 
 // ---------------------------------------------------------------------------
-// Internal / operations endpoints
+// Admin / operations endpoints
 // ---------------------------------------------------------------------------
 
 /**
- * POST /radar/events
+ * POST /admin/radar/events
  * Upsert a canonical RadarEvent and immediately trigger property matching.
  */
 export async function upsertRadarEvent(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    requireUser(req);
+    const { userId } = requireUser(req);
 
     const { event, isNew } = await service.upsertRadarEvent(req.body);
     const eventId = String((event as any).id);
+
+    await recordAdminAction({
+      actorId: userId,
+      action: isNew ? 'RADAR_EVENT_CREATE' : 'RADAR_EVENT_UPDATE',
+      entityType: 'RADAR_EVENT',
+      entityId: eventId,
+      capability: 'INTEGRATION_MANAGE',
+      newValues: {
+        eventType: (event as any).eventType ?? null,
+        sourceType: (event as any).sourceType ?? null,
+        locationType: (event as any).locationType ?? null,
+        severity: (event as any).severity ?? null,
+        status: (event as any).status ?? null,
+      },
+      req,
+    });
 
     // Trigger matching asynchronously (do not await to keep response fast)
     // Errors in matching are non-fatal for the upsert response.
@@ -59,18 +76,33 @@ export async function upsertRadarEvent(req: CustomRequest, res: Response, next: 
 }
 
 /**
- * POST /radar/events/:eventId/match
+ * POST /admin/radar/events/:eventId/match
  * (Re-)trigger property matching for a specific event.
  * Optionally pass { propertyIds: [...] } to restrict scope.
  */
 export async function triggerEventMatching(req: CustomRequest, res: Response, next: NextFunction) {
   try {
-    requireUser(req);
+    const { userId } = requireUser(req);
 
     const { eventId } = req.params;
     const propertyIds: string[] | null = req.body?.propertyIds ?? null;
 
     const result = await service.triggerMatching(eventId, propertyIds);
+
+    await recordAdminAction({
+      actorId: userId,
+      action: 'RADAR_EVENT_MATCH_TRIGGER',
+      entityType: 'RADAR_EVENT',
+      entityId: eventId,
+      capability: 'INTEGRATION_MANAGE',
+      newValues: {
+        scope: propertyIds?.length ? 'PROPERTY_LIST' : 'ALL_ELIGIBLE_PROPERTIES',
+        propertyCount: propertyIds?.length ?? null,
+        matched: result.matched,
+        skipped: result.skipped,
+      },
+      req,
+    });
 
     res.json({ success: true, data: result });
   } catch (err) {
@@ -79,7 +111,7 @@ export async function triggerEventMatching(req: CustomRequest, res: Response, ne
 }
 
 /**
- * GET /radar/events/:eventId
+ * GET /admin/radar/events/:eventId
  * Fetch a canonical radar event by ID.
  */
 export async function getRadarEvent(req: CustomRequest, res: Response, next: NextFunction) {

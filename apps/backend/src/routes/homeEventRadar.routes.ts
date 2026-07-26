@@ -7,9 +7,6 @@ import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 import {
-  upsertRadarEvent,
-  triggerEventMatching,
-  getRadarEvent,
   listRadarFeed,
   getRadarMatchDetail,
   updateRadarMatchState,
@@ -17,8 +14,6 @@ import {
 } from '../controllers/homeEventRadar.controller';
 
 import {
-  upsertRadarEventBodySchema,
-  triggerMatchBodySchema,
   listRadarFeedQuerySchema,
   updateRadarStateBodySchema,
   trackHomeEventRadarEventBodySchema,
@@ -28,41 +23,6 @@ const router = Router();
 
 router.use(apiRateLimiter);
 router.use(authenticate);
-
-// ---------------------------------------------------------------------------
-// Internal / operations routes
-// These require authentication but not property-level ownership —
-// they are intended for internal ingestion and backend-triggered matching.
-// ---------------------------------------------------------------------------
-
-/**
- * POST /radar/events
- * Create or upsert a canonical RadarEvent, then trigger property matching.
- */
-router.post(
-  '/radar/events',
-  validateBody(upsertRadarEventBodySchema),
-  upsertRadarEvent,
-);
-
-/**
- * POST /radar/events/:eventId/match
- * (Re-)trigger property matching for an existing canonical event.
- */
-router.post(
-  '/radar/events/:eventId/match',
-  validateBody(triggerMatchBodySchema),
-  triggerEventMatching,
-);
-
-/**
- * GET /radar/events/:eventId
- * Fetch a canonical radar event record.
- */
-router.get(
-  '/radar/events/:eventId',
-  getRadarEvent,
-);
 
 // ---------------------------------------------------------------------------
 // Property-scoped routes

@@ -2,13 +2,30 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | In progress — Phase 0 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
 | Current-state reference | [Home Event Radar](./HOME_EVENT_RADAR.md) |
 | Delivery posture | Clean pre-launch cutover |
 | User-data migration | Not required; there are no real users |
+
+---
+
+## Implementation Progress
+
+| Work package | Status | Evidence |
+| --- | --- | --- |
+| HER-000 Architecture decision | Complete | `docs/architecture/adr-home-event-radar-canonical-pipeline.md` |
+| HER-001 Secure operations routes | Complete | Homeowner routes are property-scoped; temporary writes/matching moved to capability-gated admin routes with audit records |
+| HER-002 Canonical contracts | Complete for Phase 0 | Runtime-validated observation, geography, source, health, coverage, match, action, overview, feed, and detail contracts |
+| HER-003 Product copy truth pass | Complete | Interim source availability, qualified empty state, and Incident handoff |
+| HER-004 Critical baseline tests | Complete | Contract, route, authorization wiring, dummy-ingest, tax policy, and weather lifecycle guards |
+| Phase 1+ | Not started | Persistence, source runs, ingestion, geospatial matching, and provider convergence remain |
+
+Implementation constraint: Prisma schema changes may be committed in later phases, but migration
+scripts will not be created by this implementation. The repository owner will perform database
+migration/reset work. No real-user data migration or compatibility layer is required.
 
 ---
 
@@ -89,7 +106,9 @@ There are no real users. Therefore the implementation shall not spend time on:
 - gradual cohort migration;
 - synthetic event-history preservation.
 
-Normal database schema migrations are still required. Existing pre-launch Radar data may be reset.
+Database schema application/reset remains required, but the repository implementation will change
+the Prisma schema only. Migration scripts and database execution are owned by the repository
+owner. Existing pre-launch Radar data may be reset.
 
 ---
 
@@ -410,7 +429,8 @@ PropertyRadarNotificationPreference
 
 **Pre-launch handling**
 
-- create normal schema migration;
+- update the Prisma schema without creating a migration script; the repository owner will apply
+  the database migration/reset;
 - no user-state backfill;
 - permit reset of existing pre-launch Radar tables;
 - do not write a legacy compatibility migration.
