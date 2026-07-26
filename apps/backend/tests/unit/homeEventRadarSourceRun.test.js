@@ -164,3 +164,42 @@ test('completion is idempotent for the same terminal status and rejects conflict
     RadarSourceRunConflictError,
   );
 });
+
+test('completion preserves durable consumer event counters regardless of race ordering', async () => {
+  let updateData;
+  const tx = {
+    radarSourceRun: {
+      findUnique: async () => ({
+        id: 'run-1',
+        sourceDefinitionId: 'source-1',
+        status: 'started',
+        sourceDefinition: { isEnabled: true },
+      }),
+      update: async ({ data }) => {
+        updateData = data;
+        return { id: 'run-1', ...data };
+      },
+    },
+    radarSourceHealth: {
+      findUnique: async () => null,
+      upsert: async () => ({}),
+    },
+  };
+  const service = new RadarSourceRunService(
+    { $transaction: async (callback) => callback(tx) },
+    {},
+  );
+
+  await service.complete('run-1', {
+    status: 'success',
+    observationsReceived: 2,
+    eventsCreated: 0,
+    eventsUpdated: 0,
+    eventsResolved: 0,
+  });
+
+  assert.deepEqual(updateData.eventsCreated, { increment: 0 });
+  assert.deepEqual(updateData.eventsUpdated, { increment: 0 });
+  assert.deepEqual(updateData.eventsResolved, { increment: 0 });
+  assert.equal(updateData.observationsReceived, 2);
+});

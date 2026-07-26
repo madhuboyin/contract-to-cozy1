@@ -56,14 +56,14 @@ function createHarness(overrides = {}) {
       return { id: runId, ...input };
     },
   };
-  const ingestion = {
-    async ingest(observation, context) {
-      calls.ingestions.push({ observation, context });
+  const ingestQueue = {
+    async enqueue(input) {
+      calls.ingestions.push(input);
       return {
-        outcome: 'created',
-        lifecycleStatus: observation.lifecycleStatus,
-        radarEventId: `event-${calls.ingestions.length}`,
-        radarEventRevisionId: `revision-${calls.ingestions.length}`,
+        jobId: `ingest-${calls.ingestions.length}`,
+        revisionIdentity: 'revision-1',
+        payloadFingerprint: 'fingerprint-1',
+        lifecycleStatus: input.observation.lifecycleStatus,
       };
     },
   };
@@ -76,7 +76,7 @@ function createHarness(overrides = {}) {
     },
     registry,
     runs,
-    ingestion,
+    ingestQueue,
     fetchSignals: fetchDummyRadarSignals,
     now: () => FIXED_NOW,
     correlationId: () => 'correlation-fixed',
@@ -99,7 +99,7 @@ function createHarness(overrides = {}) {
   };
 }
 
-test('fixture job uses canonical source runs, revisions, and match enqueueing for every family', async () => {
+test('fixture job uses canonical source runs and durable ingest enqueueing for every family', async () => {
   const harness = createHarness();
   const result = await harness.run();
 
@@ -110,10 +110,11 @@ test('fixture job uses canonical source runs, revisions, and match enqueueing fo
     sourceRuns: 4,
     accepted: 4,
     rejected: 0,
-    eventsCreated: 4,
+    eventsCreated: 0,
     eventsUpdated: 0,
     duplicateRevisions: 0,
-    matchJobsEnqueued: 4,
+    ingestJobsEnqueued: 4,
+    matchJobsEnqueued: 0,
   });
   assert.equal(harness.calls.registrations.length, 4);
   assert.equal(harness.calls.begins.length, 4);
@@ -131,13 +132,13 @@ test('fixture job uses canonical source runs, revisions, and match enqueueing fo
       postalCode: '08536',
     }]);
   }
-  for (const { observation, context } of harness.calls.ingestions) {
+  for (const { observation, sourceRunId, correlationId } of harness.calls.ingestions) {
     assert.match(observation.title, /^\[Test data\]/);
     assert.equal(observation.rawPayload.testData, true);
     assert.equal(observation.rawPayload.testDataLabel, 'Test data');
     assert.match(observation.providerRevision, /^fixture-v1:/);
-    assert.match(context.sourceRunId, /^run-/);
-    assert.match(context.correlationId, /^test-fixture:correlation-fixed:/);
+    assert.match(sourceRunId, /^run-/);
+    assert.match(correlationId, /^test-fixture:correlation-fixed:/);
   }
   for (const completion of harness.calls.completions) {
     assert.equal(completion.input.status, 'success');
@@ -227,16 +228,16 @@ test('one rejected fixture is isolated and produces an explicit partial source r
   let attempt = 0;
   const harness = createHarness({
     fetchSignals: async () => weatherSignals,
-    ingestion: {
-      async ingest(observation, context) {
-        harness.calls.ingestions.push({ observation, context });
+    ingestQueue: {
+      async enqueue(input) {
+        harness.calls.ingestions.push(input);
         attempt += 1;
         if (attempt === 1) throw new Error('simulated canonical rejection');
         return {
-          outcome: 'created',
-          lifecycleStatus: observation.lifecycleStatus,
-          radarEventId: 'event-accepted',
-          radarEventRevisionId: 'revision-accepted',
+          jobId: 'ingest-accepted',
+          revisionIdentity: 'revision-accepted',
+          payloadFingerprint: 'fingerprint-accepted',
+          lifecycleStatus: input.observation.lifecycleStatus,
         };
       },
     },
@@ -245,7 +246,8 @@ test('one rejected fixture is isolated and produces an explicit partial source r
   const result = await harness.run();
   assert.equal(result.accepted, 1);
   assert.equal(result.rejected, 1);
-  assert.equal(result.matchJobsEnqueued, 1);
+  assert.equal(result.ingestJobsEnqueued, 1);
+  assert.equal(result.matchJobsEnqueued, 0);
   assert.equal(harness.calls.completions[0].input.status, 'partial');
   assert.equal(harness.calls.completions[0].input.observationsRejected, 1);
   assert.match(harness.calls.completions[0].input.errorMessage, /simulated canonical rejection/);
@@ -258,6 +260,6 @@ test('legacy fixture job no longer writes RadarEvent or invokes matching directl
   );
   assert.doesNotMatch(source, /upsertCanonicalRadarEvent/);
   assert.doesNotMatch(source, /runMatchingForEvent/);
-  assert.match(source, /deps\.ingestion\.ingest/);
+  assert.match(source, /deps\.ingestQueue\.enqueue/);
   assert.match(source, /deps\.runs\.complete/);
 });

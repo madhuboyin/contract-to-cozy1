@@ -76,15 +76,15 @@ function fakeDeps({
         return { id: runId, ...input };
       },
     },
-    ingestion: {
-      async ingest(observation, context) {
-        calls.ingestions.push({ observation, context });
+    ingestQueue: {
+      async enqueue(input) {
+        calls.ingestions.push(input);
         if (ingestError) throw ingestError;
         return {
-          outcome: ingestOutcome,
-          lifecycleStatus: observation.lifecycleStatus,
-          radarEventId: 'event-1',
-          radarEventRevisionId: 'revision-1',
+          jobId: 'radar-ingest-job-1',
+          revisionIdentity: 'revision-1',
+          payloadFingerprint: 'fingerprint-1',
+          lifecycleStatus: input.observation.lifecycleStatus,
         };
       },
     },
@@ -187,7 +187,7 @@ test('a successful warm forecast resolves only an existing active canonical even
   assert.equal(calls.ingestions.length, 1);
   assert.equal(calls.ingestions[0].observation.providerEventId, providerEventId);
   assert.equal(calls.ingestions[0].observation.lifecycleStatus, 'resolved');
-  assert.equal(calls.completions[0].input.eventsResolved, 1);
+  assert.equal(calls.completions[0].input.eventsResolved, 0);
 });
 
 test('a warm forecast without a prior event is a verified successful empty run', async () => {
@@ -269,6 +269,6 @@ test('provider job has no direct Incident or Guidance projection path', () => {
   );
   assert.doesNotMatch(source, /IncidentService|upsertIncident|setStatus/);
   assert.doesNotMatch(source, /guidanceJourneyService|ingestSignal/);
-  assert.match(source, /deps\.ingestion\.ingest/);
+  assert.match(source, /deps\.ingestQueue\.enqueue/);
   assert.match(source, /deps\.runs\.complete/);
 });

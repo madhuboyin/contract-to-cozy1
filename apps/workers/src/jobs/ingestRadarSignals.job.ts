@@ -14,8 +14,8 @@ import {
   radarSourceRunService,
 } from '@worker-shared/modules/homeEventRadar/services/radarSourceRun.service';
 import {
-  radarEventIngestionService,
-} from '@worker-shared/modules/homeEventRadar/services/radarEventIngestion.service';
+  radarIngestQueueService,
+} from '@worker-shared/modules/homeEventRadar/queues/radarIngest.queue';
 import { logger } from '../lib/logger';
 
 const DEFAULT_TARGET_ZIPS = ['08536', '10019'];
@@ -38,7 +38,7 @@ export type RadarDummyScope = {
 
 type RegistryPort = Pick<typeof radarSourceRegistryService, 'register'>;
 type RunPort = Pick<typeof radarSourceRunService, 'begin' | 'complete'>;
-type IngestionPort = Pick<typeof radarEventIngestionService, 'ingest'>;
+type IngestQueuePort = Pick<typeof radarIngestQueueService, 'enqueue'>;
 
 type IngestRadarSignalsDependencies = {
   propertyRepository: {
@@ -46,7 +46,7 @@ type IngestRadarSignalsDependencies = {
   };
   registry: RegistryPort;
   runs: RunPort;
-  ingestion: IngestionPort;
+  ingestQueue: IngestQueuePort;
   fetchSignals(properties: TargetProperty[], now?: Date): Promise<DummyRadarRawSignal[]>;
   now(): Date;
   correlationId(): string;
@@ -164,7 +164,7 @@ function defaultDependencies(): IngestRadarSignalsDependencies {
     propertyRepository: prisma.property,
     registry: radarSourceRegistryService,
     runs: radarSourceRunService,
-    ingestion: radarEventIngestionService,
+    ingestQueue: radarIngestQueueService,
     fetchSignals: fetchDummyRadarSignals,
     now: () => new Date(),
     correlationId: randomUUID,
@@ -200,6 +200,7 @@ export function createIngestRadarSignalsJob(
         eventsCreated: 0,
         eventsUpdated: 0,
         duplicateRevisions: 0,
+        ingestJobsEnqueued: 0,
         matchJobsEnqueued: 0,
       };
     }
@@ -216,6 +217,7 @@ export function createIngestRadarSignalsJob(
       eventsCreated: 0,
       eventsUpdated: 0,
       duplicateRevisions: 0,
+      ingestJobsEnqueued: 0,
       matchJobsEnqueued: 0,
     };
 
@@ -246,9 +248,6 @@ export function createIngestRadarSignalsJob(
 
       const errors: Error[] = [];
       let acceptedForRun = 0;
-      let createdForRun = 0;
-      let updatedForRun = 0;
-      let resolvedForRun = 0;
 
       for (const signal of signals) {
         try {
@@ -257,23 +256,15 @@ export function createIngestRadarSignalsJob(
             observedAt: startedAt.toISOString(),
             countryCode: 'US',
           });
-          const ingested = await deps.ingestion.ingest(observation, {
+          const enqueued = await deps.ingestQueue.enqueue({
+            observation,
             sourceRunId: begun.run.id,
             correlationId,
+            enqueuedAt: deps.now().toISOString(),
           });
           acceptedForRun += 1;
           result.accepted += 1;
-          result.matchJobsEnqueued += 1;
-          if (ingested.outcome === 'created') {
-            createdForRun += 1;
-            result.eventsCreated += 1;
-          } else if (ingested.outcome === 'updated') {
-            updatedForRun += 1;
-            result.eventsUpdated += 1;
-          } else {
-            result.duplicateRevisions += 1;
-          }
-          if (ingested.lifecycleStatus === 'resolved') resolvedForRun += 1;
+          result.ingestJobsEnqueued += 1;
         } catch (error) {
           const normalizedError = error instanceof Error ? error : new Error(String(error));
           errors.push(normalizedError);
@@ -295,9 +286,9 @@ export function createIngestRadarSignalsJob(
         dataFreshThrough: startedAt,
         observationsReceived: signals.length,
         observationsRejected: rejectedForRun,
-        eventsCreated: createdForRun,
-        eventsUpdated: updatedForRun,
-        eventsResolved: resolvedForRun,
+        eventsCreated: 0,
+        eventsUpdated: 0,
+        eventsResolved: 0,
         errorCode: rejectedForRun > 0 ? 'FIXTURE_OBSERVATION_REJECTED' : undefined,
         errorMessage: rejectedForRun > 0
           ? `${rejectedForRun} test fixture observation(s) were rejected: ${errors[0]?.message}`
@@ -305,6 +296,7 @@ export function createIngestRadarSignalsJob(
         metadataJson: {
           testData: true,
           testDataLabel: 'Test data',
+          observationsQueued: acceptedForRun,
         },
       });
     }

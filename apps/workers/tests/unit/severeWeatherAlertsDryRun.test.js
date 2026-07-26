@@ -62,8 +62,8 @@ function deps(properties) {
           completions += 1;
         },
       },
-      ingestion: {
-        async ingest() {
+      ingestQueue: {
+        async enqueue() {
           ingestions += 1;
         },
       },

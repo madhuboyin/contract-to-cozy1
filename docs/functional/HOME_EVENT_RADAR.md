@@ -993,7 +993,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 ## Current Limitations
 
 - Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
-- Durable ingest and match consumers are still pending, so canonical provider ingestion alone does not guarantee a populated homeowner feed.
+- Durable canonical ingestion is implemented for NWS, freeze, and test fixtures. Durable matching is still pending, so accepted events do not yet guarantee a populated homeowner feed.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - `county` and `polygon` matching are not implemented.
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
@@ -1008,10 +1008,11 @@ Tracked from the "unified live-signal surface" initiative (2026-07-10). Phase 1 
 
 ### Phase 2 — Weather convergence (provider adapters complete; durable processing pending)
 
-`severeWeatherAlertsJob` and `freezeRiskIncidentsJob` now write only canonical radar observations.
+`severeWeatherAlertsJob` and `freezeRiskIncidentsJob` now enqueue only canonical radar observations
+through the durable ingest consumer.
 NWS preserves CAP identity and polygon evidence; freeze forecasts use stable property-scoped identity
-and resolve only after a successful warm forecast. Durable ingest and match consumers remain the
-next delivery slice before the weather feed can be considered operationally complete.
+and resolve only after a successful warm forecast. The durable match consumer remains the next
+delivery slice before the weather feed can be considered operationally complete.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

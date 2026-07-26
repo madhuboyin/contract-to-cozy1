@@ -57,3 +57,14 @@ export function radarMatchJobId(
     .update(`${sourceDefinitionId}\n${providerEventId}\n${revisionIdentity}`)
     .digest('hex')}`;
 }
+
+export function radarIngestJobId(
+  sourceRunId: string,
+  sourceDefinitionId: string,
+  providerEventId: string,
+  revisionIdentity: string,
+): string {
+  return `radar-ingest-${createHash('sha256')
+    .update(`${sourceRunId}\n${sourceDefinitionId}\n${providerEventId}\n${revisionIdentity}`)
+    .digest('hex')}`;
+}

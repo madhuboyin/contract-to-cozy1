@@ -4,7 +4,7 @@ import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { radarSourceRegistryService, resolveRadarRuntimeEnvironment } from '@worker-shared/modules/homeEventRadar/services/radarSourceRegistry.service';
 import { radarSourceRunService } from '@worker-shared/modules/homeEventRadar/services/radarSourceRun.service';
-import { radarEventIngestionService } from '@worker-shared/modules/homeEventRadar/services/radarEventIngestion.service';
+import { radarIngestQueueService } from '@worker-shared/modules/homeEventRadar/queues/radarIngest.queue';
 import type {
   CanonicalRadarObservation,
   RadarSourceRegistrationInput,
@@ -29,7 +29,7 @@ type ForecastOutcome =
 type FreezeDeps = {
   registry: Pick<typeof radarSourceRegistryService, 'register'>;
   runs: Pick<typeof radarSourceRunService, 'begin' | 'complete'>;
-  ingestion: Pick<typeof radarEventIngestionService, 'ingest'>;
+  ingestQueue: Pick<typeof radarIngestQueueService, 'enqueue'>;
   eventLookup: Pick<typeof prisma.radarEvent, 'findFirst' | 'findUnique'>;
   logger: AppLogger;
   iterateAllProperties: typeof iterateAllProperties;
@@ -142,7 +142,7 @@ function registration(env: NodeJS.ProcessEnv): RadarSourceRegistrationInput {
 const defaultDeps: FreezeDeps = {
   registry: radarSourceRegistryService,
   runs: radarSourceRunService,
-  ingestion: radarEventIngestionService,
+  ingestQueue: radarIngestQueueService,
   eventLookup: prisma.radarEvent,
   logger,
   iterateAllProperties,
@@ -198,8 +198,6 @@ export async function freezeRiskIncidentsJob(
   let verifiedNoEvent = 0;
   let failed = 0;
   let createdOrUpdated = 0;
-  let eventsCreated = 0;
-  let eventsUpdated = 0;
   let resolved = 0;
 
   for await (const property of deps.iterateAllProperties()) {
@@ -268,14 +266,15 @@ export async function freezeRiskIncidentsJob(
       continue;
     }
     try {
-      const ingested = await deps.ingestion.ingest(observation, {
+      const enqueued = await deps.ingestQueue.enqueue({
+        observation,
         sourceRunId: begun.run.id,
         correlationId,
+        enqueuedAt: deps.now().toISOString(),
+        smokeCorrelationId,
       });
-      if (ingested.lifecycleStatus === 'resolved') resolved += 1;
+      if (enqueued.lifecycleStatus === 'resolved') resolved += 1;
       else createdOrUpdated += 1;
-      if (ingested.outcome === 'created') eventsCreated += 1;
-      if (ingested.outcome === 'updated') eventsUpdated += 1;
     } catch (error) {
       observationsRejected += 1;
       failed += 1;
@@ -312,9 +311,9 @@ export async function freezeRiskIncidentsJob(
       dataFreshThrough: forecastsSucceeded > 0 ? startedAt : undefined,
       observationsReceived,
       observationsRejected,
-      eventsCreated,
-      eventsUpdated,
-      eventsResolved: resolved,
+      eventsCreated: 0,
+      eventsUpdated: 0,
+      eventsResolved: 0,
       propertiesEvaluated,
       errorCode: errorMessage
           ? sourceRunStatus === 'failed'
@@ -328,6 +327,7 @@ export async function freezeRiskIncidentsJob(
         forecastsFailed,
         observationsRejected,
         verifiedNoEvent,
+        observationsQueued: createdOrUpdated + resolved,
         thresholdFahrenheit: FREEZE_THRESHOLD_F,
       },
     });
@@ -336,6 +336,7 @@ export async function freezeRiskIncidentsJob(
     createdOrUpdated,
     resolved,
     failed,
+    queued: dryRun ? 0 : createdOrUpdated + resolved,
     sourceRunStatus: dryRun ? 'dry_run' : sourceRunStatus,
     smokeCorrelationId,
   };

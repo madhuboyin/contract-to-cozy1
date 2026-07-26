@@ -64,6 +64,48 @@ export const cronJobLastSuccessTimestamp = new Gauge({
   registers: [register],
 });
 
+// ─── Home Event Radar durable pipeline metrics ──────────────────────────────
+
+export const radarIngestObservationsTotal = new Counter({
+  name: 'radar_ingest_observations_total',
+  help: 'Canonical Radar observations processed by durable ingestion outcome',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
+export const radarIngestFailuresTotal = new Counter({
+  name: 'radar_ingest_failures_total',
+  help: 'Failed durable Radar ingestion attempts by bounded error class',
+  labelNames: ['error_class'] as const,
+  registers: [register],
+});
+
+export const radarIngestRetriesTotal = new Counter({
+  name: 'radar_ingest_retries_total',
+  help: 'Radar ingestion failures that remain eligible for BullMQ retry',
+  registers: [register],
+});
+
+export const radarIngestDeadLetterTotal = new Counter({
+  name: 'radar_ingest_dead_letter_total',
+  help: 'Radar ingestion jobs that exhausted their bounded BullMQ attempts',
+  registers: [register],
+});
+
+export const radarIngestLagSeconds = new Histogram({
+  name: 'radar_ingest_lag_seconds',
+  help: 'Time from canonical observation enqueue to durable ingestion start',
+  buckets: [0.1, 0.5, 1, 5, 15, 30, 60, 300, 900],
+  registers: [register],
+});
+
+export const radarIngestDurationSeconds = new Histogram({
+  name: 'radar_ingest_duration_seconds',
+  help: 'Duration of durable canonical Radar ingestion',
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 30],
+  registers: [register],
+});
+
 // ─── Severe weather alerts job metrics ───────────────────────────────────────
 
 export const nwsFetchOutcomeTotal = new Counter({

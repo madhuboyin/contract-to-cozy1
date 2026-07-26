@@ -139,3 +139,16 @@ test('weather lifecycle guards preserve unknown rather than projecting provider 
   assert.match(freeze, /dataFreshThrough: forecastsSucceeded > 0 \? startedAt : undefined/);
   assert.doesNotMatch(freeze, /IncidentService|setStatus|upsertIncident|guidanceJourneyService|ingestSignal/);
 });
+
+test('canonical weather producers use the durable ingest boundary', () => {
+  const severeWeather = read('apps/workers/src/jobs/severeWeatherAlerts.job.ts');
+  const freeze = read('apps/workers/src/jobs/freezeRiskIncidents.job.ts');
+  const worker = read('apps/workers/src/worker.ts');
+
+  assert.match(severeWeather, /deps\.ingestQueue\.enqueue/);
+  assert.match(freeze, /deps\.ingestQueue\.enqueue/);
+  assert.doesNotMatch(severeWeather, /radarEventIngestionService|deps\.ingestion\.ingest/);
+  assert.doesNotMatch(freeze, /radarEventIngestionService|deps\.ingestion\.ingest/);
+  assert.match(worker, /RADAR_INGEST_QUEUE_NAME[\s\S]*processRadarIngestJob/);
+  assert.match(worker, /isRadarIngestEnabled\(process\.env\)/);
+});

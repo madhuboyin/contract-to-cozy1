@@ -49,6 +49,11 @@ function createHarness() {
     eventUpdates: 0,
     revisionCreates: 0,
     transactions: 0,
+    sourceRunCounters: {
+      eventsCreated: 0,
+      eventsUpdated: 0,
+      eventsResolved: 0,
+    },
   };
   const source = {
     id: 'source-1',
@@ -69,6 +74,12 @@ function createHarness() {
     },
     radarSourceRun: {
       findUnique: async ({ where }) => where.id === run.id ? run : null,
+      update: async ({ data }) => {
+        for (const field of ['eventsCreated', 'eventsUpdated', 'eventsResolved']) {
+          state.sourceRunCounters[field] += data[field]?.increment ?? 0;
+        }
+        return { ...run, ...state.sourceRunCounters };
+      },
     },
     radarEvent: {
       findUnique: async ({ where }) => {
@@ -158,6 +169,11 @@ test('creates an exact-source event, immutable revision, and deterministic match
   assert.equal(result.lifecycleStatus, 'active');
   assert.equal(harness.state.events.length, 1);
   assert.equal(harness.state.revisions.length, 1);
+  assert.deepEqual(harness.state.sourceRunCounters, {
+    eventsCreated: 1,
+    eventsUpdated: 0,
+    eventsResolved: 0,
+  });
   assert.equal(harness.state.events[0].sourceDefinitionId, 'source-1');
   assert.equal(harness.state.events[0].providerEventId, 'provider-event-1');
   assert.equal(harness.state.events[0].severity, 'critical');
@@ -223,6 +239,11 @@ test('a material active revision becomes updated and terminal events cannot reop
 
   assert.equal(updated.lifecycleStatus, 'updated');
   assert.equal(resolved.lifecycleStatus, 'resolved');
+  assert.deepEqual(harness.state.sourceRunCounters, {
+    eventsCreated: 1,
+    eventsUpdated: 2,
+    eventsResolved: 1,
+  });
   assert.equal(harness.state.events[0].resolvedAt.toISOString(), '2026-07-26T13:00:00.000Z');
   await assert.rejects(
     () => harness.service.ingest(observation({
@@ -256,6 +277,31 @@ test('rejects stale revisions and source/run provenance mismatches', async () =>
     }),
     RadarObservationSourceError,
   );
+});
+
+test('durable consumer accepts observations after a successful or partial provider run', async () => {
+  for (const status of ['success', 'partial']) {
+    const harness = createHarness();
+    harness.run.status = status;
+
+    const result = await harness.service.ingest(observation(), context);
+
+    assert.equal(result.outcome, 'created');
+    assert.equal(harness.state.events.length, 1);
+  }
+});
+
+test('durable consumer rejects failed, skipped, and successful-empty provider runs', async () => {
+  for (const status of ['failed', 'skipped', 'successful_empty']) {
+    const harness = createHarness();
+    harness.run.status = status;
+
+    await assert.rejects(
+      () => harness.service.ingest(observation(), context),
+      RadarObservationSourceError,
+    );
+    assert.equal(harness.state.events.length, 0);
+  }
 });
 
 test('batch ingestion isolates every observation in its own transaction', async () => {

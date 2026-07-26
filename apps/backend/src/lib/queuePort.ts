@@ -19,6 +19,7 @@ import type { Job, JobsOptions } from 'bullmq';
 export interface QueuePort<T = unknown> {
   add(name: string, data: T, opts?: JobsOptions): Promise<Job<T>>;
   getJob(jobId: string): Promise<Job<T> | undefined>;
+  close?(): Promise<void>;
 }
 
 export interface LazyQueue<T> {
@@ -56,5 +57,6 @@ export function createFakeQueue<T>(): QueuePort<T> & { added: Array<{ name: stri
     async getJob() {
       return undefined;
     },
+    async close() {},
   };
 }

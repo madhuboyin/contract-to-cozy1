@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-201 implemented |
+| Status | In progress — HER-202 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -30,7 +30,8 @@
 | HER-106 Test-only fixture provider | Complete; DB application pending | Deterministic canonical fixtures use family-specific test sources, source-run health, immutable ingestion/revision, match enqueue, production rejection, bounded property scope, and explicit Test data labeling |
 | HER-200 NWS adapter | Complete; DB application pending | NWS CAP alerts now use source runs and canonical ingestion with shared identity, polygon/MultiPolygon geography, full provider evidence, conservative health semantics, and no direct Incident/Guidance writes |
 | HER-201 Freeze forecast adapter | Complete; DB application pending | Open-Meteo forecasts now use source runs and canonical property-scoped ingestion with stable identity, immutable refresh revisions, verified warm resolution, conservative failure semantics, and no direct Incident/Guidance writes |
-| HER-202+ | Not started | Durable consumers, matching, homeowner APIs, actions, and operations remain |
+| HER-202 Durable ingest consumer | Complete; DB application pending | Versioned canonical jobs use deterministic same-run identity, bounded retries with jitter, retained failure history, payload limits, metrics, a global kill switch, bounded concurrency, and graceful shutdown; NWS, freeze, and test fixtures enqueue through it |
+| HER-203+ | Not started | Durable matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -222,7 +223,7 @@ owner. Existing pre-launch Radar data may be reset.
 ```mermaid
 flowchart LR
   P["Provider adapters"] --> O["CanonicalRadarObservation"]
-  O --> IQ["radar-ingest queue"]
+  O --> IQ["home-event-radar-ingest-queue"]
   IQ --> IS["RadarEventIngestionService"]
   IS --> E["RadarEvent + revision"]
   E --> MQ["radar-match queue"]
@@ -278,8 +279,8 @@ Radar service authorities.
 
 Recommended queues:
 
-- `radar-ingest-queue`;
-- `radar-match-queue`;
+- `home-event-radar-ingest-queue`;
+- `home-event-radar-match-queue`;
 - optional `radar-reconcile-queue`.
 
 Each job carries:
@@ -624,6 +625,22 @@ Implement BullMQ consumer with:
 - metrics;
 - graceful shutdown;
 - concurrency appropriate to database/provider workload.
+
+Implementation note: `radarIngest.queue.ts` owns the versioned queue payload, validates the
+canonical observation and provenance before Redis, rejects payloads above 512 KiB, and generates
+a deterministic job ID from the source run plus exact-source revision identity. Jobs receive five
+bounded exponential retries with jitter and inherit symmetric retention of the latest 500 failed
+and completed jobs. `radarIngestConsumer.ts` revalidates every claimed payload and delegates to
+the idempotent `RadarEventIngestionService`, which accepts started, successful, or partial source
+runs so provider completion and queue claim ordering cannot race. Failed, skipped, and
+successful-empty runs remain ineligible to gain events. The worker uses bounded configurable
+concurrency, records lag/duration/outcome/retry/dead-letter metrics, retains exhausted jobs in
+BullMQ failure history, sends the existing final-attempt alert, and closes both Worker and Queue
+connections during graceful shutdown. Canonical event counters are incremented in the same
+database transaction as the immutable revision, while provider-run completion uses increments so
+consumer-before-completion and consumer-after-completion ordering produce the same totals.
+`RADAR_INGEST_ENABLED=false` is the global fail-closed kill switch. NWS, freeze, and non-production
+fixture producers now enqueue instead of writing canonical events synchronously.
 
 ### HER-203 — Durable match consumer
 

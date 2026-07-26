@@ -172,9 +172,12 @@ export class RadarSourceRunService {
             dataFreshThrough: completion.dataFreshThrough ?? null,
             observationsReceived: completion.observationsReceived,
             observationsRejected: completion.observationsRejected,
-            eventsCreated: completion.eventsCreated,
-            eventsUpdated: completion.eventsUpdated,
-            eventsResolved: completion.eventsResolved,
+            // Durable consumers may finish before or after this provider-run
+            // completion. Increment rather than overwrite so consumer-owned
+            // exact-once event counters survive either ordering.
+            eventsCreated: { increment: completion.eventsCreated },
+            eventsUpdated: { increment: completion.eventsUpdated },
+            eventsResolved: { increment: completion.eventsResolved },
             propertiesEvaluated: completion.propertiesEvaluated,
             matchesCreated: completion.matchesCreated,
             rateLimitJson: completion.rateLimitJson

@@ -14,8 +14,8 @@ import {
   radarSourceRunService,
 } from '@worker-shared/modules/homeEventRadar/services/radarSourceRun.service';
 import {
-  radarEventIngestionService,
-} from '@worker-shared/modules/homeEventRadar/services/radarEventIngestion.service';
+  radarIngestQueueService,
+} from '@worker-shared/modules/homeEventRadar/queues/radarIngest.queue';
 import type {
   RadarSourceRegistrationInput,
 } from '@worker-shared/modules/homeEventRadar/contracts';
@@ -39,13 +39,13 @@ type PropertyRow = {
 
 type RegistryPort = Pick<typeof radarSourceRegistryService, 'register'>;
 type RunPort = Pick<typeof radarSourceRunService, 'begin' | 'complete'>;
-type IngestionPort = Pick<typeof radarEventIngestionService, 'ingest'>;
+type IngestQueuePort = Pick<typeof radarIngestQueueService, 'enqueue'>;
 
 export interface SevereWeatherAlertsDeps {
   severeWeatherAlertService: Pick<typeof severeWeatherAlertService, 'getActiveAlerts'>;
   registry: RegistryPort;
   runs: RunPort;
-  ingestion: IngestionPort;
+  ingestQueue: IngestQueuePort;
   logger: AppLogger;
   iterateAllProperties: typeof iterateAllProperties;
   getPropertyGeo: typeof getPropertyGeo;
@@ -58,7 +58,7 @@ const defaultDeps: SevereWeatherAlertsDeps = {
   severeWeatherAlertService,
   registry: radarSourceRegistryService,
   runs: radarSourceRunService,
-  ingestion: radarEventIngestionService,
+  ingestQueue: radarIngestQueueService,
   logger,
   iterateAllProperties,
   getPropertyGeo,
@@ -211,8 +211,6 @@ export async function severeWeatherAlertsJob(
     .filter((entry) => entry.outcome === 'ok').length;
   const fetchFailed = alertsCache.size - fetchSucceeded;
   let createdOrUpdated = 0;
-  let eventsCreated = 0;
-  let eventsUpdated = 0;
   let resolved = 0;
   const errors: Error[] = [];
 
@@ -230,14 +228,15 @@ export async function severeWeatherAlertsJob(
         createdOrUpdated += 1;
         continue;
       }
-      const ingested = await deps.ingestion.ingest(observation, {
+      const enqueued = await deps.ingestQueue.enqueue({
+        observation,
         sourceRunId: begun.run.id,
         correlationId,
+        enqueuedAt: deps.now().toISOString(),
+        smokeCorrelationId,
       });
       createdOrUpdated += 1;
-      if (ingested.outcome === 'created') eventsCreated += 1;
-      if (ingested.outcome === 'updated') eventsUpdated += 1;
-      if (ingested.lifecycleStatus === 'resolved' || ingested.lifecycleStatus === 'retracted') {
+      if (enqueued.lifecycleStatus === 'resolved' || enqueued.lifecycleStatus === 'retracted') {
         resolved += 1;
       }
     } catch (error) {
@@ -274,9 +273,9 @@ export async function severeWeatherAlertsJob(
       dataFreshThrough: fetchSucceeded > 0 ? startedAt : undefined,
       observationsReceived: uniqueAlerts.size,
       observationsRejected: errors.length,
-      eventsCreated,
-      eventsUpdated,
-      eventsResolved: resolved,
+      eventsCreated: 0,
+      eventsUpdated: 0,
+      eventsResolved: 0,
       propertiesEvaluated,
       errorCode: errorMessage
         ? sourceRunStatus === 'failed'
@@ -291,6 +290,7 @@ export async function severeWeatherAlertsJob(
         fetchSucceeded,
         fetchFailed,
         queryPoints: alertsCache.size,
+        observationsQueued: createdOrUpdated,
       },
     });
   }
@@ -303,6 +303,7 @@ export async function severeWeatherAlertsJob(
     fetchSucceeded,
     fetchFailed,
     uniqueAlerts: uniqueAlerts.size,
+    queued: dryRun ? 0 : createdOrUpdated,
     rejected: errors.length,
   };
 }

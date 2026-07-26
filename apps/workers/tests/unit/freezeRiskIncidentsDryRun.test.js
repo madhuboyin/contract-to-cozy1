@@ -35,7 +35,7 @@ function fakeDeps({
         async begin() { writes.begin += 1; },
         async complete() { writes.complete += 1; },
       },
-      ingestion: { async ingest() { writes.ingest += 1; } },
+      ingestQueue: { async enqueue() { writes.ingest += 1; } },
       eventLookup: {
         async findUnique() { throw new Error('dry run must not use source ID lookup'); },
         async findFirst(query) {

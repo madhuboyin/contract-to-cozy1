@@ -78,6 +78,19 @@ export class RadarObservationSourceError extends Error {
 
 const TERMINAL_STATUSES = new Set<LifecycleStatus>(['resolved', 'expired', 'retracted']);
 
+function sourceRunEventCounters(
+  outcome: 'created' | 'updated',
+  lifecycleStatus: LifecycleStatus,
+) {
+  return {
+    ...(outcome === 'created' ? { eventsCreated: { increment: 1 } } : {}),
+    ...(outcome === 'updated' ? { eventsUpdated: { increment: 1 } } : {}),
+    ...(TERMINAL_STATUSES.has(lifecycleStatus)
+      ? { eventsResolved: { increment: 1 } }
+      : {}),
+  };
+}
+
 export function canonicalLifecycleTransition(
   previous: LifecycleStatus | null,
   requested: LifecycleStatus,
@@ -285,9 +298,13 @@ export class RadarEventIngestionService {
           `Source run ${context.sourceRunId} does not belong to source ${source.id}`,
         );
       }
-      if (run.status !== 'started') {
+      // Durable ingest jobs can be claimed either before or after the provider
+      // finishes its fetch run. A successful/partial run proves the provider
+      // observation was accepted for delivery; failed, skipped, and
+      // successful-empty runs must never gain events asynchronously.
+      if (!['started', 'success', 'partial'].includes(String(run.status))) {
         throw new RadarObservationSourceError(
-          `Source run ${context.sourceRunId} is ${run.status}; observations require a started run`,
+          `Source run ${context.sourceRunId} is ${run.status}; observations require a started, successful, or partial run`,
         );
       }
       if (run.correlationId !== context.correlationId) {
@@ -355,6 +372,10 @@ export class RadarEventIngestionService {
           where: { id: existingEvent.id },
           data: eventWriteData(observation, source, context, lifecycleStatus, existingEvent),
         });
+        await tx.radarSourceRun.update({
+          where: { id: context.sourceRunId },
+          data: sourceRunEventCounters('updated', lifecycleStatus),
+        });
         return { outcome: 'updated' as const, event, revision, lifecycleStatus };
       }
 
@@ -376,6 +397,10 @@ export class RadarEventIngestionService {
           normalizedJson: jsonInput(normalizedEvidence(observation)),
           rawPayloadJson: normalizedRawPayload,
         },
+      });
+      await tx.radarSourceRun.update({
+        where: { id: context.sourceRunId },
+        data: sourceRunEventCounters('created', lifecycleStatus),
       });
       return { outcome: 'created' as const, event, revision, lifecycleStatus };
     });

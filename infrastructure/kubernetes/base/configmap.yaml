@@ -104,6 +104,10 @@ data:
   # the other external-ingest jobs (recall-ingest, mortgage-rate-ingest,
   # permit-fetch, generate-diy-ai-guide, etc.) stay off pending review.
   WORKER_EXTERNAL_INGEST_ENABLED: "false"
+  # Durable canonical Radar ingestion. This is independent from provider
+  # enablement so reviewed NWS/freeze jobs can share one bounded consumer.
+  RADAR_INGEST_ENABLED: "true"
+  RADAR_INGEST_CONCURRENCY: "4"
   WORKER_MUTATING_SWEEPS_ENABLED: "false"
   WORKER_MANUAL_TRIGGERS_ENABLED: "true"
   # Synced from live 2026-07-24 (was "false" here, "true" on the cluster).

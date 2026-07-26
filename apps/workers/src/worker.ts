@@ -96,7 +96,21 @@ import {
   cronJobRunsTotal,
   cronJobDurationSeconds,
   cronJobLastSuccessTimestamp,
+  radarIngestDeadLetterTotal,
+  radarIngestRetriesTotal,
 } from './lib/metrics';
+import {
+  getRadarIngestQueue,
+  isRadarIngestEnabled,
+  RADAR_INGEST_JOB_NAME,
+  RADAR_INGEST_QUEUE_NAME,
+  type RadarIngestJobPayload,
+} from '@worker-shared/modules/homeEventRadar/queues/radarIngest.queue';
+import {
+  isFinalRadarIngestAttempt,
+  processRadarIngestJob,
+  radarIngestConcurrency,
+} from './radar/radarIngestConsumer';
 
 // =============================================================================
 // FIX: Update queue configuration to match backend
@@ -553,6 +567,92 @@ function validateRegistryQueueWiring(): void {
  */
 function startWorker() {
   logger.info('🚀 Worker started. Waiting for jobs...');
+  if (isRadarIngestEnabled(process.env)) {
+    const radarIngestWorker = new Worker<RadarIngestJobPayload>(
+      RADAR_INGEST_QUEUE_NAME,
+      (job) => processRadarIngestJob(job),
+      {
+        connection: redisConnection,
+        concurrency: radarIngestConcurrency(),
+        lockDuration: 120_000,
+        lockRenewTime: 30_000,
+      },
+    );
+    radarIngestWorker.on('ready', () => {
+      logger.info(
+        `[RADAR-INGEST] Durable consumer ready for ${RADAR_INGEST_QUEUE_NAME} ` +
+        `(concurrency=${radarIngestConcurrency()})`,
+      );
+    });
+    radarIngestWorker.on('active', (job) => {
+      jobsActiveGauge.inc({ queue: RADAR_INGEST_QUEUE_NAME });
+      (job as unknown as Record<string, unknown>).__metricStart = process.hrtime();
+    });
+    radarIngestWorker.on('completed', (job) => {
+      const start = (job as unknown as Record<string, unknown>).__metricStart as
+        [number, number] | undefined;
+      if (start) {
+        const [seconds, nanoseconds] = process.hrtime(start);
+        jobDurationSeconds.observe(
+          { queue: RADAR_INGEST_QUEUE_NAME, job_name: RADAR_INGEST_JOB_NAME },
+          seconds + nanoseconds / 1e9,
+        );
+      }
+      jobsActiveGauge.dec({ queue: RADAR_INGEST_QUEUE_NAME });
+      jobsProcessedTotal.inc({
+        queue: RADAR_INGEST_QUEUE_NAME,
+        job_name: RADAR_INGEST_JOB_NAME,
+        status: 'completed',
+      });
+      logger.info(
+        {
+          jobId: job.id,
+          sourceRunId: job.data.sourceRunId,
+          providerEventId: job.data.observation.providerEventId,
+        },
+        '[RADAR-INGEST] Canonical observation ingested',
+      );
+    });
+    radarIngestWorker.on('failed', (job, error) => {
+      jobsActiveGauge.dec({ queue: RADAR_INGEST_QUEUE_NAME });
+      jobsProcessedTotal.inc({
+        queue: RADAR_INGEST_QUEUE_NAME,
+        job_name: RADAR_INGEST_JOB_NAME,
+        status: 'failed',
+      });
+      const finalAttempt = isFinalRadarIngestAttempt(job);
+      if (finalAttempt) radarIngestDeadLetterTotal.inc();
+      else radarIngestRetriesTotal.inc();
+      logger.error(
+        {
+          err: error,
+          jobId: job?.id,
+          sourceRunId: job?.data.sourceRunId,
+          sourceDefinitionId: job?.data.observation.sourceDefinitionId,
+          providerEventId: job?.data.observation.providerEventId,
+          attemptsMade: job?.attemptsMade,
+          maxAttempts: job?.opts.attempts,
+          finalAttempt,
+          failureHistory: finalAttempt ? 'retained_in_bullmq_failed_set' : 'retry_scheduled',
+        },
+        finalAttempt
+          ? '[RADAR-INGEST] Observation exhausted retries and entered retained failure history'
+          : '[RADAR-INGEST] Observation failed; bounded retry scheduled',
+      );
+      void alertOnJobFailure(RADAR_INGEST_QUEUE_NAME, job, error);
+    });
+    radarIngestWorker.on('error', (error) => {
+      logger.error({ err: error }, '[RADAR-INGEST] Durable consumer error');
+    });
+    registerShutdownHandler('radarIngestWorker', () => radarIngestWorker.close());
+    registerShutdownHandler('radarIngestQueue', async () => {
+      await getRadarIngestQueue().close?.();
+    });
+  } else {
+    logger.warn(
+      '[RADAR-INGEST] Durable ingestion disabled by RADAR_INGEST_ENABLED=false',
+    );
+  }
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================
@@ -1207,6 +1307,7 @@ const KNOWN_QUEUE_NAMES = new Set<string>([
   'detect-unpermitted-work-queue',
   'generate-permit-disclosure-queue',
   'cron-trigger-queue',
+  RADAR_INGEST_QUEUE_NAME,
 ]);
 
 // =============================================================================
