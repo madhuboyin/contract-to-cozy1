@@ -103,6 +103,9 @@ import {
   PropertyDashboardBootstrap,
   PropertyNarrativeRun,
   RadarFeedItem,
+  RadarOverview,
+  RadarCanonicalFeed,
+  RadarCanonicalFeedParams,
   RadarMatchDetail,
   RadarUserState,
   ResolutionCenterPayload,
@@ -4047,6 +4050,37 @@ class APIClient {
       `/api/properties/${propertyId}/radar/feed${qs}`
     );
     return res.data ?? { items: [], hasMore: false, nextCursor: null, propertyContext: undefined };
+  }
+
+  async getRadarOverview(propertyId: string): Promise<RadarOverview> {
+    const res = await this.get<RadarOverview>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/overview`
+    );
+    if (!res.data) throw new Error('Radar overview was unavailable.');
+    return res.data;
+  }
+
+  async getRadarEvents(
+    propertyId: string,
+    params: RadarCanonicalFeedParams = {}
+  ): Promise<RadarCanonicalFeed> {
+    const query = new URLSearchParams();
+    const listKeys: Array<keyof Pick<
+      RadarCanonicalFeedParams,
+      'lifecycle' | 'sourceFamily' | 'severity' | 'impact' | 'confidence' | 'state' | 'attention'
+    >> = ['lifecycle', 'sourceFamily', 'severity', 'impact', 'confidence', 'state', 'attention'];
+    for (const key of listKeys) {
+      const values = params[key];
+      if (values?.length) query.set(key, values.join(','));
+    }
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.cursor) query.set('cursor', params.cursor);
+    const suffix = query.size ? `?${query.toString()}` : '';
+    const res = await this.get<RadarCanonicalFeed>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/events${suffix}`
+    );
+    if (!res.data) throw new Error('Radar events were unavailable.');
+    return res.data;
   }
 
   async getRadarMatchDetail(propertyId: string, matchId: string): Promise<RadarMatchDetail | null> {

@@ -1,47 +1,129 @@
-export const RADAR_INTERIM_MONITORING_COPY =
-  'This feed shows verified matches from configured Radar sources. Live NWS and freeze alerts currently appear in Incidents while weather monitoring is being unified.';
+import type {
+  RadarCategoryCoverage,
+  RadarFeedState,
+  RadarMonitoringState,
+  RadarSourceFamily,
+} from '@/types';
 
-export const RADAR_INTERIM_COVERAGE = [
-  {
-    key: 'weather',
-    label: 'Live weather',
-    status: 'In Incidents',
-    detail: 'NWS and freeze alerts currently appear in the property Incident feed.',
+export const RADAR_MONITORING_PRESENTATION: Record<
+  RadarMonitoringState,
+  { label: string; title: string; description: string; tone: 'positive' | 'warning' | 'danger' | 'neutral' }
+> = {
+  ACTIVE: {
+    label: 'Active',
+    title: 'Monitoring is active',
+    description: 'Configured sources currently cover this home and are reporting normally.',
+    tone: 'positive',
   },
-  {
-    key: 'tax',
-    label: 'Tax',
-    status: 'Limited',
-    detail: 'Available only where a verified assessor source is configured.',
+  PARTIAL: {
+    label: 'Partial coverage',
+    title: 'Some monitoring is active',
+    description: 'Active sources are monitoring this home, but one or more categories are unavailable.',
+    tone: 'warning',
   },
-  {
-    key: 'utility',
-    label: 'Utility',
-    status: 'Not connected',
-    detail: 'No verified utility connector is active in this Radar feed.',
+  DEGRADED: {
+    label: 'Degraded',
+    title: 'Monitoring is delayed',
+    description: 'One or more configured sources are stale or failing. Recent events may be delayed.',
+    tone: 'danger',
   },
-  {
-    key: 'insurance',
-    label: 'Insurance',
-    status: 'Not connected',
-    detail: 'No verified insurance connector is active in this Radar feed.',
+  UNCOVERED: {
+    label: 'Unavailable',
+    title: 'Live monitoring is unavailable',
+    description: 'No configured Radar source currently covers this home.',
+    tone: 'neutral',
   },
-] as const;
+  SETUP_NEEDED: {
+    label: 'Setup needed',
+    title: 'Property setup is needed',
+    description: 'Radar needs a usable property location and completed coverage evaluation.',
+    tone: 'warning',
+  },
+};
 
-export function getRadarEmptyStateCopy(filtered: boolean): {
-  title: string;
-  description: string;
-} {
-  if (filtered) {
+export const RADAR_FAMILY_LABELS: Record<RadarSourceFamily, string> = {
+  weather: 'Weather',
+  air_quality: 'Air quality',
+  disaster: 'Disaster',
+  utility: 'Utility',
+  tax: 'Tax',
+  insurance: 'Insurance',
+  other: 'Other',
+};
+
+export const RADAR_COVERAGE_LABELS: Record<RadarCategoryCoverage['status'], string> = {
+  covered: 'Active',
+  not_covered: 'Not available here',
+  disabled: 'Coming later',
+  failed: 'Degraded',
+  stale: 'Delayed',
+  unknown: 'Setup needed',
+};
+
+export function isRadarFamilyFilterAvailable(status: RadarCategoryCoverage['status']): boolean {
+  return status === 'covered' || status === 'failed' || status === 'stale';
+}
+
+export function formatRadarLastCheck(
+  value: string | null,
+  now: Date = new Date(),
+): string {
+  if (!value) return 'No successful check recorded';
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return 'Last successful check unavailable';
+  const minutes = Math.max(0, Math.floor((now.getTime() - timestamp) / 60_000));
+  if (minutes < 1) return 'Last successful check just now';
+  if (minutes < 60) return `Last successful check ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Last successful check ${hours} hr${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `Last successful check ${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+export function getRadarEmptyStateCopy(input: {
+  filtered: boolean;
+  monitoringState?: RadarMonitoringState;
+  feedState?: RadarFeedState;
+}): { title: string; description: string } {
+  if (input.filtered) {
     return {
-      title: 'No events in this category',
-      description: 'Try switching to “All” to see every verified Radar match for this property.',
+      title: 'No events match this filter',
+      description: 'Try another available category or switch to All.',
     };
   }
 
+  if (input.monitoringState === 'SETUP_NEEDED') {
+    return {
+      title: 'Complete property setup',
+      description: 'Add or correct this property’s location so Radar can evaluate source coverage.',
+    };
+  }
+  if (input.feedState === 'CONFIRMED_CLEAR' && input.monitoringState === 'ACTIVE') {
+    return {
+      title: 'No active events detected',
+      description: 'No active events were reported by the sources currently covering this home.',
+    };
+  }
+  if (input.feedState === 'HAS_EVENTS' && input.monitoringState === 'ACTIVE') {
+    return {
+      title: 'No current events to review',
+      description: 'Monitoring remains active. Events outside this view may be dismissed or filtered.',
+    };
+  }
+  if (input.feedState === 'DEGRADED' || input.monitoringState === 'DEGRADED') {
+    return {
+      title: 'No events available while monitoring is delayed',
+      description: 'Some sources are stale or failing. This is not confirmation that no local event exists.',
+    };
+  }
+  if (input.feedState === 'PARTIAL_COVERAGE' || input.monitoringState === 'PARTIAL') {
+    return {
+      title: 'No events detected by active sources',
+      description: 'Some categories are not covered, so this is not a complete all-clear.',
+    };
+  }
   return {
-    title: 'No Radar events available',
-    description:
-      'No verified Radar matches are available for this property. This does not confirm that no local hazards exist. Live NWS and freeze alerts currently appear in Incidents.',
+    title: 'Live monitoring is not available',
+    description: 'No configured Radar source currently covers this property. This is not evidence that no local event exists.',
   };
 }

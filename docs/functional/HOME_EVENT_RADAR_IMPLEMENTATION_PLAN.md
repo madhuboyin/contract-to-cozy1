@@ -46,7 +46,8 @@
 | HER-400 Query service | Complete | Canonical property-scoped overview, coverage, authoritative counts, feed, pure-read detail, and user-state views consume materialized Radar projections without synchronous source refresh or reprioritization |
 | HER-401 Stable pagination | Complete | Versioned property/state-bound base64url cursors encode the snapshot plus lifecycle, priority band/score, effective time, and ID; typed keyset predicates and concurrent-insert fixtures prove deterministic page boundaries |
 | HER-402 Server filters/totals | Complete | Canonical repeatable filters cover lifecycle, source family, normalized provider severity, property impact, confidence, personal state, and material New/Updated attention; normalized filters bind cursors and the same predicate drives the page and authoritative total |
-| HER-403+ | Not started | Coverage-aware UI, event cards/detail, actions, notifications, accessibility, and operations remain |
+| HER-403 Coverage-aware UI | Complete | The page consumes canonical overview/events, distinguishes every monitoring and feed state, renders materialized category coverage/freshness and last success, disables unavailable filters, preserves errors as errors, and pages with the stable cursor |
+| HER-404+ | Not started | Canonical event cards/detail, deep links, actions, notifications, accessibility, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1153,6 +1154,16 @@ Refactor `HomeEventRadarPageClient` to consume overview and feed:
 - no unsupported claims;
 - retry/degraded messaging;
 - source freshness.
+
+**Implemented:** `HomeEventRadarPageClient` now loads the canonical overview and cursor-backed
+events APIs. Active, Partial, Degraded, Uncovered, and Setup Needed have explicit monitoring copy;
+only Active plus `CONFIRMED_CLEAR` may present a covered-source empty state. Overview failures and
+feed failures retain separate retry paths and never degrade into a successful empty result.
+Materialized category rows drive availability cards and source-family filter enablement, including
+last successful check and source freshness. Counts come from overview/feed authorities rather than
+the loaded page, and the page loads additional event pages through the HER-401 cursor. Existing
+cards use a narrow canonical-to-legacy compatibility projection until their intentional HER-404
+replacement.
 
 ### HER-404 — Event feed and card
 

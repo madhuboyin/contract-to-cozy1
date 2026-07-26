@@ -3256,6 +3256,111 @@ export interface RadarMatchDetail {
   createdAt: string;
   updatedAt: string;
 }
+
+export type RadarMonitoringState =
+  | 'ACTIVE'
+  | 'PARTIAL'
+  | 'DEGRADED'
+  | 'UNCOVERED'
+  | 'SETUP_NEEDED';
+export type RadarFeedState =
+  | 'HAS_EVENTS'
+  | 'CONFIRMED_CLEAR'
+  | 'PARTIAL_COVERAGE'
+  | 'DEGRADED'
+  | 'UNCOVERED';
+export type RadarSourceFamily =
+  | 'weather'
+  | 'air_quality'
+  | 'disaster'
+  | 'utility'
+  | 'tax'
+  | 'insurance'
+  | 'other';
+export type RadarCanonicalSeverity = 'info' | 'low' | 'moderate' | 'high' | 'severe' | 'extreme';
+export type RadarCanonicalImpact = 'none' | 'low' | 'moderate' | 'high' | 'critical';
+export type RadarConfidence = 'low' | 'medium' | 'high' | 'verified';
+
+export interface RadarCategoryCoverage {
+  family: RadarSourceFamily;
+  status: 'covered' | 'not_covered' | 'disabled' | 'failed' | 'stale' | 'unknown';
+  sourceDefinitionIds: string[];
+  sourceNames: string[];
+  detail: string;
+  evaluatedAt: string | null;
+  dataFreshThrough: string | null;
+}
+
+export interface RadarOverview {
+  propertyId: string;
+  generatedAt: string;
+  monitoringState: RadarMonitoringState;
+  lastSuccessfulCheckAt: string | null;
+  coverage: RadarCategoryCoverage[];
+  counts: {
+    active: number;
+    new: number;
+    upcoming: number;
+    recentlyEnded: number;
+    saved: number;
+    dismissed: number;
+  };
+  propertyContext: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
+}
+
+export interface RadarCanonicalFeedItem {
+  id: string;
+  propertyMatchId: string;
+  eventId: string;
+  eventType: string;
+  sourceFamily: RadarSourceFamily;
+  title: string;
+  summary: string;
+  severity: RadarCanonicalSeverity;
+  impact: RadarCanonicalImpact;
+  confidence?: RadarConfidence;
+  priorityBand: RadarPriorityBand;
+  priorityScore: number;
+  matchLifecycleStatus: Exclude<RadarMatchLifecycleStatus, 'no_longer_applicable'>;
+  sourceFreshnessStatus: RadarSourceFreshnessStatus;
+  sourceFreshnessReason: string | null;
+  isSourceStale: boolean;
+  isMaterialUpdate: boolean;
+  lifecycleStatus: RadarLifecycleStatus;
+  effectiveAt: string;
+  expiresAt: string | null;
+  sourceName: string;
+  provider: string | null;
+  userState: RadarUserState;
+}
+
+export interface RadarAppliedFilters {
+  lifecycle: Array<'now' | 'upcoming' | 'recently_ended'>;
+  sourceFamily: RadarSourceFamily[];
+  severity: Array<'info' | 'low' | 'moderate' | 'high' | 'severe'>;
+  impact: Array<'none' | 'low' | 'moderate' | 'high'>;
+  confidence: RadarConfidence[];
+  state: RadarUserState[];
+  attention: Array<'new' | 'updated'>;
+}
+
+export interface RadarCanonicalFeed {
+  propertyId: string;
+  items: RadarCanonicalFeedItem[];
+  pageInfo: {
+    hasNextPage: boolean;
+    endCursor: string | null;
+  };
+  totalCount: number;
+  appliedFilters: RadarAppliedFilters;
+  feedState: RadarFeedState;
+  asOf: string;
+}
+
+export interface RadarCanonicalFeedParams extends Partial<RadarAppliedFilters> {
+  limit?: number;
+  cursor?: string;
+}
 // =============================================================================
 
 // ============================================================================

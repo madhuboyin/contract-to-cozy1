@@ -6,8 +6,8 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Building2, Filter, Radio } from 'lucide-react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { AlertTriangle, ArrowLeft, Building2, CheckCircle2, Filter, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
@@ -23,38 +23,35 @@ import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFee
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { track } from '@/lib/analytics/events';
-import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
+import type {
+  Property,
+  RadarCategoryCoverage,
+  RadarFeedItem as RadarFeedItemType,
+  RadarMonitoringState,
+  RadarOverview,
+  RadarSourceFamily,
+  RadarUserState,
+} from '@/types';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 import {
+  formatRadarLastCheck,
   getRadarEmptyStateCopy,
-  RADAR_INTERIM_COVERAGE,
-  RADAR_INTERIM_MONITORING_COPY,
+  isRadarFamilyFilterAvailable,
+  RADAR_COVERAGE_LABELS,
+  RADAR_FAMILY_LABELS,
+  RADAR_MONITORING_PRESENTATION,
 } from '@/features/homeEventRadar/radarAvailabilityCopy';
+import { toLegacyRadarFeedItem } from '@/features/homeEventRadar/radarCanonicalAdapter';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
 // ---------------------------------------------------------------------------
 
-type FilterKey = 'all' | 'weather' | 'insurance' | 'utility' | 'tax';
-
-const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'weather', label: 'Weather' },
-  { key: 'insurance', label: 'Insurance' },
-  { key: 'utility', label: 'Utility' },
-  { key: 'tax', label: 'Tax' },
-];
-
-const FILTER_TO_TYPES: Record<FilterKey, string[] | null> = {
-  all: null,
-  weather: ['hail', 'freeze', 'heat_wave', 'wind', 'heavy_rain', 'flood_risk', 'air_quality', 'wildfire_smoke', 'power_surge_risk', 'nearby_construction', 'weather'],
-  insurance: ['insurance_market'],
-  utility: ['utility_outage', 'utility_rate_change'],
-  tax: ['tax_reassessment', 'tax_rate_change'],
-};
+type FilterKey = 'all' | RadarSourceFamily;
+type FilterOption = { key: FilterKey; label: string; disabled?: boolean; status?: string };
 
 const TIMING_GROUPS = [
   { key: 'now', label: 'Now' },
@@ -62,11 +59,16 @@ const TIMING_GROUPS = [
   { key: 'recently_ended', label: 'Recently Ended' },
 ] as const;
 
-function matchesFilter(item: RadarFeedItemType, filter: FilterKey): boolean {
-  if (filter === 'all') return true;
-  const types = FILTER_TO_TYPES[filter];
-  if (!types) return true;
-  return types.includes(item.eventType);
+function radarFilterOptions(coverage: RadarCategoryCoverage[]): FilterOption[] {
+  return [
+    { key: 'all', label: 'All' },
+    ...coverage.map((category) => ({
+      key: category.family,
+      label: RADAR_FAMILY_LABELS[category.family],
+      disabled: !isRadarFamilyFilterAvailable(category.status),
+      status: RADAR_COVERAGE_LABELS[category.status],
+    })),
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -120,14 +122,22 @@ function RadarDesktopSidebar({
   newCount,
   dismissedCount,
   activeFilter,
+  monitoringState,
+  lastSuccessfulCheckAt,
 }: {
   propertyAddress?: string;
   totalCount: number;
   newCount: number;
   dismissedCount: number;
   activeFilter: FilterKey;
+  monitoringState?: RadarMonitoringState;
+  lastSuccessfulCheckAt?: string | null;
 }) {
-  const activeFilterLabel = FILTER_OPTIONS.find((option) => option.key === activeFilter)?.label ?? 'All';
+  const activeFilterLabel =
+    activeFilter === 'all' ? 'All' : RADAR_FAMILY_LABELS[activeFilter];
+  const monitoring = monitoringState
+    ? RADAR_MONITORING_PRESENTATION[monitoringState]
+    : null;
 
   return (
     <aside className="hidden space-y-4 lg:block lg:sticky lg:top-4">
@@ -146,17 +156,22 @@ function RadarDesktopSidebar({
               Selected property
             </p>
             <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-              Current property context
+              {monitoring?.title ?? 'Loading monitoring status'}
             </p>
             <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
               {propertyAddress || 'Events are matched against the selected property and available home details.'}
             </p>
+            {monitoring ? (
+              <p className="mb-0 mt-2 text-xs font-medium text-[hsl(var(--mobile-brand-strong))]">
+                {monitoring.label} · {formatRadarLastCheck(lastSuccessfulCheckAt ?? null)}
+              </p>
+            ) : null}
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
-            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Matched events</p>
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Events in view</p>
             <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{totalCount}</p>
           </div>
           <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
@@ -187,7 +202,7 @@ function RadarDesktopSidebar({
           <div>
             <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">How radar works</p>
             <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-              {RADAR_INTERIM_MONITORING_COPY}
+              Radar reports events only from configured sources that currently cover this property.
             </p>
             <p className={cn('mb-0 mt-3 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
               Event severity reflects the signal itself. Impact reflects what it may mean for this specific property.
@@ -205,29 +220,35 @@ function RadarDesktopSidebar({
 
 function FilterChips({
   active,
+  options,
   onChange,
 }: {
   active: FilterKey;
+  options: FilterOption[];
   onChange: (k: FilterKey) => void;
 }) {
   return (
     <ScrollFadeX fromColor="from-white">
     <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto no-scrollbar pb-0.5">
-      {FILTER_OPTIONS.map((opt) => (
+      {options.map((opt) => (
         <button
           key={opt.key}
           type="button"
           aria-pressed={active === opt.key}
+          aria-disabled={opt.disabled || undefined}
+          disabled={opt.disabled}
+          title={opt.disabled && opt.status ? `${opt.label}: ${opt.status}` : undefined}
           onClick={() => onChange(opt.key)}
           className={cn(
             'snap-start shrink-0 inline-flex items-center rounded-full border px-3 py-1.5 transition-colors',
             MOBILE_TYPE_TOKENS.chip,
             active === opt.key
               ? 'border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] text-[hsl(var(--mobile-brand-strong))] font-semibold'
-              : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]'
+              : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]',
+            opt.disabled && 'cursor-not-allowed opacity-50'
           )}
         >
-          {opt.label}
+          {opt.label}{opt.disabled ? ' · unavailable' : ''}
         </button>
       ))}
     </div>
@@ -239,8 +260,18 @@ function FilterChips({
 // Empty states
 // ---------------------------------------------------------------------------
 
-function RadarEmptyState({ filtered = false, propertyId }: { filtered?: boolean; propertyId: string }) {
-  const copy = getRadarEmptyStateCopy(filtered);
+function RadarEmptyState({
+  filtered = false,
+  propertyId,
+  monitoringState,
+  feedState,
+}: {
+  filtered?: boolean;
+  propertyId: string;
+  monitoringState?: RadarMonitoringState;
+  feedState?: Parameters<typeof getRadarEmptyStateCopy>[0]['feedState'];
+}) {
+  const copy = getRadarEmptyStateCopy({ filtered, monitoringState, feedState });
 
   return (
     <EmptyStateCard
@@ -260,7 +291,84 @@ function RadarEmptyState({ filtered = false, propertyId }: { filtered?: boolean;
   );
 }
 
-function RadarCoverageNotice() {
+function RadarMonitoringNotice({
+  overview,
+  isLoading,
+  isError,
+  onRetry,
+}: {
+  overview?: RadarOverview;
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
+}) {
+  if (isLoading) {
+    return (
+      <MobileSection>
+        <div className={cn(MOBILE_CARD_RADIUS, 'h-24 animate-pulse bg-[hsl(var(--mobile-bg-muted))]')} />
+      </MobileSection>
+    );
+  }
+  if (isError || !overview) {
+    return (
+      <MobileSection>
+        <div className={cn(MOBILE_CARD_RADIUS, 'border border-amber-200 bg-amber-50 p-4')}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <div>
+              <p className="mb-0 text-sm font-semibold text-amber-950">Monitoring status unavailable</p>
+              <p className={cn('mb-0 mt-1 text-amber-900', MOBILE_TYPE_TOKENS.caption)}>
+                Radar could not verify current source coverage. Event results must not be treated as an all-clear.
+              </p>
+              <button type="button" onClick={onRetry} className="mt-2 text-xs font-semibold text-amber-950 underline">
+                Retry status
+              </button>
+            </div>
+          </div>
+        </div>
+      </MobileSection>
+    );
+  }
+
+  const presentation = RADAR_MONITORING_PRESENTATION[overview.monitoringState];
+  const toneClass = {
+    positive: 'border-emerald-200 bg-emerald-50 text-emerald-950',
+    warning: 'border-amber-200 bg-amber-50 text-amber-950',
+    danger: 'border-rose-200 bg-rose-50 text-rose-950',
+    neutral: 'border-slate-200 bg-slate-50 text-slate-900',
+  }[presentation.tone];
+
+  return (
+    <MobileSection>
+      <div className={cn(MOBILE_CARD_RADIUS, 'border p-4', toneClass)}>
+        <div className="flex items-start gap-3">
+          {overview.monitoringState === 'ACTIVE' ? (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+          ) : (
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          )}
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="mb-0 text-sm font-semibold">{presentation.title}</p>
+              <span className="rounded-full border border-current/20 bg-white/70 px-2 py-0.5 text-[10px] font-semibold">
+                {presentation.label}
+              </span>
+            </div>
+            <p className={cn('mb-0 mt-1 opacity-80', MOBILE_TYPE_TOKENS.caption)}>
+              {presentation.description}
+            </p>
+            <p className="mb-0 mt-2 text-xs font-medium">
+              {formatRadarLastCheck(overview.lastSuccessfulCheckAt)}
+            </p>
+          </div>
+        </div>
+      </div>
+    </MobileSection>
+  );
+}
+
+function RadarCoverageNotice({ coverage }: { coverage: RadarCategoryCoverage[] }) {
+  if (!coverage.length) return null;
   return (
     <MobileSection>
       <div
@@ -273,21 +381,28 @@ function RadarCoverageNotice() {
           Current source availability
         </p>
         <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-          Coverage is being unified. An unavailable source is not evidence that no event exists.
+          Availability is evaluated for this property. Unavailable or delayed sources are not evidence that no event exists.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {RADAR_INTERIM_COVERAGE.map((source) => (
+          {coverage.map((source) => (
             <div
-              key={source.key}
+              key={source.family}
               className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">{source.label}</p>
+                <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+                  {RADAR_FAMILY_LABELS[source.family]}
+                </p>
                 <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-[hsl(var(--mobile-text-secondary))]">
-                  {source.status}
+                  {RADAR_COVERAGE_LABELS[source.status]}
                 </span>
               </div>
               <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">{source.detail}</p>
+              {source.dataFreshThrough ? (
+                <p className="mb-0 mt-1 text-[10px] text-[hsl(var(--mobile-text-muted))]">
+                  Data fresh through {new Date(source.dataFreshThrough).toLocaleString()}
+                </p>
+              ) : null}
             </div>
           ))}
         </div>
@@ -302,9 +417,11 @@ function RadarCoverageNotice() {
 
 function DismissedNotice({
   count,
+  showing,
   onShow,
 }: {
   count: number;
+  showing: boolean;
   onShow: () => void;
 }) {
   if (count === 0) return null;
@@ -318,7 +435,9 @@ function DismissedNotice({
         'text-[hsl(var(--mobile-text-secondary))]'
       )}
     >
-      {count} dismissed event{count > 1 ? 's' : ''} — tap to show
+      {showing
+        ? 'Hide dismissed events'
+        : `${count} dismissed event${count > 1 ? 's' : ''} — tap to show`}
     </button>
   );
 }
@@ -439,12 +558,30 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   // Data
   // -------------------------------------------------------------------------
 
-  const feedQuery = useQuery({
-    queryKey: ['radar-feed', propertyId],
+  const overviewQuery = useQuery({
+    queryKey: ['radar-overview', propertyId],
     queryFn: async () => {
       if (!propertyId) return null;
-      return api.getRadarFeed(propertyId, { includeResolved: true, limit: 50 });
+      return api.getRadarOverview(propertyId);
     },
+    enabled: !!propertyId,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const feedQuery = useInfiniteQuery({
+    queryKey: ['radar-events', propertyId, filter, showDismissed],
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
+      if (!propertyId) return null;
+      return api.getRadarEvents(propertyId, {
+        limit: 50,
+        sourceFamily: filter === 'all' ? undefined : [filter],
+        state: showDismissed ? undefined : ['new', 'seen', 'saved', 'acted_on'],
+        cursor: pageParam,
+      });
+    },
+    getNextPageParam: (lastPage) =>
+      lastPage?.pageInfo.hasNextPage ? (lastPage.pageInfo.endCursor ?? undefined) : undefined,
     enabled: !!propertyId,
     staleTime: 3 * 60 * 1000,
   });
@@ -464,26 +601,37 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   });
 
   const allItems: RadarFeedItemType[] = React.useMemo(() => {
-    return (feedQuery.data?.items ?? []).map((item) => ({
-      ...item,
-      state: stateOverrides[item.propertyRadarMatchId] ?? item.state,
-    }));
-  }, [feedQuery.data, stateOverrides]);
+    if (!propertyId) return [];
+    return (feedQuery.data?.pages.flatMap((page) => page?.items ?? []) ?? []).map((canonicalItem) => {
+      const item = toLegacyRadarFeedItem(canonicalItem, propertyId);
+      return {
+        ...item,
+        state: stateOverrides[item.propertyRadarMatchId] ?? item.state,
+      };
+    });
+  }, [feedQuery.data, propertyId, stateOverrides]);
 
-  const visibleItems = React.useMemo(() => {
-    return allItems
-      .filter((item) => {
-        if (item.state === 'dismissed' && !showDismissed) return false;
-        return matchesFilter(item, filter);
-      });
-  }, [allItems, filter, showDismissed]);
+  const visibleItems = allItems;
 
   const dismissedCount = React.useMemo(
-    () => allItems.filter((i) => i.state === 'dismissed' && matchesFilter(i, filter)).length,
-    [allItems, filter]
+    () => filter === 'all'
+      ? (overviewQuery.data?.counts.dismissed ?? 0)
+      : 0,
+    [filter, overviewQuery.data?.counts.dismissed]
   );
-  const totalCount = allItems.length;
+  const feedSummary = feedQuery.data?.pages[0] ?? null;
+  const totalCount = feedSummary?.totalCount ?? 0;
+  const filterOptions = React.useMemo(
+    () => radarFilterOptions(overviewQuery.data?.coverage ?? []),
+    [overviewQuery.data?.coverage],
+  );
   const propertyAddress = compactPropertyAddress(propertyQuery.data);
+
+  React.useEffect(() => {
+    if (filter === 'all') return;
+    const selected = filterOptions.find((option) => option.key === filter);
+    if (selected?.disabled) setFilter('all');
+  }, [filter, filterOptions]);
 
   // -------------------------------------------------------------------------
   // Analytics: OPENED (once per propertyId+surface session)
@@ -507,12 +655,21 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     const sessionKey = `${propertyId}|${feedQuery.dataUpdatedAt}`;
     if (feedViewedRef.current === sessionKey) return;
     feedViewedRef.current = sessionKey;
-    const count = feedQuery.data?.items?.length ?? 0;
+    const count = feedSummary?.totalCount ?? 0;
     trackRadarEvent('FEED_VIEWED', 'feed', {
-      feed_state: count > 0 ? 'has_events' : 'empty',
+      feed_state: feedSummary?.feedState ?? (count > 0 ? 'HAS_EVENTS' : 'UNKNOWN'),
       event_count_bucket: eventCountBucket(count),
+      monitoring_state: overviewQuery.data?.monitoringState,
     });
-  }, [propertyId, feedQuery.isLoading, feedQuery.isError, feedQuery.dataUpdatedAt, feedQuery.data, trackRadarEvent]);
+  }, [
+    propertyId,
+    feedQuery.isLoading,
+    feedQuery.isError,
+    feedQuery.dataUpdatedAt,
+    feedSummary,
+    overviewQuery.data?.monitoringState,
+    trackRadarEvent,
+  ]);
 
   // Analytics: FEED_ERROR
   React.useEffect(() => {
@@ -550,6 +707,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
 
   function handleFilterChange(key: FilterKey) {
     setFilter(key);
+    setShowDismissed(false);
     if (key !== 'all') {
       trackRadarEvent('FILTER_APPLIED', 'feed', { filter_key: key });
     }
@@ -590,7 +748,9 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   // Main render
   // -------------------------------------------------------------------------
 
-  const newCount = allItems.filter((i) => i.state === 'new').length;
+  const newCount = filter === 'all'
+    ? (overviewQuery.data?.counts.new ?? 0)
+    : allItems.filter((item) => item.state === 'new').length;
 
   return (
     <MobilePageContainer className="space-y-5 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -619,12 +779,21 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
             monitoringAddress={propertyAddress || undefined}
           />
 
-          <PropertyContextStatusNotice context={feedQuery.data?.propertyContext} title="Event matching context" />
-          <RadarCoverageNotice />
+          <PropertyContextStatusNotice
+            context={overviewQuery.data?.propertyContext}
+            title="Event matching context"
+          />
+          <RadarMonitoringNotice
+            overview={overviewQuery.data ?? undefined}
+            isLoading={overviewQuery.isLoading}
+            isError={overviewQuery.isError}
+            onRetry={() => void overviewQuery.refetch()}
+          />
+          <RadarCoverageNotice coverage={overviewQuery.data?.coverage ?? []} />
 
           <MobileSection className="space-y-3 lg:space-y-4">
             <div className="lg:hidden">
-              <FilterChips active={filter} onChange={handleFilterChange} />
+              <FilterChips active={filter} options={filterOptions} onChange={handleFilterChange} />
             </div>
             <div className="hidden lg:block">
               <div
@@ -641,7 +810,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
                     </p>
                   </div>
                   <div className="min-w-0">
-                    <FilterChips active={filter} onChange={handleFilterChange} />
+                    <FilterChips active={filter} options={filterOptions} onChange={handleFilterChange} />
                   </div>
                 </div>
               </div>
@@ -672,8 +841,17 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
               />
             ) : visibleItems.length === 0 ? (
               <>
-                <RadarEmptyState filtered={filter !== 'all'} propertyId={propertyId} />
-                <DismissedNotice count={dismissedCount} onShow={() => setShowDismissed(true)} />
+                <RadarEmptyState
+                  filtered={filter !== 'all'}
+                  propertyId={propertyId}
+                  monitoringState={overviewQuery.data?.monitoringState}
+                  feedState={feedSummary?.feedState}
+                />
+                <DismissedNotice
+                  count={dismissedCount}
+                  showing={showDismissed}
+                  onShow={() => setShowDismissed((value) => !value)}
+                />
               </>
             ) : (
               <div className="space-y-5">
@@ -700,8 +878,21 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
                     </section>
                   );
                 })}
+                {feedQuery.hasNextPage ? (
+                  <button
+                    type="button"
+                    onClick={() => void feedQuery.fetchNextPage()}
+                    disabled={feedQuery.isFetchingNextPage}
+                    className="no-brand-style inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] disabled:opacity-60"
+                  >
+                    {feedQuery.isFetchingNextPage
+                      ? 'Loading more events…'
+                      : `Load more events (${allItems.length} of ${totalCount})`}
+                  </button>
+                ) : null}
                 <DismissedNotice
                   count={dismissedCount}
+                  showing={showDismissed}
                   onShow={() => setShowDismissed((v) => !v)}
                 />
               </div>
@@ -711,7 +902,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
           <MobileSection>
             <div className="flex items-center justify-center gap-2 pb-2 text-xs text-[hsl(var(--mobile-text-muted))] lg:justify-start">
               <Radio className="h-3.5 w-3.5" />
-              Events are matched to your property location and home details
+              Events are matched from configured sources to your property location and home details
             </div>
           </MobileSection>
         </div>
@@ -722,6 +913,8 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
           newCount={newCount}
           dismissedCount={dismissedCount}
           activeFilter={filter}
+          monitoringState={overviewQuery.data?.monitoringState}
+          lastSuccessfulCheckAt={overviewQuery.data?.lastSuccessfulCheckAt}
         />
       </div>
 
