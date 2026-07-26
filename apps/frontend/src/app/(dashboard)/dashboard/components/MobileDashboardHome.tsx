@@ -57,6 +57,7 @@ import {
   hasGuidanceContinuityContext,
 } from '@/features/guidance/utils/guidanceContinuity';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
+import { buildHomeEventRadarHref } from '@/features/homeEventRadar/radarDeepLinks';
 
 type MobileDashboardHomeProps = {
   userFirstName: string;
@@ -352,7 +353,10 @@ export default function MobileDashboardHome({
     queryKey: ['mobile-radar-feed-summary', propertyId],
     queryFn: async () => {
       if (!propertyId) return null;
-      return api.getRadarFeed(propertyId, { limit: 20 });
+      return api.getRadarEvents(propertyId, {
+        limit: 20,
+        state: ['new', 'seen', 'saved', 'acted_on'],
+      });
     },
     enabled: !!propertyId,
     staleTime: 3 * 60 * 1000,
@@ -432,14 +436,23 @@ export default function MobileDashboardHome({
     : null;
 
   const radarItems = radarFeedQuery.data?.items ?? [];
-  const radarNewCount = radarItems.filter((i) => i.state === 'new').length;
-  const radarActiveCount = radarItems.filter((i) => i.state !== 'dismissed').length;
+  const radarNewCount = radarItems.filter((item) => item.userState === 'new').length;
+  const radarActiveCount = radarFeedQuery.data?.totalCount ?? radarItems.length;
+  const topRadarItem = radarItems[0] ?? null;
 
   // ── Hrefs ─────────────────────────────────────────────────────────────────
 
   const roomsHref = buildPropertyAwareHref(propertyId, 'rooms', 'rooms');
   const riskRadarHref = buildPropertyAwareDashboardHref(propertyId, '/dashboard/risk-radar');
-  const radarHref = buildAiToolHref(propertyId, '/dashboard/home-event-radar');
+  const radarHref = propertyId && topRadarItem
+    ? buildHomeEventRadarHref({
+        propertyId,
+        view: topRadarItem.matchLifecycleStatus,
+        family: topRadarItem.sourceFamily,
+        matchId: topRadarItem.propertyMatchId,
+        context: { launchSurface: 'unified_home' },
+      })
+    : buildAiToolHref(propertyId, '/dashboard/home-event-radar');
   const healthScoreHref = buildPropertyAwareDashboardHref(propertyId, '/dashboard/health-score');
   const actionsHref = `/dashboard/actions?propertyId=${encodeURIComponent(propertyId || '')}`;
 

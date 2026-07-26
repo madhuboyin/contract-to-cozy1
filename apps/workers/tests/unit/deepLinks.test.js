@@ -18,6 +18,7 @@ const {
   permitTrackerUrl,
   homeHabitCoachUrl,
   neighborhoodChangeRadarUrl,
+  homeEventRadarUrl,
   claimDetailUrl,
   recallFollowUpUrl,
 } = require('../../src/lib/deepLinks.ts');
@@ -42,6 +43,18 @@ test('neighborhoodChangeRadarUrl', () => {
   assert.equal(
     neighborhoodChangeRadarUrl('property-1'),
     '/dashboard/properties/property-1/tools/neighborhood-change-radar',
+  );
+});
+
+test('homeEventRadarUrl opens the exact property match from notifications', () => {
+  assert.equal(
+    homeEventRadarUrl('property/1', {
+      view: 'now',
+      family: 'weather',
+      matchId: 'match-1',
+      launchSurface: 'notification',
+    }),
+    '/dashboard/properties/property%2F1/tools/home-event-radar?view=now&family=weather&matchId=match-1&launchSurface=notification',
   );
 });
 

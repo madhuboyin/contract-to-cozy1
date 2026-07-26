@@ -1,5 +1,6 @@
 import { mapGuidanceJourneyToActionModel, filterGuidanceActions } from '../utils/guidanceMappers';
 import { GuidanceJourneyDTO, GuidanceNextStepResult, GuidanceStepDTO } from '@/lib/api/guidanceApi';
+import { resolveGuidanceStepHref } from '../utils/guidanceDisplay';
 
 function buildStep(overrides: Partial<GuidanceStepDTO>): GuidanceStepDTO {
   return {
@@ -171,6 +172,33 @@ describe('guidance mappers', () => {
 
     expect(filtered).toHaveLength(1);
     expect(filtered[0].journeyId).toBe('journey-2');
+  });
+
+  it('preserves the Radar match when Guidance opens the standalone workspace', () => {
+    const step = buildStep({
+      toolKey: 'home-event-radar',
+      stepKey: 'review_event',
+      routePath: '/dashboard/properties/:propertyId/tools/home-event-radar',
+    });
+    const journey = buildJourney([step]);
+    journey.primarySignal = {
+      ...journey.primarySignal!,
+      sourceToolKey: 'home-event-radar',
+      radarMatchId: 'match-1',
+    };
+
+    const href = resolveGuidanceStepHref({
+      propertyId: 'property-1',
+      journey,
+      step,
+      mode: 'standalone',
+    });
+    const parsed = new URL(href!, 'https://example.test');
+
+    expect(parsed.pathname).toBe('/dashboard/properties/property-1/tools/home-event-radar');
+    expect(parsed.searchParams.get('matchId')).toBe('match-1');
+    expect(parsed.searchParams.get('guidanceJourneyId')).toBe('journey-1');
+    expect(parsed.searchParams.get('guidanceStepKey')).toBe('review_event');
   });
 
   it('orders actions by priority score when available', () => {

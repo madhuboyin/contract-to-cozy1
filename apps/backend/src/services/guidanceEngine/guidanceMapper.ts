@@ -11,6 +11,14 @@ function asIso(value: Date | string | null | undefined): string | null {
 }
 
 export function mapGuidanceSignal(signal: any) {
+  const payload = signal.payloadJson && typeof signal.payloadJson === 'object'
+    ? signal.payloadJson as Record<string, unknown>
+    : null;
+  const radarMatchId = signal.sourceToolKey === 'home-event-radar'
+    && typeof payload?.propertyRadarMatchId === 'string'
+    && payload.propertyRadarMatchId.trim().length > 0
+    ? payload.propertyRadarMatchId
+    : null;
   return {
     id: signal.id,
     propertyId: signal.propertyId,
@@ -26,6 +34,7 @@ export function mapGuidanceSignal(signal: any) {
     sourceFeatureKey: signal.sourceFeatureKey ?? null,
     sourceEntityType: signal.sourceEntityType ?? null,
     sourceEntityId: signal.sourceEntityId ?? null,
+    radarMatchId,
     status: signal.status,
     canonicalFirstStepKey: signal.canonicalFirstStepKey ?? null,
     recommendedToolKey: signal.recommendedToolKey ?? null,

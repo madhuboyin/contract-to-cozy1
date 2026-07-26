@@ -50,6 +50,20 @@ describe('buildPropertyAwareDashboardHref', () => {
     expect(params.get('propertyId')).toBeNull();
   });
 
+  it('preserves canonical Radar deep-link state while resolving the property route', () => {
+    const href = buildPropertyAwareDashboardHref(
+      'property-123',
+      '/dashboard/home-event-radar?view=now&family=weather&matchId=match-1&propertyId=old-id',
+    );
+    const { path, params } = parseHref(href);
+
+    expect(path).toBe('/dashboard/properties/property-123/tools/home-event-radar');
+    expect(params.get('view')).toBe('now');
+    expect(params.get('family')).toBe('weather');
+    expect(params.get('matchId')).toBe('match-1');
+    expect(params.get('propertyId')).toBeNull();
+  });
+
   it('falls back to property selector navTarget when property is unavailable', () => {
     const href = buildPropertyAwareDashboardHref(undefined, '/dashboard/home-savings?guidanceStepKey=step-1');
 

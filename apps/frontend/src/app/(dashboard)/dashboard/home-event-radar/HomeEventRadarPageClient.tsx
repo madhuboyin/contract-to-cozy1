@@ -5,7 +5,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, Building2, CheckCircle2, Filter, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -44,6 +44,12 @@ import {
   RADAR_FAMILY_LABELS,
   RADAR_MONITORING_PRESENTATION,
 } from '@/features/homeEventRadar/radarAvailabilityCopy';
+import {
+  canonicalizeRadarDeepLinkQuery,
+  parseRadarDeepLinkState,
+  patchRadarDeepLinkQuery,
+  type RadarView,
+} from '@/features/homeEventRadar/radarDeepLinks';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
@@ -57,6 +63,11 @@ const TIMING_GROUPS = [
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'recently_ended', label: 'Recently Ended' },
 ] as const;
+
+const VIEW_OPTIONS: Array<{ key: RadarView; label: string }> = [
+  { key: 'all', label: 'All times' },
+  ...TIMING_GROUPS,
+];
 
 function radarFilterOptions(coverage: RadarCategoryCoverage[]): FilterOption[] {
   return [
@@ -251,6 +262,38 @@ function FilterChips({
         </button>
       ))}
     </div>
+    </ScrollFadeX>
+  );
+}
+
+function ViewChips({
+  active,
+  onChange,
+}: {
+  active: RadarView;
+  onChange: (view: RadarView) => void;
+}) {
+  return (
+    <ScrollFadeX fromColor="from-white">
+      <div aria-label="Event timing" className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+        {VIEW_OPTIONS.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            aria-pressed={active === option.key}
+            onClick={() => onChange(option.key)}
+            className={cn(
+              'min-h-[36px] shrink-0 rounded-full border px-3 py-1.5',
+              MOBILE_TYPE_TOKENS.chip,
+              active === option.key
+                ? 'border-slate-300 bg-slate-900 font-semibold text-white'
+                : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]',
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </ScrollFadeX>
   );
 }
@@ -486,7 +529,13 @@ type HomeEventRadarPageClientProps = {
 };
 
 export default function HomeEventRadarPageClient({ propertyId: propertyIdOverride }: HomeEventRadarPageClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const urlState = React.useMemo(
+    () => parseRadarDeepLinkState(searchParams),
+    [searchParams],
+  );
   const toolLaunchContext = useToolLaunchContext();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const rawPropertyId = propertyIdOverride ?? selectedPropertyId ?? searchParams.get('propertyId') ?? undefined;
@@ -524,8 +573,8 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
         })
       : null;
 
-  const [filter, setFilter] = React.useState<FilterKey>('all');
-  const [selectedItem, setSelectedItem] = React.useState<RadarCanonicalFeedItem | null>(null);
+  const filter: FilterKey = urlState.family;
+  const view = urlState.view;
   const [showDismissed, setShowDismissed] = React.useState(false);
 
   // Local override map: matchId → state (for optimistic UI without refetch)
@@ -534,6 +583,24 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   // Analytics: fire-once guards
   const openedRef = React.useRef<string | null>(null);
   const feedViewedRef = React.useRef<string | null>(null);
+
+  const updateUrlState = React.useCallback((
+    patch: Parameters<typeof patchRadarDeepLinkQuery>[1],
+    mode: 'push' | 'replace' = 'replace',
+  ) => {
+    const query = patchRadarDeepLinkQuery(searchParams, patch);
+    const queryString = query.toString();
+    const href = queryString ? `${pathname}?${queryString}` : pathname;
+    router[mode](href, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  React.useEffect(() => {
+    const canonical = canonicalizeRadarDeepLinkQuery(searchParams);
+    if (canonical.toString() === searchParams.toString()) return;
+    const canonicalQuery = canonical.toString();
+    const href = canonicalQuery ? `${pathname}?${canonicalQuery}` : pathname;
+    router.replace(href, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   // Shared tracking helper
   const trackRadarEvent = React.useCallback(
@@ -568,12 +635,13 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   });
 
   const feedQuery = useInfiniteQuery({
-    queryKey: ['radar-events', propertyId, filter, showDismissed],
+    queryKey: ['radar-events', propertyId, view, filter, showDismissed],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       if (!propertyId) return null;
       return api.getRadarEvents(propertyId, {
         limit: 50,
+        lifecycle: view === 'all' ? undefined : [view],
         sourceFamily: filter === 'all' ? undefined : [filter],
         state: showDismissed ? undefined : ['new', 'seen', 'saved', 'acted_on'],
         cursor: pageParam,
@@ -599,6 +667,18 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     staleTime: 5 * 60 * 1000,
   });
 
+  const linkedDetailQuery = useQuery({
+    queryKey: ['radar-event-detail', propertyId, urlState.matchId],
+    queryFn: async () => {
+      if (!propertyId || !urlState.matchId) throw new Error('No linked Radar event.');
+      return api.getRadarEventDetail(propertyId, urlState.matchId);
+    },
+    enabled: !!propertyId && !!urlState.matchId,
+    staleTime: 2 * 60 * 1000,
+    retry: 1,
+    retryDelay: 250,
+  });
+
   const allItems: RadarCanonicalFeedItem[] = React.useMemo(
     () => (feedQuery.data?.pages.flatMap((page) => page?.items ?? []) ?? []).map((item) => ({
       ...item,
@@ -608,6 +688,15 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   );
 
   const visibleItems = allItems;
+  const selectedItem = React.useMemo(() => {
+    if (!urlState.matchId) return null;
+    const summary = allItems.find((item) => item.propertyMatchId === urlState.matchId);
+    const item = summary ?? linkedDetailQuery.data ?? null;
+    return item ? {
+      ...item,
+      userState: stateOverrides[item.propertyMatchId] ?? item.userState,
+    } : null;
+  }, [allItems, linkedDetailQuery.data, stateOverrides, urlState.matchId]);
 
   const dismissedCount = React.useMemo(
     () => filter === 'all'
@@ -626,8 +715,10 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   React.useEffect(() => {
     if (filter === 'all') return;
     const selected = filterOptions.find((option) => option.key === filter);
-    if (selected?.disabled) setFilter('all');
-  }, [filter, filterOptions]);
+    if (overviewQuery.data && (!selected || selected.disabled)) {
+      updateUrlState({ family: 'all' });
+    }
+  }, [filter, filterOptions, overviewQuery.data, updateUrlState]);
 
   // -------------------------------------------------------------------------
   // Analytics: OPENED (once per propertyId+surface session)
@@ -685,31 +776,31 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     if (item.userState === 'new') {
       setStateOverrides((prev) => ({ ...prev, [item.propertyMatchId]: 'seen' }));
     }
-    setSelectedItem({
-      ...item,
-      userState: item.userState === 'new' ? 'seen' : item.userState,
-    });
+    updateUrlState({ matchId: item.propertyMatchId }, 'push');
   }
 
   function handleSheetClose() {
-    setSelectedItem(null);
+    updateUrlState({ matchId: null });
   }
 
   function handleStateChange(matchId: string, state: RadarUserState) {
     setStateOverrides((prev) => ({ ...prev, [matchId]: state }));
-    // Also update the selected item if it's still open
-    setSelectedItem((prev) => (prev?.propertyMatchId === matchId ? { ...prev, userState: state } : prev));
     if (propertyId) {
       track('action_completed', { tool: 'home-event-radar', actionType: `state_${state}`, propertyId });
     }
   }
 
   function handleFilterChange(key: FilterKey) {
-    setFilter(key);
+    updateUrlState({ family: key });
     setShowDismissed(false);
     if (key !== 'all') {
       trackRadarEvent('FILTER_APPLIED', 'feed', { filter_key: key });
     }
+  }
+
+  function handleViewChange(nextView: RadarView) {
+    updateUrlState({ view: nextView });
+    trackRadarEvent('FILTER_APPLIED', 'feed', { filter_key: `view:${nextView}` });
   }
 
   // -------------------------------------------------------------------------
@@ -791,7 +882,8 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
           <RadarCoverageNotice coverage={overviewQuery.data?.coverage ?? []} />
 
           <MobileSection className="space-y-3 lg:space-y-4">
-            <div className="lg:hidden">
+            <div className="space-y-2 lg:hidden">
+              <ViewChips active={view} onChange={handleViewChange} />
               <FilterChips active={filter} options={filterOptions} onChange={handleFilterChange} />
             </div>
             <div className="hidden lg:block">
@@ -801,20 +893,49 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
                   'border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 shadow-[0_12px_32px_rgba(15,23,42,0.05)]'
                 )}
               >
-                <div className="flex items-center justify-between gap-4">
+                <div className="space-y-3">
                   <div>
                     <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">Filter events</p>
                     <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-                      Narrow the feed to the signal types most relevant to your home.
+                      Narrow the feed by timing and source family. Your selection is saved in the page link.
                     </p>
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 space-y-2">
+                    <ViewChips active={view} onChange={handleViewChange} />
                     <FilterChips active={filter} options={filterOptions} onChange={handleFilterChange} />
                   </div>
                 </div>
               </div>
             </div>
           </MobileSection>
+
+          {urlState.matchId && linkedDetailQuery.isError && !selectedItem ? (
+            <MobileSection>
+              <div role="alert" className={cn(MOBILE_CARD_RADIUS, 'border border-amber-200 bg-amber-50 p-4')}>
+                <p className="mb-0 text-sm font-semibold text-amber-950">Linked event unavailable</p>
+                <p className={cn('mb-0 mt-1 text-amber-900', MOBILE_TYPE_TOKENS.caption)}>
+                  This event may have ended, been removed, or belong to a different property.
+                  The rest of this property&apos;s Radar remains available.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void linkedDetailQuery.refetch()}
+                    className="min-h-[44px] text-xs font-semibold text-amber-950 underline underline-offset-2"
+                  >
+                    Retry linked event
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSheetClose}
+                    className="min-h-[44px] text-xs font-semibold text-amber-950 underline underline-offset-2"
+                  >
+                    Clear event selection
+                  </button>
+                </div>
+              </div>
+            </MobileSection>
+          ) : null}
 
           <MobileSection>
             <MobileSectionHeader
@@ -841,7 +962,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
             ) : visibleItems.length === 0 ? (
               <>
                 <RadarEmptyState
-                  filtered={filter !== 'all'}
+                  filtered={filter !== 'all' || view !== 'all'}
                   propertyId={propertyId}
                   monitoringState={overviewQuery.data?.monitoringState}
                   feedState={feedSummary?.feedState}

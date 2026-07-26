@@ -32,6 +32,24 @@ export function neighborhoodChangeRadarUrl(propertyId: string): string {
   return `/dashboard/properties/${propertyId}/tools/neighborhood-change-radar`;
 }
 
+export function homeEventRadarUrl(
+  propertyId: string,
+  options: {
+    matchId?: string | null;
+    view?: 'now' | 'upcoming' | 'recently_ended' | null;
+    family?: 'weather' | 'air_quality' | 'disaster' | 'utility' | 'tax' | 'insurance' | 'other' | null;
+    launchSurface?: string | null;
+  } = {},
+): string {
+  const query = new URLSearchParams();
+  if (options.view) query.set('view', options.view);
+  if (options.family) query.set('family', options.family);
+  if (options.matchId) query.set('matchId', options.matchId);
+  if (options.launchSurface) query.set('launchSurface', options.launchSurface);
+  const path = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-event-radar`;
+  return query.size ? `${path}?${query.toString()}` : path;
+}
+
 export function claimDetailUrl(propertyId?: string | null, claimId?: string | null): string | undefined {
   if (!propertyId || !claimId) return undefined;
   return `/dashboard/properties/${propertyId}/claims/${claimId}`;

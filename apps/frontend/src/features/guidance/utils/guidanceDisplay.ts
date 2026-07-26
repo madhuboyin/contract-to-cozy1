@@ -103,6 +103,9 @@ function appendGuidanceContext(
   if (journey.primarySignal?.signalIntentFamily) {
     params.set('guidanceSignalIntentFamily', journey.primarySignal.signalIntentFamily);
   }
+  if (step.toolKey === 'home-event-radar' && journey.primarySignal?.radarMatchId) {
+    params.set('matchId', journey.primarySignal.radarMatchId);
+  }
   // Pass asset scope so destination tools can stay in the same issue context.
   if (journey.inventoryItemId) {
     params.set('itemId', journey.inventoryItemId);

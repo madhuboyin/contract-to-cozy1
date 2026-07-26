@@ -60,6 +60,7 @@ export type GuidanceSignalDTO = {
   sourceFeatureKey: string | null;
   sourceEntityType: string | null;
   sourceEntityId: string | null;
+  radarMatchId?: string | null;
   status: string;
   canonicalFirstStepKey: string | null;
   recommendedToolKey: string | null;

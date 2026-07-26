@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-405 implemented |
+| Status | In progress — HER-406 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -49,7 +49,8 @@
 | HER-403 Coverage-aware UI | Complete | The page consumes canonical overview/events, distinguishes every monitoring and feed state, renders materialized category coverage/freshness and last success, disables unavailable filters, preserves errors as errors, and pages with the stable cursor |
 | HER-404 Event feed and card | Complete | Canonical cards expose source provenance, exact effective/expiration timing, provider severity, property impact, limited confidence, freshness, material updates, and an accessible primary detail action |
 | HER-405 Event detail | Complete | The canonical detail projection and sheet expose official source evidence, revision timing, geography, impact/confidence factors, missing-fact correction paths, systems, safe actions, Incident/Guidance continuity, and explicit retryable errors |
-| HER-406+ | Not started | Deep links, state/feedback, actions, notifications, accessibility acceptance, and operations remain |
+| HER-406 Deep links | Complete | URL-backed timing/family/match state restores exact property events; card history, invalid/missing match recovery, Unified Home, Guidance, worker notification, and property-route preservation use canonical links |
+| HER-407+ | Not started | State/feedback, actions, notifications, accessibility acceptance, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1223,6 +1224,16 @@ Support URL state:
 ```
 
 Notification, Unified Home, Guidance, and support links must open the correct property/match.
+
+**Implemented:** the canonical property route now owns validated `view`, `family`, and `matchId`
+query state. Timing and source-family changes update the URL without dropping Guidance or launch
+context; selecting a card pushes a match URL so browser Back closes the detail, while explicit
+close removes only the match selection. A match not present on the loaded feed is fetched through
+the property-authorized canonical detail endpoint. Invalid IDs are removed safely, and inaccessible
+or ended matches show retry/clear recovery without breaking the feed. Unified Home links its
+highest-priority canonical event directly, Guidance exposes only its safe Radar match reference,
+worker notification links have a typed Radar builder, and the legacy dashboard route preserves all
+canonical state while resolving the property. No database change is required.
 
 ### HER-407 — State and feedback
 
