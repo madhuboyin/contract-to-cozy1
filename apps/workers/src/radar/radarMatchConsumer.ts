@@ -27,6 +27,13 @@ type MatchPagePort = (
 type MatchPropertyPort = (
   eventId: string,
   propertyIds: string[],
+  revision?: {
+    radarEventRevisionId?: string | null;
+    revisionIdentity?: string | null;
+    sourceRunId?: string | null;
+    sourceDefinitionId?: string | null;
+    correlationId?: string | null;
+  },
 ) => Promise<{ matched: number; skipped: number; failedPropertyIds: string[] }>;
 
 export type RadarMatchConsumerDeps = {
@@ -154,7 +161,17 @@ export async function processRadarMatchJob(
       };
     }
 
-    const result = await deps.matchProperties(payload.radarEventId, [payload.propertyId]);
+    const result = await deps.matchProperties(
+      payload.radarEventId,
+      [payload.propertyId],
+      {
+        radarEventRevisionId: payload.radarEventRevisionId,
+        revisionIdentity: payload.revisionIdentity,
+        sourceRunId: payload.sourceRunId,
+        sourceDefinitionId: payload.sourceDefinitionId,
+        correlationId: payload.correlationId,
+      },
+    );
     if (result.skipped > 0 || result.failedPropertyIds.includes(payload.propertyId)) {
       radarMatchPropertiesTotal.inc({ outcome: 'failed' });
       throw new RadarPropertyMatchError(payload.propertyId);

@@ -14,6 +14,7 @@ import {
   export type CreateIncidentInput = {
     propertyId: string;
     userId?: string | null;
+    propertyRadarMatchId?: string | null;
   
     sourceType: IncidentSourceType;
     typeKey: string;              // e.g. "FREEZE_RISK"
@@ -36,7 +37,7 @@ import {
     // initial lifecycle
     status?: IncidentStatus;      // default DETECTED
   };
-  
+
   export type AddIncidentSignalInput = {
     signalType: SignalType;
     externalRef?: string | null;
@@ -45,7 +46,7 @@ import {
     scoreHint?: number | null;
     confidence?: number | null;
   };
-  
+
   export type ListIncidentsQuery = {
     propertyId: string;
     status?: IncidentStatus;
@@ -86,4 +87,3 @@ import {
     ctaUrl?: string | null;
     payload?: any | null;
   };
-  

@@ -156,7 +156,7 @@ Events are deduplicated via `dedupeKey` to prevent ingesting the same signal twi
 
 #### `PropertyRadarMatch` — Property-Specific Match Record
 
-Created by the matching engine for each `(property, radar event)` pair that meets the location and relevance criteria. This is the record the UI actually renders in the homeowner feed, and the record `promoteRadarEventToIncident` reads impact data from when promoting to `Incident`.
+Created by the matching engine for each `(property, radar event)` pair that meets the location and relevance criteria. This is the record the UI actually renders in the homeowner feed and the canonical idempotency authority used by `RadarIncidentPromotionService`.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -260,8 +260,9 @@ The `HomeEvent` model serves the property maintenance timeline and is a distinct
 |---|---|---|
 | `sourceType` | `IncidentSourceType` | Now includes `RADAR_EVENT` (added this update) — set when an incident originates from a promoted `RadarEvent` match |
 | `typeKey` | String | For radar-promoted incidents: `` `RADAR_${eventType.toUpperCase()}` ``, e.g. `RADAR_TAX_REASSESSMENT` |
-| `fingerprint` | String | For radar-promoted incidents: `` `property:${propertyId}|${typeKey}|${radarEvent.dedupeKey}` `` — guarantees idempotency across repeated matching runs |
-| `severity` | `IncidentSeverity` | `RadarImpactLevel.moderate` → `WARNING`, `.high` → `CRITICAL` |
+| `propertyRadarMatchId` | String? | Unique canonical bridge identity; exactly one Incident may be linked to a property match |
+| `fingerprint` | String | For Radar promotion: `` `property:${propertyId}\|RADAR_MATCH:${propertyRadarMatchId}` `` |
+| `severity` | `IncidentSeverity` | Eligible `moderate` → `WARNING`; eligible `high` → `CRITICAL`; explicit low-confidence matches remain awareness-only |
 
 `Incident` has the full actionable lifecycle (severity scoring, acknowledgment, auto-resolution, archival, dedup) and is the *only* model that automatically creates a `GuidanceJourney` (via `bridgeIncidentToGuidance`). `RadarEvent`/`PropertyRadarMatch` do not.
 
@@ -322,7 +323,8 @@ Purpose:
 
 ## RadarEvent → Incident Promotion Bridge
 
-Added this update, in `apps/backend/src/services/homeEventRadarMatcher.service.ts`.
+Implemented in `apps/backend/src/modules/homeEventRadar/services/radarIncidentPromotion.service.ts`;
+the matcher delegates to it after every property-match evaluation.
 
 ### Why
 
@@ -330,25 +332,43 @@ Before this change, `RadarEvent` matching only wrote `PropertyRadarMatch` and pu
 
 ### How it works
 
-In `runMatchingForEvent()`, immediately after impact is computed and `PropertyRadarMatch` is upserted:
+In `runMatchingForEvent()`, immediately after impact is computed and `PropertyRadarMatch` is
+upserted, the matcher delegates the event, match, and durable revision context:
 
 ```ts
-if (impact.impactLevel === 'moderate' || impact.impactLevel === 'high') {
-  await promoteRadarEventToIncident(event, property, impact, match.id);
-}
+await radarIncidentPromotionService.project({
+  propertyId: property.id,
+  event,
+  match,
+  revision,
+});
 ```
 
-`promoteRadarEventToIncident` calls `IncidentService.upsertIncident(...)` directly with:
+The dedicated service:
+
+- looks up the unique `propertyRadarMatchId` linkage before projecting;
+- calls `IncidentService.upsertIncident(...)` for eligible moderate/high active matches;
+- updates the linked open Incident instead of creating another identity;
+- calls `IncidentService.setStatus` for resolution, retraction, expiration, or impact downgrade;
+- refuses to reopen terminal Incidents from delayed queue work;
+- preserves event, revision, source, provider, match, and correlation provenance;
+- propagates failures so BullMQ retries the isolated property scope.
+
+Promotion writes:
+
 - `sourceType: 'RADAR_EVENT'`
 - `typeKey`: `` `RADAR_${eventType.toUpperCase()}` ``
 - `category`: the uppercased `eventType`
-- `severity`: `moderate` → `WARNING`, `high` → `CRITICAL`
-- `fingerprint`: `` `property:${propertyId}|${typeKey}|${radarEvent.dedupeKey}` `` — idempotent across repeated matching runs
-- `details`: `{ radarEventId, eventType, eventSubType, propertyRadarMatchId, ...impactFactorsJson }`
+- `propertyRadarMatchId`: the unique canonical bridge link
+- `severity`: impact plus explicit confidence
+- `fingerprint`: `` `property:${propertyId}|RADAR_MATCH:${propertyRadarMatchId}` ``
+- bounded normalized provenance in `details` and `scoreBreakdown`
 
 `mapIncidentTypeToGuidance()` (`incident.service.ts`) was extended with a branch matching `typeKey.includes('TAX_REASSESSMENT')` → `signalIntentFamily: 'tax_reassessment'`, `issueDomain: 'FINANCIAL'`, `sourceToolKey: 'incidents'`. A generic `RADAR_`-prefix convention is used so future domains (utility, insurance) can add their own branches the same way.
 
-Failures in promotion are logged and swallowed (`try/catch`) — a promotion failure never blocks the underlying `PropertyRadarMatch`/`Signal` write, so the raw feed still works even if the Incident bridge has an issue.
+Guidance remains Incident-owned. `IncidentService` uses one explicit `incident:<incidentId>` signal
+dedupe key; Radar matching and provider jobs do not call Guidance. Resolution through
+`IncidentService.setStatus` archives that signal and its active journey.
 
 ---
 
@@ -535,7 +555,8 @@ Still routes step 1 to `toolKey: 'home-event-radar'`. This is a known, currently
 | `backend/src/routes/homeEventRadar.routes.ts` | Express route definitions, middleware chains |
 | `backend/src/controllers/homeEventRadar.controller.ts` | Request/response handling |
 | `backend/src/services/homeEventRadar.service.ts` | Business logic, Prisma queries |
-| `backend/src/services/homeEventRadarMatcher.service.ts` | Matching engine + impact computation + **Incident promotion bridge (new)** |
+| `backend/src/services/homeEventRadarMatcher.service.ts` | Matching engine + impact computation + dedicated bridge delegation |
+| `backend/src/modules/homeEventRadar/services/radarIncidentPromotion.service.ts` | Unique match-linked Incident create/update/close projection |
 | `backend/src/services/incidents/incident.service.ts` | `IncidentService.upsertIncident` (promotion target), `mapIncidentTypeToGuidance` (extended for `RADAR_`-prefixed typeKeys) |
 | `backend/src/services/taxAssessorAdapters/` | Real tax-assessor provider adapter (new) |
 | `backend/src/services/taxAssessmentFetch.service.ts` | Jurisdiction routing for tax ingestion (new) |
@@ -648,7 +669,7 @@ Scores are adjusted up/down based on property characteristics. Final score is cl
 - `recommendedActionsJson` — Array of `{ code: string, label: string, priority: 'high' | 'medium' | 'low' }`
 - `matchedSystemsJson` — Array of `{ type: string, relevance: 'high' | 'medium' | 'low' }`
 
-**Promotion function:** `promoteRadarEventToIncident(event, property, impact, propertyRadarMatchId)` — see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge).
+**Promotion service:** `RadarIncidentPromotionService.project(...)` — see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge).
 
 ---
 
@@ -947,7 +968,7 @@ HomeEventRadarMatcherService.triggerMatching()
   ├─ Computes matchScore, impactLevel, impactSummary, impactFactors,
   │   recommendedActions, matchedSystems
   ├─ Upserts PropertyRadarMatch records
-  └─ If impactLevel is moderate/high: promotes to Incident (+ GuidanceJourney)
+  └─ Projects through the unique match-linked Incident bridge
         │
         ▼
 User opens /dashboard/home-event-radar?propertyId=<id>
@@ -983,7 +1004,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 | **Auth** | All endpoints behind JWT middleware + `propertyAuth.middleware` for property-scoped routes |
 | **Rate limiting** | `apiRateLimiter` applied to all endpoints |
 | **Background workers** | QA/E2E fixture ingestion is disabled in production; real tax-assessment, NWS alert, and Open-Meteo freeze-forecast adapters exist; utility and insurance sources do not |
-| **Incident lifecycle** | `moderate`/`high` impact matches promote into `Incident` via `homeEventRadarMatcher.service.ts`'s `promoteRadarEventToIncident` |
+| **Incident lifecycle** | Eligible `moderate`/`high` matches project through `RadarIncidentPromotionService`; terminal events and impact downgrades reconcile via `IncidentService.setStatus` |
 | **Guidance engine** | `tax_reassessment_resolution` journey auto-created on promotion; weather-family journeys route to `Incidents`, not Home Event Radar |
 | **Audit log** | Analytics events written to platform audit log via `AuditLog` model |
 | **Dashboard widget** | `MobileDashboardHome.tsx` queries radar feed to show new/active event counts on the home screen |
@@ -1014,8 +1035,9 @@ NWS preserves CAP identity and polygon evidence; freeze forecasts use stable pro
 and resolve only after a successful warm forecast. The durable match consumer validates each
 event revision, scans candidates in bounded resumable pages, and retries each property scope
 independently. Property-scoped freeze events can now populate the Radar feed. NWS polygon coverage
-still depends on HER-300's indexed geospatial matcher; HER-204 is the next delivery slice and will
-extract Incident promotion into its single durable bridge.
+still depends on HER-300's indexed geospatial matcher. HER-204's unique Incident bridge is now
+complete; HER-205 is the next delivery slice and will converge weather supersession, expiration,
+resolution, and stale-event behavior.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 
@@ -1052,7 +1074,8 @@ The tax-reassessment integration establishes the template for anything that foll
 | `apps/backend/src/routes/homeEventRadar.routes.ts` | Route definitions + middleware |
 | `apps/backend/src/controllers/homeEventRadar.controller.ts` | Request handlers |
 | `apps/backend/src/services/homeEventRadar.service.ts` | Business logic + Prisma queries |
-| `apps/backend/src/services/homeEventRadarMatcher.service.ts` | Matching engine + impact computers + Incident promotion bridge |
+| `apps/backend/src/services/homeEventRadarMatcher.service.ts` | Matching engine + impact computers + Incident bridge delegation |
+| `apps/backend/src/modules/homeEventRadar/services/radarIncidentPromotion.service.ts` | Unique match-linked Incident projection and lifecycle reconciliation |
 | `apps/backend/src/services/incidents/incident.service.ts` | `IncidentService.upsertIncident`, `mapIncidentTypeToGuidance` (promotion target) |
 | `apps/backend/src/services/taxAssessorAdapters/taxAssessmentTypes.ts` | Shared tax-ingestion types |
 | `apps/backend/src/services/taxAssessorAdapters/socrataTaxAdapter.ts` | Socrata tax-assessor HTTP client |

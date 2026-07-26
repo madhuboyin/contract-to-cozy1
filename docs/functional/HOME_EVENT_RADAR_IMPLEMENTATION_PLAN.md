@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-203 implemented |
+| Status | In progress — HER-204 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -32,7 +32,8 @@
 | HER-201 Freeze forecast adapter | Complete; DB application pending | Open-Meteo forecasts now use source runs and canonical property-scoped ingestion with stable identity, immutable refresh revisions, verified warm resolution, conservative failure semantics, and no direct Incident/Guidance writes |
 | HER-202 Durable ingest consumer | Complete; DB application pending | Versioned canonical jobs use deterministic same-run identity, bounded retries with jitter, retained failure history, payload limits, metrics, a global kill switch, bounded concurrency, and graceful shutdown; NWS, freeze, and test fixtures enqueue through it |
 | HER-203 Durable match consumer | Complete; DB application pending | Versioned revision-driven scan jobs dispatch deterministic, independently retryable property scopes through bounded cursor pages; canonical property/postal/admin discovery, terminal outcomes, metrics, kill switch, bounded concurrency, retained failures, and graceful shutdown are wired |
-| HER-204+ | Not started | Incident bridge extraction, weather lifecycle convergence, advanced geospatial matching, homeowner APIs, actions, and operations remain |
+| HER-204 Incident promotion bridge | Complete; DB application pending | One dedicated projection service owns match-linked create/update/close behavior, persists revision/source/provider provenance, maps impact and explicit confidence, resolves through IncidentService, and leaves Guidance exclusively on the idempotent Incident bridge |
+| HER-205+ | Not started | Weather lifecycle convergence, advanced geospatial matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -676,6 +677,22 @@ Extract from the matcher into a dedicated service:
 - preserve source/event/match provenance;
 - use `IncidentService.setStatus` for resolution;
 - permit only one Guidance bridge.
+
+Implementation note: `RadarIncidentPromotionService` is now the only Radar-to-Incident projection
+path. Every promoted Incident persists the schema's unique `propertyRadarMatchId`, uses that link
+for create/update idempotency, and retains event, immutable revision, source run/definition,
+provider, matcher, confidence, and correlation provenance without copying raw provider evidence.
+Moderate/high matches map to Incident severity only when explicit confidence clears the reviewed
+floor; low-confidence matches remain awareness-only. Unknown confidence remains null rather than
+being invented during the pre-HER-302 rules period. Awareness-only matches do not create an
+Incident, and an impact downgrade resolves an existing linked Incident. Resolved/retracted events
+call `IncidentService.setStatus(..., RESOLVED)` and expired events call
+`IncidentService.setStatus(..., EXPIRED)`, which archives downstream Guidance. Delayed active jobs
+cannot reopen a terminal Incident. Match jobs pass revision context into the bridge and projection
+failures now remain visible to the durable property-scope retry instead of being swallowed.
+Guidance is still created only inside `IncidentService`; an explicit `incident:<id>` Guidance
+dedupe key and the unique match link permit one bridge while preserving Radar provenance. The
+required schema link already existed, so no Prisma schema or migration change was necessary.
 
 ### HER-205 — Weather lifecycle convergence
 

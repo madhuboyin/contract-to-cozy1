@@ -122,8 +122,8 @@ const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
   safety_inspection_due: 'guidance-overview',
   energy_inefficiency_detected: 'home-event-radar',
   high_utility_cost: 'home-event-radar',
-  // Promoted RadarEvent -> Incident (see homeEventRadarMatcher.service.ts's
-  // promoteRadarEventToIncident); Incidents is the real, populated surface.
+  // Promoted RadarEvent -> Incident via RadarIncidentPromotionService;
+  // Incidents is the real, populated surface.
   tax_reassessment: 'incidents',
   generic_actionable_signal: 'guidance-overview',
 };

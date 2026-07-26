@@ -695,8 +695,7 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
   },
 
   // ── Tax Reassessment ──────────────────────────────────────────────────────────
-  // First real domain promoted through the RadarEvent -> Incident bridge
-  // (homeEventRadarMatcher.service.ts's promoteRadarEventToIncident), fed by
+  // First real domain promoted through RadarIncidentPromotionService, fed by
   // ingestTaxAssessmentEvents.job.ts (Socrata county tax-assessor data).
   // Step sequence mirrors the 3 actions already anticipated by
   // computeTaxEvent() in homeEventRadarMatcher.service.ts.

@@ -113,8 +113,25 @@ test('property scope is independently matched and failures remain retryable', as
       propertyId: 'property-1',
     },
   });
-  const success = await processRadarMatchJob(propertyJob, deps());
+  const calls = [];
+  const success = await processRadarMatchJob(propertyJob, deps({
+    async matchProperties(eventId, propertyIds, revision) {
+      calls.push({ eventId, propertyIds, revision });
+      return { matched: 1, skipped: 0, failedPropertyIds: [] };
+    },
+  }));
   assert.equal(success.outcome, 'property_matched');
+  assert.deepEqual(calls, [{
+    eventId: 'event-1',
+    propertyIds: ['property-1'],
+    revision: {
+      radarEventRevisionId: 'revision-1',
+      revisionIdentity: 'provider:revision-1',
+      sourceRunId: 'run-1',
+      sourceDefinitionId: 'source-1',
+      correlationId: 'correlation-1',
+    },
+  }]);
 
   await assert.rejects(
     () => processRadarMatchJob(propertyJob, deps({

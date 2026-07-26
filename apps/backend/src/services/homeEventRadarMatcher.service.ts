@@ -3,13 +3,12 @@
 // Deterministic rules-based matching + impact engine for Home Event Radar.
 // No external provider integrations in this step.
 
-import { IncidentSeverity, IncidentSourceType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { buildUnifiedEventEnvelope } from './eventSignalProjection.service';
 import { signalService } from './signal.service';
-import { IncidentService } from './incidents/incident.service';
 import { logger } from '../lib/logger';
 import { propertyWhereForRadarEvent } from '../modules/homeEventRadar/services/radarMatchDiscovery.service';
+import { radarIncidentPromotionService } from '../modules/homeEventRadar/services/radarIncidentPromotion.service';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -555,6 +554,13 @@ async function findMatchingProperties(
 export async function runMatchingForEvent(
   eventId: string,
   propertyIdFilter?: string[] | null,
+  revision?: {
+    radarEventRevisionId?: string | null;
+    revisionIdentity?: string | null;
+    sourceRunId?: string | null;
+    sourceDefinitionId?: string | null;
+    correlationId?: string | null;
+  },
 ): Promise<{ matched: number; skipped: number; failedPropertyIds: string[] }> {
   const db = prisma as any;
 
@@ -631,9 +637,18 @@ export async function runMatchingForEvent(
         validUntil: event.endAt ?? null,
       });
 
-      if (impact.impactLevel === 'moderate' || impact.impactLevel === 'high') {
-        await promoteRadarEventToIncident(event, property, impact, match.id);
-      }
+      await radarIncidentPromotionService.project({
+        propertyId: property.id,
+        event,
+        match: {
+          ...match,
+          impactLevel: impact.impactLevel,
+          impactSummary: impact.impactSummary,
+          matchScore: impact.matchScore,
+          impactFactorsJson: impact.impactFactorsJson,
+        },
+        revision,
+      });
 
       matched++;
     } catch (err) {
@@ -644,56 +659,4 @@ export async function runMatchingForEvent(
   }
 
   return { matched, skipped, failedPropertyIds };
-}
-
-// ---------------------------------------------------------------------------
-// RadarEvent -> Incident promotion
-// ---------------------------------------------------------------------------
-
-const IMPACT_LEVEL_TO_INCIDENT_SEVERITY: Record<string, IncidentSeverity> = {
-  moderate: IncidentSeverity.WARNING,
-  high: IncidentSeverity.CRITICAL,
-};
-
-/**
- * Promotes a high-impact RadarEvent match into an Incident, reusing
- * IncidentService's existing dedup (fingerprint), severity scoring, and
- * guidance-journey bridge rather than duplicating any of that machinery.
- * Only called for 'moderate'/'high' impact matches — 'none'/'watch' stay
- * visible only in the raw Home Event Radar feed.
- */
-async function promoteRadarEventToIncident(
-  event: any,
-  property: PropertySnapshot,
-  impact: ImpactResult,
-  propertyRadarMatchId: string,
-): Promise<void> {
-  const typeKey = `RADAR_${String(event.eventType).toUpperCase()}`;
-  const severity = IMPACT_LEVEL_TO_INCIDENT_SEVERITY[impact.impactLevel] ?? IncidentSeverity.WARNING;
-
-  try {
-    await IncidentService.upsertIncident({
-      propertyId: property.id,
-      userId: null,
-      sourceType: IncidentSourceType.RADAR_EVENT,
-      typeKey,
-      category: String(event.eventType).toUpperCase(),
-      title: event.title,
-      summary: impact.impactSummary,
-      details: {
-        radarEventId: event.id,
-        eventType: event.eventType,
-        eventSubType: event.eventSubType ?? null,
-        propertyRadarMatchId,
-        ...impact.impactFactorsJson,
-      },
-      severity,
-      fingerprint: `property:${property.id}|${typeKey}|${event.dedupeKey}`,
-    });
-  } catch (err) {
-    logger.error(
-      { propertyId: property.id, radarEventId: event.id, err },
-      '[RadarMatcher] Failed to promote RadarEvent match to Incident',
-    );
-  }
 }

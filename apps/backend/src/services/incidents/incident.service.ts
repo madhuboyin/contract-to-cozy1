@@ -144,6 +144,17 @@ const SEVERE_WEATHER_HAZARD_FAMILY_INTENT: Record<string, string> = {
   WILDFIRE: 'wildfire_risk',
 };
 
+const RADAR_WEATHER_EVENT_INTENT: Record<string, string> = {
+  freeze: 'freeze_risk',
+  flood_risk: 'flood_risk',
+  heavy_rain: 'flood_risk',
+  hail: 'wind_risk',
+  wind: 'wind_risk',
+  weather: 'wind_risk',
+  heat_wave: 'heat_risk',
+  wildfire_smoke: 'wildfire_risk',
+};
+
 function mapIncidentTypeToGuidance(
   typeKey: string,
   details?: Record<string, unknown> | null
@@ -170,6 +181,23 @@ function mapIncidentTypeToGuidance(
       issueDomain: 'WEATHER',
       readiness: 'READY',
       sourceToolKey: 'home-event-radar',
+    };
+  }
+
+  const radarEventType =
+    typeof details?.eventType === 'string'
+      ? details.eventType.trim().toLowerCase()
+      : null;
+  const radarWeatherIntent =
+    normalized.startsWith('RADAR_') && radarEventType
+      ? RADAR_WEATHER_EVENT_INTENT[radarEventType]
+      : null;
+  if (radarWeatherIntent) {
+    return {
+      signalIntentFamily: radarWeatherIntent,
+      issueDomain: 'WEATHER',
+      readiness: 'READY',
+      sourceToolKey: 'incidents',
     };
   }
 
@@ -250,9 +278,8 @@ function mapIncidentTypeToGuidance(
     };
   }
 
-  // Promoted from a RadarEvent match (see homeEventRadarMatcher.service.ts's
-  // promoteRadarEventToIncident) — typeKey is prefixed 'RADAR_' for every
-  // domain ingested through the unified Home Event Radar layer.
+  // Promoted from a RadarEvent match through RadarIncidentPromotionService;
+  // typeKey is prefixed 'RADAR_' for every canonical Radar domain.
   if (normalized.includes('TAX_REASSESSMENT')) {
     return {
       signalIntentFamily: 'tax_reassessment',
@@ -287,6 +314,10 @@ async function bridgeIncidentToGuidance(incident: any) {
     typeof details.inventoryItemId === 'string' && details.inventoryItemId.trim().length > 0
       ? details.inventoryItemId
       : null;
+  const sourceRunId =
+    typeof details.sourceRunId === 'string' && details.sourceRunId.trim().length > 0
+      ? details.sourceRunId
+      : null;
 
   await guidanceJourneyService.ingestSignal({
     propertyId: incident.propertyId,
@@ -303,16 +334,27 @@ async function bridgeIncidentToGuidance(incident: any) {
     sourceToolKey: mapped.sourceToolKey,
     sourceEntityType: 'INCIDENT',
     sourceEntityId: incident.id,
+    sourceRunId,
+    dedupeKey: `incident:${incident.id}`,
     payloadJson: {
       incidentId: incident.id,
       typeKey: incident.typeKey,
       status: incident.status,
       severity: incident.severity ?? null,
       confidence: incident.confidence ?? null,
+      propertyRadarMatchId: incident.propertyRadarMatchId ?? null,
+      radarEventId: details.radarEventId ?? null,
+      radarEventRevisionId: details.radarEventRevisionId ?? null,
+      sourceDefinitionId: details.sourceDefinitionId ?? null,
+      sourceRunId,
+      providerEventId: details.providerEventId ?? null,
+      providerRevision: details.providerRevision ?? null,
     },
     metadataJson: {
       incidentCategory: incident.category ?? null,
       incidentTitle: incident.title ?? null,
+      matcherVersion: details.matcherVersion ?? null,
+      correlationId: details.correlationId ?? null,
     },
   });
 }
@@ -391,18 +433,20 @@ export class IncidentService {
 
     // Dedupe logic:
     // Step 1: Auto-resolve old unactioned incidents before creating new ones
-    const oldUnactionedIncidents = await prisma.incident.findMany({
-      where: {
-        propertyId: input.propertyId,
-        fingerprint: input.fingerprint,
-        status: { 
-          in: [IncidentStatus.DETECTED, IncidentStatus.EVALUATED, IncidentStatus.ACTIVE] 
-        },
-        createdAt: {
-          lt: new Date(Date.now() - 24 * 60 * 60 * 1000) // Older than 24 hours
-        }
-      },
-    });
+    const oldUnactionedIncidents = input.propertyRadarMatchId
+      ? []
+      : await prisma.incident.findMany({
+          where: {
+            propertyId: input.propertyId,
+            fingerprint: input.fingerprint,
+            status: {
+              in: [IncidentStatus.DETECTED, IncidentStatus.EVALUATED, IncidentStatus.ACTIVE],
+            },
+            createdAt: {
+              lt: new Date(Date.now() - 24 * 60 * 60 * 1000), // Older than 24 hours
+            },
+          },
+        });
 
     // Auto-resolve old incidents
     for (const oldIncident of oldUnactionedIncidents) {
@@ -436,18 +480,23 @@ export class IncidentService {
     }
 
     // Step 2: Prefer updating an existing incident with same fingerprint if it's still "open-ish"
-    const existing = await prisma.incident.findFirst({
-      where: {
-        propertyId: input.propertyId,
-        fingerprint: input.fingerprint,
-        status: { in: [IncidentStatus.DETECTED, IncidentStatus.EVALUATED, IncidentStatus.ACTIVE, IncidentStatus.ACTIONED, IncidentStatus.MITIGATED, IncidentStatus.SUPPRESSED] },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const existing = input.propertyRadarMatchId
+      ? await prisma.incident.findUnique({
+          where: { propertyRadarMatchId: input.propertyRadarMatchId },
+        })
+      : await prisma.incident.findFirst({
+          where: {
+            propertyId: input.propertyId,
+            fingerprint: input.fingerprint,
+            status: { in: [IncidentStatus.DETECTED, IncidentStatus.EVALUATED, IncidentStatus.ACTIVE, IncidentStatus.ACTIONED, IncidentStatus.MITIGATED, IncidentStatus.SUPPRESSED] },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
 
     const baseData = {
       propertyId: input.propertyId,
       userId: input.userId ?? null,
+      propertyRadarMatchId: input.propertyRadarMatchId ?? null,
 
       sourceType: input.sourceType,
       typeKey: input.typeKey,
@@ -456,7 +505,11 @@ export class IncidentService {
       summary: input.summary ?? null,
       details: input.details ?? null,
 
-      status: sup.suppressed ? IncidentStatus.SUPPRESSED : initialStatus,
+      status: sup.suppressed
+        ? IncidentStatus.SUPPRESSED
+        : input.propertyRadarMatchId && existing
+          ? existing.status
+          : initialStatus,
       isSuppressed: sup.suppressed,
       suppressionRuleId: sup.suppressed ? sup.ruleId ?? null : null,
       suppressionReason: sup.suppressed ? String(sup.reason ?? 'UNKNOWN') : null,
@@ -615,6 +668,12 @@ export class IncidentService {
         actions: { orderBy: { createdAt: 'desc' } },
         acknowledgements: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
+    });
+  }
+
+  static async getIncidentByRadarMatchId(propertyRadarMatchId: string) {
+    return prisma.incident.findUnique({
+      where: { propertyRadarMatchId },
     });
   }
 
