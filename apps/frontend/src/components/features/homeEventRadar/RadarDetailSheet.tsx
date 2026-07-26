@@ -369,10 +369,20 @@ function DetailContent({
                         Responsibility: {humanize(action.responsibleParty)}
                       </p>
                     ) : null}
-                    {action.destination.href ? (
+                    {action.destination.kind === 'internal' && action.destination.href ? (
                       <Link href={action.destination.href} className="mt-2 inline-flex min-h-[44px] items-center text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2">
                         Continue
                       </Link>
+                    ) : action.destination.kind === 'external' && action.destination.href ? (
+                      <a
+                        href={action.destination.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
+                      >
+                        Open official instructions
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                      </a>
                     ) : (
                       <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
                         Informational recommendation

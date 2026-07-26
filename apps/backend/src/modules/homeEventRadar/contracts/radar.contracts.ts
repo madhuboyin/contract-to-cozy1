@@ -504,6 +504,22 @@ export const radarDetailResponseSchema = radarFeedItemSchema.extend({
   impactFactors: z.record(z.string(), z.unknown()).nullable(),
   matchedSystems: z.array(radarMatchedSystemSchema),
   recommendedActions: z.array(radarProjectedActionSchema.extend({
+    registryVersion: z.literal('radar-actions-v1'),
+    completionEvidence: z.enum([
+      'match_acknowledgement',
+      'user_attestation',
+      'downstream_capability',
+      'official_source_view',
+    ]),
+    safetyClassification: z.enum([
+      'general',
+      'property_protection',
+      'health_safety',
+      'electrical_safety',
+      'financial_review',
+      'official_instruction',
+    ]),
+    targetCapability: z.string().min(1).max(120).nullable(),
     destination: z.object({
       kind: z.enum(['informational', 'internal', 'external']),
       href: z.string().min(1).nullable(),

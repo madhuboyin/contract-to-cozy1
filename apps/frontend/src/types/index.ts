@@ -3400,6 +3400,20 @@ export interface RadarCanonicalDetail extends RadarCanonicalFeedItem {
     responsibilityScope?: string;
     responsibleParty?: string;
     applicability?: 'owner_action' | 'coordinate' | 'verify_responsibility';
+    registryVersion: 'radar-actions-v1';
+    completionEvidence:
+      | 'match_acknowledgement'
+      | 'user_attestation'
+      | 'downstream_capability'
+      | 'official_source_view';
+    safetyClassification:
+      | 'general'
+      | 'property_protection'
+      | 'health_safety'
+      | 'electrical_safety'
+      | 'financial_review'
+      | 'official_instruction';
+    targetCapability: string | null;
     destination: {
       kind: 'informational' | 'internal' | 'external';
       href: string | null;

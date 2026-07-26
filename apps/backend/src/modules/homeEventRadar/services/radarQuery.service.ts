@@ -17,6 +17,13 @@ import {
   type RadarFeedFilters,
   type RadarFilterUserState,
 } from '../domain/radarFeedFilters';
+import {
+  projectRadarActions,
+  type RadarActionConfidence,
+  type RadarActionEventFamily,
+  type RadarActionImpact,
+  type RadarStoredAction,
+} from '../domain/radarActionRegistry';
 import { serializeRadarFeedback } from './radarInteraction.service';
 
 export type RadarMonitoringState =
@@ -219,19 +226,29 @@ function detailMissingFacts(match: any): Array<Record<string, string>> {
   });
 }
 
-function detailActions(value: unknown): Array<Record<string, unknown>> {
-  return storedArray(value, 'actions').flatMap((entry) => {
-    const action = storedRecord(entry);
-    if (!action?.code || !action?.label || !['high', 'medium', 'low'].includes(String(action.priority))) {
-      return [];
-    }
-    return [{
-      ...action,
-      code: String(action.code),
-      label: String(action.label),
-      priority: String(action.priority),
-      destination: { kind: 'informational', href: null },
-    }];
+function detailActions(value: unknown, match: any) {
+  const storedActions = storedArray(value, 'actions')
+    .map(storedRecord)
+    .filter((entry): entry is Record<string, unknown> => entry !== null);
+  return projectRadarActions({
+    storedActions: storedActions as RadarStoredAction[],
+    sourceFamily: normalizeSourceFamily(
+      match.radarEvent.sourceDefinition?.family,
+    ) as RadarActionEventFamily,
+    impact: (
+      ['none', 'watch', 'moderate', 'high'].includes(String(match.impactLevel))
+        ? match.impactLevel
+        : 'none'
+    ) as RadarActionImpact,
+    confidence: (
+      ['low', 'medium', 'high'].includes(String(match.confidence))
+        ? match.confidence
+        : 'low'
+    ) as RadarActionConfidence,
+    propertyId: String(match.propertyId),
+    matchId: String(match.id),
+    eventId: String(match.radarEvent.id),
+    officialSourceUrl: match.radarEvent.canonicalUrl ?? null,
   });
 }
 
@@ -581,7 +598,7 @@ export class RadarQueryService {
       impactSummary: match.impactSummary ?? null,
       impactFactors: match.impactFactorsJson ?? null,
       matchedSystems: storedArray(match.matchedSystemsJson, 'systems'),
-      recommendedActions: detailActions(match.recommendedActionsJson),
+      recommendedActions: detailActions(match.recommendedActionsJson, match),
       canonicalUrl: match.radarEvent.canonicalUrl ?? null,
       observedAt,
       revision: {

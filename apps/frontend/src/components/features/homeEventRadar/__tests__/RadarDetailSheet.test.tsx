@@ -66,11 +66,15 @@ const detail: RadarCanonicalDetail = {
   },
   matchedSystems: [{ type: 'roof', relevance: 'high' }],
   recommendedActions: [{
-    code: 'SECURE',
+    code: 'SECURE_OUTDOOR_ITEMS',
     label: 'Secure loose items',
     priority: 'high',
     responsibleParty: 'OWNER',
     applicability: 'owner_action',
+    registryVersion: 'radar-actions-v1',
+    completionEvidence: 'user_attestation',
+    safetyClassification: 'property_protection',
+    targetCapability: null,
     destination: { kind: 'informational', href: null },
   }],
   canonicalUrl: 'https://www.weather.gov/example',
@@ -162,6 +166,52 @@ describe('RadarDetailSheet', () => {
       '/dashboard/properties/property-1/incidents/incident-1',
     );
     expect(screen.getByRole('link', { name: /Open guidance/i })).toBeInTheDocument();
+  });
+
+  it('renders only the destination behavior declared by the action registry', async () => {
+    jest.mocked(api.getRadarEventDetail).mockResolvedValue({
+      ...detail,
+      recommendedActions: [
+        {
+          ...detail.recommendedActions[0],
+          code: 'GET_QUOTES',
+          label: 'Compare reviewed coverage options',
+          completionEvidence: 'downstream_capability',
+          safetyClassification: 'financial_review',
+          targetCapability: 'coverage-options',
+          destination: {
+            kind: 'internal',
+            href: '/dashboard/properties/property-1/tools/coverage-options?radarMatchId=match-1',
+          },
+        },
+        {
+          ...detail.recommendedActions[0],
+          code: 'MONITOR_SITUATION',
+          label: 'Monitor official updates',
+          completionEvidence: 'official_source_view',
+          safetyClassification: 'official_instruction',
+          targetCapability: null,
+          destination: {
+            kind: 'external',
+            href: 'https://alerts.weather.gov/example',
+          },
+        },
+      ],
+    });
+    renderSheet();
+
+    expect(await screen.findByRole('link', { name: 'Continue' })).toHaveAttribute(
+      'href',
+      '/dashboard/properties/property-1/tools/coverage-options?radarMatchId=match-1',
+    );
+    expect(screen.getByRole('link', { name: /Open official instructions/i })).toHaveAttribute(
+      'href',
+      'https://alerts.weather.gov/example',
+    );
+    expect(screen.getByRole('link', { name: /Open official instructions/i })).toHaveAttribute(
+      'rel',
+      'noopener noreferrer',
+    );
   });
 
   it('keeps detail failures explicit and offers retry', async () => {

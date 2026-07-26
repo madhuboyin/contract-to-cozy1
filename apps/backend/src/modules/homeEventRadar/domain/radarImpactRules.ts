@@ -1,3 +1,5 @@
+import type { RadarActionCode } from './radarActionRegistry';
+
 export const RADAR_IMPACT_RULE_VERSION = 'impact-v1';
 export const RADAR_IMPACT_DRIVER_CODES = [
   'OLDER_ROOF',
@@ -218,7 +220,7 @@ function explicitSystemAge(
 }
 
 function action(
-  code: string,
+  code: RadarActionCode,
   label: string,
   priority: RadarRecommendedAction['priority'],
   responsibilityScope?: RadarResponsibilityScope,

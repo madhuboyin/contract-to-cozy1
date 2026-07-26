@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-408 implemented |
+| Status | In progress — HER-500 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -52,7 +52,8 @@
 | HER-406 Deep links | Complete | URL-backed timing/family/match state restores exact property events; card history, invalid/missing match recovery, Unified Home, Guidance, worker notification, and property-route preservation use canonical links |
 | HER-407 State and feedback | Complete; DB application pending | Property-authorized idempotent personal-state writes persist seen/save/dismiss/addressed transitions, explicitly restore dismissed matches, audit transitions, and capture one bounded structured feedback response per user/match |
 | HER-408 Frontend acceptance | Complete | Fixture-gated production route exercises the real page and API client across Chromium, Firefox, WebKit, Pixel, and iPhone profiles; monitoring states, filters, pagination, detail, deep links, retries, state/feedback, and accessibility semantics are automated |
-| HER-500+ | Not started | Actions, notifications, Guidance, additional sources, and operations remain |
+| HER-500 Action registry | Complete | Versioned fail-closed registry covers every emitted action code, validates capability routes and policy metadata, enforces family/impact/confidence eligibility, and projects only registry-owned informational/internal/official destinations with lineage |
+| HER-501+ | Not started | Task/reminder integration, tool/provider handoffs, notifications, Guidance, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1323,6 +1324,27 @@ Define reviewed action codes with:
 - safety classification.
 
 No unknown action code may become a generic unsafe link.
+
+**Implemented:** `radar-actions-v1` is the single reviewed registry for all 29 action codes emitted
+by the deterministic impact rules. Every definition declares its homeowner label template,
+eligible source families, minimum property impact and confidence, destination policy, canonical
+capability/route when applicable, required property/match/event/responsibility/source context,
+responsibility applicability, expected completion evidence, and safety classification. Registry
+startup validation rejects duplicate/incomplete definitions, unsafe or non-dashboard internal
+routes, missing required context, and destination/evidence mismatches. Tests prove every
+impact-rule action has exactly one definition and every internal target matches the canonical
+capability registry.
+
+The homeowner detail read now resolves persisted action data through the registry instead of
+spreading stored objects. Unknown codes, invalid priorities/labels, wrong-family actions, and
+actions below their reviewed impact/confidence threshold fail closed. Persisted `href` or
+destination fields are never trusted. Informational recommendations remain explicitly labeled;
+internal destinations are constructed only from reviewed capability route templates and carry
+encoded property, match, and event lineage; official-source actions permit HTTPS canonical source
+URLs only and otherwise degrade to informational. The response exposes registry version,
+completion-evidence policy, safety classification, and target capability, while the frontend
+distinguishes internal continuation from a new-tab official-instructions link. No database schema
+change or migration script is required.
 
 ### HER-501 — Task/reminder integration
 

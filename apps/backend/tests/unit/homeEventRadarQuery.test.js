@@ -85,7 +85,11 @@ function match(overrides = {}) {
       }],
     },
     recommendedActionsJson: {
-      actions: [{ code: 'SECURE', label: 'Secure loose items', priority: 'high' }],
+      actions: [{
+        code: 'SECURE_OUTDOOR_ITEMS',
+        label: 'Secure loose items',
+        priority: 'high',
+      }],
     },
     matchedSystemsJson: {
       systems: [{ type: 'roof', relevance: 'high' }],
@@ -329,7 +333,10 @@ test('detail is a pure persisted-projection read and exposes revision provenance
   assert.equal(detail.geography.type, 'postal_code');
   assert.equal(detail.sourceEvidence.revisionIdentity, 'revision-identity-1');
   assert.equal(detail.revision.receivedAt, '2026-07-26T11:31:00.000Z');
-  assert.equal(detail.recommendedActions[0].code, 'SECURE');
+  assert.equal(detail.recommendedActions[0].code, 'SECURE_OUTDOOR_ITEMS');
+  assert.equal(detail.recommendedActions[0].registryVersion, 'radar-actions-v1');
+  assert.equal(detail.recommendedActions[0].completionEvidence, 'user_attestation');
+  assert.equal(detail.recommendedActions[0].safetyClassification, 'property_protection');
   assert.deepEqual(detail.recommendedActions[0].destination, {
     kind: 'informational',
     href: null,
@@ -340,6 +347,25 @@ test('detail is a pure persisted-projection read and exposes revision provenance
   assert.equal(detail.matcherVersion, 'geo-v1');
   assert.equal(detail.userFeedback, null);
   assert.deepEqual(writes, []);
+  assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
+});
+
+test('detail omits unreviewed action codes instead of projecting persisted links', async () => {
+  const unsafeMatch = match({
+    recommendedActionsJson: {
+      actions: [{
+        code: 'UNREVIEWED_ACTION',
+        label: 'Open unreviewed destination',
+        priority: 'high',
+        href: 'javascript:alert(1)',
+        destination: { kind: 'external', href: 'https://untrusted.example' },
+      }],
+    },
+  });
+  const { service } = serviceWith({ matches: [unsafeMatch] });
+  const detail = await service.getDetail('property-1', 'match-1', 'user-1');
+
+  assert.deepEqual(detail.recommendedActions, []);
   assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
 });
 
