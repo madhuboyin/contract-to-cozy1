@@ -19,6 +19,12 @@ RUN npm ci --only=production && npm cache clean --force
 # The API compiles to CommonJS. Fail the image build if the installed SDK's
 # require export is malformed or a stale dependency layer contains ESM syntax.
 RUN node -e "const sdk = require('@google/genai'); if (typeof sdk.GoogleGenAI !== 'function') throw new Error('@google/genai CommonJS export is invalid')"
+# Prisma's CLI loads this WASM before it can run db push. Compile it now and
+# retain its digest so a truncated file or damaged cross-stage copy cannot
+# reach the migration Job.
+RUN node -e "const fs=require('fs'); const wasm=fs.readFileSync('node_modules/prisma/build/prisma_schema_build_bg.wasm'); new WebAssembly.Module(wasm);" \
+    && ./node_modules/.bin/prisma --version \
+    && sha256sum node_modules/prisma/build/prisma_schema_build_bg.wasm > /tmp/prisma-schema-wasm.sha256
 
 # Stage 2: Prisma generation (isolated — only schema + packages, no source)
 # Keep Prisma generation and runtime on the same libc family. Generating the
@@ -83,6 +89,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 # Production node_modules from the clean deps stage
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /tmp/prisma-schema-wasm.sha256 /tmp/prisma-schema-wasm.sha256
 
 # Prisma client from the isolated generation stage
 COPY --from=prisma-gen /app/node_modules/.prisma ./node_modules/.prisma
@@ -98,9 +105,19 @@ RUN node -e "const sdk = require('@google/genai'); if (typeof sdk.GoogleGenAI !=
 # architecture, libc, OpenSSL, and corrupted-engine failures during image
 # construction instead of after the pod begins serving traffic.
 RUN node -e "const fs=require('fs'); const path=require('path'); const dir=path.resolve('node_modules/.prisma/client'); const engines=fs.readdirSync(dir).filter((name)=>name.startsWith('libquery_engine')&&name.endsWith('.so.node')); if(engines.length!==1) throw new Error('Expected exactly one Prisma query engine, found '+engines.join(',')); require(path.join(dir,engines[0]));"
+# Verify both byte integrity and executability after all dependency-stage
+# copies. `prisma --version` exercises the same schema WASM load that failed in
+# the production db-push Job.
+RUN sha256sum --check /tmp/prisma-schema-wasm.sha256 \
+    && node -e "const fs=require('fs'); const wasm=fs.readFileSync('node_modules/prisma/build/prisma_schema_build_bg.wasm'); new WebAssembly.Module(wasm);" \
+    && ./node_modules/.bin/prisma --version
 
 # Prisma schema (needed for migrations / runtime)
 COPY prisma ./prisma
+# Exercise the exact CLI + schema path shipped to migration Jobs. The URL is a
+# syntactically valid build-only placeholder; validation does not connect.
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build \
+    ./node_modules/.bin/prisma validate --schema=./prisma/schema.prisma
 
 RUN chown -R nodejs:nodejs /app
 

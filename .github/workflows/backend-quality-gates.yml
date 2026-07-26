@@ -34,3 +34,9 @@ jobs:
 
       - name: Integration smoke
         run: npm run test:integration
+
+      # Exercise the exact production packaging path. The Dockerfile validates
+      # Prisma's native query engine, schema WASM, cross-stage checksum, and
+      # bundled schema before the image can be published.
+      - name: Backend Docker image packaging
+        run: docker build --target runner -f ../../infrastructure/docker/backend/Dockerfile .
