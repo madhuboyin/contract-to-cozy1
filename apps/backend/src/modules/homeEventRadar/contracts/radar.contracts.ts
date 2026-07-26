@@ -58,6 +58,14 @@ export const radarMatchLifecycleStatusSchema = z.enum([
   'no_longer_applicable',
 ]);
 export const radarSourceFreshnessStatusSchema = z.enum(['fresh', 'stale', 'unknown']);
+export const radarFeedbackTypeSchema = z.enum([
+  'helpful',
+  'wrong_location',
+  'not_relevant',
+  'duplicate',
+  'stale',
+  'other',
+]);
 
 export const radarPriorityDiagnosticsSchema = z.object({
   version: z.string().min(1),
@@ -474,6 +482,21 @@ export const radarFeedResponseSchema = z.object({
   asOf: z.iso.datetime({ offset: true }),
 });
 
+export const radarInteractionStateResponseSchema = z.object({
+  id: z.string().min(1),
+  propertyRadarMatchId: z.string().min(1),
+  state: z.enum(['new', 'seen', 'saved', 'dismissed', 'acted_on']),
+  createdAt: z.iso.datetime({ offset: true }),
+  updatedAt: z.iso.datetime({ offset: true }),
+});
+
+export const radarFeedbackResponseSchema = z.object({
+  feedbackType: radarFeedbackTypeSchema,
+  comment: z.string().max(500).nullable(),
+  createdAt: z.iso.datetime({ offset: true }),
+  updatedAt: z.iso.datetime({ offset: true }),
+});
+
 export const radarDetailResponseSchema = radarFeedItemSchema.extend({
   geography: normalizedGeographySchema.nullable(),
   matchExplanation: radarMatchExplanationSchema.nullable(),
@@ -521,6 +544,7 @@ export const radarDetailResponseSchema = radarFeedItemSchema.extend({
     updatedAt: z.iso.datetime({ offset: true }),
     href: z.string().min(1),
   }).nullable(),
+  userFeedback: radarFeedbackResponseSchema.nullable(),
 });
 
 export type RadarSourceFamily = z.infer<typeof radarSourceFamilySchema>;
@@ -542,3 +566,6 @@ export type RadarCounts = z.infer<typeof radarCountsSchema>;
 export type RadarOverviewResponse = z.infer<typeof radarOverviewResponseSchema>;
 export type RadarFeedResponse = z.infer<typeof radarFeedResponseSchema>;
 export type RadarDetailResponse = z.infer<typeof radarDetailResponseSchema>;
+export type RadarFeedbackType = z.infer<typeof radarFeedbackTypeSchema>;
+export type RadarInteractionStateResponse = z.infer<typeof radarInteractionStateResponseSchema>;
+export type RadarFeedbackResponse = z.infer<typeof radarFeedbackResponseSchema>;

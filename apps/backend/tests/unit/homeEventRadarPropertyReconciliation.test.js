@@ -252,8 +252,11 @@ test('fact routing is narrow and every required mutation path publishes reconcil
     ),
     'utf8',
   );
-  const radarService = fs.readFileSync(
-    path.join(root, 'src/services/homeEventRadar.service.ts'),
+  const radarInteractionService = fs.readFileSync(
+    path.join(
+      root,
+      'src/modules/homeEventRadar/services/radarInteraction.service.ts',
+    ),
     'utf8',
   );
   const completionService = fs.readFileSync(
@@ -280,7 +283,7 @@ test('fact routing is narrow and every required mutation path publishes reconcil
     /propertyRadarMatch\.deleteMany\(\{ where: \{ propertyId \} \}\)/,
   );
   assert.match(factCapture, /radarReconciliationReasonForFactKey/);
-  assert.match(radarService, /reasons: \['mitigation_changed'\]/);
+  assert.match(radarInteractionService, /reasons: \['mitigation_changed'\]/);
   assert.match(completionService, /reasons: \['mitigation_changed'\]/);
   assert.match(maintenanceService, /reasons: \['mitigation_changed'\]/);
   assert.match(propertyGeo, /reasons: \['geography_changed'\]/);

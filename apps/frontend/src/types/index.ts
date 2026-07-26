@@ -3147,6 +3147,28 @@ export interface VaultShareLinkResponse {
 // =============================================================================
 
 export type RadarUserState = 'new' | 'seen' | 'saved' | 'dismissed' | 'acted_on';
+export type RadarFeedbackType =
+  | 'helpful'
+  | 'wrong_location'
+  | 'not_relevant'
+  | 'duplicate'
+  | 'stale'
+  | 'other';
+
+export interface RadarInteractionStateRecord {
+  id: string;
+  propertyRadarMatchId: string;
+  state: RadarUserState;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RadarFeedbackRecord {
+  feedbackType: RadarFeedbackType;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 export type RadarSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 export type RadarImpactLevel = 'none' | 'watch' | 'moderate' | 'high';
 export type RadarPriorityBand = 'low' | 'medium' | 'high' | 'urgent';
@@ -3418,6 +3440,7 @@ export interface RadarCanonicalDetail extends RadarCanonicalFeedItem {
     updatedAt: string;
     href: string;
   } | null;
+  userFeedback: RadarFeedbackRecord | null;
 }
 
 export interface RadarAppliedFilters {

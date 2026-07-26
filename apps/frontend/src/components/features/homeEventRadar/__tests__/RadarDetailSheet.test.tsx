@@ -9,6 +9,12 @@ jest.mock('@/lib/api/client', () => ({
     getRadarEventDetail: jest.fn(),
     trackHomeEventRadarEvent: jest.fn().mockResolvedValue(undefined),
     updateRadarMatchState: jest.fn().mockResolvedValue(undefined),
+    submitRadarMatchFeedback: jest.fn().mockResolvedValue({
+      feedbackType: 'wrong_location',
+      comment: 'The alert is for another county.',
+      createdAt: '2026-07-26T12:00:00.000Z',
+      updatedAt: '2026-07-26T12:00:00.000Z',
+    }),
   },
 }));
 
@@ -102,16 +108,17 @@ const detail: RadarCanonicalDetail = {
     updatedAt: '2026-07-26T11:42:00.000Z',
     href: '/dashboard/properties/property-1/guidance/step?journeyId=journey-1',
   },
+  userFeedback: null,
 };
 
-function renderSheet() {
+function renderSheet(selectedItem: RadarCanonicalFeedItem = item) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
       <RadarDetailSheet
-        item={item}
+        item={selectedItem}
         propertyId="property-1"
         onClose={jest.fn()}
       />
@@ -164,6 +171,67 @@ describe('RadarDetailSheet', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load event details');
     fireEvent.click(screen.getByRole('button', { name: 'Retry details' }));
     await waitFor(() => expect(jest.mocked(api.getRadarEventDetail).mock.calls.length).toBeGreaterThanOrEqual(3));
+  });
+
+  it('restores a dismissed event through the persisted state endpoint', async () => {
+    const dismissedItem = { ...item, userState: 'dismissed' as const };
+    jest.mocked(api.getRadarEventDetail).mockResolvedValue({
+      ...detail,
+      userState: 'dismissed',
+    });
+    renderSheet(dismissedItem);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => expect(api.updateRadarMatchState).toHaveBeenCalledWith(
+      'property-1',
+      'match-1',
+      'seen',
+      {
+        guidanceJourneyId: undefined,
+        guidanceStepKey: undefined,
+        guidanceSignalIntentFamily: undefined,
+      },
+    ));
+  });
+
+  it('persists seen state when a new event is opened directly', async () => {
+    const newItem = { ...item, userState: 'new' as const };
+    jest.mocked(api.getRadarEventDetail).mockResolvedValue({
+      ...detail,
+      userState: 'new',
+    });
+    renderSheet(newItem);
+
+    await waitFor(() => expect(api.updateRadarMatchState).toHaveBeenCalledWith(
+      'property-1',
+      'match-1',
+      'seen',
+      {
+        guidanceJourneyId: undefined,
+        guidanceStepKey: undefined,
+        guidanceSignalIntentFamily: undefined,
+      },
+    ));
+  });
+
+  it('submits a bounded structured feedback reason with an optional comment', async () => {
+    jest.mocked(api.getRadarEventDetail).mockResolvedValue(detail);
+    renderSheet();
+
+    fireEvent.click(await screen.findByRole('radio', { name: 'Wrong location' }));
+    fireEvent.change(screen.getByLabelText('Comment (optional)'), {
+      target: { value: 'The alert is for another county.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save feedback' }));
+
+    await waitFor(() => expect(api.submitRadarMatchFeedback).toHaveBeenCalledWith(
+      'property-1',
+      'match-1',
+      'wrong_location',
+      'The alert is for another county.',
+    ));
+    expect(await screen.findByRole('status')).toHaveTextContent('Feedback saved');
   });
 });
 

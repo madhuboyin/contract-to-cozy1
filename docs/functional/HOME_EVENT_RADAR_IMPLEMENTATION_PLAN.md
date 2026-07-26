@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-406 implemented |
+| Status | In progress — HER-407 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -50,7 +50,8 @@
 | HER-404 Event feed and card | Complete | Canonical cards expose source provenance, exact effective/expiration timing, provider severity, property impact, limited confidence, freshness, material updates, and an accessible primary detail action |
 | HER-405 Event detail | Complete | The canonical detail projection and sheet expose official source evidence, revision timing, geography, impact/confidence factors, missing-fact correction paths, systems, safe actions, Incident/Guidance continuity, and explicit retryable errors |
 | HER-406 Deep links | Complete | URL-backed timing/family/match state restores exact property events; card history, invalid/missing match recovery, Unified Home, Guidance, worker notification, and property-route preservation use canonical links |
-| HER-407+ | Not started | State/feedback, actions, notifications, accessibility acceptance, and operations remain |
+| HER-407 State and feedback | Complete; DB application pending | Property-authorized idempotent personal-state writes persist seen/save/dismiss/addressed transitions, explicitly restore dismissed matches, audit transitions, and capture one bounded structured feedback response per user/match |
+| HER-408+ | Not started | Frontend accessibility acceptance, actions, notifications, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1246,6 +1247,17 @@ Implement:
 - duplicate;
 - stale;
 - optional comment with bounded safe text.
+
+**Implemented:** the canonical homeowner event routes now own property-authorized state and
+feedback mutations. Opening a new detail persists `seen`; save, dismiss, addressed, and restore
+transitions are idempotent and write reviewed action records without accepting arbitrary state
+metadata. Dismissed events can be shown and explicitly restored, while feed and overview queries
+are refreshed after successful writes. Detail projects only the authenticated user's current
+feedback. The feedback contract supports wrong location, not relevant, duplicate, stale, and other
+with a trimmed 500-character comment that rejects unsupported control characters; the comment is
+never included in analytics. One response per user/match is replaced idempotently. The Prisma
+schema adds the exact feedback enum values, a restore audit action, and the one-response uniqueness
+constraint. No migration script was created; database schema application remains owner-managed.
 
 ### HER-408 — Frontend acceptance
 

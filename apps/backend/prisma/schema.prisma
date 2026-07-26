@@ -9357,10 +9357,10 @@ enum RadarCoverageEvaluationStatus {
 
 enum RadarFeedbackType {
   helpful
+  wrong_location
   not_relevant
-  incorrect
   duplicate
-  outdated
+  stale
   other
 }
 
@@ -9451,6 +9451,7 @@ enum PropertyRadarActionType {
   view_recommendation
   save_event
   dismiss_event
+  restore_event
   mark_checked
   open_related_system
   open_related_tool
@@ -9767,7 +9768,7 @@ model PropertyRadarFeedback {
   propertyRadarMatch PropertyRadarMatch @relation(fields: [propertyRadarMatchId], references: [id], onDelete: Cascade)
   user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([propertyRadarMatchId, userId, feedbackType])
+  @@unique([propertyRadarMatchId, userId])
   @@index([userId, createdAt(sort: Desc)])
   @@index([feedbackType, createdAt(sort: Desc)])
   @@map("property_radar_feedback")

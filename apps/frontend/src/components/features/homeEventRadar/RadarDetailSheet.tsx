@@ -29,6 +29,7 @@ import {
 import type {
   RadarCanonicalDetail,
   RadarCanonicalFeedItem,
+  RadarFeedbackType,
   RadarNormalizedGeography,
   RadarUserState,
 } from '@/types';
@@ -71,6 +72,14 @@ interface Props {
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
 }
+
+const FEEDBACK_OPTIONS: Array<{ value: RadarFeedbackType; label: string }> = [
+  { value: 'wrong_location', label: 'Wrong location' },
+  { value: 'not_relevant', label: 'Not relevant to my home' },
+  { value: 'duplicate', label: 'Duplicate event' },
+  { value: 'stale', label: 'Information is stale' },
+  { value: 'other', label: 'Something else' },
+];
 
 function Chip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
@@ -418,6 +427,9 @@ export function RadarDetailSheet({
   const [isDesktop, setIsDesktop] = React.useState(false);
   const openedMatchRef = React.useRef<string | null>(null);
   const actionsViewedMatchRef = React.useRef<string | null>(null);
+  const autoSeenMatchRef = React.useRef<string | null>(null);
+  const [feedbackType, setFeedbackType] = React.useState<RadarFeedbackType | null>(null);
+  const [feedbackComment, setFeedbackComment] = React.useState('');
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -444,6 +456,15 @@ export function RadarDetailSheet({
   const currentState = detail?.userState ?? item?.userState ?? 'new';
 
   React.useEffect(() => {
+    setFeedbackType(detail?.userFeedback?.feedbackType ?? null);
+    setFeedbackComment(detail?.userFeedback?.comment ?? '');
+  }, [
+    detail?.userFeedback?.comment,
+    detail?.userFeedback?.feedbackType,
+    item?.propertyMatchId,
+  ]);
+
+  React.useEffect(() => {
     if (!item || !propertyId || openedMatchRef.current === item.propertyMatchId) return;
     openedMatchRef.current = item.propertyMatchId;
     trackRadarSheetEvent(propertyId, 'EVENT_OPENED', {
@@ -467,19 +488,19 @@ export function RadarDetailSheet({
   }, [detail, item, propertyId]);
 
   const stateMutation = useMutation({
-    mutationFn: async (newState: RadarUserState) => {
+    mutationFn: async (newState: Exclude<RadarUserState, 'new'>) => {
       if (!item) return;
-      await api.updateRadarMatchState(
+      return api.updateRadarMatchState(
         propertyId,
         item.propertyMatchId,
         newState,
-        undefined,
         { guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily },
       );
     },
     onSuccess: (_data, newState) => {
       if (!item) return;
       queryClient.invalidateQueries({ queryKey: ['radar-events', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['radar-overview', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['radar-event-detail', propertyId, item.propertyMatchId] });
       onStateChange?.(item.propertyMatchId, newState);
       trackRadarSheetEvent(propertyId, 'STATE_CHANGED', {
@@ -494,8 +515,48 @@ export function RadarDetailSheet({
     },
   });
 
+  React.useEffect(() => {
+    if (
+      !item
+      || !detail
+      || currentState !== 'new'
+      || stateMutation.isPending
+      || autoSeenMatchRef.current === item.propertyMatchId
+    ) return;
+    autoSeenMatchRef.current = item.propertyMatchId;
+    stateMutation.mutate('seen');
+  }, [currentState, detail, item, stateMutation]);
+
+  const feedbackMutation = useMutation({
+    mutationFn: async () => {
+      if (!item || !feedbackType) throw new Error('Choose a feedback reason.');
+      return api.submitRadarMatchFeedback(
+        propertyId,
+        item.propertyMatchId,
+        feedbackType,
+        feedbackComment,
+      );
+    },
+    onSuccess: (feedback) => {
+      if (!item) return;
+      queryClient.setQueryData<RadarCanonicalDetail>(
+        ['radar-event-detail', propertyId, item.propertyMatchId],
+        (current) => current ? { ...current, userFeedback: feedback } : current,
+      );
+      trackRadarSheetEvent(propertyId, 'FEEDBACK_SUBMITTED', {
+        property_event_match_id: item.propertyMatchId,
+        feedback_type: feedback.feedbackType,
+        has_comment: Boolean(feedback.comment),
+      });
+    },
+    onError: () => {
+      trackRadarSheetEvent(propertyId, 'ERROR', { stage: 'feedback' });
+    },
+  });
+
   const isSaved = currentState === 'saved';
   const isActedOn = currentState === 'acted_on';
+  const isDismissed = currentState === 'dismissed';
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -585,11 +646,11 @@ export function RadarDetailSheet({
                   <button
                     type="button"
                     disabled={stateMutation.isPending}
-                    onClick={() => stateMutation.mutate('dismissed')}
+                    onClick={() => stateMutation.mutate(isDismissed ? 'seen' : 'dismissed')}
                     className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 py-2.5 text-center text-[hsl(var(--mobile-text-secondary))]"
                   >
-                    <EyeOff className="h-4 w-4" />
-                    <span className="text-[11px] font-medium">Dismiss</span>
+                    {isDismissed ? <RotateCcw className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    <span className="text-[11px] font-medium">{isDismissed ? 'Restore' : 'Dismiss'}</span>
                   </button>
                 </div>
                 {stateMutation.isError ? (
@@ -598,6 +659,85 @@ export function RadarDetailSheet({
                   </p>
                 ) : null}
               </div>
+
+              {detail ? (
+                <div className="border-t border-[hsl(var(--mobile-border-subtle))] pt-4">
+                  <fieldset className="space-y-3">
+                    <legend className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                      Help improve this match
+                    </legend>
+                    <p className="mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">
+                      Tell us when an event does not look right for this property.
+                    </p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {FEEDBACK_OPTIONS.map((option) => (
+                        <label
+                          key={option.value}
+                          className={cn(
+                            'flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs',
+                            feedbackType === option.value
+                              ? 'border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] text-[hsl(var(--mobile-brand-strong))]'
+                              : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]',
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name={`radar-feedback-${item.propertyMatchId}`}
+                            value={option.value}
+                            checked={feedbackType === option.value}
+                            onChange={() => {
+                              setFeedbackType(option.value);
+                              feedbackMutation.reset();
+                            }}
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                    <div>
+                      <label
+                        htmlFor={`radar-feedback-comment-${item.propertyMatchId}`}
+                        className="text-xs font-medium text-[hsl(var(--mobile-text-secondary))]"
+                      >
+                        Comment (optional)
+                      </label>
+                      <textarea
+                        id={`radar-feedback-comment-${item.propertyMatchId}`}
+                        value={feedbackComment}
+                        maxLength={500}
+                        rows={3}
+                        onChange={(event) => {
+                          setFeedbackComment(event.target.value);
+                          feedbackMutation.reset();
+                        }}
+                        className="mt-1 w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm text-[hsl(var(--mobile-text-primary))]"
+                        placeholder="Add context without including sensitive information"
+                      />
+                      <p className="mb-0 mt-1 text-right text-[11px] text-[hsl(var(--mobile-text-muted))]">
+                        {feedbackComment.length}/500
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!feedbackType || feedbackMutation.isPending}
+                      onClick={() => feedbackMutation.mutate()}
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {feedbackMutation.isPending ? 'Saving feedback…' : 'Save feedback'}
+                    </button>
+                    {feedbackMutation.isSuccess ? (
+                      <p role="status" className="mb-0 text-xs font-medium text-emerald-700">
+                        Feedback saved. Thank you.
+                      </p>
+                    ) : null}
+                    {feedbackMutation.isError ? (
+                      <p role="alert" className="mb-0 text-xs text-rose-600">
+                        Could not save feedback. Please try again.
+                      </p>
+                    ) : null}
+                  </fieldset>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}

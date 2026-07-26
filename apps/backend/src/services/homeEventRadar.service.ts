@@ -14,9 +14,6 @@ import {
   type RadarPriorityUserState,
 } from '../modules/homeEventRadar/domain/radarPriority';
 import { evaluateRadarSourceFreshness } from '../modules/homeEventRadar/domain/radarMatchLifecycle';
-import {
-  requestRadarPropertyReconciliation,
-} from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -139,18 +136,6 @@ function serializeMatchDetail(match: any, state: any | null): Record<string, unk
     stateMetaJson: state?.stateMetaJson ?? null,
     createdAt: match.createdAt instanceof Date ? match.createdAt.toISOString() : match.createdAt,
     updatedAt: match.updatedAt instanceof Date ? match.updatedAt.toISOString() : match.updatedAt,
-  };
-}
-
-function serializeState(state: any): Record<string, unknown> {
-  return {
-    id: String(state.id),
-    propertyRadarMatchId: String(state.propertyRadarMatchId),
-    userId: String(state.userId),
-    state: state.state,
-    stateMetaJson: state.stateMetaJson ?? null,
-    createdAt: state.createdAt instanceof Date ? state.createdAt.toISOString() : state.createdAt,
-    updatedAt: state.updatedAt instanceof Date ? state.updatedAt.toISOString() : state.updatedAt,
   };
 }
 
@@ -564,88 +549,7 @@ export class HomeEventRadarService {
   }
 
   // --------------------------------------------------------------------------
-  // 5. Update user state on a match
-  // --------------------------------------------------------------------------
-
-  async updateMatchState(
-    propertyId: string,
-    matchId: string,
-    userId: string,
-    state: string,
-    stateMetaJson?: Record<string, unknown> | null,
-  ): Promise<Record<string, unknown>> {
-    // Verify match belongs to property
-    const match = await this.db.propertyRadarMatch.findFirst({
-      where: { id: matchId, propertyId },
-      select: { id: true },
-    });
-    if (!match) throw new APIError('Radar match not found', 404, 'RADAR_MATCH_NOT_FOUND');
-
-    // Map state transition → action type
-    const actionMap: Record<string, string> = {
-      saved: 'save_event',
-      dismissed: 'dismiss_event',
-      acted_on: 'mark_checked',
-      seen: 'open_event',
-    };
-    const actionType = actionMap[state];
-    const previousState = await this.db.propertyRadarState.findUnique({
-      where: {
-        propertyRadarMatchId_userId: {
-          propertyRadarMatchId: matchId,
-          userId,
-        },
-      },
-      select: { state: true },
-    });
-    const mitigationChanged =
-      state === 'acted_on' || previousState?.state === 'acted_on';
-    const changedAt = new Date();
-    const updated = await this.db.$transaction(async (tx: any) => {
-      const nextState = await tx.propertyRadarState.upsert({
-        where: {
-          propertyRadarMatchId_userId: {
-            propertyRadarMatchId: matchId,
-            userId,
-          },
-        },
-        create: {
-          propertyRadarMatchId: matchId,
-          userId,
-          state,
-          stateMetaJson: (stateMetaJson as any) ?? null,
-        },
-        update: {
-          state,
-          stateMetaJson: (stateMetaJson as any) ?? null,
-        },
-      });
-      if (actionType) {
-        await tx.propertyRadarAction.create({
-          data: { propertyRadarMatchId: matchId, actionType },
-        });
-      }
-      if (mitigationChanged) {
-        await requestRadarPropertyReconciliation(
-          {
-            propertyId,
-            reasons: ['mitigation_changed'],
-            changeToken: changedAt.toISOString(),
-            correlationId:
-              `radar-state:${matchId}:${userId}:${changedAt.toISOString()}`,
-          },
-          tx,
-          changedAt,
-        );
-      }
-      return nextState;
-    });
-
-    return serializeState(updated);
-  }
-
-  // --------------------------------------------------------------------------
-  // 6. Get a canonical radar event by ID (utility for admin/debug)
+  // 5. Get a canonical radar event by ID (utility for admin/debug)
   // --------------------------------------------------------------------------
 
   async getRadarEvent(eventId: string): Promise<Record<string, unknown>> {

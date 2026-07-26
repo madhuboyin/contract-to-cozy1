@@ -17,6 +17,7 @@ import {
   type RadarFeedFilters,
   type RadarFilterUserState,
 } from '../domain/radarFeedFilters';
+import { serializeRadarFeedback } from './radarInteraction.service';
 
 export type RadarMonitoringState =
   | 'ACTIVE'
@@ -530,6 +531,7 @@ export class RadarQueryService {
           },
         },
         states: { where: { userId }, take: 1 },
+        feedback: { where: { userId }, take: 1 },
         incident: {
           select: {
             id: true,
@@ -612,6 +614,7 @@ export class RadarQueryService {
         updatedAt: iso(guidance.updatedAt),
         href: `/dashboard/properties/${encodeURIComponent(propertyId)}/guidance/step?journeyId=${encodeURIComponent(guidance.id)}`,
       } : null,
+      userFeedback: serializeRadarFeedback(match.feedback?.[0]),
     };
   }
 }

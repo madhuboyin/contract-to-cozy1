@@ -108,6 +108,9 @@ import {
   RadarCanonicalFeedParams,
   RadarCanonicalDetail,
   RadarUserState,
+  RadarFeedbackType,
+  RadarFeedbackRecord,
+  RadarInteractionStateRecord,
   ResolutionCenterPayload,
   EnvironmentReportDTO,
   FoundationType,
@@ -4094,21 +4097,36 @@ class APIClient {
   async updateRadarMatchState(
     propertyId: string,
     matchId: string,
-    state: RadarUserState,
-    stateMetaJson?: Record<string, unknown>,
+    state: Exclude<RadarUserState, 'new'>,
     guidance?: {
       guidanceJourneyId?: string | null;
       guidanceStepKey?: string | null;
       guidanceSignalIntentFamily?: string | null;
     }
-  ): Promise<void> {
-    await this.patch(`/api/properties/${propertyId}/radar/matches/${matchId}/state`, {
+  ): Promise<RadarInteractionStateRecord> {
+    const response = await this.patch<{ state: RadarInteractionStateRecord }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/events/${encodeURIComponent(matchId)}/state`,
+      {
       state,
-      stateMetaJson: stateMetaJson ?? null,
       guidanceJourneyId: guidance?.guidanceJourneyId ?? null,
       guidanceStepKey: guidance?.guidanceStepKey ?? null,
       guidanceSignalIntentFamily: guidance?.guidanceSignalIntentFamily ?? null,
-    });
+      },
+    );
+    return response.data.state;
+  }
+
+  async submitRadarMatchFeedback(
+    propertyId: string,
+    matchId: string,
+    feedbackType: RadarFeedbackType,
+    comment?: string | null,
+  ): Promise<RadarFeedbackRecord> {
+    const response = await this.post<{ feedback: RadarFeedbackRecord }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/events/${encodeURIComponent(matchId)}/feedback`,
+      { feedbackType, comment: comment ?? null },
+    );
+    return response.data.feedback;
   }
 
   // ==========================================================================

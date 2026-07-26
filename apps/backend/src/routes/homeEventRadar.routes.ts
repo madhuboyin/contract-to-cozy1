@@ -16,6 +16,7 @@ import {
   listRadarFeed,
   getRadarMatchDetail,
   updateRadarMatchState,
+  submitRadarMatchFeedback,
   trackHomeEventRadarEvent,
 } from '../controllers/homeEventRadar.controller';
 
@@ -24,6 +25,7 @@ import {
   listRadarStateViewRequestSchema,
   listRadarFeedQuerySchema,
   updateRadarStateBodySchema,
+  submitRadarFeedbackBodySchema,
   trackHomeEventRadarEventBodySchema,
 } from '../validators/homeEventRadar.validators';
 
@@ -98,14 +100,25 @@ router.get(
 );
 
 /**
- * PATCH /properties/:propertyId/radar/matches/:matchId/state
+ * PATCH /properties/:propertyId/radar/events/:matchId/state
  * Update user interaction state (seen | saved | dismissed | acted_on).
  */
 router.patch(
-  '/properties/:propertyId/radar/matches/:matchId/state',
+  '/properties/:propertyId/radar/events/:matchId/state',
   propertyAuthMiddleware,
   validateBody(updateRadarStateBodySchema),
   updateRadarMatchState,
+);
+
+/**
+ * POST /properties/:propertyId/radar/events/:matchId/feedback
+ * Create or replace structured homeowner feedback for this match.
+ */
+router.post(
+  '/properties/:propertyId/radar/events/:matchId/feedback',
+  propertyAuthMiddleware,
+  validateBody(submitRadarFeedbackBodySchema),
+  submitRadarMatchFeedback,
 );
 
 /**

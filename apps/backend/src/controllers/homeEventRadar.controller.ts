@@ -13,6 +13,7 @@ import {
   radarQueryService,
   type RadarUserState,
 } from '../modules/homeEventRadar/services/radarQuery.service';
+import { radarInteractionService } from '../modules/homeEventRadar/services/radarInteraction.service';
 import { listRadarEventsQuerySchema } from '../validators/homeEventRadar.validators';
 
 const service = new HomeEventRadarService();
@@ -254,7 +255,7 @@ export async function getRadarMatchDetail(req: CustomRequest, res: Response, nex
 }
 
 /**
- * PATCH /properties/:propertyId/radar/matches/:matchId/state
+ * PATCH /properties/:propertyId/radar/events/:matchId/state
  * Update user state on a property-event match.
  */
 export async function updateRadarMatchState(req: CustomRequest, res: Response, next: NextFunction) {
@@ -271,12 +272,11 @@ export async function updateRadarMatchState(req: CustomRequest, res: Response, n
         : null;
     const nextState = req.body.state;
 
-    const state = await service.updateMatchState(
+    const state = await radarInteractionService.updateState(
       propertyId,
       matchId,
       userId,
       nextState,
-      req.body.stateMetaJson ?? null,
     );
 
     analyticsEmitter.track({
@@ -328,6 +328,46 @@ export async function updateRadarMatchState(req: CustomRequest, res: Response, n
     }
 
     res.json({ success: true, data: { state } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /properties/:propertyId/radar/events/:matchId/feedback
+ * Create or replace the authenticated homeowner's structured feedback.
+ */
+export async function submitRadarMatchFeedback(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { userId } = requireUser(req);
+    const { propertyId, matchId } = req.params;
+    const feedback = await radarInteractionService.submitFeedback(
+      propertyId,
+      matchId,
+      userId,
+      req.body.feedbackType,
+      req.body.comment ?? null,
+    );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.RISK,
+      featureKey: AnalyticsFeature.HOME_EVENT_RADAR,
+      metadataJson: {
+        actionType: 'submit_match_feedback',
+        matchId,
+        feedbackType: req.body.feedbackType,
+        hasComment: Boolean(req.body.comment),
+      },
+    });
+
+    res.json({ success: true, data: { feedback } });
   } catch (err) {
     next(err);
   }

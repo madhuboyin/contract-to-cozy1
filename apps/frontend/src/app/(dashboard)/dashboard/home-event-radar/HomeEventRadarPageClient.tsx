@@ -687,7 +687,12 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     [feedQuery.data, stateOverrides],
   );
 
-  const visibleItems = allItems;
+  const visibleItems = React.useMemo(
+    () => showDismissed
+      ? allItems
+      : allItems.filter((item) => item.userState !== 'dismissed'),
+    [allItems, showDismissed],
+  );
   const selectedItem = React.useMemo(() => {
     if (!urlState.matchId) return null;
     const summary = allItems.find((item) => item.propertyMatchId === urlState.matchId);
@@ -772,10 +777,6 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   // -------------------------------------------------------------------------
 
   function handleItemClick(item: RadarCanonicalFeedItem) {
-    // Optimistically mark as seen
-    if (item.userState === 'new') {
-      setStateOverrides((prev) => ({ ...prev, [item.propertyMatchId]: 'seen' }));
-    }
     updateUrlState({ matchId: item.propertyMatchId }, 'push');
   }
 

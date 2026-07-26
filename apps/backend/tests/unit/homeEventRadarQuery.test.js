@@ -103,6 +103,7 @@ function match(overrides = {}) {
     propertyGeographyVersion: 3,
     incident: null,
     states: [],
+    feedback: [],
     radarEvent: {
       id: 'event-1',
       eventType: 'wind',
@@ -337,7 +338,33 @@ test('detail is a pure persisted-projection read and exposes revision provenance
   assert.equal(detail.missingFacts[0].factKey, 'property.roofReplacementYear');
   assert.equal(detail.propertyGeographyVersion, 3);
   assert.equal(detail.matcherVersion, 'geo-v1');
+  assert.equal(detail.userFeedback, null);
   assert.deepEqual(writes, []);
+  assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
+});
+
+test('detail projects only the current homeowner feedback contract', async () => {
+  const feedback = {
+    id: 'feedback-1',
+    userId: 'user-1',
+    feedbackType: 'wrong_location',
+    note: 'The provider area is across the county line.',
+    metadataJson: { internal: 'must not leak' },
+    createdAt: new Date('2026-07-26T11:50:00.000Z'),
+    updatedAt: new Date('2026-07-26T11:55:00.000Z'),
+  };
+  const { service } = serviceWith({
+    matches: [match({ feedback: [feedback] })],
+  });
+
+  const detail = await service.getDetail('property-1', 'match-1', 'user-1');
+
+  assert.deepEqual(detail.userFeedback, {
+    feedbackType: 'wrong_location',
+    comment: 'The provider area is across the county line.',
+    createdAt: '2026-07-26T11:50:00.000Z',
+    updatedAt: '2026-07-26T11:55:00.000Z',
+  });
   assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
 });
 
@@ -406,6 +433,8 @@ test('canonical homeowner endpoints are wired without replacing legacy compatibi
     '/radar/states/:state',
     '/radar/feed',
     '/radar/matches/:matchId',
+    '/radar/events/:matchId/state',
+    '/radar/events/:matchId/feedback',
   ]) {
     assert.match(routes, new RegExp(route.replace(/[/:]/g, '\\$&')));
   }

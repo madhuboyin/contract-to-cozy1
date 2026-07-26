@@ -9,6 +9,12 @@ import {
   RADAR_FILTER_SOURCE_FAMILIES,
   RADAR_FILTER_USER_STATES,
 } from '../modules/homeEventRadar/domain/radarFeedFilters';
+import {
+  RADAR_FEEDBACK_COMMENT_MAX_LENGTH,
+  RADAR_FEEDBACK_TYPES,
+  RADAR_MUTABLE_USER_STATES,
+  RADAR_USER_STATES,
+} from '../modules/homeEventRadar/domain/radarInteraction';
 
 // ---------------------------------------------------------------------------
 // Enum value arrays (mirrors Prisma schema; avoids dependency on
@@ -67,13 +73,7 @@ export const RADAR_EVENT_STATUSES = [
   'archived',
 ] as const;
 
-export const PROPERTY_RADAR_USER_STATES = [
-  'new',
-  'seen',
-  'saved',
-  'dismissed',
-  'acted_on',
-] as const;
+export const PROPERTY_RADAR_USER_STATES = RADAR_USER_STATES;
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -184,15 +184,37 @@ export const listRadarStateViewRequestSchema = z.object({
 });
 
 /**
- * Body for PATCH /properties/:propertyId/radar/matches/:matchId/state
+ * Body for PATCH /properties/:propertyId/radar/events/:matchId/state
  */
 export const updateRadarStateBodySchema = z.object({
-  state: z.enum(PROPERTY_RADAR_USER_STATES),
-  stateMetaJson: z.record(z.string(), z.unknown()).optional().nullable(),
+  state: z.enum(RADAR_MUTABLE_USER_STATES),
   guidanceJourneyId: z.string().uuid().optional().nullable(),
   guidanceStepKey: z.string().trim().min(1).max(120).optional().nullable(),
   guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional().nullable(),
-});
+}).strict();
+
+const radarFeedbackCommentSchema = z.preprocess(
+  (value) => {
+    if (value === undefined || value === null) return null;
+    const trimmed = String(value).trim();
+    return trimmed.length ? trimmed : null;
+  },
+  z.string()
+    .max(RADAR_FEEDBACK_COMMENT_MAX_LENGTH)
+    .regex(
+      /^[^\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]*$/,
+      'comment contains unsupported control characters',
+    )
+    .nullable(),
+);
+
+/**
+ * Body for POST /properties/:propertyId/radar/events/:matchId/feedback
+ */
+export const submitRadarFeedbackBodySchema = z.object({
+  feedbackType: z.enum(RADAR_FEEDBACK_TYPES),
+  comment: radarFeedbackCommentSchema.optional().default(null),
+}).strict();
 
 /**
  * Body for POST /properties/:propertyId/radar/events  (analytics tracking)
