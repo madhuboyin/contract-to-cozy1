@@ -10,6 +10,7 @@ export type LoanEstimateExtractedField<T> = {
 
 export interface RefinanceLoanEstimateExtraction {
   fields: {
+    loanAmountUsd: LoanEstimateExtractedField<number>;
     loanTermYears: LoanEstimateExtractedField<number>;
     loanType: LoanEstimateExtractedField<'FIXED' | 'ARM' | 'OTHER'>;
     noteRatePct: LoanEstimateExtractedField<number>;
@@ -134,6 +135,14 @@ export function extractLoanEstimateFieldsFromText(
       : missing('Loan Terms — Product');
   const fiveYear = extractFiveYearValues(text);
   const fields: RefinanceLoanEstimateExtraction['fields'] = {
+    loanAmountUsd: matchNumber(
+      text,
+      [
+        /Loan\s+Amount[ \t:$]*\$?[ \t]*([\d,]+(?:\.\d{1,2})?)/i,
+        /\$?[ \t]*([\d,]+(?:\.\d{1,2})?)[ \t]+Loan\s+Amount/i,
+      ],
+      'Loan Terms — Loan Amount',
+    ),
     loanTermYears: term,
     loanType,
     noteRatePct: matchNumber(
@@ -194,6 +203,7 @@ export function extractLoanEstimateFieldsFromText(
 
   const values = Object.values(fields);
   const requiredKeys: Array<keyof typeof fields> = [
+    'loanAmountUsd',
     'loanTermYears',
     'loanType',
     'noteRatePct',

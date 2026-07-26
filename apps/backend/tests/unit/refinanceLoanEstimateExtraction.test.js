@@ -8,6 +8,7 @@ const {
 const sample = `
 LOAN ESTIMATE
 Loan Terms
+Loan Amount $300,000
 Loan Term 30 years
 Product Fixed Rate
 Interest Rate 5.750%
@@ -27,6 +28,7 @@ Annual Percentage Rate (APR) 5.982%
 
 test('extracts standardized Loan Estimate comparison fields for review', () => {
   const result = extractLoanEstimateFieldsFromText(sample);
+  assert.equal(result.fields.loanAmountUsd.value, 300000);
   assert.equal(result.fields.loanTermYears.value, 30);
   assert.equal(result.fields.loanType.value, 'FIXED');
   assert.equal(result.fields.noteRatePct.value, 5.75);
@@ -62,12 +64,14 @@ test('supports PDF text layers that place values before labels', () => {
     ${'Loan Estimate '.repeat(10)}
     5.982% Annual Percentage Rate (APR)
     $1,905.42 Monthly Principal & Interest
+    $300,000 Loan Amount
     $8,427 D. TOTAL LOAN COSTS
     -$1,250 Lender Credits
     $12,054 Estimated Cash to Close
   `);
   assert.equal(result.fields.aprPct.value, 5.982);
   assert.equal(result.fields.monthlyPrincipalAndInterestUsd.value, 1905.42);
+  assert.equal(result.fields.loanAmountUsd.value, 300000);
   assert.equal(result.fields.loanCostsUsd.value, 8427);
   assert.equal(result.fields.lenderCreditsUsd.value, 1250);
   assert.equal(result.fields.cashToCloseUsd.value, 12054);

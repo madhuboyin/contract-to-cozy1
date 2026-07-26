@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  Download,
   FileSpreadsheet,
   FileCheck2,
   FolderOpen,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import {
   compareRefinanceLoanEstimates,
+  exportLoanEstimateComparisonMarkdown,
   extractRefinanceLoanEstimate,
   getSavedRefinanceLoanEstimateComparisons,
   saveRefinanceLoanEstimateComparison,
@@ -26,6 +28,7 @@ import {
 type OfferDraft = {
   id: string;
   lenderName: string;
+  loanAmountUsd: string;
   loanTermYears: string;
   loanType: RefinanceLoanEstimateInput['loanType'];
   noteRatePct: string;
@@ -52,6 +55,7 @@ function blankOffer(number: number): OfferDraft {
   return {
     id: `draft-${Date.now()}-${number}`,
     lenderName: '',
+    loanAmountUsd: '',
     loanTermYears: '30',
     loanType: 'FIXED',
     noteRatePct: '',
@@ -69,6 +73,7 @@ function toDraft(offer: RefinanceLoanEstimateInput): OfferDraft {
   return {
     id: offer.id,
     lenderName: offer.lenderName,
+    loanAmountUsd: String(offer.loanAmountUsd),
     loanTermYears: String(offer.loanTermYears),
     loanType: offer.loanType,
     noteRatePct: String(offer.noteRatePct),
@@ -118,6 +123,7 @@ function toInput(offer: OfferDraft): RefinanceLoanEstimateInput {
   return {
     id: offer.id,
     lenderName: offer.lenderName.trim() || 'Unnamed lender',
+    loanAmountUsd: numberValue(offer.loanAmountUsd, 'Loan amount'),
     loanTermYears: numberValue(offer.loanTermYears, 'Loan term'),
     loanType: offer.loanType,
     noteRatePct: numberValue(offer.noteRatePct, 'Note rate'),
@@ -194,6 +200,7 @@ function OfferFields({
           />
         </label>
         {[
+          ['loanAmountUsd', 'Loan amount ($)'],
           ['noteRatePct', 'Note rate (%)'],
           ['aprPct', 'APR (%)'],
           ['monthlyPrincipalAndInterestUsd', 'Monthly P&I ($)'],
@@ -258,6 +265,7 @@ export function LoanEstimateComparisonCard({
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -343,6 +351,7 @@ export function LoanEstimateComparisonCard({
       field.value == null ? '' : String(field.value);
     const reviewedDraft: OfferDraft = {
       ...base,
+      loanAmountUsd: value(fields.loanAmountUsd),
       loanTermYears:
         fields.loanTermYears.value == null
           ? base.loanTermYears
@@ -395,6 +404,39 @@ export function LoanEstimateComparisonCard({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function exportMarkdown() {
+    setExporting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const exported = await exportLoanEstimateComparisonMarkdown(
+        propertyId,
+        offers.map(toInput),
+      );
+      const url = URL.createObjectURL(
+        new Blob([exported.markdown], {
+          type: 'text/markdown;charset=utf-8',
+        }),
+      );
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = exported.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setMessage('Markdown comparison exported.');
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'The Markdown comparison could not be exported.',
+      );
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -569,12 +611,13 @@ export function LoanEstimateComparisonCard({
           <div className="space-y-3 border-t border-slate-200/70 pt-4 dark:border-slate-700/70">
             <div className="overflow-x-auto">
               <table
-                className="min-w-[820px] w-full text-left text-xs"
+                className="min-w-[940px] w-full text-left text-xs"
                 aria-label="Official Loan Estimate comparison"
               >
                 <thead className="text-slate-500 dark:text-slate-400">
                   <tr>
                     <th className="pb-2">Lender</th>
+                    <th className="pb-2">Loan amount</th>
                     <th className="pb-2">Rate / APR</th>
                     <th className="pb-2">Monthly P&I</th>
                     <th className="pb-2">Net loan costs</th>
@@ -591,6 +634,9 @@ export function LoanEstimateComparisonCard({
                           {offer.loanTermYears}-year {offer.loanType.toLowerCase()}
                         </span>
                       </th>
+                      <td className="py-3 pr-3">
+                        {currency(offer.loanAmountUsd)}
+                      </td>
                       <td className="py-3 pr-3">
                         {offer.noteRatePct.toFixed(3)}% / {offer.aprPct.toFixed(3)}%
                       </td>
@@ -652,22 +698,40 @@ export function LoanEstimateComparisonCard({
                   className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
                 />
               </label>
-              <button
-                type="button"
-                onClick={saveComparison}
-                disabled={saving}
-                className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? (
-                  <RefreshCw
-                    className="h-3.5 w-3.5 animate-spin"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <Save className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                Save comparison
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={exportMarkdown}
+                  disabled={exporting}
+                  className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300"
+                >
+                  {exporting ? (
+                    <RefreshCw
+                      className="h-3.5 w-3.5 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Export Markdown
+                </button>
+                <button
+                  type="button"
+                  onClick={saveComparison}
+                  disabled={saving}
+                  className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? (
+                    <RefreshCw
+                      className="h-3.5 w-3.5 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Save comparison
+                </button>
+              </div>
             </div>
           </div>
         )}

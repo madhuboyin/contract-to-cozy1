@@ -36,6 +36,7 @@ import {
   saveRefinanceLoanEstimateComparison,
 } from './refinanceLoanEstimateSnapshot.service';
 import { extractLoanEstimateFromPdf } from './refinanceLoanEstimateExtraction.service';
+import { buildRefinanceLoanEstimateComparisonMarkdown } from './refinanceLoanEstimateMarkdown';
 
 const service = new RefinanceRadarService();
 
@@ -109,6 +110,50 @@ export class RefinanceRadarController {
       });
 
       res.json({ success: true, data: { comparison } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async exportLoanEstimateComparisonMarkdown(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId } = req.params;
+      const body = req.body as CompareLoanEstimatesBody;
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { address: true, city: true, state: true, zipCode: true },
+      });
+      const propertyLabel = property
+        ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`
+        : `Property ${propertyId}`;
+      const markdown = buildRefinanceLoanEstimateComparisonMarkdown({
+        propertyLabel,
+        generatedAt: new Date(),
+        offers: body.offers,
+      });
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_loan_estimate_markdown_exported',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'loan_estimate_comparison',
+        metadataJson: { offerCount: body.offers.length },
+      });
+
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="mortgage-refinance-loan-estimate-comparison-${propertyId}.md"`,
+      );
+      res.status(200).send(markdown);
     } catch (err) {
       next(err);
     }

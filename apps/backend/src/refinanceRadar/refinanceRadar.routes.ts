@@ -212,6 +212,14 @@ router.post(
 );
 
 router.post(
+  '/properties/:propertyId/refinance-radar/loan-estimates/export-markdown',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(compareLoanEstimatesSchema),
+  RefinanceRadarController.exportLoanEstimateComparisonMarkdown,
+);
+
+router.post(
   '/properties/:propertyId/refinance-radar/loan-estimates/extract',
   authenticate,
   propertyAuthMiddleware,

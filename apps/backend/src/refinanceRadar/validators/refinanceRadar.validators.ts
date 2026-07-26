@@ -95,6 +95,7 @@ const loanEstimateOfferSchema = z
   .object({
     id: z.string().trim().min(1).max(80),
     lenderName: z.string().trim().min(1).max(120),
+    loanAmountUsd: z.number().positive().max(10_000_000),
     loanTermYears: z.number().int().min(5).max(50),
     loanType: z.enum(['FIXED', 'ARM', 'OTHER']),
     noteRatePct: z.number().positive().max(30),

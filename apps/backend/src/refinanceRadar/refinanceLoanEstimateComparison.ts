@@ -1,6 +1,7 @@
 export interface RefinanceLoanEstimateInput {
   id: string;
   lenderName: string;
+  loanAmountUsd: number;
   loanTermYears: number;
   loanType: 'FIXED' | 'ARM' | 'OTHER';
   noteRatePct: number;
@@ -151,6 +152,12 @@ export function compareRefinanceLoanEstimates(
   ) {
     summary.push(
       'These offers do not all use the same loan type and term. Treat payment and total-cost differences as tradeoffs, not an apples-to-apples ranking.',
+    );
+  }
+  const loanAmounts = offers.map((offer) => offer.loanAmountUsd);
+  if (Math.max(...loanAmounts) - Math.min(...loanAmounts) >= 1) {
+    summary.push(
+      'These offers use different loan amounts. Payment, APR, cash-to-close, and five-year cost are not directly comparable until each lender prices the same requested principal.',
     );
   }
 

@@ -304,6 +304,7 @@ export type RefinanceAlertPreferenceDTO = {
 export type RefinanceLoanEstimateInput = {
   id: string;
   lenderName: string;
+  loanAmountUsd: number;
   loanTermYears: number;
   loanType: 'FIXED' | 'ARM' | 'OTHER';
   noteRatePct: number;
@@ -358,6 +359,7 @@ export type LoanEstimateExtractedField<T> = {
 
 export type RefinanceLoanEstimateExtraction = {
   fields: {
+    loanAmountUsd: LoanEstimateExtractedField<number>;
     loanTermYears: LoanEstimateExtractedField<number>;
     loanType: LoanEstimateExtractedField<'FIXED' | 'ARM' | 'OTHER'>;
     noteRatePct: LoanEstimateExtractedField<number>;
@@ -460,6 +462,22 @@ export async function compareRefinanceLoanEstimates(
     { offers },
   );
   return res.data.comparison as RefinanceLoanEstimateComparison;
+}
+
+export async function exportLoanEstimateComparisonMarkdown(
+  propertyId: string,
+  offers: RefinanceLoanEstimateInput[],
+): Promise<{ markdown: string; filename: string }> {
+  const response = await api.postText(
+    `/api/properties/${propertyId}/refinance-radar/loan-estimates/export-markdown`,
+    { offers },
+  );
+  return {
+    markdown: response.data,
+    filename:
+      response.filename ??
+      `mortgage-refinance-loan-estimate-comparison-${propertyId}.md`,
+  };
 }
 
 export async function extractRefinanceLoanEstimate(

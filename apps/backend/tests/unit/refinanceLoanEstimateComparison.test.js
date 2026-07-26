@@ -9,6 +9,7 @@ function offer(overrides = {}) {
   return {
     id: 'offer-a',
     lenderName: 'Lender A',
+    loanAmountUsd: 300000,
     loanTermYears: 30,
     loanType: 'FIXED',
     noteRatePct: 5.75,
@@ -71,4 +72,16 @@ test('preserves an APR transcription warning instead of silently correcting it',
     offer({ id: 'offer-b', lenderName: 'Lender B' }),
   ]);
   assert.match(result.offers[0].cautions[0], /APR is below/i);
+});
+
+test('warns when lenders price different principal amounts', () => {
+  const result = compareRefinanceLoanEstimates([
+    offer(),
+    offer({
+      id: 'offer-b',
+      lenderName: 'Lender B',
+      loanAmountUsd: 310000,
+    }),
+  ]);
+  assert.ok(result.summary.some((line) => /different loan amounts/i.test(line)));
 });
