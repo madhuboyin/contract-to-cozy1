@@ -428,8 +428,18 @@ export function RadarDetailSheet({
   const openedMatchRef = React.useRef<string | null>(null);
   const actionsViewedMatchRef = React.useRef<string | null>(null);
   const autoSeenMatchRef = React.useRef<string | null>(null);
+  const openerRef = React.useRef<HTMLElement | null>(null);
+  const wasOpenRef = React.useRef(false);
   const [feedbackType, setFeedbackType] = React.useState<RadarFeedbackType | null>(null);
   const [feedbackComment, setFeedbackComment] = React.useState('');
+
+  React.useLayoutEffect(() => {
+    if (isOpen && !wasOpenRef.current && document.activeElement instanceof HTMLElement) {
+      const activeElement = document.activeElement;
+      openerRef.current = activeElement === document.body ? null : activeElement;
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -562,6 +572,12 @@ export function RadarDetailSheet({
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent
         side={isDesktop ? 'right' : 'bottom'}
+        onCloseAutoFocus={(event) => {
+          if (!openerRef.current?.isConnected) return;
+          event.preventDefault();
+          openerRef.current.focus({ preventScroll: true });
+          openerRef.current = null;
+        }}
         className={cn(
           'overflow-y-auto px-0 pt-0',
           isDesktop
@@ -703,6 +719,7 @@ export function RadarDetailSheet({
                       </label>
                       <textarea
                         id={`radar-feedback-comment-${item.propertyMatchId}`}
+                        aria-describedby={`radar-feedback-comment-count-${item.propertyMatchId}`}
                         value={feedbackComment}
                         maxLength={500}
                         rows={3}
@@ -713,7 +730,10 @@ export function RadarDetailSheet({
                         className="mt-1 w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm text-[hsl(var(--mobile-text-primary))]"
                         placeholder="Add context without including sensitive information"
                       />
-                      <p className="mb-0 mt-1 text-right text-[11px] text-[hsl(var(--mobile-text-muted))]">
+                      <p
+                        id={`radar-feedback-comment-count-${item.propertyMatchId}`}
+                        className="mb-0 mt-1 text-right text-[11px] text-[hsl(var(--mobile-text-muted))]"
+                      >
                         {feedbackComment.length}/500
                       </p>
                     </div>

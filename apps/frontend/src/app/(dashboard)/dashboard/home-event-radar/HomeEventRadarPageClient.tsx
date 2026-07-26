@@ -239,7 +239,11 @@ function FilterChips({
 }) {
   return (
     <ScrollFadeX fromColor="from-white">
-    <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto no-scrollbar pb-0.5">
+    <div
+      role="group"
+      aria-label="Event category"
+      className="flex snap-x snap-mandatory gap-2 overflow-x-auto no-scrollbar pb-0.5"
+    >
       {options.map((opt) => (
         <button
           key={opt.key}
@@ -250,7 +254,7 @@ function FilterChips({
           title={opt.disabled && opt.status ? `${opt.label}: ${opt.status}` : undefined}
           onClick={() => onChange(opt.key)}
           className={cn(
-            'snap-start shrink-0 inline-flex items-center rounded-full border px-3 py-1.5 transition-colors',
+            'snap-start min-h-[44px] shrink-0 inline-flex items-center rounded-full border px-3 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--mobile-brand-strong))]/60 focus-visible:ring-offset-2',
             MOBILE_TYPE_TOKENS.chip,
             active === opt.key
               ? 'border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] text-[hsl(var(--mobile-brand-strong))] font-semibold'
@@ -275,7 +279,7 @@ function ViewChips({
 }) {
   return (
     <ScrollFadeX fromColor="from-white">
-      <div aria-label="Event timing" className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+      <div role="group" aria-label="Event timing" className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
         {VIEW_OPTIONS.map((option) => (
           <button
             key={option.key}
@@ -283,7 +287,7 @@ function ViewChips({
             aria-pressed={active === option.key}
             onClick={() => onChange(option.key)}
             className={cn(
-              'min-h-[36px] shrink-0 rounded-full border px-3 py-1.5',
+              'min-h-[44px] shrink-0 rounded-full border px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--mobile-brand-strong))]/60 focus-visible:ring-offset-2',
               MOBILE_TYPE_TOKENS.chip,
               active === option.key
                 ? 'border-slate-300 bg-slate-900 font-semibold text-white'
@@ -317,6 +321,7 @@ function RadarEmptyState({
 
   return (
     <EmptyStateCard
+      titleAsHeading
       title={copy.title}
       description={copy.description}
       action={
@@ -354,7 +359,7 @@ function RadarMonitoringNotice({
   if (isError || !overview) {
     return (
       <MobileSection>
-        <div className={cn(MOBILE_CARD_RADIUS, 'border border-amber-200 bg-amber-50 p-4')}>
+        <div role="alert" className={cn(MOBILE_CARD_RADIUS, 'border border-amber-200 bg-amber-50 p-4')}>
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
             <div>
@@ -382,7 +387,7 @@ function RadarMonitoringNotice({
 
   return (
     <MobileSection>
-      <div className={cn(MOBILE_CARD_RADIUS, 'border p-4', toneClass)}>
+      <div role="status" className={cn(MOBILE_CARD_RADIUS, 'border p-4', toneClass)}>
         <div className="flex items-start gap-3">
           {overview.monitoringState === 'ACTIVE' ? (
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
@@ -414,6 +419,8 @@ function RadarCoverageNotice({ coverage }: { coverage: RadarCategoryCoverage[] }
   return (
     <MobileSection>
       <div
+        role="region"
+        aria-label="Current source availability"
         className={cn(
           MOBILE_CARD_RADIUS,
           'border border-[hsl(var(--mobile-border-subtle))] bg-white p-4'
@@ -472,7 +479,7 @@ function DismissedNotice({
       type="button"
       onClick={onShow}
       className={cn(
-        'w-full text-left rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3.5 py-2.5',
+        'min-h-[44px] w-full text-left rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3.5 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--mobile-brand-strong))]/60 focus-visible:ring-offset-2',
         MOBILE_TYPE_TOKENS.caption,
         'text-[hsl(var(--mobile-text-secondary))]'
       )}
@@ -820,6 +827,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
           </Link>
         </MobileSection>
         <EmptyStateCard
+          titleAsHeading
           title="Select a property"
           description="Home Event Radar requires a selected property to show matched events."
           action={
@@ -948,6 +956,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
               <RadarFeedSkeleton count={4} />
             ) : feedQuery.isError ? (
               <EmptyStateCard
+                titleAsHeading
                 title="Unable to load events"
                 description="There was a problem loading your event feed. Pull to refresh or try again."
                 action={

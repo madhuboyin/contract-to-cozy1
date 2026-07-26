@@ -61,7 +61,7 @@ export function RadarFeedItem({ item, onClick }: Props) {
         'border bg-[hsl(var(--mobile-card-bg))]',
         'border-[hsl(var(--mobile-border-subtle))]',
         'shadow-[0_10px_30px_rgba(15,23,42,0.05)]',
-        'p-4 transition-all active:scale-[0.99]',
+        'p-4 transition-all active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--mobile-brand-strong))]/60 focus-visible:ring-offset-2',
         isDismissed && 'opacity-50',
         isNew && 'border-l-2 border-l-[hsl(var(--mobile-brand-strong))]'
       )}

@@ -1156,14 +1156,24 @@ export function EmptyStateCard({
   title,
   description,
   action,
+  titleAsHeading = false,
 }: {
   title: string;
   description: string;
   action?: React.ReactNode;
+  titleAsHeading?: boolean;
 }) {
   return (
     <MobileCard variant="compact" className="text-center">
-      <p className={cn('mb-1 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>{title}</p>
+      {titleAsHeading ? (
+        <h3 className={cn('mb-1 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>
+          {title}
+        </h3>
+      ) : (
+        <p className={cn('mb-1 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>
+          {title}
+        </p>
+      )}
       <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>{description}</p>
       {action ? <div className="mt-3">{action}</div> : null}
     </MobileCard>

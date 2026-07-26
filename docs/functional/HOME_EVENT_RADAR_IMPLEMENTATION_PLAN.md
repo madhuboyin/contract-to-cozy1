@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-407 implemented |
+| Status | In progress — HER-408 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -51,7 +51,8 @@
 | HER-405 Event detail | Complete | The canonical detail projection and sheet expose official source evidence, revision timing, geography, impact/confidence factors, missing-fact correction paths, systems, safe actions, Incident/Guidance continuity, and explicit retryable errors |
 | HER-406 Deep links | Complete | URL-backed timing/family/match state restores exact property events; card history, invalid/missing match recovery, Unified Home, Guidance, worker notification, and property-route preservation use canonical links |
 | HER-407 State and feedback | Complete; DB application pending | Property-authorized idempotent personal-state writes persist seen/save/dismiss/addressed transitions, explicitly restore dismissed matches, audit transitions, and capture one bounded structured feedback response per user/match |
-| HER-408+ | Not started | Frontend accessibility acceptance, actions, notifications, additional sources, and operations remain |
+| HER-408 Frontend acceptance | Complete | Fixture-gated production route exercises the real page and API client across Chromium, Firefox, WebKit, Pixel, and iPhone profiles; monitoring states, filters, pagination, detail, deep links, retries, state/feedback, and accessibility semantics are automated |
+| HER-500+ | Not started | Actions, notifications, Guidance, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1273,12 +1274,33 @@ Automate:
 - feedback;
 - unsupported category hidden/unavailable.
 
+**Implemented:** a fixture-gated production acceptance route renders the real
+`HomeEventRadarPageClient`, property context, query cache, API client, event cards, and detail
+sheet. The gate returns Not Found unless `HOME_EVENT_RADAR_ACCEPTANCE_FIXTURE=1`; deterministic
+browser interception supplies canonical overview, feed, detail, state, feedback, CSRF, and
+analytics responses without adding a production mock path. The runner builds a standalone
+production bundle with its loopback API on the same origin.
+
+Chromium acceptance covers all five monitoring states and their truthful zero-feed copy,
+authoritative server filters and totals, stable cursor pagination, unavailable source categories,
+deep-link restoration and close behavior, explicit overview/detail errors and retries, match-scoped
+state/restore/feedback writes, and non-fabricated detail evidence. Chromium, Firefox, and WebKit
+all exercise the keyboard-operated card/detail flow and return focus to the opening card. Pixel
+and iPhone profiles verify no horizontal overflow, settled full-width bottom-sheet geometry,
+44-pixel controls, feedback semantics, and the bounded comment field. Filter groups and monitoring
+and source-availability regions now expose explicit accessible roles/names; empty-state titles are
+headings and error/success messages use alert/status semantics. No database schema change or
+migration script is required.
+
 **Phase 4 exit gate**
 
 - screenshot-observed zero feed becomes a truthful covered/uncovered/degraded state;
 - all counts and filters are server authoritative;
 - no detail error is silently presented as valid fallback content;
 - supported browsers/mobile acceptance passes.
+
+**Exit gate: met.** The production acceptance matrix passes with full Chromium behavioral
+coverage, Firefox/WebKit core keyboard and detail semantics, and Chrome/WebKit mobile coverage.
 
 ---
 
