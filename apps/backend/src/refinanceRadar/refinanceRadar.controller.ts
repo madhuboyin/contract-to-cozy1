@@ -36,7 +36,7 @@ import {
   listSavedRefinanceLoanEstimateComparisons,
   saveRefinanceLoanEstimateComparison,
 } from './refinanceLoanEstimateSnapshot.service';
-import { extractLoanEstimateFromPdf } from './refinanceLoanEstimateExtraction.service';
+import { extractLoanEstimateFromUpload } from './refinanceLoanEstimateExtraction.service';
 import { buildRefinanceLoanEstimateComparisonMarkdown } from './refinanceLoanEstimateMarkdown';
 
 const service = new RefinanceRadarService();
@@ -63,7 +63,10 @@ export class RefinanceRadarController {
           'LOAN_ESTIMATE_FILE_REQUIRED',
         );
       }
-      const extraction = await extractLoanEstimateFromPdf(req.file.buffer);
+      const extraction = await extractLoanEstimateFromUpload(
+        req.file.buffer,
+        req.file.mimetype,
+      );
       analyticsEmitter.track({
         eventType: AnalyticsEvent.ACTION_COMPLETED,
         eventName: 'refinance_loan_estimate_extracted',
@@ -76,6 +79,7 @@ export class RefinanceRadarController {
           extractedFieldCount: extraction.extractedFieldCount,
           requiredFieldsFound: extraction.requiredFieldsFound,
           textLayerDetected: extraction.textLayerDetected,
+          extractionMethod: extraction.extractionMethod,
         },
       });
       res.json({ success: true, data: { extraction } });

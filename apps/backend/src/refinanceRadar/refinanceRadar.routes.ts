@@ -13,7 +13,7 @@ import {
   apiRateLimiter,
   uploadRateLimiter,
 } from '../middleware/rateLimiter.middleware';
-import { validatePdfUpload } from '../utils/documentValidator.util';
+import { validatePdfOrImageUpload } from '../utils/documentValidator.util';
 import { RefinanceRadarController } from './refinanceRadar.controller';
 import {
   compareLoanEstimatesSchema,
@@ -32,10 +32,20 @@ const loanEstimateUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, callback) => {
-    if (file.mimetype === 'application/pdf') {
+    if (
+      [
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+      ].includes(file.mimetype)
+    ) {
       callback(null, true);
     } else {
-      callback(new Error('Only PDF Loan Estimates are accepted.'));
+      callback(
+        new Error('Only PDF, JPEG, PNG, or WEBP Loan Estimates are accepted.'),
+      );
     }
   },
 });
@@ -225,7 +235,7 @@ router.post(
   propertyAuthMiddleware,
   uploadRateLimiter,
   loanEstimateUpload.single('file'),
-  validatePdfUpload,
+  validatePdfOrImageUpload,
   RefinanceRadarController.extractLoanEstimate,
 );
 

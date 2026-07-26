@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   extractLoanEstimateFieldsFromText,
+  extractLoanEstimateFieldsFromOcrText,
 } = require('../../dist/refinanceRadar/refinanceLoanEstimateExtraction.service');
 
 const sample = `
@@ -76,4 +77,13 @@ test('supports PDF text layers that place values before labels', () => {
   assert.equal(result.fields.lenderCreditsUsd.value, 1250);
   assert.equal(result.fields.cashToCloseUsd.value, 12054);
   assert.equal(result.fields.aprPct.confidence, 'MEDIUM');
+});
+
+test('caps OCR-derived fields at medium confidence and identifies the method', () => {
+  const result = extractLoanEstimateFieldsFromOcrText(sample, 87.5);
+  assert.equal(result.extractionMethod, 'IMAGE_OCR');
+  assert.equal(result.documentConfidencePct, 87.5);
+  assert.equal(result.fields.loanAmountUsd.confidence, 'MEDIUM');
+  assert.match(result.fields.loanAmountUsd.sourceLabel, /OCR/);
+  assert.ok(result.warnings.some((warning) => /OCR can confuse/i.test(warning)));
 });

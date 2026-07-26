@@ -307,8 +307,16 @@ export function LoanEstimateComparisonCard({
 
   async function extractPdf(file: File | null) {
     if (!file) return;
-    if (file.type !== 'application/pdf') {
-      setError('Choose a PDF Loan Estimate.');
+    if (
+      ![
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+      ].includes(file.type)
+    ) {
+      setError('Choose a PDF, JPEG, PNG, or WEBP Loan Estimate.');
       return;
     }
     setExtracting(true);
@@ -498,15 +506,16 @@ export function LoanEstimateComparisonCard({
                 Prefill from a Loan Estimate PDF
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-blue-800 dark:text-blue-300">
-                The PDF is read in memory and is not retained. Text-layer PDFs
-                only; every value requires your review.
+                The file is read in memory and is not retained. PDFs use their
+                text layer; JPEG, PNG, and WEBP pages use local OCR. Every value
+                requires your review.
               </p>
             </div>
             <label className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-lg border border-blue-300 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300">
-              {extracting ? 'Reading PDF…' : 'Choose PDF'}
+              {extracting ? 'Reading document…' : 'Choose PDF or image'}
               <input
                 type="file"
-                accept="application/pdf,.pdf"
+                accept="application/pdf,.pdf,image/jpeg,image/png,image/webp"
                 disabled={extracting}
                 className="sr-only"
                 onChange={(event) => {
@@ -523,6 +532,16 @@ export function LoanEstimateComparisonCard({
                 <FileCheck2 className="h-3.5 w-3.5" aria-hidden="true" />
                 {uploadedFileName} — {extraction.requiredFieldsFound}/
                 {extraction.requiredFieldCount} required fields found
+              </p>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                Method:{' '}
+                {extraction.extractionMethod === 'IMAGE_OCR'
+                  ? `Image OCR${
+                      extraction.documentConfidencePct == null
+                        ? ''
+                        : ` · document confidence ${extraction.documentConfidencePct.toFixed(0)}%`
+                    }`
+                  : 'PDF text layer'}
               </p>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {Object.entries(extraction.fields).map(([key, field]) => (

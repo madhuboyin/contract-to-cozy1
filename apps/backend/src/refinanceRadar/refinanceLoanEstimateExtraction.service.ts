@@ -26,6 +26,8 @@ export interface RefinanceLoanEstimateExtraction {
   requiredFieldCount: number;
   requiredFieldsFound: number;
   textLayerDetected: boolean;
+  extractionMethod: 'PDF_TEXT' | 'IMAGE_OCR';
+  documentConfidencePct: number | null;
   reviewRequired: true;
   warnings: string[];
 }
@@ -238,7 +240,50 @@ export function extractLoanEstimateFieldsFromText(
     requiredFieldCount: requiredKeys.length,
     requiredFieldsFound,
     textLayerDetected,
+    extractionMethod: 'PDF_TEXT',
+    documentConfidencePct: null,
     reviewRequired: true,
+    warnings,
+  };
+}
+
+export function extractLoanEstimateFieldsFromOcrText(
+  rawText: string,
+  documentConfidencePct: number | null,
+): RefinanceLoanEstimateExtraction {
+  const extraction = extractLoanEstimateFieldsFromText(rawText);
+  const fields = Object.fromEntries(
+    Object.entries(extraction.fields).map(([key, field]) => [
+      key,
+      {
+        ...field,
+        confidence:
+          field.confidence === 'HIGH' ? 'MEDIUM' : field.confidence,
+        sourceLabel:
+          field.value == null ? field.sourceLabel : `${field.sourceLabel} — OCR`,
+      },
+    ]),
+  ) as unknown as RefinanceLoanEstimateExtraction['fields'];
+  const warnings = [
+    'OCR can confuse digits, punctuation, and column order. Verify every populated value against the image.',
+    ...extraction.warnings.filter(
+      (warning) => !/PDF does not appear|OCR is not enabled/i.test(warning),
+    ),
+  ];
+  if (rawText.trim().length < 100) {
+    warnings.push(
+      'The image did not produce enough readable text. Try a clearer, straight-on image or enter the fields manually.',
+    );
+  }
+  return {
+    ...extraction,
+    fields,
+    textLayerDetected: false,
+    extractionMethod: 'IMAGE_OCR',
+    documentConfidencePct:
+      documentConfidencePct == null
+        ? null
+        : Math.max(0, Math.min(100, documentConfidencePct)),
     warnings,
   };
 }
@@ -257,4 +302,61 @@ export async function extractLoanEstimateFromPdf(
       'LOAN_ESTIMATE_PDF_UNREADABLE',
     );
   }
+}
+
+export async function extractLoanEstimateFromImage(
+  buffer: Buffer,
+): Promise<RefinanceLoanEstimateExtraction> {
+  try {
+    let preprocessed = buffer;
+    try {
+      const { default: sharp } = await import('sharp');
+      preprocessed = await sharp(buffer, { failOn: 'none' })
+        .rotate()
+        .resize({ width: 2400, withoutEnlargement: false })
+        .grayscale()
+        .normalize()
+        .sharpen({ sigma: 1 })
+        .png({ compressionLevel: 9 })
+        .toBuffer();
+    } catch {
+      // Tesseract can read JPEG and PNG buffers directly. Image
+      // preprocessing improves recognition but must not be a hard dependency
+      // for the review-first intake path.
+    }
+    const { createWorker } = await import('tesseract.js');
+    const worker: any = await createWorker('eng');
+    try {
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',
+        preserve_interword_spaces: '1',
+        user_defined_dpi: '300',
+      });
+      const result = await worker.recognize(preprocessed);
+      return extractLoanEstimateFieldsFromOcrText(
+        String(result?.data?.text ?? ''),
+        typeof result?.data?.confidence === 'number'
+          ? result.data.confidence
+          : null,
+      );
+    } finally {
+      await worker.terminate();
+    }
+  } catch (error) {
+    if (error instanceof APIError) throw error;
+    throw new APIError(
+      'The Loan Estimate image could not be read. Try a clear PNG, JPEG, or WEBP image or enter the values manually.',
+      422,
+      'LOAN_ESTIMATE_IMAGE_UNREADABLE',
+    );
+  }
+}
+
+export async function extractLoanEstimateFromUpload(
+  buffer: Buffer,
+  mimeType: string,
+): Promise<RefinanceLoanEstimateExtraction> {
+  return mimeType === 'application/pdf'
+    ? extractLoanEstimateFromPdf(buffer)
+    : extractLoanEstimateFromImage(buffer);
 }

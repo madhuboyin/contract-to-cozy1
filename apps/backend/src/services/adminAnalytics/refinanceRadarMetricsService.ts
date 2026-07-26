@@ -240,6 +240,11 @@ export function aggregateRefinanceRadarMetrics(input: RefinanceRadarMetricsInput
       loanEstimateDocumentsExtracted: eventCount(
         'refinance_loan_estimate_extracted',
       ),
+      loanEstimateImageOcrExtractions: input.analyticsEvents.filter(
+        (event) =>
+          event.eventName === 'refinance_loan_estimate_extracted' &&
+          record(event.metadataJson).extractionMethod === 'IMAGE_OCR',
+      ).length,
       loanEstimateMarkdownExports: eventCount(
         'refinance_loan_estimate_markdown_exported',
       ),
