@@ -1,6 +1,15 @@
 import { prisma } from '../../../config/database';
 import { APIError } from '../../../middleware/error.middleware';
 import { getProtectionContextDecisions } from '../../../services/protection/context';
+import {
+  buildRadarFeedCursorWhere,
+  decodeRadarFeedCursor,
+  encodeRadarFeedCursor,
+  radarFeedOrderingTuple,
+  RADAR_FEED_LIFECYCLE_ORDER,
+  RADAR_FEED_ORDER_BY,
+  RadarFeedCursorError,
+} from '../domain/radarFeedCursor';
 
 export type RadarMonitoringState =
   | 'ACTIVE'
@@ -124,11 +133,16 @@ function deriveFeedState(
   return 'UNCOVERED';
 }
 
-function visibleMatchWhere(propertyId: string, now: Date): Record<string, unknown> {
+function visibleMatchWhere(
+  propertyId: string,
+  now: Date,
+  snapshotAt?: Date,
+): Record<string, unknown> {
   return {
     propertyId,
     isVisible: true,
-    lifecycleStatus: { not: 'no_longer_applicable' },
+    lifecycleStatus: { in: RADAR_FEED_LIFECYCLE_ORDER },
+    ...(snapshotAt ? { createdAt: { lte: snapshotAt } } : {}),
     AND: [
       { OR: [{ visibleFrom: null }, { visibleFrom: { lte: now } }] },
       { OR: [{ visibleUntil: null }, { visibleUntil: { gt: now } }] },
@@ -372,16 +386,27 @@ export class RadarQueryService {
     options: FeedOptions = {},
   ): Promise<Record<string, unknown>> {
     await this.requireProperty(propertyId);
-    const now = this.clock();
     const limit = Math.min(Math.max(options.limit ?? 40, 1), 100);
-    const base = visibleMatchWhere(propertyId, now);
+    const scope = { propertyId, state: options.state ?? null };
+    let cursor;
+    try {
+      cursor = options.cursor ? decodeRadarFeedCursor(options.cursor, scope) : null;
+    } catch (error) {
+      if (error instanceof RadarFeedCursorError) {
+        throw new APIError(error.message, 400, 'RADAR_CURSOR_INVALID');
+      }
+      throw error;
+    }
+    const snapshotAt = cursor ? new Date(cursor.snapshotAt) : this.clock();
+    const base = visibleMatchWhere(propertyId, snapshotAt, snapshotAt);
     const selectedState = stateFilter(userId, options.state);
+    const cursorWhere = cursor ? buildRadarFeedCursorWhere(cursor) : null;
     const where: Record<string, unknown> = {
-      ...base,
-      ...(selectedState ?? {}),
-      ...(options.cursor ? { id: { lt: options.cursor } } : {}),
+      AND: [base, ...(selectedState ? [selectedState] : []), ...(cursorWhere ? [cursorWhere] : [])],
     };
-    const countWhere: Record<string, unknown> = { ...base, ...(selectedState ?? {}) };
+    const countWhere: Record<string, unknown> = {
+      AND: [base, ...(selectedState ? [selectedState] : [])],
+    };
 
     const [matches, totalCount, overallVisibleCount, coverage] = await Promise.all([
       this.db.propertyRadarMatch.findMany({
@@ -400,37 +425,39 @@ export class RadarQueryService {
           },
           states: { where: { userId }, take: 1 },
         },
-        orderBy: [
-          { priorityScore: 'desc' },
-          { visibleFrom: 'asc' },
-          { createdAt: 'desc' },
-          { id: 'desc' },
-        ],
+        orderBy: RADAR_FEED_ORDER_BY,
         take: limit + 1,
       }),
       this.db.propertyRadarMatch.count({ where: countWhere }),
       selectedState
         ? this.db.propertyRadarMatch.count({ where: base })
-        : this.db.propertyRadarMatch.count({ where: countWhere }),
+        : this.db.propertyRadarMatch.count({ where: base }),
       this.getCoverage(propertyId),
     ]);
 
     const hasNextPage = matches.length > limit;
     const page = hasNextPage ? matches.slice(0, limit) : matches;
     const items = page.map((match: any) => serializeFeedItem(match, match.states?.[0]));
+    const lastMatch = page.at(-1);
     return {
       propertyId,
       items,
       pageInfo: {
         hasNextPage,
-        endCursor: hasNextPage ? String(page.at(-1)?.id) : null,
+        endCursor: lastMatch
+          ? encodeRadarFeedCursor(
+              radarFeedOrderingTuple(lastMatch),
+              scope,
+              snapshotAt.toISOString(),
+            )
+          : null,
       },
       totalCount,
       feedState: deriveFeedState(
         overallVisibleCount,
         coverage.monitoringState as RadarMonitoringState,
       ),
-      asOf: now.toISOString(),
+      asOf: snapshotAt.toISOString(),
     };
   }
 

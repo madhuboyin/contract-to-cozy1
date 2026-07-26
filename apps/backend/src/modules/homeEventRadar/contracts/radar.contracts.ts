@@ -411,6 +411,11 @@ export const radarFeedStateSchema = z.enum([
   'UNCOVERED',
 ]);
 
+export const radarFeedCursorSchema = z.string()
+  .min(1)
+  .max(2_048)
+  .regex(/^[A-Za-z0-9_-]+$/);
+
 export const radarCategoryCoverageSchema = z.object({
   family: radarSourceFamilySchema,
   status: z.enum(['covered', 'not_covered', 'disabled', 'failed', 'stale', 'unknown']),
@@ -451,7 +456,7 @@ export const radarFeedResponseSchema = z.object({
   items: z.array(radarFeedItemSchema),
   pageInfo: z.object({
     hasNextPage: z.boolean(),
-    endCursor: z.string().min(1).nullable(),
+    endCursor: radarFeedCursorSchema.nullable(),
   }),
   totalCount: z.number().int().nonnegative(),
   feedState: radarFeedStateSchema,

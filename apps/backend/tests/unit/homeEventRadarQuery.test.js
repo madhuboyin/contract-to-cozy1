@@ -17,6 +17,9 @@ const {
   listRadarEventsRequestSchema,
   listRadarStateViewRequestSchema,
 } = require('../../src/validators/homeEventRadar.validators');
+const {
+  decodeRadarFeedCursor,
+} = require('../../src/modules/homeEventRadar/domain/radarFeedCursor');
 
 const NOW = new Date('2026-07-26T12:00:00.000Z');
 
@@ -228,7 +231,26 @@ test('feed uses persisted priority and freshness and reports total independently
   assert.equal(feed.items[0].severity, 'severe');
   assert.equal(feed.items[0].sourceFreshnessStatus, 'fresh');
   assert.equal(feed.totalCount, 9);
-  assert.deepEqual(feed.pageInfo, { hasNextPage: true, endCursor: 'match-1' });
+  assert.equal(feed.pageInfo.hasNextPage, true);
+  const cursor = decodeRadarFeedCursor(feed.pageInfo.endCursor, {
+    propertyId: 'property-1',
+    state: null,
+  });
+  assert.deepEqual({
+    lifecycleStatus: cursor.lifecycleStatus,
+    priorityBand: cursor.priorityBand,
+    priorityScore: cursor.priorityScore,
+    effectiveAt: cursor.effectiveAt,
+    id: cursor.id,
+    snapshotAt: cursor.snapshotAt,
+  }, {
+    lifecycleStatus: 'now',
+    priorityBand: 'low',
+    priorityScore: '12.5',
+    effectiveAt: '2026-07-26T14:00:00.000Z',
+    id: 'match-1',
+    snapshotAt: NOW.toISOString(),
+  });
   assert.equal(feed.feedState, 'HAS_EVENTS');
   assert.equal(radarFeedResponseSchema.safeParse(feed).success, true);
 });
@@ -261,7 +283,9 @@ test('state views apply server-side user-state predicates', async () => {
     { limit: 20 },
   );
 
-  assert.deepEqual(capturedWhere.states, { some: { userId: 'user-1', state: 'saved' } });
+  assert.deepEqual(capturedWhere.AND[1].states, {
+    some: { userId: 'user-1', state: 'saved' },
+  });
   assert.equal(result.feedState, 'HAS_EVENTS');
 });
 
@@ -307,5 +331,10 @@ test('canonical list and state-view requests validate real query and path values
     body: {},
     query: {},
     params: { propertyId: 'property-1', state: 'invented' },
+  }).success, false);
+  assert.equal(listRadarEventsRequestSchema.safeParse({
+    body: {},
+    query: { cursor: 'not a base64url cursor' },
+    params: { propertyId: 'property-1' },
   }).success, false);
 });

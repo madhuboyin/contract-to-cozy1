@@ -44,7 +44,8 @@
 | HER-306 Scheduled safety-net reconciliation | Complete; DB application pending | Hourly leased sweeps resume revision/property cursors, retry capped Radar dead letters, materialize missing/stale coverage, expire visibility/material markers, support dry-run/property smoke scope, and report structured partial/failure outcomes |
 | HER-307 Tax routing correction | Complete; DB application pending | Coverage-type-aware city/county-FIPS/state routing, one-load source caching, validated and timeout-bound Socrata queries, address-confidence evidence, finite TTL, durable canonical ingestion, structured outcomes, dry-run/property scope, and an explicit disabled-until-pilot gate are implemented |
 | HER-400 Query service | Complete | Canonical property-scoped overview, coverage, authoritative counts, feed, pure-read detail, and user-state views consume materialized Radar projections without synchronous source refresh or reprioritization |
-| HER-401+ | Not started | Stable composite-cursor pagination, server-backed filters, coverage-aware UI, actions, notifications, accessibility, and operations remain |
+| HER-401 Stable pagination | Complete | Versioned property/state-bound base64url cursors encode the snapshot plus lifecycle, priority band/score, effective time, and ID; typed keyset predicates and concurrent-insert fixtures prove deterministic page boundaries |
+| HER-402+ | Not started | Server-backed filters, coverage-aware UI, actions, notifications, accessibility, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1094,8 +1095,8 @@ must already be materialized.
 coverage, authoritative lifecycle/user-state counts, event feed, event detail, and state views.
 These endpoints coexist with the legacy feed/detail API until HER-403 migrates the page. Canonical
 GETs do not refresh sources, recompute priority or freshness, create action records, or implicitly
-change user state. The temporary ID-only continuation cursor is explicitly superseded by the
-composite ordering cursor required in HER-401.
+change user state. HER-401 superseded the temporary ID-only continuation cursor with the canonical
+composite ordering cursor.
 
 ### HER-401 — Stable server pagination
 
@@ -1109,6 +1110,14 @@ Recommended default order:
 4. ID deterministic tie-breaker.
 
 Cursor encodes every ordering column. Add concurrency fixtures proving no skip/duplicate.
+
+**Implemented:** feed and state-view pagination now use an opaque versioned base64url cursor bound
+to the property and user-state view. It carries the first-page snapshot time plus lifecycle group,
+priority band, exact persisted priority score, canonical event effective time, and match ID. Query
+evaluation reuses the snapshot time and excludes later-created rows, while typed keyset predicates
+mirror the database ordering exactly. Boundary, malformed/scope-mismatch, tie-breaker, last-page,
+and concurrent-insert fixtures cover skip/duplicate behavior. Cursor decoding failures return the
+stable `RADAR_CURSOR_INVALID` client error.
 
 ### HER-402 — Server-backed filters and totals
 

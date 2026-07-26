@@ -116,7 +116,12 @@ export const listRadarFeedQuerySchema = z.object({
  */
 export const listRadarEventsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(40),
-  cursor: z.string().trim().min(1).optional(),
+  cursor: z.string()
+    .trim()
+    .min(1)
+    .max(2_048)
+    .regex(/^[A-Za-z0-9_-]+$/, 'cursor must use base64url encoding')
+    .optional(),
   state: z.enum(PROPERTY_RADAR_USER_STATES).optional(),
 });
 
