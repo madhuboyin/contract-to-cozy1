@@ -31,6 +31,8 @@ export interface RefinanceLoanEstimateExtraction {
     noteRatePct: LoanEstimateExtractedField<number>;
     aprPct: LoanEstimateExtractedField<number>;
     monthlyPrincipalAndInterestUsd: LoanEstimateExtractedField<number>;
+    monthlyMortgageInsuranceUsd: LoanEstimateExtractedField<number>;
+    estimatedTotalMonthlyPaymentUsd: LoanEstimateExtractedField<number>;
     loanCostsUsd: LoanEstimateExtractedField<number>;
     lenderCreditsUsd: LoanEstimateExtractedField<number>;
     discountPointsPct: LoanEstimateExtractedField<number>;
@@ -323,6 +325,22 @@ export function extractLoanEstimateFieldsFromText(
       ],
       'Loan Terms — Monthly Principal & Interest',
     ),
+    monthlyMortgageInsuranceUsd: matchNumber(
+      text,
+      [
+        /Mortgage\s+Insurance[ \t:+$]*\$?[ \t]*([\d,]+(?:\.\d{1,2})?)/i,
+        /\$?[ \t]*([\d,]+(?:\.\d{1,2})?)[ \t]+Mortgage\s+Insurance/i,
+      ],
+      'Projected Payments — Mortgage Insurance',
+    ),
+    estimatedTotalMonthlyPaymentUsd: matchNumber(
+      text,
+      [
+        /Estimated\s+Total\s+(?:Monthly\s+)?Payment[ \t:$]*\$?[ \t]*([\d,]+(?:\.\d{1,2})?)/i,
+        /\$?[ \t]*([\d,]+(?:\.\d{1,2})?)[ \t]+Estimated\s+Total\s+(?:Monthly\s+)?Payment/i,
+      ],
+      'Projected Payments — Estimated Total Payment',
+    ),
     loanCostsUsd: matchNumber(
       text,
       [
@@ -443,6 +461,8 @@ const EXTRACTION_FIELD_LABELS: Record<
   noteRatePct: 'interest rate',
   aprPct: 'APR',
   monthlyPrincipalAndInterestUsd: 'monthly principal and interest',
+  monthlyMortgageInsuranceUsd: 'monthly mortgage insurance',
+  estimatedTotalMonthlyPaymentUsd: 'estimated total monthly payment',
   loanCostsUsd: 'total loan costs',
   lenderCreditsUsd: 'lender credits',
   discountPointsPct: 'discount-points percentage',

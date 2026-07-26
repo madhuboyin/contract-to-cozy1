@@ -310,6 +310,8 @@ export type RefinanceLoanEstimateInput = {
   noteRatePct: number;
   aprPct: number;
   monthlyPrincipalAndInterestUsd: number;
+  monthlyMortgageInsuranceUsd?: number;
+  estimatedTotalMonthlyPaymentUsd?: number;
   loanCostsUsd: number;
   lenderCreditsUsd: number;
   discountPointsPct?: number;
@@ -325,6 +327,7 @@ export type RefinanceLoanEstimateInput = {
 export type LoanEstimateMetric =
   | 'APR'
   | 'MONTHLY_PRINCIPAL_AND_INTEREST'
+  | 'ESTIMATED_TOTAL_MONTHLY_PAYMENT'
   | 'NET_LOAN_COSTS'
   | 'CASH_TO_CLOSE'
   | 'FIVE_YEAR_BORROWING_COST';
@@ -380,6 +383,8 @@ export type RefinanceLoanEstimateExtraction = {
     noteRatePct: LoanEstimateExtractedField<number>;
     aprPct: LoanEstimateExtractedField<number>;
     monthlyPrincipalAndInterestUsd: LoanEstimateExtractedField<number>;
+    monthlyMortgageInsuranceUsd: LoanEstimateExtractedField<number>;
+    estimatedTotalMonthlyPaymentUsd: LoanEstimateExtractedField<number>;
     loanCostsUsd: LoanEstimateExtractedField<number>;
     lenderCreditsUsd: LoanEstimateExtractedField<number>;
     discountPointsPct: LoanEstimateExtractedField<number>;

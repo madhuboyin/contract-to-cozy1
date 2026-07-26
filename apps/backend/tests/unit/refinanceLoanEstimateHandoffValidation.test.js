@@ -15,6 +15,8 @@ function offer(id) {
     noteRatePct: 5.75,
     aprPct: 5.95,
     monthlyPrincipalAndInterestUsd: 1900,
+    monthlyMortgageInsuranceUsd: 120,
+    estimatedTotalMonthlyPaymentUsd: 2420,
     loanCostsUsd: 8000,
     lenderCreditsUsd: 1000,
     discountPointsPct: 0.5,
@@ -104,6 +106,23 @@ test('rejects discount-point dollars that do not match the disclosed percentage'
           ...offer('b'),
           discountPointsPct: 1,
           discountPointsUsd: 500,
+        },
+      ],
+    }).success,
+    false,
+  );
+});
+
+test('rejects an estimated total payment below principal, interest, and mortgage insurance', () => {
+  assert.equal(
+    exportLoanEstimateHandoffSchema.safeParse({
+      ...validInput,
+      offers: [
+        offer('a'),
+        {
+          ...offer('b'),
+          estimatedTotalMonthlyPaymentUsd: 2000,
+          monthlyMortgageInsuranceUsd: 150,
         },
       ],
     }).success,

@@ -45,6 +45,8 @@ const HANDOFF_METRIC_LABELS: Record<LoanEstimateMetric, string> = {
   APR: 'lowest disclosed APR',
   MONTHLY_PRINCIPAL_AND_INTEREST:
     'lowest monthly principal-and-interest payment',
+  ESTIMATED_TOTAL_MONTHLY_PAYMENT:
+    'lowest estimated total monthly payment',
   NET_LOAN_COSTS: 'lowest net loan costs',
   CASH_TO_CLOSE: 'lowest cash to close',
   FIVE_YEAR_BORROWING_COST: 'lowest disclosed five-year borrowing cost',
@@ -66,6 +68,8 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
       `${offer.loanTermYears}-year ${offer.loanType.toLowerCase()} | ` +
       `${pct(offer.noteRatePct)} | ${pct(offer.aprPct)} | ` +
       `${money(offer.monthlyPrincipalAndInterestUsd)} | ` +
+      `${money(offer.estimatedTotalMonthlyPaymentUsd ?? null)} | ` +
+      `${money(offer.monthlyMortgageInsuranceUsd ?? null)} | ` +
       `${money(offer.netLoanCostsUsd)} | ${pointsLabel(offer)} | ` +
       `${money(offer.cashToCloseUsd)} | ` +
       `${money(offer.fiveYearBorrowingCostUsd)} |`,
@@ -94,8 +98,8 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     '',
     '## Side-by-side comparison',
     '',
-    '| Lender | Issued | Rate lock | Loan amount | Product | Note rate | APR | Monthly P&I | Net loan costs | Discount points | Cash to close | 5-year borrowing cost |',
-    '| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |',
+    '| Lender | Issued | Rate lock | Loan amount | Product | Note rate | APR | Monthly P&I | Estimated total payment | Monthly mortgage insurance | Net loan costs | Discount points | Cash to close | 5-year borrowing cost |',
+    '| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |',
     ...rows,
     '',
     'Five-year borrowing cost is calculated as the disclosed “In 5 years” total paid minus principal paid. Net loan costs are total loan costs minus lender credits.',
@@ -122,6 +126,7 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     '- [ ] Every offer uses the intended loan type and term.',
     '- [ ] Rate-lock status, expiration date, and any float-down option are confirmed.',
     '- [ ] APR, monthly principal and interest, and page-3 five-year values were copied from the same revision of each Loan Estimate.',
+    '- [ ] Estimated total payment, mortgage insurance, taxes, insurance, and escrow assumptions were compared separately from principal and interest.',
     '- [ ] Section A origination charges, points, lender credits, and total loan costs are understood.',
     '- [ ] Cash to close is separated from prepaid taxes, insurance, initial escrow, and payoff-related timing.',
     '- [ ] Mortgage insurance, balloon payment, prepayment penalty, and adjustable-rate features are confirmed.',
@@ -214,6 +219,8 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
     `- Note rate: ${pct(selected.noteRatePct)}`,
     `- Disclosed APR: ${pct(selected.aprPct)}`,
     `- Monthly principal and interest: ${money(selected.monthlyPrincipalAndInterestUsd)}`,
+    `- Estimated total monthly payment: ${money(selected.estimatedTotalMonthlyPaymentUsd ?? null)}`,
+    `- Monthly mortgage insurance: ${money(selected.monthlyMortgageInsuranceUsd ?? null)}`,
     `- Total loan costs: ${money(selected.loanCostsUsd)}`,
     `- Lender credits: ${money(selected.lenderCreditsUsd)}`,
     `- Discount points: ${pointsLabel(selected)}`,

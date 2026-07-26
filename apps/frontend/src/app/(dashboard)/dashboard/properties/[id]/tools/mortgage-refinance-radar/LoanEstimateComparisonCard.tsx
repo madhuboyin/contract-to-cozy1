@@ -37,6 +37,8 @@ type OfferDraft = {
   noteRatePct: string;
   aprPct: string;
   monthlyPrincipalAndInterestUsd: string;
+  monthlyMortgageInsuranceUsd: string;
+  estimatedTotalMonthlyPaymentUsd: string;
   loanCostsUsd: string;
   lenderCreditsUsd: string;
   discountPointsPct: string;
@@ -54,6 +56,7 @@ type OfferDraft = {
 const METRIC_LABELS: Record<LoanEstimateMetric, string> = {
   APR: 'Lowest APR',
   MONTHLY_PRINCIPAL_AND_INTEREST: 'Lowest P&I',
+  ESTIMATED_TOTAL_MONTHLY_PAYMENT: 'Lowest estimated total payment',
   NET_LOAN_COSTS: 'Lowest net costs',
   CASH_TO_CLOSE: 'Lowest cash to close',
   FIVE_YEAR_BORROWING_COST: 'Lowest 5-year cost',
@@ -71,6 +74,8 @@ function blankOffer(number: number): OfferDraft {
     noteRatePct: '',
     aprPct: '',
     monthlyPrincipalAndInterestUsd: '',
+    monthlyMortgageInsuranceUsd: '',
+    estimatedTotalMonthlyPaymentUsd: '',
     loanCostsUsd: '',
     lenderCreditsUsd: '',
     discountPointsPct: '',
@@ -96,6 +101,14 @@ function toDraft(offer: RefinanceLoanEstimateInput): OfferDraft {
     monthlyPrincipalAndInterestUsd: String(
       offer.monthlyPrincipalAndInterestUsd,
     ),
+    monthlyMortgageInsuranceUsd:
+      offer.monthlyMortgageInsuranceUsd == null
+        ? ''
+        : String(offer.monthlyMortgageInsuranceUsd),
+    estimatedTotalMonthlyPaymentUsd:
+      offer.estimatedTotalMonthlyPaymentUsd == null
+        ? ''
+        : String(offer.estimatedTotalMonthlyPaymentUsd),
     loanCostsUsd: String(offer.loanCostsUsd),
     lenderCreditsUsd: String(offer.lenderCreditsUsd),
     discountPointsPct:
@@ -164,6 +177,14 @@ function toInput(offer: OfferDraft): RefinanceLoanEstimateInput {
     offer.discountPointsUsd,
     'Discount points amount',
   );
+  const monthlyMortgageInsuranceUsd = optionalNumberValue(
+    offer.monthlyMortgageInsuranceUsd,
+    'Monthly mortgage insurance',
+  );
+  const estimatedTotalMonthlyPaymentUsd = optionalNumberValue(
+    offer.estimatedTotalMonthlyPaymentUsd,
+    'Estimated total monthly payment',
+  );
   if (Boolean(fiveYearTotal) !== Boolean(fiveYearPrincipal)) {
     throw new Error(
       `Enter both page 3 five-year values for ${offer.lenderName || 'each lender'}, or leave both blank.`,
@@ -181,6 +202,12 @@ function toInput(offer: OfferDraft): RefinanceLoanEstimateInput {
       offer.monthlyPrincipalAndInterestUsd,
       'Monthly principal and interest',
     ),
+    ...(monthlyMortgageInsuranceUsd != null
+      ? { monthlyMortgageInsuranceUsd }
+      : {}),
+    ...(estimatedTotalMonthlyPaymentUsd != null
+      ? { estimatedTotalMonthlyPaymentUsd }
+      : {}),
     loanCostsUsd: numberValue(offer.loanCostsUsd, 'Loan costs'),
     lenderCreditsUsd: numberValue(offer.lenderCreditsUsd, 'Lender credits'),
     ...(discountPointsPct != null ? { discountPointsPct } : {}),
@@ -304,6 +331,8 @@ function OfferFields({
           ['noteRatePct', 'Note rate (%)'],
           ['aprPct', 'APR (%)'],
           ['monthlyPrincipalAndInterestUsd', 'Monthly P&I ($)'],
+          ['monthlyMortgageInsuranceUsd', 'Monthly mortgage insurance ($)'],
+          ['estimatedTotalMonthlyPaymentUsd', 'Estimated total payment ($)'],
           ['loanCostsUsd', 'Loan costs ($)'],
           ['lenderCreditsUsd', 'Lender credits ($)'],
           ['discountPointsPct', 'Discount points (%)'],
@@ -503,6 +532,12 @@ export function LoanEstimateComparisonCard({
       aprPct: value(fields.aprPct),
       monthlyPrincipalAndInterestUsd: value(
         fields.monthlyPrincipalAndInterestUsd,
+      ),
+      monthlyMortgageInsuranceUsd: value(
+        fields.monthlyMortgageInsuranceUsd,
+      ),
+      estimatedTotalMonthlyPaymentUsd: value(
+        fields.estimatedTotalMonthlyPaymentUsd,
       ),
       loanCostsUsd: value(fields.loanCostsUsd),
       lenderCreditsUsd: value(fields.lenderCreditsUsd),
@@ -909,6 +944,19 @@ export function LoanEstimateComparisonCard({
                       </td>
                       <td className="py-3 pr-3">
                         {currency(offer.monthlyPrincipalAndInterestUsd)}
+                        <span className="block text-slate-500">
+                          Total:{' '}
+                          {offer.estimatedTotalMonthlyPaymentUsd == null
+                            ? 'not supplied'
+                            : currency(offer.estimatedTotalMonthlyPaymentUsd)}
+                        </span>
+                        {(offer.monthlyMortgageInsuranceUsd ?? 0) > 0 && (
+                          <span className="block text-amber-700 dark:text-amber-300">
+                            Includes{' '}
+                            {currency(offer.monthlyMortgageInsuranceUsd ?? 0)}{' '}
+                            mortgage insurance
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 pr-3">
                         {currency(offer.netLoanCostsUsd)}

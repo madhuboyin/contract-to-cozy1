@@ -15,6 +15,8 @@ function offer(overrides = {}) {
     noteRatePct: 5.75,
     aprPct: 5.95,
     monthlyPrincipalAndInterestUsd: 1900,
+    monthlyMortgageInsuranceUsd: 120,
+    estimatedTotalMonthlyPaymentUsd: 2420,
     loanCostsUsd: 8000,
     lenderCreditsUsd: 1000,
     cashToCloseUsd: 9000,
@@ -77,7 +79,9 @@ test('flags incomplete five-year disclosures and unlike terms', () => {
 
   assert.deepEqual(result.missingFiveYearCostOfferIds, ['offer-b']);
   assert.equal(result.offers[1].fiveYearBorrowingCostUsd, null);
-  assert.match(result.offers[1].cautions[0], /page 3/i);
+  assert.ok(
+    result.offers[1].cautions.some((line) => /page 3/i.test(line)),
+  );
   assert.ok(result.summary.some((line) => /not all use the same/i.test(line)));
 });
 
@@ -167,6 +171,49 @@ test('explains discount points and flags incomplete point disclosures', () => {
   assert.ok(
     result.offers[1].cautions.some(
       (line) => /only one discount-points value/i.test(line),
+    ),
+  );
+});
+
+test('compares complete total-payment estimates and exposes mortgage insurance', () => {
+  const result = compareRefinanceLoanEstimates([
+    offer(),
+    offer({
+      id: 'offer-b',
+      lenderName: 'Lender B',
+      monthlyPrincipalAndInterestUsd: 1850,
+      monthlyMortgageInsuranceUsd: 0,
+      estimatedTotalMonthlyPaymentUsd: 2250,
+    }),
+  ]);
+
+  assert.deepEqual(result.leaders.ESTIMATED_TOTAL_MONTHLY_PAYMENT, ['offer-b']);
+  assert.ok(
+    result.offers[0].cautions.some(
+      (line) => /includes \$120 per month of mortgage insurance/i.test(line),
+    ),
+  );
+  assert.ok(
+    result.summary.some(
+      (line) => /lowest estimated total monthly payment/i.test(line),
+    ),
+  );
+});
+
+test('does not rank total payment when any offer is missing it', () => {
+  const result = compareRefinanceLoanEstimates([
+    offer(),
+    offer({
+      id: 'offer-b',
+      lenderName: 'Lender B',
+      estimatedTotalMonthlyPaymentUsd: undefined,
+    }),
+  ]);
+
+  assert.equal(result.leaders.ESTIMATED_TOTAL_MONTHLY_PAYMENT, undefined);
+  assert.ok(
+    result.offers[1].cautions.some(
+      (line) => /add the estimated total payment/i.test(line),
     ),
   );
 });

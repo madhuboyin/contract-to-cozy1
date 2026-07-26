@@ -7,6 +7,8 @@ export interface RefinanceLoanEstimateInput {
   noteRatePct: number;
   aprPct: number;
   monthlyPrincipalAndInterestUsd: number;
+  monthlyMortgageInsuranceUsd?: number;
+  estimatedTotalMonthlyPaymentUsd?: number;
   loanCostsUsd: number;
   lenderCreditsUsd: number;
   discountPointsPct?: number;
@@ -22,6 +24,7 @@ export interface RefinanceLoanEstimateInput {
 export type LoanEstimateMetric =
   | 'APR'
   | 'MONTHLY_PRINCIPAL_AND_INTEREST'
+  | 'ESTIMATED_TOTAL_MONTHLY_PAYMENT'
   | 'NET_LOAN_COSTS'
   | 'CASH_TO_CLOSE'
   | 'FIVE_YEAR_BORROWING_COST';
@@ -106,6 +109,28 @@ export function compareRefinanceLoanEstimates(
     if (offer.aprPct < offer.noteRatePct) {
       cautions.push(
         'APR is below the note rate. Recheck the values copied from the Loan Estimate.',
+      );
+    }
+    if ((offer.monthlyMortgageInsuranceUsd ?? 0) > 0) {
+      cautions.push(
+        `The estimated payment includes ${offer.monthlyMortgageInsuranceUsd?.toLocaleString(
+          'en-US',
+          {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: 0,
+          },
+        )} per month of mortgage insurance. Confirm how and when it may end.`,
+      );
+    }
+    if (
+      offer.estimatedTotalMonthlyPaymentUsd != null &&
+      offer.estimatedTotalMonthlyPaymentUsd + 0.005 <
+        offer.monthlyPrincipalAndInterestUsd +
+          (offer.monthlyMortgageInsuranceUsd ?? 0)
+    ) {
+      cautions.push(
+        'Estimated total payment is below principal, interest, and mortgage insurance. Recheck the Projected Payments values.',
       );
     }
     if (!hasFiveYearFields) {
@@ -205,6 +230,25 @@ export function compareRefinanceLoanEstimates(
     NET_LOAN_COSTS: minimumOfferIds(offers, (offer) => offer.netLoanCostsUsd),
     CASH_TO_CLOSE: minimumOfferIds(offers, (offer) => offer.cashToCloseUsd),
   };
+  const hasCompleteTotalPayments = offers.every(
+    (offer) => offer.estimatedTotalMonthlyPaymentUsd != null,
+  );
+  if (hasCompleteTotalPayments) {
+    leaders.ESTIMATED_TOTAL_MONTHLY_PAYMENT = minimumOfferIds(
+      offers,
+      (offer) => offer.estimatedTotalMonthlyPaymentUsd ?? null,
+    );
+  } else if (
+    offers.some((offer) => offer.estimatedTotalMonthlyPaymentUsd != null)
+  ) {
+    for (const offer of offers) {
+      if (offer.estimatedTotalMonthlyPaymentUsd == null) {
+        offer.cautions.push(
+          'Add the estimated total payment from Projected Payments before comparing all-in monthly estimates.',
+        );
+      }
+    }
+  }
   const fiveYearLeaders = minimumOfferIds(
     offers,
     (offer) => offer.fiveYearBorrowingCostUsd,
@@ -288,6 +332,18 @@ export function compareRefinanceLoanEstimates(
         : 'has'
     } the lowest monthly principal-and-interest payment.`,
   ];
+  if (leaders.ESTIMATED_TOTAL_MONTHLY_PAYMENT?.length) {
+    summary.push(
+      `${leaderLabel(
+        leaders.ESTIMATED_TOTAL_MONTHLY_PAYMENT,
+        offers,
+      )} ${
+        leaders.ESTIMATED_TOTAL_MONTHLY_PAYMENT.length > 1
+          ? 'tie for'
+          : 'has'
+      } the lowest estimated total monthly payment. Taxes, insurance, and escrow estimates may still differ by lender.`,
+    );
+  }
   if (fiveYearLeaders.length) {
     summary.push(
       `${leaderLabel(fiveYearLeaders, offers)} ${

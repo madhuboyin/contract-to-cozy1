@@ -115,6 +115,16 @@ const loanEstimateOfferSchema = z
     noteRatePct: z.number().positive().max(30),
     aprPct: z.number().positive().max(30),
     monthlyPrincipalAndInterestUsd: z.number().positive().max(1_000_000),
+    monthlyMortgageInsuranceUsd: z
+      .number()
+      .min(0)
+      .max(100_000)
+      .optional(),
+    estimatedTotalMonthlyPaymentUsd: z
+      .number()
+      .positive()
+      .max(1_000_000)
+      .optional(),
     loanCostsUsd: z.number().min(0).max(5_000_000),
     lenderCreditsUsd: z.number().min(0).max(5_000_000),
     discountPointsPct: z.number().min(0).max(10).optional(),
@@ -186,6 +196,19 @@ const loanEstimateOfferSchema = z
             'Discount-points percentage and dollars must align with the loan amount.',
         });
       }
+    }
+    if (
+      offer.estimatedTotalMonthlyPaymentUsd != null &&
+      offer.estimatedTotalMonthlyPaymentUsd + 0.005 <
+        offer.monthlyPrincipalAndInterestUsd +
+          (offer.monthlyMortgageInsuranceUsd ?? 0)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['estimatedTotalMonthlyPaymentUsd'],
+        message:
+          'Estimated total payment cannot be below principal, interest, and mortgage insurance.',
+      });
     }
   });
 

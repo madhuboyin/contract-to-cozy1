@@ -19,6 +19,8 @@ Loan Term 30 years
 Product Fixed Rate
 Interest Rate 5.750%
 Monthly Principal & Interest $1,905.42
+Mortgage Insurance $120.00
+Estimated Total Payment $2,425.42
 
 Closing Cost Details
 0.500% of Loan Amount (Points) $1,500.00
@@ -41,6 +43,8 @@ test('extracts standardized Loan Estimate comparison fields for review', () => {
   assert.equal(result.fields.noteRatePct.value, 5.75);
   assert.equal(result.fields.aprPct.value, 5.982);
   assert.equal(result.fields.monthlyPrincipalAndInterestUsd.value, 1905.42);
+  assert.equal(result.fields.monthlyMortgageInsuranceUsd.value, 120);
+  assert.equal(result.fields.estimatedTotalMonthlyPaymentUsd.value, 2425.42);
   assert.equal(result.fields.loanCostsUsd.value, 8427);
   assert.equal(result.fields.discountPointsPct.value, 0.5);
   assert.equal(result.fields.discountPointsUsd.value, 1500);
