@@ -64,7 +64,8 @@ test('exports only the selected lender in a homeowner-controlled discussion brie
         lenderName: 'Competitor Bank',
         noteRatePct: 5.9,
         aprPct: 6.1,
-        monthlyPrincipalAndInterestUsd: 1950,
+        monthlyPrincipalAndInterestUsd: 1800,
+        loanCostsUsd: 12500,
       }),
     ],
   });
@@ -78,4 +79,28 @@ test('exports only the selected lender in a homeowner-controlled discussion brie
   assert.match(markdown, /\[x\] The selected figures were checked/);
   assert.match(markdown, /did not send it to a lender/i);
   assert.match(markdown, /not a commitment, acceptance, application/i);
+  assert.match(markdown, /lower-net-cost baseline/i);
+});
+
+test('exports the incremental cost break-even without implying a universal winner', () => {
+  const markdown = buildRefinanceLoanEstimateComparisonMarkdown({
+    propertyLabel: '94 Ashford Dr',
+    generatedAt: new Date('2026-07-25T12:00:00.000Z'),
+    offers: [
+      offer(),
+      offer({
+        id: 'offer-b',
+        lenderName: 'Lender B',
+        monthlyPrincipalAndInterestUsd: 1800,
+        loanCostsUsd: 12500,
+      }),
+    ],
+  });
+
+  assert.match(markdown, /## Upfront-cost tradeoffs/);
+  assert.match(
+    markdown,
+    /\| Lender B \| Lender A \| \$4,500 \| \$100 \| 45 months \|/,
+  );
+  assert.match(markdown, /excludes taxes, insurance, escrow/i);
 });

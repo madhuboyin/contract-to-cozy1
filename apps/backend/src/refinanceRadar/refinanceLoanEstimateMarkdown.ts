@@ -64,6 +64,14 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
       (caution) => `- **${safeInline(offer.lenderName)}:** ${safeInline(caution)}`,
     ),
   );
+  const tradeoffRows = comparison.costTradeoffs.map(
+    (tradeoff) =>
+      `| ${safeInline(tradeoff.premiumLenderName)} | ` +
+      `${safeInline(tradeoff.baselineLenderName)} | ` +
+      `${money(tradeoff.incrementalNetLoanCostsUsd)} | ` +
+      `${money(tradeoff.monthlyPaymentSavingsUsd)} | ` +
+      `${tradeoff.breakEvenMonths} months |`,
+  );
 
   return [
     '# Mortgage Refinance Loan Estimate Comparison',
@@ -85,6 +93,18 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     '',
     ...comparison.summary.map((line) => `- ${safeInline(line)}`),
     '',
+    ...(tradeoffRows.length
+      ? [
+          '## Upfront-cost tradeoffs',
+          '',
+          '| Lower-payment offer | Lower-net-cost baseline | Additional net loan costs | Monthly P&I savings | Incremental break-even |',
+          '| --- | --- | ---: | ---: | ---: |',
+          ...tradeoffRows,
+          '',
+          'Incremental break-even divides the additional net loan costs by monthly principal-and-interest savings for offers with the same loan amount, product, and term. It excludes taxes, insurance, escrow, future refinancing, and the time value of money.',
+          '',
+        ]
+      : []),
     '## Verification checklist',
     '',
     '- [ ] Every offer uses the same requested loan amount and cash-out amount.',
@@ -147,6 +167,23 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
   const selectedCautions = selected.cautions.map(
     (caution) => `- ${safeInline(caution)}`,
   );
+  const selectedPremiumTradeoffs = comparison.costTradeoffs.filter(
+    (tradeoff) => tradeoff.premiumOfferId === selected.id,
+  );
+  const selectedBaselineTradeoffs = comparison.costTradeoffs.filter(
+    (tradeoff) => tradeoff.baselineOfferId === selected.id,
+  );
+  const selectedTradeoffLines = [
+    ...selectedPremiumTradeoffs.map(
+      (tradeoff) =>
+        `- Compared with the lower-net-cost reviewed alternative, this offer costs ${money(tradeoff.incrementalNetLoanCostsUsd)} more upfront, lowers monthly principal and interest by ${money(tradeoff.monthlyPaymentSavingsUsd)}, and reaches incremental break-even in about ${tradeoff.breakEvenMonths} months.`,
+    ),
+    ...(selectedBaselineTradeoffs.length
+      ? [
+          `- This offer is the lower-net-cost baseline in ${selectedBaselineTradeoffs.length} modeled upfront-cost tradeoff(s).`,
+        ]
+      : []),
+  ];
 
   return [
     '# Mortgage Refinance Lender Discussion Brief',
@@ -180,6 +217,7 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
     ...(selectedStrengths.length
       ? selectedStrengths
       : ['- No single lowest-cost metric was assigned to this offer.']),
+    ...selectedTradeoffLines,
     '',
     ...(selectedCautions.length
       ? ['## Items to correct or confirm', '', ...selectedCautions, '']

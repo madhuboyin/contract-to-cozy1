@@ -50,6 +50,18 @@ test('compares disclosed costs without declaring one universal winner', () => {
   assert.deepEqual(result.leaders.FIVE_YEAR_BORROWING_COST, ['offer-b']);
   assert.equal(result.offers[0].netLoanCostsUsd, 7000);
   assert.equal(result.offers[1].fiveYearBorrowingCostUsd, 98000);
+  assert.deepEqual(result.costTradeoffs, [
+    {
+      baselineOfferId: 'offer-a',
+      baselineLenderName: 'Lender A',
+      premiumOfferId: 'offer-b',
+      premiumLenderName: 'Lender B',
+      incrementalNetLoanCostsUsd: 4500,
+      monthlyPaymentSavingsUsd: 75,
+      breakEvenMonths: 60,
+      withinNewLoanTerm: true,
+    },
+  ]);
   assert.match(result.disclaimer, /does not.*recommend a lender/i);
 });
 
@@ -87,6 +99,7 @@ test('warns when lenders price different principal amounts', () => {
     }),
   ]);
   assert.ok(result.summary.some((line) => /different loan amounts/i.test(line)));
+  assert.equal(result.costTradeoffs.length, 0);
 });
 
 test('flags stale disclosures, expired locks, and mismatched lock status', () => {
@@ -112,4 +125,23 @@ test('flags stale disclosures, expired locks, and mismatched lock status', () =>
   assert.ok(result.offers[1].cautions.some((line) => /not locked/i.test(line)));
   assert.ok(result.summary.some((line) => /not all issued on the same date/i.test(line)));
   assert.ok(result.summary.some((line) => /do not share the same rate-lock status/i.test(line)));
+});
+
+test('flags a higher-cost comparable offer that does not lower payment', () => {
+  const result = compareRefinanceLoanEstimates([
+    offer(),
+    offer({
+      id: 'offer-b',
+      lenderName: 'Lender B',
+      loanCostsUsd: 12000,
+      monthlyPrincipalAndInterestUsd: 1950,
+    }),
+  ]);
+
+  assert.equal(result.costTradeoffs.length, 0);
+  assert.ok(
+    result.offers[1].cautions.some(
+      (line) => /more in net loan costs.*without a lower monthly/i.test(line),
+    ),
+  );
 });

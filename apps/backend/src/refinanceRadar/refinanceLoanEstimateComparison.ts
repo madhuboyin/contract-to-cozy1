@@ -32,9 +32,21 @@ export interface RefinanceLoanEstimateComparisonRow
   cautions: string[];
 }
 
+export interface RefinanceLoanEstimateCostTradeoff {
+  baselineOfferId: string;
+  baselineLenderName: string;
+  premiumOfferId: string;
+  premiumLenderName: string;
+  incrementalNetLoanCostsUsd: number;
+  monthlyPaymentSavingsUsd: number;
+  breakEvenMonths: number;
+  withinNewLoanTerm: boolean;
+}
+
 export interface RefinanceLoanEstimateComparison {
   offers: RefinanceLoanEstimateComparisonRow[];
   leaders: Partial<Record<LoanEstimateMetric, string[]>>;
+  costTradeoffs: RefinanceLoanEstimateCostTradeoff[];
   summary: string[];
   missingFiveYearCostOfferIds: string[];
   disclaimer: string;
@@ -173,6 +185,60 @@ export function compareRefinanceLoanEstimates(
     }
   }
 
+  const costTradeoffs: RefinanceLoanEstimateCostTradeoff[] = [];
+  const comparableGroups = new Map<
+    string,
+    RefinanceLoanEstimateComparisonRow[]
+  >();
+  for (const offer of offers) {
+    const key = `${Math.round(offer.loanAmountUsd * 100)}:${offer.loanType}:${offer.loanTermYears}`;
+    comparableGroups.set(key, [...(comparableGroups.get(key) ?? []), offer]);
+  }
+  for (const group of comparableGroups.values()) {
+    if (group.length < 2) continue;
+    const baseline = [...group].sort(
+      (left, right) =>
+        left.netLoanCostsUsd - right.netLoanCostsUsd ||
+        left.monthlyPrincipalAndInterestUsd -
+          right.monthlyPrincipalAndInterestUsd,
+    )[0];
+    for (const offer of group) {
+      if (offer.id === baseline.id) continue;
+      const incrementalNetLoanCostsUsd = roundCurrency(
+        offer.netLoanCostsUsd - baseline.netLoanCostsUsd,
+      );
+      if (incrementalNetLoanCostsUsd <= 0) continue;
+      const monthlyPaymentSavingsUsd = roundCurrency(
+        baseline.monthlyPrincipalAndInterestUsd -
+          offer.monthlyPrincipalAndInterestUsd,
+      );
+      if (monthlyPaymentSavingsUsd <= 0) {
+        offer.cautions.push(
+          `This offer has ${incrementalNetLoanCostsUsd.toLocaleString('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: 0,
+          })} more in net loan costs than the lowest-cost comparable offer without a lower monthly principal-and-interest payment.`,
+        );
+        continue;
+      }
+      const breakEvenMonths = Math.ceil(
+        incrementalNetLoanCostsUsd / monthlyPaymentSavingsUsd,
+      );
+      costTradeoffs.push({
+        baselineOfferId: baseline.id,
+        baselineLenderName: baseline.lenderName,
+        premiumOfferId: offer.id,
+        premiumLenderName: offer.lenderName,
+        incrementalNetLoanCostsUsd,
+        monthlyPaymentSavingsUsd,
+        breakEvenMonths,
+        withinNewLoanTerm:
+          breakEvenMonths <= offer.loanTermYears * 12,
+      });
+    }
+  }
+
   const summary = [
     `${leaderLabel(leaders.APR ?? [], offers)} ${
       (leaders.APR?.length ?? 0) > 1 ? 'tie for' : 'has'
@@ -226,10 +292,10 @@ export function compareRefinanceLoanEstimates(
       'The offers do not share the same rate-lock status. Locked and floating terms are not directly comparable.',
     );
   }
-
   return {
     offers,
     leaders,
+    costTradeoffs,
     summary,
     missingFiveYearCostOfferIds: offers
       .filter((offer) => offer.fiveYearBorrowingCostUsd == null)

@@ -141,6 +141,7 @@ export class RefinanceRadarController {
           offerCount: body.offers.length,
           completeFiveYearCostCount:
             body.offers.length - comparison.missingFiveYearCostOfferIds.length,
+          costTradeoffCount: comparison.costTradeoffs.length,
         },
       });
 

@@ -905,6 +905,45 @@ export function LoanEstimateComparisonCard({
                 )),
               )}
             </div>
+            {comparison.costTradeoffs.length > 0 && (
+              <div className="rounded-xl border border-violet-200/80 bg-violet-50/50 p-3 dark:border-violet-900/60 dark:bg-violet-950/20">
+                <h4 className="text-xs font-semibold text-violet-900 dark:text-violet-200">
+                  Upfront cost versus monthly payment
+                </h4>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                  For offers with the same loan amount, product, and term,
+                  this shows how long the lower payment takes to recover
+                  additional net loan costs. Taxes, insurance, escrow, and
+                  future refinancing are not included.
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {comparison.costTradeoffs.map((tradeoff) => (
+                    <li
+                      key={`${tradeoff.baselineOfferId}-${tradeoff.premiumOfferId}`}
+                      className="rounded-lg bg-white/80 p-2.5 text-xs text-slate-700 dark:bg-slate-950/40 dark:text-slate-300"
+                    >
+                      <span className="font-semibold">
+                        {tradeoff.premiumLenderName}
+                      </span>{' '}
+                      costs {currency(tradeoff.incrementalNetLoanCostsUsd)}
+                      {' '}more upfront than {tradeoff.baselineLenderName} and
+                      lowers monthly P&I by{' '}
+                      {currency(tradeoff.monthlyPaymentSavingsUsd)}. The
+                      incremental-cost break-even is about{' '}
+                      <span className="font-semibold">
+                        {tradeoff.breakEvenMonths} months
+                      </span>
+                      .
+                      {!tradeoff.withinNewLoanTerm && (
+                        <span className="mt-1 block font-medium text-amber-700 dark:text-amber-300">
+                          That is longer than the new loan term.
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <ul className="space-y-1 text-xs text-slate-700 dark:text-slate-300">
               {comparison.summary.map((line) => (
                 <li key={line}>• {line}</li>

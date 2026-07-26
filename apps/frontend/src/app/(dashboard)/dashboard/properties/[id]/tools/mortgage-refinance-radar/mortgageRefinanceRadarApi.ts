@@ -337,6 +337,16 @@ export type RefinanceLoanEstimateComparison = {
     }
   >;
   leaders: Partial<Record<LoanEstimateMetric, string[]>>;
+  costTradeoffs: Array<{
+    baselineOfferId: string;
+    baselineLenderName: string;
+    premiumOfferId: string;
+    premiumLenderName: string;
+    incrementalNetLoanCostsUsd: number;
+    monthlyPaymentSavingsUsd: number;
+    breakEvenMonths: number;
+    withinNewLoanTerm: boolean;
+  }>;
   summary: string[];
   missingFiveYearCostOfferIds: string[];
   disclaimer: string;
