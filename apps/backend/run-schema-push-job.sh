@@ -253,6 +253,32 @@ spec:
                 npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
                   --stdin \
                   --schema=/config/schema.prisma
+              echo "Checking first-deployment Radar notification schema state..."
+              if ! printf '%s\n' \
+                'SELECT 1 FROM "property_radar_notification_decisions" LIMIT 0;' | \
+                npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
+                  --stdin \
+                  --schema=/config/schema.prisma >/dev/null 2>&1; then
+                echo "Bootstrapping property_radar_notification_decisions before its optional Notification relation..."
+                awk '
+                  \$1 == "model" { current_model = \$2 }
+                  current_model == "Notification" &&
+                    \$1 == "radarDecision" &&
+                    \$2 == "PropertyRadarNotificationDecision?" { next }
+                  current_model == "PropertyRadarNotificationDecision" &&
+                    \$1 == "notificationId" { next }
+                  current_model == "PropertyRadarNotificationDecision" &&
+                    \$1 == "notification" &&
+                    \$2 == "Notification?" { next }
+                  { print }
+                ' /config/schema.prisma > /tmp/schema-bootstrap.prisma
+                npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma validate \
+                  --schema=/tmp/schema-bootstrap.prisma
+                npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db push \
+                  --accept-data-loss \
+                  --skip-generate \
+                  --schema=/tmp/schema-bootstrap.prisma
+              fi
               npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db push \
                 --accept-data-loss \
                 --skip-generate \
