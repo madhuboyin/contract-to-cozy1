@@ -145,7 +145,12 @@ function detail(item: ReturnType<typeof feedItem>, feedback: Record<string, unkn
         'link_existing_task',
       ],
       taskLink: null,
-      destination: { kind: 'informational', href: null },
+      destination: {
+        kind: 'informational',
+        purpose: null,
+        label: null,
+        href: null,
+      },
     }],
     canonicalUrl: 'https://www.weather.gov/',
     observedAt: timestamps.observed,

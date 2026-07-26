@@ -7,6 +7,7 @@ import type {
 const KNOWN_SURFACES = new Set<ToolDiscoverySurface>([
   'unified_home',
   'property_detail',
+  'home_event_radar',
   'explore_tools',
   'command_palette',
   'workflow',
@@ -64,5 +65,8 @@ export function parseToolLaunchContext(searchParams: LaunchSearchParams): ToolLa
     guidanceStepKey: searchParams.get('guidanceStepKey'),
     guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
     itemId: searchParams.get('itemId'),
+    radarMatchId: searchParams.get('radarMatchId'),
+    radarEventId: searchParams.get('radarEventId'),
+    incidentId: searchParams.get('incidentId'),
   };
 }

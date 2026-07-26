@@ -3267,6 +3267,13 @@ model Booking {
   guidanceJourneyId String?
   guidanceStepKey   String?
 
+  // Reviewed Home Event Radar handoff lineage.
+  sourceRadarMatchId     String?
+  sourceRadarEventId     String?
+  sourceIncidentId       String?
+  sourceRadarActionCode  String?
+  sourceLaunchSurface    String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3281,6 +3288,9 @@ model Booking {
   @@index([category])
   @@index([insightFactor]) // For fast lookups
   @@index([guidanceJourneyId]) // Phase 5: journey → bookings lookup
+  @@index([sourceRadarMatchId])
+  @@index([sourceRadarEventId])
+  @@index([sourceIncidentId])
   @@index([propertyId, executionScopeType, executionScopeKey])
   @@index([propertyId, activeExecutionScopeKey])
   @@map("bookings")

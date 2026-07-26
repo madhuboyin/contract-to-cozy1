@@ -600,17 +600,32 @@ function DetailContent({
                       </p>
                     ) : null}
                     {action.destination.kind === 'internal' && action.destination.href ? (
-                      <Link href={action.destination.href} className="mt-2 inline-flex min-h-[44px] items-center text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2">
-                        Continue
+                      <Link
+                        href={action.destination.href}
+                        onClick={() => trackRadarSheetEvent(propertyId, 'ACTION_HANDOFF_OPENED', {
+                          property_event_match_id: detail.propertyMatchId,
+                          action_code: action.code,
+                          destination_purpose: action.destination.purpose,
+                          target_capability: action.targetCapability,
+                        })}
+                        className="mt-2 inline-flex min-h-[44px] items-center text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
+                      >
+                        {action.destination.label ?? 'Continue'}
                       </Link>
                     ) : action.destination.kind === 'external' && action.destination.href ? (
                       <a
                         href={action.destination.href}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={() => trackRadarSheetEvent(propertyId, 'ACTION_HANDOFF_OPENED', {
+                          property_event_match_id: detail.propertyMatchId,
+                          action_code: action.code,
+                          destination_purpose: action.destination.purpose,
+                          target_capability: null,
+                        })}
                         className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
                       >
-                        Open official instructions
+                        {action.destination.label ?? 'Open official instructions'}
                         <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                       </a>
                     ) : (

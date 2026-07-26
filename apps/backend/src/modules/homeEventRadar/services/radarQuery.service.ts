@@ -227,7 +227,15 @@ function detailMissingFacts(match: any): Array<Record<string, string>> {
   });
 }
 
-function detailActions(value: unknown, match: any) {
+function detailActions(
+  value: unknown,
+  match: any,
+  continuity: {
+    incidentId?: string | null;
+    guidanceJourneyId?: string | null;
+    guidanceStepKey?: string | null;
+  } = {},
+) {
   const storedActions = storedArray(value, 'actions')
     .map(storedRecord)
     .filter((entry): entry is Record<string, unknown> => entry !== null);
@@ -250,6 +258,7 @@ function detailActions(value: unknown, match: any) {
     matchId: String(match.id),
     eventId: String(match.radarEvent.id),
     officialSourceUrl: match.radarEvent.canonicalUrl ?? null,
+    ...continuity,
   });
   return actions.map((action) => {
     const link = match.taskLinks?.find(
@@ -611,7 +620,11 @@ export class RadarQueryService {
       impactSummary: match.impactSummary ?? null,
       impactFactors: match.impactFactorsJson ?? null,
       matchedSystems: storedArray(match.matchedSystemsJson, 'systems'),
-      recommendedActions: detailActions(match.recommendedActionsJson, match),
+      recommendedActions: detailActions(match.recommendedActionsJson, match, {
+        incidentId: incident?.id ? String(incident.id) : null,
+        guidanceJourneyId: guidance?.id ? String(guidance.id) : null,
+        guidanceStepKey: guidance?.currentStepKey ?? null,
+      }),
       canonicalUrl: match.radarEvent.canonicalUrl ?? null,
       observedAt,
       revision: {

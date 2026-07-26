@@ -84,6 +84,9 @@ describe('server suggestion launch context', () => {
       guidanceStepKey: null,
       guidanceSignalIntentFamily: null,
       itemId: 'item-1',
+      radarMatchId: null,
+      radarEventId: null,
+      incidentId: null,
     });
   });
 
@@ -107,6 +110,7 @@ describe('server suggestion launch context', () => {
       'guidance',
       'home_tools',
       'dashboard',
+      'home_event_radar',
     ] as const;
     for (const surface of surfaces) {
       expect(normalizeToolLaunchSurface(surface)).toBe(surface);

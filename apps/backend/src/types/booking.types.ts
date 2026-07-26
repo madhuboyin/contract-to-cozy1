@@ -37,6 +37,32 @@ export const createBookingSchema = z.object({
   guidanceSignalIntentFamily: z.string().optional(),
   workCategory: z.enum(PROVIDER_WORK_CATEGORIES).optional(),
   guidanceEnforceGuard: z.boolean().optional(),
+  sourceRadarMatchId: z.string().uuid('Invalid Radar match ID').optional(),
+  sourceRadarEventId: z.string().uuid('Invalid Radar event ID').optional(),
+  sourceIncidentId: z.string().uuid('Invalid Incident ID').optional(),
+  sourceRadarActionCode: z.string().trim().min(1).max(128).optional(),
+  sourceLaunchSurface: z.literal('home_event_radar').optional(),
+}).superRefine((value, context) => {
+  const hasRadarLineage = Boolean(
+    value.sourceRadarEventId
+    || value.sourceIncidentId
+    || value.sourceRadarActionCode
+    || value.sourceLaunchSurface,
+  );
+  if (hasRadarLineage && !value.sourceRadarMatchId) {
+    context.addIssue({
+      code: 'custom',
+      path: ['sourceRadarMatchId'],
+      message: 'Radar match ID is required for Radar booking lineage',
+    });
+  }
+  if (value.sourceRadarMatchId && value.sourceLaunchSurface !== 'home_event_radar') {
+    context.addIssue({
+      code: 'custom',
+      path: ['sourceLaunchSurface'],
+      message: 'Radar booking lineage requires the Home Event Radar launch surface',
+    });
+  }
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
@@ -170,6 +196,11 @@ export interface BookingResponse {
   // Phase 5: Guidance context — stored on the booking to enable service-completion
   // auto-advance of the linked guidance journey step (TR-03).
   guidanceJourneyId: string | null;
+  sourceRadarMatchId: string | null;
+  sourceRadarEventId: string | null;
+  sourceIncidentId: string | null;
+  sourceRadarActionCode: string | null;
+  sourceLaunchSurface: string | null;
   
   // Cancellation
   cancelledAt: Date | null;

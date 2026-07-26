@@ -56,6 +56,10 @@ import {
   getNextProviderSearchRadius,
   PROVIDER_SEARCH_RADII,
 } from '@/lib/providers/providerSearchRadius';
+import {
+  forwardRadarHandoffContinuity,
+  sanitizeDashboardReturnTo,
+} from '@/lib/navigation/radarHandoffContinuity';
 
 const RESPONSIBILITY_OPTIONS: Array<{ value: ProviderResponsibilityParty; label: string }> = [
   { value: 'OWNER', label: 'I do / the homeowner' },
@@ -251,6 +255,7 @@ const ProviderList = ({
   executionBlocked,
   executionGuardLoading,
   blockedActionHref,
+  radarHandoffQuery,
 }: {
   providers: Provider[];
   targetPropertyId?: string;
@@ -273,6 +278,7 @@ const ProviderList = ({
   executionBlocked?: boolean;
   executionGuardLoading?: boolean;
   blockedActionHref?: string;
+  radarHandoffQuery?: string;
 }) => {
   return (
     <div className="space-y-2.5">
@@ -316,6 +322,12 @@ const ProviderList = ({
         if (priceFinalizationId) queryParams.append('priceFinalizationId', priceFinalizationId);
         if (finalPrice) queryParams.append('finalPrice', finalPrice);
         if (vendorName) queryParams.append('vendorName', vendorName);
+        if (radarHandoffQuery) {
+          forwardRadarHandoffContinuity(
+            new URLSearchParams(radarHandoffQuery),
+            queryParams,
+          );
+        }
 
         const profileLink = queryParams.toString()
           ? `/dashboard/providers/${provider.id}?${queryParams.toString()}`
@@ -441,7 +453,7 @@ export default function ProvidersPage() {
   const predictionId = searchParams.get('predictionId') || undefined;
   const inventoryItemId = searchParams.get('itemId') || undefined;
   const fromSource = searchParams.get('from') || undefined;
-  const returnTo = searchParams.get('returnTo') || undefined;
+  const returnTo = sanitizeDashboardReturnTo(searchParams.get('returnTo')) || undefined;
   const intent = searchParams.get('intent') || undefined;
   const actionKey = searchParams.get('actionKey') || undefined;
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
@@ -450,6 +462,11 @@ export default function ProvidersPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId') || undefined;
   const finalPrice = searchParams.get('finalPrice') || undefined;
   const vendorName = searchParams.get('vendorName') || undefined;
+  const radarHandoffQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    forwardRadarHandoffContinuity(searchParams, params);
+    return params.toString();
+  }, [searchParams]);
   const hasGuardScopeContext = Boolean(
     guidanceJourneyId ||
       guidanceStepKey ||
@@ -1027,6 +1044,7 @@ export default function ProvidersPage() {
           executionBlocked={isExecutionBlocked}
           executionGuardLoading={isGuardLoading}
           blockedActionHref={effectiveBlockedActionHref}
+          radarHandoffQuery={radarHandoffQuery}
         />
       ) : (
         <EmptyStateCard

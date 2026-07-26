@@ -27,6 +27,7 @@ export type ToolDiscoverySurface =
   | 'home_tools'
   | 'dashboard'
   | 'property_detail'
+  | 'home_event_radar'
   | 'unknown';
 export type ToolReleaseStage = 'ACTIVE' | 'BETA';
 export type ToolSafetyTier = 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
@@ -51,6 +52,9 @@ export type ToolLaunchContext = {
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
   itemId?: string | null;
+  radarMatchId?: string | null;
+  radarEventId?: string | null;
+  incidentId?: string | null;
 };
 
 export type ToolDiscoveryContext = {
@@ -227,6 +231,9 @@ function appendLaunchContext(href: string, context?: ToolLaunchContext): string 
   if (context.guidanceStepKey) params.set('guidanceStepKey', context.guidanceStepKey);
   if (context.guidanceSignalIntentFamily) params.set('guidanceSignalIntentFamily', context.guidanceSignalIntentFamily);
   if (context.itemId) params.set('itemId', context.itemId);
+  if (context.radarMatchId) params.set('radarMatchId', context.radarMatchId);
+  if (context.radarEventId) params.set('radarEventId', context.radarEventId);
+  if (context.incidentId) params.set('incidentId', context.incidentId);
   const suffix = params.toString();
   if (!suffix) return href;
   return `${href}${href.includes('?') ? '&' : '?'}${suffix}`;

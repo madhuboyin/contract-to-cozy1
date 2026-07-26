@@ -1830,6 +1830,11 @@ export interface Booking {
   maintenancePredictionId: string | null;
   inventoryItemId: string | null;
   priceFinalizationId: string | null;
+  sourceRadarMatchId?: string | null;
+  sourceRadarEventId?: string | null;
+  sourceIncidentId?: string | null;
+  sourceRadarActionCode?: string | null;
+  sourceLaunchSurface?: string | null;
   cancelledAt: string | null;
   cancelledBy: string | null;
   cancellationReason: string | null;
@@ -1968,6 +1973,11 @@ export interface CreateBookingInput {
   guidanceSignalIntentFamily?: string;
   workCategory?: string;
   guidanceEnforceGuard?: boolean;
+  sourceRadarMatchId?: string;
+  sourceRadarEventId?: string;
+  sourceIncidentId?: string;
+  sourceRadarActionCode?: string;
+  sourceLaunchSurface?: 'home_event_radar';
 }
 
 /**
@@ -3462,6 +3472,16 @@ export interface RadarCanonicalDetail extends RadarCanonicalFeedItem {
     taskLink: RadarTaskLink | null;
     destination: {
       kind: 'informational' | 'internal' | 'external';
+      purpose:
+        | 'coverage_review'
+        | 'service_pricing'
+        | 'maintenance'
+        | 'document_vault'
+        | 'provider_search'
+        | 'official_instructions'
+        | 'other_tool'
+        | null;
+      label: string | null;
       href: string | null;
     };
   }>;

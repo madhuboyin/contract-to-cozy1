@@ -82,3 +82,38 @@ test('booking preserves the same work category through its hard responsibility g
   const bookingService = fs.readFileSync(path.resolve(__dirname, '../../src/services/booking.service.ts'), 'utf8');
   assert.match(bookingService, /serviceCategory: input\.workCategory \?\? service\.category/);
 });
+
+test('booking accepts complete Radar lineage and rejects detached source identifiers', () => {
+  const base = {
+    providerId: '11111111-1111-4111-8111-111111111111',
+    serviceId: '22222222-2222-4222-8222-222222222222',
+    propertyId: '33333333-3333-4333-8333-333333333333',
+    description: 'Inspect and repair the roof shingles.',
+    estimatedPrice: 500,
+  };
+  const parsed = createBookingSchema.parse({
+    ...base,
+    sourceLaunchSurface: 'home_event_radar',
+    sourceRadarMatchId: '44444444-4444-4444-8444-444444444444',
+    sourceRadarEventId: '55555555-5555-4555-8555-555555555555',
+    sourceIncidentId: '66666666-6666-4666-8666-666666666666',
+    sourceRadarActionCode: 'INSPECT_ROOF',
+  });
+  assert.equal(parsed.sourceRadarMatchId, '44444444-4444-4444-8444-444444444444');
+  assert.equal(createBookingSchema.safeParse({
+    ...base,
+    sourceLaunchSurface: 'home_event_radar',
+    sourceRadarEventId: '55555555-5555-4555-8555-555555555555',
+  }).success, false);
+  assert.equal(createBookingSchema.safeParse({
+    ...base,
+    sourceRadarMatchId: '44444444-4444-4444-8444-444444444444',
+  }).success, false);
+
+  const bookingService = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/booking.service.ts'),
+    'utf8',
+  );
+  assert.match(bookingService, /sourceRadarMatchId/);
+  assert.match(bookingService, /Radar source match does not belong to selected property/);
+});

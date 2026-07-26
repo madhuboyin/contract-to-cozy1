@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-501 implemented |
+| Status | In progress — HER-502 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -54,7 +54,8 @@
 | HER-408 Frontend acceptance | Complete | Fixture-gated production route exercises the real page and API client across Chromium, Firefox, WebKit, Pixel, and iPhone profiles; monitoring states, filters, pagination, detail, deep links, retries, state/feedback, and accessibility semantics are automated |
 | HER-500 Action registry | Complete | Versioned fail-closed registry covers every emitted action code, validates capability routes and policy metadata, enforces family/impact/confidence eligibility, and projects only registry-owned informational/internal/official destinations with lineage |
 | HER-501 Task/reminder integration | Complete; DB application pending | Reviewed Radar actions create or link canonical maintenance tasks, use bounded event-aware due-date policy, support household assignment, persist idempotent match/action/task lineage, and expose task continuity in event detail |
-| HER-502+ | Not started | Tool/provider handoffs, notifications, Guidance, additional sources, and operations remain |
+| HER-502 Tool/provider handoffs | Complete; DB application pending | Typed reviewed destinations cover Coverage Intelligence/options, Service Price Radar, maintenance, Document Vault upload, provider search/booking, and HTTPS official instructions while preserving bounded Radar/Incident/Guidance lineage |
+| HER-503+ | Not started | Notifications, Guidance continuity expansion, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1389,6 +1390,24 @@ Implement reviewed destinations:
 - official provider instructions.
 
 Preserve source/match/incident/journey launch context.
+
+**Implemented:** The action registry now owns a typed destination purpose and homeowner CTA label
+in addition to the route. Reviewed handoffs cover Coverage Intelligence and Coverage Options,
+Service Price Radar with HVAC prefill, the open maintenance plan, Document Vault's upload flow,
+roof-specialist provider search, and HTTPS-only official instructions. Capability routes must still
+match the canonical capability registry; maintenance and provider routes use a separate exact
+workflow allowlist. Unknown, mismatched, unsafe, and unavailable destinations continue to fail
+closed as informational recommendations.
+
+Internal handoffs carry a bounded launch contract containing property, Radar match/event, action
+code and registry version, optional Incident and Guidance journey/step, launch surface, and an
+encoded return link to the exact Radar event. External official URLs receive no property data.
+The shared tool destination boundary understands Radar lineage, and provider search forwards only
+an explicit allowlist through profile and booking. Completed bookings validate the source match
+against the selected property and persist Radar match/event/Incident/action/launch lineage for
+later completion and attribution. The detail sheet renders registry-owned CTA labels and records
+handoff-open analytics. Booking schema fields are included without a migration script; the
+repository owner must apply the schema before deployment.
 
 ### HER-503 — Notification preference persistence
 

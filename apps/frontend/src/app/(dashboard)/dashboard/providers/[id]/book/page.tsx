@@ -36,6 +36,10 @@ import {
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
+import {
+  forwardRadarHandoffContinuity,
+  sanitizeDashboardReturnTo,
+} from '@/lib/navigation/radarHandoffContinuity';
 import { getProviderWorkCategory } from '@/lib/config/serviceCategoryMapping';
 function getInitials(firstName: string, lastName: string) {
   return (firstName?.[0] || '') + (lastName?.[0] || '');
@@ -62,8 +66,13 @@ export default function BookProviderPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId');
   const finalPrice = searchParams.get('finalPrice');
   const vendorName = searchParams.get('vendorName');
-  const returnTo = searchParams.get('returnTo');
+  const returnTo = sanitizeDashboardReturnTo(searchParams.get('returnTo'));
   const actionKey = searchParams.get('actionKey');
+  const sourceLaunchSurface = searchParams.get('launchSurface');
+  const sourceRadarMatchId = searchParams.get('radarMatchId');
+  const sourceRadarEventId = searchParams.get('radarEventId');
+  const sourceIncidentId = searchParams.get('incidentId');
+  const sourceRadarActionCode = searchParams.get('recommendationReason');
   // FRD-FR-10: Guidance pre-population fields from book_service step
   const guidanceAssetName = searchParams.get('assetName');
   const guidanceIssueDescription = searchParams.get('issueDescription');
@@ -375,6 +384,13 @@ export default function BookProviderPage() {
       ...(guidanceSignalIntentFamily && { guidanceSignalIntentFamily }),
       ...(workCategory && { workCategory }),
       ...(hasGuardScopeContext && { guidanceEnforceGuard: true }),
+      ...(sourceLaunchSurface === 'home_event_radar' && sourceRadarMatchId && {
+        sourceLaunchSurface: 'home_event_radar' as const,
+        sourceRadarMatchId,
+        ...(sourceRadarEventId && { sourceRadarEventId }),
+        ...(sourceIncidentId && { sourceIncidentId }),
+        ...(sourceRadarActionCode && { sourceRadarActionCode }),
+      }),
     };
 
     track('booking_initiated', {
@@ -427,6 +443,7 @@ export default function BookProviderPage() {
             bookingDetailParams.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
           }
           if (inventoryItemId) bookingDetailParams.set('itemId', inventoryItemId);
+          forwardRadarHandoffContinuity(searchParams, bookingDetailParams);
           const fallbackReturnTo = buildGuidanceOverviewHref({
             propertyId: selectedPropertyId,
             journeyId: guidanceJourneyId,
@@ -454,6 +471,7 @@ export default function BookProviderPage() {
         if (guidanceSignalIntentFamily) params.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
         if (inventoryItemId) params.set('itemId', inventoryItemId);
         if (contextualBackHref) params.set('returnTo', contextualBackHref);
+        forwardRadarHandoffContinuity(searchParams, params);
         const suffix = params.toString();
         router.push(suffix ? `/dashboard/bookings/${existingBookingId}?${suffix}` : `/dashboard/bookings/${existingBookingId}`);
         return;

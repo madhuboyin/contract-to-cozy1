@@ -132,7 +132,12 @@ test('reviewed projection exposes only bounded fields and registry-owned destina
       'create_reminder',
       'link_existing_task',
     ],
-    destination: { kind: 'informational', href: null },
+    destination: {
+      kind: 'informational',
+      purpose: null,
+      label: null,
+      href: null,
+    },
   });
 });
 
@@ -177,6 +182,116 @@ test('internal destinations use reviewed routes and preserve encoded lineage', (
   assert.equal(url.searchParams.get('propertyId'), 'property / one');
   assert.equal(url.searchParams.get('radarMatchId'), 'match / one');
   assert.equal(url.searchParams.get('radarEventId'), 'event / one');
+  assert.equal(url.searchParams.get('launchSurface'), 'home_event_radar');
+  assert.equal(url.searchParams.get('sourceEntityType'), 'RADAR_MATCH');
+  assert.equal(url.searchParams.get('sourceEntityId'), 'match / one');
+  assert.equal(url.searchParams.get('recommendationReason'), 'GET_QUOTES');
+  assert.equal(url.searchParams.get('recommendationVersion'), 'radar-actions-v1');
+  assert.equal(
+    url.searchParams.get('returnTo'),
+    '/dashboard/properties/property%20%2F%20one/tools/home-event-radar?matchId=match+%2F+one',
+  );
+});
+
+test('reviewed handoffs cover maintenance, service pricing, documents, providers, and coverage', () => {
+  const cases = [
+    {
+      action: {
+        code: 'CHECK_AIR_FILTERS',
+        label: 'Check filters',
+        priority: 'medium',
+        responsibilityScope: 'HVAC',
+      },
+      family: 'weather',
+      impact: 'watch',
+      confidence: 'low',
+      purpose: 'maintenance',
+      pathname: '/dashboard/maintenance',
+      fixed: { view: 'open' },
+    },
+    {
+      action: {
+        code: 'SERVICE_HVAC',
+        label: 'Service HVAC',
+        priority: 'high',
+        responsibilityScope: 'HVAC',
+      },
+      family: 'weather',
+      impact: 'moderate',
+      confidence: 'medium',
+      purpose: 'service_pricing',
+      pathname: '/dashboard/properties/property-1/tools/service-price-radar',
+      fixed: { category: 'HVAC', label: 'HVAC service' },
+    },
+    {
+      action: {
+        code: 'DOCUMENT_ROOF',
+        label: 'Document roof',
+        priority: 'medium',
+        responsibilityScope: 'ROOF',
+      },
+      family: 'insurance',
+      impact: 'moderate',
+      confidence: 'medium',
+      purpose: 'document_vault',
+      pathname: '/dashboard/documents',
+      fixed: { action: 'upload' },
+    },
+    {
+      action: {
+        code: 'INSPECT_ROOF',
+        label: 'Inspect roof',
+        priority: 'high',
+        responsibilityScope: 'ROOF',
+      },
+      family: 'weather',
+      impact: 'watch',
+      confidence: 'medium',
+      purpose: 'provider_search',
+      pathname: '/dashboard/providers',
+      fixed: { category: 'INSPECTION', workCategory: 'ROOFING' },
+    },
+    {
+      action: {
+        code: 'REVIEW_POLICY',
+        label: 'Review policy',
+        priority: 'high',
+      },
+      family: 'insurance',
+      impact: 'watch',
+      confidence: 'medium',
+      purpose: 'coverage_review',
+      pathname: '/dashboard/coverage-intelligence',
+      fixed: {},
+    },
+  ];
+
+  for (const scenario of cases) {
+    const [projected] = projectRadarActions({
+      storedActions: [scenario.action],
+      sourceFamily: scenario.family,
+      impact: scenario.impact,
+      confidence: scenario.confidence,
+      propertyId: 'property-1',
+      matchId: 'match-1',
+      eventId: 'event-1',
+      incidentId: 'incident-1',
+      guidanceJourneyId: 'journey-1',
+      guidanceStepKey: 'step-1',
+    });
+    assert.equal(projected.destination.kind, 'internal');
+    assert.equal(projected.destination.purpose, scenario.purpose);
+    assert.ok(projected.destination.label);
+    const url = new URL(projected.destination.href, 'https://example.test');
+    assert.equal(url.pathname, scenario.pathname);
+    assert.equal(url.searchParams.get('incidentId'), 'incident-1');
+    assert.equal(url.searchParams.get('journeyId'), 'journey-1');
+    assert.equal(url.searchParams.get('guidanceJourneyId'), 'journey-1');
+    assert.equal(url.searchParams.get('guidanceStepKey'), 'step-1');
+    for (const [key, value] of Object.entries(scenario.fixed)) {
+      assert.equal(url.searchParams.get(key), value);
+    }
+  }
 });
 
 test('official-source destinations permit HTTPS only and otherwise remain informational', () => {
@@ -193,8 +308,15 @@ test('official-source destinations permit HTTPS only and otherwise remain inform
   });
   assert.deepEqual(safe.destination, {
     kind: 'external',
+    purpose: 'official_instructions',
+    label: 'Open official instructions',
     href: 'https://alerts.weather.gov/example',
   });
+  assert.equal(
+    new URL(safe.destination.href).searchParams.get('radarMatchId'),
+    null,
+    'property lineage must not leak to an external provider URL',
+  );
 
   const [unsafe] = projection({
     storedActions: [monitor],
@@ -203,5 +325,10 @@ test('official-source destinations permit HTTPS only and otherwise remain inform
     confidence: 'low',
     officialSourceUrl: 'http://untrusted.example/event',
   });
-  assert.deepEqual(unsafe.destination, { kind: 'informational', href: null });
+  assert.deepEqual(unsafe.destination, {
+    kind: 'informational',
+    purpose: null,
+    label: null,
+    href: null,
+  });
 });

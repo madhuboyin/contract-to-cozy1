@@ -13,6 +13,9 @@ export type ToolDestinationPrefill = {
   issueType: string | null;
   scopeCategory: string | null;
   scopeId: string | null;
+  radarMatchId?: string | null;
+  radarEventId?: string | null;
+  incidentId?: string | null;
 };
 
 export type ResolvedToolDestinationContext = {
@@ -120,6 +123,11 @@ export function resolveToolDestinationContext(args: {
       issueType: journey?.issueType ?? null,
       scopeCategory: journey?.scopeCategory ?? null,
       scopeId: journeyScopeId,
+      radarMatchId: context.radarMatchId ?? (
+        context.sourceEntityType === 'RADAR_MATCH' ? entityId : null
+      ),
+      radarEventId: context.radarEventId ?? null,
+      incidentId: context.incidentId ?? null,
     },
     actionPlanHref,
     journeyHref,

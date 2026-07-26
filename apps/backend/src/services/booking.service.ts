@@ -168,6 +168,34 @@ export class BookingService {
       throw new Error('Property not found or does not belong to you');
     }
 
+    if (input.sourceRadarMatchId) {
+      const sourceMatch = await prisma.propertyRadarMatch.findFirst({
+        where: {
+          id: input.sourceRadarMatchId,
+          propertyId: input.propertyId,
+        },
+        select: {
+          radarEventId: true,
+          incident: { select: { id: true } },
+        },
+      });
+      if (!sourceMatch) {
+        throw new Error('Radar source match does not belong to selected property');
+      }
+      if (
+        input.sourceRadarEventId
+        && input.sourceRadarEventId !== sourceMatch.radarEventId
+      ) {
+        throw new Error('Radar source event does not match the source match');
+      }
+      if (
+        input.sourceIncidentId
+        && input.sourceIncidentId !== sourceMatch.incident?.id
+      ) {
+        throw new Error('Radar source incident does not match the source match');
+      }
+    }
+
     // Validate provider — input.providerId is the provider profile ID from the URL
     if (input.providerId !== service.providerProfileId) {
       throw new Error('Provider ID does not match service provider');
@@ -397,6 +425,11 @@ export class BookingService {
         ...({
           guidanceJourneyId: options?.guidanceJourneyId ?? null,
           guidanceStepKey: options?.guidanceStepKey ?? null,
+          sourceRadarMatchId: input.sourceRadarMatchId ?? null,
+          sourceRadarEventId: input.sourceRadarEventId ?? null,
+          sourceIncidentId: input.sourceIncidentId ?? null,
+          sourceRadarActionCode: input.sourceRadarActionCode ?? null,
+          sourceLaunchSurface: input.sourceLaunchSurface ?? null,
         } as Record<string, unknown>),
         timeline: {
           create: {
@@ -1281,6 +1314,11 @@ export class BookingService {
       executionScopeKey: (booking as any).executionScopeKey || null,
       // Phase 5: cast until Prisma client is regenerated after schema migration
       guidanceJourneyId: (booking as any).guidanceJourneyId || null,
+      sourceRadarMatchId: (booking as any).sourceRadarMatchId || null,
+      sourceRadarEventId: (booking as any).sourceRadarEventId || null,
+      sourceIncidentId: (booking as any).sourceIncidentId || null,
+      sourceRadarActionCode: (booking as any).sourceRadarActionCode || null,
+      sourceLaunchSurface: (booking as any).sourceLaunchSurface || null,
       cancelledAt: booking.cancelledAt,
       cancelledBy: booking.cancelledBy,
       cancellationReason: booking.cancellationReason,

@@ -346,6 +346,8 @@ test('detail is a pure persisted-projection read and exposes revision provenance
   assert.equal(detail.recommendedActions[0].taskLink, null);
   assert.deepEqual(detail.recommendedActions[0].destination, {
     kind: 'informational',
+    purpose: null,
+    label: null,
     href: null,
   });
   assert.equal(detail.matchedSystems[0].type, 'roof');
@@ -437,6 +439,16 @@ test('detail projects only the current homeowner feedback contract', async () =>
 
 test('detail projects related Incident and Guidance without mutating either system', async () => {
   const linked = match({
+    recommendedActionsJson: {
+      actions: [{
+        code: 'INSPECT_ROOF',
+        label: 'Inspect roof',
+        priority: 'high',
+        responsibilityScope: 'ROOF',
+        responsibleParty: 'OWNER',
+        applicability: 'owner_action',
+      }],
+    },
     incident: {
       id: 'incident-1',
       status: 'ACTIVE',
@@ -461,6 +473,15 @@ test('detail projects related Incident and Guidance without mutating either syst
   assert.equal(detail.relatedGuidance.id, 'journey-1');
   assert.match(detail.relatedIncident.href, /incidents\/incident-1$/);
   assert.match(detail.relatedGuidance.href, /journeyId=journey-1$/);
+  const handoff = new URL(
+    detail.recommendedActions[0].destination.href,
+    'https://example.test',
+  );
+  assert.equal(handoff.pathname, '/dashboard/providers');
+  assert.equal(handoff.searchParams.get('radarMatchId'), 'match-1');
+  assert.equal(handoff.searchParams.get('incidentId'), 'incident-1');
+  assert.equal(handoff.searchParams.get('guidanceJourneyId'), 'journey-1');
+  assert.equal(handoff.searchParams.get('guidanceStepKey'), 'secure-outdoor-items');
   assert.deepEqual(writes, []);
   assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
 });

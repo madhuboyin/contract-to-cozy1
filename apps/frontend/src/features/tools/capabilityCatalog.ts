@@ -52,6 +52,9 @@ export function appendCapabilityLaunchContext(
     params.set('guidanceSignalIntentFamily', context.guidanceSignalIntentFamily);
   }
   if (context.itemId) params.set('itemId', context.itemId);
+  if (context.radarMatchId) params.set('radarMatchId', context.radarMatchId);
+  if (context.radarEventId) params.set('radarEventId', context.radarEventId);
+  if (context.incidentId) params.set('incidentId', context.incidentId);
   const suffix = params.toString();
   return suffix ? `${href}${href.includes('?') ? '&' : '?'}${suffix}` : href;
 }

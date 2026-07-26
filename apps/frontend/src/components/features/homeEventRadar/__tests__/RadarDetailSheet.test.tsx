@@ -103,7 +103,12 @@ const detail: RadarCanonicalDetail = {
       'link_existing_task',
     ],
     taskLink: null,
-    destination: { kind: 'informational', href: null },
+    destination: {
+      kind: 'informational',
+      purpose: null,
+      label: null,
+      href: null,
+    },
   }],
   canonicalUrl: 'https://www.weather.gov/example',
   observedAt: '2026-07-26T11:30:00.000Z',
@@ -209,6 +214,8 @@ describe('RadarDetailSheet', () => {
           targetCapability: 'coverage-options',
           destination: {
             kind: 'internal',
+            purpose: 'coverage_review',
+            label: 'Compare coverage options',
             href: '/dashboard/properties/property-1/tools/coverage-options?radarMatchId=match-1',
           },
         },
@@ -221,6 +228,8 @@ describe('RadarDetailSheet', () => {
           targetCapability: null,
           destination: {
             kind: 'external',
+            purpose: 'official_instructions',
+            label: 'Open official instructions',
             href: 'https://alerts.weather.gov/example',
           },
         },
@@ -228,7 +237,7 @@ describe('RadarDetailSheet', () => {
     });
     renderSheet();
 
-    expect(await screen.findByRole('link', { name: 'Continue' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Compare coverage options' })).toHaveAttribute(
       'href',
       '/dashboard/properties/property-1/tools/coverage-options?radarMatchId=match-1',
     );
@@ -239,6 +248,20 @@ describe('RadarDetailSheet', () => {
     expect(screen.getByRole('link', { name: /Open official instructions/i })).toHaveAttribute(
       'rel',
       'noopener noreferrer',
+    );
+    const coverageLink = screen.getByRole('link', { name: 'Compare coverage options' });
+    coverageLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    fireEvent.click(coverageLink);
+    expect(api.trackHomeEventRadarEvent).toHaveBeenCalledWith(
+      'property-1',
+      expect.objectContaining({
+        event: 'ACTION_HANDOFF_OPENED',
+        metadata: expect.objectContaining({
+          action_code: 'GET_QUOTES',
+          destination_purpose: 'coverage_review',
+          target_capability: 'coverage-options',
+        }),
+      }),
     );
   });
 

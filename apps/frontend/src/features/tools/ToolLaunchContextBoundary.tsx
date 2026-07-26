@@ -30,10 +30,14 @@ export type ToolLaunchContextValue = {
 const Context = createContext<ToolLaunchContextValue>(null);
 const PROPERTY_PATH = /^\/dashboard\/properties\/([^/]+)(?:\/|$)/;
 
-function readPropertyId(pathname: string, selectedPropertyId?: string | null): string | null {
+function readPropertyId(
+  pathname: string,
+  queryPropertyId?: string | null,
+  selectedPropertyId?: string | null,
+): string | null {
   const match = pathname.match(PROPERTY_PATH);
   if (match?.[1]) return decodeURIComponent(match[1]);
-  return selectedPropertyId ?? null;
+  return queryPropertyId ?? selectedPropertyId ?? null;
 }
 
 export function useToolLaunchContext(): ToolLaunchContextValue {
@@ -49,7 +53,11 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
   const baseValue = useMemo(() => {
     const href = query ? `${pathname}?${query}` : pathname;
     const tool = findDiscoverableToolByHref(href);
-    const propertyId = readPropertyId(pathname, selectedPropertyId);
+    const propertyId = readPropertyId(
+      pathname,
+      searchParams.get('propertyId'),
+      selectedPropertyId,
+    );
     if (!tool || !propertyId) return null;
 
     return {

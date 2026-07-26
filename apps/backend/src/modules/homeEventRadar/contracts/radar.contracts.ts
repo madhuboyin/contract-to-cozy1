@@ -553,6 +553,16 @@ export const radarDetailResponseSchema = radarFeedItemSchema.extend({
     }).nullable(),
     destination: z.object({
       kind: z.enum(['informational', 'internal', 'external']),
+      purpose: z.enum([
+        'coverage_review',
+        'service_pricing',
+        'maintenance',
+        'document_vault',
+        'provider_search',
+        'official_instructions',
+        'other_tool',
+      ]).nullable(),
+      label: z.string().min(1).max(120).nullable(),
       href: z.string().min(1).nullable(),
     }),
   })),

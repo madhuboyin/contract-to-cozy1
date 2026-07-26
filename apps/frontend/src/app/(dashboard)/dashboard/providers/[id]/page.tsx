@@ -32,6 +32,10 @@ import {
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { extractGuidanceContinuityContext, hasGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
+import {
+  forwardRadarHandoffContinuity,
+  sanitizeDashboardReturnTo,
+} from '@/lib/navigation/radarHandoffContinuity';
 interface CompleteUser extends User {
   phone: string | null;
   email: string;
@@ -70,7 +74,7 @@ export default function ProviderDetailPage() {
   const vendorName = searchParams.get('vendorName');
   const serviceLabel = searchParams.get('serviceLabel');
   const workCategory = searchParams.get('workCategory');
-  const returnTo = searchParams.get('returnTo');
+  const returnTo = sanitizeDashboardReturnTo(searchParams.get('returnTo'));
   const intent = searchParams.get('intent');
   const actionKey = searchParams.get('actionKey');
   const hasGuardScopeContext = Boolean(
@@ -326,9 +330,10 @@ export default function ProviderDetailPage() {
     if (returnTo) queryParams.append('returnTo', returnTo);
     if (intent) queryParams.append('intent', intent);
     if (actionKey) queryParams.append('actionKey', actionKey);
+    forwardRadarHandoffContinuity(searchParams, queryParams);
 
     const fromParam = searchParams.get('from');
-    if (fromParam) queryParams.append('from', fromParam);
+    if (fromParam && !queryParams.has('from')) queryParams.set('from', fromParam);
 
     const baseUrl = `/dashboard/providers/${providerId}/book`;
     return queryParams.toString() ? `${baseUrl}?${queryParams.toString()}` : baseUrl;
