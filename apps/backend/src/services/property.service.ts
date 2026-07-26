@@ -21,6 +21,11 @@ import { reevaluateActiveWeatherIncidentsForProperty } from './incidents/inciden
 import { reconcileCoverageGuidanceJourneyApplicability } from './coverageJourneyReconciliation.service';
 import { SeasonalChecklistService } from './seasonalChecklist.service';
 import { resolveCurrentSeasonWindow } from './seasonal/seasonWindow';
+import {
+  buildPropertyGeographyInvalidation,
+  hasPropertyLocationIdentityChanged,
+  normalizeUsZip,
+} from '../modules/homeEventRadar/domain/propertyGeography';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -446,7 +451,9 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       address: data.address,
       city: data.city,
       state: data.state.toUpperCase(),
-      zipCode: data.zipCode,
+      zipCode: normalizeUsZip(data.zipCode),
+      normalizedZipCode: normalizeUsZip(data.zipCode),
+      geocodingStatus: 'PENDING',
       isPrimary: data.isPrimary || false,
       
       // PHASE 2 ADDITIONS - FIX: Ensure all optional fields are explicitly null if undefined/missing
@@ -834,7 +841,7 @@ export async function updateProperty(
   if (data.address !== undefined) updatePayload.address = data.address;
   if (data.city !== undefined) updatePayload.city = data.city;
   if (data.state !== undefined) updatePayload.state = data.state.toUpperCase();
-  if (data.zipCode !== undefined) updatePayload.zipCode = data.zipCode;
+  if (data.zipCode !== undefined) updatePayload.zipCode = normalizeUsZip(data.zipCode);
   if (data.isPrimary !== undefined) updatePayload.isPrimary = data.isPrimary;
   
   // PHASE 2 ADDITIONS - Dynamically set new fields for update
@@ -907,8 +914,18 @@ export async function updateProperty(
     updatePayload.coverPhotoDocumentId = resolvedCoverPhotoDocumentId ?? null;
   }
 
+  const locationIdentityChanged = hasPropertyLocationIdentityChanged(existingProperty, {
+    ...(data.address !== undefined ? { address: data.address } : {}),
+    ...(data.city !== undefined ? { city: data.city } : {}),
+    ...(data.state !== undefined ? { state: data.state } : {}),
+    ...(data.zipCode !== undefined ? { zipCode: data.zipCode } : {}),
+  });
+
   const propertyUpdateData: Prisma.PropertyUpdateInput = {
     ...updatePayload,
+    ...(locationIdentityChanged
+      ? buildPropertyGeographyInvalidation(data.zipCode ?? existingProperty.zipCode)
+      : {}),
     ...(data.exteriorProfile !== undefined ? {
       exteriorProfile: {
         upsert: { create: data.exteriorProfile, update: data.exteriorProfile },
@@ -918,6 +935,19 @@ export async function updateProperty(
   const factKeys = capturedFactKeys(data);
   const capturedAt = new Date();
   const property = await prisma.$transaction(async (tx) => {
+    if (locationIdentityChanged) {
+      // Coverage and matches are disposable projections of the previous
+      // property geography. Delete them in the same transaction as the
+      // address change so stale matches cannot survive a location edit.
+      await tx.propertyRadarCoverage.deleteMany({ where: { propertyId } });
+      await tx.propertyRadarMatch.deleteMany({ where: { propertyId } });
+      await tx.$executeRaw`
+        UPDATE "properties"
+        SET "locationPoint" = NULL
+        WHERE "id" = ${propertyId}
+      `;
+    }
+
     const updated = await tx.property.update({
       where: { id: propertyId },
       data: propertyUpdateData,

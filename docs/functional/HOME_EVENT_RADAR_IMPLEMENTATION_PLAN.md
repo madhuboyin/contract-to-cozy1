@@ -21,7 +21,10 @@
 | HER-002 Canonical contracts | Complete for Phase 0 | Runtime-validated observation, geography, source, health, coverage, match, action, overview, feed, and detail contracts |
 | HER-003 Product copy truth pass | Complete | Interim source availability, qualified empty state, and Incident handoff |
 | HER-004 Critical baseline tests | Complete | Contract, route, authorization wiring, dummy-ingest, tax policy, and weather lifecycle guards |
-| Phase 1+ | Not started | Persistence, source runs, ingestion, geospatial matching, and provider convergence remain |
+| HER-100 Persistence schema | Complete; DB application pending | Source definitions/health/runs/coverage, event revisions, match explanation/confidence, feedback/preferences, and unique Incident bridge |
+| HER-101 Canonical property geography | Complete; DB application pending | Normalized ZIP/FIPS, geocoding state/version, PostGIS geography columns and GIST indexes, location-change invalidation |
+| HER-102–HER-106 | Not started | Source registry/run services, canonical ingestion, adapter harness, and fixture convergence remain |
+| Phase 2+ | Not started | Live-provider convergence, durable matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database

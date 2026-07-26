@@ -27,6 +27,19 @@ const pointSchema = z.object({
   longitude: z.number().min(-180).max(180),
 });
 
+const polygonRingSchema = z.array(
+  z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
+).min(4).superRefine((ring, ctx) => {
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (!first || !last || first[0] !== last[0] || first[1] !== last[1]) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'GeoJSON polygon rings must be closed',
+    });
+  }
+});
+
 export const normalizedGeographySchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('property'),
@@ -57,9 +70,7 @@ export const normalizedGeographySchema = z.discriminatedUnion('type', [
     type: z.literal('polygon'),
     geoJson: z.object({
       type: z.literal('Polygon'),
-      coordinates: z.array(
-        z.array(z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])).min(4),
-      ).min(1),
+      coordinates: z.array(polygonRingSchema).min(1),
     }),
   }),
 ]);

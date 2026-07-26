@@ -1,6 +1,7 @@
 // apps/workers/src/lib/propertyGeo.ts
 import { prisma } from './prisma';
 import { geocodeZip, Geo } from './geocodeZip';
+import { normalizeUsZip } from '@worker-shared/modules/homeEventRadar/domain/propertyGeography';
 
 type GeocodableProperty = {
   id: string;
@@ -12,12 +13,48 @@ type GeocodableProperty = {
 
 async function persist(propertyId: string, zip: string, geo: Geo): Promise<void> {
   try {
-    await prisma.property.update({
-      where: { id: propertyId },
-      data: { latitude: geo.lat, longitude: geo.lon, geocodedZipCode: zip },
+    const normalizedZipCode = normalizeUsZip(zip);
+    await prisma.$transaction(async (tx) => {
+      await tx.propertyRadarCoverage.deleteMany({ where: { propertyId } });
+      await tx.propertyRadarMatch.deleteMany({ where: { propertyId } });
+      await tx.property.update({
+        where: { id: propertyId },
+        data: {
+          latitude: geo.lat,
+          longitude: geo.lon,
+          geocodedZipCode: normalizedZipCode,
+          normalizedZipCode,
+          geocodingStatus: 'VERIFIED',
+          geocodingProvider: 'open-meteo',
+          geocodingVersion: 'open-meteo-geocoding-v1',
+          geocodedAt: new Date(),
+          geographyVersion: { increment: 1 },
+        },
+      });
+      await tx.$executeRaw`
+        UPDATE "properties"
+        SET "locationPoint" = ST_SetSRID(ST_MakePoint(${geo.lon}, ${geo.lat}), 4326)::geography
+        WHERE "id" = ${propertyId}
+      `;
     });
   } catch {
     // Non-fatal: worst case we re-geocode this property on the next run.
+  }
+}
+
+async function persistFailure(propertyId: string, zip: string): Promise<void> {
+  try {
+    await prisma.property.update({
+      where: { id: propertyId },
+      data: {
+        normalizedZipCode: normalizeUsZip(zip),
+        geocodingStatus: 'FAILED',
+        geocodingProvider: 'open-meteo',
+        geocodingVersion: 'open-meteo-geocoding-v1',
+      },
+    });
+  } catch {
+    // A failed status write must not turn a provider miss into a job failure.
   }
 }
 
@@ -50,11 +87,13 @@ export async function getPropertyGeo(
   if (runCache?.has(zip)) {
     const cached = runCache.get(zip) ?? null;
     if (cached) await persist(property.id, zip, cached);
+    else await persistFailure(property.id, zip);
     return cached;
   }
 
   const geo = await geocodeZip(zip, 'US');
   runCache?.set(zip, geo);
   if (geo) await persist(property.id, zip, geo);
+  else await persistFailure(property.id, zip);
   return geo;
 }
