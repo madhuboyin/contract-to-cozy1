@@ -1,4 +1,4 @@
-_PRODUCT & ENGINEERING ENHANCEMENT PLAN_
+_PRODUCT, ENGINEERING & ROLLOUT STATUS_
 
 # Mortgage Refinance Radar
 
@@ -6,111 +6,58 @@ _PRODUCT & ENGINEERING ENHANCEMENT PLAN_
 
 **Prepared for:** ContractToCozy Product, Design, Engineering, Data, and Growth
 
-**Date:** July 25, 2026
+**Last updated:** July 26, 2026
 
-**Baseline:** main @ c5c9332 — canonical mortgage sync and Gazette correctness fix
+**Implementation baseline:** main @ f589baf — isolated Prisma schema-push runtime and successful production schema synchronization
 
-**Status:** Active implementation roadmap
+**Status:** Core implementation complete; controlled external-alert rollout remains operationally gated
 
-**Implementation status (July 25, 2026):** The correctness and always-on
-foundation is implemented, and the explainability and personalization roadmap
-is substantially delivered. A
-newly persisted mortgage-rate snapshot now triggers a paginated, bounded
-evaluation sweep of complete canonical Financing profiles, with per-snapshot
-idempotency and run totals. The current radar card is mounted on Home and the
-property overview; Home suppresses CLOSED monitoring and requests missing
-mortgage facts only after a meaningful rate decline. The radar now requests 52
-weekly observations and renders a personalized one-year rate chart with
-30-/15-year and 3-month/1-year controls, a current-note-rate benchmark,
-freshness/source details, keyboard-accessible data points, and a table
-fallback—including beneath an incomplete-mortgage setup state. Outbox-backed
-OPEN, material UPDATE, and CLOSED transitions are now written atomically with
-the current radar state and opportunity record, using a stable
-property/snapshot/transition idempotency key. The shared domain-event worker
-acknowledges these events with its existing multi-worker claim, exponential
-backoff, and failure isolation behavior; events that fail eight attempts now
-move to a terminal dead-letter state with run-level observability. Durable
-refinance transitions are now exposed through the property-scoped rate-history
-contract and replayed on the chart: OPEN uses a diamond, material UPDATE a
-ring, and CLOSED a square, with shaded opportunity windows, keyboard labels,
-and equivalent table values. Property/snapshot evaluation work now uses durable
-lease-token claims with expiry recovery, bounded attempts, and dead-letter
-state; rerunning ingestion for an existing snapshot resumes unfinished
-properties instead of waiting for the next weekly observation. A separate
-post-ingestion sweep now persists DATA_REQUIRED events for incomplete profiles
-only after a meaningful rate decline, with a 30-day event cooldown. Home
-projects those events through a stable action key so canonical snooze and
-dismissal controls apply, suppresses the action as soon as the profile is
-complete, and lets a homeowner record that the property has no mortgage so
-future radar prompts stop. External-notification rollout remains explicitly
-opt-in and operationally gated. The radar now also calculates the highest approximate
-30-year benchmark that clears every existing OPEN gate under the homeowner's
-current saved assumptions. Fresh and read-only status responses expose that
-personalized monitoring threshold plus the top three ordered decision factors;
-the UI labels the result as modeled market context rather than a lender quote.
-Status responses now also classify the saved mortgage balance and weekly market
-benchmark as CURRENT, AGING, STALE, or UNKNOWN. An external-alert-readiness
-contract fails closed for any non-current market input or an unverified,
-aging, or stale mortgage balance, while keeping in-product monitoring and
-estimates available with calm warnings and a direct path to confirm the
-canonical Financing record. Property-scoped alert preferences now keep Home
-monitoring always on, require explicit email opt-in, offer immediate/digest
-cadence, quiet hours, and conservative/balanced/early sensitivity. Push is
-available only when a VAPID public key is configured. Permission is requested
-only after an explicit homeowner action, browser subscriptions are stored per
-user and device, and the property preference is confirmed separately.
-Refinance no longer inherits legacy email defaults. External delivery remains
-disabled during the pilot; email and push have independent rollout gates.
-The guarded delivery consumer is now implemented for durable OPEN and material
-UPDATE events. It reloads canonical property state at consumption time,
-addresses only the owning homeowner, requires the explicit property-scoped
-email preference, current mortgage and market inputs, configured confidence,
-and a 30-day property cooldown. CLOSED and DATA_REQUIRED remain Home-only.
-Notification metadata intentionally omits balances, rates, and savings. Two
-independent fail-closed controls—`REFINANCE_EXTERNAL_ALERTS_ENABLED` and
-`WORKER_OUTBOUND_NOTIFICATIONS_ENABLED`—must both be exactly `true`; therefore
-external delivery remains off by default. Existing notification policy applies
-the homeowner's cadence, timezone, and quiet hours once the alert is admitted.
-External alerts additionally default to
-`REFINANCE_ALERT_ROLLOUT_MODE=ALLOWLIST`; an empty recipient allowlist
-suppresses every refinance email and push. Admission and both transport
-workers re-check the recipient cohort, so a queued delivery cannot bypass a
-tightened rollout setting. `GENERAL` must be an explicit operator promotion,
-and startup validation rejects an enabled alert channel with an empty
-allowlist or invalid mode.
-The Web Push worker sends only title, calm summary text, and a product deep
-link; mortgage balance, rate, savings, and other sensitive figures are
-excluded. Expired subscriptions are revoked after provider 404/410 responses.
-Delivery requires `WEB_PUSH_DELIVERY_ENABLED`,
-`REFINANCE_PUSH_ALERTS_ENABLED`, `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED`, and
-complete VAPID subject/public/private configuration. The Prisma subscription
-model is included, but no migration script is generated; schema deployment
-remains an operator action.
-The scenario planner's first expanded-assumptions slice is also implemented.
-Homeowners can itemize discount points, lender credits, and appraisal/title/tax
-or other fees instead of relying on one opaque cost value. Results distinguish
-gross and net modeled costs, cash to close, note rate versus modeled APR, and
-the current versus refinanced payoff date. Saved scenarios retain this detail
-in the existing metadata JSON, so no database schema change or migration is
-required. APR remains clearly labeled as an educational estimate rather than a
-lender disclosure.
-The next eligibility-context slice now reuses canonical Property and Financing
-facts to show first-lien LTV, combined LTV, estimated equity, second liens, and
-recorded mortgage insurance. A dated appraisal is preferred; purchase price is
-used only as an explicitly low-confidence fallback. If a second lien is known
-but its balance is missing, combined LTV and equity fail closed instead of
-assuming zero. Stale or missing values link back to the existing Property or
-Financing records for correction. These signals remain planning context—not an
-approval, appraisal, or program-eligibility claim—and require no schema change.
-The objective layer is now implemented in the scenario planner. Homeowners can
-prioritize balanced savings, lower monthly payment, faster payoff, or lower
-total cost. Every run compares 15-, 20-, and 30-year terms under the same
-entered rate and cost assumptions, returns an accessible side-by-side table,
-and explains the recommended term's payment, payoff, and lifetime-cost
-tradeoffs. Balanced mode will not recommend a modeled payment increase when an
-option that lowers payment exists. The interface explicitly warns that lender
-rates and fees vary by term. Objective and comparison details use existing
-scenario metadata JSON, so no schema change or migration is required.
+**Document source of truth:** This Markdown file. The legacy DOCX is not
+maintained and should not be used for implementation or rollout status.
+
+### Current implementation status
+
+As of July 26, 2026, Releases 0 through 3 and the advanced decision-intelligence
+slices described in this plan are implemented. The radar now:
+
+- Reuses the canonical Financing profile, pre-populates every known mortgage
+  fact, requests only missing required fields, and automatically re-evaluates
+  after canonical updates.
+- Runs paginated, resumable weekly property evaluation with lease-token claims,
+  bounded retries, dead-letter handling, run totals, and per-snapshot
+  idempotency.
+- Persists replay-safe OPEN, material UPDATE, CLOSED, and DATA_REQUIRED
+  transitions and promotes the current actionable state to Home and Gazette.
+- Shows a personalized, accessible 52-week rate chart with product/range
+  controls, current-note-rate and trigger-rate context, opportunity windows,
+  source/freshness details, keyboard support, and a table fallback.
+- Provides property-scoped alert preferences and guarded email/Web Push
+  delivery with explicit consent, cadence, quiet hours, sensitivity, cooldown,
+  material-improvement overrides, freshness/confidence checks, and cohort
+  enforcement at admission and transport.
+- Models detailed costs, APR, payoff-date movement, LTV/CLTV, liens, mortgage
+  insurance, objectives, multiple terms, retain/recast/extra-principal/cash-out
+  alternatives, and FHA/VA/jumbo/ARM/multiple-mortgage planning context without
+  making lender approval claims.
+- Exports lender-ready Markdown and provides a homeowner-controlled official
+  Loan Estimate comparison workflow with reviewed extraction, OCR, rate-lock,
+  points, cash-direction, payment, five-year-cost, save/delete, and manual
+  sharing safeguards.
+- Aggregates funnel, usefulness, delivery-suppression, duplicate-alert,
+  coverage, and freshness guardrails through the authorized refinance-radar
+  analytics report.
+
+The production Prisma schema, including `PushSubscription`, has been applied
+successfully using the isolated non-root schema-push Job in
+`apps/backend/run-schema-push-job.sh`. No Prisma migration script was created,
+in accordance with the project constraint.
+
+The remaining work is operational rollout, not missing core implementation:
+configure VAPID and outbound-provider secrets, define the internal recipient
+allowlist, enable the fail-closed channel flags for that cohort, validate
+delivery/duplicate/opt-out/freshness guardrails, and promote
+`REFINANCE_ALERT_ROLLOUT_MODE` from `ALLOWLIST` to `GENERAL` only after approval.
+Transactional lender delivery remains intentionally out of scope and gated.
 
 ### Current completion matrix
 
@@ -129,47 +76,51 @@ scenario metadata JSON, so no schema change or migration is required.
 | Lender-ready Markdown export | Complete | Recomputes against canonical context and exports assumptions, costs, alternatives, questions, and disclaimers as Markdown only. |
 | Funnel and trust instrumentation and reporting | Complete | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, durable alert-suppression outcomes, evaluation coverage, duplicate alerts, and freshness guardrails are aggregated through the authorized `/api/admin/analytics/refinance-radar` report. |
 | FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Complete for planning | Explicit Financing loan types drive FHA streamline, VA IRRRL, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, and second-lien coordination pathways. Every pathway lists facts to confirm and avoids approval claims or hard-coded county limits. |
-| Push notifications | Implemented; cohort rollout gated | Explicit browser consent, persisted per-device subscriptions, property-scoped PUSH preferences, VAPID delivery, minimal payloads, stale-subscription cleanup, recipient-cohort enforcement, and fail-closed rollout controls are implemented. Operators must apply the Prisma schema and configure VAPID keys, an internal allowlist, and rollout flags. |
+| Push notifications | Implemented; cohort rollout gated | Explicit browser consent, persisted per-device subscriptions, property-scoped PUSH preferences, VAPID delivery, minimal payloads, stale-subscription cleanup, recipient-cohort enforcement, and fail-closed rollout controls are implemented. The production Prisma schema has been applied; VAPID keys, an internal allowlist, rollout flags, and controlled delivery validation remain operational gates. |
 | Lender-offer and Loan Estimate comparison | Reviewed comparison and homeowner-controlled handoff complete | Homeowners can compare two to four official Loan Estimates using loan amount, disclosed APR, principal-and-interest payment, estimated total payment, monthly mortgage insurance, lender costs/credits, cash to close, and page-3 five-year totals. Cash to close is recorded as from or to the borrower and is ranked only when every offer is cash-from-borrower with the same amount, product, and term; unknown, mixed, or cash-to-borrower disclosures remain visible but cannot earn a misleading lowest-cash badge. Readable direction text is extracted from page 2, and all exports preserve the direction. Total-payment rankings appear only when every offer supplies that field, and the interface separates mortgage insurance plus lender-estimated tax, insurance, and escrow assumptions from P&I. Page-1 extraction prefills readable Projected Payments values and warns about mortgage insurance or incomplete all-in payment context. Section A discount points are captured as both percentage and dollars, checked against the loan amount, and shown separately from net loan costs so a bought-down rate is not mistaken for a free advantage. Page-2 extraction prefills readable points, while incomplete or inconsistent point disclosures require review. For offers with the same amount, product, and term, the comparison quantifies how long a lower monthly principal-and-interest payment takes to recover additional net loan costs; it also warns when a higher-cost offer does not lower payment. The tradeoff is explicitly limited to disclosed net loan costs and P&I and excludes taxes, insurance, escrow, future refinancing, and time value of money. The comparison records each disclosure's issue date, rate-lock status, and lock expiration; it warns on older disclosures, expired or incomplete locks, different issue dates, and mixed locked/floating offers. Saved comparisons are re-evaluated when read so time-sensitive lock warnings do not freeze at save time. A text-layer or scanned PDF, or up to three image pages, can prefill an editable offer through a non-retained, magic-byte-validated upload, including the standardized page-1 issue date when readable. Scanned PDFs are safely capped at three pages; PDF and image pages use sequential local OCR, expose field provenance, and cap every OCR-derived field at medium confidence. Standard page sections are detected automatically, with visible completeness, duplicate-page, and ordering checks before comparison. Every extracted field requires explicit review before comparison or saving. Different loan amounts and unlike terms fail visibly as comparison warnings. Homeowners can export a Markdown-only review package with lender questions and an apples-to-apples verification checklist. After selecting one offer and completing explicit figure, comparability, and manual-sharing acknowledgements, the homeowner can also download a selected-lender discussion brief. That brief intentionally omits competitor identities and is never transmitted by ContractToCozy. Comparisons remain transient by default, persist only after an explicit Save action, and can be permanently deleted through a two-step property-scoped control. Any future transactional lender delivery remains gated. |
 
 ## Executive recommendation
 
-> **Decision:** Fund a three-release evolution that makes the radar genuinely proactive: evaluate every eligible property after each rate update, promote state transitions onto Home, and explain the decision with a one-year rate view and complete cost assumptions.
+> **Current decision:** Treat the planned product implementation as complete
+> and proceed only with controlled external-alert activation and evidence-based
+> rollout.
 
 The feature now has the calculation, orchestration, Home promotion, proactive
 data capture, explainability, Markdown export, feedback, and official
 Loan Estimate comparison foundations required for an always-on product.
-Remaining product work is operational: apply the PushSubscription schema,
-provision VAPID configuration and the internal recipient allowlist, enable
-email and/or push for that cohort, and promote the mode to `GENERAL` only after
-delivery, duplicate, opt-out, and freshness guardrails pass. Any future
+The `PushSubscription` schema is deployed. Remaining work is operational:
+provision VAPID and outbound-provider configuration, define the internal
+recipient allowlist, enable email and/or push for that cohort, and promote the
+mode to `GENERAL` only after delivery, duplicate, opt-out, and freshness
+guardrails pass. Any future
 transactional lender delivery remains deliberately gated. Exports remain
 Markdown-only and keep the homeowner in control of external sharing.
 
-- Treat Financing Center as the only owner of mortgage facts; never ask users to duplicate known information.
+- Preserve Financing Center as the only owner of mortgage facts.
 
-- Turn each successful rate ingestion into an idempotent evaluation cycle across eligible properties.
+- Monitor weekly evaluation coverage, retries, dead letters, and transition lag.
 
-- Create explicit OPEN, UPDATE, and CLOSED events that power Home, Gazette, and optional notifications.
+- Keep external alerts in `ALLOWLIST` until the trust guardrails have sufficient evidence.
 
-- Replace the short rate list with a 52-week visual that overlays the homeowner’s rate and opportunity windows.
+- Validate email and push independently; do not infer one channel is ready from the other.
 
-- Improve decision quality with APR, points, fees, term reset, LTV, eligibility, PMI, and alternative actions.
+- Preserve homeowner-controlled Markdown sharing and the transactional-lender gate.
 
-- Measure alert usefulness and suppress noisy or low-confidence prompts.
+- Continue measuring alert usefulness and suppress noisy, stale, duplicate, or low-confidence prompts.
 
 ## 1. Current-state assessment
 
-The assessment below combines repository inspection, the reported production behavior, and the fixes delivered in baseline commit c5c9332. “Current state” describes the implementation after that correctness fix; roadmap items remain unimplemented unless explicitly stated.
+This assessment reflects the implementation and production schema state as of
+July 26, 2026.
 
-| Area | Current state | Gap / risk | Recommended action |
+| Area | Current state | Remaining risk / gate | Current action |
 | --- | --- | --- | --- |
-| Mortgage context | Financing Center is the canonical owner. Radar reads PropertyFinancingProfile. | Unavailable UI previously opened a blank duplicate form; context policy also required a nonessential as-of date. | Keep one canonical profile; pull known values, request only missing facts, and retry evaluation automatically. |
-| Rate ingestion | A scheduled worker ingests 30-year and 15-year benchmark rates. | Ingestion does not trigger evaluation across eligible properties. | Run a property-scoped evaluation fan-out after each successful rate snapshot. |
-| Home visibility | Gazette can consume a persisted open opportunity; a dedicated dashboard card exists. | The card is not mounted, and Gazette previously read historical OPEN rows and used a broken link. | Promote current state transitions to Home, Gazette, and optional notifications using one event contract. |
-| Rate history | The UI shows 12 snapshots in a list. The endpoint supports up to 52. | Homeowners cannot see a one-year trend, their own rate benchmark, or past opportunity windows. | Add an accessible 52-week chart with current-loan line, open/close markers, and source freshness. |
-| Decision quality | The engine considers rate gap, balance, remaining term, savings, lifetime savings, closing cost, and break-even. | APR, points, term reset, eligibility, LTV, PMI, cash-out, and alternatives are not fully modeled. | Expand the decision model and explain both qualifying and non-qualifying factors. |
-| Proactive capture | Missing mortgage data is requested inside the radar. | There is no market-triggered Home nudge when rates fall and the profile is incomplete. | Create a low-frequency, consent-aware data-completion action that asks only for missing fields. |
+| Mortgage context | Complete. Financing is canonical; Radar reuses known values and requests only missing required facts. | Mortgage balance freshness can materially change external-alert confidence. | Keep in-product estimates available, show freshness, and request canonical confirmation only when material. |
+| Rate ingestion and evaluation | Complete. Weekly ingestion triggers resumable, paginated evaluation and DATA_REQUIRED sweeps with run observability. | Provider freshness, worker lag, retries, and dead letters require operations monitoring. | Monitor coverage and transition lag; investigate failed or stale runs before enabling outbound alerts. |
+| Home and Gazette visibility | Complete. Current OPEN opportunities and eligible DATA_REQUIRED actions use stable keys, valid deep links, and feedback controls. | Duplicate or stale actions would erode trust. | Continue duplicate, dismissal, snooze, no-mortgage, and CLOSED-state guardrail reporting. |
+| Rate history and explainability | Complete. The accessible 52-week chart includes homeowner/trigger context, transitions, opportunity windows, and freshness. | National benchmarks must not be presented as consumer quotes. | Preserve market-context language, source dates, non-color markers, and table equivalence. |
+| Decision quality | Complete for educational planning, including costs, APR, payoff, eligibility context, terms, alternatives, programs, and Loan Estimate review. | Official lender disclosures, appraisal, credit, income, and program eligibility remain authoritative. | Preserve assumptions, uncertainty, comparability gates, disclaimers, and homeowner-controlled sharing. |
+| Proactive capture and alerts | Home capture is complete; guarded email and push are implemented. | External delivery is not generally released and requires provider configuration, consent, cohort, freshness, confidence, and cooldown evidence. | Configure and validate an internal allowlist before any explicit `GENERAL` promotion. |
 
 ## 2. Product principles
 
@@ -203,53 +154,55 @@ The assessment below combines repository inspection, the reported production beh
 
 > **Core promise:** “We monitor the market and your mortgage context. When the economics materially change, we explain why—and we never make you enter the same fact twice.”
 
-## 4. Priority roadmap
+## 4. Delivered roadmap
 
-### P0 — Correctness and always-on foundations
+### P0 — Correctness and always-on foundations — Complete
 
-- Keep the canonical Financing profile read and prefill behavior delivered in c5c9332.
+- Canonical Financing profile read, known-field prefill, and missing-field-only behavior are delivered.
 
-- After successful rate ingestion, enqueue evaluation for every property with balance, rate, and remaining term.
+- Successful rate ingestion enqueues evaluation for every eligible complete property.
 
-- Use batch pagination, per-property leases, retries, dead-letter handling, and a run summary with examined/evaluated/opened/closed/failed counts.
+- Batch pagination, per-property leases, retries, dead-letter handling, resumability, and run summaries are delivered.
 
-- Emit state transitions only when the effective opportunity changes; preserve existing hysteresis and same-day deduplication.
+- State transitions emit only for effective opportunity changes and preserve hysteresis and deduplication.
 
-- Mount the refinance Home card and consume the same current-state contract used by Gazette.
+- Home and Gazette consume current property-scoped radar state through stable actions and links.
 
-- Generate DATA_REQUIRED only when the rate movement is meaningful and at least one required mortgage fact is absent.
+- DATA_REQUIRED is generated only after meaningful rate movement, for incomplete profiles, with cooldown and feedback controls.
 
-### P1 — Best-in-class homeowner experience
+### P1 — Best-in-class homeowner experience — Complete
 
-- Add the one-year rate chart specified in Section 5.
+- The one-year rate chart specified in Section 5 is delivered.
 
-- Show a personalized trigger rate: the approximate market rate at which the current mortgage would meet all opportunity gates.
+- Personalized trigger-rate and ordered decision-factor explanations are delivered.
 
-- Explain every closed decision with a concise reason hierarchy, such as insufficient rate gap, long break-even, low balance, or short remaining term.
+- Closed decisions expose a concise reason hierarchy and “what would need to change” context.
 
-- Add alert preferences: Home only, email, push when available, quiet hours, snooze, and opportunity threshold sensitivity.
+- Home, email, and push preferences, quiet hours, cadence, snooze, and sensitivity are delivered.
 
-- Support multi-property prioritization and display the property address on every alert.
+- Multi-property prioritization and property-identifying alert context are delivered.
 
-- Provide calm next steps: adjust assumptions, save scenario, export a lender-ready summary, or continue monitoring.
+- Calm next steps include assumption adjustment, scenario save/delete, Markdown export, Loan Estimate review, and continued monitoring.
 
-### P2 — Advanced decision intelligence
+### P2 — Advanced decision intelligence — Complete for educational planning
 
-- Model APR, points, lender credits, title and appraisal fees, taxes, escrow impact, and cash-to-close.
+- APR, points, lender credits, fees, taxes, escrow context, and cash-to-close are modeled.
 
-- Incorporate LTV/equity, occupancy, property type, loan type, conforming limits, and broad credit bands as eligibility inputs.
+- LTV/equity, liens, occupancy, property type, loan type, mortgage insurance, and conforming context are incorporated with confidence and confirmation boundaries.
 
-- Compare term-preserving, term-extending, and term-shortening scenarios; make the cost of restarting a 30-year amortization explicit.
+- Term-preserving, term-extending, and term-shortening scenarios expose payment, payoff-date, and lifetime-cost tradeoffs.
 
-- Compare refinance against recast, extra principal, retain-current-loan, and cash-out alternatives where applicable.
+- Refinance is compared with recast, extra principal, retain-current-loan, and cash-out alternatives where applicable.
 
-- Support FHA, VA, jumbo, ARM, second-lien, and multiple-mortgage contexts without presenting modeled spreads as live quotes.
+- FHA, VA, jumbo, ARM, second-lien, and multiple-mortgage contexts are supported without quote or approval claims.
 
-- Create lender-offer comparison only after the monitoring and explanation layers demonstrate strong trust metrics.
+- The official Loan Estimate comparison is delivered with reviewed extraction, comparability gates, and homeowner-controlled sharing; transactional lender delivery remains gated.
 
 ## 5. One-year interest-rate graph
 
-The backend rate endpoint already allows 52 observations. The initial chart can therefore use existing weekly snapshots, while later versions may add richer product feeds.
+The implemented chart requests up to 52 existing weekly observations. Future
+product feeds may be added only when they provide reliable source, product, and
+freshness metadata.
 
 ### Visual specification
 
@@ -359,7 +312,7 @@ Continue requiring a meaningful rate gap, minimum remaining balance and term, ad
 
 6. **Observe.** Record run totals, lag, failure rate, stale-rate conditions, transition counts, and notification suppression reasons.
 
-### Data-contract additions
+### Implemented data-contract additions
 
 - Radar status: missingFields[], mortgageDataAsOf, mortgageDataFreshness, marketDataAsOf, marketDataSource, triggerRatePct.
 
@@ -370,6 +323,10 @@ Continue requiring a meaningful rate gap, minimum remaining balance and term, ad
 - Notification decision: channel, consent basis, cooldown result, freshness result, confidence result, suppression reason.
 
 ## 9. Acceptance criteria
+
+The core in-product acceptance criteria below are implemented and covered by
+the completion matrix. External email/push activation remains subject to the
+controlled rollout and operational evidence in Section 11.
 
 ### Mortgage-context behavior
 
@@ -435,16 +392,22 @@ Continue requiring a meaningful rate gap, minimum remaining balance and term, ad
 
 - Model drift between stored opportunities and rerun calculations under the same assumptions.
 
-## 11. Rollout plan
+## 11. Rollout status
 
-| Release | Focus | Exit gate |
-| --- | --- | --- |
-| Release 0 — Correctness | Canonical profile sync, missing-field behavior, Gazette correctness | No known profile is re-requested; stale opportunities cannot surface |
-| Release 1 — Always-on | Post-ingestion evaluation, state-transition events, Home card | Eligible properties evaluate weekly; OPEN/CLOSED events are idempotent |
-| Release 2 — Explainability | 52-week chart, trigger rate, expanded assumptions and alternatives | Users can understand why, when, and under what assumptions refinancing helps |
-| Release 3 — Personalization | Eligibility bands, alert preferences, multi-property prioritization | Alerts respect consent, cooldowns, confidence, and property selection |
+| Release | Focus | Implementation status | Remaining exit evidence |
+| --- | --- | --- | --- |
+| Release 0 — Correctness | Canonical profile sync, missing-field behavior, Gazette correctness | Complete | Continue regression monitoring; no known profile should be re-requested and stale opportunities must not surface. |
+| Release 1 — Always-on | Post-ingestion evaluation, state-transition events, Home card | Complete | Monitor weekly evaluation coverage, retry/dead-letter volume, transition lag, and duplicate current-state actions. |
+| Release 2 — Explainability | 52-week chart, trigger rate, expanded assumptions and alternatives | Complete | Continue accessibility, freshness, benchmark-versus-quote, and modeled-assumption guardrails. |
+| Release 3 — Personalization | Eligibility context, alert preferences, multi-property prioritization | In-product complete; external rollout gated | Configure providers and VAPID, validate an explicit internal allowlist, and demonstrate acceptable delivery, duplicate, opt-out, complaint, and freshness metrics before `GENERAL`. |
+| Advanced comparison | Official Loan Estimate intake, reviewed comparison, persistence, export, and manual lender brief | Complete for homeowner-controlled use | Keep automated/transactional lender delivery disabled unless separately authorized and governed. |
 
-Recommended sequencing: ship Release 0 immediately, design the event and Home contracts before building the chart, then launch always-on evaluation to an internal cohort with notifications disabled. Enable Home promotion next, followed by opt-in external alerts after duplicate, freshness, and usefulness guardrails are proven.
+The production schema is synchronized. Keep Home monitoring active while
+external channels remain fail-closed. Activate email and push independently for
+an explicit internal allowlist, observe the trust metrics in Section 10, and
+promote to `GENERAL` only through an approved operational change. A benchmark
+decline, an OPEN transition, or successful internal delivery alone is not
+sufficient evidence for general release.
 
 ## 12. Risks and governance
 
@@ -480,16 +443,31 @@ Recommended sequencing: ship Release 0 immediately, design the event and Home co
 
 - Financial context policy: apps/backend/src/services/financialContext/applicabilityPolicy.ts
 
-### Decisions to authorize next
+- Alert preferences and rollout admission: apps/backend/src/refinanceRadar/refinanceAlertPreference.service.ts
 
-- Approve Release 1 architecture: post-ingestion evaluation, transition outbox, and Home promotion.
+- External transition delivery: apps/workers/src/jobs/refinanceTransitionAlert.job.ts
 
-- Choose the service-level objective for weekly property evaluation and the initial internal cohort.
+- Web Push transport: apps/workers/src/jobs/sendPushNotification.job.ts
 
-- Approve Home-only DATA_REQUIRED nudges with snooze, dismissal, and no-mortgage controls.
+- Loan Estimate comparison and extraction: apps/backend/src/refinanceRadar/refinanceLoanEstimateComparison.ts and apps/backend/src/refinanceRadar/refinanceLoanEstimateExtraction.service.ts
 
-- Confirm that external alerts remain disabled until freshness, duplicate, and usefulness guardrails pass.
+- Refinance funnel and trust reporting: apps/backend/src/services/adminAnalytics/refinanceRadarMetricsService.ts
 
-- Assign product, engineering, data, design, and compliance owners for the acceptance criteria in Section 9.
+- Isolated production schema synchronization: apps/backend/run-schema-push-job.sh
+
+### Remaining operational decisions
+
+- Assign the product, engineering, data, design, compliance, and operations owners for rollout evidence and incident response.
+
+- Confirm the production service-level objective for weekly evaluation coverage and transition lag.
+
+- Define and approve the initial email and push recipient allowlists.
+
+- Approve provider/VAPID configuration and channel-specific enablement only after startup validation passes.
+
+- Keep `REFINANCE_ALERT_ROLLOUT_MODE=ALLOWLIST` until delivery, duplicate, opt-out, complaint, usefulness, and freshness evidence supports an explicit `GENERAL` decision.
+
+- Keep transactional lender delivery disabled unless a separate product,
+  privacy, compliance, security, and operational review authorizes it.
 
 > **Bottom line:** The best-in-class version is not merely a richer calculator. It is a quiet monitoring system that notices material change, reuses trusted home facts, explains the economics, and surfaces a controlled action at the right moment.
