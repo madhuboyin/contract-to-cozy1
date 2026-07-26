@@ -12,3 +12,14 @@
 export function newHomeWarrantyPlanUrl(propertyId: string): string {
   return `/dashboard/properties/${propertyId}/new-home-plan`;
 }
+
+export function homeEventRadarNotificationUrl(
+  propertyId: string,
+  matchId: string,
+): string {
+  const query = new URLSearchParams({
+    matchId,
+    launchSurface: 'notification',
+  });
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-event-radar?${query.toString()}`;
+}

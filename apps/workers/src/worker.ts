@@ -24,6 +24,7 @@ import { runMaterialSpecExportPoller, stopMaterialSpecExportPoller } from './run
 import { runMaterialSpecExportCleanup, stopMaterialSpecExportCleanup } from './runners/materialSpecExport.cleanup';
 import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
+import { startRadarNotificationDeliveryPoller } from './runners/radarNotificationDelivery.poller';
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 import { alertOnJobFailure } from './lib/jobFailureAlert';
 import { initCronRunHistory, recordCronRun } from './lib/cronRunHistory';
@@ -1006,6 +1007,21 @@ if (runnerAllowed('high-priority-email-enqueue-poller')) {
     redisConnection,
   });
   registerShutdownHandler('high-priority-email-enqueue-poller', stopHighPriorityEmailEnqueuePoller);
+}
+
+if (runnerAllowed('radar-notification-delivery-poller')) {
+  const stopRadarNotificationDeliveryPoller = startRadarNotificationDeliveryPoller({
+    intervalMs: 10_000,
+    batchSize: 50,
+    redisConnection,
+    pushTransportEnabled:
+      process.env.WEB_PUSH_DELIVERY_ENABLED === 'true'
+      && process.env.WORKER_JOB_PUSH_NOTIFICATION_ENABLED === 'true',
+  });
+  registerShutdownHandler(
+    'radar-notification-delivery-poller',
+    stopRadarNotificationDeliveryPoller,
+  );
 }
 
 if (runnerAllowed('domain-events-poller')) {

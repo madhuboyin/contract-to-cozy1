@@ -57,7 +57,8 @@
 | HER-502 Tool/provider handoffs | Complete; DB application pending | Typed reviewed destinations cover Coverage Intelligence/options, Service Price Radar, maintenance, Document Vault upload, provider search/booking, and HTTPS official instructions while preserving bounded Radar/Incident/Guidance lineage |
 | HER-503 Notification preference persistence | Complete; DB application pending | Property-authorized per-user preferences persist enabled categories, available channels, canonical minimum severity/impact, immediate/digest mode, normalized quiet hours, and validated IANA timezone |
 | HER-504 Notification eligibility/dedup | Complete; DB application pending | Versioned pure policy and durable per-user revision decisions enforce materiality/escalation, confidence and preference thresholds, timing, channels, DST-aware quiet hours, opt-in critical override, terminal/test suppression, and exact deduplication without delivering |
-| HER-505+ | Not started | Notification delivery, Guidance continuity expansion, additional sources, and operations remain |
+| HER-505 Notification delivery integration | Complete; DB application pending | Eligible decisions idempotently materialize canonical in-app notifications and exact outbound rows; immediate/deferred delivery uses durable worker claims, retry release, transport gates, and canonical deep links |
+| HER-506+ | Not started | Guidance continuity expansion, Unified Home summary, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1481,6 +1482,28 @@ changes are included without a migration script; the repository owner must apply
 
 Use existing Notification infrastructure. Create in-app notifications even when outbound channels
 are disabled, where policy permits.
+
+**Implemented:** Every eligible HER-504 decision now idempotently materializes one canonical
+`Notification`, linked back to the decision and protected by a deterministic unique deduplication
+key. The notification uses bounded homeowner copy, the canonical property/match deep link, and
+versioned event, revision, match, policy, timing, confidence, impact, and source lineage. Delivery
+rows are created only for the policy-approved channels. In-app is marked sent immediately for
+immediate, deferred, and digest decisions, so passive visibility does not depend on outbound
+transport availability; suppressed decisions create nothing.
+
+Immediate email/push rows and quiet-hours-deferred rows that have reached `deferredUntil` are
+claimed by a dedicated worker poller. Claims use `enqueuedAt` as the durable handoff boundary,
+stable BullMQ job IDs prevent duplicate queue work, and a failed queue write releases the claim for
+retry. Email shares the canonical email worker and remains recoverable by the existing high-priority
+poller. Push rows stay pending when the provider/worker transport flags are disabled. Digest email
+rows retain canonical `DAILY_DIGEST` metadata for the existing digest worker rather than being sent
+as immediate alerts. Matcher retries repair a decision whose notification link was not completed,
+and concurrent materialization converges on the unique notification key.
+
+The worker Docker context now explicitly includes the notification policy, preferences, decision,
+and delivery modules imported through the shared backend boundary. The Prisma schema adds the
+nullable unique notification deduplication key without a migration script; the repository owner
+must apply the schema before deployment.
 
 ### HER-506 — Incident/Guidance UI continuity
 

@@ -244,6 +244,7 @@ test('test and synthetic sources are always suppressed before delivery policy', 
 
 test('decision persistence is idempotent on match, immutable revision, and user', async () => {
   const decisions = [];
+  const materializations = [];
   const db = {
     property: {
       findUnique: async () => ({
@@ -280,7 +281,15 @@ test('decision persistence is idempotent on match, immutable revision, and user'
       },
     },
   };
-  const service = new RadarNotificationDecisionService(db, { NODE_ENV: 'production' });
+  const service = new RadarNotificationDecisionService(
+    db,
+    { NODE_ENV: 'production' },
+    {
+      materialize: async (input) => {
+        materializations.push(input);
+      },
+    },
+  );
   const input = {
     propertyId: 'property-1',
     match: {
@@ -335,11 +344,12 @@ test('decision persistence is idempotent on match, immutable revision, and user'
     suppressed: 0,
   });
   assert.equal(decisions.length, 1);
-  assert.equal(decisions[0].notificationId, undefined);
+  assert.equal(materializations.length, 2);
+  assert.equal(materializations[0].decision.id, decisions[0].id);
   assert.equal(decisions[0].policyVersion, RADAR_NOTIFICATION_POLICY_VERSION);
 });
 
-test('matcher evaluates durable decisions for active, terminal, and inapplicable revisions without delivery', () => {
+test('matcher evaluates durable decisions for active, terminal, and inapplicable revisions', () => {
   const matcher = fs.readFileSync(path.resolve(
     __dirname,
     '../../src/services/homeEventRadarMatcher.service.ts',

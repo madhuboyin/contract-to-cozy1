@@ -33,6 +33,10 @@ test('Radar persistence includes source, health, run, revision, feedback, and pr
     schema,
     /model PropertyRadarNotificationDecision \{[\s\S]*notificationId\s+String\?\s+@unique[\s\S]*outcome\s+RadarNotificationDecisionOutcome[\s\S]*eligibleChannels\s+RadarNotificationChannel\[\][\s\S]*policyVersion\s+String[\s\S]*evidenceJson\s+Json[\s\S]*@@unique\(\[propertyRadarMatchId, radarEventRevisionId, userId\]\)/,
   );
+  assert.match(
+    schema,
+    /model Notification \{[\s\S]*deduplicationKey\s+String\?\s+@unique/,
+  );
   assert.doesNotMatch(schema, /model RadarSourceConfig \{/);
 });
 

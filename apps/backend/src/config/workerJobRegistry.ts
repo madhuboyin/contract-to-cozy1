@@ -965,6 +965,17 @@ export const RUNNER_REGISTRY: RunnerRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'radar-notification-delivery-poller',
+    name: 'Home Event Radar Notification Delivery Poller',
+    description: 'Dispatches eligible immediate and quiet-hours-deferred Radar email/push delivery rows with durable claims and retries.',
+    impact: 'OUTBOUND',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'domain-events-poller',
     name: 'Domain Events Poller',
     description: 'Processes pending/failed DomainEvent records (claims follow-ups and related cross-cutting effects).',

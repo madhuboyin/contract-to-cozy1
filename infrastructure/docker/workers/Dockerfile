@@ -97,6 +97,9 @@ COPY apps/backend/src/modules/homeEventRadar/domain/radarMatchLifecycle.ts src/s
 COPY apps/backend/src/modules/homeEventRadar/domain/radarObservationIdentity.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarPriority.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarVisibility.ts src/shared/backend/modules/homeEventRadar/domain/
+COPY apps/backend/src/modules/homeEventRadar/domain/radarNotificationPolicy.ts src/shared/backend/modules/homeEventRadar/domain/
+COPY apps/backend/src/modules/homeEventRadar/domain/radarNotificationPreferences.ts src/shared/backend/modules/homeEventRadar/domain/
+COPY apps/backend/src/modules/homeEventRadar/domain/radarActionRegistry.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/contracts/ src/shared/backend/modules/homeEventRadar/contracts/
 COPY apps/backend/src/modules/homeEventRadar/services/radarSourceRegistry.service.ts \
      apps/backend/src/modules/homeEventRadar/services/radarSourceRun.service.ts \
@@ -104,6 +107,8 @@ COPY apps/backend/src/modules/homeEventRadar/services/radarSourceRegistry.servic
      apps/backend/src/modules/homeEventRadar/services/radarMatchDiscovery.service.ts \
      apps/backend/src/modules/homeEventRadar/services/radarIncidentPromotion.service.ts \
      apps/backend/src/modules/homeEventRadar/services/radarPropertyReconciliation.service.ts \
+     apps/backend/src/modules/homeEventRadar/services/radarNotificationDecision.service.ts \
+     apps/backend/src/modules/homeEventRadar/services/radarNotificationDelivery.service.ts \
      src/shared/backend/modules/homeEventRadar/services/
 COPY apps/backend/src/modules/homeEventRadar/queues/radarMatch.queue.ts \
      apps/backend/src/modules/homeEventRadar/queues/radarIngest.queue.ts \

@@ -1,4 +1,4 @@
-import { prisma } from '../../../config/database';
+import { prisma } from '../../../lib/prisma';
 import {
   evaluateRadarNotificationPolicy,
   type RadarNotificationPreviousDecision,
@@ -10,6 +10,10 @@ import {
   type RadarNotificationChannel,
   type RadarNotificationPreferenceProjection,
 } from '../domain/radarNotificationPreferences';
+import {
+  radarNotificationDeliveryService,
+  type RadarNotificationMaterializationInput,
+} from './radarNotificationDelivery.service';
 
 type RadarNotificationDecisionDatabase = {
   property: {
@@ -29,11 +33,15 @@ export type RadarNotificationDecisionEvaluationInput = {
   match: {
     id: string;
     impactLevel: string;
+    impactSummary?: string | null;
     confidence?: string | null;
     lifecycleStatus?: string | null;
   };
   event: {
     id: string;
+    title?: string | null;
+    summary?: string | null;
+    eventType?: string | null;
     status: string;
     startAt: Date | string;
     endAt?: Date | string | null;
@@ -181,6 +189,9 @@ export class RadarNotificationDecisionService {
   constructor(
     private readonly db: RadarNotificationDecisionDatabase = prisma as any,
     private readonly env: NodeJS.ProcessEnv = process.env,
+    private readonly deliveryService: {
+      materialize(input: RadarNotificationMaterializationInput): Promise<unknown>;
+    } = radarNotificationDeliveryService,
   ) {}
 
   async evaluateMatch(
@@ -293,7 +304,16 @@ export class RadarNotificationDecisionService {
       if (existing) {
         deduped += 1;
         if (existing.outcome === 'suppressed') suppressed += 1;
-        else eligible += 1;
+        else {
+          eligible += 1;
+          await this.deliveryService.materialize({
+            propertyId: input.propertyId,
+            decision: existing,
+            match: input.match,
+            event: input.event,
+            revision: { id: input.revision.id },
+          });
+        }
         continue;
       }
       const preference = preferenceByUserId.get(recipient.id)
@@ -351,7 +371,7 @@ export class RadarNotificationDecisionService {
         previousDecisionId: prior?.id ?? null,
         availableChannels: availableChannels(recipient),
       };
-      await this.db.propertyRadarNotificationDecision.upsert({
+      const persistedDecision = await this.db.propertyRadarNotificationDecision.upsert({
         where: {
           propertyRadarMatchId_radarEventRevisionId_userId: {
             propertyRadarMatchId: input.match.id,
@@ -377,7 +397,16 @@ export class RadarNotificationDecisionService {
       });
       created += 1;
       if (decision.outcome === 'suppressed') suppressed += 1;
-      else eligible += 1;
+      else {
+        eligible += 1;
+        await this.deliveryService.materialize({
+          propertyId: input.propertyId,
+          decision: persistedDecision,
+          match: input.match,
+          event: input.event,
+          revision: { id: input.revision.id },
+        });
+      }
     }
     return {
       evaluated: recipients.length,
