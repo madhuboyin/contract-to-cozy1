@@ -1,5 +1,11 @@
 # Home Event Radar
 
+> **Specification status:** This document records the current implementation and its history.
+> The proposed target product requirements are defined in
+> [Home Event Radar — Functional Requirements Document](./HOME_EVENT_RADAR_FRD.md), with delivery
+> work packages and launch gates in
+> [Home Event Radar — Comprehensive Implementation Plan](./HOME_EVENT_RADAR_IMPLEMENTATION_PLAN.md).
+
 ## Overview
 
 Home Event Radar is the unified live-signal ingestion layer for events that may matter to a homeowner's property — weather, insurance market shifts, utility outages, tax reassessments, air quality alerts, and similar signals. The system stores canonical radar events, runs a deterministic rules-based matching engine against property characteristics, and delivers a personalized feed with actionable recommendations.
