@@ -41,6 +41,7 @@ export type RadarIncidentPromotionInput = {
     matchScore?: unknown;
     confidence?: string | null;
     confidenceScore?: unknown;
+    lifecycleStatus?: 'now' | 'upcoming' | 'recently_ended' | 'no_longer_applicable';
     matcherVersion?: string | null;
     propertyGeographyVersion?: number | null;
     matchExplanationJson?: unknown;
@@ -257,6 +258,7 @@ export class RadarIncidentPromotionService {
     );
     const lifecycleStatus = incidentStatusForLifecycle(input.event.status);
     const shouldClose = lifecycleStatus !== null ||
+      input.match.lifecycleStatus === 'no_longer_applicable' ||
       !isPromotableImpact(input.match.impactLevel) ||
       !isPromotionConfidenceEligible(confidence);
 

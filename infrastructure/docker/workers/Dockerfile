@@ -93,6 +93,7 @@ COPY apps/backend/src/services/coverage/contextPolicy.ts src/shared/backend/serv
 COPY apps/backend/src/modules/homeEventRadar/domain/propertyGeography.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarConfidence.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarImpactRules.ts src/shared/backend/modules/homeEventRadar/domain/
+COPY apps/backend/src/modules/homeEventRadar/domain/radarMatchLifecycle.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarObservationIdentity.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarPriority.ts src/shared/backend/modules/homeEventRadar/domain/
 COPY apps/backend/src/modules/homeEventRadar/domain/radarVisibility.ts src/shared/backend/modules/homeEventRadar/domain/

@@ -109,8 +109,19 @@ test('property discovery validates revision ownership and returns a resumable bo
     AND: [
       {
         OR: [
-          { normalizedZipCode: { startsWith: '08536' } },
-          { zipCode: { startsWith: '08536' } },
+          {
+            OR: [
+              { normalizedZipCode: { startsWith: '08536' } },
+              { zipCode: { startsWith: '08536' } },
+            ],
+          },
+          {
+            radarMatches: {
+              some: {
+                radarEventId: 'event-1',
+              },
+            },
+          },
         ],
       },
       { id: { gt: 'p-1' } },
@@ -153,6 +164,7 @@ test('point, radius, and polygon discovery use bounded indexed PostGIS queries',
   const makeDb = (event, rows) => ({
     radarEvent: { async findUnique() { return event; } },
     radarEventRevision: { async findUnique() { return { radarEventId: 'event-1' }; } },
+    propertyRadarMatch: { async findMany() { return []; } },
     async $queryRawUnsafe(...args) {
       calls.push(args);
       return rows;
@@ -202,6 +214,94 @@ test('point, radius, and polygon discovery use bounded indexed PostGIS queries',
   assert.match(calls[1][0], /ST_Covers/);
   assert.equal(calls[1][2], 'p-1');
   assert.equal(calls[1][3], 11);
+});
+
+test('spatial discovery merges prior matches with current geography in stable order', async () => {
+  const db = {
+    radarEvent: {
+      async findUnique() {
+        return {
+          id: 'event-1',
+          status: 'updated',
+          locationType: 'point',
+          locationKey: 'point:40,-74',
+          geoJson: { type: 'Point', coordinates: [-74, 40] },
+        };
+      },
+    },
+    radarEventRevision: {
+      async findUnique() {
+        return { radarEventId: 'event-1' };
+      },
+    },
+    propertyRadarMatch: {
+      async findMany() {
+        return [{ propertyId: 'p-1' }, { propertyId: 'p-4' }];
+      },
+    },
+    async $queryRawUnsafe() {
+      return [{ id: 'p-2' }, { id: 'p-3' }];
+    },
+  };
+  const result = await listMatchingPropertyIdsForEventPage(
+    'event-1',
+    'revision-2',
+    undefined,
+    3,
+    db,
+  );
+  assert.deepEqual(result, {
+    outcome: 'ready',
+    propertyIds: ['p-1', 'p-2', 'p-3'],
+    nextCursor: 'p-3',
+  });
+});
+
+test('terminal discovery revisits prior matches without adding new properties', async () => {
+  const calls = [];
+  const db = {
+    radarEvent: {
+      async findUnique() {
+        return {
+          id: 'event-1',
+          status: 'retracted',
+          locationType: 'polygon',
+          locationKey: 'polygon:withdrawn',
+          geoJson: null,
+        };
+      },
+    },
+    radarEventRevision: {
+      async findUnique() {
+        return { radarEventId: 'event-1' };
+      },
+    },
+    property: {
+      async findMany(args) {
+        calls.push(args);
+        return [{ id: 'prior-property' }];
+      },
+    },
+  };
+  const result = await listMatchingPropertyIdsForEventPage(
+    'event-1',
+    'revision-2',
+    undefined,
+    100,
+    db,
+  );
+  assert.deepEqual(result, {
+    outcome: 'ready',
+    propertyIds: ['prior-property'],
+    nextCursor: null,
+  });
+  assert.deepEqual(calls[0].where, {
+    radarMatches: {
+      some: {
+        radarEventId: 'event-1',
+      },
+    },
+  });
 });
 
 test('spatial specifications reject malformed evidence and bound point configuration', () => {

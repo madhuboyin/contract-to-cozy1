@@ -3150,6 +3150,12 @@ export type RadarUserState = 'new' | 'seen' | 'saved' | 'dismissed' | 'acted_on'
 export type RadarSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 export type RadarImpactLevel = 'none' | 'watch' | 'moderate' | 'high';
 export type RadarPriorityBand = 'low' | 'medium' | 'high' | 'urgent';
+export type RadarMatchLifecycleStatus =
+  | 'now'
+  | 'upcoming'
+  | 'recently_ended'
+  | 'no_longer_applicable';
+export type RadarSourceFreshnessStatus = 'fresh' | 'stale' | 'unknown';
 export type RadarLifecycleStatus = 'active' | 'updated' | 'resolved' | 'expired' | 'retracted';
 export type RadarTimingGroup = 'now' | 'upcoming' | 'recently_ended';
 
@@ -3169,6 +3175,10 @@ export interface RadarFeedItem {
   impactLevel: RadarImpactLevel;
   impactSummary: string | null;
   priorityBand: RadarPriorityBand;
+  matchLifecycleStatus: RadarMatchLifecycleStatus;
+  sourceFreshnessStatus: RadarSourceFreshnessStatus;
+  isSourceStale: boolean;
+  isMaterialUpdate: boolean;
   isVisible: boolean;
   state: RadarUserState;
   createdAt: string;
@@ -3215,6 +3225,15 @@ export interface RadarMatchDetail {
   priorityBand: RadarPriorityBand;
   priorityVersion: string | null;
   priorityEvaluatedAt: string | null;
+  matchLifecycleStatus: RadarMatchLifecycleStatus;
+  lifecycleReason: string | null;
+  lifecycleVersion: string | null;
+  sourceFreshnessStatus: RadarSourceFreshnessStatus;
+  sourceFreshnessReason: string | null;
+  isSourceStale: boolean;
+  isMaterialUpdate: boolean;
+  materialUpdatedAt: string | null;
+  noLongerApplicableAt: string | null;
   isVisible: boolean;
   visibleFrom: string | null;
   visibleUntil: string | null;

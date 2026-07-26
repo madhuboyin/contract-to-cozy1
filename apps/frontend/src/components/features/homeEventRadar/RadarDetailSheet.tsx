@@ -289,10 +289,34 @@ export function RadarDetailSheet({
                     {IMPACT_LABELS[item.impactLevel]}
                   </Chip>
                 )}
+                {(detail?.isMaterialUpdate ?? item.isMaterialUpdate) && (
+                  <Chip className="border-sky-200 bg-sky-50 text-sky-700">
+                    Updated
+                  </Chip>
+                )}
+                {(detail?.isSourceStale ?? item.isSourceStale) && (
+                  <Chip className="border-amber-200 bg-amber-50 text-amber-700">
+                    Source update delayed
+                  </Chip>
+                )}
               </div>
             </SheetHeader>
 
             <div className="space-y-6">
+
+              {(detail?.isSourceStale ?? item.isSourceStale) && (
+                <div
+                  className={cn(
+                    MOBILE_CARD_RADIUS,
+                    'border border-amber-200 bg-amber-50 px-4 py-3'
+                  )}
+                >
+                  <p className={cn('mb-0 text-amber-900', MOBILE_TYPE_TOKENS.caption)}>
+                    The source has not refreshed within its usual window. This event remains visible,
+                    but its latest status may be delayed.
+                  </p>
+                </div>
+              )}
 
               {/* Impact summary */}
               <DetailSection title="Impact on your home">

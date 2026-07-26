@@ -149,6 +149,37 @@ test('impact downgrade resolves an existing Incident and does not create a low-i
   assert.equal(emptyHarness.calls.upsert.length, 0);
 });
 
+test('match no longer applicable resolves its linked Incident without changing the event', async () => {
+  const existingHarness = harness({ id: 'incident-existing', status: 'ACTIVE' });
+  const resolved = await existingHarness.service.project(input({
+    match: {
+      ...input().match,
+      lifecycleStatus: 'no_longer_applicable',
+    },
+  }));
+  assert.deepEqual(resolved, {
+    outcome: 'resolved',
+    incidentId: 'incident-existing',
+  });
+  assert.deepEqual(existingHarness.calls.setStatus, [{
+    id: 'incident-existing',
+    status: 'RESOLVED',
+  }]);
+  assert.equal(existingHarness.calls.upsert.length, 0);
+
+  const emptyHarness = harness();
+  const ignored = await emptyHarness.service.project(input({
+    match: {
+      ...input().match,
+      lifecycleStatus: 'no_longer_applicable',
+    },
+  }));
+  assert.deepEqual(ignored, {
+    outcome: 'not_promotable',
+    incidentId: null,
+  });
+});
+
 test('explicit low confidence remains awareness-only and resolves a prior projection', async () => {
   const lowConfidenceInput = input({
     match: {

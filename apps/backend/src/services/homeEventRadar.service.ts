@@ -13,6 +13,7 @@ import {
   type RadarPriorityTieBreakers,
   type RadarPriorityUserState,
 } from '../modules/homeEventRadar/domain/radarPriority';
+import { evaluateRadarSourceFreshness } from '../modules/homeEventRadar/domain/radarMatchLifecycle';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -53,11 +54,21 @@ function serializeMatchFeedItem(match: any, state: any | null): Record<string, u
     startAt: event?.startAt instanceof Date ? event.startAt.toISOString() : (event?.startAt ?? null),
     endAt: event?.endAt ? (event.endAt instanceof Date ? event.endAt.toISOString() : event.endAt) : null,
     lifecycleStatus: event?.status ?? null,
-    timingGroup: event ? radarTimingGroup(event) : null,
+    timingGroup: match.lifecycleStatus === 'now'
+      || match.lifecycleStatus === 'upcoming'
+      || match.lifecycleStatus === 'recently_ended'
+      ? match.lifecycleStatus
+      : event
+        ? radarTimingGroup(event)
+        : null,
     impactLevel: match.impactLevel,
     impactSummary: match.impactSummary ?? null,
     confidence: match.confidence ?? null,
     priorityBand: match.priorityBand ?? null,
+    matchLifecycleStatus: match.lifecycleStatus,
+    sourceFreshnessStatus: match.sourceFreshnessStatus,
+    isSourceStale: match.sourceFreshnessStatus === 'stale',
+    isMaterialUpdate: match.isMaterialUpdate,
     isVisible: match.isVisible,
     state: state?.state ?? 'new',
     createdAt: match.createdAt instanceof Date ? match.createdAt.toISOString() : match.createdAt,
@@ -85,6 +96,27 @@ function serializeMatchDetail(match: any, state: any | null): Record<string, unk
           match.priorityEvaluatedAt instanceof Date
             ? match.priorityEvaluatedAt.toISOString()
             : match.priorityEvaluatedAt
+        )
+      : null,
+    matchLifecycleStatus: match.lifecycleStatus,
+    lifecycleReason: match.lifecycleReason ?? null,
+    lifecycleVersion: match.lifecycleVersion ?? null,
+    sourceFreshnessStatus: match.sourceFreshnessStatus,
+    sourceFreshnessReason: match.sourceFreshnessReason ?? null,
+    isSourceStale: match.sourceFreshnessStatus === 'stale',
+    isMaterialUpdate: match.isMaterialUpdate,
+    materialUpdatedAt: match.materialUpdatedAt
+      ? (
+          match.materialUpdatedAt instanceof Date
+            ? match.materialUpdatedAt.toISOString()
+            : match.materialUpdatedAt
+        )
+      : null,
+    noLongerApplicableAt: match.noLongerApplicableAt
+      ? (
+          match.noLongerApplicableAt instanceof Date
+            ? match.noLongerApplicableAt.toISOString()
+            : match.noLongerApplicableAt
         )
       : null,
     matchExplanation: match.matchExplanationJson ?? null,
@@ -324,7 +356,30 @@ export class HomeEventRadarService {
       ],
       take: limit + 1,
       include: {
-        radarEvent: true,
+        radarEvent: {
+          include: {
+            sourceDefinition: {
+              select: {
+                isEnabled: true,
+                freshnessSeconds: true,
+                health: {
+                  select: {
+                    status: true,
+                    lastSuccessAt: true,
+                    dataFreshThrough: true,
+                  },
+                },
+              },
+            },
+            sourceRun: {
+              select: {
+                status: true,
+                finishedAt: true,
+                dataFreshThrough: true,
+              },
+            },
+          },
+        },
         incident: {
           select: {
             status: true,
@@ -355,6 +410,10 @@ export class HomeEventRadarService {
     const rankedEntries: RankedRadarFeedEntry[] = page
       .map((match: any): RankedRadarFeedEntry => {
         const state = stateMap.get(match.id) ?? null;
+        const sourceFreshness = evaluateRadarSourceFreshness(
+          match.radarEvent,
+          now,
+        );
         const priority = computeRadarPriority(
           {
             severity: match.radarEvent.severity,
@@ -363,8 +422,8 @@ export class HomeEventRadarService {
             effectiveAt: match.radarEvent.startAt,
             expiresAt: match.radarEvent.endAt,
             lifecycleStatus: match.radarEvent.status,
-            isMaterialUpdate: match.radarEvent.status === 'updated',
-            materiallyUpdatedAt: match.radarEvent.updatedAt,
+            isMaterialUpdate: match.isMaterialUpdate,
+            materiallyUpdatedAt: match.materialUpdatedAt,
             hasActiveIncident: hasActiveRadarIncident(match.incident),
             userState: (state?.state ?? 'new') as RadarPriorityUserState,
           },
@@ -373,7 +432,12 @@ export class HomeEventRadarService {
         return {
           item: {
             ...serializeMatchFeedItem(
-              { ...match, priorityBand: priority.band },
+              {
+                ...match,
+                priorityBand: priority.band,
+                sourceFreshnessStatus: sourceFreshness.status,
+                sourceFreshnessReason: sourceFreshness.reason,
+              },
               state,
             ),
             priorityBand: priority.band,
@@ -421,7 +485,32 @@ export class HomeEventRadarService {
   ): Promise<Record<string, unknown>> {
     const match = await this.db.propertyRadarMatch.findFirst({
       where: { id: matchId, propertyId },
-      include: { radarEvent: true },
+      include: {
+        radarEvent: {
+          include: {
+            sourceDefinition: {
+              select: {
+                isEnabled: true,
+                freshnessSeconds: true,
+                health: {
+                  select: {
+                    status: true,
+                    lastSuccessAt: true,
+                    dataFreshThrough: true,
+                  },
+                },
+              },
+            },
+            sourceRun: {
+              select: {
+                status: true,
+                finishedAt: true,
+                dataFreshThrough: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!match) throw new APIError('Radar match not found', 404, 'RADAR_MATCH_NOT_FOUND');
@@ -449,8 +538,16 @@ export class HomeEventRadarService {
     });
 
     const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'EVENT_RADAR');
+    const sourceFreshness = evaluateRadarSourceFreshness(
+      match.radarEvent,
+      new Date(),
+    );
     const detail = applyResponsibilityToRadarDetail(
-      serializeMatchDetail(match, refreshedState),
+      serializeMatchDetail({
+        ...match,
+        sourceFreshnessStatus: sourceFreshness.status,
+        sourceFreshnessReason: sourceFreshness.reason,
+      }, refreshedState),
       protectionContext.decisions,
     );
     return {

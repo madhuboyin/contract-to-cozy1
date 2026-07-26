@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-303 implemented |
+| Status | In progress — HER-304 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -39,7 +39,8 @@
 | HER-301 Impact-rule refactor | Complete | Event-family calculations are pure and deterministic; nullable facts remain unknown, explicit system dates replace construction-year inference, driver codes are registered, responsibility redirects actions, and every output records rule/fact lineage |
 | HER-302 Confidence engine | Complete | Five fixed bounded components score source, geography, freshness, relevant property completeness, and domain evidence; matches persist an internal score and band plus homeowner-readable evidence gaps, and low confidence remains Radar-only |
 | HER-303 Priority engine | Complete; DB application pending | Seven fixed bounded ordering components replace global signal blending; match-level score, band, version, evaluation time, and diagnostics persist, while homeowner APIs expose only the band and use deterministic tie-breakers |
-| HER-304+ | Not started | Match lifecycle, reconciliation, homeowner APIs, actions, and operations remain |
+| HER-304 Match lifecycle | Complete; DB application pending | Revision-aware material updates, Now/Upcoming/Recently Ended state, source freshness, terminal retention, retraction/Incident closure, and explicit no-longer-applicable reconciliation are persisted and exposed safely |
+| HER-305+ | Not started | Property reconciliation, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -918,6 +919,29 @@ Implement:
 - source-stale marker;
 - event-to-match resolution;
 - match no-longer-applicable handling.
+
+Implementation note: the pure `domain/radarMatchLifecycle.ts` engine records
+`match-lifecycle-v1`. It derives persisted `now`, `upcoming`, `recently_ended`, and
+`no_longer_applicable` match states at an explicit evaluation clock. Explicit provider
+resolution, expiration, and retraction retain homeowner-visible history for 72 hours and continue
+to close linked Incidents through the single Incident bridge. Source freshness is evaluated
+independently as Fresh, Stale, or Unknown from the reviewed source window and latest evidence
+anchor; a provider failure never manufactures a clear event, and a recent last success may remain
+fresh while operations are degraded. The last matching evaluation is persisted for operations,
+while feed and detail reads recompute the marker from current source health so a source can age
+into Stale without waiting for a new provider event.
+
+Materiality is intentionally narrower than immutable revision identity. Lifecycle, event family,
+severity, effective/expiration timing, geography, title, or summary changes are material; raw
+provider metadata changes are not. Each match stores the last evaluated event revision so retries
+preserve the original material-update decision and timestamp instead of re-alerting or erasing it.
+The durable scan now unions currently eligible properties with every prior match for the event.
+Each property scope revalidates current canonical geography: a prior match outside the new scope is
+hidden immediately, records `GEOGRAPHY_NO_LONGER_APPLIES`, and resolves its linked Incident without
+changing the canonical event or other properties. Terminal scans visit prior matches only, avoiding
+creation of historical matches for properties that were never affected. Prisma adds lifecycle,
+source-freshness, material-update, revision-lineage, and inapplicability fields and indexes; no
+migration script was created.
 
 ### HER-305 — Property reconciliation
 

@@ -9324,6 +9324,19 @@ enum RadarPriorityBand {
   urgent
 }
 
+enum RadarMatchLifecycleStatus {
+  now
+  upcoming
+  recently_ended
+  no_longer_applicable
+}
+
+enum RadarSourceFreshnessStatus {
+  fresh
+  stale
+  unknown
+}
+
 enum RadarCoverageEvaluationStatus {
   covered
   not_covered
@@ -9643,6 +9656,15 @@ model PropertyRadarMatch {
   priorityDiagnosticsJson  Json?
   priorityVersion          String?
   priorityEvaluatedAt      DateTime?
+  lifecycleStatus          RadarMatchLifecycleStatus  @default(now)
+  lifecycleReason          String?
+  lifecycleVersion         String?
+  sourceFreshnessStatus    RadarSourceFreshnessStatus @default(unknown)
+  sourceFreshnessReason    String?
+  isMaterialUpdate         Boolean                    @default(false)
+  materialUpdatedAt        DateTime?
+  lastEventRevisionId      String?
+  noLongerApplicableAt     DateTime?
   matchExplanationJson     Json?
   matcherVersion           String?
   propertyGeographyVersion Int?
@@ -9669,6 +9691,9 @@ model PropertyRadarMatch {
   @@index([propertyId, isVisible, priorityScore(sort: Desc), visibleFrom, createdAt(sort: Desc), id])
   @@index([priorityBand])
   @@index([priorityVersion])
+  @@index([propertyId, lifecycleStatus, isVisible])
+  @@index([sourceFreshnessStatus])
+  @@index([lastEventRevisionId])
   @@index([matcherVersion])
   @@index([isVisible, visibleFrom])
   @@index([createdAt])

@@ -443,6 +443,25 @@ export type RadarPropertyPageResult =
       nextCursor: null;
     };
 
+const TERMINAL_EVENT_STATUSES = new Set(['resolved', 'expired', 'retracted']);
+
+function mergePropertyIdPages(
+  pages: Array<Array<{ id?: string; propertyId?: string }>>,
+  take: number,
+): Array<{ id: string }> {
+  const ids = new Set<string>();
+  for (const page of pages) {
+    for (const row of page) {
+      const id = row.id ?? row.propertyId;
+      if (id) ids.add(id);
+    }
+  }
+  return [...ids]
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, take)
+    .map((id) => ({ id }));
+}
+
 /**
  * Reads one stable, bounded page of property IDs. The cursor is the final
  * returned property ID, making a scan resumable without retaining worker
@@ -474,25 +493,63 @@ export async function listMatchingPropertyIdsForEventPage(
   const boundedPageSize = Math.min(500, Math.max(1, Math.trunc(pageSize)));
   const spatialSpec = spatialMatchSpecForRadarEvent(event);
   const where = propertyWhereForRadarEvent(event);
-  if (!where && !spatialSpec) {
+
+  const existingMatchWhere = {
+    radarMatches: {
+      some: {
+        radarEventId: eventId,
+      },
+    },
+  };
+  const isTerminalEvent = TERMINAL_EVENT_STATUSES.has(String(event.status));
+  if (!isTerminalEvent && !where && !spatialSpec) {
     return { outcome: 'unsupported_geography', propertyIds: [], nextCursor: null };
   }
-
-  const rows = spatialSpec
-    ? await spatialPropertyPage(
+  let rows: Array<{ id: string }>;
+  if (isTerminalEvent) {
+    rows = await db.property.findMany({
+      where: afterPropertyId
+        ? { AND: [existingMatchWhere, { id: { gt: afterPropertyId } }] }
+        : existingMatchWhere,
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take: boundedPageSize + 1,
+    }) as Array<{ id: string }>;
+  } else if (spatialSpec) {
+    const [currentlyEligible, previouslyMatched] = await Promise.all([
+      spatialPropertyPage(
         spatialSpec,
         afterPropertyId,
         boundedPageSize + 1,
         db,
-      )
-    : await db.property.findMany({
-        where: afterPropertyId
-          ? { AND: [where, { id: { gt: afterPropertyId } }] }
-          : where,
-        select: { id: true },
-        orderBy: { id: 'asc' },
+      ),
+      db.propertyRadarMatch.findMany({
+        where: {
+          radarEventId: eventId,
+          ...(afterPropertyId ? { propertyId: { gt: afterPropertyId } } : {}),
+        },
+        select: { propertyId: true },
+        orderBy: { propertyId: 'asc' },
         take: boundedPageSize + 1,
-      }) as Array<{ id: string }>;
+      }) as Promise<Array<{ propertyId: string }>>,
+    ]);
+    rows = mergePropertyIdPages(
+      [currentlyEligible, previouslyMatched],
+      boundedPageSize + 1,
+    );
+  } else {
+    const activeOrExistingWhere = {
+      OR: [where, existingMatchWhere],
+    };
+    rows = await db.property.findMany({
+      where: afterPropertyId
+        ? { AND: [activeOrExistingWhere, { id: { gt: afterPropertyId } }] }
+        : activeOrExistingWhere,
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take: boundedPageSize + 1,
+    }) as Array<{ id: string }>;
+  }
   const hasMore = rows.length > boundedPageSize;
   const propertyIds = rows.slice(0, boundedPageSize).map((row) => row.id);
   return {

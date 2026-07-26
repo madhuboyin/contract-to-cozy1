@@ -51,6 +51,13 @@ export const radarSeveritySchema = z.enum(['info', 'low', 'moderate', 'high', 's
 export const radarImpactSchema = z.enum(['none', 'low', 'moderate', 'high', 'critical']);
 export const radarConfidenceSchema = z.enum(['low', 'medium', 'high', 'verified']);
 export const radarPriorityBandSchema = z.enum(['low', 'medium', 'high', 'urgent']);
+export const radarMatchLifecycleStatusSchema = z.enum([
+  'now',
+  'upcoming',
+  'recently_ended',
+  'no_longer_applicable',
+]);
+export const radarSourceFreshnessStatusSchema = z.enum(['fresh', 'stale', 'unknown']);
 
 export const radarPriorityDiagnosticsSchema = z.object({
   version: z.string().min(1),
@@ -357,6 +364,10 @@ export const radarFeedItemSchema = z.object({
   impact: radarImpactSchema,
   confidence: radarConfidenceSchema.optional(),
   priorityBand: radarPriorityBandSchema,
+  matchLifecycleStatus: radarMatchLifecycleStatusSchema,
+  sourceFreshnessStatus: radarSourceFreshnessStatusSchema,
+  isSourceStale: z.boolean(),
+  isMaterialUpdate: z.boolean(),
   lifecycleStatus: radarLifecycleStatusSchema,
   effectiveAt: z.iso.datetime({ offset: true }),
   expiresAt: z.iso.datetime({ offset: true }).nullable(),

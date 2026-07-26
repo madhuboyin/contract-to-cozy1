@@ -697,6 +697,10 @@ Homeowner payloads expose the band but not the raw score or diagnostic component
 - `confidence` / `confidenceScore` — High/Medium/Low plus the bounded internal diagnostic
 - `priorityBand` / `priorityScore` — Homeowner band plus the internal bounded ordering score
 - `priorityDiagnosticsJson` / `priorityVersion` / `priorityEvaluatedAt` — Operational component trace and evaluation lineage
+- `lifecycleStatus` / `lifecycleReason` / `lifecycleVersion` — Now, Upcoming, Recently Ended, or no-longer-applicable state and lineage
+- `sourceFreshnessStatus` / `sourceFreshnessReason` — Fresh, Stale, or Unknown source-evidence marker
+- `isMaterialUpdate` / `materialUpdatedAt` / `lastEventRevisionId` — Retry-stable material revision decision
+- `noLongerApplicableAt` — When current canonical geography stopped applying to the property
 - `matchExplanationJson` — Geographic reason, confidence components, missing-evidence reasons, and homeowner explanation
 
 **Promotion service:** `RadarIncidentPromotionService.project(...)` — see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge).
@@ -1045,7 +1049,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 - Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
-- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed.
+- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed. `match-lifecycle-v1` persists Now/Upcoming/Recently Ended, independently marks source freshness, detects homeowner-material revisions, and closes matches/Incidents that no longer intersect current property geography.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
@@ -1072,8 +1076,9 @@ imply resolution. HER-206 now supplies an exact-count weather acceptance matrix 
 updates, replay, supersession, resolution, empty/failure semantics, and the complete freeze
 lifecycle. The Incident bridge now carries authoritative revision-scoped weather signals so the
 existing Incident evaluator can activate eligible notifications. HER-300 indexed geospatial
-matching, HER-301's pure impact rules, HER-302's bounded confidence engine, and HER-303's
-ordering-only priority engine are complete. HER-304 match lifecycle is the next delivery slice.
+matching, HER-301's pure impact rules, HER-302's bounded confidence engine, HER-303's
+ordering-only priority engine, and HER-304's revision-aware match lifecycle are complete. HER-305
+property reconciliation is the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 
