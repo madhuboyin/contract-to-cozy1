@@ -3149,6 +3149,7 @@ export interface VaultShareLinkResponse {
 export type RadarUserState = 'new' | 'seen' | 'saved' | 'dismissed' | 'acted_on';
 export type RadarSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 export type RadarImpactLevel = 'none' | 'watch' | 'moderate' | 'high';
+export type RadarPriorityBand = 'low' | 'medium' | 'high' | 'urgent';
 export type RadarLifecycleStatus = 'active' | 'updated' | 'resolved' | 'expired' | 'retracted';
 export type RadarTimingGroup = 'now' | 'upcoming' | 'recently_ended';
 
@@ -3167,6 +3168,7 @@ export interface RadarFeedItem {
   timingGroup: RadarTimingGroup;
   impactLevel: RadarImpactLevel;
   impactSummary: string | null;
+  priorityBand: RadarPriorityBand;
   isVisible: boolean;
   state: RadarUserState;
   createdAt: string;
@@ -3210,6 +3212,9 @@ export interface RadarMatchDetail {
   } | null;
   recommendedActionsJson: { actions?: RadarRecommendedAction[] } | null;
   matchedSystemsJson: { systems?: RadarMatchedSystem[] } | null;
+  priorityBand: RadarPriorityBand;
+  priorityVersion: string | null;
+  priorityEvaluatedAt: string | null;
   isVisible: boolean;
   visibleFrom: string | null;
   visibleUntil: string | null;

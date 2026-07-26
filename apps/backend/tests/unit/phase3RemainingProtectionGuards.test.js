@@ -30,7 +30,7 @@ test('recall follow-ups require confirmation or verified exact item identity', (
 test('event radar and replay enforce event validity and context-version reuse', () => {
   const radar = source('../../src/services/homeEventRadar.service.ts');
   const replay = source('../../src/services/homeRiskReplay.service.ts');
-  assert.match(radar, /status: 'active'/);
+  assert.match(radar, /status: \{ in: \['active', 'updated'\] \}/);
   assert.match(radar, /visibleUntil: \{ gt: now \}/);
   assert.match(radar, /decisions\.eventRadar/);
   assert.match(replay, /snapshot\?\.propertyContextVersion === protectionContext\.contextVersion/);

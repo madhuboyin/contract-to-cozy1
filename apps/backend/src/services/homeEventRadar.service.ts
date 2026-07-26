@@ -3,12 +3,16 @@
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { runMatchingForEvent } from './homeEventRadarMatcher.service';
-import { SharedSignalKey, signalService } from './signal.service';
-import { logSharedDataEvent } from './sharedDataObservability.service';
-import { applyBoundedSignalPriorityBoost } from './signalPriorityBoost.service';
 import { getProtectionContextDecisions } from './protection/context';
 import type { FeatureDecision } from '../modules/propertyContext';
 import { radarTimingGroup } from '../modules/homeEventRadar/domain/radarVisibility';
+import {
+  compareRadarPriority,
+  computeRadarPriority,
+  type RadarPriorityResult,
+  type RadarPriorityTieBreakers,
+  type RadarPriorityUserState,
+} from '../modules/homeEventRadar/domain/radarPriority';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -53,6 +57,7 @@ function serializeMatchFeedItem(match: any, state: any | null): Record<string, u
     impactLevel: match.impactLevel,
     impactSummary: match.impactSummary ?? null,
     confidence: match.confidence ?? null,
+    priorityBand: match.priorityBand ?? null,
     isVisible: match.isVisible,
     state: state?.state ?? 'new',
     createdAt: match.createdAt instanceof Date ? match.createdAt.toISOString() : match.createdAt,
@@ -73,6 +78,15 @@ function serializeMatchDetail(match: any, state: any | null): Record<string, unk
     recommendedActionsJson: match.recommendedActionsJson ?? null,
     matchedSystemsJson: match.matchedSystemsJson ?? null,
     confidence: match.confidence ?? null,
+    priorityBand: match.priorityBand ?? null,
+    priorityVersion: match.priorityVersion ?? null,
+    priorityEvaluatedAt: match.priorityEvaluatedAt
+      ? (
+          match.priorityEvaluatedAt instanceof Date
+            ? match.priorityEvaluatedAt.toISOString()
+            : match.priorityEvaluatedAt
+        )
+      : null,
     matchExplanation: match.matchExplanationJson ?? null,
     matcherVersion: match.matcherVersion ?? null,
     lastEvaluatedAt: match.lastEvaluatedAt
@@ -145,31 +159,23 @@ function applyResponsibilityToRadarDetail(
   return { ...detail, recommendedActionsJson: { ...recommended, actions } };
 }
 
-function toSignalNumber(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number.parseFloat(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
+const CLOSED_INCIDENT_STATUSES = new Set([
+  'RESOLVED',
+  'SUPPRESSED',
+  'EXPIRED',
+]);
+
+function hasActiveRadarIncident(incident: { status?: string } | null | undefined): boolean {
+  return Boolean(
+    incident?.status
+    && !CLOSED_INCIDENT_STATUSES.has(String(incident.status)),
+  );
 }
 
-function radarSeverityWeight(severity: unknown): number {
-  const normalized = String(severity || '').toLowerCase();
-  if (normalized === 'critical') return 4;
-  if (normalized === 'high') return 3;
-  if (normalized === 'medium') return 2;
-  if (normalized === 'low') return 1;
-  return 0;
-}
-
-function radarImpactWeight(impactLevel: unknown): number {
-  const normalized = String(impactLevel || '').toLowerCase();
-  if (normalized === 'high') return 3;
-  if (normalized === 'moderate') return 2;
-  if (normalized === 'watch') return 1;
-  return 0;
-}
+type RankedRadarFeedEntry = {
+  item: Record<string, unknown>;
+  priority: RadarPriorityResult & RadarPriorityTieBreakers;
+};
 
 // ---------------------------------------------------------------------------
 // Service
@@ -273,14 +279,6 @@ export class HomeEventRadarService {
     items: Record<string, unknown>[];
     hasMore: boolean;
     nextCursor: string | null;
-    signalContext: {
-      riskSpike: unknown;
-      costAnomaly: unknown;
-      maintenanceAdherence: unknown;
-      riskAccumulation: unknown;
-      costPressurePattern: unknown;
-      interactions: unknown;
-    };
     propertyContext: {
       propertyId: string;
       contextVersion: string;
@@ -319,12 +317,19 @@ export class HomeEventRadarService {
     const matches = await this.db.propertyRadarMatch.findMany({
       where,
       orderBy: [
+        { priorityScore: 'desc' },
+        { visibleFrom: 'asc' },
         { createdAt: 'desc' },
         { id: 'desc' },
       ],
       take: limit + 1,
       include: {
         radarEvent: true,
+        incident: {
+          select: {
+            status: true,
+          },
+        },
       },
     });
 
@@ -347,108 +352,47 @@ export class HomeEventRadarService {
       stateMap.set(s.propertyRadarMatchId, s);
     }
 
-    const items = page.map((match: any) => serializeMatchFeedItem(match, stateMap.get(match.id) ?? null));
-    const signalKeys: SharedSignalKey[] = [
-      'RISK_SPIKE',
-      'COST_ANOMALY',
-      'MAINT_ADHERENCE',
-      'COVERAGE_GAP',
-      'SAVINGS_REALIZATION',
-      'RISK_ACCUMULATION',
-      'COST_PRESSURE_PATTERN',
-    ];
-    const signalLookup = await signalService.getLatestSignalsByKeyWithFreshFallback(propertyId, signalKeys, {
-      freshOnly: true,
-      refreshIfStale: true,
-      refreshReason: 'home-event-radar',
-    });
-    const latestSignals = signalLookup.signals;
-    if (signalLookup.fallbackUsed) {
-      logSharedDataEvent({
-        event: 'event_radar.signal_fallback_used',
-        level: 'INFO',
-        propertyId,
-        toolKey: 'HOME_EVENT_RADAR',
-        fallbackPath: 'signal-refresh',
-        metadata: {
-          refreshedSignals: signalLookup.refreshSummary?.refreshedSignals ?? [],
-          skippedSignals: signalLookup.refreshSummary?.skippedSignals ?? [],
-        },
-      });
-    }
-    const signalInteractions = await signalService
-      .getSignalInteractionContext(propertyId, {
-        freshOnly: true,
-      })
-      .catch((error) => {
-        logSharedDataEvent({
-          event: 'event_radar.signal_interaction_context_fallback',
-          level: 'WARN',
-          propertyId,
-          toolKey: 'HOME_EVENT_RADAR',
-          fallbackPath: 'empty-signal-interaction-context',
-          error,
-        });
+    const rankedEntries: RankedRadarFeedEntry[] = page
+      .map((match: any): RankedRadarFeedEntry => {
+        const state = stateMap.get(match.id) ?? null;
+        const priority = computeRadarPriority(
+          {
+            severity: match.radarEvent.severity,
+            impactLevel: match.impactLevel,
+            confidence: match.confidence,
+            effectiveAt: match.radarEvent.startAt,
+            expiresAt: match.radarEvent.endAt,
+            lifecycleStatus: match.radarEvent.status,
+            isMaterialUpdate: match.radarEvent.status === 'updated',
+            materiallyUpdatedAt: match.radarEvent.updatedAt,
+            hasActiveIncident: hasActiveRadarIncident(match.incident),
+            userState: (state?.state ?? 'new') as RadarPriorityUserState,
+          },
+          now,
+        );
         return {
-          signals: {},
-          interactions: [],
-          staleSignals: [],
-        };
-      });
-
-    const riskSpike = toSignalNumber(latestSignals.RISK_SPIKE?.valueNumber);
-    const costAnomaly = toSignalNumber(latestSignals.COST_ANOMALY?.valueNumber);
-    const maintenanceAdherence = toSignalNumber(latestSignals.MAINT_ADHERENCE?.valueNumber);
-    const riskAccumulation = toSignalNumber(latestSignals.RISK_ACCUMULATION?.valueNumber);
-    const costPressurePattern = toSignalNumber(latestSignals.COST_PRESSURE_PATTERN?.valueNumber);
-
-    const prioritizedItems = items
-      .map((item: Record<string, unknown>) => {
-        const base = radarSeverityWeight((item as any).severity) + radarImpactWeight((item as any).impactLevel);
-        let additiveBoost = 0;
-
-        if (riskSpike !== null) additiveBoost += riskSpike * 2;
-        if (costAnomaly !== null && ['insurance_market', 'utility_rate_change', 'tax_reassessment', 'tax_rate_change'].includes(
-          String((item as any).eventType || '').toLowerCase()
-        )) {
-          additiveBoost += costAnomaly;
-        }
-        if (maintenanceAdherence !== null && maintenanceAdherence < 0.5) {
-          additiveBoost += 0.4;
-        }
-        if (riskAccumulation !== null && riskAccumulation >= 0.6) {
-          additiveBoost += riskAccumulation * 0.6;
-        }
-        if (costPressurePattern !== null && costPressurePattern >= 0.6) {
-          additiveBoost += costPressurePattern * 0.5;
-        }
-        if (signalInteractions.interactions.length > 0) {
-          additiveBoost += signalInteractions.interactions[0].strength * 0.35;
-        }
-        const bounded = applyBoundedSignalPriorityBoost({
-          baseScore: base,
-          additiveBoost,
-          maxMultiplier: 1.5,
-        });
-
-        return {
-          ...item,
-          priorityScore: Number(bounded.score.toFixed(3)),
-          priorityBoostMeta: {
-            baseScore: Number(base.toFixed(3)),
-            appliedBoost: Number(bounded.appliedBoost.toFixed(3)),
-            maxAllowedScore: Number(bounded.maxAllowedScore.toFixed(3)),
-            wasClamped: bounded.wasClamped,
+          item: {
+            ...serializeMatchFeedItem(
+              { ...match, priorityBand: priority.band },
+              state,
+            ),
+            priorityBand: priority.band,
+          },
+          priority: {
+            ...priority,
+            effectiveAt: match.radarEvent.startAt instanceof Date
+              ? match.radarEvent.startAt.toISOString()
+              : String(match.radarEvent.startAt),
+            createdAt: match.createdAt instanceof Date
+              ? match.createdAt.toISOString()
+              : String(match.createdAt),
+            matchId: String(match.id),
           },
         };
-      })
-      .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-        const scoreDiff = Number((b as any).priorityScore ?? 0) - Number((a as any).priorityScore ?? 0);
-        if (scoreDiff !== 0) return scoreDiff;
-        const byDate = new Date(String((b as any).createdAt ?? 0)).getTime() - new Date(String((a as any).createdAt ?? 0)).getTime();
-        if (byDate !== 0) return byDate;
-        return String((b as any).propertyRadarMatchId ?? '').localeCompare(String((a as any).propertyRadarMatchId ?? ''));
       });
+    const prioritizedItems = rankedEntries
+      .sort((left, right) => compareRadarPriority(left.priority, right.priority))
+      .map(({ item }) => item);
 
     const nextCursor = hasMore ? String(page[page.length - 1].id) : null;
 
@@ -458,14 +402,6 @@ export class HomeEventRadarService {
       items: prioritizedItems,
       hasMore,
       nextCursor,
-      signalContext: {
-        riskSpike: latestSignals.RISK_SPIKE ?? null,
-        costAnomaly: latestSignals.COST_ANOMALY ?? null,
-        maintenanceAdherence: latestSignals.MAINT_ADHERENCE ?? null,
-        riskAccumulation: latestSignals.RISK_ACCUMULATION ?? null,
-        costPressurePattern: latestSignals.COST_PRESSURE_PATTERN ?? null,
-        interactions: signalInteractions.interactions,
-      },
       propertyContext: {
         propertyId,
         contextVersion: protectionContext.contextVersion,

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-206 implemented |
+| Status | In progress — HER-303 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -38,7 +38,8 @@
 | HER-300 Geographic matcher | Complete; DB application pending | Exact property, bounded point/radius distance, normalized ZIP, city/state, county FIPS, state, and Polygon/MultiPolygon matching now use conservative canonical rules; spatial scans use indexed PostGIS queries and matches persist deterministic explanations |
 | HER-301 Impact-rule refactor | Complete | Event-family calculations are pure and deterministic; nullable facts remain unknown, explicit system dates replace construction-year inference, driver codes are registered, responsibility redirects actions, and every output records rule/fact lineage |
 | HER-302 Confidence engine | Complete | Five fixed bounded components score source, geography, freshness, relevant property completeness, and domain evidence; matches persist an internal score and band plus homeowner-readable evidence gaps, and low confidence remains Radar-only |
-| HER-303+ | Not started | Priority, reconciliation, homeowner APIs, actions, and operations remain |
+| HER-303 Priority engine | Complete; DB application pending | Seven fixed bounded ordering components replace global signal blending; match-level score, band, version, evaluation time, and diagnostics persist, while homeowner APIs expose only the band and use deterministic tie-breakers |
+| HER-304+ | Not started | Match lifecycle, reconciliation, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -888,6 +889,24 @@ Priority must:
 - expose diagnostic components to operations;
 - be deterministic;
 - have stable tie-breakers.
+
+Implementation note: the pure `domain/radarPriority.ts` engine records `priority-v1` and combines
+seven bounded components into an ordering-only 0–100 score: provider severity 25%, property impact
+25%, confidence 15%, time to onset/expiration 15%, material update 5%, active unresolved Incident
+10%, and explicit user state 5%. Scores map to Urgent at 80+, High at 60–79.999, Medium at
+35–59.999, and Low below 35. Time changes only at documented onset/expiration windows; terminal
+events receive no timing boost. Material-update boosts decay from full strength within 24 hours,
+to half strength through 72 hours, then to zero. Material-update, Incident, and user-state
+contributions have hard independent caps, and unknown labels receive conservative values. The match pipeline persists the
+base score, band, component diagnostics, version, and evaluation time after Incident projection,
+so the Incident contribution reflects the resulting lifecycle. Feed reads remove all global
+`RISK_SPIKE`, cost, maintenance, accumulation, and interaction boosts, then recompute the bounded
+user-state component at a single explicit request clock. Homeowner feed/detail payloads expose the
+priority band but not the raw score or component diagnostics. Equal scores sort by effective time
+ascending, creation time descending, and match ID; HER-401 remains responsible for encoding the
+full ordering tuple into a stable server cursor. Prisma adds non-null priority band/score defaults,
+the diagnostics fields, enum, and
+property/feed ordering index; no migration script was created.
 
 ### HER-304 — Match lifecycle
 

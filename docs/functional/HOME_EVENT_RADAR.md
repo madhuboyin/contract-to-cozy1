@@ -666,6 +666,27 @@ High is 0.80+, Medium is 0.60–0.7999, and Low is below 0.60. The numeric score
 evidence-quality diagnostic, not a probability. Low-confidence matches remain visible but do not
 promote to Incidents.
 
+Priority is a separate pure `priority-v1` feed-ordering result:
+
+| Component | Weight |
+|---|---:|
+| Provider severity | 25% |
+| Property impact | 25% |
+| Confidence | 15% |
+| Time to onset or expiration | 15% |
+| New/material update | 5% |
+| Active unresolved Incident | 10% |
+| Explicit user state | 5% |
+
+Urgent is 80+, High is 60–79.999, Medium is 35–59.999, and Low is below 35. Every
+component is independently bounded and retains a stable operational reason code. Material-update
+weight decays after 24 hours and reaches zero after 72 hours. The score is
+ordering-only: it is not a probability, provider severity, property-impact claim, or notification
+decision. Match evaluation persists base diagnostics after Incident projection. Feed reads use one
+explicit request clock to apply the current user's saved/action state and deterministic tie-breakers.
+Global risk, cost, maintenance, and cross-signal values no longer boost unrelated Radar events.
+Homeowner payloads expose the band but not the raw score or diagnostic components.
+
 **Match Output Fields:**
 - `matchScore` — Float, 4 decimal places
 - `impactLevel` — none / watch / moderate / high
@@ -674,6 +695,8 @@ promote to Incidents.
 - `recommendedActionsJson` — Stable action code, label, priority, scope, responsible party, and applicability
 - `matchedSystemsJson` — Array of `{ type: string, relevance: 'high' | 'medium' | 'low' }`
 - `confidence` / `confidenceScore` — High/Medium/Low plus the bounded internal diagnostic
+- `priorityBand` / `priorityScore` — Homeowner band plus the internal bounded ordering score
+- `priorityDiagnosticsJson` / `priorityVersion` / `priorityEvaluatedAt` — Operational component trace and evaluation lineage
 - `matchExplanationJson` — Geographic reason, confidence components, missing-evidence reasons, and homeowner explanation
 
 **Promotion service:** `RadarIncidentPromotionService.project(...)` — see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge).
@@ -1022,7 +1045,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 - Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
-- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Priority remains pending.
+- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
@@ -1049,8 +1072,8 @@ imply resolution. HER-206 now supplies an exact-count weather acceptance matrix 
 updates, replay, supersession, resolution, empty/failure semantics, and the complete freeze
 lifecycle. The Incident bridge now carries authoritative revision-scoped weather signals so the
 existing Incident evaluator can activate eligible notifications. HER-300 indexed geospatial
-matching, HER-301's pure impact rules, and HER-302's bounded confidence engine are complete;
-HER-303's ordering-only priority engine is the next delivery slice.
+matching, HER-301's pure impact rules, HER-302's bounded confidence engine, and HER-303's
+ordering-only priority engine are complete. HER-304 match lifecycle is the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

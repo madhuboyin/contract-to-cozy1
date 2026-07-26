@@ -20,6 +20,7 @@ import {
   type RadarImpactPropertyInput,
 } from '../modules/homeEventRadar/domain/radarImpactRules';
 import { computeRadarConfidence } from '../modules/homeEventRadar/domain/radarConfidence';
+import { computeRadarPriority } from '../modules/homeEventRadar/domain/radarPriority';
 
 interface PropertySnapshot extends RadarImpactPropertyInput {
   normalizedZipCode: string | null;
@@ -248,7 +249,7 @@ export async function runMatchingForEvent(
         validUntil: event.endAt ?? null,
       });
 
-      await radarIncidentPromotionService.project({
+      const incidentProjection = await radarIncidentPromotionService.project({
         propertyId: property.id,
         event,
         match: {
@@ -263,6 +264,34 @@ export async function runMatchingForEvent(
           matchExplanationJson: matchExplanation,
         },
         revision,
+      });
+      const hasActiveIncident =
+        incidentProjection.outcome === 'created'
+        || incidentProjection.outcome === 'updated';
+      const priority = computeRadarPriority(
+        {
+          severity: event.severity,
+          impactLevel: impact.impactLevel,
+          confidence: confidence.band,
+          effectiveAt: event.startAt,
+          expiresAt: event.endAt,
+          lifecycleStatus: event.status,
+          isMaterialUpdate: event.status === 'updated',
+          materiallyUpdatedAt: event.updatedAt,
+          hasActiveIncident,
+          userState: 'new',
+        },
+        evaluatedAt,
+      );
+      await db.propertyRadarMatch.update({
+        where: { id: match.id },
+        data: {
+          priorityBand: priority.band,
+          priorityScore: priority.score.toFixed(3),
+          priorityDiagnosticsJson: priority,
+          priorityVersion: priority.version,
+          priorityEvaluatedAt: evaluatedAt,
+        },
       });
       matched++;
     } catch (err) {

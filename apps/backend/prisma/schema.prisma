@@ -9317,6 +9317,13 @@ enum RadarMatchConfidence {
   verified
 }
 
+enum RadarPriorityBand {
+  low
+  medium
+  high
+  urgent
+}
+
 enum RadarCoverageEvaluationStatus {
   covered
   not_covered
@@ -9631,6 +9638,11 @@ model PropertyRadarMatch {
   matchedSystemsJson       Json?
   confidence               RadarMatchConfidence?
   confidenceScore          Decimal?                 @db.Decimal(5, 4)
+  priorityBand             RadarPriorityBand         @default(low)
+  priorityScore            Decimal                   @default(0) @db.Decimal(6, 3)
+  priorityDiagnosticsJson  Json?
+  priorityVersion          String?
+  priorityEvaluatedAt      DateTime?
   matchExplanationJson     Json?
   matcherVersion           String?
   propertyGeographyVersion Int?
@@ -9654,6 +9666,9 @@ model PropertyRadarMatch {
   @@index([radarEventId])
   @@index([impactLevel])
   @@index([confidence])
+  @@index([propertyId, isVisible, priorityScore(sort: Desc), visibleFrom, createdAt(sort: Desc), id])
+  @@index([priorityBand])
+  @@index([priorityVersion])
   @@index([matcherVersion])
   @@index([isVisible, visibleFrom])
   @@index([createdAt])

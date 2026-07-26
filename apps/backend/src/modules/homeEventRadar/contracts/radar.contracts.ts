@@ -50,6 +50,30 @@ export const radarLifecycleStatusSchema = z.enum([
 export const radarSeveritySchema = z.enum(['info', 'low', 'moderate', 'high', 'severe', 'extreme']);
 export const radarImpactSchema = z.enum(['none', 'low', 'moderate', 'high', 'critical']);
 export const radarConfidenceSchema = z.enum(['low', 'medium', 'high', 'verified']);
+export const radarPriorityBandSchema = z.enum(['low', 'medium', 'high', 'urgent']);
+
+export const radarPriorityDiagnosticsSchema = z.object({
+  version: z.string().min(1),
+  score: z.number().min(0).max(100),
+  band: radarPriorityBandSchema,
+  components: z.array(z.object({
+    name: z.enum([
+      'severity',
+      'impact',
+      'confidence',
+      'timing',
+      'materialUpdate',
+      'activeIncident',
+      'userState',
+    ]),
+    weight: z.number().min(0).max(1),
+    score: z.number().min(0).max(1),
+    weightedScore: z.number().min(0).max(1),
+    reasonCode: z.string().min(1).max(128),
+  })).length(7),
+  evaluatedAt: z.iso.datetime({ offset: true }),
+  orderingOnly: z.literal(true),
+});
 
 const pointSchema = z.object({
   latitude: z.number().min(-90).max(90),
@@ -332,6 +356,7 @@ export const radarFeedItemSchema = z.object({
   severity: radarSeveritySchema,
   impact: radarImpactSchema,
   confidence: radarConfidenceSchema.optional(),
+  priorityBand: radarPriorityBandSchema,
   lifecycleStatus: radarLifecycleStatusSchema,
   effectiveAt: z.iso.datetime({ offset: true }),
   expiresAt: z.iso.datetime({ offset: true }).nullable(),
@@ -378,6 +403,7 @@ export type RadarSourceRunCompletionInput = z.input<typeof radarSourceRunComplet
 export type RadarSourceHealth = z.infer<typeof radarSourceHealthSchema>;
 export type RadarCoverage = z.infer<typeof radarCoverageSchema>;
 export type RadarMatchExplanation = z.infer<typeof radarMatchExplanationSchema>;
+export type RadarPriorityDiagnostics = z.infer<typeof radarPriorityDiagnosticsSchema>;
 export type RadarRecommendedAction = z.infer<typeof radarRecommendedActionSchema>;
 export type RadarOverviewResponse = z.infer<typeof radarOverviewResponseSchema>;
 export type RadarFeedResponse = z.infer<typeof radarFeedResponseSchema>;
