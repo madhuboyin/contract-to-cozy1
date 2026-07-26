@@ -36,7 +36,8 @@
 | HER-205 Weather lifecycle convergence | Complete | NWS references resolve or retract prior canonical identities, provider end times expire events, failed fetches never imply resolution, stale fallback requires a fully successful run, and terminal matches remain in Recently Ended for 72 hours |
 | HER-206 Weather end-to-end acceptance | Complete | Deterministic watch, warning, escalation, extended/replayed expiration, supersession, resolution, failed/successful empty, and freeze lifecycle fixtures assert exact event/revision/match/Incident/Journey/notification-decision totals and representative in-process p95 |
 | HER-300 Geographic matcher | Complete; DB application pending | Exact property, bounded point/radius distance, normalized ZIP, city/state, county FIPS, state, and Polygon/MultiPolygon matching now use conservative canonical rules; spatial scans use indexed PostGIS queries and matches persist deterministic explanations |
-| HER-301+ | Not started | Impact-rule refactoring, confidence scoring, reconciliation, homeowner APIs, actions, and operations remain |
+| HER-301 Impact-rule refactor | Complete | Event-family calculations are pure and deterministic; nullable facts remain unknown, explicit system dates replace construction-year inference, driver codes are registered, responsibility redirects actions, and every output records rule/fact lineage |
+| HER-302+ | Not started | Confidence scoring, priority, reconciliation, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -181,7 +182,8 @@ owner. Existing pre-launch Radar data may be reset.
 | File | Current responsibility | Target |
 | --- | --- | --- |
 | `services/homeEventRadar.service.ts` | Feed, detail, state, analytics, manual event upsert | Split query/state from admin/source operations |
-| `services/homeEventRadarMatcher.service.ts` | Location matching, impact, Signal and Incident publication | Extract rule engine; add confidence/geospatial/reconciliation |
+| `services/homeEventRadarMatcher.service.ts` | Match persistence plus Signal and Incident publication | Keep as orchestration; add confidence and reconciliation |
+| `modules/homeEventRadar/domain/radarImpactRules.ts` | Pure versioned impact rules, evidence trace, and responsibility-aware actions | Extend only through reviewed versioned rules |
 | `controllers/homeEventRadar.controller.ts` | Public feed plus unsafe operations handlers | Keep property handlers; remove/move operations |
 | `routes/homeEventRadar.routes.ts` | Public and operations routes | Public property routes only |
 | `validators/homeEventRadar.validators.ts` | Event and property DTO validation | Replace manual ingest schema with new API contracts |
@@ -825,6 +827,20 @@ Requirements:
 - responsibility decisions applied;
 - rule version recorded;
 - input facts traceable.
+
+Implementation note: event-family calculations now live in the I/O-free
+`domain/radarImpactRules.ts` module and receive the evaluation clock explicitly. `impact-v1`
+preserves the reviewed score thresholds and stable driver identifiers while removing construction
+year as a fallback for roof, HVAC, or water-heater age. Nullable booleans are three-state:
+confirmed `true` and `false` follow separate branches, while `null` records a missing-fact reason
+and never increases impact. Every driver identifies the exact facts that support it, every
+consumed fact is recorded with known/unknown state, and outputs include the rule version,
+evaluation time, missing facts, and responsibility decisions. Canonical Property Responsibility
+records now route owner/shared work directly and rewrite association/landlord work as coordination
+without suppressing the underlying property impact. The database-owning matcher is reduced to
+geographic revalidation, context loading, persistence, and downstream Signal/Incident projection;
+its persisted matcher version combines `geography-v1+impact-v1`. No schema change or migration
+script was required.
 
 ### HER-302 — Confidence engine
 

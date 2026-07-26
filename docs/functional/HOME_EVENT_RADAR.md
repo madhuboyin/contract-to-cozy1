@@ -1015,8 +1015,8 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 - Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
+- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Confidence and priority remain pending.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
-- `county` and `polygon` matching are not implemented.
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
 - `energy_inefficiency_detected`/`high_utility_cost` guidance families still point at the (mostly dataless) Home Event Radar tool — known gap, not yet fixed.
@@ -1042,7 +1042,8 @@ imply resolution. HER-206 now supplies an exact-count weather acceptance matrix 
 updates, replay, supersession, resolution, empty/failure semantics, and the complete freeze
 lifecycle. The Incident bridge now carries authoritative revision-scoped weather signals so the
 existing Incident evaluator can activate eligible notifications. HER-300 indexed geospatial
-matching is complete; HER-301's pure impact-rule refactor is the next delivery slice.
+matching and HER-301's pure, traceable, responsibility-aware impact rules are complete; HER-302's
+bounded confidence engine is the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 
