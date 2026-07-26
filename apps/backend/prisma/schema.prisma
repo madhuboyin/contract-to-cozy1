@@ -9338,6 +9338,13 @@ enum RadarSourceFreshnessStatus {
   unknown
 }
 
+enum RadarSafetyNetStatus {
+  pending
+  in_progress
+  complete
+  failed
+}
+
 enum RadarCoverageEvaluationStatus {
   covered
   not_covered
@@ -9592,6 +9599,12 @@ model RadarEvent {
   expiredAt          DateTime?
   retractedAt        DateTime?
   canonicalUrl       String?
+  safetyNetStatus          RadarSafetyNetStatus @default(pending)
+  safetyNetRevisionId      String?
+  safetyNetAfterPropertyId String?
+  safetyNetEvaluatedAt     DateTime?
+  safetyNetLastError       String?
+  safetyNetFailureCount    Int                  @default(0)
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
@@ -9608,6 +9621,7 @@ model RadarEvent {
   @@index([providerEventId])
   @@index([severity])
   @@index([status])
+  @@index([status, safetyNetStatus, safetyNetEvaluatedAt])
   @@index([locationType, locationKey])
   @@map("radar_events")
 }

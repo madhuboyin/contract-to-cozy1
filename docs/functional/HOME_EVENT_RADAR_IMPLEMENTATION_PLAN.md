@@ -41,7 +41,8 @@
 | HER-303 Priority engine | Complete; DB application pending | Seven fixed bounded ordering components replace global signal blending; match-level score, band, version, evaluation time, and diagnostics persist, while homeowner APIs expose only the band and use deterministic tie-breakers |
 | HER-304 Match lifecycle | Complete; DB application pending | Revision-aware material updates, Now/Upcoming/Recently Ended state, source freshness, terminal retention, retraction/Incident closure, and explicit no-longer-applicable reconciliation are persisted and exposed safely |
 | HER-305 Property reconciliation | Complete; DB application pending | Database-backed domain events durably reconcile property creation, geography, relevant facts, responsibility, Radar action state, and canonical completion changes through bounded active-event pages with shared retries and structured outcomes |
-| HER-306+ | Not started | Scheduled safety-net reconciliation, homeowner APIs, actions, and operations remain |
+| HER-306 Scheduled safety-net reconciliation | Complete; DB application pending | Hourly leased sweeps resume revision/property cursors, retry capped Radar dead letters, materialize missing/stale coverage, expire visibility/material markers, support dry-run/property smoke scope, and report structured partial/failure outcomes |
+| HER-307+ | Not started | Tax routing correction, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -988,6 +989,30 @@ Add a periodic job that:
 - retries failed claims;
 - expires stale lifecycle records according to source policy;
 - reports structured outcomes.
+
+Implementation note: `radarSafetyNetReconciliationJob` is registered as the hourly
+`radar-safety-net-reconciliation` leased cron, with an environment schedule override, bounded
+configuration, admin trigger, dry-run, and allowlisted property smoke scope. Active/updated events
+store revision-scoped safety-net status, property cursor, evaluation time, bounded failure count,
+and last error. Each run processes at most 20 events and 100 property candidates per event by
+default; cursor progress advances only after every required property claim in the page succeeds.
+Current revision/geography matches are skipped, while missing, old-revision, unevaluated, or
+old-geography claims re-enter the independently isolated property matcher. A property that becomes
+applicable again can reactivate a prior `no_longer_applicable` match.
+
+The same run evaluates at most 100 missing or source-freshness-expired
+`PropertyRadarCoverage` projections, using the reviewed source registry's exact coverage and health
+policy. It releases at most 25 Radar reconciliation dead letters older than one hour, resets the
+normal claim-attempt budget, and records a maximum of three explicit safety-net retry cycles in the
+payload. Exhausted claims remain dead-lettered. Finally, it hides at most 500 matches whose
+reviewed `visibleUntil` has elapsed and removes material-update markers after 72 hours. It never
+turns source staleness into event resolution or mutates canonical provider lifecycle.
+
+The job returns a `WorkerRunResult` plus stage-level event, property-claim, coverage, retry,
+lifecycle, and material-marker counts. The shared scheduler records success/partial/failure,
+duration, lease contention, and run history, while stage failures remain isolated and logged with
+canonical IDs. Prisma adds the safety-net status/cursor fields and index; no migration script was
+created.
 
 ### HER-307 — Tax routing correction
 

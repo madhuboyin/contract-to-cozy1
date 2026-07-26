@@ -563,6 +563,29 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'radar-safety-net-reconciliation',
+    name: 'Home Event Radar Safety-Net Reconciliation',
+    description:
+      'Re-derives incomplete or failed active-event property matches, materializes missing source ' +
+      'coverage evaluations, releases bounded Radar dead-letter claims, and expires lifecycle ' +
+      'visibility/material-update markers according to reviewed policy. Override schedule via ' +
+      'RADAR_SAFETY_NET_RECONCILIATION_CRON.',
+    category: 'RISK_SAFETY',
+    schedule: 'Hourly at minute 17',
+    cronExpression: '17 * * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'radar-safety-net-reconciliation',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: true,
+    supportsPropertyScope: true,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'reserve-fund-recalculation',
     name: 'Reserve Fund Recalculation',
     description:

@@ -1049,7 +1049,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 - Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
-- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed. `match-lifecycle-v1` persists Now/Upcoming/Recently Ended, independently marks source freshness, detects homeowner-material revisions, and closes matches/Incidents that no longer intersect current property geography. Property creation, geography/fact/responsibility changes, Radar mitigation state, and canonical completion changes publish durable database-backed reconciliation events that replay active events in bounded cursor pages.
+- Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed. `match-lifecycle-v1` persists Now/Upcoming/Recently Ended, independently marks source freshness, detects homeowner-material revisions, and closes matches/Incidents that no longer intersect current property geography. Property creation, geography/fact/responsibility changes, Radar mitigation state, and canonical completion changes publish durable database-backed reconciliation events that replay active events in bounded cursor pages. An hourly leased safety net resumes incomplete revision/property pages, retries capped Radar dead letters, materializes source coverage, and expires visibility/material-update markers without interpreting source failure as clear.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
@@ -1077,9 +1077,9 @@ updates, replay, supersession, resolution, empty/failure semantics, and the comp
 lifecycle. The Incident bridge now carries authoritative revision-scoped weather signals so the
 existing Incident evaluator can activate eligible notifications. HER-300 indexed geospatial
 matching, HER-301's pure impact rules, HER-302's bounded confidence engine, HER-303's
-ordering-only priority engine, HER-304's revision-aware match lifecycle, and HER-305's durable
-property reconciliation are complete. HER-306 scheduled safety-net reconciliation is the next
-delivery slice.
+ordering-only priority engine, HER-304's revision-aware match lifecycle, HER-305's durable
+property reconciliation, and HER-306's scheduled safety net are complete. HER-307 tax routing
+correction is the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

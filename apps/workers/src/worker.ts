@@ -40,6 +40,7 @@ import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { ingestTaxAssessmentEventsJob } from './jobs/ingestTaxAssessmentEvents.job';
 import { ingestHomeRiskEventsJob } from './jobs/ingestHomeRiskEvents.job';
+import { radarSafetyNetReconciliationJob } from './jobs/radarSafetyNetReconciliation.job';
 import { runHiddenAssetRefreshJob } from './jobs/hiddenAssetRefresh.job';
 import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.job';
 import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNotification.job';
@@ -325,6 +326,14 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     };
   },
   'tax-assessment-ingest':           async () => { await ingestTaxAssessmentEventsJob(); },
+  'radar-safety-net-reconciliation': async (opts) => {
+    const result = await radarSafetyNetReconciliationJob(opts);
+    logger.info(
+      { ...result },
+      `[radar-safety-net-reconciliation] events=${result.activeEventsExamined} claims=${result.eventClaimsExamined} reconciled=${result.eventClaimsReconciled} coverage=${result.coverageEvaluated} retried=${result.failedClaimsRetried} expired=${result.lifecycleExpired}`,
+    );
+    return result;
+  },
   'home-gazette-generation':         async (opts) => {
     const result = await runGazetteGenerationJob(opts);
     logger.info({ ...result }, `[home-gazette-generation] published=${result.published} skipped=${result.skipped} failed=${result.failed}`);
@@ -382,6 +391,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
 // Per-job cron expression overrides (env-var-based schedules)
 const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'tax-assessment-ingest':      process.env.TAX_ASSESSMENT_INGEST_CRON,
+  'radar-safety-net-reconciliation': process.env.RADAR_SAFETY_NET_RECONCILIATION_CRON,
   'inventory-draft-cleanup':    process.env.INVENTORY_DRAFT_CLEANUP_CRON,
   'home-gazette-generation':    process.env.HOME_GAZETTE_GENERATION_CRON,
   'shared-data-backfill':       process.env.SHARED_DATA_BACKFILL_CRON,

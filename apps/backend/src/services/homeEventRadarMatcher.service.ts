@@ -212,9 +212,7 @@ export async function runMatchingForEvent(
       // Terminal revisions revisit only prior matches. Preserve those matches
       // in Recently Ended even when a withdrawal omits or changes geography.
       let geographicallyApplicable: boolean;
-      if (existingMatch?.lifecycleStatus === 'no_longer_applicable') {
-        geographicallyApplicable = false;
-      } else if (
+      if (
         existingMatch
         && TERMINAL_EVENT_STATUSES.has(String(event.status))
       ) {
