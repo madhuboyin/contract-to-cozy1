@@ -117,6 +117,8 @@ const loanEstimateOfferSchema = z
     monthlyPrincipalAndInterestUsd: z.number().positive().max(1_000_000),
     loanCostsUsd: z.number().min(0).max(5_000_000),
     lenderCreditsUsd: z.number().min(0).max(5_000_000),
+    discountPointsPct: z.number().min(0).max(10).optional(),
+    discountPointsUsd: z.number().min(0).max(1_000_000).optional(),
     cashToCloseUsd: z.number().min(0).max(10_000_000),
     fiveYearTotalPaidUsd: z.number().min(0).max(20_000_000).optional(),
     fiveYearPrincipalPaidUsd: z.number().min(0).max(20_000_000).optional(),
@@ -168,6 +170,22 @@ const loanEstimateOfferSchema = z
         path: ['rateLockExpirationDate'],
         message: 'The rate-lock expiration cannot precede the issue date.',
       });
+    }
+    if (
+      offer.discountPointsPct != null &&
+      offer.discountPointsUsd != null
+    ) {
+      const expectedPointsUsd =
+        (offer.loanAmountUsd * offer.discountPointsPct) / 100;
+      const tolerance = Math.max(10, expectedPointsUsd * 0.01);
+      if (Math.abs(expectedPointsUsd - offer.discountPointsUsd) > tolerance) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['discountPointsUsd'],
+          message:
+            'Discount-points percentage and dollars must align with the loan amount.',
+        });
+      }
     }
   });
 

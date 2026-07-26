@@ -31,6 +31,16 @@ function rateLockLabel(offer: RefinanceLoanEstimateInput): string {
   return 'Unknown';
 }
 
+function pointsLabel(offer: RefinanceLoanEstimateInput): string {
+  if (
+    offer.discountPointsPct == null &&
+    offer.discountPointsUsd == null
+  ) {
+    return 'Not supplied';
+  }
+  return `${offer.discountPointsPct == null ? 'percentage missing' : pct(offer.discountPointsPct)} / ${offer.discountPointsUsd == null ? 'amount missing' : money(offer.discountPointsUsd)}`;
+}
+
 const HANDOFF_METRIC_LABELS: Record<LoanEstimateMetric, string> = {
   APR: 'lowest disclosed APR',
   MONTHLY_PRINCIPAL_AND_INTEREST:
@@ -56,7 +66,8 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
       `${offer.loanTermYears}-year ${offer.loanType.toLowerCase()} | ` +
       `${pct(offer.noteRatePct)} | ${pct(offer.aprPct)} | ` +
       `${money(offer.monthlyPrincipalAndInterestUsd)} | ` +
-      `${money(offer.netLoanCostsUsd)} | ${money(offer.cashToCloseUsd)} | ` +
+      `${money(offer.netLoanCostsUsd)} | ${pointsLabel(offer)} | ` +
+      `${money(offer.cashToCloseUsd)} | ` +
       `${money(offer.fiveYearBorrowingCostUsd)} |`,
   );
   const cautionLines = comparison.offers.flatMap((offer) =>
@@ -83,8 +94,8 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     '',
     '## Side-by-side comparison',
     '',
-    '| Lender | Issued | Rate lock | Loan amount | Product | Note rate | APR | Monthly P&I | Net loan costs | Cash to close | 5-year borrowing cost |',
-    '| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+    '| Lender | Issued | Rate lock | Loan amount | Product | Note rate | APR | Monthly P&I | Net loan costs | Discount points | Cash to close | 5-year borrowing cost |',
+    '| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |',
     ...rows,
     '',
     'Five-year borrowing cost is calculated as the disclosed “In 5 years” total paid minus principal paid. Net loan costs are total loan costs minus lender credits.',
@@ -205,6 +216,7 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
     `- Monthly principal and interest: ${money(selected.monthlyPrincipalAndInterestUsd)}`,
     `- Total loan costs: ${money(selected.loanCostsUsd)}`,
     `- Lender credits: ${money(selected.lenderCreditsUsd)}`,
+    `- Discount points: ${pointsLabel(selected)}`,
     `- Net loan costs: ${money(selected.netLoanCostsUsd)}`,
     `- Cash to close: ${money(selected.cashToCloseUsd)}`,
     `- Five-year borrowing cost: ${money(selected.fiveYearBorrowingCostUsd)}`,

@@ -145,3 +145,28 @@ test('flags a higher-cost comparable offer that does not lower payment', () => {
     ),
   );
 });
+
+test('explains discount points and flags incomplete point disclosures', () => {
+  const result = compareRefinanceLoanEstimates([
+    offer({
+      discountPointsPct: 0.5,
+      discountPointsUsd: 1500,
+    }),
+    offer({
+      id: 'offer-b',
+      lenderName: 'Lender B',
+      discountPointsPct: 0.25,
+    }),
+  ]);
+
+  assert.ok(
+    result.offers[0].cautions.some(
+      (line) => /includes \$1,500 in discount points/i.test(line),
+    ),
+  );
+  assert.ok(
+    result.offers[1].cautions.some(
+      (line) => /only one discount-points value/i.test(line),
+    ),
+  );
+});

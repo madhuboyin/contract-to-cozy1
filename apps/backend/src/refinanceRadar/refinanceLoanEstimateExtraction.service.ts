@@ -33,6 +33,8 @@ export interface RefinanceLoanEstimateExtraction {
     monthlyPrincipalAndInterestUsd: LoanEstimateExtractedField<number>;
     loanCostsUsd: LoanEstimateExtractedField<number>;
     lenderCreditsUsd: LoanEstimateExtractedField<number>;
+    discountPointsPct: LoanEstimateExtractedField<number>;
+    discountPointsUsd: LoanEstimateExtractedField<number>;
     cashToCloseUsd: LoanEstimateExtractedField<number>;
     fiveYearTotalPaidUsd: LoanEstimateExtractedField<number>;
     fiveYearPrincipalPaidUsd: LoanEstimateExtractedField<number>;
@@ -338,6 +340,22 @@ export function extractLoanEstimateFieldsFromText(
       ],
       'Calculating Cash to Close — Lender Credits',
     ),
+    discountPointsPct: matchNumber(
+      text,
+      [
+        /([0-9]{1,2}(?:\.\d{1,4})?)\s*%\s+of\s+(?:the\s+)?Loan\s+Amount\s*\(Points\)/i,
+        /Discount\s+Points[ \t:]*(?:Rate[ \t:]*)?([0-9]{1,2}(?:\.\d{1,4})?)\s*%/i,
+      ],
+      'Closing Cost Details — Section A discount-points percentage',
+    ),
+    discountPointsUsd: matchNumber(
+      text,
+      [
+        /[0-9]{1,2}(?:\.\d{1,4})?\s*%\s+of\s+(?:the\s+)?Loan\s+Amount\s*\(Points\)[ \t:$]*\$?[ \t]*([\d,]+(?:\.\d{1,2})?)/i,
+        /Discount\s+Points[ \t:$]*\$?[ \t]*([\d,]+(?:\.\d{1,2})?)/i,
+      ],
+      'Closing Cost Details — Section A discount-points charge',
+    ),
     cashToCloseUsd: matchNumber(
       text,
       [
@@ -427,6 +445,8 @@ const EXTRACTION_FIELD_LABELS: Record<
   monthlyPrincipalAndInterestUsd: 'monthly principal and interest',
   loanCostsUsd: 'total loan costs',
   lenderCreditsUsd: 'lender credits',
+  discountPointsPct: 'discount-points percentage',
+  discountPointsUsd: 'discount-points charge',
   cashToCloseUsd: 'cash to close',
   fiveYearTotalPaidUsd: 'five-year total paid',
   fiveYearPrincipalPaidUsd: 'five-year principal paid',

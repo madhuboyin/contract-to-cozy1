@@ -9,6 +9,8 @@ export interface RefinanceLoanEstimateInput {
   monthlyPrincipalAndInterestUsd: number;
   loanCostsUsd: number;
   lenderCreditsUsd: number;
+  discountPointsPct?: number;
+  discountPointsUsd?: number;
   cashToCloseUsd: number;
   fiveYearTotalPaidUsd?: number;
   fiveYearPrincipalPaidUsd?: number;
@@ -110,6 +112,40 @@ export function compareRefinanceLoanEstimates(
       cautions.push(
         'Add the “In 5 years” total paid and principal paid values from page 3 for a stronger cost comparison.',
       );
+    }
+    if (
+      offer.discountPointsPct != null ||
+      offer.discountPointsUsd != null
+    ) {
+      if (
+        offer.discountPointsPct == null ||
+        offer.discountPointsUsd == null
+      ) {
+        cautions.push(
+          'Only one discount-points value was supplied. Confirm both the percentage and dollar charge from Section A.',
+        );
+      } else {
+        const expectedPointsUsd =
+          (offer.loanAmountUsd * offer.discountPointsPct) / 100;
+        const tolerance = Math.max(10, expectedPointsUsd * 0.01);
+        if (Math.abs(expectedPointsUsd - offer.discountPointsUsd) > tolerance) {
+          cautions.push(
+            'The discount-points percentage and dollar amount do not align with the disclosed loan amount. Recheck Section A.',
+          );
+        }
+      }
+      if ((offer.discountPointsUsd ?? 0) > 0) {
+        cautions.push(
+          `This offer includes ${offer.discountPointsUsd?.toLocaleString(
+            'en-US',
+            {
+              style: 'currency',
+              currency: 'USD',
+              maximumFractionDigits: 0,
+            },
+          ) ?? 'discount points'} in discount points. Ask for a zero-point or lower-point option to compare the rate/cost tradeoff.`,
+        );
+      }
     }
     if (!offer.issuedDate) {
       cautions.push(

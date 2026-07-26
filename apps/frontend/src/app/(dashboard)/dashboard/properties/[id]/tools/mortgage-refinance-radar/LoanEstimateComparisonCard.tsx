@@ -39,6 +39,8 @@ type OfferDraft = {
   monthlyPrincipalAndInterestUsd: string;
   loanCostsUsd: string;
   lenderCreditsUsd: string;
+  discountPointsPct: string;
+  discountPointsUsd: string;
   cashToCloseUsd: string;
   fiveYearTotalPaidUsd: string;
   fiveYearPrincipalPaidUsd: string;
@@ -71,6 +73,8 @@ function blankOffer(number: number): OfferDraft {
     monthlyPrincipalAndInterestUsd: '',
     loanCostsUsd: '',
     lenderCreditsUsd: '',
+    discountPointsPct: '',
+    discountPointsUsd: '',
     cashToCloseUsd: '',
     fiveYearTotalPaidUsd: '',
     fiveYearPrincipalPaidUsd: '',
@@ -94,6 +98,10 @@ function toDraft(offer: RefinanceLoanEstimateInput): OfferDraft {
     ),
     loanCostsUsd: String(offer.loanCostsUsd),
     lenderCreditsUsd: String(offer.lenderCreditsUsd),
+    discountPointsPct:
+      offer.discountPointsPct == null ? '' : String(offer.discountPointsPct),
+    discountPointsUsd:
+      offer.discountPointsUsd == null ? '' : String(offer.discountPointsUsd),
     cashToCloseUsd: String(offer.cashToCloseUsd),
     fiveYearTotalPaidUsd:
       offer.fiveYearTotalPaidUsd == null
@@ -136,9 +144,26 @@ function numberValue(value: string, label: string): number {
   return parsed;
 }
 
+function optionalNumberValue(value: string, label: string): number | undefined {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${label} must be zero or greater.`);
+  }
+  return parsed;
+}
+
 function toInput(offer: OfferDraft): RefinanceLoanEstimateInput {
   const fiveYearTotal = offer.fiveYearTotalPaidUsd.trim();
   const fiveYearPrincipal = offer.fiveYearPrincipalPaidUsd.trim();
+  const discountPointsPct = optionalNumberValue(
+    offer.discountPointsPct,
+    'Discount points percentage',
+  );
+  const discountPointsUsd = optionalNumberValue(
+    offer.discountPointsUsd,
+    'Discount points amount',
+  );
   if (Boolean(fiveYearTotal) !== Boolean(fiveYearPrincipal)) {
     throw new Error(
       `Enter both page 3 five-year values for ${offer.lenderName || 'each lender'}, or leave both blank.`,
@@ -158,6 +183,8 @@ function toInput(offer: OfferDraft): RefinanceLoanEstimateInput {
     ),
     loanCostsUsd: numberValue(offer.loanCostsUsd, 'Loan costs'),
     lenderCreditsUsd: numberValue(offer.lenderCreditsUsd, 'Lender credits'),
+    ...(discountPointsPct != null ? { discountPointsPct } : {}),
+    ...(discountPointsUsd != null ? { discountPointsUsd } : {}),
     cashToCloseUsd: numberValue(offer.cashToCloseUsd, 'Cash to close'),
     ...(fiveYearTotal
       ? {
@@ -279,6 +306,8 @@ function OfferFields({
           ['monthlyPrincipalAndInterestUsd', 'Monthly P&I ($)'],
           ['loanCostsUsd', 'Loan costs ($)'],
           ['lenderCreditsUsd', 'Lender credits ($)'],
+          ['discountPointsPct', 'Discount points (%)'],
+          ['discountPointsUsd', 'Discount points ($)'],
           ['cashToCloseUsd', 'Cash to close ($)'],
           ['fiveYearTotalPaidUsd', 'In 5 years — total paid ($)'],
           ['fiveYearPrincipalPaidUsd', 'In 5 years — principal paid ($)'],
@@ -477,6 +506,8 @@ export function LoanEstimateComparisonCard({
       ),
       loanCostsUsd: value(fields.loanCostsUsd),
       lenderCreditsUsd: value(fields.lenderCreditsUsd),
+      discountPointsPct: value(fields.discountPointsPct),
+      discountPointsUsd: value(fields.discountPointsUsd),
       cashToCloseUsd: value(fields.cashToCloseUsd),
       fiveYearTotalPaidUsd: value(fields.fiveYearTotalPaidUsd),
       fiveYearPrincipalPaidUsd: value(fields.fiveYearPrincipalPaidUsd),
@@ -881,6 +912,19 @@ export function LoanEstimateComparisonCard({
                       </td>
                       <td className="py-3 pr-3">
                         {currency(offer.netLoanCostsUsd)}
+                        {(offer.discountPointsUsd != null ||
+                          offer.discountPointsPct != null) && (
+                          <span className="block text-slate-500">
+                            Points:{' '}
+                            {offer.discountPointsPct != null
+                              ? `${offer.discountPointsPct.toFixed(3)}%`
+                              : 'percentage missing'}
+                            {' / '}
+                            {offer.discountPointsUsd != null
+                              ? currency(offer.discountPointsUsd)
+                              : 'amount missing'}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 pr-3">
                         {currency(offer.cashToCloseUsd)}

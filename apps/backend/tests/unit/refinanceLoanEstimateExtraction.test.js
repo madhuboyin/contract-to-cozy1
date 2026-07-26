@@ -21,6 +21,7 @@ Interest Rate 5.750%
 Monthly Principal & Interest $1,905.42
 
 Closing Cost Details
+0.500% of Loan Amount (Points) $1,500.00
 D. TOTAL LOAN COSTS (A + B + C) $8,427.00
 Lender Credits -$1,250.00
 Cash to Close $12,054.00
@@ -41,6 +42,8 @@ test('extracts standardized Loan Estimate comparison fields for review', () => {
   assert.equal(result.fields.aprPct.value, 5.982);
   assert.equal(result.fields.monthlyPrincipalAndInterestUsd.value, 1905.42);
   assert.equal(result.fields.loanCostsUsd.value, 8427);
+  assert.equal(result.fields.discountPointsPct.value, 0.5);
+  assert.equal(result.fields.discountPointsUsd.value, 1500);
   assert.equal(result.fields.lenderCreditsUsd.value, 1250);
   assert.equal(result.fields.cashToCloseUsd.value, 12054);
   assert.equal(result.fields.fiveYearTotalPaidUsd.value, 125582);

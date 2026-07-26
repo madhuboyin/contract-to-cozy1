@@ -17,6 +17,8 @@ function offer(id) {
     monthlyPrincipalAndInterestUsd: 1900,
     loanCostsUsd: 8000,
     lenderCreditsUsd: 1000,
+    discountPointsPct: 0.5,
+    discountPointsUsd: 1500,
     cashToCloseUsd: 9000,
     issuedDate: '2026-07-20',
     rateLockStatus: 'LOCKED',
@@ -85,6 +87,23 @@ test('rejects impossible or inconsistent Loan Estimate lock dates', () => {
           ...offer('b'),
           issuedDate: '2026-09-01',
           rateLockExpirationDate: '2026-08-20',
+        },
+      ],
+    }).success,
+    false,
+  );
+});
+
+test('rejects discount-point dollars that do not match the disclosed percentage', () => {
+  assert.equal(
+    exportLoanEstimateHandoffSchema.safeParse({
+      ...validInput,
+      offers: [
+        offer('a'),
+        {
+          ...offer('b'),
+          discountPointsPct: 1,
+          discountPointsUsd: 500,
         },
       ],
     }).success,
