@@ -10,6 +10,35 @@ export const radarSourceFamilySchema = z.enum([
   'other',
 ]);
 
+export const radarEventTypeSchema = z.enum([
+  'weather',
+  'insurance_market',
+  'utility_outage',
+  'utility_rate_change',
+  'tax_reassessment',
+  'tax_rate_change',
+  'air_quality',
+  'wildfire_smoke',
+  'flood_risk',
+  'heat_wave',
+  'freeze',
+  'hail',
+  'heavy_rain',
+  'wind',
+  'power_surge_risk',
+  'nearby_construction',
+  'other',
+]);
+
+export const radarSourceTypeSchema = z.enum([
+  'weather_provider',
+  'insurance_market_feed',
+  'utility_feed',
+  'tax_assessor_feed',
+  'internal_derived',
+  'manual_import',
+]);
+
 export const radarLifecycleStatusSchema = z.enum([
   'active',
   'updated',
@@ -118,6 +147,118 @@ export const radarSourceDefinitionSchema = z.object({
   coverageDescription: z.string().min(1).max(1_000),
 });
 
+const radarSourceCoverageRegistrationSchema = z.object({
+  coverageType: z.enum(['global', 'country', 'state', 'county', 'postal_code', 'polygon', 'radius']),
+  countryCode: z.string().length(2).transform((value) => value.toUpperCase()).optional(),
+  stateCode: z.string().min(2).max(3).transform((value) => value.toUpperCase()).optional(),
+  countyFips: z.string().regex(/^\d{5}$/).optional(),
+  postalCode: z.string().min(2).max(16).optional(),
+  centerLatitude: z.number().min(-90).max(90).optional(),
+  centerLongitude: z.number().min(-180).max(180).optional(),
+  radiusMeters: z.number().int().positive().max(1_000_000).optional(),
+  geometryGeoJson: z.object({
+    type: z.literal('Polygon'),
+    coordinates: z.array(polygonRingSchema).min(1),
+  }).optional(),
+  priority: z.number().int().default(0),
+  validFrom: z.coerce.date().optional(),
+  validUntil: z.coerce.date().optional(),
+}).superRefine((value, ctx) => {
+  const required: Partial<Record<typeof value.coverageType, Array<keyof typeof value>>> = {
+    country: ['countryCode'],
+    state: ['countryCode', 'stateCode'],
+    county: ['countryCode', 'countyFips'],
+    postal_code: ['countryCode', 'postalCode'],
+    polygon: ['geometryGeoJson'],
+    radius: ['centerLatitude', 'centerLongitude', 'radiusMeters'],
+  };
+  for (const field of required[value.coverageType] ?? []) {
+    if (value[field] === undefined) {
+      ctx.addIssue({ code: 'custom', path: [field], message: `${String(field)} is required` });
+    }
+  }
+  if (value.validFrom && value.validUntil && value.validUntil < value.validFrom) {
+    ctx.addIssue({ code: 'custom', path: ['validUntil'], message: 'validUntil cannot precede validFrom' });
+  }
+});
+
+export const radarSourceRegistrationSchema = z.object({
+  key: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100),
+  family: radarSourceFamilySchema,
+  sourceType: radarSourceTypeSchema,
+  name: z.string().min(1).max(160),
+  provider: z.string().min(1).max(160),
+  adapterVersion: z.string().min(1).max(80),
+  contractVersion: z.number().int().positive().default(1),
+  isEnabled: z.boolean().default(false),
+  environments: z.array(z.enum(['development', 'test', 'staging', 'production'])).min(1),
+  scheduleCron: z.string().min(1).max(120).optional(),
+  freshnessSeconds: z.number().int().positive(),
+  supportedEventTypes: z.array(radarEventTypeSchema).min(1),
+  coverageDescription: z.string().min(1).max(1_000),
+  configJson: z.record(z.string(), z.unknown()).default({}),
+  coverage: z.array(radarSourceCoverageRegistrationSchema).default([]),
+});
+
+export const radarSourceRunCompletionSchema = z.object({
+  status: z.enum(['success', 'successful_empty', 'partial', 'failed', 'skipped']),
+  finishedAt: z.coerce.date().default(() => new Date()),
+  dataFreshThrough: z.coerce.date().optional(),
+  observationsReceived: z.number().int().nonnegative().default(0),
+  observationsRejected: z.number().int().nonnegative().default(0),
+  eventsCreated: z.number().int().nonnegative().default(0),
+  eventsUpdated: z.number().int().nonnegative().default(0),
+  eventsResolved: z.number().int().nonnegative().default(0),
+  propertiesEvaluated: z.number().int().nonnegative().default(0),
+  matchesCreated: z.number().int().nonnegative().default(0),
+  rateLimitJson: z.record(z.string(), z.unknown()).optional(),
+  errorCode: z.string().min(1).max(120).optional(),
+  errorMessage: z.string().min(1).max(2_000).optional(),
+  metadataJson: z.record(z.string(), z.unknown()).optional(),
+}).superRefine((value, ctx) => {
+  if (value.status === 'successful_empty') {
+    if (
+      value.observationsReceived !== 0 ||
+      value.observationsRejected !== 0 ||
+      value.eventsCreated !== 0 ||
+      value.eventsUpdated !== 0 ||
+      value.eventsResolved !== 0
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['status'],
+        message: 'successful_empty requires zero observations and event changes',
+      });
+    }
+  }
+  if (value.status === 'failed' && !value.errorMessage) {
+    ctx.addIssue({ code: 'custom', path: ['errorMessage'], message: 'failed runs require an errorMessage' });
+  }
+  if (value.status === 'success') {
+    if (value.observationsReceived === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['status'],
+        message: 'success requires observations; use successful_empty for a verified empty run',
+      });
+    }
+    if (value.observationsRejected > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['status'],
+        message: 'runs with rejected observations must be partial or failed',
+      });
+    }
+  }
+  if (value.status === 'partial' && value.observationsRejected === 0 && !value.errorMessage) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['status'],
+      message: 'partial runs require rejected observations or an errorMessage',
+    });
+  }
+});
+
 export const radarSourceHealthSchema = z.object({
   sourceDefinitionId: z.string().min(1),
   status: z.enum(['healthy', 'degraded', 'failed', 'stale', 'disabled', 'unknown']),
@@ -207,6 +348,10 @@ export type RadarSourceFamily = z.infer<typeof radarSourceFamilySchema>;
 export type NormalizedGeography = z.infer<typeof normalizedGeographySchema>;
 export type CanonicalRadarObservation = z.infer<typeof canonicalRadarObservationSchema>;
 export type RadarSourceDefinition = z.infer<typeof radarSourceDefinitionSchema>;
+export type RadarSourceRegistration = z.infer<typeof radarSourceRegistrationSchema>;
+export type RadarSourceRegistrationInput = z.input<typeof radarSourceRegistrationSchema>;
+export type RadarSourceRunCompletion = z.infer<typeof radarSourceRunCompletionSchema>;
+export type RadarSourceRunCompletionInput = z.input<typeof radarSourceRunCompletionSchema>;
 export type RadarSourceHealth = z.infer<typeof radarSourceHealthSchema>;
 export type RadarCoverage = z.infer<typeof radarCoverageSchema>;
 export type RadarMatchExplanation = z.infer<typeof radarMatchExplanationSchema>;

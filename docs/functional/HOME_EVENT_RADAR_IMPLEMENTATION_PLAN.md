@@ -23,7 +23,9 @@
 | HER-004 Critical baseline tests | Complete | Contract, route, authorization wiring, dummy-ingest, tax policy, and weather lifecycle guards |
 | HER-100 Persistence schema | Complete; DB application pending | Source definitions/health/runs/coverage, event revisions, match explanation/confidence, feedback/preferences, and unique Incident bridge |
 | HER-101 Canonical property geography | Complete; DB application pending | Normalized ZIP/FIPS, geocoding state/version, PostGIS geography columns and GIST indexes, location-change invalidation |
-| HER-102–HER-106 | Not started | Source registry/run services, canonical ingestion, adapter harness, and fixture convergence remain |
+| HER-102 Source registry service | Complete; DB application pending | Validated registration, safe configuration projection, runtime policy, freshness, and jurisdiction/radius/polygon coverage |
+| HER-103 Source run and health service | Complete; DB application pending | Idempotent attempts, explicit success/empty/partial/failed/skipped outcomes, health transitions, and zero-coverage skip |
+| HER-104–HER-106 | Not started | Canonical ingestion, adapter harness, and fixture convergence remain |
 | Phase 2+ | Not started | Live-provider convergence, durable matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
