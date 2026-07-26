@@ -71,6 +71,13 @@ independent fail-closed controls—`REFINANCE_EXTERNAL_ALERTS_ENABLED` and
 `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED`—must both be exactly `true`; therefore
 external delivery remains off by default. Existing notification policy applies
 the homeowner's cadence, timezone, and quiet hours once the alert is admitted.
+External alerts additionally default to
+`REFINANCE_ALERT_ROLLOUT_MODE=ALLOWLIST`; an empty recipient allowlist
+suppresses every refinance email and push. Admission and both transport
+workers re-check the recipient cohort, so a queued delivery cannot bypass a
+tightened rollout setting. `GENERAL` must be an explicit operator promotion,
+and startup validation rejects an enabled alert channel with an empty
+allowlist or invalid mode.
 The Web Push worker sends only title, calm summary text, and a product deep
 link; mortgage balance, rate, savings, and other sensitive figures are
 excluded. Expired subscriptions are revoked after provider 404/410 responses.
@@ -114,7 +121,7 @@ scenario metadata JSON, so no schema change or migration is required.
 | OPEN, material UPDATE, CLOSED, and DATA_REQUIRED transitions | Complete | Durable outbox events and replay-safe chart history are implemented. |
 | Home opportunity and missing-data promotion | Complete | Home shows actionable states, honors feedback controls, and ranks the highest-value OPEN opportunity across properties. |
 | One-year rate graph and personalized trigger rate | Complete | Accessible chart, table fallback, transition markers, source/freshness, and trigger-rate explanation are implemented. |
-| Alert preferences and guarded email delivery | Implemented; rollout gated | Consent, confidence, freshness, cadence, quiet hours, sensitivity, cooldown, material-improvement override, and preference deep link are implemented. Production flags and provider readiness remain operational gates. |
+| Alert preferences and guarded email delivery | Implemented; cohort rollout gated | Consent, confidence, freshness, cadence, quiet hours, sensitivity, cooldown, material-improvement override, recipient-cohort enforcement at admission and transport, and preference deep link are implemented. Production flags and an explicit ALLOWLIST-to-GENERAL promotion remain operational gates. |
 | Cost, payoff, APR, escrow, and prepayment modeling | Complete for planning | Detailed educational estimates are implemented; official lender disclosures remain authoritative. |
 | LTV, liens, PMI, occupancy, property type, loan type, and conforming context | Complete for broad context | The configured conforming baseline must be supplied operationally; program and high-cost-area limits require lender confirmation. |
 | Term and objective comparison | Complete | Balanced, lower-payment, faster-payoff, and lower-total-cost modes compare 15-, 20-, and 30-year terms. |
@@ -122,7 +129,7 @@ scenario metadata JSON, so no schema change or migration is required.
 | Lender-ready Markdown export | Complete | Recomputes against canonical context and exports assumptions, costs, alternatives, questions, and disclaimers as Markdown only. |
 | Funnel and trust instrumentation and reporting | Complete | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, durable alert-suppression outcomes, evaluation coverage, duplicate alerts, and freshness guardrails are aggregated through the authorized `/api/admin/analytics/refinance-radar` report. |
 | FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Complete for planning | Explicit Financing loan types drive FHA streamline, VA IRRRL, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, and second-lien coordination pathways. Every pathway lists facts to confirm and avoids approval claims or hard-coded county limits. |
-| Push notifications | Implemented; rollout gated | Explicit browser consent, persisted per-device subscriptions, property-scoped PUSH preferences, VAPID delivery, minimal payloads, stale-subscription cleanup, and fail-closed rollout controls are implemented. Operators must apply the Prisma schema and configure VAPID keys and rollout flags. |
+| Push notifications | Implemented; cohort rollout gated | Explicit browser consent, persisted per-device subscriptions, property-scoped PUSH preferences, VAPID delivery, minimal payloads, stale-subscription cleanup, recipient-cohort enforcement, and fail-closed rollout controls are implemented. Operators must apply the Prisma schema and configure VAPID keys, an internal allowlist, and rollout flags. |
 | Lender-offer and Loan Estimate comparison | Reviewed comparison and homeowner-controlled handoff complete | Homeowners can compare two to four official Loan Estimates using loan amount, disclosed APR, principal-and-interest payment, estimated total payment, monthly mortgage insurance, lender costs/credits, cash to close, and page-3 five-year totals. Cash to close is recorded as from or to the borrower and is ranked only when every offer is cash-from-borrower with the same amount, product, and term; unknown, mixed, or cash-to-borrower disclosures remain visible but cannot earn a misleading lowest-cash badge. Readable direction text is extracted from page 2, and all exports preserve the direction. Total-payment rankings appear only when every offer supplies that field, and the interface separates mortgage insurance plus lender-estimated tax, insurance, and escrow assumptions from P&I. Page-1 extraction prefills readable Projected Payments values and warns about mortgage insurance or incomplete all-in payment context. Section A discount points are captured as both percentage and dollars, checked against the loan amount, and shown separately from net loan costs so a bought-down rate is not mistaken for a free advantage. Page-2 extraction prefills readable points, while incomplete or inconsistent point disclosures require review. For offers with the same amount, product, and term, the comparison quantifies how long a lower monthly principal-and-interest payment takes to recover additional net loan costs; it also warns when a higher-cost offer does not lower payment. The tradeoff is explicitly limited to disclosed net loan costs and P&I and excludes taxes, insurance, escrow, future refinancing, and time value of money. The comparison records each disclosure's issue date, rate-lock status, and lock expiration; it warns on older disclosures, expired or incomplete locks, different issue dates, and mixed locked/floating offers. Saved comparisons are re-evaluated when read so time-sensitive lock warnings do not freeze at save time. A text-layer or scanned PDF, or up to three image pages, can prefill an editable offer through a non-retained, magic-byte-validated upload, including the standardized page-1 issue date when readable. Scanned PDFs are safely capped at three pages; PDF and image pages use sequential local OCR, expose field provenance, and cap every OCR-derived field at medium confidence. Standard page sections are detected automatically, with visible completeness, duplicate-page, and ordering checks before comparison. Every extracted field requires explicit review before comparison or saving. Different loan amounts and unlike terms fail visibly as comparison warnings. Homeowners can export a Markdown-only review package with lender questions and an apples-to-apples verification checklist. After selecting one offer and completing explicit figure, comparability, and manual-sharing acknowledgements, the homeowner can also download a selected-lender discussion brief. That brief intentionally omits competitor identities and is never transmitted by ContractToCozy. Comparisons remain transient by default, persist only after an explicit Save action, and can be permanently deleted through a two-step property-scoped control. Any future transactional lender delivery remains gated. |
 
 ## Executive recommendation
@@ -133,11 +140,11 @@ The feature now has the calculation, orchestration, Home promotion, proactive
 data capture, explainability, Markdown export, feedback, and official
 Loan Estimate comparison foundations required for an always-on product.
 Remaining product work is operational: apply the PushSubscription schema,
-provision VAPID configuration, run an internal Web Push/email cohort, and
-approve rollout only after delivery, duplicate, opt-out, and freshness
-guardrails pass. Any future transactional lender delivery remains deliberately
-gated. Exports remain Markdown-only and keep the homeowner in control of
-external sharing.
+provision VAPID configuration and the internal recipient allowlist, enable
+email and/or push for that cohort, and promote the mode to `GENERAL` only after
+delivery, duplicate, opt-out, and freshness guardrails pass. Any future
+transactional lender delivery remains deliberately gated. Exports remain
+Markdown-only and keep the homeowner in control of external sharing.
 
 - Treat Financing Center as the only owner of mortgage facts; never ask users to duplicate known information.
 

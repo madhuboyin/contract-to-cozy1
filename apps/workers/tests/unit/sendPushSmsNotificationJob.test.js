@@ -27,6 +27,7 @@ function fakeDeps({
   deliveryEnabled = false,
   subscriptions = [],
   send = async () => ({ statusCode: 201, headers: {}, body: '' }),
+  refinanceRolloutAllowed = true,
 }) {
   const calls = { updates: [], subscriptionUpdates: [], sends: [] };
   const deps = {
@@ -53,6 +54,11 @@ function fakeDeps({
       calls.sends.push(args);
       return send(...args);
     },
+    decideRefinanceAlertRollout: () => ({
+      allowed: refinanceRolloutAllowed,
+      mode: refinanceRolloutAllowed ? 'GENERAL' : 'ALLOWLIST',
+      reason: refinanceRolloutAllowed ? null : 'RECIPIENT_NOT_IN_COHORT',
+    }),
   };
   return { deps, calls };
 }
@@ -113,6 +119,33 @@ test('push: revokes an expired subscription after a provider 410', async () => {
   );
   assert.equal(calls.subscriptionUpdates.length, 1);
   assert.equal(calls.updates.at(-1).data.status, 'FAILED');
+});
+
+test('push: skips a refinance notification outside the rollout cohort', async () => {
+  const { deps, calls } = fakeDeps({
+    delivery: pendingDelivery({
+      notification: {
+        id: 'notification-1',
+        type: 'REFINANCE_OPPORTUNITY_OPENED',
+        userId: 'user-1',
+        user: { email: 'owner@example.com' },
+        title: 'Refinance update',
+        message: 'Review the latest assumptions.',
+        actionUrl: '/',
+      },
+    }),
+    deliveryEnabled: true,
+    refinanceRolloutAllowed: false,
+  });
+
+  await sendPushNotificationJob('delivery-1', deps);
+
+  assert.equal(calls.sends.length, 0);
+  assert.equal(calls.updates.at(-1).data.status, 'SKIPPED');
+  assert.equal(
+    calls.updates.at(-1).data.failureReason,
+    'REFINANCE_ALERT_RECIPIENT_NOT_IN_COHORT',
+  );
 });
 
 function pendingDelivery(overrides = {}) {

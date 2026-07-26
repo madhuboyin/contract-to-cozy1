@@ -4,6 +4,11 @@ import { prisma } from '../lib/prisma';
 import { logger, AppLogger } from '../lib/logger';
 import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
 import { areWorkerOutboundNotificationsEnabled } from '@worker-shared/config/workerExecutionPolicy';
+import {
+  decideRefinanceAlertRollout,
+  isRefinanceNotification,
+  REFINANCE_ALERT_ROLLOUT_SUPPRESSION_REASON,
+} from '../lib/refinanceAlertRollout';
 
 type StoredPushSubscription = {
   id: string;
@@ -21,6 +26,7 @@ export interface SendPushNotificationDeps {
     subscription: webPush.PushSubscription,
     payload: string,
   ): Promise<webPush.SendResult>;
+  decideRefinanceAlertRollout: typeof decideRefinanceAlertRollout;
 }
 
 function isWebPushDeliveryEnabled(
@@ -58,6 +64,7 @@ const defaultDeps: SendPushNotificationDeps = {
   filterDeliveriesByAggregationPolicy,
   deliveryEnabled: isWebPushDeliveryEnabled,
   send,
+  decideRefinanceAlertRollout,
 };
 
 export async function sendPushNotificationJob(
@@ -66,7 +73,13 @@ export async function sendPushNotificationJob(
 ) {
   const delivery = await deps.prisma.notificationDelivery.findUnique({
     where: { id: notificationDeliveryId },
-    include: { notification: true },
+    include: {
+      notification: {
+        include: {
+          user: { select: { email: true } },
+        },
+      },
+    },
   });
 
   if (!delivery) return;
@@ -82,6 +95,21 @@ export async function sendPushNotificationJob(
     });
     deps.logger.warn(`[PUSH] Skipped delivery ${notificationDeliveryId}: ${reason}`);
     throw new Error(`PUSH_NOT_CONFIGURED: ${reason}`);
+  }
+  if (
+    isRefinanceNotification(delivery.notification) &&
+    !deps.decideRefinanceAlertRollout(
+      delivery.notification.user.email,
+    ).allowed
+  ) {
+    await deps.prisma.notificationDelivery.update({
+      where: { id: notificationDeliveryId },
+      data: {
+        status: DeliveryStatus.SKIPPED,
+        failureReason: REFINANCE_ALERT_ROLLOUT_SUPPRESSION_REASON,
+      },
+    });
+    return;
   }
 
   const subscriptions = await deps.prisma.pushSubscription.findMany({

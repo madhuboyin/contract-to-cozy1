@@ -13,6 +13,10 @@ import {
   type RefinanceAlertPreferenceDTO,
 } from '@worker-shared/refinanceRadar/refinanceAlertPreference.service';
 import { buildRefinanceFreshness } from '@worker-shared/refinanceRadar/refinanceFreshness';
+import {
+  decideRefinanceAlertRollout,
+  type RefinanceAlertRolloutDecision,
+} from '../lib/refinanceAlertRollout';
 
 export const REFINANCE_EXTERNAL_ALERT_COOLDOWN_DAYS = 30;
 export const REFINANCE_EXTERNAL_ALERT_FLAG =
@@ -25,6 +29,7 @@ export type RefinanceAlertTransition = 'OPEN' | 'UPDATE';
 type RefinanceAlertContext = {
   propertyId: string;
   ownerUserId: string;
+  ownerEmail: string;
   address: string;
   confidenceLevel: RefinanceConfidenceLevel | null;
   mortgageDataAsOf: string | null;
@@ -59,6 +64,9 @@ export interface RefinanceTransitionAlertDeps {
   preferenceDeliveryEnabled?(
     preference: RefinanceAlertPreferenceDTO,
   ): boolean;
+  recipientRollout?(
+    email: string,
+  ): RefinanceAlertRolloutDecision;
   now(): Date;
 }
 
@@ -107,7 +115,12 @@ async function loadContext(
     select: {
       id: true,
       address: true,
-      homeownerProfile: { select: { userId: true } },
+      homeownerProfile: {
+        select: {
+          userId: true,
+          user: { select: { email: true } },
+        },
+      },
       financingProfile: {
         select: { mortgageBalanceAsOfDate: true },
       },
@@ -158,6 +171,7 @@ async function loadContext(
   return {
     propertyId,
     ownerUserId,
+    ownerEmail: property.homeownerProfile.user.email,
     address: property.address,
     confidenceLevel:
       property.refinanceRadarState?.currentOpportunity?.confidenceLevel ?? null,
@@ -185,6 +199,7 @@ async function loadContext(
           }
         : null,
       Boolean(activePushSubscription),
+      property.homeownerProfile.user.email,
     ),
   };
 }
@@ -222,6 +237,7 @@ const defaultDeps: RefinanceTransitionAlertDeps = {
   createNotification: (input) => NotificationService.create(input),
   deliveryEnabled: areRefinanceExternalAlertsEnabled,
   preferenceDeliveryEnabled: isRefinancePreferenceDeliveryEnabled,
+  recipientRollout: decideRefinanceAlertRollout,
   now: () => new Date(),
 };
 
@@ -235,6 +251,9 @@ export type RefinanceTransitionAlertResult =
         | 'INPUTS_NOT_CURRENT'
         | 'CONFIDENCE_BELOW_PREFERENCE'
         | 'COOLDOWN_ACTIVE'
+        | 'ROLLOUT_DISABLED'
+        | 'RECIPIENT_NOT_IN_COHORT'
+        | 'INVALID_ROLLOUT_MODE'
         | 'PROPERTY_NOT_FOUND'
         | 'NOTIFICATION_POLICY';
     };
@@ -269,6 +288,13 @@ export async function processRefinanceTransitionAlert(
   const context = await deps.loadContext(input.propertyId);
   if (!context) {
     return { status: 'SUPPRESSED', reason: 'PROPERTY_NOT_FOUND' };
+  }
+  const rolloutDecision = deps.recipientRollout?.(context.ownerEmail);
+  if (rolloutDecision && !rolloutDecision.allowed) {
+    return {
+      status: 'SUPPRESSED',
+      reason: rolloutDecision.reason!,
+    };
   }
 
   const now = deps.now();

@@ -27,6 +27,7 @@ function fakeDeps({
   digestDeliveriesByUser = {},
   sendEmailImpl,
   aggregationAllowsAll = true,
+  refinanceRolloutAllowed = true,
 }) {
   const calls = { sentEmails: [], updateManyArgs: [] };
 
@@ -58,6 +59,11 @@ function fakeDeps({
     },
     filterDeliveriesByAggregationPolicy: async (deliveries) => (aggregationAllowsAll ? deliveries : []),
     logger: noopLogger,
+    decideRefinanceAlertRollout: () => ({
+      allowed: refinanceRolloutAllowed,
+      mode: refinanceRolloutAllowed ? 'GENERAL' : 'ALLOWLIST',
+      reason: refinanceRolloutAllowed ? null : 'RECIPIENT_NOT_IN_COHORT',
+    }),
   };
 
   return { deps, calls };
@@ -169,6 +175,32 @@ test('sendEmailNotificationJob: sends nothing when the aggregation delivery poli
   assert.equal(calls.sentEmails.length, 0);
 });
 
+test('sendEmailNotificationJob: skips refinance delivery outside the rollout cohort', async () => {
+  const seed = deliveryFixture({
+    notification: {
+      ...deliveryFixture().notification,
+      type: 'REFINANCE_OPPORTUNITY_OPENED',
+    },
+  });
+  const { deps, calls } = fakeDeps({
+    seedDelivery: seed,
+    pendingDeliveries: [{ id: 'delivery-1', notification: seed.notification }],
+    refinanceRolloutAllowed: false,
+  });
+
+  await sendEmailNotificationJob('delivery-1', deps);
+
+  assert.equal(calls.sentEmails.length, 0);
+  const skipped = calls.updateManyArgs.find(
+    (update) => update.data.status === 'SKIPPED',
+  );
+  assert.deepEqual(skipped.where.id.in, ['delivery-1']);
+  assert.equal(
+    skipped.data.failureReason,
+    'REFINANCE_ALERT_RECIPIENT_NOT_IN_COHORT',
+  );
+});
+
 // ── runDailyEmailDigest / runWeeklyHomeBriefDigest ──────────────────────
 
 test('runDailyEmailDigest: includes users with an unset cadence (defaults to daily) and DAILY_DIGEST cadence', async () => {
@@ -243,6 +275,53 @@ test('runWeeklyHomeBriefDigest: groups items into Soon, Plan, and Consider secti
   assert.ok(html.indexOf('Review reserve plan') < html.indexOf('Explore rebate'));
   assert.doesNotMatch(html, /daily notification digest/);
   assert.match(html, /weekly Home Brief/);
+});
+
+test('digest: skips refinance items when the recipient leaves the rollout cohort', async () => {
+  const refinancePolicy = {
+    notificationPolicy: {
+      category: 'REFINANCE',
+      channels: [{ channel: 'EMAIL', cadence: 'DAILY_DIGEST' }],
+    },
+  };
+  const { deps, calls } = fakeDeps({
+    seedDelivery: null,
+    digestPendingRows: [{
+      notification: {
+        userId: 'user-1',
+        metadata: refinancePolicy,
+      },
+    }],
+    digestDeliveriesByUser: {
+      'user-1': [{
+        id: 'd1',
+        notification: {
+          type: 'REFINANCE_OPPORTUNITY_OPENED',
+          userId: 'user-1',
+          title: 'Refinance update',
+          message: 'Review the assumptions.',
+          actionUrl: null,
+          metadata: refinancePolicy,
+          user: {
+            email: 'owner@example.com',
+            firstName: 'Owner',
+          },
+        },
+      }],
+    },
+    refinanceRolloutAllowed: false,
+  });
+
+  const result = await runDailyEmailDigest(deps);
+
+  assert.equal(calls.sentEmails.length, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(
+    calls.updateManyArgs.find(
+      (update) => update.data.status === 'SKIPPED',
+    ).data.failureReason,
+    'REFINANCE_ALERT_RECIPIENT_NOT_IN_COHORT',
+  );
 });
 
 test('digest: one user failing does not abort the digest run for the rest', async () => {

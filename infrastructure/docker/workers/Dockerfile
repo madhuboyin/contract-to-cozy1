@@ -238,6 +238,7 @@ COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.
 COPY apps/backend/src/refinanceRadar/refinanceRadar.service.ts \
      apps/backend/src/refinanceRadar/refinanceRadarTransition.ts \
      apps/backend/src/refinanceRadar/refinanceAlertPreference.service.ts \
+     apps/backend/src/refinanceRadar/refinanceAlertRollout.ts \
      apps/backend/src/refinanceRadar/refinanceFreshness.ts \
      apps/backend/src/refinanceRadar/refinanceEligibilityContext.ts \
      apps/backend/src/refinanceRadar/refinanceObjectiveComparison.ts \

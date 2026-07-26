@@ -89,6 +89,9 @@ data:
   # reviewed as a fresh group-flag decision rather than grandfathered in.
   WORKER_OUTBOUND_NOTIFICATIONS_ENABLED: "true"
   REFINANCE_EXTERNAL_ALERTS_ENABLED: "false"
+  # Keep cohort rollout fail-closed. Recipient emails belong in app-secrets as
+  # REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST, never in this ConfigMap.
+  REFINANCE_ALERT_ROLLOUT_MODE: "ALLOWLIST"
   # Web Push remains off until an internal cohort and VAPID configuration are
   # approved. WEB_PUSH_VAPID_PRIVATE_KEY belongs in app-secrets, not here.
   WEB_PUSH_DELIVERY_ENABLED: "false"

@@ -20,6 +20,7 @@ function context(overrides = {}) {
   return {
     propertyId: 'property-1',
     ownerUserId: 'owner-1',
+    ownerEmail: 'owner@example.com',
     address: '94 Ashford Dr',
     confidenceLevel: RefinanceConfidenceLevel.STRONG,
     mortgageDataAsOf: '2026-07-20T00:00:00.000Z',
@@ -134,6 +135,22 @@ test('suppresses before loading financial context while delivery is disabled', a
   const result = await processRefinanceTransitionAlert(event, value);
   assert.deepEqual(result, { status: 'SUPPRESSED', reason: 'DELIVERY_DISABLED' });
   assert.equal(loaded, false);
+  assert.equal(calls.creates.length, 0);
+});
+
+test('suppresses an otherwise eligible recipient outside the rollout cohort', async () => {
+  const { value, calls } = deps({
+    recipientRollout: () => ({
+      allowed: false,
+      mode: 'ALLOWLIST',
+      reason: 'RECIPIENT_NOT_IN_COHORT',
+    }),
+  });
+  const result = await processRefinanceTransitionAlert(event, value);
+  assert.deepEqual(result, {
+    status: 'SUPPRESSED',
+    reason: 'RECIPIENT_NOT_IN_COHORT',
+  });
   assert.equal(calls.creates.length, 0);
 });
 

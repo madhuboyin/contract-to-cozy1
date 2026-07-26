@@ -714,9 +714,12 @@ function AlertPreferencesCard({
       });
       setPreference(saved);
       setMessage(
-        saved.externalDeliveryEnabled || saved.pushDeliveryEnabled
+        (saved.externalDeliveryEnabled || saved.pushDeliveryEnabled) &&
+        saved.recipientInRolloutCohort
           ? 'Preferences saved. Eligible external alerts are active.'
-          : 'Preferences saved. External delivery remains disabled during the pilot.',
+          : saved.rolloutMode === 'ALLOWLIST'
+            ? 'Preferences saved. Delivery remains limited to the internal rollout cohort.'
+            : 'Preferences saved. External delivery remains disabled during the pilot.',
       );
     } catch (error) {
       setMessage(
@@ -781,10 +784,13 @@ function AlertPreferencesCard({
             Refinance alert preferences
           </h3>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {preference?.externalDeliveryEnabled ||
-            preference?.pushDeliveryEnabled
+            {(preference?.externalDeliveryEnabled ||
+            preference?.pushDeliveryEnabled) &&
+            preference?.recipientInRolloutCohort
               ? 'Home monitoring stays on. Email and push are explicit opt-in and follow your cadence and quiet hours.'
-              : 'Home monitoring stays on. External channels require explicit opt-in and activate only after their delivery rollout is approved.'}
+              : preference?.rolloutMode === 'ALLOWLIST'
+                ? 'Home monitoring stays on. External alerts are limited to an internal rollout cohort while delivery guardrails are verified.'
+                : 'Home monitoring stays on. External channels require explicit opt-in and activate only after their delivery rollout is approved.'}
           </p>
         </div>
 
@@ -845,7 +851,8 @@ function AlertPreferencesCard({
                   ? 'Available after Web Push keys are configured.'
                   : subscribing
                     ? 'Waiting for browser permission…'
-                    : preference.pushDeliveryEnabled
+                    : preference.pushDeliveryEnabled &&
+                        preference.recipientInRolloutCohort
                       ? 'Receive qualified refinance alerts on this device.'
                       : 'Opt in now; delivery activates with the push rollout.'}
               </span>

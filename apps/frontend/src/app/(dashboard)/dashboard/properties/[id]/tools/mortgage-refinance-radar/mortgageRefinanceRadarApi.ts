@@ -304,6 +304,8 @@ export type RefinanceAlertPreferenceDTO = {
   explicitPushConsent: boolean;
   externalDeliveryEnabled: boolean;
   pushDeliveryEnabled: boolean;
+  rolloutMode: 'DISABLED' | 'ALLOWLIST' | 'GENERAL' | 'INVALID';
+  recipientInRolloutCohort: boolean;
 };
 
 export type RefinanceLoanEstimateInput = {

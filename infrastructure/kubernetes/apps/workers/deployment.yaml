@@ -47,6 +47,17 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: REFINANCE_EXTERNAL_ALERTS_ENABLED
+            - name: REFINANCE_ALERT_ROLLOUT_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REFINANCE_ALERT_ROLLOUT_MODE
+            - name: REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST
+                  optional: true
             - name: WEB_PUSH_DELIVERY_ENABLED
               valueFrom:
                 configMapKeyRef:

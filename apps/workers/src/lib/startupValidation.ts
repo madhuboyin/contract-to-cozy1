@@ -145,6 +145,31 @@ export async function validateStartupDependencies(deps: StartupValidationDeps = 
         );
       }
     }),
+    runCheck(
+      'refinance-alert-rollout',
+      env.REFINANCE_EXTERNAL_ALERTS_ENABLED === 'true' ||
+        env.REFINANCE_PUSH_ALERTS_ENABLED === 'true',
+      async () => {
+        const mode = (
+          env.REFINANCE_ALERT_ROLLOUT_MODE ?? 'ALLOWLIST'
+        ).trim().toUpperCase();
+        if (!['DISABLED', 'ALLOWLIST', 'GENERAL'].includes(mode)) {
+          throw new Error(
+            'REFINANCE_ALERT_ROLLOUT_MODE must be DISABLED, ALLOWLIST, or GENERAL',
+          );
+        }
+        if (
+          mode === 'ALLOWLIST' &&
+          !(env.REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST ?? '')
+            .split(',')
+            .some((entry) => entry.trim())
+        ) {
+          throw new Error(
+            'REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST requires at least one recipient in ALLOWLIST mode',
+          );
+        }
+      },
+    ),
     runCheck('s3', isAnyS3JobEnabled(), async () => {
       if (!env.S3_BUCKET) {
         throw new Error('S3_BUCKET is required — at least one export/disclosure job that writes to S3 is enabled');

@@ -55,6 +55,10 @@ const CLEAR_FLAGS = {
   WEB_PUSH_VAPID_SUBJECT: undefined,
   WEB_PUSH_VAPID_PUBLIC_KEY: undefined,
   WEB_PUSH_VAPID_PRIVATE_KEY: undefined,
+  REFINANCE_EXTERNAL_ALERTS_ENABLED: undefined,
+  REFINANCE_PUSH_ALERTS_ENABLED: undefined,
+  REFINANCE_ALERT_ROLLOUT_MODE: undefined,
+  REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST: undefined,
   S3_BUCKET: undefined,
   GEMINI_API_KEY: undefined,
 };
@@ -173,6 +177,53 @@ test('web push startup validation passes with complete VAPID configuration', asy
       const push = results.find((result) => result.name === 'web-push');
       assert.equal(push.required, true);
       assert.equal(push.ok, true);
+    },
+  );
+});
+
+test('refinance external delivery requires a recipient in default ALLOWLIST mode', async () => {
+  await withEnv(
+    {
+      ...CLEAR_FLAGS,
+      REFINANCE_EXTERNAL_ALERTS_ENABLED: 'true',
+    },
+    async () => {
+      const { validateStartupDependencies } = freshModule();
+      const results = await validateStartupDependencies({
+        checkDatabaseConnectivity: async () => {},
+        checkRedisConnectivity: async () => {},
+      });
+      const rollout = results.find(
+        (result) => result.name === 'refinance-alert-rollout',
+      );
+      assert.equal(rollout.required, true);
+      assert.equal(rollout.ok, false);
+      assert.match(
+        rollout.detail,
+        /REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST/,
+      );
+    },
+  );
+});
+
+test('GENERAL refinance alert rollout must be explicitly configured', async () => {
+  await withEnv(
+    {
+      ...CLEAR_FLAGS,
+      REFINANCE_EXTERNAL_ALERTS_ENABLED: 'true',
+      REFINANCE_ALERT_ROLLOUT_MODE: 'GENERAL',
+    },
+    async () => {
+      const { validateStartupDependencies } = freshModule();
+      const results = await validateStartupDependencies({
+        checkDatabaseConnectivity: async () => {},
+        checkRedisConnectivity: async () => {},
+      });
+      const rollout = results.find(
+        (result) => result.name === 'refinance-alert-rollout',
+      );
+      assert.equal(rollout.required, true);
+      assert.equal(rollout.ok, true);
     },
   );
 });

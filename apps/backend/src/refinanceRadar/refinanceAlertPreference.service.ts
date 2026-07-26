@@ -8,6 +8,10 @@ import { prisma } from '../lib/prisma';
 import type { RefinanceAlertPreferenceBody } from './validators/refinanceRadar.validators';
 import type { RefinanceAlertReadiness } from './refinanceFreshness';
 import { APIError } from '../middleware/error.middleware';
+import {
+  decideRefinanceAlertRollout,
+  type RefinanceAlertRolloutMode,
+} from './refinanceAlertRollout';
 
 const REFINANCE_CATEGORY = 'REFINANCE';
 
@@ -27,6 +31,8 @@ export interface RefinanceAlertPreferenceDTO {
   explicitPushConsent: boolean;
   externalDeliveryEnabled: boolean;
   pushDeliveryEnabled: boolean;
+  rolloutMode: RefinanceAlertRolloutMode | 'INVALID';
+  recipientInRolloutCohort: boolean;
 }
 
 export function isRefinanceExternalDeliveryEnabled(
@@ -56,6 +62,7 @@ export function isRefinancePushDeliveryEnabled(
 }
 
 export function defaultRefinanceAlertPreference(): RefinanceAlertPreferenceDTO {
+  const rollout = decideRefinanceAlertRollout(null);
   return {
     homeEnabled: true,
     emailEnabled: false,
@@ -72,6 +79,8 @@ export function defaultRefinanceAlertPreference(): RefinanceAlertPreferenceDTO {
     explicitPushConsent: false,
     externalDeliveryEnabled: isRefinanceExternalDeliveryEnabled(),
     pushDeliveryEnabled: isRefinancePushDeliveryEnabled(),
+    rolloutMode: rollout.mode,
+    recipientInRolloutCohort: rollout.allowed,
   };
 }
 
@@ -88,8 +97,10 @@ export function mapRefinanceAlertPreference(
   preference: StoredRefinanceAlertPreference | null,
   pushPreference: StoredRefinanceAlertPreference | null = null,
   hasActivePushSubscription = false,
+  recipientEmail?: string | null,
 ): RefinanceAlertPreferenceDTO {
   const defaults = defaultRefinanceAlertPreference();
+  const rollout = decideRefinanceAlertRollout(recipientEmail);
   const emailOptedIn = Boolean(
     preference?.enabled &&
     preference.cadence !== NotificationCadence.MUTED,
@@ -114,6 +125,8 @@ export function mapRefinanceAlertPreference(
     timezone: primary?.timezone ?? defaults.timezone,
     explicitEmailConsent: emailOptedIn,
     explicitPushConsent: pushOptedIn,
+    rolloutMode: rollout.mode,
+    recipientInRolloutCohort: rollout.allowed,
   };
 }
 
@@ -121,7 +134,7 @@ export async function getRefinanceAlertPreference(
   userId: string,
   propertyId: string,
 ): Promise<RefinanceAlertPreferenceDTO> {
-  const [preferences, activeSubscription] = await Promise.all([
+  const [preferences, activeSubscription, user] = await Promise.all([
     prisma.notificationPreference.findMany({
       where: {
         userId,
@@ -133,11 +146,16 @@ export async function getRefinanceAlertPreference(
       where: { userId, revokedAt: null },
       select: { id: true },
     }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    }),
   ]);
   return mapRefinanceAlertPreference(
     preferences.find((item) => item.channel === NotificationChannel.EMAIL) ?? null,
     preferences.find((item) => item.channel === NotificationChannel.PUSH) ?? null,
     Boolean(activeSubscription),
+    user?.email,
   );
 }
 

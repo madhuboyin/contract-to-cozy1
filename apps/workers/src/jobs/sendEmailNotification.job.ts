@@ -8,6 +8,11 @@ import { logger } from '../lib/logger';
 import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
 import type { WorkerRunResult } from '../lib/workerRunResult';
 import { AppLogger } from '../lib/logger';
+import {
+  decideRefinanceAlertRollout,
+  isRefinanceNotification,
+  REFINANCE_ALERT_ROLLOUT_SUPPRESSION_REASON,
+} from '../lib/refinanceAlertRollout';
 
 const MAX_NOTIFICATIONS_PER_EMAIL = 10;
 
@@ -22,6 +27,7 @@ export interface SendEmailNotificationDeps {
   sendEmail: typeof sendEmail;
   filterDeliveriesByAggregationPolicy: typeof filterDeliveriesByAggregationPolicy;
   logger: AppLogger;
+  decideRefinanceAlertRollout: typeof decideRefinanceAlertRollout;
 }
 
 const defaultDeps: SendEmailNotificationDeps = {
@@ -29,7 +35,34 @@ const defaultDeps: SendEmailNotificationDeps = {
   sendEmail,
   filterDeliveriesByAggregationPolicy,
   logger,
+  decideRefinanceAlertRollout,
 };
+
+async function applyRefinanceRolloutGate<T extends {
+  id: string;
+  notification: { type?: string | null; metadata?: unknown };
+}>(
+  deliveries: T[],
+  recipientEmail: string,
+  deps: SendEmailNotificationDeps,
+): Promise<T[]> {
+  const decision = deps.decideRefinanceAlertRollout(recipientEmail);
+  if (decision.allowed) return deliveries;
+  const suppressedIds = deliveries
+    .filter((delivery) => isRefinanceNotification(delivery.notification))
+    .map((delivery) => delivery.id);
+  if (suppressedIds.length === 0) return deliveries;
+  await deps.prisma.notificationDelivery.updateMany({
+    where: { id: { in: suppressedIds } },
+    data: {
+      status: DeliveryStatus.SKIPPED,
+      failureReason: REFINANCE_ALERT_ROLLOUT_SUPPRESSION_REASON,
+    },
+  });
+  return deliveries.filter(
+    (delivery) => !suppressedIds.includes(delivery.id),
+  );
+}
 
 export async function sendEmailNotificationJob(
   notificationDeliveryId: string,
@@ -86,7 +119,13 @@ export async function sendEmailNotificationJob(
     },
     take: MAX_NOTIFICATIONS_PER_EMAIL,
   });
-  const deliveries = await filterDeliveriesByAggregationPolicy(pendingDeliveries);
+  const aggregationDeliveries =
+    await filterDeliveriesByAggregationPolicy(pendingDeliveries);
+  const deliveries = await applyRefinanceRolloutGate(
+    aggregationDeliveries,
+    user.email,
+    deps,
+  );
 
   if (deliveries.length === 0) return;
 
@@ -306,12 +345,19 @@ async function sendUserDigest(userId: string, cadence: 'DAILY_DIGEST' | 'WEEKLY_
       ? policyCadence == null || policyCadence === 'DAILY_DIGEST'
       : policyCadence === 'WEEKLY_BRIEF';
   });
-  const deliveries = await filterDeliveriesByAggregationPolicy(cadenceDeliveries);
+  const aggregationDeliveries =
+    await filterDeliveriesByAggregationPolicy(cadenceDeliveries);
 
-  if (deliveries.length === 0) return 'skipped';
+  if (aggregationDeliveries.length === 0) return 'skipped';
 
-  const user = deliveries[0].notification.user;
+  const user = aggregationDeliveries[0].notification.user;
   if (!user?.email) return 'skipped';
+  const deliveries = await applyRefinanceRolloutGate(
+    aggregationDeliveries,
+    user.email,
+    deps,
+  );
+  if (deliveries.length === 0) return 'skipped';
 
   const notifications = deliveries.map(d => d.notification);
 
