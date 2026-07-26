@@ -2724,6 +2724,7 @@ model Property {
   refinanceRadarState       PropertyRefinanceRadarState?
   refinanceEvaluationClaims RefinanceEvaluationClaim[]
   refinanceScenarios        RefinanceScenarioSnapshot[]
+  refinanceLoanEstimateComparisons RefinanceLoanEstimateComparisonSnapshot[]
   preferenceProfiles        PreferenceProfile[]
   assumptionSets            AssumptionSet[]
   signals                   Signal[]
@@ -11426,6 +11427,25 @@ model RefinanceScenarioSnapshot {
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([propertyId, isSaved])
   @@map("refinance_scenario_snapshots")
+}
+
+// E. User-saved comparison of figures transcribed from official Loan Estimates.
+// Comparisons remain transient unless the homeowner explicitly saves them.
+model RefinanceLoanEstimateComparisonSnapshot {
+  id         String @id @default(uuid())
+  propertyId String
+  label      String?
+
+  offersJson     Json
+  comparisonJson Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@map("refinance_loan_estimate_comparison_snapshots")
 }
 
 // ============================================================================

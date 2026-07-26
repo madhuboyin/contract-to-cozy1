@@ -15,6 +15,7 @@ import {
   RefinanceFeedbackBody,
   RefinanceTelemetryBody,
   RunScenarioBody,
+  SaveLoanEstimateComparisonBody,
 } from './validators/refinanceRadar.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { APIError } from '../middleware/error.middleware';
@@ -30,6 +31,10 @@ import {
 import { buildRefinanceScenarioMarkdown } from './refinanceScenarioMarkdown';
 import { prisma } from '../lib/prisma';
 import { compareRefinanceLoanEstimates } from './refinanceLoanEstimateComparison';
+import {
+  listSavedRefinanceLoanEstimateComparisons,
+  saveRefinanceLoanEstimateComparison,
+} from './refinanceLoanEstimateSnapshot.service';
 
 const service = new RefinanceRadarService();
 
@@ -67,6 +72,58 @@ export class RefinanceRadarController {
       });
 
       res.json({ success: true, data: { comparison } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async saveLoanEstimateComparison(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId } = req.params;
+      const body = req.body as SaveLoanEstimateComparisonBody;
+      const savedComparison = await saveRefinanceLoanEstimateComparison({
+        propertyId,
+        label: body.label,
+        offers: body.offers,
+      });
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_loan_estimate_comparison_saved',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'loan_estimate_comparison',
+        metadataJson: { offerCount: body.offers.length },
+      });
+
+      res.status(201).json({
+        success: true,
+        data: { savedComparison },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async getSavedLoanEstimateComparisons(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      requireUserId(req);
+      const savedComparisons =
+        await listSavedRefinanceLoanEstimateComparisons(
+          req.params.propertyId,
+        );
+      res.json({ success: true, data: { savedComparisons } });
     } catch (err) {
       next(err);
     }

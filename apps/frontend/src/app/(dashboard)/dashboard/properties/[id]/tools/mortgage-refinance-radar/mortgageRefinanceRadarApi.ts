@@ -338,6 +338,16 @@ export type RefinanceLoanEstimateComparison = {
   disclaimer: string;
 };
 
+export type SavedRefinanceLoanEstimateComparison = {
+  id: string;
+  propertyId: string;
+  label: string | null;
+  offers: RefinanceLoanEstimateInput[];
+  comparison: RefinanceLoanEstimateComparison;
+  createdAt: string;
+  updatedAt: string;
+};
+
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export async function getRadarStatus(
@@ -421,6 +431,30 @@ export async function compareRefinanceLoanEstimates(
     { offers },
   );
   return res.data.comparison as RefinanceLoanEstimateComparison;
+}
+
+export async function saveRefinanceLoanEstimateComparison(
+  propertyId: string,
+  input: { label?: string; offers: RefinanceLoanEstimateInput[] },
+): Promise<SavedRefinanceLoanEstimateComparison> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/refinance-radar/loan-estimates/saved`,
+    input,
+  );
+  return res.data
+    .savedComparison as SavedRefinanceLoanEstimateComparison;
+}
+
+export async function getSavedRefinanceLoanEstimateComparisons(
+  propertyId: string,
+): Promise<SavedRefinanceLoanEstimateComparison[]> {
+  const res = await api.get(
+    `/api/properties/${propertyId}/refinance-radar/loan-estimates/saved`,
+  );
+  return (
+    (res.data
+      ?.savedComparisons as SavedRefinanceLoanEstimateComparison[]) ?? []
+  );
 }
 
 export async function runScenario(

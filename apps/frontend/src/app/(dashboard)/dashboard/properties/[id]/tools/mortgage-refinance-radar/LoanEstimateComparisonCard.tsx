@@ -1,12 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-import { FileSpreadsheet, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  FileSpreadsheet,
+  FolderOpen,
+  Plus,
+  RefreshCw,
+  Save,
+  Trash2,
+} from 'lucide-react';
 import {
   compareRefinanceLoanEstimates,
+  getSavedRefinanceLoanEstimateComparisons,
+  saveRefinanceLoanEstimateComparison,
   type LoanEstimateMetric,
   type RefinanceLoanEstimateComparison,
   type RefinanceLoanEstimateInput,
+  type SavedRefinanceLoanEstimateComparison,
 } from './mortgageRefinanceRadarApi';
 
 type OfferDraft = {
@@ -36,7 +46,7 @@ let nextOfferNumber = 3;
 
 function blankOffer(number: number): OfferDraft {
   return {
-    id: `offer-${number}`,
+    id: `draft-${Date.now()}-${number}`,
     lenderName: '',
     loanTermYears: '30',
     loanType: 'FIXED',
@@ -48,6 +58,31 @@ function blankOffer(number: number): OfferDraft {
     cashToCloseUsd: '',
     fiveYearTotalPaidUsd: '',
     fiveYearPrincipalPaidUsd: '',
+  };
+}
+
+function toDraft(offer: RefinanceLoanEstimateInput): OfferDraft {
+  return {
+    id: offer.id,
+    lenderName: offer.lenderName,
+    loanTermYears: String(offer.loanTermYears),
+    loanType: offer.loanType,
+    noteRatePct: String(offer.noteRatePct),
+    aprPct: String(offer.aprPct),
+    monthlyPrincipalAndInterestUsd: String(
+      offer.monthlyPrincipalAndInterestUsd,
+    ),
+    loanCostsUsd: String(offer.loanCostsUsd),
+    lenderCreditsUsd: String(offer.lenderCreditsUsd),
+    cashToCloseUsd: String(offer.cashToCloseUsd),
+    fiveYearTotalPaidUsd:
+      offer.fiveYearTotalPaidUsd == null
+        ? ''
+        : String(offer.fiveYearTotalPaidUsd),
+    fiveYearPrincipalPaidUsd:
+      offer.fiveYearPrincipalPaidUsd == null
+        ? ''
+        : String(offer.fiveYearPrincipalPaidUsd),
   };
 }
 
@@ -207,12 +242,35 @@ export function LoanEstimateComparisonCard({
   ]);
   const [comparison, setComparison] =
     useState<RefinanceLoanEstimateComparison | null>(null);
+  const [savedComparisons, setSavedComparisons] = useState<
+    SavedRefinanceLoanEstimateComparison[]
+  >([]);
+  const [saveLabel, setSaveLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void getSavedRefinanceLoanEstimateComparisons(propertyId)
+      .then((items) => {
+        if (active) setSavedComparisons(items);
+      })
+      .catch(() => {
+        if (active) {
+          setMessage('Saved Loan Estimate comparisons could not be loaded.');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [propertyId]);
 
   async function compare() {
     setRunning(true);
     setError(null);
+    setMessage(null);
     try {
       setComparison(
         await compareRefinanceLoanEstimates(propertyId, offers.map(toInput)),
@@ -226,6 +284,40 @@ export function LoanEstimateComparisonCard({
     } finally {
       setRunning(false);
     }
+  }
+
+  async function saveComparison() {
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await saveRefinanceLoanEstimateComparison(propertyId, {
+        ...(saveLabel.trim() ? { label: saveLabel.trim() } : {}),
+        offers: offers.map(toInput),
+      });
+      setSavedComparisons((current) => [
+        saved,
+        ...current.filter((item) => item.id !== saved.id),
+      ]);
+      setSaveLabel('');
+      setMessage('Comparison saved for this property.');
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'The comparison could not be saved.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function loadSaved(item: SavedRefinanceLoanEstimateComparison) {
+    setOffers(item.offers.map(toDraft));
+    setComparison(item.comparison);
+    setSaveLabel(item.label ?? '');
+    setError(null);
+    setMessage(`Loaded ${item.label ?? 'saved comparison'}.`);
   }
 
   return (
@@ -251,16 +343,20 @@ export function LoanEstimateComparisonCard({
             offer={offer}
             index={index}
             canRemove={offers.length > 2}
-            onChange={(next) =>
+            onChange={(next) => {
               setOffers((current) =>
-                current.map((item) => (item.id === offer.id ? next : item)),
-              )
-            }
-            onRemove={() =>
+                current.map((item) =>
+                  item.id === offer.id ? next : item,
+                ),
+              );
+              setComparison(null);
+            }}
+            onRemove={() => {
               setOffers((current) =>
                 current.filter((item) => item.id !== offer.id),
-              )
-            }
+              );
+              setComparison(null);
+            }}
           />
         ))}
 
@@ -268,12 +364,13 @@ export function LoanEstimateComparisonCard({
           {offers.length < 4 && (
             <button
               type="button"
-              onClick={() =>
+              onClick={() => {
                 setOffers((current) => [
                   ...current,
                   blankOffer(nextOfferNumber++),
-                ])
-              }
+                ]);
+                setComparison(null);
+              }}
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -299,6 +396,11 @@ export function LoanEstimateComparisonCard({
         {error && (
           <p role="alert" className="text-xs text-rose-700 dark:text-rose-300">
             {error}
+          </p>
+        )}
+        {message && (
+          <p role="status" className="text-xs text-slate-600 dark:text-slate-300">
+            {message}
           </p>
         )}
 
@@ -378,6 +480,65 @@ export function LoanEstimateComparisonCard({
             <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
               {comparison.disclaimer}
             </p>
+            <div className="flex flex-col gap-2 rounded-xl border border-blue-200/70 bg-blue-50/50 p-3 sm:flex-row sm:items-end dark:border-blue-900/60 dark:bg-blue-950/20">
+              <label className="flex-1 text-xs font-medium text-slate-700 dark:text-slate-300">
+                Saved comparison label (optional)
+                <input
+                  value={saveLabel}
+                  maxLength={120}
+                  onChange={(event) => setSaveLabel(event.target.value)}
+                  placeholder="e.g. July lender quotes"
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={saveComparison}
+                disabled={saving}
+                className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? (
+                  <RefreshCw
+                    className="h-3.5 w-3.5 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Save className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                Save comparison
+              </button>
+            </div>
+          </div>
+        )}
+
+        {savedComparisons.length > 0 && (
+          <div className="border-t border-slate-200/70 pt-4 dark:border-slate-700/70">
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+              <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
+              Saved comparisons
+            </h4>
+            <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+              {savedComparisons.map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded-xl border border-slate-200/80 p-3 dark:border-slate-700/80"
+                >
+                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    {item.label ?? `Comparison from ${new Date(item.createdAt).toLocaleDateString()}`}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    {item.offers.map((offer) => offer.lenderName).join(' · ')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => loadSaved(item)}
+                    className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300"
+                  >
+                    Load comparison
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

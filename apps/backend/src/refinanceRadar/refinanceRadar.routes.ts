@@ -19,6 +19,7 @@ import {
   refinanceFeedbackSchema,
   refinanceTelemetrySchema,
   runScenarioSchema,
+  saveLoanEstimateComparisonSchema,
 } from './validators/refinanceRadar.validators';
 
 const router = Router();
@@ -192,6 +193,21 @@ router.post(
   propertyAuthMiddleware,
   validateBody(compareLoanEstimatesSchema),
   RefinanceRadarController.compareLoanEstimates,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-radar/loan-estimates/saved',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(saveLoanEstimateComparisonSchema),
+  RefinanceRadarController.saveLoanEstimateComparison,
+);
+
+router.get(
+  '/properties/:propertyId/refinance-radar/loan-estimates/saved',
+  authenticate,
+  propertyAuthMiddleware,
+  RefinanceRadarController.getSavedLoanEstimateComparisons,
 );
 
 router.post(

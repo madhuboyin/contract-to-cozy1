@@ -76,6 +76,7 @@ test('aggregates refinance activation, coverage, funnel, quality, and guardrails
       analytics('refinance_scenario_saved'),
       analytics('refinance_scenario_markdown_exported'),
       analytics('refinance_loan_estimates_compared'),
+      analytics('refinance_loan_estimate_comparison_saved'),
       analytics('refinance_feedback_recorded', 'property-1', {
         feedback: 'HELPFUL',
       }),
@@ -106,6 +107,7 @@ test('aggregates refinance activation, coverage, funnel, quality, and guardrails
   assert.equal(metrics.funnel.scenarioRuns, 2);
   assert.equal(metrics.funnel.scenariosSaved, 1);
   assert.equal(metrics.funnel.loanEstimateComparisons, 1);
+  assert.equal(metrics.funnel.loanEstimateComparisonsSaved, 1);
   assert.equal(metrics.decisionQuality.medianProjectedMonthlySavingsUsd, 325);
   assert.equal(metrics.decisionQuality.helpfulRate, 1);
   assert.equal(metrics.guardrails.inputsNotCurrentSuppressions, 1);

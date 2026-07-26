@@ -150,6 +150,27 @@ export type CompareLoanEstimatesBody = z.infer<
   typeof compareLoanEstimatesSchema
 >;
 
+export const saveLoanEstimateComparisonSchema = z
+  .object({
+    label: z.string().trim().min(1).max(120).optional(),
+    offers: z.array(loanEstimateOfferSchema).min(2).max(4),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const ids = value.offers.map((offer) => offer.id);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['offers'],
+        message: 'Each offer must have a unique id.',
+      });
+    }
+  });
+
+export type SaveLoanEstimateComparisonBody = z.infer<
+  typeof saveLoanEstimateComparisonSchema
+>;
+
 export const refinanceFeedbackSchema = z.object({
   feedback: z.enum(['HELPFUL', 'NOT_NOW', 'NOT_RELEVANT']),
   context: z.enum(['RADAR', 'OPPORTUNITY', 'SCENARIO']).default('RADAR'),
