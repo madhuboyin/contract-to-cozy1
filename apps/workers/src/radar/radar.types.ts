@@ -30,6 +30,7 @@ export type DummyRadarRawSignal = {
   severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
   startsAt: string;
   endsAt?: string | null;
+  lifecycleStatus?: 'active' | 'updated' | 'resolved' | 'expired' | 'retracted';
   geography: {
     type: 'property' | 'zip' | 'city' | 'county' | 'state' | 'polygon';
     key: string;

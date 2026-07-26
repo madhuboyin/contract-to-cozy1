@@ -9381,6 +9381,10 @@ enum RadarEventSeverity {
 
 enum RadarEventLocationType {
   property
+  point
+  radius
+  postal_code
+  administrative_area
   zip
   city
   county

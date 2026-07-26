@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — Phase 0 implemented |
+| Status | In progress — HER-105 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -25,7 +25,9 @@
 | HER-101 Canonical property geography | Complete; DB application pending | Normalized ZIP/FIPS, geocoding state/version, PostGIS geography columns and GIST indexes, location-change invalidation |
 | HER-102 Source registry service | Complete; DB application pending | Validated registration, safe configuration projection, runtime policy, freshness, and jurisdiction/radius/polygon coverage |
 | HER-103 Source run and health service | Complete; DB application pending | Idempotent attempts, explicit success/empty/partial/failed/skipped outcomes, health transitions, and zero-coverage skip |
-| HER-104–HER-106 | Not started | Canonical ingestion, adapter harness, and fixture convergence remain |
+| HER-104 Canonical ingestion service | Complete; DB application pending | Validated exact-source identity, immutable revisions, deterministic fingerprints, lifecycle/stale guards, provenance, serializable per-observation transactions, and idempotent match enqueue |
+| HER-105 Source adapter harness | Complete | Shared conformance runner verifies canonical output, exact-source/revision identity, UTC dates, URL allowlisting, geography, lifecycle mappings, persistable evidence, and invalid-payload rejection |
+| HER-106 | Not started; adapter groundwork complete | Canonical dummy adapter exists and passes conformance; fixture job still needs source-run, ingestion queue, matching, and test-data convergence |
 | Phase 2+ | Not started | Live-provider convergence, durable matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
@@ -505,6 +507,13 @@ Implement:
 - match job enqueue;
 - per-observation transaction boundaries.
 
+Implementation note: `radarEventIngestion.service.ts` now validates each observation against its
+registered source and active source run, persists exact-source event identity plus immutable
+revision evidence, rejects conflicting/stale lifecycle changes, and enqueues a deterministic
+revision-scoped match job. Batch ingestion intentionally commits or rejects each observation
+independently. Queue submission is retry-safe: replaying a committed revision attempts the same
+BullMQ job ID without creating another event or revision.
+
 ### HER-105 — Source adapter harness
 
 Provide a shared test harness that asserts:
@@ -517,6 +526,14 @@ Provide a shared test harness that asserts:
 - geography contract;
 - resolution/supersession mapping;
 - invalid payload behavior.
+
+Implementation note: `adapterConformance.ts` exercises adapters with the same canonical schema and
+fingerprint/revision functions used by ingestion. A conforming adapter must provide explicit
+resolution and supersession cases, reject declared invalid inputs, emit UTC timestamps and
+normalized geography, keep exact-source identity stable across revisions, and restrict any
+canonical source link to a reviewed HTTPS host. `canonicalDummyRadarAdapter.ts` is the first
+conforming adapter and provides the implementation bridge for HER-106 without changing the
+currently scheduled fixture job in this slice.
 
 ### HER-106 — Test-only fixture provider
 
