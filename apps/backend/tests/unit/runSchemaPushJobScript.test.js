@@ -52,19 +52,35 @@ if (args[0] === 'get' && args[1] === 'job') {
   }
   process.exit(0);
 }
+if (args[0] === 'get' && args[1] === 'pod') {
+  if (
+    args.some((value) => value.includes('.status.phase')) &&
+    args.some((value) => value.includes('Ready'))
+  ) {
+    process.stdout.write(
+      scenario === 'early-failure'
+        ? 'Failed|False'
+        : scenario === 'fast-success'
+          ? 'Succeeded|False'
+          : scenario === 'success'
+            ? 'Running|True'
+            : 'Pending|False',
+    );
+  }
+  process.exit(0);
+}
 if (args[0] === 'wait') {
   if (has('--for=create')) process.exit(0);
-  if (has('--for=condition=Ready')) {
-    process.exit(scenario === 'container-creating' ? 1 : 0);
-  }
 }
 if (args[0] === 'logs') {
   process.stdout.write(
-    scenario === 'success'
+    scenario === 'success' || scenario === 'fast-success'
       ? 'Applying Prisma schema from ConfigMap...\\n'
       : 'container is waiting to start: ContainerCreating\\n',
   );
-  process.exit(scenario === 'success' ? 0 : 1);
+  process.exit(
+    scenario === 'success' || scenario === 'fast-success' ? 0 : 1,
+  );
 }
 if (args[0] === 'describe' && args[1] === 'pod') {
   process.stderr.write('MOCK POD EVENT: FailedMount prisma-schema\\n');
@@ -88,7 +104,8 @@ process.exit(0);
       KUBECTL_TEST_SCENARIO: scenario,
       JOB_NAME: 'schema-push-test',
       POD_CREATION_TIMEOUT: '1s',
-      POD_READY_TIMEOUT: '1s',
+      POD_READY_TIMEOUT: scenario === 'early-failure' ? '10s' : '1s',
+      POD_STATUS_POLL_INTERVAL_SECONDS: '1',
       JOB_WAIT_TIMEOUT_SECONDS: '2',
       JOB_POLL_INTERVAL_SECONDS: '1',
     },
@@ -111,4 +128,26 @@ test('ready pod streams logs and exits after Job success', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Streaming logs for migration-pod-1/);
   assert.match(result.stdout, /Schema push completed successfully/);
+});
+
+test('failed pod exits immediately with diagnostics', () => {
+  const startedAt = Date.now();
+  const result = runScript('early-failure');
+  const elapsedMs = Date.now() - startedAt;
+
+  assert.equal(result.status, 1);
+  assert.ok(
+    elapsedMs < 9000,
+    `expected failure before the 10s readiness timeout, took ${elapsedMs}ms`,
+  );
+  assert.match(result.stderr, /terminated with failure before becoming ready/);
+  assert.match(result.stderr, /FailedMount prisma-schema/);
+});
+
+test('pod that completes before readiness is treated as success', () => {
+  const result = runScript('fast-success');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Schema push completed successfully/);
+  assert.doesNotMatch(result.stdout, /Streaming logs for migration-pod-1/);
 });

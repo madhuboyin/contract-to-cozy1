@@ -16,6 +16,7 @@ set -Eeuo pipefail
 #   PRISMA_CONFIGMAP=prisma-schema
 #   POD_CREATION_TIMEOUT=60s
 #   POD_READY_TIMEOUT=2m
+#   POD_STATUS_POLL_INTERVAL_SECONDS=2
 #   JOB_WAIT_TIMEOUT_SECONDS=600
 #   JOB_POLL_INTERVAL_SECONDS=3
 
@@ -29,6 +30,7 @@ DATABASE_URL_SECRET_KEY="${DATABASE_URL_SECRET_KEY:-DATABASE_URL}"
 PRISMA_CONFIGMAP="${PRISMA_CONFIGMAP:-prisma-schema}"
 POD_CREATION_TIMEOUT="${POD_CREATION_TIMEOUT:-60s}"
 POD_READY_TIMEOUT="${POD_READY_TIMEOUT:-2m}"
+POD_STATUS_POLL_INTERVAL_SECONDS="${POD_STATUS_POLL_INTERVAL_SECONDS:-2}"
 JOB_WAIT_TIMEOUT_SECONDS="${JOB_WAIT_TIMEOUT_SECONDS:-600}"
 JOB_POLL_INTERVAL_SECONDS="${JOB_POLL_INTERVAL_SECONDS:-3}"
 JOB_NAME="${JOB_NAME:-prisma-schema-push-$(date +%s)-${RANDOM}}"
@@ -51,6 +53,27 @@ if ! [[ "${JOB_POLL_INTERVAL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
   echo "JOB_POLL_INTERVAL_SECONDS must be a positive integer." >&2
   exit 1
 fi
+
+if ! [[ "${POD_STATUS_POLL_INTERVAL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "POD_STATUS_POLL_INTERVAL_SECONDS must be a positive integer." >&2
+  exit 1
+fi
+
+duration_seconds() {
+  local value="$1"
+  if [[ "${value}" =~ ^([1-9][0-9]*)s?$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "${value}" =~ ^([1-9][0-9]*)m$ ]]; then
+    echo "$(( BASH_REMATCH[1] * 60 ))"
+    return 0
+  fi
+  echo "Unsupported timeout '${value}'. Use positive seconds (for example 60s) or minutes (for example 2m)." >&2
+  return 1
+}
+
+POD_READY_TIMEOUT_SECONDS="$(duration_seconds "${POD_READY_TIMEOUT}")" || exit 1
 
 if [[ ! -r "${SCHEMA_PATH}" ]]; then
   echo "Prisma schema not found or unreadable: ${SCHEMA_PATH}" >&2
@@ -110,6 +133,36 @@ job_status_value() {
   kubectl get job "${JOB_NAME}" \
     -n "${NAMESPACE}" \
     -o "jsonpath=${jsonpath}" 2>/dev/null || true
+}
+
+wait_for_pod_ready_or_terminal() {
+  local deadline
+  deadline="$(( $(date +%s) + POD_READY_TIMEOUT_SECONDS ))"
+
+  while (( $(date +%s) < deadline )); do
+    local pod_state phase ready
+    pod_state="$(
+      kubectl get pod "${POD_NAME}" \
+        -n "${NAMESPACE}" \
+        -o 'jsonpath={.status.phase}|{.status.conditions[?(@.type=="Ready")].status}' \
+        2>/dev/null || true
+    )"
+    phase="${pod_state%%|*}"
+    ready="${pod_state#*|}"
+
+    if [[ "${ready}" == "True" ]]; then
+      return 0
+    fi
+    if [[ "${phase}" == "Succeeded" ]]; then
+      return 10
+    fi
+    if [[ "${phase}" == "Failed" ]]; then
+      return 11
+    fi
+    sleep "${POD_STATUS_POLL_INTERVAL_SECONDS}"
+  done
+
+  return 12
 }
 
 wait_for_job_terminal() {
@@ -215,23 +268,19 @@ POD_NAME="$(
 )"
 
 echo "Waiting up to ${POD_READY_TIMEOUT} for pod ${POD_NAME} to become ready..."
-if ! kubectl wait \
-  -n "${NAMESPACE}" \
-  --for=condition=Ready \
-  "pod/${POD_NAME}" \
-  --timeout="${POD_READY_TIMEOUT}" >/dev/null; then
-  JOB_SUCCEEDED="$(job_status_value '{.status.succeeded}')"
-  POD_PHASE="$(
-    kubectl get pod "${POD_NAME}" \
-      -n "${NAMESPACE}" \
-      -o jsonpath='{.status.phase}' 2>/dev/null || true
-  )"
-  if \
-    [[ -n "${JOB_SUCCEEDED}" && "${JOB_SUCCEEDED}" != "0" ]] ||
-    [[ "${POD_PHASE}" == "Succeeded" ]]; then
+if wait_for_pod_ready_or_terminal; then
+  :
+else
+  POD_WAIT_RESULT="$?"
+  if [[ "${POD_WAIT_RESULT}" == "10" ]]; then
     kubectl logs -n "${NAMESPACE}" "${POD_NAME}" --all-containers=true || true
     echo "Schema push completed successfully: ${NAMESPACE}/${JOB_NAME}"
     exit 0
+  fi
+  if [[ "${POD_WAIT_RESULT}" == "11" ]]; then
+    echo "Migration pod ${POD_NAME} terminated with failure before becoming ready." >&2
+    diagnose_job
+    exit 1
   fi
   echo \
     "Migration pod did not become ready within ${POD_READY_TIMEOUT}. " \
