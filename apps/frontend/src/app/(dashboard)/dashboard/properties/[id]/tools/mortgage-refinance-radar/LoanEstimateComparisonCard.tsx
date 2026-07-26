@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  ShieldCheck,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import {
   compareRefinanceLoanEstimates,
   deleteSavedRefinanceLoanEstimateComparison,
   exportLoanEstimateComparisonMarkdown,
+  exportLoanEstimateHandoffMarkdown,
   extractRefinanceLoanEstimate,
   getSavedRefinanceLoanEstimateComparisons,
   saveRefinanceLoanEstimateComparison,
@@ -267,6 +269,13 @@ export function LoanEstimateComparisonCard({
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [handoffExporting, setHandoffExporting] = useState(false);
+  const [handoffOfferId, setHandoffOfferId] = useState('');
+  const [handoffChecks, setHandoffChecks] = useState({
+    figuresVerified: false,
+    sameLoanRequestConfirmed: false,
+    manualSharingUnderstood: false,
+  });
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -291,9 +300,17 @@ export function LoanEstimateComparisonCard({
     setError(null);
     setMessage(null);
     try {
-      setComparison(
-        await compareRefinanceLoanEstimates(propertyId, offers.map(toInput)),
+      const nextComparison = await compareRefinanceLoanEstimates(
+        propertyId,
+        offers.map(toInput),
       );
+      setComparison(nextComparison);
+      setHandoffOfferId('');
+      setHandoffChecks({
+        figuresVerified: false,
+        sameLoanRequestConfirmed: false,
+        manualSharingUnderstood: false,
+      });
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -466,10 +483,65 @@ export function LoanEstimateComparisonCard({
     }
   }
 
+  async function exportHandoffMarkdown() {
+    if (
+      !handoffOfferId ||
+      !handoffChecks.figuresVerified ||
+      !handoffChecks.sameLoanRequestConfirmed ||
+      !handoffChecks.manualSharingUnderstood
+    ) {
+      setError(
+        'Select one lender and complete all homeowner confirmations before downloading.',
+      );
+      return;
+    }
+    setHandoffExporting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const exported = await exportLoanEstimateHandoffMarkdown(propertyId, {
+        offers: offers.map(toInput),
+        selectedOfferId: handoffOfferId,
+        acknowledgements: {
+          figuresVerified: true,
+          sameLoanRequestConfirmed: true,
+          manualSharingUnderstood: true,
+        },
+      });
+      const url = URL.createObjectURL(
+        new Blob([exported.markdown], {
+          type: 'text/markdown;charset=utf-8',
+        }),
+      );
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = exported.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setMessage('Lender discussion brief downloaded. Nothing was sent.');
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'The lender discussion brief could not be downloaded.',
+      );
+    } finally {
+      setHandoffExporting(false);
+    }
+  }
+
   function loadSaved(item: SavedRefinanceLoanEstimateComparison) {
     setOffers(item.offers.map(toDraft));
     setComparison(item.comparison);
     setSaveLabel(item.label ?? '');
+    setHandoffOfferId('');
+    setHandoffChecks({
+      figuresVerified: false,
+      sameLoanRequestConfirmed: false,
+      manualSharingUnderstood: false,
+    });
     setError(null);
     setMessage(`Loaded ${item.label ?? 'saved comparison'}.`);
   }
@@ -816,6 +888,93 @@ export function LoanEstimateComparisonCard({
                 </button>
               </div>
             </div>
+            <fieldset className="rounded-xl border border-teal-200/80 bg-teal-50/50 p-3 dark:border-teal-900/60 dark:bg-teal-950/20">
+              <legend className="flex items-center gap-1.5 px-1 text-xs font-semibold text-teal-900 dark:text-teal-200">
+                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                Prepare a lender discussion brief
+              </legend>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                Choose one offer to create a Markdown brief for your own review
+                and manual sharing. Competitor lender names are excluded.
+                ContractToCozy will not send the file, contact a lender, or
+                store a recipient.
+              </p>
+              <label className="mt-3 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                Selected lender
+                <select
+                  value={handoffOfferId}
+                  onChange={(event) => setHandoffOfferId(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                >
+                  <option value="">Choose one reviewed offer</option>
+                  {comparison.offers.map((offer) => (
+                    <option key={offer.id} value={offer.id}>
+                      {offer.lenderName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="mt-3 space-y-2">
+                {[
+                  [
+                    'figuresVerified',
+                    'I checked the selected figures against the latest official Loan Estimate.',
+                  ],
+                  [
+                    'sameLoanRequestConfirmed',
+                    'The offers reflect my intended loan request, or I understand the visible differences.',
+                  ],
+                  [
+                    'manualSharingUnderstood',
+                    'I understand this only downloads a file; ContractToCozy will not send it or contact a lender.',
+                  ],
+                ].map(([field, label]) => (
+                  <label
+                    key={field}
+                    className="flex items-start gap-2 text-xs leading-relaxed text-slate-700 dark:text-slate-300"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={
+                        handoffChecks[
+                          field as keyof typeof handoffChecks
+                        ]
+                      }
+                      onChange={(event) =>
+                        setHandoffChecks((current) => ({
+                          ...current,
+                          [field]: event.target.checked,
+                        }))
+                      }
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => void exportHandoffMarkdown()}
+                disabled={
+                  handoffExporting ||
+                  !handoffOfferId ||
+                  !handoffChecks.figuresVerified ||
+                  !handoffChecks.sameLoanRequestConfirmed ||
+                  !handoffChecks.manualSharingUnderstood
+                }
+                className="mt-3 inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-4 text-xs font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {handoffExporting ? (
+                  <RefreshCw
+                    className="h-3.5 w-3.5 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                Download selected-lender brief
+              </button>
+            </fieldset>
           </div>
         )}
 

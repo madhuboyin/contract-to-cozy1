@@ -276,6 +276,9 @@ export function aggregateRefinanceRadarMetrics(input: RefinanceRadarMetricsInput
       loanEstimateMarkdownExports: eventCount(
         'refinance_loan_estimate_markdown_exported',
       ),
+      loanEstimateHandoffPackages: eventCount(
+        'refinance_loan_estimate_handoff_package_exported',
+      ),
       loanEstimateComparisonsDeleted: eventCount(
         'refinance_loan_estimate_comparison_deleted',
       ),

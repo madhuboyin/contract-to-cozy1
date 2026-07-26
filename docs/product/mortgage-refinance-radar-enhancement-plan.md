@@ -114,7 +114,7 @@ scenario metadata JSON, so no schema change or migration is required.
 | Funnel and trust instrumentation and reporting | Complete | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, durable alert-suppression outcomes, evaluation coverage, duplicate alerts, and freshness guardrails are aggregated through the authorized `/api/admin/analytics/refinance-radar` report. |
 | FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Complete for planning | Explicit Financing loan types drive FHA streamline, VA IRRRL, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, and second-lien coordination pathways. Every pathway lists facts to confirm and avoids approval claims or hard-coded county limits. |
 | Push notifications | Deferred | Requires a configured push provider and consent contract. |
-| Lender-offer and Loan Estimate comparison | Reviewed comparison and handoff foundation complete | Homeowners can compare two to four official Loan Estimates using loan amount, disclosed APR, payment, lender costs/credits, cash to close, and page-3 five-year totals. A text-layer or scanned PDF, or up to three image pages, can prefill an editable offer through a non-retained, magic-byte-validated upload. Scanned PDFs are safely capped at three pages; PDF and image pages use sequential local OCR, expose field provenance, and cap every OCR-derived field at medium confidence. Standard page sections are detected automatically, with visible completeness, duplicate-page, and ordering checks before comparison. Every extracted field requires explicit review before comparison or saving. Different loan amounts and unlike terms fail visibly as comparison warnings. Homeowners can export a Markdown-only review package with lender questions and an apples-to-apples verification checklist. Comparisons remain transient by default, persist only after an explicit Save action, and can be permanently deleted through a two-step property-scoped control. Transactional lender handoff remains gated. |
+| Lender-offer and Loan Estimate comparison | Reviewed comparison and homeowner-controlled handoff complete | Homeowners can compare two to four official Loan Estimates using loan amount, disclosed APR, payment, lender costs/credits, cash to close, and page-3 five-year totals. A text-layer or scanned PDF, or up to three image pages, can prefill an editable offer through a non-retained, magic-byte-validated upload. Scanned PDFs are safely capped at three pages; PDF and image pages use sequential local OCR, expose field provenance, and cap every OCR-derived field at medium confidence. Standard page sections are detected automatically, with visible completeness, duplicate-page, and ordering checks before comparison. Every extracted field requires explicit review before comparison or saving. Different loan amounts and unlike terms fail visibly as comparison warnings. Homeowners can export a Markdown-only review package with lender questions and an apples-to-apples verification checklist. After selecting one offer and completing explicit figure, comparability, and manual-sharing acknowledgements, the homeowner can also download a selected-lender discussion brief. That brief intentionally omits competitor identities and is never transmitted by ContractToCozy. Comparisons remain transient by default, persist only after an explicit Save action, and can be permanently deleted through a two-step property-scoped control. Any future transactional lender delivery remains gated. |
 
 ## Executive recommendation
 
@@ -123,9 +123,10 @@ scenario metadata JSON, so no schema change or migration is required.
 The feature now has the calculation, orchestration, Home promotion, proactive
 data capture, explainability, Markdown export, feedback, and official
 Loan Estimate comparison foundations required for an always-on product.
-Remaining product work is concentrated in push-provider integration and
-transactional lender handoff governance. The current export is deliberately
-Markdown-only and keeps the homeowner in control of any external sharing.
+Remaining product work is concentrated in push-provider integration and any
+future transactional lender delivery/provider integration. The exports are
+deliberately Markdown-only and keep the homeowner in control of any external
+sharing.
 
 - Treat Financing Center as the only owner of mortgage facts; never ask users to duplicate known information.
 

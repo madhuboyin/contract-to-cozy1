@@ -1,5 +1,6 @@
 import {
   compareRefinanceLoanEstimates,
+  type LoanEstimateMetric,
   type RefinanceLoanEstimateInput,
 } from './refinanceLoanEstimateComparison';
 
@@ -19,6 +20,15 @@ function pct(value: number): string {
 function safeInline(value: string): string {
   return value.replace(/[\r\n|]/g, ' ').replace(/\s+/g, ' ').trim();
 }
+
+const HANDOFF_METRIC_LABELS: Record<LoanEstimateMetric, string> = {
+  APR: 'lowest disclosed APR',
+  MONTHLY_PRINCIPAL_AND_INTEREST:
+    'lowest monthly principal-and-interest payment',
+  NET_LOAN_COSTS: 'lowest net loan costs',
+  CASH_TO_CLOSE: 'lowest cash to close',
+  FIVE_YEAR_BORROWING_COST: 'lowest disclosed five-year borrowing cost',
+};
 
 export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
   propertyLabel: string;
@@ -89,6 +99,93 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     comparison.disclaimer,
     '',
     'ContractToCozy does not verify the uploaded document, lender identity, eligibility, rate lock, or final closing terms. Compare the latest official disclosures and consult qualified professionals before committing.',
+    '',
+  ].join('\n');
+}
+
+export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
+  propertyLabel: string;
+  generatedAt: Date;
+  offers: RefinanceLoanEstimateInput[];
+  selectedOfferId: string;
+}): string {
+  const comparison = compareRefinanceLoanEstimates(input.offers);
+  const selected = comparison.offers.find(
+    (offer) => offer.id === input.selectedOfferId,
+  );
+  if (!selected) {
+    throw new Error('Selected Loan Estimate offer was not found.');
+  }
+  const sameLoanAmount =
+    new Set(input.offers.map((offer) => offer.loanAmountUsd)).size === 1;
+  const sameProduct =
+    new Set(
+      input.offers.map(
+        (offer) => `${offer.loanType}:${offer.loanTermYears}`,
+      ),
+    ).size === 1;
+  const selectedStrengths = selected.bestMetrics.map(
+    (metric) => `- ${HANDOFF_METRIC_LABELS[metric]} among the reviewed offers`,
+  );
+  const selectedCautions = selected.cautions.map(
+    (caution) => `- ${safeInline(caution)}`,
+  );
+
+  return [
+    '# Mortgage Refinance Lender Discussion Brief',
+    '',
+    `**Property:** ${safeInline(input.propertyLabel)}`,
+    `**Selected lender:** ${safeInline(selected.lenderName)}`,
+    `**Prepared:** ${input.generatedAt.toISOString()}`,
+    '',
+    '> Homeowner-controlled discussion copy. Downloading this Markdown file did not send it to a lender, create an application, authorize a credit inquiry, or accept an offer.',
+    '',
+    '## Selected Loan Estimate',
+    '',
+    `- Loan amount: ${money(selected.loanAmountUsd)}`,
+    `- Product: ${selected.loanTermYears}-year ${selected.loanType.toLowerCase()}`,
+    `- Note rate: ${pct(selected.noteRatePct)}`,
+    `- Disclosed APR: ${pct(selected.aprPct)}`,
+    `- Monthly principal and interest: ${money(selected.monthlyPrincipalAndInterestUsd)}`,
+    `- Total loan costs: ${money(selected.loanCostsUsd)}`,
+    `- Lender credits: ${money(selected.lenderCreditsUsd)}`,
+    `- Net loan costs: ${money(selected.netLoanCostsUsd)}`,
+    `- Cash to close: ${money(selected.cashToCloseUsd)}`,
+    `- Five-year borrowing cost: ${money(selected.fiveYearBorrowingCostUsd)}`,
+    '',
+    '## Private comparison context',
+    '',
+    `- Reviewed against ${input.offers.length - 1} other offer(s); competitor lender identities are intentionally omitted.`,
+    `- Requested loan amount alignment: ${sameLoanAmount ? 'confirmed across reviewed offers' : 'not aligned; request corrected estimates before relying on rankings'}.`,
+    `- Product and term alignment: ${sameProduct ? 'confirmed across reviewed offers' : 'not aligned; treat payment and cost differences as tradeoffs'}.`,
+    ...(selectedStrengths.length
+      ? selectedStrengths
+      : ['- No single lowest-cost metric was assigned to this offer.']),
+    '',
+    ...(selectedCautions.length
+      ? ['## Items to correct or confirm', '', ...selectedCautions, '']
+      : []),
+    '## Requested confirmations from the selected lender',
+    '',
+    '- Confirm whether the interest rate is locked, the expiration date, and every condition that could change it.',
+    '- Confirm the loan amount, term, product, occupancy, and cash-out amount used for this disclosure.',
+    '- Explain points, Section A origination charges, lender credits, and which settlement services may be shopped.',
+    '- Separate prepaid taxes, insurance, initial escrow, and payoff timing from lender-controlled costs.',
+    '- Confirm mortgage insurance, prepayment penalty, balloon payment, and adjustable-rate terms, if any.',
+    '- Provide a revised Loan Estimate if the rate, credits, loan amount, product, or closing date changes.',
+    '- Confirm when the Closing Disclosure and final cash-to-close figure will be available.',
+    '',
+    '## Homeowner verification recorded at download',
+    '',
+    '- [x] The selected figures were checked against the latest official Loan Estimate.',
+    '- [x] The reviewed offers reflect the intended loan request or visible differences were understood.',
+    '- [x] The homeowner understands that ContractToCozy did not transmit this file or contact a lender.',
+    '',
+    '## Important limitations',
+    '',
+    comparison.disclaimer,
+    '',
+    'This brief intentionally excludes competitor lender identities and is not a commitment, acceptance, application, approval, or authorization for a credit inquiry. Reconfirm all terms using the latest official disclosures before proceeding.',
     '',
   ].join('\n');
 }

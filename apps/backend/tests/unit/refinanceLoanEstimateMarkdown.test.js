@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   buildRefinanceLoanEstimateComparisonMarkdown,
+  buildRefinanceLoanEstimateHandoffMarkdown,
 } = require('../../dist/refinanceRadar/refinanceLoanEstimateMarkdown');
 
 function offer(overrides = {}) {
@@ -46,4 +47,31 @@ test('exports reviewed offers, comparison context, and verification checklist', 
   assert.match(markdown, /Verification checklist/);
   assert.match(markdown, /Rate-lock status/);
   assert.match(markdown, /not a lender recommendation/i);
+});
+
+test('exports only the selected lender in a homeowner-controlled discussion brief', () => {
+  const markdown = buildRefinanceLoanEstimateHandoffMarkdown({
+    propertyLabel: '94 Ashford Dr',
+    generatedAt: new Date('2026-07-25T12:00:00.000Z'),
+    selectedOfferId: 'offer-a',
+    offers: [
+      offer(),
+      offer({
+        id: 'offer-b',
+        lenderName: 'Competitor Bank',
+        noteRatePct: 5.9,
+        aprPct: 6.1,
+        monthlyPrincipalAndInterestUsd: 1950,
+      }),
+    ],
+  });
+
+  assert.match(markdown, /^# Mortgage Refinance Lender Discussion Brief/m);
+  assert.match(markdown, /\*\*Selected lender:\*\* Lender A/);
+  assert.doesNotMatch(markdown, /Competitor Bank/);
+  assert.match(markdown, /competitor lender identities are intentionally omitted/i);
+  assert.match(markdown, /Loan amount: \$300,000/);
+  assert.match(markdown, /\[x\] The selected figures were checked/);
+  assert.match(markdown, /did not send it to a lender/i);
+  assert.match(markdown, /not a commitment, acceptance, application/i);
 });

@@ -8,6 +8,7 @@ import { AuthRequest } from '../types/auth.types';
 import { RefinanceRadarService } from './refinanceRadar.service';
 import {
   CompareLoanEstimatesBody,
+  ExportLoanEstimateHandoffBody,
   HistoryQuery,
   IngestRateSnapshotBody,
   RateHistoryQuery,
@@ -40,7 +41,10 @@ import {
   combineLoanEstimateExtractions,
   extractLoanEstimateFromUpload,
 } from './refinanceLoanEstimateExtraction.service';
-import { buildRefinanceLoanEstimateComparisonMarkdown } from './refinanceLoanEstimateMarkdown';
+import {
+  buildRefinanceLoanEstimateComparisonMarkdown,
+  buildRefinanceLoanEstimateHandoffMarkdown,
+} from './refinanceLoanEstimateMarkdown';
 
 const service = new RefinanceRadarService();
 
@@ -183,6 +187,58 @@ export class RefinanceRadarController {
       res.setHeader(
         'Content-Disposition',
         `attachment; filename="mortgage-refinance-loan-estimate-comparison-${propertyId}.md"`,
+      );
+      res.status(200).send(markdown);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async exportLoanEstimateHandoffMarkdown(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId } = req.params;
+      const body = req.body as ExportLoanEstimateHandoffBody;
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { address: true, city: true, state: true, zipCode: true },
+      });
+      const propertyLabel = property
+        ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`
+        : `Property ${propertyId}`;
+      const markdown = buildRefinanceLoanEstimateHandoffMarkdown({
+        propertyLabel,
+        generatedAt: new Date(),
+        offers: body.offers,
+        selectedOfferId: body.selectedOfferId,
+      });
+      const selectedOfferPosition =
+        body.offers.findIndex((offer) => offer.id === body.selectedOfferId) + 1;
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_loan_estimate_handoff_package_exported',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'loan_estimate_homeowner_handoff',
+        metadataJson: {
+          offerCount: body.offers.length,
+          selectedOfferPosition,
+          acknowledgementVersion: '2026-07-25',
+          externallyTransmitted: false,
+        },
+      });
+
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="mortgage-refinance-lender-discussion-${propertyId}.md"`,
       );
       res.status(200).send(markdown);
     } catch (err) {

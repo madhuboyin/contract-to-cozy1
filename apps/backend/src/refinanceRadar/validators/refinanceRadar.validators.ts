@@ -151,6 +151,47 @@ export type CompareLoanEstimatesBody = z.infer<
   typeof compareLoanEstimatesSchema
 >;
 
+export const exportLoanEstimateHandoffSchema = z
+  .object({
+    offers: z.array(loanEstimateOfferSchema).min(2).max(4),
+    selectedOfferId: z.string().trim().min(1).max(80),
+    acknowledgements: z
+      .object({
+        figuresVerified: z.literal(true, {
+          error: 'Confirm that the selected figures match the latest official Loan Estimate.',
+        }),
+        sameLoanRequestConfirmed: z.literal(true, {
+          error: 'Confirm that the compared offers use the intended loan request.',
+        }),
+        manualSharingUnderstood: z.literal(true, {
+          error: 'Confirm that downloading does not send anything to a lender.',
+        }),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const ids = value.offers.map((offer) => offer.id);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['offers'],
+        message: 'Each offer must have a unique id.',
+      });
+    }
+    if (!ids.includes(value.selectedOfferId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['selectedOfferId'],
+        message: 'The selected offer must be included in the comparison.',
+      });
+    }
+  });
+
+export type ExportLoanEstimateHandoffBody = z.infer<
+  typeof exportLoanEstimateHandoffSchema
+>;
+
 export const saveLoanEstimateComparisonSchema = z
   .object({
     label: z.string().trim().min(1).max(120).optional(),

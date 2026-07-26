@@ -495,6 +495,30 @@ export async function exportLoanEstimateComparisonMarkdown(
   };
 }
 
+export async function exportLoanEstimateHandoffMarkdown(
+  propertyId: string,
+  input: {
+    offers: RefinanceLoanEstimateInput[];
+    selectedOfferId: string;
+    acknowledgements: {
+      figuresVerified: true;
+      sameLoanRequestConfirmed: true;
+      manualSharingUnderstood: true;
+    };
+  },
+): Promise<{ markdown: string; filename: string }> {
+  const response = await api.postText(
+    `/api/properties/${propertyId}/refinance-radar/loan-estimates/handoff-markdown`,
+    input,
+  );
+  return {
+    markdown: response.data,
+    filename:
+      response.filename ??
+      `mortgage-refinance-lender-discussion-${propertyId}.md`,
+  };
+}
+
 export async function extractRefinanceLoanEstimate(
   propertyId: string,
   files: File[],

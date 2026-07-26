@@ -18,6 +18,7 @@ import { validateDocumentArrayUpload } from '../utils/documentValidator.util';
 import { RefinanceRadarController } from './refinanceRadar.controller';
 import {
   compareLoanEstimatesSchema,
+  exportLoanEstimateHandoffSchema,
   historyQuerySchema,
   ingestRateSnapshotSchema,
   rateHistoryQuerySchema,
@@ -228,6 +229,14 @@ router.post(
   propertyAuthMiddleware,
   validateBody(compareLoanEstimatesSchema),
   RefinanceRadarController.exportLoanEstimateComparisonMarkdown,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-radar/loan-estimates/handoff-markdown',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(exportLoanEstimateHandoffSchema),
+  RefinanceRadarController.exportLoanEstimateHandoffMarkdown,
 );
 
 router.post(
