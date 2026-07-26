@@ -15,6 +15,7 @@ import {
 } from '../modules/homeEventRadar/services/radarQuery.service';
 import { radarInteractionService } from '../modules/homeEventRadar/services/radarInteraction.service';
 import { radarTaskIntegrationService } from '../modules/homeEventRadar/services/radarTaskIntegration.service';
+import { radarNotificationPreferenceService } from '../modules/homeEventRadar/services/radarNotificationPreference.service';
 import { listRadarEventsQuerySchema } from '../validators/homeEventRadar.validators';
 
 const service = new HomeEventRadarService();
@@ -160,6 +161,41 @@ export async function getRadarCounts(req: CustomRequest, res: Response, next: Ne
   try {
     const { userId } = requireUser(req);
     const data = await radarQueryService.getCounts(req.params.propertyId, userId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRadarNotificationPreferences(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { userId } = requireUser(req);
+    const data = await radarNotificationPreferenceService.get(
+      req.params.propertyId,
+      userId,
+    );
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateRadarNotificationPreferences(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { userId } = requireUser(req);
+    const data = await radarNotificationPreferenceService.update(
+      req.params.propertyId,
+      userId,
+      req.body,
+    );
     res.json({ success: true, data });
   } catch (err) {
     next(err);

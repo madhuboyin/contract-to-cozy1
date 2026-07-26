@@ -21,6 +21,7 @@ import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dash
 import { RadarFeedItem } from '@/components/features/homeEventRadar/RadarFeedItem';
 import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFeedSkeleton';
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
+import { RadarNotificationPreferencesCard } from '@/components/features/homeEventRadar/RadarNotificationPreferences';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { track } from '@/lib/analytics/events';
 import type {
@@ -889,6 +890,9 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
             onRetry={() => void overviewQuery.refetch()}
           />
           <RadarCoverageNotice coverage={overviewQuery.data?.coverage ?? []} />
+          <MobileSection>
+            <RadarNotificationPreferencesCard propertyId={propertyId} />
+          </MobileSection>
 
           <MobileSection className="space-y-3 lg:space-y-4">
             <div className="space-y-2 lg:hidden">

@@ -3312,6 +3312,35 @@ export type RadarSourceFamily =
 export type RadarCanonicalSeverity = 'info' | 'low' | 'moderate' | 'high' | 'severe' | 'extreme';
 export type RadarCanonicalImpact = 'none' | 'low' | 'moderate' | 'high' | 'critical';
 export type RadarConfidence = 'low' | 'medium' | 'high' | 'verified';
+export type RadarNotificationChannel = 'in_app' | 'email' | 'push';
+export type RadarNotificationDeliveryMode = 'immediate' | 'digest';
+
+export interface RadarNotificationPreferences {
+  propertyId: string;
+  userId: string;
+  isEnabled: boolean;
+  enabledCategories: RadarSourceFamily[];
+  channels: RadarNotificationChannel[];
+  minimumSeverity: RadarCanonicalSeverity;
+  minimumImpact: RadarCanonicalImpact;
+  deliveryMode: RadarNotificationDeliveryMode;
+  quietHours: { start: string; end: string } | null;
+  timezone: string;
+  persisted: boolean;
+  updatedAt: string | null;
+}
+
+export type UpdateRadarNotificationPreferencesInput = Pick<
+  RadarNotificationPreferences,
+  | 'isEnabled'
+  | 'enabledCategories'
+  | 'channels'
+  | 'minimumSeverity'
+  | 'minimumImpact'
+  | 'deliveryMode'
+  | 'quietHours'
+  | 'timezone'
+>;
 
 export interface RadarCategoryCoverage {
   family: RadarSourceFamily;

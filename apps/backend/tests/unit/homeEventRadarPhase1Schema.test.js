@@ -24,7 +24,11 @@ test('Radar persistence includes source, health, run, revision, feedback, and pr
   assert.match(schema, /model RadarEvent \{[\s\S]*sourceDefinitionId String\?[\s\S]*providerEventId\s+String\?/);
   assert.match(schema, /@@unique\(\[sourceDefinitionId, providerEventId\]\)/);
   assert.match(schema, /@@unique\(\[radarEventId, revisionIdentity\]\)/);
-  assert.match(schema, /@@unique\(\[propertyId, userId, preferenceKey\]\)/);
+  assert.match(
+    schema,
+    /model PropertyRadarNotificationPreference \{[\s\S]*enabledCategories\s+RadarSourceFamily\[\][\s\S]*channels\s+RadarNotificationChannel\[\][\s\S]*minimumSeverity\s+RadarNotificationMinimumSeverity[\s\S]*minimumImpact\s+RadarNotificationMinimumImpact[\s\S]*deliveryMode\s+RadarNotificationDeliveryMode[\s\S]*quietHoursStartMinutes\s+Int\?[\s\S]*quietHoursEndMinutes\s+Int\?[\s\S]*timezone\s+String/,
+  );
+  assert.match(schema, /@@unique\(\[propertyId, userId\]\)/);
   assert.doesNotMatch(schema, /model RadarSourceConfig \{/);
 });
 

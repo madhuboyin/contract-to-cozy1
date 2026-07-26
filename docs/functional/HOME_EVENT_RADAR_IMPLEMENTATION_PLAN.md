@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-502 implemented |
+| Status | In progress — HER-503 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -55,7 +55,8 @@
 | HER-500 Action registry | Complete | Versioned fail-closed registry covers every emitted action code, validates capability routes and policy metadata, enforces family/impact/confidence eligibility, and projects only registry-owned informational/internal/official destinations with lineage |
 | HER-501 Task/reminder integration | Complete; DB application pending | Reviewed Radar actions create or link canonical maintenance tasks, use bounded event-aware due-date policy, support household assignment, persist idempotent match/action/task lineage, and expose task continuity in event detail |
 | HER-502 Tool/provider handoffs | Complete; DB application pending | Typed reviewed destinations cover Coverage Intelligence/options, Service Price Radar, maintenance, Document Vault upload, provider search/booking, and HTTPS official instructions while preserving bounded Radar/Incident/Guidance lineage |
-| HER-503+ | Not started | Notifications, Guidance continuity expansion, additional sources, and operations remain |
+| HER-503 Notification preference persistence | Complete; DB application pending | Property-authorized per-user preferences persist enabled categories, available channels, canonical minimum severity/impact, immediate/digest mode, normalized quiet hours, and validated IANA timezone |
+| HER-504+ | Not started | Notification policy/delivery, Guidance continuity expansion, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1419,6 +1420,23 @@ Add per-user/property preferences:
 - immediate/digest;
 - quiet hours;
 - timezone.
+
+**Implemented:** One canonical preference now exists per user/property, with a full-replacement,
+idempotent `PUT` contract and a non-mutating `GET` that returns safe defaults when the user has not
+saved a preference. The persisted schema uses canonical Radar source families and canonical
+severity/impact thresholds, supports in-app/email/push channels, records immediate or digest
+delivery, and stores quiet-hour boundaries as bounded local-day minutes rather than ambiguous
+timestamps. Timezones are validated as IANA identifiers; a valid property timezone seeds the
+default, otherwise UTC is explicit.
+
+Both endpoints require authentication and property authorization. Input arrays are deduplicated
+into stable policy order, at least one category and channel are required, unsupported channels and
+unknown fields fail closed, and quiet hours require distinct 24-hour start/end times. Reading
+defaults does not create a database row. The Radar page exposes an accessible, lazily loaded
+settings card covering the complete contract and reports save/retry states. Prisma schema changes
+are included without a migration script; the repository owner must apply the schema before runtime
+deployment. Notification eligibility, deduplication, quiet-hour evaluation, and delivery remain
+owned by HER-504/HER-505.
 
 ### HER-504 — Notification eligibility/dedup
 

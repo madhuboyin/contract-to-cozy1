@@ -13,6 +13,8 @@ import {
   getRadarOverview,
   getRadarCoverage,
   getRadarCounts,
+  getRadarNotificationPreferences,
+  updateRadarNotificationPreferences,
   listRadarEvents,
   getRadarEventDetail,
   getRadarStateView,
@@ -33,6 +35,7 @@ import {
   submitRadarFeedbackBodySchema,
   radarTaskActionRequestSchema,
   radarTaskIntegrationBodySchema,
+  updateRadarNotificationPreferencesBodySchema,
   trackHomeEventRadarEventBodySchema,
 } from '../validators/homeEventRadar.validators';
 
@@ -62,6 +65,19 @@ router.get(
   '/properties/:propertyId/radar/counts',
   propertyAuthMiddleware,
   getRadarCounts,
+);
+
+router.get(
+  '/properties/:propertyId/radar/preferences',
+  propertyAuthMiddleware,
+  getRadarNotificationPreferences,
+);
+
+router.put(
+  '/properties/:propertyId/radar/preferences',
+  propertyAuthMiddleware,
+  validateBody(updateRadarNotificationPreferencesBodySchema),
+  updateRadarNotificationPreferences,
 );
 
 router.get(

@@ -114,6 +114,8 @@ import {
   RadarTaskCandidate,
   RadarTaskIntegrationInput,
   RadarTaskLink,
+  RadarNotificationPreferences,
+  UpdateRadarNotificationPreferencesInput,
   ResolutionCenterPayload,
   EnvironmentReportDTO,
   FoundationType,
@@ -4095,6 +4097,28 @@ class APIClient {
     );
     if (!res.data) throw new Error('Radar event details were unavailable.');
     return res.data;
+  }
+
+  async getRadarNotificationPreferences(
+    propertyId: string,
+  ): Promise<RadarNotificationPreferences> {
+    const response = await this.get<RadarNotificationPreferences>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/preferences`,
+    );
+    if (!response.data) throw new Error('Radar notification preferences were unavailable.');
+    return response.data;
+  }
+
+  async updateRadarNotificationPreferences(
+    propertyId: string,
+    input: UpdateRadarNotificationPreferencesInput,
+  ): Promise<RadarNotificationPreferences> {
+    const response = await this.put<RadarNotificationPreferences>(
+      `/api/properties/${encodeURIComponent(propertyId)}/radar/preferences`,
+      input,
+    );
+    if (!response.data) throw new Error('Radar notification preferences were not saved.');
+    return response.data;
   }
 
   async updateRadarMatchState(

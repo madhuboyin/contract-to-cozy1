@@ -18,6 +18,15 @@ import {
 import {
   RADAR_ACTION_CODES,
 } from '../modules/homeEventRadar/domain/radarActionRegistry';
+import {
+  isIanaTimezone,
+  orderedRadarPreferenceValues,
+  RADAR_NOTIFICATION_CATEGORIES,
+  RADAR_NOTIFICATION_CHANNELS,
+  RADAR_NOTIFICATION_DELIVERY_MODES,
+  RADAR_NOTIFICATION_IMPACTS,
+  RADAR_NOTIFICATION_SEVERITIES,
+} from '../modules/homeEventRadar/domain/radarNotificationPreferences';
 
 // ---------------------------------------------------------------------------
 // Enum value arrays (mirrors Prisma schema; avoids dependency on
@@ -264,6 +273,52 @@ export const radarTaskActionRequestSchema = z.object({
   params: radarTaskActionParamsSchema,
 });
 
+const radarQuietHoursSchema = z.object({
+  start: z.string().regex(
+    /^(?:[01]\d|2[0-3]):[0-5]\d$/,
+    'start must use 24-hour HH:mm format',
+  ),
+  end: z.string().regex(
+    /^(?:[01]\d|2[0-3]):[0-5]\d$/,
+    'end must use 24-hour HH:mm format',
+  ),
+}).strict().superRefine((value, context) => {
+  if (value.start === value.end) {
+    context.addIssue({
+      code: 'custom',
+      path: ['end'],
+      message: 'quiet hours must have different start and end times',
+    });
+  }
+});
+
+export const updateRadarNotificationPreferencesBodySchema = z.object({
+  isEnabled: z.boolean(),
+  enabledCategories: z.array(z.enum(RADAR_NOTIFICATION_CATEGORIES))
+    .min(1)
+    .max(RADAR_NOTIFICATION_CATEGORIES.length)
+    .transform((values) => orderedRadarPreferenceValues(
+      values,
+      RADAR_NOTIFICATION_CATEGORIES,
+    )),
+  channels: z.array(z.enum(RADAR_NOTIFICATION_CHANNELS))
+    .min(1)
+    .max(RADAR_NOTIFICATION_CHANNELS.length)
+    .transform((values) => orderedRadarPreferenceValues(
+      values,
+      RADAR_NOTIFICATION_CHANNELS,
+    )),
+  minimumSeverity: z.enum(RADAR_NOTIFICATION_SEVERITIES),
+  minimumImpact: z.enum(RADAR_NOTIFICATION_IMPACTS),
+  deliveryMode: z.enum(RADAR_NOTIFICATION_DELIVERY_MODES),
+  quietHours: radarQuietHoursSchema.nullable(),
+  timezone: z.string()
+    .trim()
+    .min(1)
+    .max(100)
+    .refine(isIanaTimezone, 'timezone must be a valid IANA timezone'),
+}).strict();
+
 /**
  * Body for POST /properties/:propertyId/radar/events  (analytics tracking)
  */
@@ -274,3 +329,6 @@ export const trackHomeEventRadarEventBodySchema = z.object({
 });
 
 export type TrackHomeEventRadarEventBody = z.infer<typeof trackHomeEventRadarEventBodySchema>;
+export type UpdateRadarNotificationPreferencesBody = z.infer<
+  typeof updateRadarNotificationPreferencesBodySchema
+>;

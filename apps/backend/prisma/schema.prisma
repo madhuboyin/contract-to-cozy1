@@ -9380,7 +9380,28 @@ enum RadarNotificationChannel {
   in_app
   email
   push
-  sms
+}
+
+enum RadarNotificationDeliveryMode {
+  immediate
+  digest
+}
+
+enum RadarNotificationMinimumSeverity {
+  info
+  low
+  moderate
+  high
+  severe
+  extreme
+}
+
+enum RadarNotificationMinimumImpact {
+  none
+  low
+  moderate
+  high
+  critical
 }
 
 enum RadarEventType {
@@ -9851,23 +9872,25 @@ model PropertyRadarCoverage {
 }
 
 model PropertyRadarNotificationPreference {
-  id             String                     @id @default(uuid())
-  propertyId     String
-  userId         String
-  preferenceKey  String
-  sourceFamily   RadarSourceFamily?
-  eventType      RadarEventType?
-  isEnabled      Boolean                    @default(true)
-  channels       RadarNotificationChannel[] @default([in_app])
-  minimumImpact  PropertyRadarImpactLevel   @default(watch)
-  quietHoursJson Json?
-  createdAt      DateTime                   @default(now())
-  updatedAt      DateTime                   @updatedAt
+  id                     String                           @id @default(uuid())
+  propertyId             String
+  userId                 String
+  isEnabled              Boolean                          @default(true)
+  enabledCategories      RadarSourceFamily[]              @default([weather, air_quality, disaster, utility, tax, insurance, other])
+  channels               RadarNotificationChannel[]       @default([in_app])
+  minimumSeverity        RadarNotificationMinimumSeverity @default(moderate)
+  minimumImpact          RadarNotificationMinimumImpact   @default(moderate)
+  deliveryMode           RadarNotificationDeliveryMode    @default(immediate)
+  quietHoursStartMinutes Int?
+  quietHoursEndMinutes   Int?
+  timezone               String                           @default("UTC")
+  createdAt              DateTime                         @default(now())
+  updatedAt              DateTime                         @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([propertyId, userId, preferenceKey])
+  @@unique([propertyId, userId])
   @@index([userId, isEnabled])
   @@index([propertyId, isEnabled])
   @@map("property_radar_notification_preferences")

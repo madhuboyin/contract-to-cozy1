@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import {
+  RADAR_NOTIFICATION_CATEGORIES,
+  RADAR_NOTIFICATION_CHANNELS,
+  RADAR_NOTIFICATION_DELIVERY_MODES,
+  RADAR_NOTIFICATION_IMPACTS,
+  RADAR_NOTIFICATION_SEVERITIES,
+} from '../domain/radarNotificationPreferences';
 
 export const radarSourceFamilySchema = z.enum([
   'weather',
@@ -497,6 +504,24 @@ export const radarFeedbackResponseSchema = z.object({
   updatedAt: z.iso.datetime({ offset: true }),
 });
 
+export const radarNotificationPreferenceResponseSchema = z.object({
+  propertyId: z.string().min(1),
+  userId: z.string().min(1),
+  isEnabled: z.boolean(),
+  enabledCategories: z.array(z.enum(RADAR_NOTIFICATION_CATEGORIES)).min(1),
+  channels: z.array(z.enum(RADAR_NOTIFICATION_CHANNELS)).min(1),
+  minimumSeverity: z.enum(RADAR_NOTIFICATION_SEVERITIES),
+  minimumImpact: z.enum(RADAR_NOTIFICATION_IMPACTS),
+  deliveryMode: z.enum(RADAR_NOTIFICATION_DELIVERY_MODES),
+  quietHours: z.object({
+    start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+    end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+  }).nullable(),
+  timezone: z.string().min(1).max(100),
+  persisted: z.boolean(),
+  updatedAt: z.iso.datetime({ offset: true }).nullable(),
+});
+
 export const radarDetailResponseSchema = radarFeedItemSchema.extend({
   geography: normalizedGeographySchema.nullable(),
   matchExplanation: radarMatchExplanationSchema.nullable(),
@@ -626,3 +651,6 @@ export type RadarDetailResponse = z.infer<typeof radarDetailResponseSchema>;
 export type RadarFeedbackType = z.infer<typeof radarFeedbackTypeSchema>;
 export type RadarInteractionStateResponse = z.infer<typeof radarInteractionStateResponseSchema>;
 export type RadarFeedbackResponse = z.infer<typeof radarFeedbackResponseSchema>;
+export type RadarNotificationPreferenceResponse = z.infer<
+  typeof radarNotificationPreferenceResponseSchema
+>;
