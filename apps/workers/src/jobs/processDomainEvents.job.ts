@@ -5,6 +5,9 @@ import {
   processRefinanceTransitionAlert,
   type RefinanceAlertTransition,
 } from './refinanceTransitionAlert.job';
+import {
+  processRadarPropertyReconciliationEvent,
+} from '@worker-shared/modules/homeEventRadar/services/radarPropertyReconciliation.service';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
 type DomainEventType =
@@ -14,7 +17,8 @@ type DomainEventType =
   | 'REFINANCE_OPPORTUNITY_OPENED'
   | 'REFINANCE_OPPORTUNITY_UPDATED'
   | 'REFINANCE_OPPORTUNITY_CLOSED'
-  | 'REFINANCE_DATA_REQUIRED';
+  | 'REFINANCE_DATA_REQUIRED'
+  | 'RADAR_PROPERTY_RECONCILIATION_REQUESTED';
 
 export const MAX_DOMAIN_EVENT_ATTEMPTS = 8;
 
@@ -24,12 +28,14 @@ export interface ProcessDomainEventsDeps {
   prisma: Pick<typeof prisma, 'notification' | 'domainEvent'>;
   notificationService: Pick<typeof NotificationService, 'create'>;
   refinanceTransitionAlert?: typeof processRefinanceTransitionAlert;
+  radarPropertyReconciliation?: typeof processRadarPropertyReconciliationEvent;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
   prisma,
   notificationService: NotificationService,
   refinanceTransitionAlert: processRefinanceTransitionAlert,
+  radarPropertyReconciliation: processRadarPropertyReconciliationEvent,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -307,6 +313,12 @@ export async function processDomainEventsJob(
           break;
         case 'REFINANCE_DATA_REQUIRED':
           handleRefinanceDataRequired(ev);
+          break;
+        case 'RADAR_PROPERTY_RECONCILIATION_REQUESTED':
+          processingOutcome = await (
+            deps.radarPropertyReconciliation
+            ?? processRadarPropertyReconciliationEvent
+          )(ev);
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

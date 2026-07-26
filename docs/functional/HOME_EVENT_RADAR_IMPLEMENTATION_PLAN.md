@@ -40,7 +40,8 @@
 | HER-302 Confidence engine | Complete | Five fixed bounded components score source, geography, freshness, relevant property completeness, and domain evidence; matches persist an internal score and band plus homeowner-readable evidence gaps, and low confidence remains Radar-only |
 | HER-303 Priority engine | Complete; DB application pending | Seven fixed bounded ordering components replace global signal blending; match-level score, band, version, evaluation time, and diagnostics persist, while homeowner APIs expose only the band and use deterministic tie-breakers |
 | HER-304 Match lifecycle | Complete; DB application pending | Revision-aware material updates, Now/Upcoming/Recently Ended state, source freshness, terminal retention, retraction/Incident closure, and explicit no-longer-applicable reconciliation are persisted and exposed safely |
-| HER-305+ | Not started | Property reconciliation, homeowner APIs, actions, and operations remain |
+| HER-305 Property reconciliation | Complete; DB application pending | Database-backed domain events durably reconcile property creation, geography, relevant facts, responsibility, Radar action state, and canonical completion changes through bounded active-event pages with shared retries and structured outcomes |
+| HER-306+ | Not started | Scheduled safety-net reconciliation, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -955,6 +956,28 @@ Trigger reconciliation on:
 
 Use event publication or a bounded job. Avoid synchronous full matching inside property update
 requests.
+
+Implementation note: canonical property writes now publish the versioned
+`RADAR_PROPERTY_RECONCILIATION_REQUESTED` event through the existing database-backed domain-event
+outbox. Property creation, semantic address edits, relevant profile/context facts, responsibility
+changes, Radar `acted_on` transitions, maintenance completion transitions, and orchestration
+completion changes each use deterministic mutation identities. Property/context transactions write
+their reconciliation request atomically with the canonical change.
+
+Verified coordinate writes publish the same request in their property transaction. The worker
+claims these events through the existing bounded retry/backoff/dead-letter processor,
+loads only active/updated canonical Radar events in stable ID order, evaluates at most 25 events by
+default (configurable from 1–100), and publishes at most one durable cursor continuation. Every
+event is re-run through the existing property-scoped matcher with its latest immutable revision
+provenance. A failed property/event evaluation fails the domain event so it remains observable and
+retryable; successful outcomes persist evaluated, matched, no-longer-eligible, continuation, and
+cursor counts in the domain-event payload.
+
+Location changes continue invalidating disposable source coverage and the indexed point, but no
+longer delete `PropertyRadarMatch`. Preserving prior matches lets HER-304 record
+`no_longer_applicable`, close linked Incidents, and retain lifecycle history. Direct Property
+Context city/state/ZIP capture applies the same geography invalidation contract. Prisma adds only
+the domain-event enum value; no migration script was created.
 
 ### HER-306 — Scheduled safety-net reconciliation
 

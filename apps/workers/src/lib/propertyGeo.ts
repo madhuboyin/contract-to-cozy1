@@ -2,6 +2,9 @@
 import { prisma } from './prisma';
 import { geocodeZip, Geo } from './geocodeZip';
 import { normalizeUsZip } from '@worker-shared/modules/homeEventRadar/domain/propertyGeography';
+import {
+  requestRadarPropertyReconciliation,
+} from '@worker-shared/modules/homeEventRadar/services/radarPropertyReconciliation.service';
 
 type GeocodableProperty = {
   id: string;
@@ -14,9 +17,9 @@ type GeocodableProperty = {
 async function persist(propertyId: string, zip: string, geo: Geo): Promise<void> {
   try {
     const normalizedZipCode = normalizeUsZip(zip);
+    const geocodedAt = new Date();
     await prisma.$transaction(async (tx) => {
       await tx.propertyRadarCoverage.deleteMany({ where: { propertyId } });
-      await tx.propertyRadarMatch.deleteMany({ where: { propertyId } });
       await tx.property.update({
         where: { id: propertyId },
         data: {
@@ -27,7 +30,7 @@ async function persist(propertyId: string, zip: string, geo: Geo): Promise<void>
           geocodingStatus: 'VERIFIED',
           geocodingProvider: 'open-meteo',
           geocodingVersion: 'open-meteo-geocoding-v1',
-          geocodedAt: new Date(),
+          geocodedAt,
           geographyVersion: { increment: 1 },
         },
       });
@@ -36,6 +39,16 @@ async function persist(propertyId: string, zip: string, geo: Geo): Promise<void>
         SET "locationPoint" = ST_SetSRID(ST_MakePoint(${geo.lon}, ${geo.lat}), 4326)::geography
         WHERE "id" = ${propertyId}
       `;
+      await requestRadarPropertyReconciliation(
+        {
+          propertyId,
+          reasons: ['geography_changed'],
+          changeToken: geocodedAt.toISOString(),
+          correlationId: `property-geocode:${propertyId}:${geocodedAt.toISOString()}`,
+        },
+        tx,
+        geocodedAt,
+      );
     });
   } catch {
     // Non-fatal: worst case we re-geocode this property on the next run.

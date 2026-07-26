@@ -26,6 +26,10 @@ import {
   hasPropertyLocationIdentityChanged,
   normalizeUsZip,
 } from '../modules/homeEventRadar/domain/propertyGeography';
+import {
+  requestRadarPropertyReconciliation,
+  type RadarPropertyReconciliationReason,
+} from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -188,6 +192,47 @@ function evidenceCreateData(propertyId: string, userId: string, factKeys: string
     observedAt,
     verifiedAt: observedAt,
   }));
+}
+
+const RADAR_RELEVANT_PROPERTY_UPDATE_FIELDS = new Set<keyof UpdatePropertyData>([
+  'dwellingType',
+  'propertySize',
+  'yearBuilt',
+  'roofType',
+  'roofReplacementYear',
+  'heatingType',
+  'coolingType',
+  'hvacInstallYear',
+  'waterHeaterType',
+  'waterHeaterInstallYear',
+  'foundationType',
+  'hasIrrigation',
+  'hasDrainageIssues',
+  'hasSumpPump',
+  'hasSumpPumpBackup',
+  'primaryHeatingFuel',
+  'hasSecondaryHeat',
+  'exteriorProfile',
+]);
+
+function radarReconciliationReasonsForPropertyUpdate(
+  data: UpdatePropertyData,
+  locationIdentityChanged: boolean,
+): RadarPropertyReconciliationReason[] {
+  const reasons = new Set<RadarPropertyReconciliationReason>();
+  if (locationIdentityChanged) reasons.add('geography_changed');
+  if ((data.responsibilities?.length ?? 0) > 0) {
+    reasons.add('responsibility_changed');
+  }
+  if (
+    Object.keys(data).some((field) =>
+      RADAR_RELEVANT_PROPERTY_UPDATE_FIELDS.has(
+        field as keyof UpdatePropertyData,
+      ))
+  ) {
+    reasons.add('property_facts_changed');
+  }
+  return [...reasons];
 }
 
 // === INJECT MISSING INTERFACE DEFINITIONS ===
@@ -585,6 +630,12 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
   // created Home is returned, rather than waiting for the overnight worker.
   await reconcileCurrentSeasonalChecklist(property.id, userId);
 
+  await requestRadarPropertyReconciliation({
+    propertyId: property.id,
+    reasons: ['property_created'],
+    changeToken: property.updatedAt.toISOString(),
+    correlationId: `property-create:${property.id}`,
+  });
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
   // This triggers both Risk and FES calculations
   await JobQueueService.enqueuePropertyIntelligenceJobs(property.id);
@@ -920,6 +971,8 @@ export async function updateProperty(
     ...(data.state !== undefined ? { state: data.state } : {}),
     ...(data.zipCode !== undefined ? { zipCode: data.zipCode } : {}),
   });
+  const radarReconciliationReasons =
+    radarReconciliationReasonsForPropertyUpdate(data, locationIdentityChanged);
 
   const propertyUpdateData: Prisma.PropertyUpdateInput = {
     ...updatePayload,
@@ -937,10 +990,9 @@ export async function updateProperty(
   const property = await prisma.$transaction(async (tx) => {
     if (locationIdentityChanged) {
       // Coverage and matches are disposable projections of the previous
-      // property geography. Delete them in the same transaction as the
-      // address change so stale matches cannot survive a location edit.
+      // property geography. Matches remain durable so the asynchronous
+      // reconciler can close linked Incidents and preserve lifecycle history.
       await tx.propertyRadarCoverage.deleteMany({ where: { propertyId } });
-      await tx.propertyRadarMatch.deleteMany({ where: { propertyId } });
       await tx.$executeRaw`
         UPDATE "properties"
         SET "locationPoint" = NULL
@@ -969,6 +1021,19 @@ export async function updateProperty(
       await tx.propertyFactEvidence.createMany({
         data: evidenceCreateData(propertyId, userId, factKeys, capturedAt),
       });
+    }
+
+    if (radarReconciliationReasons.length > 0) {
+      await requestRadarPropertyReconciliation(
+        {
+          propertyId,
+          reasons: radarReconciliationReasons,
+          changeToken: capturedAt.toISOString(),
+          correlationId: `property-update:${propertyId}:${capturedAt.toISOString()}`,
+        },
+        tx,
+        capturedAt,
+      );
     }
 
     return updated;

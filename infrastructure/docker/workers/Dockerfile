@@ -103,6 +103,7 @@ COPY apps/backend/src/modules/homeEventRadar/services/radarSourceRegistry.servic
      apps/backend/src/modules/homeEventRadar/services/radarEventIngestion.service.ts \
      apps/backend/src/modules/homeEventRadar/services/radarMatchDiscovery.service.ts \
      apps/backend/src/modules/homeEventRadar/services/radarIncidentPromotion.service.ts \
+     apps/backend/src/modules/homeEventRadar/services/radarPropertyReconciliation.service.ts \
      src/shared/backend/modules/homeEventRadar/services/
 COPY apps/backend/src/modules/homeEventRadar/queues/radarMatch.queue.ts \
      apps/backend/src/modules/homeEventRadar/queues/radarIngest.queue.ts \

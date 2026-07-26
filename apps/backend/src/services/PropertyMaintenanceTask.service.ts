@@ -24,6 +24,9 @@ import {
   maintenanceTemplateActionKey,
   maintenanceTemplateContextInput,
 } from './maintenance/applicabilityPolicy';
+import {
+  requestRadarPropertyReconciliation,
+} from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 
   /**
    * Service for managing property maintenance tasks.
@@ -697,6 +700,13 @@ import {
       }
 
       if (wasCompleted !== isNowCompleted) {
+        await requestRadarPropertyReconciliation({
+          propertyId: task.propertyId,
+          reasons: ['mitigation_changed'],
+          changeToken: updatedTask.updatedAt.toISOString(),
+          correlationId:
+            `maintenance-task:${updatedTask.id}:${updatedTask.updatedAt.toISOString()}`,
+        });
         try {
           await signalService.publishMaintenanceAdherenceSignal({
             propertyId: task.propertyId,
@@ -730,7 +740,7 @@ import {
       }
     ): Promise<PropertyMaintenanceTask> {
       // Verify access (CONTRIBUTOR+ required to mutate tasks)
-      await this.getTask(userId, taskId, 'CONTRIBUTOR');
+      const existingTask = await this.getTask(userId, taskId, 'CONTRIBUTOR');
 
       // Validate serviceCategory if provided
       if (data.serviceCategory) {
@@ -765,6 +775,20 @@ import {
           }),
         },
       });
+
+      if (
+        data.status !== undefined
+        && (existingTask.status === 'COMPLETED')
+          !== (updatedTask.status === 'COMPLETED')
+      ) {
+        await requestRadarPropertyReconciliation({
+          propertyId: updatedTask.propertyId,
+          reasons: ['mitigation_changed'],
+          changeToken: updatedTask.updatedAt.toISOString(),
+          correlationId:
+            `maintenance-task:${updatedTask.id}:${updatedTask.updatedAt.toISOString()}`,
+        });
+      }
   
       return updatedTask;
     }

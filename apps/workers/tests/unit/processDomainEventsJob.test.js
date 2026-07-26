@@ -36,8 +36,20 @@ function eventFixture(overrides = {}) {
   };
 }
 
-function fakeDeps({ pendingEvents, existingNotification = null, notificationCreateShouldFailFor = new Set(), lockShouldFail = false }) {
-  const calls = { updates: [], creates: [], notificationFindFirstArgs: [], refinanceAlerts: [] };
+function fakeDeps({
+  pendingEvents,
+  existingNotification = null,
+  notificationCreateShouldFailFor = new Set(),
+  lockShouldFail = false,
+  radarReconciliationShouldFail = false,
+}) {
+  const calls = {
+    updates: [],
+    creates: [],
+    notificationFindFirstArgs: [],
+    refinanceAlerts: [],
+    radarReconciliations: [],
+  };
 
   const deps = {
     prisma: {
@@ -69,6 +81,18 @@ function fakeDeps({ pendingEvents, existingNotification = null, notificationCrea
     refinanceTransitionAlert: async (input) => {
       calls.refinanceAlerts.push(input);
       return { status: 'SUPPRESSED', reason: 'DELIVERY_DISABLED' };
+    },
+    radarPropertyReconciliation: async (event) => {
+      calls.radarReconciliations.push(event);
+      if (radarReconciliationShouldFail) {
+        throw new Error('radar reconciliation failed');
+      }
+      return {
+        outcome: 'page_reconciled',
+        propertyId: event.propertyId,
+        evaluatedEvents: 2,
+        continuationCreated: false,
+      };
     },
   };
   return { deps, calls };
@@ -146,6 +170,56 @@ test('acknowledges a valid REFINANCE_DATA_REQUIRED event without external delive
   assert.equal(calls.creates.length, 0);
   const terminal = calls.updates.find((update) => update.kind === 'terminal');
   assert.equal(terminal.args.data.status, 'PROCESSED');
+});
+
+test('processes Radar property reconciliation and persists its structured outcome', async () => {
+  const radarEvent = eventFixture({
+    type: 'RADAR_PROPERTY_RECONCILIATION_REQUESTED',
+    payload: {
+      payloadVersion: 1,
+      propertyId: 'property-1',
+      reasons: ['property_facts_changed'],
+      changeToken: 'version-1',
+      correlationId: 'correlation-1',
+      requestedAt: '2026-07-26T18:00:00.000Z',
+      pageSize: 25,
+    },
+  });
+  const { deps, calls } = fakeDeps({ pendingEvents: [radarEvent] });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.processed, 1);
+  assert.equal(calls.radarReconciliations.length, 1);
+  const terminal = calls.updates.find((update) => update.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'PROCESSED');
+  assert.equal(
+    terminal.args.data.payload.processingOutcome.outcome,
+    'page_reconciled',
+  );
+  assert.equal(
+    terminal.args.data.payload.processingOutcome.evaluatedEvents,
+    2,
+  );
+});
+
+test('Radar reconciliation failures use the shared retry and dead-letter path', async () => {
+  const { deps, calls } = fakeDeps({
+    pendingEvents: [
+      eventFixture({
+        type: 'RADAR_PROPERTY_RECONCILIATION_REQUESTED',
+        payload: {},
+      }),
+    ],
+    radarReconciliationShouldFail: true,
+  });
+
+  const result = await processDomainEventsJob(undefined, deps);
+
+  assert.equal(result.failed, 1);
+  const terminal = calls.updates.find((update) => update.kind === 'terminal');
+  assert.equal(terminal.args.data.status, 'FAILED');
+  assert.match(terminal.args.data.lastError, /radar reconciliation failed/);
 });
 
 test('a malformed refinance transition is retried as FAILED', async () => {

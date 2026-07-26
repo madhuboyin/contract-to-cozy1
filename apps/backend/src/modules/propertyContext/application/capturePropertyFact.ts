@@ -20,6 +20,14 @@ import { propertyContextCapturesTotal } from '../../../lib/metrics';
 import { resolvePropertyAccess, ROLE_RANK } from '../../../services/propertyAccess.service';
 import { getFactDefinition } from '../catalog/factCatalog';
 import { getPropertyContext, PropertyContextAccessDeniedError } from './getPropertyContext';
+import {
+  buildPropertyGeographyInvalidation,
+  hasPropertyLocationIdentityChanged,
+} from '../../homeEventRadar/domain/propertyGeography';
+import {
+  radarReconciliationReasonForFactKey,
+  requestRadarPropertyReconciliation,
+} from '../../homeEventRadar/services/radarPropertyReconciliation.service';
 
 const nullableBoolean = z.boolean().nullable();
 const nullableNonNegativeNumber = z.number().nonnegative().nullable();
@@ -142,6 +150,44 @@ export async function writeCanonicalFact(
       return;
     }
     const mapping = propertyFacts[factKey as keyof typeof propertyFacts];
+    if (
+      factKey === 'location.city'
+      || factKey === 'location.state'
+      || factKey === 'location.zipCode'
+    ) {
+      const current = await tx.property.findUnique({
+        where: { id: propertyId },
+        select: {
+          address: true,
+          city: true,
+          state: true,
+          zipCode: true,
+        },
+      });
+      if (!current) throw new Error('Property not found');
+      const patch = {
+        ...(factKey === 'location.city' ? { city: value as string } : {}),
+        ...(factKey === 'location.state' ? { state: value as string } : {}),
+        ...(factKey === 'location.zipCode' ? { zipCode: value as string } : {}),
+      };
+      if (hasPropertyLocationIdentityChanged(current, patch)) {
+        const nextZipCode = patch.zipCode ?? current.zipCode;
+        await tx.propertyRadarCoverage.deleteMany({ where: { propertyId } });
+        await tx.$executeRaw`
+          UPDATE "properties"
+          SET "locationPoint" = NULL
+          WHERE "id" = ${propertyId}
+        `;
+        await tx.property.update({
+          where: { id: propertyId },
+          data: {
+            [mapping.field]: value,
+            ...buildPropertyGeographyInvalidation(nextZipCode),
+          },
+        });
+        return;
+      }
+    }
     await tx.property.update({ where: { id: propertyId }, data: { [mapping.field]: value } });
     return;
   }
@@ -184,6 +230,8 @@ export async function capturePropertyFact(
 
   const input = capturePropertyFactInputSchema.parse(rawInput);
   const value = normalizeCaptureValue(factKey, input.value);
+  const radarReconciliationReason =
+    radarReconciliationReasonForFactKey(factKey);
   const unknownAnswer = value === null || value === 'UNKNOWN';
   const observedAt = new Date();
 
@@ -219,6 +267,19 @@ export async function capturePropertyFact(
         },
       });
       evidenceId = evidence.id;
+      if (radarReconciliationReason) {
+        await requestRadarPropertyReconciliation(
+          {
+            propertyId,
+            reasons: [radarReconciliationReason],
+            changeToken: observedAt.toISOString(),
+            correlationId:
+              `property-context:${propertyId}:${factKey}:${observedAt.toISOString()}`,
+          },
+          tx,
+          observedAt,
+        );
+      }
     });
     propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: factKey, outcome: 'success' });
   } catch (error) {

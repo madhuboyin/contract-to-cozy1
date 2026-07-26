@@ -8,7 +8,8 @@ export type EmitDomainEventInput = {
     | 'FOLLOW_UP_DUE'
     | 'REFINANCE_OPPORTUNITY_OPENED'
     | 'REFINANCE_OPPORTUNITY_UPDATED'
-    | 'REFINANCE_OPPORTUNITY_CLOSED';
+    | 'REFINANCE_OPPORTUNITY_CLOSED'
+    | 'RADAR_PROPERTY_RECONCILIATION_REQUESTED';
   propertyId?: string | null;
   userId?: string | null;
   idempotencyKey?: string | null;

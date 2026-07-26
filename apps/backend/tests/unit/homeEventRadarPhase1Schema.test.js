@@ -57,16 +57,25 @@ test('Incident has a unique nullable bridge to its canonical property match', ()
   assert.match(schema, /model PropertyRadarMatch \{[\s\S]*incident\s+Incident\?/);
 });
 
-test('property edits and geocoder writes invalidate derived Radar projections', () => {
+test('property edits invalidate disposable geography while preserving matches for reconciliation', () => {
   const propertyService = read('apps/backend/src/services/property.service.ts');
   const propertyGeo = read('apps/workers/src/lib/propertyGeo.ts');
 
   assert.match(propertyService, /hasPropertyLocationIdentityChanged/);
   assert.match(propertyService, /propertyRadarCoverage\.deleteMany\(\{ where: \{ propertyId \} \}\)/);
-  assert.match(propertyService, /propertyRadarMatch\.deleteMany\(\{ where: \{ propertyId \} \}\)/);
+  assert.doesNotMatch(
+    propertyService,
+    /propertyRadarMatch\.deleteMany\(\{ where: \{ propertyId \} \}\)/,
+  );
+  assert.match(propertyService, /requestRadarPropertyReconciliation/);
   assert.match(propertyService, /SET "locationPoint" = NULL/);
 
   assert.match(propertyGeo, /geocodingStatus: 'VERIFIED'/);
   assert.match(propertyGeo, /ST_SetSRID\(ST_MakePoint/);
+  assert.match(propertyGeo, /requestRadarPropertyReconciliation/);
+  assert.doesNotMatch(
+    propertyGeo,
+    /propertyRadarMatch\.deleteMany\(\{ where: \{ propertyId \} \}\)/,
+  );
   assert.match(propertyGeo, /geocodingStatus: 'FAILED'/);
 });

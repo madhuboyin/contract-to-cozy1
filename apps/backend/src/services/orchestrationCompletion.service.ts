@@ -3,6 +3,9 @@ import { prisma } from '../lib/prisma';
 import { CompletionCreateInput, CompletionResponse } from './orchestration.service';
 import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
+import {
+  requestRadarPropertyReconciliation,
+} from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 
 export async function createCompletion(params: {
   propertyId: string;
@@ -46,6 +49,13 @@ export async function createCompletion(params: {
       },
     });
   }
+
+  await requestRadarPropertyReconciliation({
+    propertyId,
+    reasons: ['mitigation_changed'],
+    changeToken: completion.updatedAt.toISOString(),
+    correlationId: `orchestration-completion:${completion.id}:created`,
+  });
 
   try {
     await signalService.publishMaintenanceAdherenceSignal({
@@ -130,6 +140,13 @@ export async function updateCompletion(
         orderBy: { orderIndex: 'asc' },
       },
     },
+  });
+
+  await requestRadarPropertyReconciliation({
+    propertyId,
+    reasons: ['mitigation_changed'],
+    changeToken: updated.updatedAt.toISOString(),
+    correlationId: `orchestration-completion:${updated.id}:updated`,
   });
 
   try {

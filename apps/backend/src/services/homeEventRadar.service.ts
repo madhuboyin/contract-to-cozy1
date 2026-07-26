@@ -14,6 +14,9 @@ import {
   type RadarPriorityUserState,
 } from '../modules/homeEventRadar/domain/radarPriority';
 import { evaluateRadarSourceFreshness } from '../modules/homeEventRadar/domain/radarMatchLifecycle';
+import {
+  requestRadarPropertyReconciliation,
+} from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -578,20 +581,6 @@ export class HomeEventRadarService {
     });
     if (!match) throw new APIError('Radar match not found', 404, 'RADAR_MATCH_NOT_FOUND');
 
-    const updated = await this.db.propertyRadarState.upsert({
-      where: { propertyRadarMatchId_userId: { propertyRadarMatchId: matchId, userId } },
-      create: {
-        propertyRadarMatchId: matchId,
-        userId,
-        state,
-        stateMetaJson: (stateMetaJson as any) ?? null,
-      },
-      update: {
-        state,
-        stateMetaJson: (stateMetaJson as any) ?? null,
-      },
-    });
-
     // Map state transition → action type
     const actionMap: Record<string, string> = {
       saved: 'save_event',
@@ -600,11 +589,57 @@ export class HomeEventRadarService {
       seen: 'open_event',
     };
     const actionType = actionMap[state];
-    if (actionType) {
-      await this.db.propertyRadarAction.create({
-        data: { propertyRadarMatchId: matchId, actionType },
+    const previousState = await this.db.propertyRadarState.findUnique({
+      where: {
+        propertyRadarMatchId_userId: {
+          propertyRadarMatchId: matchId,
+          userId,
+        },
+      },
+      select: { state: true },
+    });
+    const mitigationChanged =
+      state === 'acted_on' || previousState?.state === 'acted_on';
+    const changedAt = new Date();
+    const updated = await this.db.$transaction(async (tx: any) => {
+      const nextState = await tx.propertyRadarState.upsert({
+        where: {
+          propertyRadarMatchId_userId: {
+            propertyRadarMatchId: matchId,
+            userId,
+          },
+        },
+        create: {
+          propertyRadarMatchId: matchId,
+          userId,
+          state,
+          stateMetaJson: (stateMetaJson as any) ?? null,
+        },
+        update: {
+          state,
+          stateMetaJson: (stateMetaJson as any) ?? null,
+        },
       });
-    }
+      if (actionType) {
+        await tx.propertyRadarAction.create({
+          data: { propertyRadarMatchId: matchId, actionType },
+        });
+      }
+      if (mitigationChanged) {
+        await requestRadarPropertyReconciliation(
+          {
+            propertyId,
+            reasons: ['mitigation_changed'],
+            changeToken: changedAt.toISOString(),
+            correlationId:
+              `radar-state:${matchId}:${userId}:${changedAt.toISOString()}`,
+          },
+          tx,
+          changedAt,
+        );
+      }
+      return nextState;
+    });
 
     return serializeState(updated);
   }
