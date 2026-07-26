@@ -11,6 +11,7 @@ import {
   radarEventMatchesPropertyId,
 } from '../modules/homeEventRadar/services/radarMatchDiscovery.service';
 import { radarIncidentPromotionService } from '../modules/homeEventRadar/services/radarIncidentPromotion.service';
+import { radarNotificationDecisionService } from '../modules/homeEventRadar/services/radarNotificationDecision.service';
 import {
   computeRadarImpact,
   type RadarImpactPropertyInput,
@@ -135,6 +136,9 @@ export async function runMatchingForEvent(
     include: {
       sourceDefinition: {
         select: {
+          key: true,
+          family: true,
+          environments: true,
           isEnabled: true,
           freshnessSeconds: true,
           health: {
@@ -294,6 +298,25 @@ export async function runMatchingForEvent(
             priorityEvaluatedAt: evaluatedAt,
           },
         });
+        await radarNotificationDecisionService.evaluateMatch({
+          propertyId: property.id,
+          event,
+          match: {
+            id: inactiveMatch.id,
+            impactLevel: String(inactiveMatch.impactLevel),
+            confidence: inactiveMatch.confidence ? String(inactiveMatch.confidence) : null,
+            lifecycleStatus: 'no_longer_applicable',
+          },
+          revision: currentRevisionRow
+            ? {
+                id: String(currentRevisionRow.id),
+                normalizedJson: currentRevisionRow.normalizedJson,
+              }
+            : null,
+          isInitialMatch: false,
+          isMaterialRevision: lifecycle.isMaterialUpdate,
+          evaluatedAt,
+        });
         continue;
       }
 
@@ -350,6 +373,25 @@ export async function runMatchingForEvent(
             priorityVersion: priority.version,
             priorityEvaluatedAt: evaluatedAt,
           },
+        });
+        await radarNotificationDecisionService.evaluateMatch({
+          propertyId: property.id,
+          event,
+          match: {
+            id: endedMatch.id,
+            impactLevel: String(endedMatch.impactLevel),
+            confidence: endedMatch.confidence ? String(endedMatch.confidence) : null,
+            lifecycleStatus: lifecycle.status,
+          },
+          revision: currentRevisionRow
+            ? {
+                id: String(currentRevisionRow.id),
+                normalizedJson: currentRevisionRow.normalizedJson,
+              }
+            : null,
+          isInitialMatch: false,
+          isMaterialRevision: lifecycle.isMaterialUpdate,
+          evaluatedAt,
         });
         matched++;
         continue;
@@ -526,6 +568,25 @@ export async function runMatchingForEvent(
           priorityVersion: priority.version,
           priorityEvaluatedAt: evaluatedAt,
         },
+      });
+      await radarNotificationDecisionService.evaluateMatch({
+        propertyId: property.id,
+        event,
+        match: {
+          id: match.id,
+          impactLevel: impact.impactLevel,
+          confidence: confidence.band,
+          lifecycleStatus: lifecycle.status,
+        },
+        revision: currentRevisionRow
+          ? {
+              id: String(currentRevisionRow.id),
+              normalizedJson: currentRevisionRow.normalizedJson,
+            }
+          : null,
+        isInitialMatch: !existingMatch,
+        isMaterialRevision: lifecycle.isMaterialUpdate,
+        evaluatedAt,
       });
       matched++;
     } catch (err) {

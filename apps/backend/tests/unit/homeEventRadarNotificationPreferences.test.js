@@ -23,6 +23,7 @@ function validInput(overrides = {}) {
     minimumSeverity: 'moderate',
     minimumImpact: 'high',
     deliveryMode: 'digest',
+    criticalSafetyOverrideEnabled: false,
     quietHours: { start: '22:30', end: '06:15' },
     timezone: 'America/New_York',
     ...overrides,
@@ -36,6 +37,7 @@ test('preference input validates and canonicalizes the complete homeowner contra
   assert.equal(parsed.minimumSeverity, 'moderate');
   assert.equal(parsed.minimumImpact, 'high');
   assert.equal(parsed.deliveryMode, 'digest');
+  assert.equal(parsed.criticalSafetyOverrideEnabled, false);
   assert.deepEqual(parsed.quietHours, { start: '22:30', end: '06:15' });
 });
 
@@ -82,6 +84,7 @@ test('read returns non-mutating property-timezone defaults when no preference ex
   assert.equal(result.minimumSeverity, 'moderate');
   assert.equal(result.minimumImpact, 'moderate');
   assert.equal(result.deliveryMode, 'immediate');
+  assert.equal(result.criticalSafetyOverrideEnabled, false);
   assert.equal(result.updatedAt, null);
   assert.equal(upsertCalls, 0);
 });

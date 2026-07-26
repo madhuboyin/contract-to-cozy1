@@ -24,6 +24,7 @@ type PersistedRadarPreference = {
   minimumSeverity: string;
   minimumImpact: string;
   deliveryMode: string;
+  criticalSafetyOverrideEnabled: boolean;
   quietHoursStartMinutes: number | null;
   quietHoursEndMinutes: number | null;
   timezone: string;
@@ -47,6 +48,7 @@ function projectPreference(
     minimumSeverity: row.minimumSeverity as RadarNotificationPreferenceProjection['minimumSeverity'],
     minimumImpact: row.minimumImpact as RadarNotificationPreferenceProjection['minimumImpact'],
     deliveryMode: row.deliveryMode as RadarNotificationPreferenceProjection['deliveryMode'],
+    criticalSafetyOverrideEnabled: row.criticalSafetyOverrideEnabled,
     quietHours: hasQuietHours
       ? {
           start: minutesToClockTime(row.quietHoursStartMinutes!),
@@ -88,6 +90,7 @@ export class RadarNotificationPreferenceService {
       minimumSeverity: 'moderate',
       minimumImpact: 'moderate',
       deliveryMode: 'immediate',
+      criticalSafetyOverrideEnabled: false,
       quietHoursStartMinutes: null,
       quietHoursEndMinutes: null,
       timezone,
@@ -107,6 +110,7 @@ export class RadarNotificationPreferenceService {
       minimumSeverity: input.minimumSeverity,
       minimumImpact: input.minimumImpact,
       deliveryMode: input.deliveryMode,
+      criticalSafetyOverrideEnabled: input.criticalSafetyOverrideEnabled,
       quietHoursStartMinutes: input.quietHours
         ? clockTimeToMinutes(input.quietHours.start)
         : null,

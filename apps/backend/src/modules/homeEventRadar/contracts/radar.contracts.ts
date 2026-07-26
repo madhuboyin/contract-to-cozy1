@@ -513,6 +513,7 @@ export const radarNotificationPreferenceResponseSchema = z.object({
   minimumSeverity: z.enum(RADAR_NOTIFICATION_SEVERITIES),
   minimumImpact: z.enum(RADAR_NOTIFICATION_IMPACTS),
   deliveryMode: z.enum(RADAR_NOTIFICATION_DELIVERY_MODES),
+  criticalSafetyOverrideEnabled: z.boolean(),
   quietHours: z.object({
     start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
     end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),

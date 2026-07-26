@@ -3324,6 +3324,7 @@ export interface RadarNotificationPreferences {
   minimumSeverity: RadarCanonicalSeverity;
   minimumImpact: RadarCanonicalImpact;
   deliveryMode: RadarNotificationDeliveryMode;
+  criticalSafetyOverrideEnabled: boolean;
   quietHours: { start: string; end: string } | null;
   timezone: string;
   persisted: boolean;
@@ -3338,6 +3339,7 @@ export type UpdateRadarNotificationPreferencesInput = Pick<
   | 'minimumSeverity'
   | 'minimumImpact'
   | 'deliveryMode'
+  | 'criticalSafetyOverrideEnabled'
   | 'quietHours'
   | 'timezone'
 >;

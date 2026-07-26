@@ -20,6 +20,7 @@ const preference: RadarNotificationPreferences = {
   minimumSeverity: 'moderate',
   minimumImpact: 'moderate',
   deliveryMode: 'immediate',
+  criticalSafetyOverrideEnabled: false,
   quietHours: null,
   timezone: 'America/New_York',
   persisted: false,
@@ -57,6 +58,7 @@ describe('RadarNotificationPreferencesCard', () => {
     expect(await screen.findByLabelText('Email')).not.toBeChecked();
     fireEvent.click(screen.getByLabelText('Email'));
     fireEvent.click(screen.getByLabelText(/digest/i));
+    fireEvent.click(screen.getByLabelText(/allow verified extreme safety alerts/i));
     fireEvent.click(screen.getByRole('button', { name: 'Save notification settings' }));
 
     await waitFor(() => expect(api.updateRadarNotificationPreferences).toHaveBeenCalledWith(
@@ -64,6 +66,7 @@ describe('RadarNotificationPreferencesCard', () => {
       expect.objectContaining({
         channels: ['in_app', 'email'],
         deliveryMode: 'digest',
+        criticalSafetyOverrideEnabled: true,
         timezone: 'America/New_York',
       }),
     ));

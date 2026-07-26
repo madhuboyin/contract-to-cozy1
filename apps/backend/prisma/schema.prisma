@@ -1752,6 +1752,7 @@ model User {
   radarStates                      PropertyRadarState[]
   radarFeedback                    PropertyRadarFeedback[]
   radarNotificationPreferences     PropertyRadarNotificationPreference[]
+  radarNotificationDecisions       PropertyRadarNotificationDecision[]
   radarTaskLinksCreated            PropertyRadarTaskLink[] @relation("RadarTaskLinkCreator")
   createdHomeTwinScenarios         HomeTwinScenario[]
   assumptionSetsCreated            AssumptionSet[]
@@ -2700,6 +2701,7 @@ model Property {
   radarMatches                 PropertyRadarMatch[]
   radarCoverage                PropertyRadarCoverage[]
   radarNotificationPreferences PropertyRadarNotificationPreference[]
+  radarNotificationDecisions   PropertyRadarNotificationDecision[]
   homeRiskReplayRuns           HomeRiskReplayRun[]
   homeRiskReplayEventMatches   HomeRiskReplayEventMatch[]
 
@@ -5347,6 +5349,7 @@ model Notification {
   deliveries     NotificationDelivery[]
   dailySnapshots PropertyDailySnapshot[]
   outcomes       NotificationOutcome[]
+  radarDecision  PropertyRadarNotificationDecision?
 
   recallMatchId String?
   recallMatch   RecallMatch? @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
@@ -9404,6 +9407,13 @@ enum RadarNotificationMinimumImpact {
   critical
 }
 
+enum RadarNotificationDecisionOutcome {
+  immediate
+  digest
+  deferred
+  suppressed
+}
+
 enum RadarEventType {
   weather
   insurance_market
@@ -9697,6 +9707,7 @@ model RadarEventRevision {
 
   radarEvent RadarEvent      @relation(fields: [radarEventId], references: [id], onDelete: Cascade)
   sourceRun  RadarSourceRun? @relation(fields: [sourceRunId], references: [id], onDelete: SetNull)
+  notificationDecisions PropertyRadarNotificationDecision[]
 
   @@unique([radarEventId, revisionIdentity])
   @@index([radarEventId, observedAt(sort: Desc)])
@@ -9751,6 +9762,7 @@ model PropertyRadarMatch {
   feedback  PropertyRadarFeedback[]
   taskLinks PropertyRadarTaskLink[]
   incident  Incident?
+  notificationDecisions PropertyRadarNotificationDecision[]
 
   @@unique([propertyId, radarEventId])
   @@index([propertyId])
@@ -9881,6 +9893,7 @@ model PropertyRadarNotificationPreference {
   minimumSeverity        RadarNotificationMinimumSeverity @default(moderate)
   minimumImpact          RadarNotificationMinimumImpact   @default(moderate)
   deliveryMode           RadarNotificationDeliveryMode    @default(immediate)
+  criticalSafetyOverrideEnabled Boolean                    @default(false)
   quietHoursStartMinutes Int?
   quietHoursEndMinutes   Int?
   timezone               String                           @default("UTC")
@@ -9894,6 +9907,40 @@ model PropertyRadarNotificationPreference {
   @@index([userId, isEnabled])
   @@index([propertyId, isEnabled])
   @@map("property_radar_notification_preferences")
+}
+
+// Durable policy decision only. HER-505 owns creating Notification rows and
+// outbound deliveries from eligible decisions.
+model PropertyRadarNotificationDecision {
+  id                      String                           @id @default(uuid())
+  propertyId              String
+  propertyRadarMatchId    String
+  radarEventRevisionId    String
+  userId                  String
+  notificationId          String?                          @unique
+  outcome                 RadarNotificationDecisionOutcome
+  reasonCodes             String[]                         @default([])
+  eligibleChannels        RadarNotificationChannel[]       @default([])
+  deferredUntil           DateTime?
+  criticalOverrideApplied Boolean                          @default(false)
+  policyVersion           String
+  evaluatedAt             DateTime
+  evidenceJson            Json
+  createdAt               DateTime                         @default(now())
+  updatedAt               DateTime                         @updatedAt
+
+  property           Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyRadarMatch PropertyRadarMatch @relation(fields: [propertyRadarMatchId], references: [id], onDelete: Cascade)
+  radarEventRevision RadarEventRevision @relation(fields: [radarEventRevisionId], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification       Notification?      @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyRadarMatchId, radarEventRevisionId, userId])
+  @@index([propertyId, outcome, evaluatedAt(sort: Desc)])
+  @@index([userId, outcome, evaluatedAt(sort: Desc)])
+  @@index([radarEventRevisionId])
+  @@index([deferredUntil, outcome])
+  @@map("property_radar_notification_decisions")
 }
 
 // ============================================================================

@@ -311,6 +311,7 @@ export const updateRadarNotificationPreferencesBodySchema = z.object({
   minimumSeverity: z.enum(RADAR_NOTIFICATION_SEVERITIES),
   minimumImpact: z.enum(RADAR_NOTIFICATION_IMPACTS),
   deliveryMode: z.enum(RADAR_NOTIFICATION_DELIVERY_MODES),
+  criticalSafetyOverrideEnabled: z.boolean(),
   quietHours: radarQuietHoursSchema.nullable(),
   timezone: z.string()
     .trim()

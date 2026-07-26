@@ -57,6 +57,7 @@ export type RadarNotificationPreferenceProjection = {
   minimumSeverity: RadarNotificationSeverity;
   minimumImpact: RadarNotificationImpact;
   deliveryMode: RadarNotificationDeliveryMode;
+  criticalSafetyOverrideEnabled: boolean;
   quietHours: RadarQuietHours | null;
   timezone: string;
   persisted: boolean;

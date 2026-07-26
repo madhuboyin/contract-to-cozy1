@@ -59,6 +59,7 @@ function preferenceInput(
     minimumSeverity: preference.minimumSeverity,
     minimumImpact: preference.minimumImpact,
     deliveryMode: preference.deliveryMode,
+    criticalSafetyOverrideEnabled: preference.criticalSafetyOverrideEnabled,
     quietHours: preference.quietHours ? { ...preference.quietHours } : null,
     timezone: preference.timezone,
   };
@@ -233,6 +234,28 @@ export function RadarNotificationPreferencesCard({
                   </p>
                 ) : null}
               </fieldset>
+
+              <label className="flex min-h-[52px] items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <input
+                  type="checkbox"
+                  checked={draft.criticalSafetyOverrideEnabled}
+                  disabled={!draft.isEnabled}
+                  onChange={(event) => setDraftValue(
+                    'criticalSafetyOverrideEnabled',
+                    event.target.checked,
+                  )}
+                  className="mt-1 h-4 w-4 rounded border-amber-300"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-amber-950">
+                    Allow verified extreme safety alerts during quiet hours
+                  </span>
+                  <span className="block text-xs text-amber-900">
+                    Applies only to reviewed, observed, immediate official alerts with verified
+                    confidence and high property impact.
+                  </span>
+                </span>
+              </label>
 
               <fieldset disabled={!draft.isEnabled}>
                 <legend className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">

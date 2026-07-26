@@ -26,9 +26,13 @@ test('Radar persistence includes source, health, run, revision, feedback, and pr
   assert.match(schema, /@@unique\(\[radarEventId, revisionIdentity\]\)/);
   assert.match(
     schema,
-    /model PropertyRadarNotificationPreference \{[\s\S]*enabledCategories\s+RadarSourceFamily\[\][\s\S]*channels\s+RadarNotificationChannel\[\][\s\S]*minimumSeverity\s+RadarNotificationMinimumSeverity[\s\S]*minimumImpact\s+RadarNotificationMinimumImpact[\s\S]*deliveryMode\s+RadarNotificationDeliveryMode[\s\S]*quietHoursStartMinutes\s+Int\?[\s\S]*quietHoursEndMinutes\s+Int\?[\s\S]*timezone\s+String/,
+    /model PropertyRadarNotificationPreference \{[\s\S]*enabledCategories\s+RadarSourceFamily\[\][\s\S]*channels\s+RadarNotificationChannel\[\][\s\S]*minimumSeverity\s+RadarNotificationMinimumSeverity[\s\S]*minimumImpact\s+RadarNotificationMinimumImpact[\s\S]*deliveryMode\s+RadarNotificationDeliveryMode[\s\S]*criticalSafetyOverrideEnabled\s+Boolean[\s\S]*quietHoursStartMinutes\s+Int\?[\s\S]*quietHoursEndMinutes\s+Int\?[\s\S]*timezone\s+String/,
   );
   assert.match(schema, /@@unique\(\[propertyId, userId\]\)/);
+  assert.match(
+    schema,
+    /model PropertyRadarNotificationDecision \{[\s\S]*notificationId\s+String\?\s+@unique[\s\S]*outcome\s+RadarNotificationDecisionOutcome[\s\S]*eligibleChannels\s+RadarNotificationChannel\[\][\s\S]*policyVersion\s+String[\s\S]*evidenceJson\s+Json[\s\S]*@@unique\(\[propertyRadarMatchId, radarEventRevisionId, userId\]\)/,
+  );
   assert.doesNotMatch(schema, /model RadarSourceConfig \{/);
 });
 

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-503 implemented |
+| Status | In progress — HER-504 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -56,7 +56,8 @@
 | HER-501 Task/reminder integration | Complete; DB application pending | Reviewed Radar actions create or link canonical maintenance tasks, use bounded event-aware due-date policy, support household assignment, persist idempotent match/action/task lineage, and expose task continuity in event detail |
 | HER-502 Tool/provider handoffs | Complete; DB application pending | Typed reviewed destinations cover Coverage Intelligence/options, Service Price Radar, maintenance, Document Vault upload, provider search/booking, and HTTPS official instructions while preserving bounded Radar/Incident/Guidance lineage |
 | HER-503 Notification preference persistence | Complete; DB application pending | Property-authorized per-user preferences persist enabled categories, available channels, canonical minimum severity/impact, immediate/digest mode, normalized quiet hours, and validated IANA timezone |
-| HER-504+ | Not started | Notification policy/delivery, Guidance continuity expansion, additional sources, and operations remain |
+| HER-504 Notification eligibility/dedup | Complete; DB application pending | Versioned pure policy and durable per-user revision decisions enforce materiality/escalation, confidence and preference thresholds, timing, channels, DST-aware quiet hours, opt-in critical override, terminal/test suppression, and exact deduplication without delivering |
+| HER-505+ | Not started | Notification delivery, Guidance continuity expansion, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1450,6 +1451,31 @@ Build deterministic policy:
 - user preferences;
 - channel availability;
 - test/synthetic suppression.
+
+**Implemented:** `radar-notification-policy-v1` is a pure, deterministic decision function. Initial
+qualifying matches may be eligible once; later revisions must be material and must increase
+severity, property impact, or timing urgency relative to the last eligible decision. Immutable
+provider revisions that do not materially change homeowner meaning, repeated evaluations of the
+same revision, and material updates without escalation cannot re-alert. Terminal, expired,
+retracted, archived, and no-longer-applicable events are non-interruptive.
+
+Eligibility applies a medium-confidence floor, the user's canonical severity and impact
+thresholds, enabled source families, enabled state, immediate/digest choice, and the intersection
+of requested channels with actual availability. In-app is always available; email requires a
+verified address; push requires an active subscription. Far-future eligible events become digest
+decisions. Immediate decisions inside quiet hours become deferred decisions with a DST-aware first
+deliverable instant. A quiet-hours override is disabled by default and requires explicit opt-in
+plus a production, observed, immediate, extreme weather/air-quality/disaster alert with verified
+confidence and high property impact.
+
+Every evaluated user receives an auditable `PropertyRadarNotificationDecision` keyed uniquely by
+property match, immutable event revision, and user. The row records outcome, reason codes, eligible
+channels, deferral, policy version, bounded evidence, and an optional future Notification link.
+Retries reuse the same row, including when the match write completed before a decision write.
+Matching evaluates active, terminal, and geographically inapplicable revisions. Non-production,
+test, fixture, dummy, and synthetic sources are always suppressed. This slice intentionally does
+not create canonical Notification or delivery rows; HER-505 owns that boundary. Prisma schema
+changes are included without a migration script; the repository owner must apply the schema.
 
 ### HER-505 — Notification delivery integration
 

@@ -20,6 +20,12 @@ const {
   RadarIncidentPromotionService,
 } = require('../../../backend/src/modules/homeEventRadar/services/radarIncidentPromotion.service');
 const {
+  evaluateRadarNotificationPolicy,
+} = require('../../../backend/src/modules/homeEventRadar/domain/radarNotificationPolicy');
+const {
+  detectRadarMaterialUpdate,
+} = require('../../../backend/src/modules/homeEventRadar/domain/radarMatchLifecycle');
+const {
   freezeRadarAdapter,
 } = require('../../src/radar/freezeRadarAdapter');
 const {
@@ -35,7 +41,6 @@ const {
 const NWS_SOURCE_ID = 'acceptance-nws-source';
 const FREEZE_SOURCE_ID = 'acceptance-freeze-source';
 const PROPERTY_ID = 'acceptance-property';
-const INCIDENT_SEVERITY_RANK = { INFO: 0, WARNING: 1, CRITICAL: 2 };
 
 function nwsAlert(overrides = {}) {
   return {
@@ -101,7 +106,8 @@ class WeatherAcceptanceHarness {
     this.matches = new Map();
     this.incidents = new Map();
     this.journeys = new Map();
-    this.notificationDecisions = { eligible: 0, suppressed: 0 };
+    this.notificationDecisions = { eligible: 0, suppressed: 0, deduped: 0 };
+    this.lastEligibleNotificationDecision = new Map();
     this.latenciesMs = [];
     this.incidentService = new RadarIncidentPromotionService({
       getIncidentByRadarMatchId: async (matchId) => this.incidents.get(matchId) ?? null,
@@ -165,6 +171,7 @@ class WeatherAcceptanceHarness {
       journeys: this.journeys.size,
       notificationsEligible: this.notificationDecisions.eligible,
       notificationsSuppressed: this.notificationDecisions.suppressed,
+      notificationsDeduped: this.notificationDecisions.deduped,
     };
   }
 
@@ -176,6 +183,7 @@ class WeatherAcceptanceHarness {
     const fingerprint = radarObservationFingerprint(observation);
     const revisionIdentity = radarRevisionIdentity(observation, fingerprint);
     const revisions = event ? this.revisions.get(event.id) : [];
+    const previousObservation = revisions?.[revisions.length - 1]?.observation ?? null;
     const duplicate = revisions?.find((revision) =>
       revision.revisionIdentity === revisionIdentity
     );
@@ -209,6 +217,7 @@ class WeatherAcceptanceHarness {
     }
 
     let match = this.matches.get(event.id);
+    const isInitialMatch = !match;
     if (!match) {
       match = {
         id: `match-${this.matches.size + 1}`,
@@ -217,8 +226,6 @@ class WeatherAcceptanceHarness {
       this.matches.set(event.id, match);
     }
 
-    const existingIncident = this.incidents.get(match.id);
-    const priorIncidentSeverity = existingIncident?.severity ?? null;
     const result = await this.incidentService.project({
       propertyId: PROPERTY_ID,
       event: {
@@ -255,18 +262,81 @@ class WeatherAcceptanceHarness {
       },
     });
 
-    const incident = this.incidents.get(match.id);
-    const nextSeverity = incident?.severity ?? null;
-    const notificationEligible =
-      result.outcome === 'created' ||
-      (
-        result.outcome === 'updated' &&
-        priorIncidentSeverity &&
-        nextSeverity &&
-        INCIDENT_SEVERITY_RANK[nextSeverity] > INCIDENT_SEVERITY_RANK[priorIncidentSeverity]
-      );
-    if (notificationEligible) this.notificationDecisions.eligible += 1;
-    else this.notificationDecisions.suppressed += 1;
+    if (duplicate) {
+      this.notificationDecisions.deduped += 1;
+    } else {
+      const material = !isInitialMatch && previousObservation
+        ? detectRadarMaterialUpdate(
+            {
+              id: 'previous',
+              lifecycleStatus: previousObservation.lifecycleStatus,
+              eventType: previousObservation.eventType,
+              severity: previousObservation.severity,
+              effectiveAt: previousObservation.effectiveAt,
+              expiresAt: previousObservation.expiresAt,
+              title: previousObservation.title,
+              summary: previousObservation.summary,
+              geography: previousObservation.geography,
+            },
+            {
+              id: revisionIdentity,
+              lifecycleStatus: observation.lifecycleStatus,
+              eventType: observation.eventType,
+              severity: observation.severity,
+              effectiveAt: observation.effectiveAt,
+              expiresAt: observation.expiresAt,
+              title: observation.title,
+              summary: observation.summary,
+              geography: observation.geography,
+            },
+          ).isMaterialUpdate
+        : false;
+      const decision = evaluateRadarNotificationPolicy({
+        preference: {
+          propertyId: PROPERTY_ID,
+          userId: 'acceptance-user',
+          isEnabled: true,
+          enabledCategories: ['weather', 'air_quality', 'disaster', 'utility', 'tax', 'insurance', 'other'],
+          channels: ['in_app'],
+          minimumSeverity: 'moderate',
+          minimumImpact: 'moderate',
+          deliveryMode: 'immediate',
+          criticalSafetyOverrideEnabled: false,
+          quietHours: null,
+          timezone: 'UTC',
+          persisted: false,
+          updatedAt: null,
+        },
+        availableChannels: ['in_app'],
+        event: {
+          sourceFamily: observation.sourceFamily,
+          severity: observation.severity,
+          impact: fixture.impactLevel,
+          confidence: fixture.confidence ?? 'verified',
+          lifecycleStatus: observation.lifecycleStatus,
+          effectiveAt: observation.effectiveAt,
+          expiresAt: observation.expiresAt,
+          providerUrgency: observation.providerUrgency ?? null,
+          certainty: observation.certainty ?? null,
+          isSynthetic: false,
+        },
+        isInitialMatch,
+        isMaterialRevision: material,
+        previousDecision: this.lastEligibleNotificationDecision.get(match.id) ?? null,
+        evaluatedAt: new Date(observation.observedAt),
+      });
+      if (decision.outcome === 'suppressed') {
+        this.notificationDecisions.suppressed += 1;
+      } else {
+        this.notificationDecisions.eligible += 1;
+        this.lastEligibleNotificationDecision.set(match.id, {
+          outcome: decision.outcome,
+          severity: decision.normalized.severity,
+          impact: decision.normalized.impact,
+          timing: decision.normalized.timing,
+        });
+      }
+    }
     this.latenciesMs.push(performance.now() - started);
     return { event, match, result, duplicate: Boolean(duplicate) };
   }
@@ -477,8 +547,9 @@ test('HER-206 weather fixtures preserve exact end-to-end lineage and notificatio
     propertyMatches: 3,
     incidents: 3,
     journeys: 3,
-    notificationsEligible: 4,
-    notificationsSuppressed: 7,
+    notificationsEligible: 5,
+    notificationsSuppressed: 5,
+    notificationsDeduped: 1,
   });
   assert.equal(new Set([...harness.incidents.values()].map((item) => item.id)).size, 3);
   assert.equal(new Set([...harness.journeys.values()].map((item) => item.incidentId)).size, 3);
