@@ -1,172 +1,142 @@
-// apps/workers/tests/unit/freezeRiskIncidentsDryRun.test.js
-//
-// Worker audit follow-up slice: freeze-risk-incidents is one of the 7
-// broadSweep/externalProvider jobs wired for dry-run + manual-trigger
-// support. Covers: dry-run skips all incident writes but still counts
-// what would happen; a scoped propertyId both filters which property is
-// processed and is independently re-checked against the operator
-// allowlist; and a real scoped run tags the created incident with a
-// smokeCorrelationId.
-//
-// W4 item 1 (DI refactor): dependencies (including iterateAllProperties and
-// getPropertyGeo, both plain function references) are injected directly
-// instead of via require.cache — this also removes the fragility the old
-// version of this comment described, where paginateProperties.ts/
-// propertyGeo.ts's own module-cache entries had to be separately purged on
-// every test because they import the real prisma singleton directly.
-
 const test = require('node:test');
 const assert = require('node:assert/strict');
-
-process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
 
 require('ts-node/register');
 require('tsconfig-paths/register');
 
 const { freezeRiskIncidentsJob } = require('../../src/jobs/freezeRiskIncidents.job.ts');
 
-const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+const noopLogger = {
+  info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; },
+};
 
-function fakeDeps({ properties, openIncidents = [] }) {
-  const upsertCalls = [];
-  const setStatusCalls = [];
-
-  const deps = {
-    prisma: {
-      incident: {
-        findMany: async () => openIncidents,
-      },
-    },
-    incidentService: {
-      upsertIncident: async (input) => {
-        upsertCalls.push(input);
-        return { id: 'incident-new' };
-      },
-      setStatus: async (id, status) => {
-        setStatusCalls.push({ id, status });
-      },
-    },
-    guidanceJourneyService: { ingestSignal: async () => {} },
-    logger: noopLogger,
-    iterateAllProperties: async function* () {
-      for (const p of properties) yield p;
-    },
-    getPropertyGeo: async (property) => {
-      if (typeof property.latitude === 'number' && typeof property.longitude === 'number') {
-        return { lat: property.latitude, lon: property.longitude };
-      }
-      return null;
-    },
-  };
-
-  return { deps, getUpsertCalls: () => upsertCalls, getSetStatusCalls: () => setStatusCalls };
-}
-
-function property(overrides = {}) {
+function property(id) {
   return {
-    id: 'property-1',
-    address: '1 Main St',
+    id,
     zipCode: '08536',
-    city: 'Plainsboro',
-    state: 'NJ',
     latitude: 40.33,
     longitude: -74.58,
-    geocodedZipCode: '08536', // pre-cached so getPropertyGeo skips real geocoding
-    ...overrides,
   };
 }
 
-function openMeteoResponse(minTempC) {
-  const hourInWindow = new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 13) + ':00';
+function fakeDeps({
+  properties = [property('property-1')],
+  minimumFahrenheit = 20,
+  existingEvent = null,
+} = {}) {
+  const writes = { register: 0, begin: 0, complete: 0, ingest: 0 };
+  const reads = [];
   return {
-    ok: true,
-    json: async () => ({ hourly: { time: [hourInWindow], temperature_2m: [minTempC] } }),
+    writes,
+    reads,
+    deps: {
+      registry: { async register() { writes.register += 1; } },
+      runs: {
+        async begin() { writes.begin += 1; },
+        async complete() { writes.complete += 1; },
+      },
+      ingestion: { async ingest() { writes.ingest += 1; } },
+      eventLookup: {
+        async findUnique() { throw new Error('dry run must not use source ID lookup'); },
+        async findFirst(query) {
+          reads.push(query);
+          return existingEvent;
+        },
+      },
+      logger: noopLogger,
+      iterateAllProperties: async function* () {
+        for (const item of properties) yield item;
+      },
+      async getPropertyGeo(item) {
+        return { lat: item.latitude, lon: item.longitude };
+      },
+      async getForecast(lat, lon, now) {
+        return {
+          status: 'ok',
+          forecast: {
+            latitude: lat,
+            longitude: lon,
+            minimumFahrenheit,
+            windowStart: now.toISOString(),
+            windowEnd: new Date(now.getTime() + 36 * 3_600_000).toISOString(),
+            sourceUrl: 'https://api.open-meteo.com/v1/forecast',
+            rawPayload: { samples: [] },
+          },
+        };
+      },
+      now: () => new Date('2026-07-26T14:05:00Z'),
+      correlationId: () => 'unused',
+      sleep: async () => {},
+      env: { NODE_ENV: 'test' },
+    },
   };
 }
 
-function withFrozenFetch(minTempC, fn) {
-  const originalFetch = global.fetch;
-  global.fetch = async () => openMeteoResponse(minTempC);
-  return fn().finally(() => { global.fetch = originalFetch; });
-}
+test('dry run counts a freeze event without source, run, ingestion, or projection writes', async () => {
+  const { deps, writes } = fakeDeps();
 
-test('dry run: examines and counts freeze risk but creates/resolves no incidents', () =>
-  withFrozenFetch(-5, async () => {
-    const { deps, getUpsertCalls } = fakeDeps({ properties: [property()] });
+  const result = await freezeRiskIncidentsJob({ dryRun: true }, deps);
 
-    const result = await freezeRiskIncidentsJob({ dryRun: true }, deps);
+  assert.equal(result.createdOrUpdated, 1);
+  assert.equal(result.resolved, 0);
+  assert.equal(result.sourceRunStatus, 'dry_run');
+  assert.deepEqual(writes, { register: 0, begin: 0, complete: 0, ingest: 0 });
+});
 
-    assert.equal(getUpsertCalls().length, 0);
-    assert.equal(result.createdOrUpdated, 1);
-    assert.equal(result.smokeCorrelationId, undefined);
-  }));
+test('dry run finds the real source event before counting a warm resolution', async () => {
+  const { deps, writes, reads } = fakeDeps({
+    minimumFahrenheit: 35,
+    existingEvent: { id: 'event-1', status: 'active' },
+  });
 
-test('no opts (the daily cron tick): behaves exactly like a real run', () =>
-  withFrozenFetch(-5, async () => {
-    const { deps, getUpsertCalls } = fakeDeps({ properties: [property()] });
+  const result = await freezeRiskIncidentsJob({ dryRun: true }, deps);
 
-    const result = await freezeRiskIncidentsJob(undefined, deps);
+  assert.equal(result.createdOrUpdated, 0);
+  assert.equal(result.resolved, 1);
+  assert.equal(reads[0].where.sourceDefinition.key, 'open-meteo-freeze-forecast');
+  assert.equal(
+    reads[0].where.providerEventId,
+    'open-meteo:freeze-risk:property-1',
+  );
+  assert.deepEqual(writes, { register: 0, begin: 0, complete: 0, ingest: 0 });
+});
 
-    assert.equal(getUpsertCalls().length, 1);
-    assert.equal(result.createdOrUpdated, 1);
-  }));
-
-test('a scoped propertyId processes only that property', () =>
-  withFrozenFetch(-5, async () => {
-    const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
-    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
-    try {
-      const { deps, getUpsertCalls } = fakeDeps({
-        properties: [property({ id: 'property-allowed' }), property({ id: 'property-other' })],
-      });
-
-      await freezeRiskIncidentsJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
-
-      assert.equal(getUpsertCalls().length, 1);
-      assert.equal(getUpsertCalls()[0].propertyId, 'property-allowed');
-    } finally {
-      process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
-    }
-  }));
-
-test('a propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected outright, before any query runs', async () => {
-  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
-  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
+test('a scoped dry run processes only the allowlisted property', async () => {
+  const originalAllowlist = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { deps } = fakeDeps({ properties: [property()] });
+    const { deps } = fakeDeps({
+      properties: [property('property-allowed'), property('property-other')],
+    });
 
-    await assert.rejects(
-      () => freezeRiskIncidentsJob({ dryRun: true, propertyId: 'property-not-allowed' }, deps),
-      /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
+    const result = await freezeRiskIncidentsJob(
+      { dryRun: true, propertyId: 'property-allowed' },
+      deps,
     );
+
+    assert.equal(result.createdOrUpdated, 1);
+    assert.match(result.smokeCorrelationId, /^smoke:freeze-risk-incidents:/);
   } finally {
-    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalAllowlist;
   }
 });
 
-test('a real scoped run tags the upserted incident with a smokeCorrelationId', () =>
-  withFrozenFetch(-5, async () => {
-    const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
-    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
-    try {
-      const { deps, getUpsertCalls } = fakeDeps({ properties: [property({ id: 'property-allowed' })] });
+test('a property outside the smoke allowlist is rejected before reads or writes', async () => {
+  const originalAllowlist = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
+  try {
+    const { deps, writes, reads } = fakeDeps();
 
-      const result = await freezeRiskIncidentsJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
-
-      assert.equal(getUpsertCalls().length, 1);
-      assert.match(getUpsertCalls()[0].details.smokeCorrelationId, /^smoke:freeze-risk-incidents:/);
-      assert.equal(result.smokeCorrelationId, getUpsertCalls()[0].details.smokeCorrelationId);
-    } finally {
-      process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
-    }
-  }));
-
-test('an unscoped run (no propertyId) tags nothing', () =>
-  withFrozenFetch(-5, async () => {
-    const { deps, getUpsertCalls } = fakeDeps({ properties: [property()] });
-
-    const result = await freezeRiskIncidentsJob(undefined, deps);
-
-    assert.equal(getUpsertCalls()[0].details.smokeCorrelationId, undefined);
-    assert.equal(result.smokeCorrelationId, undefined);
-  }));
+    await assert.rejects(
+      () => freezeRiskIncidentsJob(
+        { dryRun: true, propertyId: 'property-not-allowed' },
+        deps,
+      ),
+      /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
+    );
+    assert.deepEqual(writes, { register: 0, begin: 0, complete: 0, ingest: 0 });
+    assert.equal(reads.length, 0);
+  } finally {
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalAllowlist;
+  }
+});

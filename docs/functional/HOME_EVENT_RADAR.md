@@ -16,8 +16,8 @@ Important current-state clarification:
 - The user-facing Home Event Radar page does not call external providers directly.
 - The frontend reads property-scoped matches from CtC backend APIs.
 - Canonical `RadarEvent` rows must already exist in the database before the feature can show anything.
-- As of this update, canonical events come from: (1) the manual/internal ingest API, (2) the worker-based dummy ingest flow (QA/E2E only, **disabled in production**, see [Incident History](#incident-history-dummy-data-in-production-2026-07-10)), and (3) **the real tax-reassessment provider integration** (first real, non-dummy data source — see [Real Provider Ingestion](#real-provider-ingestion)).
-- Weather is **not yet** ingested through `RadarEvent`. Real weather alerts (NWS-based) flow through a separate, pre-existing pipeline directly into `Incident` (`severeWeatherAlerts.job.ts`, `freezeRiskIncidents.job.ts`). Weather-family guidance journeys route to the **Incidents tab**, not to Home Event Radar. See [Guidance Journey Integration](#guidance-journey-integration).
+- As of this update, canonical events come from: (1) the manual/internal ingest API, (2) the worker-based fixture flow (QA/E2E only, **disabled in production**, see [Incident History](#incident-history-dummy-data-in-production-2026-07-10)), (3) the real tax-reassessment provider integration, and (4) real NWS alert and Open-Meteo freeze-forecast adapters.
+- NWS alerts and property-scoped freeze forecasts now enter the canonical `RadarEvent` pipeline. They no longer write directly to `Incident` or `GuidanceJourney`; those projections belong to downstream matching and promotion.
 
 ---
 
@@ -982,7 +982,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 | **Route mounting** | Both `homeEventRadar.routes` and `homeEvents.routes` are registered in `backend/src/index.ts` |
 | **Auth** | All endpoints behind JWT middleware + `propertyAuth.middleware` for property-scoped routes |
 | **Rate limiting** | `apiRateLimiter` applied to all endpoints |
-| **Background workers** | Dummy QA/E2E ingest worker exists in `apps/workers` (disabled in prod); real tax-assessment ingest worker exists (needs pilot jurisdiction config); weather/utility/insurance real ingest does not exist yet |
+| **Background workers** | QA/E2E fixture ingestion is disabled in production; real tax-assessment, NWS alert, and Open-Meteo freeze-forecast adapters exist; utility and insurance sources do not |
 | **Incident lifecycle** | `moderate`/`high` impact matches promote into `Incident` via `homeEventRadarMatcher.service.ts`'s `promoteRadarEventToIncident` |
 | **Guidance engine** | `tax_reassessment_resolution` journey auto-created on promotion; weather-family journeys route to `Incidents`, not Home Event Radar |
 | **Audit log** | Analytics events written to platform audit log via `AuditLog` model |
@@ -992,8 +992,8 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 ## Current Limitations
 
-- Only one real external provider integration exists (tax reassessment), and it requires at least one jurisdiction to be manually configured before it fetches anything.
-- Weather is not ingested through `RadarEvent` — it remains on the separate `Incident`-only pipeline (`severeWeatherAlerts.job.ts`, `freezeRiskIncidents.job.ts`).
+- Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
+- Durable ingest and match consumers are still pending, so canonical provider ingestion alone does not guarantee a populated homeowner feed.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - `county` and `polygon` matching are not implemented.
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
@@ -1006,9 +1006,12 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 Tracked from the "unified live-signal surface" initiative (2026-07-10). Phase 1 (promotion bridge + tax reassessment) is **done** — everything below is what's left.
 
-### Phase 2 — Weather dual-write/promotion consolidation (not started)
+### Phase 2 — Weather convergence (provider adapters complete; durable processing pending)
 
-`severeWeatherAlertsJob`/`freezeRiskIncidentsJob` currently write directly to `Incident`, bypassing `RadarEvent` entirely, so real weather events never appear in the Home Event Radar raw feed. Making them *also* write a `RadarEvent` needs its own design pass to avoid double-triggering guidance journeys (since `Incident` already creates one, and the promotion bridge would try to create a second) — this is safety-relevant code and shouldn't be touched casually. Until this lands, weather guidance stays correctly routed to the Incidents tab (not a bug, just Phase 1's chosen scope).
+`severeWeatherAlertsJob` and `freezeRiskIncidentsJob` now write only canonical radar observations.
+NWS preserves CAP identity and polygon evidence; freeze forecasts use stable property-scoped identity
+and resolve only after a successful warm forecast. Durable ingest and match consumers remain the
+next delivery slice before the weather feed can be considered operationally complete.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 

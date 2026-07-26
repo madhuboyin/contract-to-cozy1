@@ -1,295 +1,342 @@
-// apps/workers/src/jobs/freezeRiskIncidents.job.ts
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
-import { IncidentStatus } from '@prisma/client';
-import { IncidentService } from '@worker-shared/services/incidents/incident.service';
-import { guidanceJourneyService } from '@worker-shared/services/guidanceEngine/guidanceJourney.service';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
-import { logger, AppLogger } from '../lib/logger';
-import { Geo } from '../lib/geocodeZip';
+import { radarSourceRegistryService, resolveRadarRuntimeEnvironment } from '@worker-shared/modules/homeEventRadar/services/radarSourceRegistry.service';
+import { radarSourceRunService } from '@worker-shared/modules/homeEventRadar/services/radarSourceRun.service';
+import { radarEventIngestionService } from '@worker-shared/modules/homeEventRadar/services/radarEventIngestion.service';
+import type {
+  CanonicalRadarObservation,
+  RadarSourceRegistrationInput,
+} from '@worker-shared/modules/homeEventRadar/contracts';
+import { logger, type AppLogger } from '../lib/logger';
+import type { Geo } from '../lib/geocodeZip';
 import { getPropertyGeo } from '../lib/propertyGeo';
 import { iterateAllProperties } from '../lib/paginateProperties';
+import {
+  FREEZE_THRESHOLD_F,
+  freezeRadarAdapter,
+  type FreezeForecast,
+} from '../radar/freezeRadarAdapter';
 
-// W4 item 1: small, job-scoped dependency interface (see
-// reserveFundBalanceReminder.job.ts for the pattern). iterateAllProperties
-// and getPropertyGeo are injected as plain function references — both
-// import the real prisma singleton directly rather than accepting deps
-// themselves, which is exactly what forced the old require.cache tests to
-// separately purge paginateProperties.ts/propertyGeo.ts's own module cache
-// entries (see the comment this replaced in freezeRiskIncidentsDryRun.test.js).
-// Injecting them here removes that fragility outright.
-export interface FreezeRiskIncidentsDeps {
-  prisma: Pick<typeof prisma, 'incident'>;
-  incidentService: Pick<typeof IncidentService, 'setStatus' | 'upsertIncident'>;
-  guidanceJourneyService: Pick<typeof guidanceJourneyService, 'ingestSignal'>;
+const FREEZE_SOURCE_KEY = 'open-meteo-freeze-forecast';
+const FORECAST_WINDOW_HOURS = 36;
+
+type ForecastOutcome =
+  | { status: 'ok'; forecast: Omit<FreezeForecast, 'propertyId'> }
+  | { status: 'failed'; error: string };
+
+type FreezeDeps = {
+  registry: Pick<typeof radarSourceRegistryService, 'register'>;
+  runs: Pick<typeof radarSourceRunService, 'begin' | 'complete'>;
+  ingestion: Pick<typeof radarEventIngestionService, 'ingest'>;
+  eventLookup: Pick<typeof prisma.radarEvent, 'findFirst' | 'findUnique'>;
   logger: AppLogger;
   iterateAllProperties: typeof iterateAllProperties;
   getPropertyGeo: typeof getPropertyGeo;
-}
-
-const defaultDeps: FreezeRiskIncidentsDeps = {
-  prisma,
-  incidentService: IncidentService,
-  guidanceJourneyService,
-  logger,
-  iterateAllProperties,
-  getPropertyGeo,
+  getForecast(lat: number, lon: number, now: Date): Promise<ForecastOutcome>;
+  now(): Date;
+  correlationId(): string;
+  sleep(ms: number): Promise<void>;
+  env: NodeJS.ProcessEnv;
 };
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const OPEN_FREEZE_STATUSES: IncidentStatus[] = [
-  IncidentStatus.DETECTED,
-  IncidentStatus.EVALUATED,
-  IncidentStatus.ACTIVE,
-  IncidentStatus.ACTIONED,
-  IncidentStatus.MITIGATED,
-];
-
-function scoreFromMinF(minF: number) {
-  if (minF <= 15) return 85;
-  if (minF <= 20) return 75;
-  if (minF <= 27) return 60;
-  return 0;
-}
 
 function cToF(c: number) {
   return (c * 9) / 5 + 32;
 }
 
-/**
- * Returns minimum forecast temp in °F in the next 36 hours for given lat/lon.
- * Uses Open-Meteo hourly temperature_2m.
- */
-async function getForecastMinF(lat: number, lon: number): Promise<number | null> {
-  const now = new Date();
-  const end = new Date(now.getTime() + 36 * 3600 * 1000);
+export function freezeProviderEventId(propertyId: string): string {
+  return `open-meteo:freeze-risk:${propertyId}`;
+}
 
-  // Open-Meteo expects dates. We'll request today..tomorrow and then slice to next 36h.
-  const startDate = now.toISOString().slice(0, 10);
-  const endDate = end.toISOString().slice(0, 10);
+export async function getFreezeForecast(
+  lat: number,
+  lon: number,
+  now = new Date(),
+): Promise<ForecastOutcome> {
+  const end = new Date(now.getTime() + FORECAST_WINDOW_HOURS * 3_600_000);
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.searchParams.set('latitude', String(lat));
+  url.searchParams.set('longitude', String(lon));
+  url.searchParams.set('hourly', 'temperature_2m');
+  url.searchParams.set('temperature_unit', 'celsius');
+  url.searchParams.set('timezone', 'UTC');
+  url.searchParams.set('start_date', now.toISOString().slice(0, 10));
+  url.searchParams.set('end_date', end.toISOString().slice(0, 10));
 
-  const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(
-      String(lat)
-    )}&longitude=${encodeURIComponent(String(lon))}` +
-    `&hourly=temperature_2m&temperature_unit=celsius&timezone=UTC&start_date=${startDate}&end_date=${endDate}`;
-
-  // WKR (risk/weather/coverage W3 fix): a thrown fetch/JSON-parse exception
-  // (network error, timeout, malformed body) used to propagate unhandled
-  // out of this function and crash the whole job — every other property
-  // in the run would be skipped too. Treat it the same as the existing
-  // "no data" (null) path below, which the caller already handles
-  // conservatively (skip that property, don't create or resolve anything).
-  let json: any;
   try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 8_000);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    let json: any;
     try {
-      const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
-      if (!res.ok) return null;
-      json = await res.json();
+      const response = await fetch(url, { method: 'GET', signal: controller.signal });
+      if (!response.ok) return { status: 'failed', error: `Open-Meteo HTTP ${response.status}` };
+      json = await response.json();
     } finally {
       clearTimeout(timeout);
     }
+    const times: unknown[] = json?.hourly?.time ?? [];
+    const temperatures: unknown[] = json?.hourly?.temperature_2m ?? [];
+    if (!Array.isArray(times) || !Array.isArray(temperatures) || times.length !== temperatures.length) {
+      return { status: 'failed', error: 'Open-Meteo returned malformed hourly data' };
+    }
+    const samples: Array<{ at: string; celsius: number }> = [];
+    for (let index = 0; index < times.length; index += 1) {
+      const rawTime = times[index];
+      const at = typeof rawTime === 'string'
+        ? new Date(/[zZ]$|[+-]\d{2}:\d{2}$/.test(rawTime) ? rawTime : `${rawTime}Z`)
+        : null;
+      const celsius = Number(temperatures[index]);
+      if (!at || !Number.isFinite(at.getTime()) || !Number.isFinite(celsius)) continue;
+      if (at < now || at > end) continue;
+      samples.push({ at: at.toISOString(), celsius });
+    }
+    if (samples.length === 0) return { status: 'failed', error: 'Open-Meteo returned no usable 36-hour samples' };
+    const minimumFahrenheit = Math.round(
+      Math.min(...samples.map((sample) => cToF(sample.celsius))) * 10,
+    ) / 10;
+    return {
+      status: 'ok',
+      forecast: {
+        latitude: lat,
+        longitude: lon,
+        minimumFahrenheit,
+        windowStart: now.toISOString(),
+        windowEnd: end.toISOString(),
+        sourceUrl: url.toString(),
+        rawPayload: { samples },
+      },
+    };
   } catch (error) {
-    logger.error({ err: error, lat, lon }, '[FREEZE-RISK] Forecast fetch failed');
-    return null;
+    return {
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
-
-  const times: string[] = json?.hourly?.time ?? [];
-  const tempsC: number[] = json?.hourly?.temperature_2m ?? [];
-
-  if (!Array.isArray(times) || !Array.isArray(tempsC) || times.length !== tempsC.length) return null;
-
-  const nowMs = now.getTime();
-  const endMs = end.getTime();
-
-  let minF: number | null = null;
-
-  for (let i = 0; i < times.length; i++) {
-    const tMs = Date.parse(times[i] + 'Z'); // times are UTC like "2026-01-08T12:00"
-    if (Number.isNaN(tMs)) continue;
-    if (tMs < nowMs || tMs > endMs) continue;
-
-    const f = cToF(tempsC[i]);
-    if (minF == null || f < minF) minF = f;
-  }
-
-  // Round to 1 decimal for display
-  return minF == null ? null : Math.round(minF * 10) / 10;
 }
+
+function registration(env: NodeJS.ProcessEnv): RadarSourceRegistrationInput {
+  return {
+    key: FREEZE_SOURCE_KEY,
+    family: 'weather',
+    sourceType: 'weather_provider',
+    name: 'Open-Meteo freeze forecast',
+    provider: 'Open-Meteo',
+    adapterVersion: 'open-meteo-freeze-v1',
+    contractVersion: 1,
+    isEnabled: true,
+    environments: [resolveRadarRuntimeEnvironment(env)],
+    scheduleCron: '0 */6 * * *',
+    freshnessSeconds: 8 * 3_600,
+    supportedEventTypes: ['freeze'],
+    coverageDescription: 'Open-Meteo point forecast coverage for geocoded properties',
+    configJson: {
+      endpoint: 'https://api.open-meteo.com/v1/forecast',
+      forecastWindowHours: FORECAST_WINDOW_HOURS,
+      freezeThresholdFahrenheit: FREEZE_THRESHOLD_F,
+    },
+    coverage: [{ coverageType: 'global' }],
+  };
+}
+
+const defaultDeps: FreezeDeps = {
+  registry: radarSourceRegistryService,
+  runs: radarSourceRunService,
+  ingestion: radarEventIngestionService,
+  eventLookup: prisma.radarEvent,
+  logger,
+  iterateAllProperties,
+  getPropertyGeo,
+  getForecast: getFreezeForecast,
+  now: () => new Date(),
+  correlationId: randomUUID,
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  env: process.env,
+};
 
 export async function freezeRiskIncidentsJob(
   opts?: { dryRun?: boolean; propertyId?: string },
-  deps: FreezeRiskIncidentsDeps = defaultDeps,
+  deps: FreezeDeps = defaultDeps,
 ) {
-  const { prisma, incidentService, guidanceJourneyService, logger, iterateAllProperties, getPropertyGeo } = deps;
   const dryRun = opts?.dryRun === true;
-  // W6 item 5 (smoke validation): a scoped smoke run passes an explicit
-  // propertyId — that property must itself be operator-allowlisted, so a
-  // caller can't accidentally point a "safe" scoped run at a real
-  // homeowner's property. The unscoped nightly sweep passes no propertyId
-  // at all and is unaffected by this check.
   if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
     throw new Error(
       `[FreezeRiskIncidents] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
     );
   }
-  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('freeze-risk-incidents') : undefined;
-
-  let createdOrUpdated = 0;
-  let resolved = 0;
-  const now = new Date();
-
-  // In-run cache so properties sharing an as-yet-uncached zip within this run
-  // don't each trigger their own geocode call. getPropertyGeo also persists
-  // resolved coordinates onto Property.latitude/longitude, so future runs
-  // skip geocoding entirely for properties whose zip hasn't changed.
-  const geoRunCache = new Map<string, Geo | null>();
-
-  for await (const p of iterateAllProperties()) {
-    if (opts?.propertyId && p.id !== opts.propertyId) continue;
-    const zip = (p.zipCode ?? '').trim();
-    if (!zip) continue;
-
-    const geo = await getPropertyGeo(p, geoRunCache);
-    if (!geo) continue;
-
-    const minF = await getForecastMinF(geo.lat, geo.lon);
-    if (minF == null) continue;
-
-    // trigger: < 28F
-    if (minF >= 28) {
-      // Forecast no longer indicates freeze risk; resolve active/open freeze incidents.
-      // Routed through IncidentService.setStatus (not a raw prisma update) so its
-      // RESOLVED-transition hook archives the linked guidance journey/signal too.
-      const openFreezeIncidents = await prisma.incident.findMany({
-        where: {
-          propertyId: p.id,
-          sourceType: 'WEATHER',
-          typeKey: 'FREEZE_RISK',
-          isSuppressed: false,
-          status: { in: OPEN_FREEZE_STATUSES },
-        },
-        select: { id: true },
-      });
-      for (const incident of openFreezeIncidents) {
-        if (dryRun) {
-          resolved++;
-          logger.info(`[FreezeRiskIncidents] (dry run) Would resolve incident ${incident.id}`);
-          continue;
-        }
-        await incidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
-        resolved++;
-      }
-      continue;
-    }
-
-    const score = scoreFromMinF(minF);
-
-    if (dryRun) {
-      createdOrUpdated++;
-      logger.info(`[FreezeRiskIncidents] (dry run) Would upsert freeze incident for property ${p.id} (minF=${minF})`);
-      await sleep(200);
-      continue;
-    }
-
-    await incidentService.upsertIncident(
-      {
-        propertyId: p.id,
-        userId: null,
-        sourceType: 'WEATHER',
-        typeKey: 'FREEZE_RISK',
-        category: 'PLUMBING',
-        title: 'Freeze Risk Detected',
-        summary: `Forecast minimum temperature is ${minF}°F in the next 36 hours.`,
-        details: {
-          minF,
-          timeWindowHours: 36,
-          probabilityPct: 80,
-          exposureUsd: 5000,
-          geoHint: {
-            zip,
-            city: p.city ?? null,
-            state: p.state ?? null,
-            lat: geo.lat,
-            lon: geo.lon,
-            geoName: geo.name ?? null,
-            admin1: geo.admin1 ?? null,
-            country: geo.country ?? null,
-          },
-          mitigationLevel: 'NONE',
+  const startedAt = deps.now();
+  const smokeCorrelationId = opts?.propertyId
+    ? generateSmokeCorrelationId('freeze-risk-incidents')
+    : undefined;
+  const source = dryRun
+    ? { id: 'freeze-dry-run', key: FREEZE_SOURCE_KEY }
+    : await deps.registry.register(registration(deps.env));
+  const correlationId = smokeCorrelationId ?? `freeze:${deps.correlationId()}`;
+  const begun = dryRun
+    ? { runnable: true, run: { id: 'freeze-dry-run' } }
+    : await deps.runs.begin({
+        sourceKey: source.key,
+        correlationId,
+        triggerType: 'scheduled',
+        startedAt,
+        metadataJson: {
           provider: 'open-meteo',
+          ...(opts?.propertyId ? { propertyId: opts.propertyId } : {}),
           ...(smokeCorrelationId ? { smokeCorrelationId } : {}),
         },
-        status: 'DETECTED',
-        fingerprint: `property:${p.id}|FREEZE_RISK`,
-        dedupeWindowMins: 24 * 60,
-        severityScore: score,
-        confidence: 70,
-      },
-      [
-        {
-          signalType: 'WEATHER_FORECAST_MIN_TEMP',
-          externalRef: `open-meteo:${zip}`,
-          observedAt: now.toISOString(),
-          payload: { zip, minF, windowHours: 36, lat: geo.lat, lon: geo.lon },
-          scoreHint: score,
-          confidence: 70,
-        },
-      ]
-    );
-
-    createdOrUpdated++;
-
-    try {
-      await guidanceJourneyService.ingestSignal({
-        propertyId: p.id,
-        signalIntentFamily: 'freeze_risk',
-        issueDomain: 'WEATHER',
-        decisionStage: 'AWARENESS',
-        executionReadiness: 'NEEDS_CONTEXT',
-        severity: score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW',
-        severityScore: score,
-        confidenceScore: 0.70,
-        sourceType: 'EXTERNAL',
-        sourceFeatureKey: 'freeze-risk-incidents',
-        sourceEntityType: 'INCIDENT',
-        payloadJson: { minF, timeWindowHours: 36, zip, provider: 'open-meteo' },
-        expiresAt: new Date(Date.now() + 36 * 60 * 60 * 1000),
-      });
-    } catch (guidanceError) {
-      logger.warn({ err: guidanceError }, '[GUIDANCE] freeze risk signal ingest failed');
-    }
-
-    // Rate limit Open-Meteo API calls (free tier)
-    await sleep(200);
+      }, deps.env);
+  if (!begun.runnable) {
+    return { createdOrUpdated: 0, resolved: 0, failed: 0, sourceRunStatus: 'skipped', smokeCorrelationId };
   }
 
-  // Safety net: resolve lingering stale freeze incidents that were not refreshed recently.
-  // Scoped to opts.propertyId when set, so a scoped smoke run can't touch
-  // stale incidents on unrelated properties.
-  const staleCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-  const staleFreezeIncidents = await prisma.incident.findMany({
-    where: {
-      sourceType: 'WEATHER',
-      typeKey: 'FREEZE_RISK',
-      isSuppressed: false,
-      status: { in: OPEN_FREEZE_STATUSES },
-      updatedAt: { lt: staleCutoff },
-      ...(opts?.propertyId ? { propertyId: opts.propertyId } : {}),
-    },
-    select: { id: true },
-  });
-  for (const incident of staleFreezeIncidents) {
-    if (dryRun) {
-      resolved++;
-      logger.info(`[FreezeRiskIncidents] (dry run) Would resolve stale incident ${incident.id}`);
+  const geoRunCache = new Map<string, Geo | null>();
+  let propertiesEvaluated = 0;
+  let forecastsSucceeded = 0;
+  let forecastsFailed = 0;
+  let observationsReceived = 0;
+  let observationsRejected = 0;
+  let verifiedNoEvent = 0;
+  let failed = 0;
+  let createdOrUpdated = 0;
+  let eventsCreated = 0;
+  let eventsUpdated = 0;
+  let resolved = 0;
+
+  for await (const property of deps.iterateAllProperties()) {
+    if (opts?.propertyId && property.id !== opts.propertyId) continue;
+    if (!(property.zipCode ?? '').trim()) continue;
+    const geo = await deps.getPropertyGeo(property, geoRunCache);
+    if (!geo) continue;
+    propertiesEvaluated += 1;
+    const outcome = await deps.getForecast(geo.lat, geo.lon, startedAt);
+    if (outcome.status === 'failed') {
+      forecastsFailed += 1;
+      failed += 1;
+      deps.logger.error(
+        { propertyId: property.id, error: outcome.error },
+        '[FREEZE-RISK] Forecast unavailable; preserving existing lifecycle',
+      );
       continue;
     }
-    await incidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
-    resolved++;
+    forecastsSucceeded += 1;
+    const forecast: FreezeForecast = { propertyId: property.id, ...outcome.forecast };
+    const isFreeze = forecast.minimumFahrenheit < FREEZE_THRESHOLD_F;
+    if (!isFreeze) {
+      const providerEventId = freezeProviderEventId(property.id);
+      const existing = dryRun
+        ? await deps.eventLookup.findFirst({
+            where: {
+              providerEventId,
+              sourceDefinition: { key: FREEZE_SOURCE_KEY },
+            },
+            select: { id: true, status: true },
+          })
+        : await deps.eventLookup.findUnique({
+            where: {
+              sourceDefinitionId_providerEventId: {
+                sourceDefinitionId: source.id,
+                providerEventId,
+              },
+            },
+            select: { id: true, status: true },
+          });
+      if (!existing || !['active', 'updated'].includes(String(existing.status))) {
+        verifiedNoEvent += 1;
+        continue;
+      }
+    }
+    observationsReceived += 1;
+    let observation: CanonicalRadarObservation;
+    try {
+      observation = await freezeRadarAdapter.normalize(forecast, {
+        sourceDefinitionId: source.id,
+        observedAt: startedAt.toISOString(),
+      });
+    } catch (error) {
+      observationsRejected += 1;
+      failed += 1;
+      deps.logger.error(
+        { err: error, propertyId: property.id },
+        '[FREEZE-RISK] Canonical observation rejected',
+      );
+      await deps.sleep(200);
+      continue;
+    }
+    if (dryRun) {
+      if (isFreeze) createdOrUpdated += 1;
+      else resolved += 1;
+      continue;
+    }
+    try {
+      const ingested = await deps.ingestion.ingest(observation, {
+        sourceRunId: begun.run.id,
+        correlationId,
+      });
+      if (ingested.lifecycleStatus === 'resolved') resolved += 1;
+      else createdOrUpdated += 1;
+      if (ingested.outcome === 'created') eventsCreated += 1;
+      if (ingested.outcome === 'updated') eventsUpdated += 1;
+    } catch (error) {
+      observationsRejected += 1;
+      failed += 1;
+      deps.logger.error({ err: error, propertyId: property.id }, '[FREEZE-RISK] Canonical observation rejected');
+    }
+    await deps.sleep(200);
   }
 
-  return { createdOrUpdated, resolved, smokeCorrelationId };
+  let sourceRunStatus: 'success' | 'successful_empty' | 'partial' | 'failed' | 'skipped';
+  if (propertiesEvaluated === 0) sourceRunStatus = 'skipped';
+  else if (forecastsSucceeded === 0) sourceRunStatus = 'failed';
+  else if (
+    observationsReceived > 0 &&
+    observationsRejected === observationsReceived &&
+    verifiedNoEvent === 0
+  ) sourceRunStatus = 'failed';
+  else if (forecastsFailed > 0 || observationsRejected > 0) sourceRunStatus = 'partial';
+  else if (observationsReceived === 0) sourceRunStatus = 'successful_empty';
+  else sourceRunStatus = 'success';
+
+  if (!dryRun) {
+    const errorMessage = sourceRunStatus === 'failed'
+      ? forecastsSucceeded === 0
+        ? `All ${forecastsFailed} Open-Meteo forecast requests failed`
+        : `All ${observationsRejected} canonical freeze observation(s) were rejected`
+      : sourceRunStatus === 'partial'
+        ? `${forecastsFailed} Open-Meteo forecast request(s) failed and ${observationsRejected} canonical ingestion operation(s) were rejected`
+        : sourceRunStatus === 'skipped'
+          ? 'No properties with usable geography were evaluated'
+          : undefined;
+    await deps.runs.complete(begun.run.id, {
+      status: sourceRunStatus,
+      finishedAt: deps.now(),
+      dataFreshThrough: forecastsSucceeded > 0 ? startedAt : undefined,
+      observationsReceived,
+      observationsRejected,
+      eventsCreated,
+      eventsUpdated,
+      eventsResolved: resolved,
+      propertiesEvaluated,
+      errorCode: errorMessage
+          ? sourceRunStatus === 'failed'
+            ? forecastsSucceeded === 0 ? 'OPEN_METEO_FAILED' : 'FREEZE_OBSERVATIONS_REJECTED'
+          : sourceRunStatus === 'partial' ? 'OPEN_METEO_PARTIAL' : 'NO_QUERY_POINTS'
+        : undefined,
+      errorMessage,
+      metadataJson: {
+        provider: 'open-meteo',
+        forecastsSucceeded,
+        forecastsFailed,
+        observationsRejected,
+        verifiedNoEvent,
+        thresholdFahrenheit: FREEZE_THRESHOLD_F,
+      },
+    });
+  }
+  return {
+    createdOrUpdated,
+    resolved,
+    failed,
+    sourceRunStatus: dryRun ? 'dry_run' : sourceRunStatus,
+    smokeCorrelationId,
+  };
 }

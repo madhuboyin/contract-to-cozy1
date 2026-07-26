@@ -133,5 +133,9 @@ test('weather lifecycle guards preserve unknown rather than projecting provider 
   assert.match(severeWeather, /fetchSucceeded === 0\) sourceRunStatus = 'failed'/);
   assert.match(severeWeather, /dataFreshThrough: fetchSucceeded > 0 \? startedAt : undefined/);
   assert.doesNotMatch(severeWeather, /setStatus|upsertIncident|ingestSignal/);
-  assert.match(freeze, /if \(minF == null\) continue;[\s\S]*if \(minF >= 28\)[\s\S]*setStatus/);
+  assert.match(freeze, /outcome\.status === 'failed'/);
+  assert.match(freeze, /preserving existing lifecycle/);
+  assert.match(freeze, /forecastsSucceeded === 0\) sourceRunStatus = 'failed'/);
+  assert.match(freeze, /dataFreshThrough: forecastsSucceeded > 0 \? startedAt : undefined/);
+  assert.doesNotMatch(freeze, /IncidentService|setStatus|upsertIncident|guidanceJourneyService|ingestSignal/);
 });

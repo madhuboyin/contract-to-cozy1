@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-200 implemented |
+| Status | In progress — HER-201 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -29,7 +29,8 @@
 | HER-105 Source adapter harness | Complete | Shared conformance runner verifies canonical output, exact-source/revision identity, UTC dates, URL allowlisting, geography, lifecycle mappings, persistable evidence, and invalid-payload rejection |
 | HER-106 Test-only fixture provider | Complete; DB application pending | Deterministic canonical fixtures use family-specific test sources, source-run health, immutable ingestion/revision, match enqueue, production rejection, bounded property scope, and explicit Test data labeling |
 | HER-200 NWS adapter | Complete; DB application pending | NWS CAP alerts now use source runs and canonical ingestion with shared identity, polygon/MultiPolygon geography, full provider evidence, conservative health semantics, and no direct Incident/Guidance writes |
-| HER-201+ | Not started | Freeze convergence, durable consumers, matching, homeowner APIs, actions, and operations remain |
+| HER-201 Freeze forecast adapter | Complete; DB application pending | Open-Meteo forecasts now use source runs and canonical property-scoped ingestion with stable identity, immutable refresh revisions, verified warm resolution, conservative failure semantics, and no direct Incident/Guidance writes |
+| HER-202+ | Not started | Durable consumers, matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -601,6 +602,17 @@ Refactor `freezeRiskIncidents.job.ts`:
 
 Evaluate whether ZIP-shared canonical events are safe and more efficient than property-scoped events.
 Prefer shared geography when forecast inputs and thresholds are identical.
+
+Implementation note: `freezeRadarAdapter.ts` passes the shared adapter conformance harness and
+preserves the forecast window, minimum temperature, coordinates, provider URL, threshold, and raw
+hourly samples. The event identity is stable per property while every materially changed forecast
+becomes an immutable revision. Property scope is intentional: Open-Meteo is queried at each
+property's coordinates, so ZIP sharing could merge forecast inputs that are not identical and
+could resolve one property's event from another property's warmer point forecast. The job retains
+its eight-second provider timeout, in-run geography cache, and per-property failure isolation.
+Only a successful warm forecast may resolve an existing active event; provider failure preserves
+the prior lifecycle and does not advance freshness. Direct Incident and Guidance writes have been
+removed.
 
 ### HER-202 — Durable ingest consumer
 
