@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — Phase 1 implemented in code |
+| Status | In progress — HER-200 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -28,7 +28,8 @@
 | HER-104 Canonical ingestion service | Complete; DB application pending | Validated exact-source identity, immutable revisions, deterministic fingerprints, lifecycle/stale guards, provenance, serializable per-observation transactions, and idempotent match enqueue |
 | HER-105 Source adapter harness | Complete | Shared conformance runner verifies canonical output, exact-source/revision identity, UTC dates, URL allowlisting, geography, lifecycle mappings, persistable evidence, and invalid-payload rejection |
 | HER-106 Test-only fixture provider | Complete; DB application pending | Deterministic canonical fixtures use family-specific test sources, source-run health, immutable ingestion/revision, match enqueue, production rejection, bounded property scope, and explicit Test data labeling |
-| Phase 2+ | Not started | Live-provider convergence, durable matching, homeowner APIs, actions, and operations remain |
+| HER-200 NWS adapter | Complete; DB application pending | NWS CAP alerts now use source runs and canonical ingestion with shared identity, polygon/MultiPolygon geography, full provider evidence, conservative health semantics, and no direct Incident/Guidance writes |
+| HER-201+ | Not started | Freeze convergence, durable consumers, matching, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -579,6 +580,14 @@ Refactor `severeWeatherAlerts.job.ts`:
 - enqueue canonical ingestion;
 - remove direct `IncidentService.upsertIncident`;
 - remove direct `guidanceJourneyService.ingestSignal`.
+
+Implementation note: `nwsRadarAdapter.ts` passes the shared adapter conformance harness and
+preserves CAP identity, revisions, references, severity, certainty, urgency, effective/onset/end
+times, instructions, source URL, and Polygon/MultiPolygon geometry. The NWS job retains per-ZIP
+fetch caching, deduplicates provider alerts across properties, records success/successful-empty/
+partial/failed source outcomes, and sends accepted observations through canonical ingestion.
+Provider failures never update freshness or project a false clear state. Direct Incident and
+Guidance writes have been removed; those projections remain downstream responsibilities.
 
 ### HER-201 — Freeze forecast adapter
 

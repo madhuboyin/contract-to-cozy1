@@ -28,6 +28,21 @@ export interface SevereWeatherAlert {
   effective: string | null;
   expires: string | null;
   senderName: string | null;
+  sent: string | null;
+  onset: string | null;
+  ends: string | null;
+  status: string | null;
+  messageType: string | null;
+  urgency: string | null;
+  certainty: string | null;
+  canonicalUrl: string;
+  geometry: {
+    type: 'Polygon';
+    coordinates: [number, number][][];
+  } | {
+    type: 'MultiPolygon';
+    coordinates: [number, number][][][];
+  } | null;
   /**
    * nwsAlertId values of prior alerts this one supersedes (e.g. a Watch
    * upgraded to a Warning, or a warning re-issued/extended under a new id).
@@ -43,6 +58,7 @@ interface NwsAlertReference {
 
 interface NwsAlertFeature {
   id?: string;
+  geometry?: SevereWeatherAlert['geometry'];
   properties?: {
     id?: string;
     event?: string;
@@ -53,6 +69,13 @@ interface NwsAlertFeature {
     effective?: string | null;
     expires?: string | null;
     senderName?: string | null;
+    sent?: string | null;
+    onset?: string | null;
+    ends?: string | null;
+    status?: string | null;
+    messageType?: string | null;
+    urgency?: string | null;
+    certainty?: string | null;
     references?: NwsAlertReference[];
   };
 }
@@ -219,6 +242,15 @@ export class SevereWeatherAlertService {
         effective: props?.effective ?? null,
         expires: props?.expires ?? null,
         senderName: props?.senderName ?? null,
+        sent: props?.sent ?? null,
+        onset: props?.onset ?? null,
+        ends: props?.ends ?? null,
+        status: props?.status ?? null,
+        messageType: props?.messageType ?? null,
+        urgency: props?.urgency ?? null,
+        certainty: props?.certainty ?? null,
+        canonicalUrl: feature.id ?? props?.id ?? `https://api.weather.gov/alerts/${encodeURIComponent(nwsAlertId)}`,
+        geometry: feature.geometry ?? null,
         referencedAlertIds,
       });
     }

@@ -69,6 +69,16 @@ const polygonRingSchema = z.array(
   }
 });
 
+const polygonGeoJsonSchema = z.object({
+  type: z.literal('Polygon'),
+  coordinates: z.array(polygonRingSchema).min(1),
+});
+
+const multiPolygonGeoJsonSchema = z.object({
+  type: z.literal('MultiPolygon'),
+  coordinates: z.array(z.array(polygonRingSchema).min(1)).min(1),
+});
+
 export const normalizedGeographySchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('property'),
@@ -97,10 +107,7 @@ export const normalizedGeographySchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('polygon'),
-    geoJson: z.object({
-      type: z.literal('Polygon'),
-      coordinates: z.array(polygonRingSchema).min(1),
-    }),
+    geoJson: z.union([polygonGeoJsonSchema, multiPolygonGeoJsonSchema]),
   }),
 ]);
 

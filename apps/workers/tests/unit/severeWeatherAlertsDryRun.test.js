@@ -1,176 +1,140 @@
-// apps/workers/tests/unit/severeWeatherAlertsDryRun.test.js
-//
-// Worker audit follow-up slice: severe-weather-alerts is one of the 7
-// broadSweep/externalProvider jobs wired for dry-run + manual-trigger
-// support. Covers: dry-run skips all incident writes but still counts
-// what would happen; a scoped propertyId processes only that property and
-// is independently re-checked against the operator allowlist; and a real
-// scoped run tags the created incident with a smokeCorrelationId.
-//
-// W4 item 1 (DI refactor): dependencies (including iterateAllProperties and
-// getPropertyGeo, both plain function references) are injected directly
-// instead of via require.cache — this also removes the fragility the old
-// version of this comment described, where paginateProperties.ts/
-// propertyGeo.ts's own module-cache entries had to be separately purged on
-// every test because they import the real prisma singleton directly.
-
 const test = require('node:test');
 const assert = require('node:assert/strict');
-
-process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
 
 require('ts-node/register');
 
 const { severeWeatherAlertsJob } = require('../../src/jobs/severeWeatherAlerts.job.ts');
 
-const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
+const noopLogger = {
+  info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; },
+};
 
-function fakeDeps({ properties, openIncidents = [], alerts = [] }) {
-  const upsertCalls = [];
-  const setStatusCalls = [];
-
-  const deps = {
-    prisma: {
-      incident: {
-        findMany: async (args) => (args?.where?.propertyId ? openIncidents : []),
-      },
-    },
-    incidentService: {
-      upsertIncident: async (input) => {
-        upsertCalls.push(input);
-        return { id: 'incident-new' };
-      },
-      setStatus: async (id, status) => {
-        setStatusCalls.push({ id, status });
-      },
-    },
-    guidanceJourneyService: { ingestSignal: async () => {} },
-    severeWeatherAlertService: {
-      getActiveAlerts: async (lat, lon, onOutcome) => {
-        onOutcome?.('ok');
-        return alerts;
-      },
-    },
-    logger: noopLogger,
-    iterateAllProperties: async function* () {
-      for (const p of properties) yield p;
-    },
-    getPropertyGeo: async (property) => {
-      if (typeof property.latitude === 'number' && typeof property.longitude === 'number') {
-        return { lat: property.latitude, lon: property.longitude };
-      }
-      return null;
-    },
+function alert() {
+  return {
+    nwsAlertId: 'urn:oid:dry-run-alert',
+    referencedAlertIds: [],
+    hazardFamily: 'FLOOD',
+    event: 'Flash Flood Warning',
+    severity: 'Severe',
+    headline: 'Flash Flood Warning issued.',
+    description: 'Flooding is occurring.',
+    instruction: 'Move to higher ground.',
+    sent: '2026-07-26T13:55:00Z',
+    effective: '2026-07-26T14:00:00Z',
+    onset: '2026-07-26T14:00:00Z',
+    expires: '2026-07-26T16:00:00Z',
+    ends: null,
+    senderName: 'NWS',
+    status: 'Actual',
+    messageType: 'Alert',
+    urgency: 'Immediate',
+    certainty: 'Observed',
+    canonicalUrl: 'https://api.weather.gov/alerts/urn:oid:dry-run-alert',
+    geometry: null,
   };
-
-  return { deps, getUpsertCalls: () => upsertCalls, getSetStatusCalls: () => setStatusCalls };
 }
 
-function property(overrides = {}) {
+function deps(properties) {
+  let registrations = 0;
+  let begins = 0;
+  let completions = 0;
+  let ingestions = 0;
   return {
+    port: {
+      severeWeatherAlertService: {
+        async getActiveAlerts(lat, lon, onOutcome) {
+          onOutcome?.('ok');
+          return [alert()];
+        },
+      },
+      registry: {
+        async register() {
+          registrations += 1;
+          return { id: 'source', key: 'nws-active-alerts' };
+        },
+      },
+      runs: {
+        async begin() {
+          begins += 1;
+          return { runnable: true, run: { id: 'run' } };
+        },
+        async complete() {
+          completions += 1;
+        },
+      },
+      ingestion: {
+        async ingest() {
+          ingestions += 1;
+        },
+      },
+      logger: noopLogger,
+      iterateAllProperties: async function* () {
+        for (const property of properties) yield property;
+      },
+      getPropertyGeo: async (property) => ({
+        lat: property.latitude,
+        lon: property.longitude,
+      }),
+      now: () => new Date('2026-07-26T14:05:00Z'),
+      correlationId: () => 'dry-correlation',
+      env: { NODE_ENV: 'test' },
+    },
+    counts: () => ({ registrations, begins, completions, ingestions }),
+  };
+}
+
+test('dry run fetches and validates canonical alerts without database or queue writes', async () => {
+  const harness = deps([{
     id: 'property-1',
-    address: '1 Main St',
     zipCode: '08536',
-    city: 'Plainsboro',
-    state: 'NJ',
     latitude: 40.33,
     longitude: -74.58,
-    geocodedZipCode: '08536', // pre-cached so getPropertyGeo skips real geocoding
-    ...overrides,
-  };
-}
+  }]);
 
-function alert(overrides = {}) {
-  return {
-    nwsAlertId: 'nws-alert-1',
-    referencedAlertIds: [],
-    hazardFamily: 'STORM',
-    severity: 'Severe',
-    expires: null,
-    headline: 'Severe Thunderstorm Warning',
-    description: 'desc',
-    senderName: 'NWS',
-    event: 'Severe Thunderstorm Warning',
-    ...overrides,
-  };
-}
+  const result = await severeWeatherAlertsJob({ dryRun: true }, harness.port);
 
-test('dry run: examines and counts alerts but creates/resolves no incidents', async () => {
-  const { deps, getUpsertCalls } = fakeDeps({ properties: [property()], alerts: [alert()] });
-
-  const result = await severeWeatherAlertsJob({ dryRun: true }, deps);
-
-  assert.equal(getUpsertCalls().length, 0);
   assert.equal(result.createdOrUpdated, 1);
-  assert.equal(result.smokeCorrelationId, undefined);
+  assert.equal(result.sourceRunStatus, 'dry_run');
+  assert.deepEqual(harness.counts(), {
+    registrations: 0,
+    begins: 0,
+    completions: 0,
+    ingestions: 0,
+  });
 });
 
-test('no opts (the scheduled tick): behaves exactly like a real run', async () => {
-  const { deps, getUpsertCalls } = fakeDeps({ properties: [property()], alerts: [alert()] });
-
-  const result = await severeWeatherAlertsJob(undefined, deps);
-
-  assert.equal(getUpsertCalls().length, 1);
-  assert.equal(result.createdOrUpdated, 1);
-});
-
-test('a scoped propertyId processes only that property', async () => {
-  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+test('scoped execution processes only the requested allowlisted property', async () => {
+  const original = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
   process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { deps, getUpsertCalls } = fakeDeps({
-      properties: [property({ id: 'property-allowed' }), property({ id: 'property-other' })],
-      alerts: [alert()],
-    });
-
-    await severeWeatherAlertsJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
-
-    assert.equal(getUpsertCalls().length, 1);
-    assert.equal(getUpsertCalls()[0].propertyId, 'property-allowed');
+    const harness = deps([
+      { id: 'property-allowed', zipCode: '08536', latitude: 40.33, longitude: -74.58 },
+      { id: 'property-other', zipCode: '10019', latitude: 40.76, longitude: -73.98 },
+    ]);
+    const result = await severeWeatherAlertsJob(
+      { dryRun: true, propertyId: 'property-allowed' },
+      harness.port,
+    );
+    assert.equal(result.uniqueAlerts, 1);
+    assert.match(result.smokeCorrelationId, /^smoke:severe-weather-alerts:/);
   } finally {
-    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = original;
   }
 });
 
-test('a propertyId not in SMOKE_TEST_PROPERTY_ALLOWLIST is rejected outright, before any query runs', async () => {
-  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
-  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'some-other-property';
+test('non-allowlisted scoped execution is rejected before fetching', async () => {
+  const original = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
+  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
   try {
-    const { deps } = fakeDeps({ properties: [property()], alerts: [alert()] });
-
+    const harness = deps([]);
     await assert.rejects(
-      () => severeWeatherAlertsJob({ dryRun: true, propertyId: 'property-not-allowed' }, deps),
+      () => severeWeatherAlertsJob(
+        { dryRun: true, propertyId: 'property-denied' },
+        harness.port,
+      ),
       /not in SMOKE_TEST_PROPERTY_ALLOWLIST/,
     );
   } finally {
-    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
+    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = original;
   }
-});
-
-test('a real scoped run tags the upserted incident with a smokeCorrelationId', async () => {
-  const originalEnv = process.env.SMOKE_TEST_PROPERTY_ALLOWLIST;
-  process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = 'property-allowed';
-  try {
-    const { deps, getUpsertCalls } = fakeDeps({
-      properties: [property({ id: 'property-allowed' })],
-      alerts: [alert()],
-    });
-
-    const result = await severeWeatherAlertsJob({ dryRun: false, propertyId: 'property-allowed' }, deps);
-
-    assert.equal(getUpsertCalls().length, 1);
-    assert.match(getUpsertCalls()[0].details.smokeCorrelationId, /^smoke:severe-weather-alerts:/);
-    assert.equal(result.smokeCorrelationId, getUpsertCalls()[0].details.smokeCorrelationId);
-  } finally {
-    process.env.SMOKE_TEST_PROPERTY_ALLOWLIST = originalEnv;
-  }
-});
-
-test('an unscoped run (no propertyId) tags nothing', async () => {
-  const { deps, getUpsertCalls } = fakeDeps({ properties: [property()], alerts: [alert()] });
-
-  const result = await severeWeatherAlertsJob(undefined, deps);
-
-  assert.equal(getUpsertCalls()[0].details.smokeCorrelationId, undefined);
-  assert.equal(result.smokeCorrelationId, undefined);
 });

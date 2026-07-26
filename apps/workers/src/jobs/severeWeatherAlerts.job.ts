@@ -1,330 +1,308 @@
-// apps/workers/src/jobs/severeWeatherAlerts.job.ts
-//
-// Polls live NOAA/NWS severe weather alerts (flash flood, severe thunderstorm,
-// tornado, high wind, excessive heat, winter storm) per property and creates
-// Incidents for any that are active. Runs every 15 minutes (see
-// workerJobRegistry.ts + worker.ts) since NWS warnings can be issued and
-// expire within a few hours — unlike the daily freeze-risk check.
-import { prisma } from '../lib/prisma';
-import { IncidentStatus } from '@prisma/client';
-import { IncidentService } from '@worker-shared/services/incidents/incident.service';
-import { guidanceJourneyService } from '@worker-shared/services/guidanceEngine/guidanceJourney.service';
+// Canonical NWS ingestion. Provider code owns fetch/normalization/source health;
+// downstream Radar matching owns property impact, Incident, and Guidance projection.
+import { randomUUID } from 'node:crypto';
 import {
   severeWeatherAlertService,
-  SevereWeatherAlert,
+  type NwsFetchOutcome,
+  type SevereWeatherAlert,
 } from '@worker-shared/services/severeWeatherAlert.service';
+import {
+  radarSourceRegistryService,
+  resolveRadarRuntimeEnvironment,
+} from '@worker-shared/modules/homeEventRadar/services/radarSourceRegistry.service';
+import {
+  radarSourceRunService,
+} from '@worker-shared/modules/homeEventRadar/services/radarSourceRun.service';
+import {
+  radarEventIngestionService,
+} from '@worker-shared/modules/homeEventRadar/services/radarEventIngestion.service';
+import type {
+  RadarSourceRegistrationInput,
+} from '@worker-shared/modules/homeEventRadar/contracts';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
-import { Geo } from '../lib/geocodeZip';
+import type { Geo } from '../lib/geocodeZip';
 import { getPropertyGeo } from '../lib/propertyGeo';
 import { iterateAllProperties } from '../lib/paginateProperties';
-import { logger, AppLogger } from '../lib/logger';
-import {
-  HAZARD_INTENT_FAMILY,
-  HAZARD_CATEGORY,
-  isWarningLevel,
-  initialScoreFor,
-  scoringInputsFor,
-  summaryFor,
-} from './severeWeatherAlerts.scoring';
-import { nwsFetchOutcomeTotal, severeWeatherIncidentsTotal } from '../lib/metrics';
+import { logger, type AppLogger } from '../lib/logger';
+import { nwsFetchOutcomeTotal } from '../lib/metrics';
+import { nwsRadarAdapter } from '../radar/nwsRadarAdapter';
 
-const TYPE_KEY = 'SEVERE_WEATHER_ALERT';
+const NWS_SOURCE_KEY = 'nws-active-alerts';
 
-const OPEN_SEVERE_WEATHER_STATUSES: IncidentStatus[] = [
-  IncidentStatus.DETECTED,
-  IncidentStatus.EVALUATED,
-  IncidentStatus.ACTIVE,
-  IncidentStatus.ACTIONED,
-  IncidentStatus.MITIGATED,
-];
+type PropertyRow = {
+  id: string;
+  zipCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
 
-// W4 item 1: small, job-scoped dependency interface (see
-// reserveFundBalanceReminder.job.ts for the pattern). iterateAllProperties
-// and getPropertyGeo are injected as plain function references for the same
-// reason as freezeRiskIncidents.job.ts — both import the real prisma
-// singleton directly, so genuine DI requires substituting them rather than
-// relying on a require.cache swap of their own module entries.
+type RegistryPort = Pick<typeof radarSourceRegistryService, 'register'>;
+type RunPort = Pick<typeof radarSourceRunService, 'begin' | 'complete'>;
+type IngestionPort = Pick<typeof radarEventIngestionService, 'ingest'>;
+
 export interface SevereWeatherAlertsDeps {
-  prisma: Pick<typeof prisma, 'incident'>;
-  incidentService: Pick<typeof IncidentService, 'setStatus' | 'upsertIncident'>;
-  guidanceJourneyService: Pick<typeof guidanceJourneyService, 'ingestSignal'>;
   severeWeatherAlertService: Pick<typeof severeWeatherAlertService, 'getActiveAlerts'>;
+  registry: RegistryPort;
+  runs: RunPort;
+  ingestion: IngestionPort;
   logger: AppLogger;
   iterateAllProperties: typeof iterateAllProperties;
   getPropertyGeo: typeof getPropertyGeo;
+  now(): Date;
+  correlationId(): string;
+  env: NodeJS.ProcessEnv;
 }
 
 const defaultDeps: SevereWeatherAlertsDeps = {
-  prisma,
-  incidentService: IncidentService,
-  guidanceJourneyService,
   severeWeatherAlertService,
+  registry: radarSourceRegistryService,
+  runs: radarSourceRunService,
+  ingestion: radarEventIngestionService,
   logger,
   iterateAllProperties,
   getPropertyGeo,
+  now: () => new Date(),
+  correlationId: randomUUID,
+  env: process.env,
 };
+
+function sourceRegistration(env: NodeJS.ProcessEnv): RadarSourceRegistrationInput {
+  return {
+    key: NWS_SOURCE_KEY,
+    family: 'weather' as const,
+    sourceType: 'weather_provider' as const,
+    name: 'National Weather Service active alerts',
+    provider: 'National Weather Service',
+    adapterVersion: 'nws-canonical-v1',
+    contractVersion: 1,
+    isEnabled: true,
+    environments: [resolveRadarRuntimeEnvironment(env)],
+    scheduleCron: '*/15 * * * *',
+    freshnessSeconds: 30 * 60,
+    supportedEventTypes: [
+      'weather',
+      'flood_risk',
+      'heat_wave',
+      'wind',
+      'hail',
+      'heavy_rain',
+    ],
+    coverageDescription: 'NWS active alert coverage for the United States',
+    configJson: {
+      canonicalHostAllowlist: ['api.weather.gov'],
+      endpoint: 'https://api.weather.gov/alerts/active',
+    },
+    coverage: [{
+      coverageType: 'country' as const,
+      countryCode: 'US',
+    }],
+  };
+}
+
+function laterAlert(
+  current: { alert: SevereWeatherAlert; geo: Geo } | undefined,
+  candidate: SevereWeatherAlert,
+  geo: Geo,
+) {
+  if (!current) return { alert: candidate, geo };
+  const currentTime = Date.parse(current.alert.sent ?? current.alert.effective ?? '');
+  const candidateTime = Date.parse(candidate.sent ?? candidate.effective ?? '');
+  return Number.isFinite(candidateTime) && (!Number.isFinite(currentTime) || candidateTime > currentTime)
+    ? { alert: candidate, geo }
+    : current;
+}
 
 export async function severeWeatherAlertsJob(
   opts?: { dryRun?: boolean; propertyId?: string },
   deps: SevereWeatherAlertsDeps = defaultDeps,
 ) {
-  const {
-    prisma,
-    incidentService,
-    guidanceJourneyService,
-    severeWeatherAlertService,
-    logger,
-    iterateAllProperties,
-    getPropertyGeo,
-  } = deps;
   const dryRun = opts?.dryRun === true;
   if (opts?.propertyId && !isPropertyAllowlisted(opts.propertyId)) {
     throw new Error(
       `[SevereWeatherAlerts] propertyId ${opts.propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`,
     );
   }
-  const smokeCorrelationId = opts?.propertyId ? generateSmokeCorrelationId('severe-weather-alerts') : undefined;
 
-  let createdOrUpdated = 0;
-  let resolved = 0;
-  const now = new Date();
+  const startedAt = deps.now();
+  const smokeCorrelationId = opts?.propertyId
+    ? generateSmokeCorrelationId('severe-weather-alerts')
+    : undefined;
+  const source = dryRun
+    ? { id: 'nws-dry-run', key: NWS_SOURCE_KEY }
+    : await deps.registry.register(sourceRegistration(deps.env));
+  const correlationId = smokeCorrelationId ?? `nws:${deps.correlationId()}`;
+  const begun = dryRun
+    ? {
+        runnable: true,
+        reason: 'dry run',
+        run: { id: 'nws-dry-run', correlationId },
+      }
+    : await deps.runs.begin({
+        sourceKey: source.key,
+        correlationId,
+        triggerType: 'scheduled',
+        startedAt,
+        metadataJson: {
+          provider: 'nws',
+          ...(opts?.propertyId ? { propertyId: opts.propertyId } : {}),
+          ...(smokeCorrelationId ? { smokeCorrelationId } : {}),
+        },
+      }, deps.env);
 
-  // In-run cache so properties sharing an as-yet-uncached zip within this run
-  // don't each trigger their own geocode call. getPropertyGeo also persists
-  // resolved coordinates onto Property.latitude/longitude, so future runs
-  // skip geocoding entirely for properties whose zip hasn't changed.
+  if (!begun.runnable) {
+    deps.logger.warn(
+      { reason: begun.reason },
+      '[SevereWeatherAlerts] NWS source run skipped',
+    );
+    return {
+      createdOrUpdated: 0,
+      resolved: 0,
+      smokeCorrelationId,
+      sourceRunStatus: 'skipped',
+      fetchSucceeded: 0,
+      fetchFailed: 0,
+      uniqueAlerts: 0,
+      rejected: 0,
+    };
+  }
+
   const geoRunCache = new Map<string, Geo | null>();
-  // WKR (risk/weather/coverage W3 fix): getActiveAlerts returns [] both when
-  // there are genuinely no active alerts AND when the NWS fetch itself
-  // failed (timeout/HTTP error/exception) — the two are indistinguishable
-  // from the array alone. Caching `fetchSucceeded` alongside the alerts
-  // lets the resolution loop below tell "confirmed clear" apart from
-  // "we don't know" so a transient NWS outage can't silently auto-resolve
-  // real, still-active severe weather incidents.
-  const alertsCache = new Map<string, { alerts: SevereWeatherAlert[]; fetchSucceeded: boolean }>();
+  const alertsCache = new Map<
+    string,
+    { alerts: SevereWeatherAlert[]; outcome: NwsFetchOutcome; geo: Geo }
+  >();
+  const uniqueAlerts = new Map<string, { alert: SevereWeatherAlert; geo: Geo }>();
+  let propertiesEvaluated = 0;
 
-  for await (const p of iterateAllProperties()) {
+  for await (const property of deps.iterateAllProperties()) {
+    const p = property as PropertyRow;
     if (opts?.propertyId && p.id !== opts.propertyId) continue;
     const zip = (p.zipCode ?? '').trim();
     if (!zip) continue;
-
-    const geo = await getPropertyGeo(p, geoRunCache);
+    const geo = await deps.getPropertyGeo(property, geoRunCache);
     if (!geo) continue;
+    propertiesEvaluated += 1;
 
     let cached = alertsCache.get(zip);
-    if (cached === undefined) {
-      let fetchSucceeded = false;
-      const alerts = await severeWeatherAlertService.getActiveAlerts(geo.lat, geo.lon, (outcome) => {
-        nwsFetchOutcomeTotal.inc({ outcome });
-        fetchSucceeded = outcome === 'ok';
-      });
-      cached = { alerts, fetchSucceeded };
+    if (!cached) {
+      let outcome: NwsFetchOutcome = 'error';
+      const alerts = await deps.severeWeatherAlertService.getActiveAlerts(
+        geo.lat,
+        geo.lon,
+        (value) => {
+          outcome = value;
+          nwsFetchOutcomeTotal.inc({ outcome: value });
+        },
+      );
+      cached = { alerts, outcome, geo };
       alertsCache.set(zip, cached);
     }
-    const { alerts, fetchSucceeded } = cached;
-
-    const activeAlertIds = new Set(alerts.map(a => a.nwsAlertId));
-
-    // Fetch this property's currently-open severe-weather incidents once —
-    // used both to resolve incidents explicitly superseded by a newer alert
-    // (a Watch upgraded to a Warning, or a warning re-issued/extended under a
-    // new alert id, signaled via that new alert's `references`) and, further
-    // below, to resolve incidents whose alert has simply dropped out of the
-    // active feed.
-    const openIncidents = await prisma.incident.findMany({
-      where: {
-        propertyId: p.id,
-        sourceType: 'WEATHER',
-        typeKey: TYPE_KEY,
-        isSuppressed: false,
-        status: { in: OPEN_SEVERE_WEATHER_STATUSES },
-      },
-      select: { id: true, details: true },
-    });
-
-    const openIncidentIdByAlertId = new Map<string, string>();
-    for (const incident of openIncidents) {
-      const details = (incident.details as Record<string, unknown> | null) ?? {};
-      const nwsAlertId = typeof details.nwsAlertId === 'string' ? details.nwsAlertId : null;
-      if (nwsAlertId) openIncidentIdByAlertId.set(nwsAlertId, incident.id);
-    }
-
-    const supersededIncidentIds = new Set<string>();
-    for (const alert of alerts) {
-      for (const referencedAlertId of alert.referencedAlertIds) {
-        const supersededIncidentId = openIncidentIdByAlertId.get(referencedAlertId);
-        if (supersededIncidentId) supersededIncidentIds.add(supersededIncidentId);
-      }
-    }
-    for (const incidentId of supersededIncidentIds) {
-      if (dryRun) {
-        resolved++;
-        logger.info(`[SevereWeatherAlerts] (dry run) Would resolve superseded incident ${incidentId}`);
-        continue;
-      }
-      // Same archival-hook rationale as the resolves below.
-      await incidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
-      resolved++;
-    }
-
-    for (const alert of alerts) {
-      const scoring = scoringInputsFor(alert);
-      const fingerprint = `property:${p.id}|${TYPE_KEY}|${alert.nwsAlertId}`;
-
-      if (dryRun) {
-        createdOrUpdated++;
-        logger.info(`[SevereWeatherAlerts] (dry run) Would upsert incident for property ${p.id} (alert=${alert.nwsAlertId})`);
-        continue;
-      }
-
-      await incidentService.upsertIncident(
-        {
-          propertyId: p.id,
-          userId: null,
-          sourceType: 'WEATHER',
-          typeKey: TYPE_KEY,
-          category: HAZARD_CATEGORY[alert.hazardFamily],
-          title: alert.event,
-          summary: summaryFor(alert),
-          details: {
-            hazardFamily: alert.hazardFamily,
-            nwsEvent: alert.event,
-            nwsAlertId: alert.nwsAlertId,
-            nwsSeverity: alert.severity,
-            senderName: alert.senderName,
-            effective: alert.effective,
-            expires: alert.expires,
-            headline: alert.headline,
-            instruction: alert.instruction,
-            description: alert.description,
-            geoHint: {
-              zip,
-              city: p.city ?? null,
-              state: p.state ?? null,
-              lat: geo.lat,
-              lon: geo.lon,
-              geoName: geo.name ?? null,
-              admin1: geo.admin1 ?? null,
-              country: geo.country ?? null,
-            },
-            mitigationLevel: 'NONE',
-            provider: 'nws',
-            ...scoring,
-            ...(smokeCorrelationId ? { smokeCorrelationId } : {}),
-          },
-          status: 'DETECTED',
-          fingerprint,
-          dedupeWindowMins: 24 * 60,
-          severityScore: initialScoreFor(alert.severity),
-          confidence: 70,
-        },
-        [
-          {
-            signalType: 'WEATHER_ALERT_NWS',
-            externalRef: `nws:${alert.nwsAlertId}`,
-            observedAt: now.toISOString(),
-            payload: {
-              zip,
-              hazardFamily: alert.hazardFamily,
-              event: alert.event,
-              severity: alert.severity,
-              lat: geo.lat,
-              lon: geo.lon,
-              expires: alert.expires,
-            },
-            scoreHint: null,
-            confidence: 70,
-          },
-        ]
+    if (cached.outcome !== 'ok') continue;
+    for (const alert of cached.alerts) {
+      uniqueAlerts.set(
+        alert.nwsAlertId,
+        laterAlert(uniqueAlerts.get(alert.nwsAlertId), alert, cached.geo),
       );
-
-      createdOrUpdated++;
-
-      try {
-        await guidanceJourneyService.ingestSignal({
-          propertyId: p.id,
-          signalIntentFamily: HAZARD_INTENT_FAMILY[alert.hazardFamily],
-          issueDomain: 'WEATHER',
-          decisionStage: 'AWARENESS',
-          executionReadiness: 'NEEDS_CONTEXT',
-          severity: isWarningLevel(alert.severity) ? 'HIGH' : 'MEDIUM',
-          severityScore: isWarningLevel(alert.severity) ? 85 : 55,
-          confidenceScore: 0.7,
-          sourceType: 'EXTERNAL',
-          sourceFeatureKey: 'severe-weather-alerts',
-          sourceEntityType: 'INCIDENT',
-          payloadJson: {
-            hazardFamily: alert.hazardFamily,
-            event: alert.event,
-            zip,
-            provider: 'nws',
-          },
-          expiresAt: alert.expires ? new Date(alert.expires) : new Date(now.getTime() + 6 * 3_600_000),
-        });
-      } catch (guidanceError) {
-        logger.warn({ err: guidanceError }, '[GUIDANCE] severe weather alert signal ingest failed');
-      }
-    }
-
-    // Resolve any remaining open severe-weather incidents for this property
-    // that are no longer represented in the currently active alert list
-    // (already-superseded ones were handled above and are skipped here).
-    // Conservative failure: only when the NWS fetch actually succeeded —
-    // an empty result from a failed fetch means "unknown", not "cleared",
-    // and must not auto-resolve real open incidents. The 48h stale safety
-    // net below still catches genuinely-cleared incidents if the outage
-    // persists across runs.
-    if (fetchSucceeded) {
-      for (const [nwsAlertId, incidentId] of openIncidentIdByAlertId) {
-        if (supersededIncidentIds.has(incidentId)) continue;
-        if (!activeAlertIds.has(nwsAlertId)) {
-          if (dryRun) {
-            resolved++;
-            logger.info(`[SevereWeatherAlerts] (dry run) Would resolve cleared incident ${incidentId}`);
-            continue;
-          }
-          // Route through IncidentService.setStatus (not a raw prisma update) so its
-          // RESOLVED-transition hook archives the linked guidance journey/signal too.
-          await incidentService.setStatus(incidentId, IncidentStatus.RESOLVED);
-          resolved++;
-        }
-      }
     }
   }
 
-  // Safety net: resolve lingering stale severe-weather incidents that were not
-  // refreshed recently (e.g. property dropped out of the list, job failures).
-  // Scoped to opts.propertyId when set, so a scoped smoke run can't touch
-  // stale incidents on unrelated properties.
-  const staleCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-  const staleIncidents = await prisma.incident.findMany({
-    where: {
-      sourceType: 'WEATHER',
-      typeKey: TYPE_KEY,
-      isSuppressed: false,
-      status: { in: OPEN_SEVERE_WEATHER_STATUSES },
-      updatedAt: { lt: staleCutoff },
-      ...(opts?.propertyId ? { propertyId: opts.propertyId } : {}),
-    },
-    select: { id: true },
-  });
-  for (const incident of staleIncidents) {
-    if (dryRun) {
-      resolved++;
-      logger.info(`[SevereWeatherAlerts] (dry run) Would resolve stale incident ${incident.id}`);
-      continue;
+  const fetchSucceeded = Array.from(alertsCache.values())
+    .filter((entry) => entry.outcome === 'ok').length;
+  const fetchFailed = alertsCache.size - fetchSucceeded;
+  let createdOrUpdated = 0;
+  let eventsCreated = 0;
+  let eventsUpdated = 0;
+  let resolved = 0;
+  const errors: Error[] = [];
+
+  for (const { alert, geo } of uniqueAlerts.values()) {
+    try {
+      const observation = await nwsRadarAdapter.normalize(alert, {
+        sourceDefinitionId: source.id,
+        observedAt: startedAt.toISOString(),
+        queryPoint: {
+          latitude: geo.lat,
+          longitude: geo.lon,
+        },
+      });
+      if (dryRun) {
+        createdOrUpdated += 1;
+        continue;
+      }
+      const ingested = await deps.ingestion.ingest(observation, {
+        sourceRunId: begun.run.id,
+        correlationId,
+      });
+      createdOrUpdated += 1;
+      if (ingested.outcome === 'created') eventsCreated += 1;
+      if (ingested.outcome === 'updated') eventsUpdated += 1;
+      if (ingested.lifecycleStatus === 'resolved' || ingested.lifecycleStatus === 'retracted') {
+        resolved += 1;
+      }
+    } catch (error) {
+      const normalized = error instanceof Error ? error : new Error(String(error));
+      errors.push(normalized);
+      deps.logger.error(
+        { err: normalized, nwsAlertId: alert.nwsAlertId },
+        '[SevereWeatherAlerts] Canonical NWS observation rejected',
+      );
     }
-    await incidentService.setStatus(incident.id, IncidentStatus.RESOLVED);
-    resolved++;
   }
 
-  // Dry-run activity is hypothetical, not real — don't pollute the
-  // production metric with counts that never actually happened.
+  let sourceRunStatus: 'success' | 'successful_empty' | 'partial' | 'failed' | 'skipped';
+  if (alertsCache.size === 0) sourceRunStatus = 'skipped';
+  else if (fetchSucceeded === 0) sourceRunStatus = 'failed';
+  else if (uniqueAlerts.size > 0 && errors.length === uniqueAlerts.size) sourceRunStatus = 'failed';
+  else if (fetchFailed > 0 || errors.length > 0) sourceRunStatus = 'partial';
+  else if (uniqueAlerts.size === 0) sourceRunStatus = 'successful_empty';
+  else sourceRunStatus = 'success';
+
   if (!dryRun) {
-    severeWeatherIncidentsTotal.inc({ action: 'created_or_updated' }, createdOrUpdated);
-    severeWeatherIncidentsTotal.inc({ action: 'resolved' }, resolved);
+    const errorMessage = sourceRunStatus === 'failed'
+      ? fetchSucceeded === 0
+        ? `All ${fetchFailed} NWS fetches failed`
+        : `All ${errors.length} canonical NWS observation(s) were rejected`
+      : sourceRunStatus === 'partial'
+        ? `${fetchFailed} NWS fetch(es) failed and ${errors.length} observation(s) were rejected`
+        : sourceRunStatus === 'skipped'
+          ? 'No properties with usable geography were evaluated'
+          : undefined;
+    await deps.runs.complete(begun.run.id, {
+      status: sourceRunStatus,
+      finishedAt: deps.now(),
+      dataFreshThrough: fetchSucceeded > 0 ? startedAt : undefined,
+      observationsReceived: uniqueAlerts.size,
+      observationsRejected: errors.length,
+      eventsCreated,
+      eventsUpdated,
+      eventsResolved: resolved,
+      propertiesEvaluated,
+      errorCode: errorMessage
+        ? sourceRunStatus === 'failed'
+          ? fetchSucceeded === 0 ? 'NWS_FETCH_FAILED' : 'NWS_OBSERVATIONS_REJECTED'
+          : sourceRunStatus === 'partial'
+            ? 'NWS_PARTIAL'
+            : 'NO_QUERY_POINTS'
+        : undefined,
+      errorMessage,
+      metadataJson: {
+        provider: 'nws',
+        fetchSucceeded,
+        fetchFailed,
+        queryPoints: alertsCache.size,
+      },
+    });
   }
 
-  return { createdOrUpdated, resolved, smokeCorrelationId };
+  return {
+    createdOrUpdated,
+    resolved,
+    smokeCorrelationId,
+    sourceRunStatus: dryRun ? 'dry_run' : sourceRunStatus,
+    fetchSucceeded,
+    fetchFailed,
+    uniqueAlerts: uniqueAlerts.size,
+    rejected: errors.length,
+  };
 }

@@ -126,10 +126,12 @@ test('worker safety policies remain fail-closed for dummy and unreviewed tax ing
   assert.doesNotMatch(configMap, /WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED: "true"/);
 });
 
-test('existing weather lifecycle guards preserve unknown rather than clearing on provider failure', () => {
+test('weather lifecycle guards preserve unknown rather than projecting provider failures as clear', () => {
   const severeWeather = read('apps/workers/src/jobs/severeWeatherAlerts.job.ts');
   const freeze = read('apps/workers/src/jobs/freezeRiskIncidents.job.ts');
 
-  assert.match(severeWeather, /if \(fetchSucceeded\) \{[\s\S]*setStatus/);
+  assert.match(severeWeather, /fetchSucceeded === 0\) sourceRunStatus = 'failed'/);
+  assert.match(severeWeather, /dataFreshThrough: fetchSucceeded > 0 \? startedAt : undefined/);
+  assert.doesNotMatch(severeWeather, /setStatus|upsertIncident|ingestSignal/);
   assert.match(freeze, /if \(minF == null\) continue;[\s\S]*if \(minF >= 28\)[\s\S]*setStatus/);
 });

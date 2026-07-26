@@ -24,6 +24,16 @@ function mockFetch(responseBody, status = 200) {
 function alertFeature(overrides = {}) {
   return {
     id: 'https://api.weather.gov/alerts/urn:oid:test-alert-1',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [-75.1, 39.9],
+        [-74.9, 39.9],
+        [-74.9, 40.1],
+        [-75.1, 40.1],
+        [-75.1, 39.9],
+      ]],
+    },
     properties: {
       id: 'urn:oid:test-alert-1',
       event: 'Flash Flood Warning',
@@ -34,6 +44,13 @@ function alertFeature(overrides = {}) {
       effective: '2026-07-06T12:00:00-04:00',
       expires: '2026-07-06T15:00:00-04:00',
       senderName: 'NWS Test Office',
+      sent: '2026-07-06T11:55:00-04:00',
+      onset: '2026-07-06T12:00:00-04:00',
+      ends: null,
+      status: 'Actual',
+      messageType: 'Alert',
+      urgency: 'Immediate',
+      certainty: 'Observed',
       ...overrides,
     },
   };
@@ -51,6 +68,11 @@ test('maps an in-scope NWS event to the correct hazard family', async () => {
   assert.equal(alerts[0].hazardFamily, 'FLOOD');
   assert.equal(alerts[0].nwsAlertId, 'urn:oid:test-alert-1');
   assert.equal(alerts[0].event, 'Flash Flood Warning');
+  assert.equal(alerts[0].canonicalUrl, 'https://api.weather.gov/alerts/urn:oid:test-alert-1');
+  assert.equal(alerts[0].sent, '2026-07-06T11:55:00-04:00');
+  assert.equal(alerts[0].urgency, 'Immediate');
+  assert.equal(alerts[0].certainty, 'Observed');
+  assert.equal(alerts[0].geometry.type, 'Polygon');
 });
 
 test('maps Watch-tier events to the same hazard family as their Warning counterpart', async () => {

@@ -1,122 +1,221 @@
-// apps/workers/tests/unit/severeWeatherAlertsJob.test.js
-//
-// W3 (risk/weather/coverage): getActiveAlerts returns [] both when there
-// are genuinely no active alerts AND when the NWS fetch itself failed —
-// the job used to auto-resolve every open severe-weather incident whenever
-// the alerts array was empty, regardless of why. A transient NWS outage
-// could silently close real, still-active incidents. Fixed by tracking
-// fetch success alongside the alerts and only resolving on a confirmed-ok
-// fetch.
-//
-// W4 item 1 (DI refactor): dependencies are injected directly instead of
-// via require.cache. This job transitively imports guidanceJourney.service.ts,
-// which constructs a GeminiService singleton at module load — that throws if
-// GEMINI_API_KEY is unset, so it's stubbed before the real require() below.
-
 const test = require('node:test');
 const assert = require('node:assert/strict');
-
-process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key';
+const fs = require('node:fs');
+const path = require('node:path');
 
 require('ts-node/register');
 
 const { severeWeatherAlertsJob } = require('../../src/jobs/severeWeatherAlerts.job.ts');
 
-const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
-
-function fakeDeps({ properties, openIncidents = [], alertsOutcome, alerts = [] }) {
-  const setStatusCalls = [];
-  const upsertCalls = [];
-
-  const deps = {
-    prisma: {
-      incident: {
-        // Distinguish the per-property open-incidents query (has propertyId)
-        // from the 48h stale-safety-net sweep (has updatedAt, no propertyId)
-        // — both hit the same model, and the safety net must not mask what
-        // this test is actually checking (same-run resolution behavior).
-        findMany: async (args) => (args?.where?.propertyId ? openIncidents : []),
-      },
-    },
-    incidentService: {
-      upsertIncident: async (input) => {
-        upsertCalls.push(input);
-        return { id: 'incident-new' };
-      },
-      setStatus: async (id, status) => {
-        setStatusCalls.push({ id, status });
-      },
-    },
-    guidanceJourneyService: { ingestSignal: async () => {} },
-    severeWeatherAlertService: {
-      getActiveAlerts: async (lat, lon, onOutcome) => {
-        onOutcome?.(alertsOutcome);
-        return alertsOutcome === 'ok' ? alerts : []; // both "ok, nothing active" and "failed" return []
-      },
-    },
-    logger: noopLogger,
-    iterateAllProperties: async function* () {
-      for (const p of properties) yield p;
-    },
-    getPropertyGeo: async (property) => {
-      if (typeof property.latitude === 'number' && typeof property.longitude === 'number') {
-        return { lat: property.latitude, lon: property.longitude };
-      }
-      return null;
-    },
-  };
-
-  return { deps, getSetStatusCalls: () => setStatusCalls, getUpsertCalls: () => upsertCalls };
-}
+const noopLogger = {
+  info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; },
+};
 
 function property(overrides = {}) {
   return {
     id: 'property-1',
-    address: '1 Main St',
     zipCode: '08536',
-    city: 'Plainsboro',
-    state: 'NJ',
     latitude: 40.33,
     longitude: -74.58,
-    geocodedZipCode: '08536', // pre-cached so getPropertyGeo skips real geocoding
     ...overrides,
   };
 }
 
-function openIncident(overrides = {}) {
+function alert(overrides = {}) {
   return {
-    id: 'incident-1',
-    details: { nwsAlertId: 'nws-alert-123' },
+    nwsAlertId: 'urn:oid:nws-alert-1',
+    referencedAlertIds: [],
+    hazardFamily: 'STORM',
+    event: 'Severe Thunderstorm Warning',
+    severity: 'Severe',
+    headline: 'Severe Thunderstorm Warning issued.',
+    description: 'Damaging winds are possible.',
+    instruction: 'Move indoors.',
+    sent: '2026-07-26T13:55:00Z',
+    effective: '2026-07-26T14:00:00Z',
+    onset: '2026-07-26T14:00:00Z',
+    expires: '2026-07-26T16:00:00Z',
+    ends: null,
+    senderName: 'NWS Mount Holly',
+    status: 'Actual',
+    messageType: 'Alert',
+    urgency: 'Immediate',
+    certainty: 'Observed',
+    canonicalUrl: 'https://api.weather.gov/alerts/urn:oid:nws-alert-1',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [-74.70, 40.20],
+        [-74.40, 40.20],
+        [-74.40, 40.50],
+        [-74.70, 40.50],
+        [-74.70, 40.20],
+      ]],
+    },
     ...overrides,
   };
 }
 
-test('does NOT resolve open incidents when the NWS fetch failed (fail-open regression guard)', async () => {
-  for (const outcome of ['error', 'timeout', 'http_error']) {
-    const { deps, getSetStatusCalls } = fakeDeps({
-      properties: [property()],
-      openIncidents: [openIncident()],
-      alertsOutcome: outcome,
-    });
+function fakeDeps({
+  properties = [property()],
+  fetchByZip = { '08536': { outcome: 'ok', alerts: [alert()] } },
+  ingestOutcome = 'created',
+} = {}) {
+  const calls = {
+    fetches: [],
+    registrations: [],
+    begins: [],
+    completions: [],
+    ingestions: [],
+  };
+  const deps = {
+    severeWeatherAlertService: {
+      async getActiveAlerts(lat, lon, onOutcome) {
+        const matchingProperty = properties.find((item) =>
+          item.latitude === lat && item.longitude === lon
+        );
+        const response = fetchByZip[matchingProperty?.zipCode] ?? {
+          outcome: 'error',
+          alerts: [],
+        };
+        calls.fetches.push({ lat, lon, response });
+        onOutcome?.(response.outcome);
+        return response.alerts;
+      },
+    },
+    registry: {
+      async register(input) {
+        calls.registrations.push(input);
+        return { id: 'nws-source-1', key: input.key };
+      },
+    },
+    runs: {
+      async begin(input) {
+        calls.begins.push(input);
+        return {
+          runnable: true,
+          reason: 'source is runnable',
+          run: { id: 'nws-run-1', correlationId: input.correlationId },
+        };
+      },
+      async complete(runId, input) {
+        calls.completions.push({ runId, input });
+        return { id: runId, ...input };
+      },
+    },
+    ingestion: {
+      async ingest(observation, context) {
+        calls.ingestions.push({ observation, context });
+        return {
+          outcome: ingestOutcome,
+          lifecycleStatus: observation.lifecycleStatus,
+          radarEventId: 'event-1',
+          radarEventRevisionId: 'revision-1',
+        };
+      },
+    },
+    logger: noopLogger,
+    iterateAllProperties: async function* () {
+      for (const item of properties) yield item;
+    },
+    getPropertyGeo: async (item) => ({
+      lat: item.latitude,
+      lon: item.longitude,
+      name: item.zipCode,
+    }),
+    now: () => new Date('2026-07-26T14:05:00Z'),
+    correlationId: () => 'correlation-1',
+    env: {
+      NODE_ENV: 'test',
+      WORKER_EXTERNAL_INGEST_ENABLED: 'true',
+    },
+  };
+  return { calls, deps };
+}
 
-    const result = await severeWeatherAlertsJob(undefined, deps);
-
-    assert.equal(getSetStatusCalls().length, 0, `outcome=${outcome} must not resolve any incident`);
-    assert.equal(result.resolved, 0);
-  }
-});
-
-test('resolves an open incident whose alert genuinely cleared (confirmed-ok empty fetch)', async () => {
-  const { deps, getSetStatusCalls } = fakeDeps({
-    properties: [property()],
-    openIncidents: [openIncident()],
-    alertsOutcome: 'ok',
+test('shared-ZIP fetches are cached and duplicate NWS alerts ingest once', async () => {
+  const { calls, deps } = fakeDeps({
+    properties: [
+      property(),
+      property({ id: 'property-2', latitude: 40.34, longitude: -74.57 }),
+    ],
   });
 
   const result = await severeWeatherAlertsJob(undefined, deps);
 
-  assert.equal(getSetStatusCalls().length, 1);
-  assert.equal(getSetStatusCalls()[0].id, 'incident-1');
-  assert.equal(getSetStatusCalls()[0].status, 'RESOLVED');
-  assert.equal(result.resolved, 1);
+  assert.equal(calls.fetches.length, 1);
+  assert.equal(calls.ingestions.length, 1);
+  assert.equal(result.uniqueAlerts, 1);
+  assert.equal(result.createdOrUpdated, 1);
+  assert.equal(result.sourceRunStatus, 'success');
+  assert.equal(calls.completions[0].input.propertiesEvaluated, 2);
+  assert.equal(calls.registrations[0].provider, 'National Weather Service');
+  assert.equal(calls.registrations[0].sourceType, 'weather_provider');
+});
+
+test('failed NWS fetch records failed source health and never resolves or ingests', async () => {
+  for (const outcome of ['error', 'timeout', 'http_error']) {
+    const { calls, deps } = fakeDeps({
+      fetchByZip: { '08536': { outcome, alerts: [] } },
+    });
+
+    const result = await severeWeatherAlertsJob(undefined, deps);
+
+    assert.equal(calls.ingestions.length, 0);
+    assert.equal(result.resolved, 0);
+    assert.equal(result.sourceRunStatus, 'failed');
+    assert.equal(calls.completions[0].input.status, 'failed');
+    assert.equal(calls.completions[0].input.dataFreshThrough, undefined);
+    assert.match(calls.completions[0].input.errorMessage, /fetches failed/);
+  }
+});
+
+test('confirmed successful empty NWS fetch records successful-empty, not failure', async () => {
+  const { calls, deps } = fakeDeps({
+    fetchByZip: { '08536': { outcome: 'ok', alerts: [] } },
+  });
+
+  const result = await severeWeatherAlertsJob(undefined, deps);
+
+  assert.equal(result.sourceRunStatus, 'successful_empty');
+  assert.equal(calls.completions[0].input.status, 'successful_empty');
+  assert.deepEqual(calls.completions[0].input.dataFreshThrough, new Date('2026-07-26T14:05:00Z'));
+});
+
+test('mixed fetch outcomes remain partial while successful observations ingest', async () => {
+  const { calls, deps } = fakeDeps({
+    properties: [
+      property(),
+      property({
+        id: 'property-2',
+        zipCode: '10019',
+        latitude: 40.76,
+        longitude: -73.98,
+      }),
+    ],
+    fetchByZip: {
+      '08536': { outcome: 'ok', alerts: [alert()] },
+      '10019': { outcome: 'timeout', alerts: [] },
+    },
+  });
+
+  const result = await severeWeatherAlertsJob(undefined, deps);
+
+  assert.equal(result.sourceRunStatus, 'partial');
+  assert.equal(result.fetchSucceeded, 1);
+  assert.equal(result.fetchFailed, 1);
+  assert.equal(calls.ingestions.length, 1);
+  assert.equal(calls.completions[0].input.status, 'partial');
+  assert.match(calls.completions[0].input.errorMessage, /1 NWS fetch/);
+});
+
+test('provider job has no direct Incident or Guidance projection path', () => {
+  const source = fs.readFileSync(
+    path.resolve(__dirname, '../../src/jobs/severeWeatherAlerts.job.ts'),
+    'utf8',
+  );
+  assert.doesNotMatch(source, /IncidentService|upsertIncident|setStatus/);
+  assert.doesNotMatch(source, /guidanceJourneyService|ingestSignal/);
+  assert.match(source, /deps\.ingestion\.ingest/);
+  assert.match(source, /deps\.runs\.complete/);
 });
