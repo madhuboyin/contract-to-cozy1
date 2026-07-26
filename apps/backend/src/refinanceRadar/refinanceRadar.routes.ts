@@ -11,6 +11,7 @@ import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { RefinanceRadarController } from './refinanceRadar.controller';
 import {
+  compareLoanEstimatesSchema,
   historyQuerySchema,
   ingestRateSnapshotSchema,
   rateHistoryQuerySchema,
@@ -183,6 +184,14 @@ router.post(
   propertyAuthMiddleware,
   validateBody(runScenarioSchema),
   RefinanceRadarController.exportScenarioMarkdown,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-radar/loan-estimates/compare',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(compareLoanEstimatesSchema),
+  RefinanceRadarController.compareLoanEstimates,
 );
 
 router.post(

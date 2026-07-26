@@ -1,0 +1,74 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const {
+  compareRefinanceLoanEstimates,
+} = require('../../dist/refinanceRadar/refinanceLoanEstimateComparison');
+
+function offer(overrides = {}) {
+  return {
+    id: 'offer-a',
+    lenderName: 'Lender A',
+    loanTermYears: 30,
+    loanType: 'FIXED',
+    noteRatePct: 5.75,
+    aprPct: 5.95,
+    monthlyPrincipalAndInterestUsd: 1900,
+    loanCostsUsd: 8000,
+    lenderCreditsUsd: 1000,
+    cashToCloseUsd: 9000,
+    fiveYearTotalPaidUsd: 125000,
+    fiveYearPrincipalPaidUsd: 26000,
+    ...overrides,
+  };
+}
+
+test('compares disclosed costs without declaring one universal winner', () => {
+  const result = compareRefinanceLoanEstimates([
+    offer(),
+    offer({
+      id: 'offer-b',
+      lenderName: 'Lender B',
+      noteRatePct: 5.5,
+      aprPct: 6.05,
+      monthlyPrincipalAndInterestUsd: 1825,
+      loanCostsUsd: 12000,
+      lenderCreditsUsd: 500,
+      cashToCloseUsd: 13000,
+      fiveYearTotalPaidUsd: 122000,
+      fiveYearPrincipalPaidUsd: 24000,
+    }),
+  ]);
+
+  assert.deepEqual(result.leaders.APR, ['offer-a']);
+  assert.deepEqual(result.leaders.MONTHLY_PRINCIPAL_AND_INTEREST, ['offer-b']);
+  assert.deepEqual(result.leaders.NET_LOAN_COSTS, ['offer-a']);
+  assert.deepEqual(result.leaders.FIVE_YEAR_BORROWING_COST, ['offer-b']);
+  assert.equal(result.offers[0].netLoanCostsUsd, 7000);
+  assert.equal(result.offers[1].fiveYearBorrowingCostUsd, 98000);
+  assert.match(result.disclaimer, /does not.*recommend a lender/i);
+});
+
+test('flags incomplete five-year disclosures and unlike terms', () => {
+  const withoutFiveYear = offer({
+    id: 'offer-b',
+    lenderName: 'Lender B',
+    loanTermYears: 15,
+    fiveYearTotalPaidUsd: undefined,
+    fiveYearPrincipalPaidUsd: undefined,
+  });
+  const result = compareRefinanceLoanEstimates([offer(), withoutFiveYear]);
+
+  assert.deepEqual(result.missingFiveYearCostOfferIds, ['offer-b']);
+  assert.equal(result.offers[1].fiveYearBorrowingCostUsd, null);
+  assert.match(result.offers[1].cautions[0], /page 3/i);
+  assert.ok(result.summary.some((line) => /not all use the same/i.test(line)));
+});
+
+test('preserves an APR transcription warning instead of silently correcting it', () => {
+  const result = compareRefinanceLoanEstimates([
+    offer({ aprPct: 5.5 }),
+    offer({ id: 'offer-b', lenderName: 'Lender B' }),
+  ]);
+  assert.match(result.offers[0].cautions[0], /APR is below/i);
+});

@@ -301,6 +301,43 @@ export type RefinanceAlertPreferenceDTO = {
   externalDeliveryEnabled: boolean;
 };
 
+export type RefinanceLoanEstimateInput = {
+  id: string;
+  lenderName: string;
+  loanTermYears: number;
+  loanType: 'FIXED' | 'ARM' | 'OTHER';
+  noteRatePct: number;
+  aprPct: number;
+  monthlyPrincipalAndInterestUsd: number;
+  loanCostsUsd: number;
+  lenderCreditsUsd: number;
+  cashToCloseUsd: number;
+  fiveYearTotalPaidUsd?: number;
+  fiveYearPrincipalPaidUsd?: number;
+};
+
+export type LoanEstimateMetric =
+  | 'APR'
+  | 'MONTHLY_PRINCIPAL_AND_INTEREST'
+  | 'NET_LOAN_COSTS'
+  | 'CASH_TO_CLOSE'
+  | 'FIVE_YEAR_BORROWING_COST';
+
+export type RefinanceLoanEstimateComparison = {
+  offers: Array<
+    RefinanceLoanEstimateInput & {
+      netLoanCostsUsd: number;
+      fiveYearBorrowingCostUsd: number | null;
+      bestMetrics: LoanEstimateMetric[];
+      cautions: string[];
+    }
+  >;
+  leaders: Partial<Record<LoanEstimateMetric, string[]>>;
+  summary: string[];
+  missingFiveYearCostOfferIds: string[];
+  disclaimer: string;
+};
+
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export async function getRadarStatus(
@@ -373,6 +410,17 @@ export async function updateRefinanceAlertPreference(
     preference,
   );
   return res.data.preference as RefinanceAlertPreferenceDTO;
+}
+
+export async function compareRefinanceLoanEstimates(
+  propertyId: string,
+  offers: RefinanceLoanEstimateInput[],
+): Promise<RefinanceLoanEstimateComparison> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/refinance-radar/loan-estimates/compare`,
+    { offers },
+  );
+  return res.data.comparison as RefinanceLoanEstimateComparison;
 }
 
 export async function runScenario(

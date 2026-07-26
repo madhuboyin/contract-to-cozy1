@@ -51,6 +51,7 @@ import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { refinanceLoopTrust, trustDateLabel } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
 import { MortgageRateHistoryChart } from './MortgageRateHistoryChart';
+import { LoanEstimateComparisonCard } from './LoanEstimateComparisonCard';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2130,6 +2131,9 @@ export default function MortgageRefinanceRadarClient() {
 
           {/* 6. Scenario planner */}
           <ScenarioCalculator propertyId={propertyId} contextData={available} />
+
+          {/* 7. Official lender disclosure comparison */}
+          <LoanEstimateComparisonCard propertyId={propertyId} />
 
           <RefinanceFeedbackCard
             propertyId={propertyId}

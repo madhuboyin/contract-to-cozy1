@@ -7,6 +7,7 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types/auth.types';
 import { RefinanceRadarService } from './refinanceRadar.service';
 import {
+  CompareLoanEstimatesBody,
   HistoryQuery,
   IngestRateSnapshotBody,
   RateHistoryQuery,
@@ -28,6 +29,7 @@ import {
 } from './refinanceAlertPreference.service';
 import { buildRefinanceScenarioMarkdown } from './refinanceScenarioMarkdown';
 import { prisma } from '../lib/prisma';
+import { compareRefinanceLoanEstimates } from './refinanceLoanEstimateComparison';
 
 const service = new RefinanceRadarService();
 
@@ -38,6 +40,38 @@ function requireUserId(req: AuthRequest): string {
 }
 
 export class RefinanceRadarController {
+  static async compareLoanEstimates(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId } = req.params;
+      const body = req.body as CompareLoanEstimatesBody;
+      const comparison = compareRefinanceLoanEstimates(body.offers);
+
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: 'refinance_loan_estimates_compared',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'loan_estimate_comparison',
+        metadataJson: {
+          offerCount: body.offers.length,
+          completeFiveYearCostCount:
+            body.offers.length - comparison.missingFiveYearCostOfferIds.length,
+        },
+      });
+
+      res.json({ success: true, data: { comparison } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getAlertPreference(
     req: AuthRequest,
     res: Response,

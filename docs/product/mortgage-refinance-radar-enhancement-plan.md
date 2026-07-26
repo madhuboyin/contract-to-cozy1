@@ -114,17 +114,18 @@ scenario metadata JSON, so no schema change or migration is required.
 | Funnel and trust instrumentation and reporting | Complete | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, durable alert-suppression outcomes, evaluation coverage, duplicate alerts, and freshness guardrails are aggregated through the authorized `/api/admin/analytics/refinance-radar` report. |
 | FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Complete for planning | Explicit Financing loan types drive FHA streamline, VA IRRRL, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, and second-lien coordination pathways. Every pathway lists facts to confirm and avoids approval claims or hard-coded county limits. |
 | Push notifications | Deferred | Requires a configured push provider and consent contract. |
-| Lender-offer and Loan Estimate comparison | Deferred | Begin only after trust and usefulness guardrails demonstrate readiness. |
+| Lender-offer and Loan Estimate comparison | Comparison foundation complete | Homeowners can compare two to four official Loan Estimates using disclosed APR, payment, lender costs/credits, cash to close, and page-3 five-year totals. The comparison is calculation-only and not persisted; document extraction, saved comparisons, and execution handoff remain gated. |
 
 ## Executive recommendation
 
 > **Decision:** Fund a three-release evolution that makes the radar genuinely proactive: evaluate every eligible property after each rate update, promote state transitions onto Home, and explain the decision with a one-year rate view and complete cost assumptions.
 
 The feature now has the calculation, orchestration, Home promotion, proactive
-data capture, explainability, Markdown export, and feedback foundations required
-for an always-on product. Remaining product work is concentrated in
-program-specific eligibility, analytics reporting, push delivery, and eventual
-lender-offer comparison.
+data capture, explainability, Markdown export, feedback, and official
+Loan Estimate comparison foundations required for an always-on product.
+Remaining product work is concentrated in push-provider integration and a
+governed path from an unsaved offer comparison to document-assisted review,
+saved comparisons, and execution handoff.
 
 - Treat Financing Center as the only owner of mortgage facts; never ask users to duplicate known information.
 

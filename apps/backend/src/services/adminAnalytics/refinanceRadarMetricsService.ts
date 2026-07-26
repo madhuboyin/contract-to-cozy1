@@ -231,6 +231,9 @@ export function aggregateRefinanceRadarMetrics(input: RefinanceRadarMetricsInput
       scenarioRunRate: ratio(scenarioRuns, opportunityViews),
       scenariosSaved: eventCount('refinance_scenario_saved'),
       markdownExports: eventCount('refinance_scenario_markdown_exported'),
+      loanEstimateComparisons: eventCount(
+        'refinance_loan_estimates_compared',
+      ),
     },
     decisionQuality: {
       medianProjectedMonthlySavingsUsd: median(opportunitySavings),

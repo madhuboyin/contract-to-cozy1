@@ -91,6 +91,65 @@ export const runScenarioSchema = z
 
 export type RunScenarioBody = z.infer<typeof runScenarioSchema>;
 
+const loanEstimateOfferSchema = z
+  .object({
+    id: z.string().trim().min(1).max(80),
+    lenderName: z.string().trim().min(1).max(120),
+    loanTermYears: z.number().int().min(5).max(50),
+    loanType: z.enum(['FIXED', 'ARM', 'OTHER']),
+    noteRatePct: z.number().positive().max(30),
+    aprPct: z.number().positive().max(30),
+    monthlyPrincipalAndInterestUsd: z.number().positive().max(1_000_000),
+    loanCostsUsd: z.number().min(0).max(5_000_000),
+    lenderCreditsUsd: z.number().min(0).max(5_000_000),
+    cashToCloseUsd: z.number().min(0).max(10_000_000),
+    fiveYearTotalPaidUsd: z.number().min(0).max(20_000_000).optional(),
+    fiveYearPrincipalPaidUsd: z.number().min(0).max(20_000_000).optional(),
+  })
+  .superRefine((offer, ctx) => {
+    if (
+      Boolean(offer.fiveYearTotalPaidUsd != null) !==
+      Boolean(offer.fiveYearPrincipalPaidUsd != null)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['fiveYearTotalPaidUsd'],
+        message: 'Provide both five-year values or leave both blank.',
+      });
+    }
+    if (
+      offer.fiveYearTotalPaidUsd != null &&
+      offer.fiveYearPrincipalPaidUsd != null &&
+      offer.fiveYearPrincipalPaidUsd > offer.fiveYearTotalPaidUsd
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['fiveYearPrincipalPaidUsd'],
+        message: 'Five-year principal paid cannot exceed total paid.',
+      });
+    }
+  });
+
+export const compareLoanEstimatesSchema = z
+  .object({
+    offers: z.array(loanEstimateOfferSchema).min(2).max(4),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const ids = value.offers.map((offer) => offer.id);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['offers'],
+        message: 'Each offer must have a unique id.',
+      });
+    }
+  });
+
+export type CompareLoanEstimatesBody = z.infer<
+  typeof compareLoanEstimatesSchema
+>;
+
 export const refinanceFeedbackSchema = z.object({
   feedback: z.enum(['HELPFUL', 'NOT_NOW', 'NOT_RELEVANT']),
   context: z.enum(['RADAR', 'OPPORTUNITY', 'SCENARIO']).default('RADAR'),
