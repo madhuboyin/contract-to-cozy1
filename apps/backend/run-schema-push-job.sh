@@ -248,6 +248,11 @@ spec:
               mkdir -p "\${HOME}" "\${NPM_CONFIG_CACHE}"
               cd /tmp
               npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma --version
+              echo "Ensuring required PostGIS extension is installed..."
+              printf '%s\n' 'CREATE EXTENSION IF NOT EXISTS postgis;' | \
+                npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
+                  --stdin \
+                  --schema=/config/schema.prisma
               npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db push \
                 --accept-data-loss \
                 --skip-generate \

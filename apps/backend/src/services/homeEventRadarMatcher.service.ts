@@ -7,7 +7,11 @@ import { prisma } from '../lib/prisma';
 import { buildUnifiedEventEnvelope } from './eventSignalProjection.service';
 import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
-import { propertyWhereForRadarEvent } from '../modules/homeEventRadar/services/radarMatchDiscovery.service';
+import {
+  explainRadarGeographicMatch,
+  propertyWhereForRadarEvent,
+  radarEventMatchesPropertyId,
+} from '../modules/homeEventRadar/services/radarMatchDiscovery.service';
 import { radarIncidentPromotionService } from '../modules/homeEventRadar/services/radarIncidentPromotion.service';
 import {
   radarMatchVisibleFrom,
@@ -38,8 +42,13 @@ interface PropertySnapshot {
   propertySize: number | null;
   dwellingType: string;
   zipCode: string;
+  normalizedZipCode: string | null;
   city: string;
   state: string;
+  countyFips: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  geographyVersion: number;
 }
 
 interface ImpactDriver {
@@ -110,8 +119,13 @@ const PROPERTY_FIELDS_SELECT = {
   propertySize: true,
   dwellingType: true,
   zipCode: true,
+  normalizedZipCode: true,
   city: true,
   state: true,
+  countyFips: true,
+  latitude: true,
+  longitude: true,
+  geographyVersion: true,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -535,12 +549,25 @@ async function findMatchingProperties(
   event: any,
   propertyIdFilter?: string[] | null,
 ): Promise<PropertySnapshot[]> {
-  let where = propertyWhereForRadarEvent(event);
-  if (!where) return [];
   if (propertyIdFilter && propertyIdFilter.length > 0) {
-    where = { AND: [where, { id: { in: propertyIdFilter } }] };
+    const eligibility = await Promise.all(
+      propertyIdFilter.map(async (propertyId) => ({
+        propertyId,
+        matches: await radarEventMatchesPropertyId(event, propertyId),
+      })),
+    );
+    const eligiblePropertyIds = eligibility
+      .filter((candidate) => candidate.matches)
+      .map((candidate) => candidate.propertyId);
+    if (eligiblePropertyIds.length === 0) return [];
+    return prisma.property.findMany({
+      where: { id: { in: eligiblePropertyIds } },
+      select: PROPERTY_FIELDS_SELECT,
+    }) as unknown as Promise<PropertySnapshot[]>;
   }
 
+  const where = propertyWhereForRadarEvent(event);
+  if (!where) return [];
   return prisma.property.findMany({
     where,
     select: PROPERTY_FIELDS_SELECT,
@@ -584,6 +611,8 @@ export async function runMatchingForEvent(
       const impact = computeImpact(event, property);
       const visibleFrom = radarMatchVisibleFrom(event);
       const visibleUntil = radarMatchVisibleUntil(event);
+      const evaluatedAt = new Date();
+      const matchExplanation = explainRadarGeographicMatch(event, property, evaluatedAt);
 
       const match = await db.propertyRadarMatch.upsert({
         where: {
@@ -601,6 +630,10 @@ export async function runMatchingForEvent(
           impactFactorsJson: impact.impactFactorsJson,
           recommendedActionsJson: impact.recommendedActionsJson,
           matchedSystemsJson: impact.matchedSystemsJson,
+          matchExplanationJson: matchExplanation,
+          matcherVersion: matchExplanation.matcherVersion,
+          propertyGeographyVersion: property.geographyVersion,
+          lastEvaluatedAt: evaluatedAt,
           isVisible: true,
           visibleFrom,
           visibleUntil,
@@ -612,6 +645,10 @@ export async function runMatchingForEvent(
           impactFactorsJson: impact.impactFactorsJson,
           recommendedActionsJson: impact.recommendedActionsJson,
           matchedSystemsJson: impact.matchedSystemsJson,
+          matchExplanationJson: matchExplanation,
+          matcherVersion: matchExplanation.matcherVersion,
+          propertyGeographyVersion: property.geographyVersion,
+          lastEvaluatedAt: evaluatedAt,
           isVisible: true,
           visibleFrom,
           visibleUntil,

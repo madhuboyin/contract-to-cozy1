@@ -35,7 +35,8 @@
 | HER-204 Incident promotion bridge | Complete; DB application pending | One dedicated projection service owns match-linked create/update/close behavior, persists revision/source/provider provenance, maps impact and explicit confidence, resolves through IncidentService, and leaves Guidance exclusively on the idempotent Incident bridge |
 | HER-205 Weather lifecycle convergence | Complete | NWS references resolve or retract prior canonical identities, provider end times expire events, failed fetches never imply resolution, stale fallback requires a fully successful run, and terminal matches remain in Recently Ended for 72 hours |
 | HER-206 Weather end-to-end acceptance | Complete | Deterministic watch, warning, escalation, extended/replayed expiration, supersession, resolution, failed/successful empty, and freeze lifecycle fixtures assert exact event/revision/match/Incident/Journey/notification-decision totals and representative in-process p95 |
-| HER-300+ | Not started | Advanced geospatial matching, homeowner APIs, actions, and operations remain |
+| HER-300 Geographic matcher | Complete; DB application pending | Exact property, bounded point/radius distance, normalized ZIP, city/state, county FIPS, state, and Polygon/MultiPolygon matching now use conservative canonical rules; spatial scans use indexed PostGIS queries and matches persist deterministic explanations |
+| HER-301+ | Not started | Impact-rule refactoring, confidence scoring, reconciliation, homeowner APIs, actions, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -663,8 +664,9 @@ bounded cursor page of candidate property IDs, and dispatches deterministic `pro
 at most one continuation. Each property scope executes independently and throws on a property
 failure so BullMQ retries only that property; replayed scans produce the same child job identities.
 Canonical property, postal-code, state, and county identifiers are parsed without broadening or
-guessing. Point, radius, and polygon scopes terminate as `unsupported_geography` until HER-300
-provides indexed PostGIS matching. The consumer has five exponential attempts with jitter,
+guessing. At HER-203 completion, point, radius, and polygon scopes terminated as
+`unsupported_geography`; HER-300 subsequently replaced that terminal path with indexed PostGIS
+matching. The consumer has five exponential attempts with jitter,
 retained completed/failed history, lag/duration/outcome/property/retry/dead-letter metrics, a
 fail-closed `RADAR_MATCH_ENABLED` switch, bounded page-size and concurrency configuration, and
 graceful Worker/Queue shutdown. No database schema change was required.
@@ -793,6 +795,22 @@ Return an explanation:
 Matched because the property's canonical point is inside NWS polygon ...
 Matched because property county FIPS equals ...
 ```
+
+Implementation note: `radarMatchDiscovery.service.ts` now owns the conservative geographic query
+contract. Exact property, normalized five-digit ZIP, city plus state, county FIPS, and state use
+bounded Prisma queries. Point and radius use `ST_DWithin` against the existing GIST-indexed
+`Property.locationPoint`; Polygon and MultiPolygon use `ST_Covers`, intentionally including
+properties on an authoritative boundary. Point-only observations use a bounded
+`RADAR_POINT_MATCH_DISTANCE_METERS` threshold (default 1,000 meters; allowed 1–100,000), while
+explicit radii remain capped at 1,000,000 meters. Malformed spatial evidence, city without state,
+county names without FIPS, and non-code state scopes fail closed. Each independently dispatched
+property scope revalidates current canonical geography before matching, so geocoding changes
+between scan and execution cannot create stale matches. Successful matches record
+`geography-v1`, the property geography version, evaluation time, and a deterministic explanation
+including distance where applicable. No Prisma schema change or migration script was required.
+The existing owner-run schema-push job now idempotently enables the PostGIS extension before
+`prisma db push`; this is required because Prisma cannot create PostgreSQL extensions from an
+`Unsupported("geography(...)")` field declaration.
 
 ### HER-301 — Impact-rule refactor
 

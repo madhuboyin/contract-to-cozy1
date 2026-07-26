@@ -69,12 +69,12 @@ const polygonRingSchema = z.array(
   }
 });
 
-const polygonGeoJsonSchema = z.object({
+export const polygonGeoJsonSchema = z.object({
   type: z.literal('Polygon'),
   coordinates: z.array(polygonRingSchema).min(1),
 });
 
-const multiPolygonGeoJsonSchema = z.object({
+export const multiPolygonGeoJsonSchema = z.object({
   type: z.literal('MultiPolygon'),
   coordinates: z.array(z.array(polygonRingSchema).min(1)).min(1),
 });

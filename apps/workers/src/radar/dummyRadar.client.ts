@@ -59,7 +59,7 @@ function geographyKeyForType(type: DummyRadarRawSignal['geography']['type'], pro
     case 'zip':
       return property.zipCode;
     case 'city':
-      return property.city;
+      return `${property.state}:${property.city}`;
     case 'state':
       return property.state;
     default:

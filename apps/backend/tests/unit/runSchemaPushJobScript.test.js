@@ -163,6 +163,14 @@ test('migration job uses an isolated pinned Prisma runtime', () => {
     scriptSource,
     /npx --yes --package=prisma@\$\{PRISMA_CLI_VERSION\} prisma db push/,
   );
+  assert.match(
+    scriptSource,
+    /CREATE EXTENSION IF NOT EXISTS postgis/,
+  );
+  assert.match(
+    scriptSource,
+    /prisma db execute[\s\S]*--stdin[\s\S]*--schema=\/config\/schema\.prisma/,
+  );
   assert.match(scriptSource, /name: NPM_CONFIG_CACHE/);
   assert.match(scriptSource, /runAsNonRoot: true/);
   assert.match(scriptSource, /allowPrivilegeEscalation: false/);

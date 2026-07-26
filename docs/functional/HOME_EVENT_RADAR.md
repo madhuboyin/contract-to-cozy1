@@ -1014,7 +1014,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 ## Current Limitations
 
 - Three real external source paths exist: tax reassessment (requires configured jurisdictions), NWS alerts, and Open-Meteo freeze forecasts.
-- Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Property/postal/admin scopes are matched through resumable pages with independently retryable property jobs; polygon NWS alerts still await indexed geospatial matching.
+- Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
 - No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
 - `county` and `polygon` matching are not implemented.
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
@@ -1034,15 +1034,15 @@ through the durable ingest consumer.
 NWS preserves CAP identity and polygon evidence; freeze forecasts use stable property-scoped identity
 and resolve only after a successful warm forecast. The durable match consumer validates each
 event revision, scans candidates in bounded resumable pages, and retries each property scope
-independently. Property-scoped freeze events can now populate the Radar feed. NWS polygon coverage
-still depends on HER-300's indexed geospatial matcher. HER-205 now resolves or retracts referenced
+independently. Property-scoped freeze events and NWS Polygon/MultiPolygon alerts can now populate
+the Radar feed through exact property or indexed spatial matching. HER-205 now resolves or retracts referenced
 NWS identities, expires authoritative end times, gates stale cleanup behind a fully successful
 fetch, and retains terminal matches in a 72-hour Recently Ended feed group. Provider failures never
 imply resolution. HER-206 now supplies an exact-count weather acceptance matrix covering provider
 updates, replay, supersession, resolution, empty/failure semantics, and the complete freeze
 lifecycle. The Incident bridge now carries authoritative revision-scoped weather signals so the
 existing Incident evaluator can activate eligible notifications. HER-300 indexed geospatial
-matching is the next delivery slice.
+matching is complete; HER-301's pure impact-rule refactor is the next delivery slice.
 
 ### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
 
