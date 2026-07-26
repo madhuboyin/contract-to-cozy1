@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 
 const backendRoot = path.resolve(__dirname, '../..');
 const scriptPath = path.join(backendRoot, 'run-schema-push-job.sh');
+const scriptSource = fs.readFileSync(scriptPath, 'utf8');
 
 function runScript(scenario) {
   const tempRoot = fs.mkdtempSync(
@@ -150,4 +151,21 @@ test('pod that completes before readiness is treated as success', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Schema push completed successfully/);
   assert.doesNotMatch(result.stdout, /Streaming logs for migration-pod-1/);
+});
+
+test('migration job uses an isolated pinned Prisma runtime', () => {
+  assert.match(
+    scriptSource,
+    /MIGRATION_IMAGE=.*node:22-bookworm@sha256:[a-f0-9]{64}/,
+  );
+  assert.match(scriptSource, /PRISMA_CLI_VERSION=.*5\.22\.0/);
+  assert.match(
+    scriptSource,
+    /npx --yes --package=prisma@\$\{PRISMA_CLI_VERSION\} prisma db push/,
+  );
+  assert.match(scriptSource, /name: NPM_CONFIG_CACHE/);
+  assert.match(scriptSource, /runAsNonRoot: true/);
+  assert.match(scriptSource, /allowPrivilegeEscalation: false/);
+  assert.doesNotMatch(scriptSource, /image: \$\{BACKEND_IMAGE\}/);
+  assert.doesNotMatch(scriptSource, /cd \/app/);
 });

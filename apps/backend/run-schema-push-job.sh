@@ -2,15 +2,17 @@
 set -Eeuo pipefail
 
 # Push the local Prisma schema to the production database through a one-off
-# Kubernetes Job. The backend image already contains Prisma, so the Job invokes
-# that binary directly instead of asking npx to download a version at runtime.
+# Kubernetes Job. The Job intentionally uses a clean, pinned Node image instead
+# of the application image so database maintenance cannot be blocked by a
+# damaged or stale application dependency layer.
 #
 # Usage:
 #   ./run-schema-push-job.sh
 #
 # Optional overrides:
 #   NAMESPACE=production
-#   BACKEND_IMAGE=ghcr.io/madhuboyin/contract-to-cozy/backend:latest
+#   MIGRATION_IMAGE=node:22-bookworm@sha256:...
+#   PRISMA_CLI_VERSION=5.22.0
 #   DATABASE_URL_SECRET=app-secrets
 #   DATABASE_URL_SECRET_KEY=DATABASE_URL
 #   PRISMA_CONFIGMAP=prisma-schema
@@ -24,7 +26,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SCHEMA_PATH="${SCRIPT_DIR}/prisma/schema.prisma"
 
 NAMESPACE="${NAMESPACE:-production}"
-BACKEND_IMAGE="${BACKEND_IMAGE:-ghcr.io/madhuboyin/contract-to-cozy/backend:latest}"
+MIGRATION_IMAGE="${MIGRATION_IMAGE:-node:22-bookworm@sha256:5647be709086c696ff32edaaf1c70cd26d1da6ab2b39c32f3c7b4c4a31957e37}"
+PRISMA_CLI_VERSION="${PRISMA_CLI_VERSION:-5.22.0}"
 DATABASE_URL_SECRET="${DATABASE_URL_SECRET:-app-secrets}"
 DATABASE_URL_SECRET_KEY="${DATABASE_URL_SECRET_KEY:-DATABASE_URL}"
 PRISMA_CONFIGMAP="${PRISMA_CONFIGMAP:-prisma-schema}"
@@ -56,6 +59,11 @@ fi
 
 if ! [[ "${POD_STATUS_POLL_INTERVAL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
   echo "POD_STATUS_POLL_INTERVAL_SECONDS must be a positive integer." >&2
+  exit 1
+fi
+
+if ! [[ "${PRISMA_CLI_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "PRISMA_CLI_VERSION must be an exact semantic version such as 5.22.0." >&2
   exit 1
 fi
 
@@ -214,10 +222,21 @@ spec:
         app.kubernetes.io/component: database-migration
     spec:
       restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: migrate
-          image: ${BACKEND_IMAGE}
-          imagePullPolicy: Always
+          image: ${MIGRATION_IMAGE}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           command:
             - /bin/sh
             - -ec
@@ -225,10 +244,11 @@ spec:
             - |
               echo "Applying Prisma schema from ConfigMap..."
               echo "Architecture: \$(uname -m)"
-              cd /app
-              test -x ./node_modules/.bin/prisma
-              ./node_modules/.bin/prisma --version
-              ./node_modules/.bin/prisma db push \
+              echo "Installing pinned Prisma CLI ${PRISMA_CLI_VERSION} in ephemeral storage..."
+              mkdir -p "\${HOME}" "\${NPM_CONFIG_CACHE}"
+              cd /tmp
+              npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma --version
+              npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db push \
                 --accept-data-loss \
                 --skip-generate \
                 --schema=/config/schema.prisma
@@ -238,6 +258,10 @@ spec:
                 secretKeyRef:
                   name: ${DATABASE_URL_SECRET}
                   key: ${DATABASE_URL_SECRET_KEY}
+            - name: HOME
+              value: /tmp/prisma-home
+            - name: NPM_CONFIG_CACHE
+              value: /tmp/npm-cache
           volumeMounts:
             - name: schema-volume
               mountPath: /config
