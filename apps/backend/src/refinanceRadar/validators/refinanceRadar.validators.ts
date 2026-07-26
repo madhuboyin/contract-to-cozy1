@@ -91,6 +91,20 @@ export const runScenarioSchema = z
 
 export type RunScenarioBody = z.infer<typeof runScenarioSchema>;
 
+const loanEstimateDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date in YYYY-MM-DD format.')
+  .refine(
+    (value) => {
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      return (
+        !Number.isNaN(parsed.getTime()) &&
+        parsed.toISOString().slice(0, 10) === value
+      );
+    },
+    { message: 'Enter a valid calendar date.' },
+  );
+
 const loanEstimateOfferSchema = z
   .object({
     id: z.string().trim().min(1).max(80),
@@ -106,6 +120,11 @@ const loanEstimateOfferSchema = z
     cashToCloseUsd: z.number().min(0).max(10_000_000),
     fiveYearTotalPaidUsd: z.number().min(0).max(20_000_000).optional(),
     fiveYearPrincipalPaidUsd: z.number().min(0).max(20_000_000).optional(),
+    issuedDate: loanEstimateDateSchema.optional(),
+    rateLockStatus: z
+      .enum(['LOCKED', 'NOT_LOCKED', 'UNKNOWN'])
+      .optional(),
+    rateLockExpirationDate: loanEstimateDateSchema.optional(),
   })
   .superRefine((offer, ctx) => {
     if (
@@ -127,6 +146,27 @@ const loanEstimateOfferSchema = z
         code: 'custom',
         path: ['fiveYearPrincipalPaidUsd'],
         message: 'Five-year principal paid cannot exceed total paid.',
+      });
+    }
+    if (
+      offer.rateLockExpirationDate &&
+      offer.rateLockStatus !== 'LOCKED'
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['rateLockExpirationDate'],
+        message: 'A lock expiration date requires a locked rate.',
+      });
+    }
+    if (
+      offer.issuedDate &&
+      offer.rateLockExpirationDate &&
+      offer.rateLockExpirationDate < offer.issuedDate
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['rateLockExpirationDate'],
+        message: 'The rate-lock expiration cannot precede the issue date.',
       });
     }
   });

@@ -12,6 +12,7 @@ const {
 
 const sample = `
 LOAN ESTIMATE
+Date Issued 07/20/2026
 Loan Terms
 Loan Amount $300,000
 Loan Term 30 years
@@ -44,6 +45,7 @@ test('extracts standardized Loan Estimate comparison fields for review', () => {
   assert.equal(result.fields.cashToCloseUsd.value, 12054);
   assert.equal(result.fields.fiveYearTotalPaidUsd.value, 125582);
   assert.equal(result.fields.fiveYearPrincipalPaidUsd.value, 26773);
+  assert.equal(result.fields.issuedDate.value, '2026-07-20');
   assert.equal(result.requiredFieldsFound, result.requiredFieldCount);
   assert.deepEqual(result.pageIntegrity.detectedPages, [1, 2, 3]);
   assert.equal(result.pageIntegrity.status, 'COMPLETE');

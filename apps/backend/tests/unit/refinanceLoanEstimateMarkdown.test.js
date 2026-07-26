@@ -21,6 +21,9 @@ function offer(overrides = {}) {
     cashToCloseUsd: 9000,
     fiveYearTotalPaidUsd: 125000,
     fiveYearPrincipalPaidUsd: 26000,
+    issuedDate: '2026-07-20',
+    rateLockStatus: 'LOCKED',
+    rateLockExpirationDate: '2026-08-20',
     ...overrides,
   };
 }
@@ -42,7 +45,7 @@ test('exports reviewed offers, comparison context, and verification checklist', 
 
   assert.match(markdown, /^# Mortgage Refinance Loan Estimate Comparison/m);
   assert.match(markdown, /94 Ashford Dr unsafe/);
-  assert.match(markdown, /\| Lender A \| \$300,000 \|/);
+  assert.match(markdown, /\| Lender A \| 2026-07-20 \| Locked through 2026-08-20 \| \$300,000 \|/);
   assert.match(markdown, /different loan amounts/i);
   assert.match(markdown, /Verification checklist/);
   assert.match(markdown, /Rate-lock status/);
@@ -71,6 +74,7 @@ test('exports only the selected lender in a homeowner-controlled discussion brie
   assert.doesNotMatch(markdown, /Competitor Bank/);
   assert.match(markdown, /competitor lender identities are intentionally omitted/i);
   assert.match(markdown, /Loan amount: \$300,000/);
+  assert.match(markdown, /Rate lock: Locked through 2026-08-20/);
   assert.match(markdown, /\[x\] The selected figures were checked/);
   assert.match(markdown, /did not send it to a lender/i);
   assert.match(markdown, /not a commitment, acceptance, application/i);

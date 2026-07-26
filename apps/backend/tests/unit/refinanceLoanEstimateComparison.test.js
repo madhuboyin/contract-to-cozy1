@@ -20,6 +20,9 @@ function offer(overrides = {}) {
     cashToCloseUsd: 9000,
     fiveYearTotalPaidUsd: 125000,
     fiveYearPrincipalPaidUsd: 26000,
+    issuedDate: '2026-07-20',
+    rateLockStatus: 'LOCKED',
+    rateLockExpirationDate: '2026-08-20',
     ...overrides,
   };
 }
@@ -84,4 +87,29 @@ test('warns when lenders price different principal amounts', () => {
     }),
   ]);
   assert.ok(result.summary.some((line) => /different loan amounts/i.test(line)));
+});
+
+test('flags stale disclosures, expired locks, and mismatched lock status', () => {
+  const result = compareRefinanceLoanEstimates(
+    [
+      offer({
+        issuedDate: '2026-06-01',
+        rateLockExpirationDate: '2026-07-01',
+      }),
+      offer({
+        id: 'offer-b',
+        lenderName: 'Lender B',
+        issuedDate: '2026-07-25',
+        rateLockStatus: 'NOT_LOCKED',
+        rateLockExpirationDate: undefined,
+      }),
+    ],
+    new Date('2026-07-25T12:00:00.000Z'),
+  );
+
+  assert.ok(result.offers[0].cautions.some((line) => /issued 54 days ago/i.test(line)));
+  assert.ok(result.offers[0].cautions.some((line) => /lock expired/i.test(line)));
+  assert.ok(result.offers[1].cautions.some((line) => /not locked/i.test(line)));
+  assert.ok(result.summary.some((line) => /not all issued on the same date/i.test(line)));
+  assert.ok(result.summary.some((line) => /do not share the same rate-lock status/i.test(line)));
 });

@@ -18,6 +18,9 @@ function offer(id) {
     loanCostsUsd: 8000,
     lenderCreditsUsd: 1000,
     cashToCloseUsd: 9000,
+    issuedDate: '2026-07-20',
+    rateLockStatus: 'LOCKED',
+    rateLockExpirationDate: '2026-08-20',
   };
 }
 
@@ -53,6 +56,37 @@ test('requires a selected offer from the reviewed comparison', () => {
     exportLoanEstimateHandoffSchema.safeParse({
       ...validInput,
       selectedOfferId: 'unreviewed-offer',
+    }).success,
+    false,
+  );
+});
+
+test('rejects impossible or inconsistent Loan Estimate lock dates', () => {
+  assert.equal(
+    exportLoanEstimateHandoffSchema.safeParse({
+      ...validInput,
+      offers: [
+        offer('a'),
+        {
+          ...offer('b'),
+          rateLockStatus: 'NOT_LOCKED',
+          rateLockExpirationDate: '2026-08-20',
+        },
+      ],
+    }).success,
+    false,
+  );
+  assert.equal(
+    exportLoanEstimateHandoffSchema.safeParse({
+      ...validInput,
+      offers: [
+        offer('a'),
+        {
+          ...offer('b'),
+          issuedDate: '2026-09-01',
+          rateLockExpirationDate: '2026-08-20',
+        },
+      ],
     }).success,
     false,
   );

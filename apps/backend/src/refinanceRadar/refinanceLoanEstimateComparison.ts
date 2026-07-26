@@ -12,6 +12,9 @@ export interface RefinanceLoanEstimateInput {
   cashToCloseUsd: number;
   fiveYearTotalPaidUsd?: number;
   fiveYearPrincipalPaidUsd?: number;
+  issuedDate?: string;
+  rateLockStatus?: 'LOCKED' | 'NOT_LOCKED' | 'UNKNOWN';
+  rateLockExpirationDate?: string;
 }
 
 export type LoanEstimateMetric =
@@ -69,7 +72,13 @@ function leaderLabel(
  */
 export function compareRefinanceLoanEstimates(
   input: RefinanceLoanEstimateInput[],
+  evaluatedAt: Date = new Date(),
 ): RefinanceLoanEstimateComparison {
+  const evaluationDate = Date.UTC(
+    evaluatedAt.getUTCFullYear(),
+    evaluatedAt.getUTCMonth(),
+    evaluatedAt.getUTCDate(),
+  );
   const offers: RefinanceLoanEstimateComparisonRow[] = input.map((offer) => {
     const hasFiveYearFields =
       offer.fiveYearTotalPaidUsd != null &&
@@ -89,6 +98,44 @@ export function compareRefinanceLoanEstimates(
       cautions.push(
         'Add the “In 5 years” total paid and principal paid values from page 3 for a stronger cost comparison.',
       );
+    }
+    if (!offer.issuedDate) {
+      cautions.push(
+        'Add the Loan Estimate issue date to confirm that every offer reflects a comparable market window.',
+      );
+    } else {
+      const issuedAt = Date.parse(`${offer.issuedDate}T00:00:00.000Z`);
+      const ageDays = Math.floor(
+        (evaluationDate - issuedAt) / (24 * 60 * 60 * 1000),
+      );
+      if (ageDays > 10) {
+        cautions.push(
+          `This Loan Estimate was issued ${ageDays} days ago. Confirm that the rate, credits, and costs are still available.`,
+        );
+      }
+    }
+    const lockStatus = offer.rateLockStatus ?? 'UNKNOWN';
+    if (lockStatus === 'UNKNOWN') {
+      cautions.push(
+        'Rate-lock status is unknown. Confirm whether the rate is locked before relying on this comparison.',
+      );
+    } else if (lockStatus === 'NOT_LOCKED') {
+      cautions.push(
+        'The rate is not locked and may change before the lender issues revised terms.',
+      );
+    } else if (!offer.rateLockExpirationDate) {
+      cautions.push(
+        'The rate is marked locked, but no lock expiration date was supplied.',
+      );
+    } else {
+      const expiresAt = Date.parse(
+        `${offer.rateLockExpirationDate}T00:00:00.000Z`,
+      );
+      if (expiresAt < evaluationDate) {
+        cautions.push(
+          `The recorded rate lock expired on ${offer.rateLockExpirationDate}. Request current terms before proceeding.`,
+        );
+      }
     }
     return {
       ...offer,
@@ -158,6 +205,25 @@ export function compareRefinanceLoanEstimates(
   if (Math.max(...loanAmounts) - Math.min(...loanAmounts) >= 1) {
     summary.push(
       'These offers use different loan amounts. Payment, APR, cash-to-close, and five-year cost are not directly comparable until each lender prices the same requested principal.',
+    );
+  }
+  const issueDates = offers
+    .map((offer) => offer.issuedDate)
+    .filter((date): date is string => Boolean(date));
+  if (
+    issueDates.length !== offers.length ||
+    new Set(issueDates).size > 1
+  ) {
+    summary.push(
+      'These Loan Estimates were not all issued on the same date. Market movement may explain some rate or cost differences.',
+    );
+  }
+  const lockStatuses = new Set(
+    offers.map((offer) => offer.rateLockStatus ?? 'UNKNOWN'),
+  );
+  if (lockStatuses.size > 1) {
+    summary.push(
+      'The offers do not share the same rate-lock status. Locked and floating terms are not directly comparable.',
     );
   }
 

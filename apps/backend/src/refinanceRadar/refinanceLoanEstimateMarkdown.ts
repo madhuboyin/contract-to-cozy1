@@ -21,6 +21,16 @@ function safeInline(value: string): string {
   return value.replace(/[\r\n|]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function rateLockLabel(offer: RefinanceLoanEstimateInput): string {
+  if (offer.rateLockStatus === 'LOCKED') {
+    return offer.rateLockExpirationDate
+      ? `Locked through ${offer.rateLockExpirationDate}`
+      : 'Locked; expiration not supplied';
+  }
+  if (offer.rateLockStatus === 'NOT_LOCKED') return 'Not locked';
+  return 'Unknown';
+}
+
 const HANDOFF_METRIC_LABELS: Record<LoanEstimateMetric, string> = {
   APR: 'lowest disclosed APR',
   MONTHLY_PRINCIPAL_AND_INTEREST:
@@ -35,10 +45,14 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
   generatedAt: Date;
   offers: RefinanceLoanEstimateInput[];
 }): string {
-  const comparison = compareRefinanceLoanEstimates(input.offers);
+  const comparison = compareRefinanceLoanEstimates(
+    input.offers,
+    input.generatedAt,
+  );
   const rows = comparison.offers.map(
     (offer) =>
-      `| ${safeInline(offer.lenderName)} | ${money(offer.loanAmountUsd)} | ` +
+      `| ${safeInline(offer.lenderName)} | ${offer.issuedDate ?? 'Not supplied'} | ` +
+      `${rateLockLabel(offer)} | ${money(offer.loanAmountUsd)} | ` +
       `${offer.loanTermYears}-year ${offer.loanType.toLowerCase()} | ` +
       `${pct(offer.noteRatePct)} | ${pct(offer.aprPct)} | ` +
       `${money(offer.monthlyPrincipalAndInterestUsd)} | ` +
@@ -61,8 +75,8 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     '',
     '## Side-by-side comparison',
     '',
-    '| Lender | Loan amount | Product | Note rate | APR | Monthly P&I | Net loan costs | Cash to close | 5-year borrowing cost |',
-    '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+    '| Lender | Issued | Rate lock | Loan amount | Product | Note rate | APR | Monthly P&I | Net loan costs | Cash to close | 5-year borrowing cost |',
+    '| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
     ...rows,
     '',
     'Five-year borrowing cost is calculated as the disclosed “In 5 years” total paid minus principal paid. Net loan costs are total loan costs minus lender credits.',
@@ -109,7 +123,10 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
   offers: RefinanceLoanEstimateInput[];
   selectedOfferId: string;
 }): string {
-  const comparison = compareRefinanceLoanEstimates(input.offers);
+  const comparison = compareRefinanceLoanEstimates(
+    input.offers,
+    input.generatedAt,
+  );
   const selected = comparison.offers.find(
     (offer) => offer.id === input.selectedOfferId,
   );
@@ -142,6 +159,8 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
     '',
     '## Selected Loan Estimate',
     '',
+    `- Date issued: ${selected.issuedDate ?? 'Not supplied'}`,
+    `- Rate lock: ${rateLockLabel(selected)}`,
     `- Loan amount: ${money(selected.loanAmountUsd)}`,
     `- Product: ${selected.loanTermYears}-year ${selected.loanType.toLowerCase()}`,
     `- Note rate: ${pct(selected.noteRatePct)}`,

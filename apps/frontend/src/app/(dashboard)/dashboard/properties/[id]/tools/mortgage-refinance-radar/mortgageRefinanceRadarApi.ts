@@ -315,6 +315,9 @@ export type RefinanceLoanEstimateInput = {
   cashToCloseUsd: number;
   fiveYearTotalPaidUsd?: number;
   fiveYearPrincipalPaidUsd?: number;
+  issuedDate?: string;
+  rateLockStatus?: 'LOCKED' | 'NOT_LOCKED' | 'UNKNOWN';
+  rateLockExpirationDate?: string;
 };
 
 export type LoanEstimateMetric =
@@ -370,6 +373,7 @@ export type RefinanceLoanEstimateExtraction = {
     cashToCloseUsd: LoanEstimateExtractedField<number>;
     fiveYearTotalPaidUsd: LoanEstimateExtractedField<number>;
     fiveYearPrincipalPaidUsd: LoanEstimateExtractedField<number>;
+    issuedDate: LoanEstimateExtractedField<string>;
   };
   extractedFieldCount: number;
   requiredFieldCount: number;

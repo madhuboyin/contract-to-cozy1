@@ -42,6 +42,11 @@ type OfferDraft = {
   cashToCloseUsd: string;
   fiveYearTotalPaidUsd: string;
   fiveYearPrincipalPaidUsd: string;
+  issuedDate: string;
+  rateLockStatus: NonNullable<
+    RefinanceLoanEstimateInput['rateLockStatus']
+  >;
+  rateLockExpirationDate: string;
 };
 
 const METRIC_LABELS: Record<LoanEstimateMetric, string> = {
@@ -69,6 +74,9 @@ function blankOffer(number: number): OfferDraft {
     cashToCloseUsd: '',
     fiveYearTotalPaidUsd: '',
     fiveYearPrincipalPaidUsd: '',
+    issuedDate: '',
+    rateLockStatus: 'UNKNOWN',
+    rateLockExpirationDate: '',
   };
 }
 
@@ -95,6 +103,9 @@ function toDraft(offer: RefinanceLoanEstimateInput): OfferDraft {
       offer.fiveYearPrincipalPaidUsd == null
         ? ''
         : String(offer.fiveYearPrincipalPaidUsd),
+    issuedDate: offer.issuedDate ?? '',
+    rateLockStatus: offer.rateLockStatus ?? 'UNKNOWN',
+    rateLockExpirationDate: offer.rateLockExpirationDate ?? '',
   };
 }
 
@@ -105,6 +116,16 @@ function currency(value: number | null): string {
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function lockLabel(offer: RefinanceLoanEstimateInput): string {
+  if (offer.rateLockStatus === 'LOCKED') {
+    return offer.rateLockExpirationDate
+      ? `Locked through ${offer.rateLockExpirationDate}`
+      : 'Locked; expiration missing';
+  }
+  if (offer.rateLockStatus === 'NOT_LOCKED') return 'Not locked';
+  return 'Lock status unknown';
 }
 
 function numberValue(value: string, label: string): number {
@@ -143,6 +164,11 @@ function toInput(offer: OfferDraft): RefinanceLoanEstimateInput {
           fiveYearTotalPaidUsd: Number(fiveYearTotal),
           fiveYearPrincipalPaidUsd: Number(fiveYearPrincipal),
         }
+      : {}),
+    ...(offer.issuedDate ? { issuedDate: offer.issuedDate } : {}),
+    rateLockStatus: offer.rateLockStatus,
+    ...(offer.rateLockStatus === 'LOCKED' && offer.rateLockExpirationDate
+      ? { rateLockExpirationDate: offer.rateLockExpirationDate }
       : {}),
   };
 }
@@ -199,6 +225,50 @@ function OfferFields({
             max="50"
             value={offer.loanTermYears}
             onChange={(event) => set('loanTermYears', event.target.value)}
+            className={inputClass}
+          />
+        </label>
+        <label className="text-xs text-slate-600 dark:text-slate-300">
+          Date issued
+          <input
+            type="date"
+            value={offer.issuedDate}
+            onChange={(event) => set('issuedDate', event.target.value)}
+            className={inputClass}
+          />
+        </label>
+        <label className="text-xs text-slate-600 dark:text-slate-300">
+          Rate-lock status
+          <select
+            value={offer.rateLockStatus}
+            onChange={(event) => {
+              const rateLockStatus = event.target
+                .value as OfferDraft['rateLockStatus'];
+              onChange({
+                ...offer,
+                rateLockStatus,
+                rateLockExpirationDate:
+                  rateLockStatus === 'LOCKED'
+                    ? offer.rateLockExpirationDate
+                    : '',
+              });
+            }}
+            className={inputClass}
+          >
+            <option value="UNKNOWN">Confirm with lender</option>
+            <option value="NOT_LOCKED">Not locked</option>
+            <option value="LOCKED">Locked</option>
+          </select>
+        </label>
+        <label className="text-xs text-slate-600 dark:text-slate-300">
+          Lock expiration
+          <input
+            type="date"
+            value={offer.rateLockExpirationDate}
+            disabled={offer.rateLockStatus !== 'LOCKED'}
+            onChange={(event) =>
+              set('rateLockExpirationDate', event.target.value)
+            }
             className={inputClass}
           />
         </label>
@@ -410,6 +480,10 @@ export function LoanEstimateComparisonCard({
       cashToCloseUsd: value(fields.cashToCloseUsd),
       fiveYearTotalPaidUsd: value(fields.fiveYearTotalPaidUsd),
       fiveYearPrincipalPaidUsd: value(fields.fiveYearPrincipalPaidUsd),
+      issuedDate:
+        fields.issuedDate.value == null
+          ? base.issuedDate
+          : value(fields.issuedDate),
     };
     setOffers((current) =>
       targetIndex >= 0
@@ -766,12 +840,13 @@ export function LoanEstimateComparisonCard({
           <div className="space-y-3 border-t border-slate-200/70 pt-4 dark:border-slate-700/70">
             <div className="overflow-x-auto">
               <table
-                className="min-w-[940px] w-full text-left text-xs"
+                className="min-w-[1080px] w-full text-left text-xs"
                 aria-label="Official Loan Estimate comparison"
               >
                 <thead className="text-slate-500 dark:text-slate-400">
                   <tr>
                     <th className="pb-2">Lender</th>
+                    <th className="pb-2">Issued / lock</th>
                     <th className="pb-2">Loan amount</th>
                     <th className="pb-2">Rate / APR</th>
                     <th className="pb-2">Monthly P&I</th>
@@ -789,6 +864,12 @@ export function LoanEstimateComparisonCard({
                           {offer.loanTermYears}-year {offer.loanType.toLowerCase()}
                         </span>
                       </th>
+                      <td className="py-3 pr-3">
+                        {offer.issuedDate ?? 'Issue date missing'}
+                        <span className="block text-slate-500">
+                          {lockLabel(offer)}
+                        </span>
+                      </td>
                       <td className="py-3 pr-3">
                         {currency(offer.loanAmountUsd)}
                       </td>

@@ -22,13 +22,14 @@ export interface SavedRefinanceLoanEstimateComparison {
 function mapSnapshot(
   row: RefinanceLoanEstimateComparisonSnapshot,
 ): SavedRefinanceLoanEstimateComparison {
+  const offers =
+    row.offersJson as unknown as RefinanceLoanEstimateInput[];
   return {
     id: row.id,
     propertyId: row.propertyId,
     label: row.label,
-    offers: row.offersJson as unknown as RefinanceLoanEstimateInput[],
-    comparison:
-      row.comparisonJson as unknown as RefinanceLoanEstimateComparison,
+    offers,
+    comparison: compareRefinanceLoanEstimates(offers),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

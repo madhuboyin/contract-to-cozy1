@@ -36,6 +36,7 @@ export interface RefinanceLoanEstimateExtraction {
     cashToCloseUsd: LoanEstimateExtractedField<number>;
     fiveYearTotalPaidUsd: LoanEstimateExtractedField<number>;
     fiveYearPrincipalPaidUsd: LoanEstimateExtractedField<number>;
+    issuedDate: LoanEstimateExtractedField<string>;
   };
   extractedFieldCount: number;
   requiredFieldCount: number;
@@ -71,6 +72,33 @@ function matchNumber(
     if (value != null) {
       return {
         value,
+        confidence: index === 0 ? 'HIGH' : 'MEDIUM',
+        sourceLabel,
+      };
+    }
+  }
+  return missing(sourceLabel);
+}
+
+function matchDate(
+  text: string,
+  patterns: RegExp[],
+  sourceLabel: string,
+): LoanEstimateExtractedField<string> {
+  for (let index = 0; index < patterns.length; index += 1) {
+    const match = text.match(patterns[index]);
+    if (!match?.[1] || !match[2] || !match[3]) continue;
+    const year = Number(match[3]);
+    const month = Number(match[1]);
+    const day = Number(match[2]);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    ) {
+      return {
+        value: parsed.toISOString().slice(0, 10),
         confidence: index === 0 ? 'HIGH' : 'MEDIUM',
         sourceLabel,
       };
@@ -321,6 +349,14 @@ export function extractLoanEstimateFieldsFromText(
     ),
     fiveYearTotalPaidUsd: fiveYear.total,
     fiveYearPrincipalPaidUsd: fiveYear.principal,
+    issuedDate: matchDate(
+      text,
+      [
+        /Date\s+Issued[ \t:]*(\d{1,2})[/-](\d{1,2})[/-](\d{4})/i,
+        /(\d{1,2})[/-](\d{1,2})[/-](\d{4})[ \t]+Date\s+Issued/i,
+      ],
+      'Loan Estimate page 1 — Date Issued',
+    ),
   };
 
   const values = Object.values(fields);
@@ -394,6 +430,7 @@ const EXTRACTION_FIELD_LABELS: Record<
   cashToCloseUsd: 'cash to close',
   fiveYearTotalPaidUsd: 'five-year total paid',
   fiveYearPrincipalPaidUsd: 'five-year principal paid',
+  issuedDate: 'issue date',
 };
 
 export function combineLoanEstimateExtractions(
