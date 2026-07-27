@@ -38,6 +38,7 @@ import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
 import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 import { severeWeatherAlertsJob } from './jobs/severeWeatherAlerts.job';
 import { airNowAirQualityJob } from './jobs/airNowAirQuality.job';
+import { usgsEarthquakeJob } from './jobs/usgsEarthquake.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { ingestTaxAssessmentEventsJob } from './jobs/ingestTaxAssessmentEvents.job';
@@ -299,6 +300,22 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
       smokeCorrelationId: result.smokeCorrelationId,
     };
   },
+  'usgs-earthquakes':                async (opts) => {
+    const result = await usgsEarthquakeJob(opts);
+    logger.info(
+      { ...result },
+      `[usgs-earthquakes] status=${result.sourceRunStatus} actionable=${result.actionableEvents ?? 0} matched=${result.matchedEvents ?? 0} queued=${result.queued}`,
+    );
+    return {
+      examined: result.propertiesEvaluated ?? 0,
+      refreshed: result.createdOrUpdated,
+      failed: result.sourceRunStatus === 'failed'
+        ? 1
+        : result.sourceRunStatus === 'partial' ? Math.max(1, result.rejected ?? 0) : 0,
+      reason: result.failed > 0 ? `${result.failed} USGS fetch or record failure(s)` : undefined,
+      smokeCorrelationId: result.smokeCorrelationId,
+    };
+  },
   'neighborhood-change-notifications': async () => { await neighborhoodChangeNotificationJob(); },
   'neighborhood-radar-refresh':      async (opts) => {
     const result = await refreshNeighborhoodEventsJob(opts);
@@ -418,6 +435,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
 // Per-job cron expression overrides (env-var-based schedules)
 const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'airnow-air-quality':         process.env.AIRNOW_AIR_QUALITY_CRON,
+  'usgs-earthquakes':           process.env.USGS_EARTHQUAKE_CRON,
   'tax-assessment-ingest':      process.env.TAX_ASSESSMENT_INGEST_CRON,
   'radar-safety-net-reconciliation': process.env.RADAR_SAFETY_NET_RECONCILIATION_CRON,
   'inventory-draft-cleanup':    process.env.INVENTORY_DRAFT_CLEANUP_CRON,

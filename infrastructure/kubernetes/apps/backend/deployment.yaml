@@ -188,6 +188,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED
+            - name: WORKER_JOB_USGS_EARTHQUAKES_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_USGS_EARTHQUAKES_ENABLED
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

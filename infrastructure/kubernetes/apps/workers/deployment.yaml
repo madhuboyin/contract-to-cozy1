@@ -177,6 +177,16 @@ spec:
                   name: app-secrets
                   key: AIRNOW_API_KEY
                   optional: true
+            - name: WORKER_JOB_USGS_EARTHQUAKES_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_USGS_EARTHQUAKES_ENABLED
+            - name: USGS_EARTHQUAKE_CRON
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: USGS_EARTHQUAKE_CRON
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:

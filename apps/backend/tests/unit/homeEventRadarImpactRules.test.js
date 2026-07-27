@@ -268,6 +268,21 @@ test('driver-code registry is stable and duplicate-free', () => {
   assert.equal(new Set(RADAR_IMPACT_DRIVER_CODES).size, RADAR_IMPACT_DRIVER_CODES.length);
 });
 
+test('earthquake impact copy is observational and routes to official updates', () => {
+  const result = computeRadarImpact(
+    event('earthquake', 'medium'),
+    property(),
+    EVALUATED_AT,
+  );
+
+  assert.match(result.impactSummary, /does not by itself indicate property damage/i);
+  assert.match(result.impactSummary, /distance, depth, and ground conditions/i);
+  assert.deepEqual(
+    result.recommendedActionsJson.actions.map((action) => action.code),
+    ['MONITOR_SITUATION'],
+  );
+});
+
 test('pure impact rule module has no database or service dependency', () => {
   const source = fs.readFileSync(
     path.resolve(

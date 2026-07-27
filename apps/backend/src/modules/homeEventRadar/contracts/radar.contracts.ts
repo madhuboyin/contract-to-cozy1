@@ -19,6 +19,7 @@ export const radarSourceFamilySchema = z.enum([
 
 export const radarEventTypeSchema = z.enum([
   'weather',
+  'earthquake',
   'insurance_market',
   'utility_outage',
   'utility_rate_change',
@@ -40,6 +41,7 @@ export const radarEventTypeSchema = z.enum([
 export const radarSourceTypeSchema = z.enum([
   'weather_provider',
   'air_quality_provider',
+  'seismic_provider',
   'insurance_market_feed',
   'utility_feed',
   'tax_assessor_feed',

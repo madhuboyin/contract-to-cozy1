@@ -403,6 +403,26 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'usgs-earthquakes',
+    name: 'USGS Earthquakes',
+    description:
+      'Polls the USGS real-time GeoJSON feed and emits canonical earthquake events only when reviewed magnitude and property-distance thresholds are met.',
+    category: 'RISK_SAFETY',
+    schedule: 'Every 5 minutes',
+    cronExpression: '*/5 * * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'usgs-earthquakes',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: false,
+    supportsDryRun: true,
+    supportsPropertyScope: true,
+    externalProvider: 'U.S. Geological Survey',
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'weekly-score-snapshots',
     name: 'Weekly Score Snapshots',
     description:

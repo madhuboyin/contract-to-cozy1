@@ -149,6 +149,10 @@ data:
   # allowlisted dry run confirms the 2026 latitudeLongitude endpoints.
   WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED: "false"
   AIRNOW_AIR_QUALITY_CRON: "*/30 * * * *"
+  # Launch closed until an allowlisted dry run validates USGS feed matching
+  # and the reviewed magnitude/distance bands in the target environment.
+  WORKER_JOB_USGS_EARTHQUAKES_ENABLED: "false"
+  USGS_EARTHQUAKE_CRON: "*/5 * * * *"
 
   # Rate Limiting
   RATE_LIMIT_WINDOW_MS: "60000"

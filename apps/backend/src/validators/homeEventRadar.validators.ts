@@ -35,6 +35,7 @@ import {
 
 export const RADAR_EVENT_TYPES = [
   'weather',
+  'earthquake',
   'insurance_market',
   'utility_outage',
   'utility_rate_change',
@@ -56,6 +57,7 @@ export const RADAR_EVENT_TYPES = [
 export const RADAR_EVENT_SOURCE_TYPES = [
   'weather_provider',
   'air_quality_provider',
+  'seismic_provider',
   'insurance_market_feed',
   'utility_feed',
   'tax_assessor_feed',

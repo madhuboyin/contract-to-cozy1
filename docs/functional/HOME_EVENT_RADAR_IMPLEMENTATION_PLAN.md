@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-507 implemented |
+| Status | In progress — HER-602 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -62,7 +62,8 @@
 | HER-507 Unified Home summary | Complete | Canonical overview projects the non-zero-impact active count and highest-priority explainable match; Unified Home renders monitoring truth, explicit failure/degraded states, and an exact property/match deep link |
 | HER-600 Admin source operations | Complete; DB application pending | Admin + MFA + capability-gated source console exposes redacted source detail, coverage/counts, effective health, run history, dry-run tests, allowlisted scoped runs, replay, persistent audited pause/resume, event lineage API, and anomaly detection |
 | HER-601 AirNow adapter | Complete; DB application and credentialed activation pending | New 2026 latitudeLongitude current/forecast services feed the canonical pipeline with AQI 101 materiality, bounded reporting-area radius, particle/smoke evidence, source freshness/health, ZIP request caching, dry-run/property scope, launch-closed policy, and HVAC/filter actions |
-| HER-602+ | Not started | Additional reviewed source adapters remain |
+| HER-602 USGS adapter | Complete; DB application and production activation pending | Real-time v1.0 GeoJSON feed uses reviewed M2.5+ magnitude/distance bands, point/radius matching, stable event revisions, retraction/expiry lifecycle, source freshness/health, dry-run/property scope, and observational homeowner copy |
+| HER-603+ | Not started | Additional reviewed source adapters remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1613,6 +1614,14 @@ Add only with reviewed materiality rules:
 - point/radius matching;
 - update lifecycle;
 - non-alarmist copy for low-impact distant events.
+
+Implemented against the USGS production v1.0 `all_day.geojson` summary feed.
+The reviewed monitoring bands are M2.5–3.4 within 25 km, M3.5–4.4 within
+75 km, M4.5–5.4 within 200 km, M5.5–6.4 within 500 km, and M6.5+ within
+1,000 km. These are relevance bounds, not predicted shaking or damage
+contours. Production activation remains fail-closed until
+`WORKER_JOB_USGS_EARTHQUAKES_ENABLED=true` after an allowlisted dry run
+validates the feed, property geography, revision behavior, and homeowner copy.
 
 ### HER-603 — OpenFEMA adapter
 

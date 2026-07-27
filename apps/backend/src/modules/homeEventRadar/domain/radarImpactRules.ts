@@ -729,6 +729,18 @@ function computeUtilityOutage(
 }
 
 function computeStaticEvent(baseScore: number, eventType: string): EventImpactPartial {
+  if (eventType === 'earthquake') {
+    return {
+      matchScore: clamp(baseScore),
+      impactSummary:
+        'USGS reported an earthquake within the reviewed monitoring distance for this home. This does not by itself indicate property damage; local effects vary by distance, depth, and ground conditions.',
+      drivers: [],
+      actions: [
+        action('MONITOR_SITUATION', 'Review the official USGS event page for verified updates', 'medium'),
+      ],
+      systems: [],
+    };
+  }
   if (eventType === 'utility_rate_change') {
     return {
       matchScore: clamp(baseScore),

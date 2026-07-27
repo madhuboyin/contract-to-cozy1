@@ -6,6 +6,7 @@ const SOURCE_JOB_KEYS: Readonly<Record<string, string>> = {
   'nws-active-alerts': 'severe-weather-alerts',
   'open-meteo-freeze-forecast': 'freeze-risk-incidents',
   'epa-airnow-air-quality': 'airnow-air-quality',
+  'usgs-earthquakes': 'usgs-earthquakes',
   'tax-assessment-ingest': 'tax-assessment-ingest',
 };
 
