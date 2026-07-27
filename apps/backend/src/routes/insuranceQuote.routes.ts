@@ -1,10 +1,12 @@
 // apps/backend/src/routes/insuranceQuote.routes.ts
 import { Router, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
+import { requireCapability } from '../middleware/adminCapability.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { CustomRequest } from '../types';
+import { UserRole } from '../types/auth.types';
 import {
   createInsuranceHandoffRequest,
   getInsuranceHandoffReadiness,
@@ -12,8 +14,21 @@ import {
   ingestReturnedInsuranceQuote,
   withdrawInsuranceHandoffRequest,
 } from '../services/insuranceHandoff.service';
+import { getCoverageOperationsHealth } from '../services/coverageLifecycle.service';
 
 export const insuranceQuoteRouter = Router();
+
+insuranceQuoteRouter.get(
+  '/admin/coverage-operations/health',
+  authenticate,
+  requireMfa,
+  requireRole(UserRole.ADMIN),
+  requireCapability('RELEASE_GATE_VIEW'),
+  handler(async (_req, res) => {
+    const health = await getCoverageOperationsHealth();
+    res.json({ success: true, data: health });
+  })
+);
 
 const consentSchema = z.object({
   dataSharing: z.literal(true),

@@ -83,7 +83,11 @@ export default function CoverageComparisonPanel({
     setError(null);
     try {
       const [workspace, documentResponse] = await Promise.all([
-        getCoverageComparisonWorkspace(propertyId),
+        getCoverageComparisonWorkspace(propertyId, {
+          guidanceJourneyId,
+          guidanceStepKey,
+          sourceActionId,
+        }),
         api.listDocuments(propertyId),
       ]);
       setComparison(workspace.comparison);
@@ -93,7 +97,7 @@ export default function CoverageComparisonPanel({
       setError(loadError?.message ?? 'Unable to load the comparison.');
       setState('ERROR');
     }
-  }, [propertyId]);
+  }, [guidanceJourneyId, guidanceStepKey, propertyId, sourceActionId]);
 
   useEffect(() => {
     void load();

@@ -42,6 +42,10 @@ import {
   getCapabilitySuggestionsFromAuthorizedSources,
 } from './capabilityRecommendation.service';
 import { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
+import {
+  applyCoverageActionLifecyclePolicy,
+  coverageActionRuntimePolicy,
+} from './coverageLifecycle.service';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -369,9 +373,15 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     for (const bucket of Object.values(activation.plan)) rawCandidates.push(...bucket);
   }
 
+  const runtimePolicy = coverageActionRuntimePolicy(userId);
+  const governedCoverage = applyCoverageActionLifecyclePolicy(rawCandidates, {
+    rolloutEnabled: runtimePolicy.rollout.enabled,
+    killSwitchEnabled: runtimePolicy.killSwitchEnabled,
+    ruleSourceStatus: runtimePolicy.ruleSourceStatus,
+  });
   const coverageStates = await loadCurrentCoverageStates(propertyId);
-  const candidates = reconcileCoverageHomeActions(rawCandidates, coverageStates);
-  const coverageConflictSuppressedCount = rawCandidates.length - candidates.length;
+  const candidates = reconcileCoverageHomeActions(governedCoverage.actions, coverageStates);
+  const coverageConflictSuppressedCount = governedCoverage.actions.length - candidates.length;
 
   const actions = rankAndDeduplicateHomeActions(candidates);
   emitHomeActionsSurfaced({ propertyId, userId, actions, source: 'phase2_home_actions' });
@@ -408,8 +418,13 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
       candidateCount: rawCandidates.length,
       surfacedCount: actions.length,
       duplicateCount: candidates.length - actions.length,
-      suppressedCount: orchestration.suppressedActions.length + promoted.diagnostics.suppressedCount + coverageConflictSuppressedCount,
+      suppressedCount: orchestration.suppressedActions.length + promoted.diagnostics.suppressedCount + governedCoverage.suppressedCount + coverageConflictSuppressedCount,
       coverageConflictSuppressedCount,
+      coverageLifecycle: {
+        actionPromotionEnabled: governedCoverage.decision.enabled,
+        blockers: governedCoverage.decision.blockers,
+        rolloutCohort: runtimePolicy.rollout.cohort,
+      },
       snoozedCount: orchestration.snoozedActions.length + promoted.diagnostics.snoozedCount,
       promotedCount: promoted.actions.length,
       personalization: {

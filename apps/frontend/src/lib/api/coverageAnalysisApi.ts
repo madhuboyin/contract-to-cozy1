@@ -387,12 +387,22 @@ export async function getInsurancePolicyHistory(
 }
 
 export async function getCoverageComparisonWorkspace(
-  propertyId: string
+  propertyId: string,
+  context?: {
+    guidanceJourneyId?: string | null;
+    guidanceStepKey?: string | null;
+    sourceActionId?: string | null;
+  }
 ): Promise<{ state: 'BASELINE_REQUIRED' | 'READY'; comparison: CoverageComparisonDTO | null }> {
+  const params = new URLSearchParams();
+  if (context?.guidanceJourneyId) params.set('guidanceJourneyId', context.guidanceJourneyId);
+  if (context?.guidanceStepKey) params.set('guidanceStepKey', context.guidanceStepKey);
+  if (context?.sourceActionId) params.set('sourceActionId', context.sourceActionId);
+  const query = params.toString();
   const res = await api.get<{
     state: 'BASELINE_REQUIRED' | 'READY';
     comparison: CoverageComparisonDTO | null;
-  }>(`/api/properties/${propertyId}/coverage-comparison`);
+  }>(`/api/properties/${propertyId}/coverage-comparison${query ? `?${query}` : ''}`);
   return res.data;
 }
 

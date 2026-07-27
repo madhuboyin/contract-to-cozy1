@@ -220,7 +220,15 @@ async function refreshComparisonStatus(comparisonId: string) {
   });
 }
 
-export async function getOrCreateCoverageComparison(propertyId: string, userId: string) {
+export async function getOrCreateCoverageComparison(
+  propertyId: string,
+  userId: string,
+  context: {
+    guidanceJourneyId?: string | null;
+    guidanceStepKey?: string | null;
+    sourceActionId?: string | null;
+  } = {}
+) {
   await authorizeProperty(propertyId, userId);
   const baseline = await prisma.insurancePolicyTerm.findFirst({
     where: { propertyId, verificationStatus: 'VERIFIED' },
@@ -235,11 +243,41 @@ export async function getOrCreateCoverageComparison(propertyId: string, userId: 
   }
 
   const existing = await prisma.coverageComparison.findFirst({
-    where: { propertyId, baselinePolicyTermId: baseline.id },
+    where: {
+      propertyId,
+      baselinePolicyTermId: baseline.id,
+      ...(context.sourceActionId
+        ? {
+            status: 'DRAFT',
+            OR: [
+              { sourceActionId: context.sourceActionId },
+              { sourceActionId: null },
+            ],
+          }
+        : {}),
+    },
     orderBy: { updatedAt: 'desc' },
     include: comparisonInclude,
   });
-  if (existing) return { state: 'READY' as const, comparison: existing };
+  if (existing) {
+    if (
+      existing.status === 'DRAFT' &&
+      (context.sourceActionId || context.guidanceJourneyId) &&
+      (!existing.sourceActionId || !existing.guidanceJourneyId)
+    ) {
+      const comparison = await prisma.coverageComparison.update({
+        where: { id: existing.id },
+        data: {
+          sourceActionId: existing.sourceActionId ?? context.sourceActionId ?? null,
+          guidanceJourneyId: existing.guidanceJourneyId ?? context.guidanceJourneyId ?? null,
+          guidanceStepKey: existing.guidanceStepKey ?? context.guidanceStepKey ?? null,
+        },
+        include: comparisonInclude,
+      });
+      return { state: 'READY' as const, comparison };
+    }
+    return { state: 'READY' as const, comparison: existing };
+  }
 
   const normalizedFacts = normalizeStoredFacts(baseline.facts);
   const comparison = await prisma.coverageComparison.create({
@@ -252,6 +290,9 @@ export async function getOrCreateCoverageComparison(propertyId: string, userId: 
         premiumExcludedFromEquivalence: true,
       },
       createdByUserId: userId,
+      sourceActionId: context.sourceActionId ?? null,
+      guidanceJourneyId: context.guidanceJourneyId ?? null,
+      guidanceStepKey: context.guidanceStepKey ?? null,
       options: {
         create: {
           propertyId,
@@ -436,7 +477,7 @@ export async function recordCoverageDecision(
         decidedAt: occurredAt,
         guidanceJourneyId: input.guidanceJourneyId ?? comparison.guidanceJourneyId,
         guidanceStepKey: input.guidanceStepKey ?? comparison.guidanceStepKey,
-        sourceActionId: input.sourceActionId ?? comparison.sourceActionId,
+        sourceActionId: comparison.sourceActionId ?? input.sourceActionId,
       },
     });
     const homeEvent = await tx.homeEvent.create({
@@ -462,7 +503,7 @@ export async function recordCoverageDecision(
           selectedOptionId: selected?.id ?? null,
           selectedOptionEquivalenceStatus: selected?.equivalenceStatus ?? null,
           rationale: input.rationale?.trim() || null,
-          sourceActionId: input.sourceActionId ?? comparison.sourceActionId,
+          sourceActionId: comparison.sourceActionId ?? input.sourceActionId,
         },
       },
     });

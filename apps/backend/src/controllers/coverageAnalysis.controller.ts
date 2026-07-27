@@ -20,6 +20,7 @@ import {
   recordCoverageDecision,
 } from '../services/coverageComparison.service';
 import { recordCapabilityCompletionAndResolveNext } from '../services/capabilityCompletion.service';
+import { resolveCoverageHomeActionFromDecision } from '../services/coverageLifecycle.service';
 
 const service = new CoverageIntelligenceService();
 const inventoryService = new InventoryService();
@@ -30,7 +31,14 @@ export async function getCoverageComparisonWorkspace(req: CustomRequest, res: Re
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
-    const result = await getOrCreateCoverageComparison(req.params.propertyId, userId);
+    const result = await getOrCreateCoverageComparison(req.params.propertyId, userId, {
+      guidanceJourneyId:
+        typeof req.query.guidanceJourneyId === 'string' ? req.query.guidanceJourneyId : null,
+      guidanceStepKey:
+        typeof req.query.guidanceStepKey === 'string' ? req.query.guidanceStepKey : null,
+      sourceActionId:
+        typeof req.query.sourceActionId === 'string' ? req.query.sourceActionId : null,
+    });
     return res.json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching coverage comparison');
@@ -79,6 +87,17 @@ export async function recordCoverageComparisonDecision(req: CustomRequest, res: 
       userId,
       req.body
     );
+
+    try {
+      await resolveCoverageHomeActionFromDecision({
+        propertyId: req.params.propertyId,
+        userId,
+        sourceActionId: result.decision.sourceActionId,
+        decisionId: result.decision.id,
+      });
+    } catch (resolutionError) {
+      logger.warn({ resolutionError }, '[COVERAGE] Home Action resolution hook failed');
+    }
 
     if (req.body.guidanceJourneyId) {
       try {
