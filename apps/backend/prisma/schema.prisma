@@ -10976,7 +10976,11 @@ model HomeTwinComponent {
   // "<TYPE>:PRIMARY"; components backed by a specific inventory item use
   // "<TYPE>:<inventoryItemId>" so multiple real systems of the same type
   // (e.g. two HVAC zones) become distinct rows instead of collapsing.
-  identityKey String
+  // Defaulted to a random uuid so existing rows can be backfilled without
+  // --force-reset; a random default never collides with a real
+  // "<TYPE>:..." key, so the next twin build/refresh naturally retires
+  // these legacy rows as orphaned and creates correctly-keyed replacements.
+  identityKey String @default(uuid())
 
   componentType     HomeTwinComponentType
   label             String? // e.g. "Main HVAC", "Upper Floor AC"
