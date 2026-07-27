@@ -793,10 +793,14 @@ Property resolution:
 property setup from operational coverage initialization. A property without a
 usable point, state/postal combination, or state/locality combination receives
 `PROPERTY_SETUP_REQUIRED`, an explicit list of missing location fields, and an
-`Update property location` link. A property that already has usable geography
+`Update home address` link. A property that already has usable geography
 but no materialized source-coverage rows receives
 `MONITORING_NOT_INITIALIZED`; the UI says the first monitoring check is pending
-and offers `Check again` instead of incorrectly blaming property setup. The
+in plain homeowner language and offers `Refresh status` instead of incorrectly
+blaming property setup. The Unified Home card leads with Radar’s homeowner
+purpose, suppresses a misleading zero before monitoring is ready, and uses
+“events need attention” rather than the internal “active material events”
+terminology. The
 same distinction is rendered on Unified Home, the Radar status notice, the
 empty feed, and the desktop context panel.
 

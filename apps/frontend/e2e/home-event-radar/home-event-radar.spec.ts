@@ -72,8 +72,8 @@ test('every monitoring state has truthful zero-feed copy', async ({ page }, test
     },
     {
       state: 'SETUP_NEEDED',
-      monitoringTitle: 'Complete this property’s location',
-      emptyTitle: 'Complete this property’s location',
+      monitoringTitle: 'Help Radar locate this home',
+      emptyTitle: 'Help Radar locate this home',
     },
   ];
 
@@ -83,7 +83,7 @@ test('every monitoring state has truthful zero-feed copy', async ({ page }, test
     await expect(page.getByRole('status')).toContainText(scenario.monitoringTitle);
     await expect(page.getByRole('heading', { name: scenario.emptyTitle })).toBeVisible();
     if (scenario.state === 'SETUP_NEEDED') {
-      await expect(page.getByRole('link', { name: 'Update property location' }).first())
+      await expect(page.getByRole('link', { name: 'Update home address' }).first())
         .toHaveAttribute('href', `/dashboard/properties/${propertyId}/edit`);
     }
   }

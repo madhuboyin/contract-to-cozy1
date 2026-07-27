@@ -21,8 +21,8 @@ const MONITORING_COPY: Record<
   { label: string; description: string; attention: boolean }
 > = {
   ACTIVE: {
-    label: 'Monitoring active',
-    description: 'Live sources are checking this home.',
+    label: 'Watching',
+    description: 'Radar is watching this home.',
     attention: false,
   },
   PARTIAL: {
@@ -47,6 +47,9 @@ const MONITORING_COPY: Record<
   },
 };
 
+const RADAR_PURPOSE_COPY =
+  'Stay ahead of weather, air-quality, disaster, and property-related events that may affect this home.';
+
 function humanize(value: string): string {
   return value.replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
 }
@@ -66,11 +69,11 @@ function lastCheckLabel(value: string | null): string | null {
 export function radarHomeEmptyCopy(
   state: RadarMonitoringState,
 ): string {
-  if (state === 'ACTIVE') return 'No active material events from the sources covering this home.';
-  if (state === 'PARTIAL') return 'No active material events from covered sources. Some categories are not monitored.';
-  if (state === 'DEGRADED') return 'Monitoring is delayed, so this view is not confirmation that no events exist.';
+  if (state === 'ACTIVE') return 'Nothing needs your attention right now from the sources monitoring this home.';
+  if (state === 'PARTIAL') return 'Nothing needs attention from active sources. Some event types are not available here.';
+  if (state === 'DEGRADED') return 'Some checks are delayed, so Radar may not have the latest local events.';
   if (state === 'SETUP_NEEDED') return 'Monitoring cannot evaluate this home until setup is complete.';
-  return 'Live event monitoring is not available for this home.';
+  return 'Event monitoring is not available for this home yet.';
 }
 
 export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }) {
@@ -152,7 +155,9 @@ export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }
               <CardTitle id="home-radar-summary-heading" className="text-lg">
                 Home Event Radar
               </CardTitle>
-              <p className="mt-1 text-sm text-slate-600">{presentation.description}</p>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                {RADAR_PURPOSE_COPY}
+              </p>
             </div>
           </div>
           <Badge
@@ -172,17 +177,19 @@ export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-2xl font-semibold text-slate-950">
-            {summary.activeMaterialEventCount}
-          </span>
-          <span className="text-sm text-slate-600">
-            active material event{summary.activeMaterialEventCount === 1 ? '' : 's'}
-          </span>
-          {presentation.attention && checkedAt && !readiness ? (
-            <span className="text-xs text-amber-800">· {checkedAt}</span>
-          ) : null}
-        </div>
+        {!readiness && summary.activeMaterialEventCount > 0 ? (
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="text-2xl font-semibold text-slate-950">
+              {summary.activeMaterialEventCount}
+            </span>
+            <span className="text-sm text-slate-600">
+              event{summary.activeMaterialEventCount === 1 ? '' : 's'} need attention
+            </span>
+            {presentation.attention && checkedAt ? (
+              <span className="text-xs text-amber-800">· {checkedAt}</span>
+            ) : null}
+          </div>
+        ) : null}
 
         {urgent ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -215,7 +222,7 @@ export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }
               : 'border-emerald-200 bg-emerald-50 text-emerald-800',
           )}>
             {summary.activeMaterialEventCount > 0
-              ? `${summary.activeMaterialEventCount} active material event${summary.activeMaterialEventCount === 1 ? ' is' : 's are'} still being evaluated. Open Radar for the latest available evidence.`
+              ? `${summary.activeMaterialEventCount} event${summary.activeMaterialEventCount === 1 ? ' needs' : 's need'} attention, but the details are still loading. Open Radar for the latest information.`
               : readiness?.title ?? radarHomeEmptyCopy(overview.monitoringState)}
             {readiness ? (
               <span className="mt-1 block text-xs text-amber-800">
@@ -249,7 +256,7 @@ export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }
             href={urgent?.href ?? baseHref}
             className="inline-flex min-h-[44px] items-center text-sm font-semibold text-teal-700 underline underline-offset-2"
           >
-            {urgent ? 'Open Home Event Radar' : 'View monitoring details'}
+            {urgent ? 'Open Home Event Radar' : 'See what Radar monitors'}
           </Link>
         </div>
       </CardContent>

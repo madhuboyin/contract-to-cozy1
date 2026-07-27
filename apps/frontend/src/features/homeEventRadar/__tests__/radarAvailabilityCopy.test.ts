@@ -65,10 +65,10 @@ describe('Home Event Radar coverage-aware copy', () => {
       },
     });
 
-    expect(copy?.title).toBe('Complete this property’s location');
+    expect(copy?.title).toBe('Help Radar locate this home');
     expect(copy?.description).toContain('state and ZIP code or city/county');
     expect(copy?.action).toBe('edit_property');
-    expect(copy?.actionLabel).toBe('Update property location');
+    expect(copy?.actionLabel).toBe('Update home address');
   });
 
   it('does not blame homeowner setup when the first coverage check is missing', () => {
@@ -81,9 +81,9 @@ describe('Home Event Radar coverage-aware copy', () => {
       },
     });
 
-    expect(copy?.title).toBe('First monitoring check is pending');
-    expect(copy?.description).toContain('already has a usable location');
+    expect(copy?.title).toBe('We’re setting up monitoring');
+    expect(copy?.description).toContain('No action is needed right now');
     expect(copy?.action).toBe('retry');
-    expect(copy?.actionLabel).toBe('Check again');
+    expect(copy?.actionLabel).toBe('Refresh status');
   });
 });

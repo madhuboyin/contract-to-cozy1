@@ -89,8 +89,9 @@ describe('HomeEventRadarSummaryCard', () => {
     renderCard();
 
     expect(await screen.findByText('Severe thunderstorm warning')).toBeInTheDocument();
+    expect(screen.getByText(/Stay ahead of weather, air-quality, disaster/i)).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('active material events')).toBeInTheDocument();
+    expect(screen.getByText('events need attention')).toBeInTheDocument();
     expect(screen.getByText('Exposed outdoor components may need attention.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review event' })).toHaveAttribute(
       'href',
@@ -114,7 +115,7 @@ describe('HomeEventRadarSummaryCard', () => {
     renderCard();
 
     expect(await screen.findByText('Monitoring delayed')).toBeInTheDocument();
-    expect(screen.getByText(/not confirmation that no events exist/i)).toBeInTheDocument();
+    expect(screen.getByText(/may not have the latest local events/i)).toBeInTheDocument();
     expect(screen.queryByText(/all clear/i)).not.toBeInTheDocument();
   });
 
@@ -128,8 +129,8 @@ describe('HomeEventRadarSummaryCard', () => {
     });
     renderCard();
 
-    expect(await screen.findByText(/1 active material event is still being evaluated/i)).toBeInTheDocument();
-    expect(screen.queryByText(/No active material events/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/1 event needs attention, but the details are still loading/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing needs your attention/i)).not.toBeInTheDocument();
   });
 
   it('keeps overview failures explicit instead of fabricating a zero state', async () => {
@@ -157,9 +158,9 @@ describe('HomeEventRadarSummaryCard', () => {
     });
     renderCard();
 
-    expect(await screen.findByText('Complete this property’s location')).toBeInTheDocument();
+    expect(await screen.findByText('Help Radar locate this home')).toBeInTheDocument();
     expect(screen.getAllByText(/state and ZIP code or city\/county/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: /Update property location/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Update home address/i })).toHaveAttribute(
       'href',
       '/dashboard/properties/property-1/edit',
     );
@@ -183,17 +184,18 @@ describe('HomeEventRadarSummaryCard', () => {
     });
     renderCard();
 
-    expect(await screen.findByText('First monitoring check is pending')).toBeInTheDocument();
-    expect(screen.getAllByText(/already has a usable location/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument();
+    expect(await screen.findByText('We’re setting up monitoring')).toBeInTheDocument();
+    expect(screen.getAllByText(/No action is needed right now/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Refresh status' })).toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByText('Setup needed')).not.toBeInTheDocument();
   });
 });
 
 describe('radarHomeEmptyCopy', () => {
   it('qualifies partial, degraded, uncovered, and setup states', () => {
-    expect(radarHomeEmptyCopy('PARTIAL')).toContain('Some categories are not monitored');
-    expect(radarHomeEmptyCopy('DEGRADED')).toContain('not confirmation');
+    expect(radarHomeEmptyCopy('PARTIAL')).toContain('Some event types are not available');
+    expect(radarHomeEmptyCopy('DEGRADED')).toContain('may not have the latest');
     expect(radarHomeEmptyCopy('UNCOVERED')).toContain('not available');
     expect(radarHomeEmptyCopy('SETUP_NEEDED')).toContain('until setup is complete');
   });

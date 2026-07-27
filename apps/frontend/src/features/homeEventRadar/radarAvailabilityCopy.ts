@@ -31,32 +31,32 @@ export function getRadarReadinessPresentation(
       .map((field) => LOCATION_FIELD_LABELS[field]);
     return {
       label: 'Setup needed',
-      title: 'Complete this property’s location',
+      title: 'Help Radar locate this home',
       description: fields.length > 0
-        ? `Add ${fields.join(' and ')} so Radar can match this home to available sources.`
-        : 'Add or verify this property’s location so Radar can match it to available sources.',
+        ? `Add ${fields.join(' and ')} so Radar can watch for events near this home.`
+        : 'Add or verify this property’s location so Radar can watch for nearby events.',
       action: 'edit_property',
-      actionLabel: 'Update property location',
+      actionLabel: 'Update home address',
     };
   }
   if (overview.readiness?.state === 'MONITORING_NOT_INITIALIZED') {
     return {
-      label: 'Check pending',
-      title: 'First monitoring check is pending',
+      label: 'Getting ready',
+      title: 'We’re setting up monitoring',
       description:
-        'This property already has a usable location. Radar has not recorded its first source-coverage evaluation yet.',
+        'Radar is checking which event sources cover this address. No action is needed right now.',
       action: 'retry',
-      actionLabel: 'Check again',
+      actionLabel: 'Refresh status',
     };
   }
   // Backward-compatible fallback for an older API response.
   if (!overview.readiness && overview.monitoringState === 'SETUP_NEEDED') {
     return {
       label: 'Setup needed',
-      title: 'Complete this property’s location',
-      description: 'Add or verify this property’s location so Radar can evaluate source coverage.',
+      title: 'Help Radar locate this home',
+      description: 'Add or verify this property’s location so Radar can watch for nearby events.',
       action: 'edit_property',
-      actionLabel: 'Update property location',
+      actionLabel: 'Update home address',
     };
   }
   return null;
