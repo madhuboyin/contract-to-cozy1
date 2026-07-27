@@ -1294,17 +1294,67 @@ export interface InsurancePolicy {
   carrierName: string;
   policyNumber: string;
   coverageType: string | null;
-  premiumAmount: number;
+  premiumAmount: number | null;
   personalPropertyLimitCents: number | null;
   deductibleCents: number | null;
   isVerified: boolean;
   lastVerifiedAt: string | null;
-  startDate: string; // ISO Date string
-  expiryDate: string; // ISO Date string
+  startDate: string | null; // ISO Date string when known
+  expiryDate: string | null; // ISO Date string when known
   documents: Document[]; // Array of associated documents
   createdAt: string;
   updatedAt: string;
   applicability?: CoverageApplicability;
+}
+
+export interface InsurancePolicyFact {
+  id: string;
+  policyTermId: string;
+  factKey: string;
+  valueType: 'AMOUNT' | 'TEXT' | 'BOOLEAN' | 'JSON';
+  amountValue: string | number | null;
+  textValue: string | null;
+  booleanValue: boolean | null;
+  jsonValue: unknown;
+  currency: string | null;
+  sourceDocumentId: string | null;
+  sourcePage: number | null;
+  sourceExcerptHash: string | null;
+  extractionMethod: string;
+  confidence: number | null;
+  confirmationStatus: 'PENDING' | 'CONFIRMED' | 'REJECTED';
+  confirmedByUserId: string | null;
+  confirmedAt: string | null;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  sourceDocument?: Pick<Document, 'id' | 'name'> | null;
+}
+
+export interface InsurancePolicyTerm {
+  id: string;
+  insurancePolicyId: string;
+  propertyId: string;
+  termStart: string | null;
+  termEnd: string | null;
+  annualPremium: string | number | null;
+  status: 'PENDING_CONFIRMATION' | 'REVIEWED';
+  verificationStatus: 'UNVERIFIED' | 'VERIFIED';
+  verifiedAt: string | null;
+  sourceDocumentId: string | null;
+  sourceDocument?: Pick<Document, 'id' | 'name'> | null;
+  facts: InsurancePolicyFact[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsurancePolicyRecord extends InsurancePolicy {
+  terms: InsurancePolicyTerm[];
+  readiness: {
+    state: 'NO_TERM' | 'NEEDS_CONFIRMATION' | 'CONFIRMED' | 'UNKNOWN';
+    pendingFactCount: number;
+    confirmedFactCount: number;
+    unknownFactKeys: string[];
+  };
 }
 
 export interface CoverageApplicability {

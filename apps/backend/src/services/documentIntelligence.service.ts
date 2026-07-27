@@ -7,6 +7,7 @@ import { logger } from '../lib/logger';
 import { analyticsEmitter } from './analytics';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
+import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
 
 export interface DocumentInsights {
   documentType: 'WARRANTY' | 'RECEIPT' | 'MANUAL' | 'INSPECTION' | 'INVOICE' | 'INSURANCE' | 'UNKNOWN';
@@ -333,48 +334,28 @@ export class DocumentIntelligenceService {
         return null;
       }
 
-      // Check if policy already exists
-      const existingPolicy = await prisma.insurancePolicy.findFirst({
-        where: {
-          homeownerProfileId,
-          propertyId,
-          policyNumber: extractedData.policyNumber,
-        }
-      });
-
-      if (existingPolicy) {
-        return existingPolicy;
-      }
-
-      const policy = await prisma.insurancePolicy.create({
-        data: {
-          homeownerProfileId,
-          propertyId,
-          carrierName: extractedData.carrierName,
-          policyNumber: extractedData.policyNumber,
-          coverageType: extractedData.coverageType || 'Homeowner',
-          premiumAmount: extractedData.premiumAmount || 0,
-          startDate: extractedData.startDate || new Date(),
-          expiryDate: extractedData.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        }
-      });
-
-      logger.info({ policyId: policy.id }, '[DOC-INTELLIGENCE] Auto-created insurance policy');
-
-      // Track outcome generated for the user
-      analyticsEmitter.outcomeGenerated({
+      const staged = await stageExtractedPolicyTerm({
+        homeownerProfileId,
         propertyId,
-        outcomeType: 'SAVINGS',
-        sourceEngine: 'INSURANCE_AUTO_DETECTION',
-        valueUsd: extractedData.premiumAmount,
-        metadataJson: {
-          policyId: policy.id,
-          carrierName: policy.carrierName,
-          docId: documentId
-        }
+        documentId,
+        carrierName: extractedData.carrierName,
+        policyNumber: extractedData.policyNumber,
+        coverageType: extractedData.coverageType,
+        premiumAmount: extractedData.premiumAmount,
+        deductibleAmount: extractedData.deductible,
+        coverageLimits: extractedData.coverageLimits,
+        termStart: extractedData.startDate,
+        termEnd: extractedData.expiryDate,
+        confidence: insights.confidence,
+        sourceText: insights.rawText,
       });
 
-      return policy;
+      logger.info(
+        { policyId: staged.policy.id, policyTermId: staged.term.id },
+        '[DOC-INTELLIGENCE] Staged insurance policy facts for confirmation'
+      );
+
+      return staged.policy;
     } catch (error: any) {
       logger.error({ err: error }, '[DOC-INTELLIGENCE] Insurance creation error');
       return null;

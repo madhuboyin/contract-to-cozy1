@@ -83,13 +83,13 @@ export interface InsurancePolicy {
   carrierName: string;
   policyNumber: string;
   coverageType: string | null;
-  premiumAmount: number; // Decimal(12, 2) in DB
+  premiumAmount: number | null; // Unknown until observed or confirmed
   personalPropertyLimitCents: number | null;
   deductibleCents: number | null;
   isVerified: boolean;
   lastVerifiedAt: Date | null;
-  startDate: Date;
-  expiryDate: Date;
+  startDate: Date | null;
+  expiryDate: Date | null;
   createdAt: Date;
   updatedAt: Date;
   documents: Document[];

@@ -28,6 +28,7 @@ import {
   CreateInsurancePolicyInput,
   UpdateInsurancePolicyInput,
   InsurancePolicy,
+  InsurancePolicyRecord,
   InsuranceProtectionGapSummary,
   HomeEquitySummary,
   APISuccess, 
@@ -1832,6 +1833,23 @@ class APIClient {
 
   async deleteInsurancePolicy(policyId: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/home-management/insurance-policies/${policyId}`, { method: 'DELETE' });
+  }
+
+  async getInsurancePolicyRecord(policyId: string): Promise<APIResponse<InsurancePolicyRecord>> {
+    return this.request<InsurancePolicyRecord>(
+      `/api/home-management/insurance-policies/${policyId}/record`
+    );
+  }
+
+  async confirmInsurancePolicyFact(
+    policyId: string,
+    factId: string,
+    confirmationStatus: 'CONFIRMED' | 'REJECTED'
+  ): Promise<APIResponse<import('@/types').InsurancePolicyFact>> {
+    return this.request<import('@/types').InsurancePolicyFact>(
+      `/api/home-management/insurance-policies/${policyId}/facts/${factId}`,
+      { method: 'PATCH', body: { confirmationStatus } }
+    );
   }
 
   async getInsuranceProtectionGap(

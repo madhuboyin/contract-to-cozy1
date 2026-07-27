@@ -13,6 +13,12 @@ import {
 import { Document } from '@prisma/client'; 
 import multer from 'multer';
 import { logger } from '../lib/logger';
+import {
+  confirmPolicyFact,
+  getPolicyRecord,
+  PolicyFactValue,
+} from '../services/insurancePolicyRecord.service';
+import { APIError } from '../middleware/error.middleware';
 
 // ============================================================================
 // FILE UPLOAD SETUP
@@ -29,6 +35,51 @@ export const upload = multer({
 
 // Utility function to get homeownerProfileId from the request (assuming Auth is implemented)
 const getHomeownerId = (req: AuthRequest) => (req.user as any)?.homeownerProfile?.id as string;
+
+function parsePolicyFactCorrection(value: unknown): PolicyFactValue | undefined {
+  if (value == null) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new APIError('correction must be a typed fact value', 400, 'INVALID_POLICY_FACT_CORRECTION');
+  }
+  const correction = value as Record<string, unknown>;
+  if (
+    correction.valueType === 'AMOUNT' &&
+    typeof correction.amountValue === 'number' &&
+    Number.isFinite(correction.amountValue) &&
+    correction.amountValue >= 0 &&
+    (correction.currency === undefined ||
+      (typeof correction.currency === 'string' && /^[A-Z]{3}$/.test(correction.currency)))
+  ) {
+    return {
+      valueType: 'AMOUNT',
+      amountValue: correction.amountValue,
+      ...(typeof correction.currency === 'string' ? { currency: correction.currency } : {}),
+    };
+  }
+  if (
+    correction.valueType === 'TEXT' &&
+    typeof correction.textValue === 'string' &&
+    correction.textValue.trim().length > 0 &&
+    correction.textValue.length <= 10_000
+  ) {
+    return { valueType: 'TEXT', textValue: correction.textValue.trim() };
+  }
+  if (correction.valueType === 'BOOLEAN' && typeof correction.booleanValue === 'boolean') {
+    return { valueType: 'BOOLEAN', booleanValue: correction.booleanValue };
+  }
+  if (
+    correction.valueType === 'JSON' &&
+    correction.jsonValue !== undefined &&
+    correction.jsonValue !== null
+  ) {
+    return { valueType: 'JSON', jsonValue: correction.jsonValue as any };
+  }
+  throw new APIError(
+    'correction does not match its declared valueType',
+    400,
+    'INVALID_POLICY_FACT_CORRECTION'
+  );
+}
 
 // Temporary type augmentation for Multer to recognize req.file and req.body as multipart
 interface UploadAuthRequest extends Request {
@@ -201,7 +252,10 @@ export const getInsurancePolicies = async (req: AuthRequest, res: Response, next
     // DEBUG 11: Log API call initiation
     logger.info(`DEBUG (Controller): GET /insurance-policies for user ${homeownerProfileId}`);
 
-    const policies = await HomeManagementService.listInsurancePolicies(homeownerProfileId);
+    const policies = await HomeManagementService.listInsurancePolicies(
+      homeownerProfileId,
+      typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined
+    );
     res.status(200).json({ success: true, data: { policies } });
   } catch (error) {
     // DEBUG 12: Log the error being passed to Express's error handler
@@ -234,6 +288,41 @@ export const deleteInsurancePolicy = async (req: AuthRequest, res: Response, nex
 
     await HomeManagementService.deleteInsurancePolicy(policyId, homeownerProfileId);
     res.status(200).json({ success: true, message: 'Policy deleted successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getInsurancePolicyRecord = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const policy = await getPolicyRecord(req.params.policyId, getHomeownerId(req));
+    res.status(200).json({ success: true, data: policy });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const patchInsurancePolicyFact = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const confirmationStatus = req.body?.confirmationStatus;
+    if (confirmationStatus !== 'CONFIRMED' && confirmationStatus !== 'REJECTED') {
+      throw new APIError(
+        'confirmationStatus must be CONFIRMED or REJECTED',
+        400,
+        'INVALID_CONFIRMATION_STATUS'
+      );
+    }
+    if (!req.user?.userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+
+    const fact = await confirmPolicyFact({
+      policyId: req.params.policyId,
+      factId: req.params.factId,
+      homeownerProfileId: getHomeownerId(req),
+      userId: req.user.userId,
+      confirmationStatus,
+      correction: parsePolicyFactCorrection(req.body?.correction),
+    });
+    res.status(200).json({ success: true, data: fact });
   } catch (error) {
     next(error);
   }

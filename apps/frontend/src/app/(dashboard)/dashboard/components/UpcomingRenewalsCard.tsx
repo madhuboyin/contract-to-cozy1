@@ -71,11 +71,11 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
           propertyId: w.propertyId
         })),
       ...rawPolicies
-        .filter(p => p.propertyId === propertyId)
+        .filter(p => p.propertyId === propertyId && p.expiryDate != null)
         .map(p => ({
           id: p.id,
           title: p.carrierName ? `${p.carrierName} Insurance` : 'Property Insurance',
-          expiryDate: new Date(p.expiryDate),
+          expiryDate: new Date(p.expiryDate as string),
           type: 'insurance' as const,
           propertyId: p.propertyId
         }))

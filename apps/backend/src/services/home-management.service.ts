@@ -27,7 +27,7 @@ interface DecimalLike {
 type PrismaOutputWithDecimals<T> = T & { 
   amount?: DecimalLike;
   cost?: DecimalLike | null;
-  premiumAmount?: DecimalLike;
+  premiumAmount?: DecimalLike | null;
 };
 
 /**
@@ -125,12 +125,10 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
  */
 const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
     const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>;
-    let premiumAmount = 0;
+    let premiumAmount: number | null = null;
 
     try {
-        // High-granularity check for 'premiumAmount'
-        premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
-        if (premiumAmount === null) throw new Error("Conversion resulted in null.");
+        premiumAmount = safeToNumber(policyWithNumber.premiumAmount);
     } catch (e) {
         logger.error({ rawPremiumAmount: policyWithNumber.premiumAmount }, `FATAL MAPPING ERROR (Policy ID ${rawPolicy.id}): Failed to convert 'premiumAmount'`);
         throw new Error(`Policy conversion failed for ID ${rawPolicy.id} on 'premiumAmount' field.`);
@@ -415,21 +413,110 @@ export async function createInsurancePolicy(
   data: CreateInsurancePolicyDTO
 ): Promise<InsurancePolicy> {
   try {
-    const rawPolicy = await prisma.insurancePolicy.create({
-      data: {
-        homeownerProfile: { connect: { id: homeownerProfileId } },
-        property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
-        
-        carrierName: data.carrierName,
-        policyNumber: data.policyNumber,
-        coverageType: data.coverageType,
-        premiumAmount: data.premiumAmount,
-        personalPropertyLimitCents: data.personalPropertyLimitCents ?? null,
-        deductibleCents: data.deductibleCents ?? null,
-        isVerified: data.isVerified ?? false,
-        startDate: new Date(data.startDate),
-        expiryDate: new Date(data.expiryDate),
-      } as Prisma.InsurancePolicyCreateInput,
+    const rawPolicy = await prisma.$transaction(async (tx) => {
+      if (data.propertyId && data.propertyId !== "") {
+        const ownedProperty = await tx.property.findFirst({
+          where: { id: data.propertyId, homeownerProfileId },
+          select: { id: true },
+        });
+        if (!ownedProperty) {
+          throw new Error('The selected property does not belong to this homeowner.');
+        }
+      }
+      const confirmedAt = new Date();
+      const policy = await tx.insurancePolicy.create({
+        data: {
+          homeownerProfile: { connect: { id: homeownerProfileId } },
+          property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
+
+          carrierName: data.carrierName,
+          policyNumber: data.policyNumber,
+          coverageType: data.coverageType,
+          premiumAmount: data.premiumAmount,
+          personalPropertyLimitCents: data.personalPropertyLimitCents ?? null,
+          deductibleCents: data.deductibleCents ?? null,
+          isVerified: true,
+          lastVerifiedAt: confirmedAt,
+          startDate: new Date(data.startDate),
+          expiryDate: new Date(data.expiryDate),
+        } as Prisma.InsurancePolicyCreateInput,
+      });
+
+      if (policy.propertyId) {
+        const profile = await tx.homeownerProfile.findUnique({
+          where: { id: homeownerProfileId },
+          select: { userId: true },
+        });
+        const facts: Prisma.InsurancePolicyFactCreateWithoutPolicyTermInput[] = [
+          {
+            factKey: 'ANNUAL_PREMIUM',
+            valueType: 'AMOUNT',
+            amountValue: data.premiumAmount,
+            currency: 'USD',
+            extractionMethod: 'HOMEOWNER_ENTRY',
+            confirmationStatus: 'CONFIRMED',
+            confirmedByUserId: profile?.userId,
+            confirmedAt,
+            effectiveFrom: new Date(data.startDate),
+            effectiveTo: new Date(data.expiryDate),
+          },
+          ...(data.coverageType
+            ? [{
+                factKey: 'POLICY_FORM',
+                valueType: 'TEXT',
+                textValue: data.coverageType,
+                extractionMethod: 'HOMEOWNER_ENTRY',
+                confirmationStatus: 'CONFIRMED',
+                confirmedByUserId: profile?.userId,
+                confirmedAt,
+                effectiveFrom: new Date(data.startDate),
+                effectiveTo: new Date(data.expiryDate),
+              }]
+            : []),
+          ...(data.deductibleCents != null
+            ? [{
+                factKey: 'ALL_PERIL_DEDUCTIBLE',
+                valueType: 'AMOUNT',
+                amountValue: data.deductibleCents / 100,
+                currency: 'USD',
+                extractionMethod: 'HOMEOWNER_ENTRY',
+                confirmationStatus: 'CONFIRMED',
+                confirmedByUserId: profile?.userId,
+                confirmedAt,
+                effectiveFrom: new Date(data.startDate),
+                effectiveTo: new Date(data.expiryDate),
+              }]
+            : []),
+        ];
+        const term = await tx.insurancePolicyTerm.create({
+          data: {
+            insurancePolicyId: policy.id,
+            propertyId: policy.propertyId,
+            termStart: new Date(data.startDate),
+            termEnd: new Date(data.expiryDate),
+            annualPremium: data.premiumAmount,
+            status: 'REVIEWED',
+            verificationStatus: 'VERIFIED',
+            verifiedAt: confirmedAt,
+            facts: { create: facts },
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            userId: profile?.userId,
+            action: 'insurance_policy_term_confirmed',
+            entityType: 'InsurancePolicyTerm',
+            entityId: term.id,
+            newValues: {
+              policyId: policy.id,
+              propertyId: policy.propertyId,
+              source: 'HOMEOWNER_ENTRY',
+              factCount: facts.length,
+            },
+          },
+        });
+      }
+      return policy;
     });
     
     if (rawPolicy.propertyId) {
@@ -446,9 +533,12 @@ export async function createInsurancePolicy(
   }
 }
 
-export async function listInsurancePolicies(homeownerProfileId: string): Promise<InsurancePolicy[]> {
+export async function listInsurancePolicies(
+  homeownerProfileId: string,
+  propertyId?: string
+): Promise<InsurancePolicy[]> {
   const rawPolicies = await prisma.insurancePolicy.findMany({
-    where: { homeownerProfileId },
+    where: { homeownerProfileId, ...(propertyId ? { propertyId } : {}) },
     orderBy: { expiryDate: 'asc' },
     include: {
       documents: true
@@ -463,6 +553,15 @@ export async function updateInsurancePolicy(
   homeownerProfileId: string, 
   data: UpdateInsurancePolicyDTO
 ): Promise<InsurancePolicy> {
+  if (data.propertyId) {
+    const ownedProperty = await prisma.property.findFirst({
+      where: { id: data.propertyId, homeownerProfileId },
+      select: { id: true },
+    });
+    if (!ownedProperty) {
+      throw new Error('The selected property does not belong to this homeowner.');
+    }
+  }
   const rawUpdatedPolicy = await prisma.insurancePolicy.update({
     where: { id: policyId, homeownerProfileId },
     data: {

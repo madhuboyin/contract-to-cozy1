@@ -13,6 +13,7 @@ import InsuranceTrendClient from '../insurance-trend/InsuranceTrendClient';
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadinessPanel';
 
 type CoverageStage = 'current' | 'questions' | 'renewal' | 'risk';
 
@@ -163,7 +164,8 @@ export default function CoverageIntelligenceToolClient() {
 
       {/* Tab content */}
       {activeStage === 'current' && (
-        <div id="coverage-stage-current" role="tabpanel">
+        <div id="coverage-stage-current" role="tabpanel" className="space-y-4">
+          <PolicyRecordReadinessPanel propertyId={propertyId} />
           <CoverageIntelligencePanel propertyId={propertyId} />
           <PropertyContextCapturePanel
             propertyId={propertyId}

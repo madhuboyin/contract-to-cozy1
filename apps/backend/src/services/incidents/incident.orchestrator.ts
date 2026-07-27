@@ -145,7 +145,12 @@ export async function orchestrateIncident(incidentId: string) {
     const activePolicy = policies.find((policy) => {
       if (!isCoverageActive(policy, incident.propertyId)) return false;
       if (!lapsePolicyId || policy.id !== lapsePolicyId) return true;
-      return !!recordedExpiry && !Number.isNaN(recordedExpiry.getTime()) && policy.expiryDate > recordedExpiry;
+      return (
+        !!recordedExpiry &&
+        !Number.isNaN(recordedExpiry.getTime()) &&
+        policy.expiryDate != null &&
+        policy.expiryDate > recordedExpiry
+      );
     });
     if (activePolicy) {
       const resolved = await prisma.incident.update({

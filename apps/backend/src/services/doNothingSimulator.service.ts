@@ -710,7 +710,13 @@ export class DoNothingSimulatorService {
 
     const now = new Date();
     const activePolicy =
-      policies.find((policy) => policy.startDate <= now && policy.expiryDate >= now) ?? policies[0] ?? null;
+      policies.find(
+        (policy) =>
+          policy.startDate != null &&
+          policy.expiryDate != null &&
+          policy.startDate <= now &&
+          policy.expiryDate >= now
+      ) ?? policies[0] ?? null;
 
     const annualPremiumDollars = asNumber(activePolicy?.premiumAmount);
     const deductibleDollars = asNumber(activePolicy?.deductibleAmount);

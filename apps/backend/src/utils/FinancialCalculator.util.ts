@@ -38,7 +38,7 @@ export function calculateFinancialEfficiency(inputs: CalculationInputs): Financi
     // --- 1. Calculate Actual Annual Costs ($AC) ---
 
     const actualInsuranceCost = insurancePolicies.reduce(
-        (sum, policy) => sum.plus(policy.premiumAmount),
+        (sum, policy) => sum.plus(policy.premiumAmount ?? 0),
         new Prisma.Decimal(0)
     );
 

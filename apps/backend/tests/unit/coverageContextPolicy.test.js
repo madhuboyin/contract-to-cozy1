@@ -62,6 +62,17 @@ test('invalid date windows remain unknown instead of being treated as uncovered 
   assert.equal(decision.lifecycle, 'INVALID');
 });
 
+test('missing policy term dates remain explicitly unknown', () => {
+  const decision = evaluateCoverageRecord(
+    { id: 'pending-term', propertyId, startDate: null, expiryDate: null },
+    propertyId,
+    now,
+  );
+  assert.equal(decision.status, 'UNKNOWN');
+  assert.equal(decision.lifecycle, 'INVALID');
+  assert.deepEqual(decision.reasonCodes, ['COVERAGE_DATES_INVALID']);
+});
+
 test('claim source selects its required canonical coverage owner', () => {
   assert.equal(requiredCoverageKind('INSURANCE'), 'INSURANCE');
   assert.equal(requiredCoverageKind('HOME_WARRANTY'), 'WARRANTY');

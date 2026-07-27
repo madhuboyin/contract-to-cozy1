@@ -20,7 +20,8 @@ import { Button } from "@/components/ui/button";
 import { navigateBackWithDashboardFallback } from "@/lib/navigation/backNavigation";
 import { differenceInDays, parseISO, isPast } from "date-fns";
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null): string {
+  if (!iso) return "Unknown";
   return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
@@ -29,7 +30,10 @@ function formatCurrency(cents: number | null | undefined): string | null {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
 }
 
-function expiryStatusLabel(expiryDate: string): { label: string; isExpired: boolean; daysLabel: string } {
+function expiryStatusLabel(expiryDate: string | null): { label: string; isExpired: boolean; daysLabel: string } {
+  if (!expiryDate) {
+    return { label: "Unknown", isExpired: false, daysLabel: "after dates are confirmed" };
+  }
   const date = parseISO(expiryDate);
   const expired = isPast(date);
   const days = Math.abs(differenceInDays(new Date(), date));

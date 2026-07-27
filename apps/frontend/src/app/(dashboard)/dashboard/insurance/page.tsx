@@ -95,6 +95,12 @@ function getPolicyStatusMeta(policy: InsurancePolicy): {
   expiryLine: string;
   helperLine: string;
 } {
+  if (!policy.startDate || !policy.expiryDate) {
+    return {
+      status: 'unknown', tone: 'info', label: 'Check Dates', daysRemaining: null, expiryDate: null,
+      expiryLine: 'Coverage dates are unknown', helperLine: 'Confirm the policy term before using it as active coverage.',
+    };
+  }
   const expiryDate = parseISO(policy.expiryDate);
   if (policy.applicability?.lifecycle === 'FUTURE') {
     const startDate = parseISO(policy.startDate);
@@ -797,8 +803,8 @@ export default function InsurancePage() {
 
   const sortedPolicies = useMemo(() => {
     return [...policies].sort((a, b) => {
-        const dateA = parseISO(a.expiryDate).getTime();
-        const dateB = parseISO(b.expiryDate).getTime();
+        const dateA = a.expiryDate ? parseISO(a.expiryDate).getTime() : Number.POSITIVE_INFINITY;
+        const dateB = b.expiryDate ? parseISO(b.expiryDate).getTime() : Number.POSITIVE_INFINITY;
         return dateA - dateB;
     });
   }, [policies]);
@@ -1064,12 +1070,14 @@ export default function InsurancePage() {
                         </div>
                         <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
                           <p className="text-slate-500">Premium</p>
-                          <p className="font-medium text-slate-800">${policy.premiumAmount.toFixed(2)}</p>
+                          <p className="font-medium text-slate-800">
+                            {policy.premiumAmount == null ? 'Unknown' : `$${policy.premiumAmount.toFixed(2)}`}
+                          </p>
                         </div>
                         <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
                           <p className="text-slate-500">Started</p>
                           <p className="font-medium text-slate-800">
-                            {isValid(parseISO(policy.startDate)) ? format(parseISO(policy.startDate), 'MMM dd, yyyy') : 'N/A'}
+                            {policy.startDate && isValid(parseISO(policy.startDate)) ? format(parseISO(policy.startDate), 'MMM dd, yyyy') : 'Unknown'}
                           </p>
                         </div>
                         {meta.status !== 'active' ? (
@@ -1115,7 +1123,7 @@ export default function InsurancePage() {
                     <TableCell className="font-medium">
                       {policy.carrierName}
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {format(parseISO(policy.startDate), 'MMM dd, yyyy')}
+                        {policy.startDate ? format(parseISO(policy.startDate), 'MMM dd, yyyy') : 'Start date unknown'}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -1128,11 +1136,11 @@ export default function InsurancePage() {
                         {getPropertyInfo(policy.propertyId)}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                        ${policy.premiumAmount.toFixed(2)}
+                        {policy.premiumAmount == null ? 'Unknown' : `$${policy.premiumAmount.toFixed(2)}`}
                     </TableCell>
                     <TableCell className="text-center">
                       <div className={statusClass}>
-                          {format(parseISO(policy.expiryDate), 'MMM dd, yyyy')}
+                          {policy.expiryDate ? format(parseISO(policy.expiryDate), 'MMM dd, yyyy') : 'Unknown'}
                       </div>
                     </TableCell>
                     <TableCell className="text-center">

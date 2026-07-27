@@ -13,11 +13,12 @@ export type CoverageApplicability = {
 export type CoverageRecord = {
   id: string;
   propertyId?: string | null;
-  startDate: Date | string;
-  expiryDate: Date | string;
+  startDate: Date | string | null;
+  expiryDate: Date | string | null;
 };
 
-function validDate(value: Date | string): Date | null {
+function validDate(value: Date | string | null): Date | null {
+  if (value == null) return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }

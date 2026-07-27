@@ -676,7 +676,13 @@ export class RiskPremiumOptimizerService {
     }
 
     const activePolicy =
-      policies.find((policy) => policy.startDate <= now && policy.expiryDate > now) ?? null;
+      policies.find(
+        (policy) =>
+          policy.startDate != null &&
+          policy.expiryDate != null &&
+          policy.startDate <= now &&
+          policy.expiryDate > now
+      ) ?? null;
 
     const annualPremium =
       effectiveOverrides.annualPremium ?? (activePolicy ? asNumber(activePolicy.premiumAmount) : undefined);

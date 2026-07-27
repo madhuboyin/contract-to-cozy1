@@ -455,4 +455,14 @@ router.route('/insurance-policies/:policyId')
   .patch(HomeManagementController.patchInsurancePolicy)
   .delete(HomeManagementController.deleteInsurancePolicy);
 
+router.get(
+  '/insurance-policies/:policyId/record',
+  HomeManagementController.getInsurancePolicyRecord
+);
+
+router.patch(
+  '/insurance-policies/:policyId/facts/:factId',
+  HomeManagementController.patchInsurancePolicyFact
+);
+
 export default router;
