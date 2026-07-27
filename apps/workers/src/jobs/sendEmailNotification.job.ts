@@ -2,8 +2,8 @@
 import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
-import { buildDigestHtml, buildWeeklyHomeBriefHtml, escapeHtml } from '../email/buildDigestHtml';
-import { buildWeatherAlertCardHtml, isWeatherCardMetadata } from '../email/buildWeatherAlertCardHtml';
+import { buildDigestHtml, buildWeeklyHomeBriefHtml, renderNotificationCard } from '../email/buildDigestHtml';
+import { renderEmailShell } from '../email/emailShell';
 import { logger } from '../lib/logger';
 import { filterDeliveriesByAggregationPolicy } from '../services/aggregationDeliveryPolicy';
 import type { WorkerRunResult } from '../lib/workerRunResult';
@@ -130,94 +130,19 @@ export async function sendEmailNotificationJob(
   if (deliveries.length === 0) return;
 
   // 3️⃣ Build email HTML
-  const cardsHtml = deliveries
-    .map(({ notification }) => {
-      const weather = (notification.metadata as any)?.weather;
-      if (isWeatherCardMetadata(weather)) {
-        const card = buildWeatherAlertCardHtml({
-          title: notification.title,
-          actionUrl: notification.actionUrl,
-          weather,
-        });
-        return `<tr><td style="padding:12px 0;">${card}</td></tr>`;
-      }
-
-      const safeTitle = escapeHtml(notification.title);
-      const safeMessage = escapeHtml(notification.message);
-      const safeUrl = notification.actionUrl
-        ? escapeHtml(notification.actionUrl)
-        : '';
-      return `
-        <tr>
-          <td style="padding:12px 0;">
-            <table width="100%" style="border:1px solid #e5e7eb;border-radius:6px;">
-              <tr>
-                <td style="padding:14px;">
-                  <h3 style="margin:0 0 6px;font-size:15px;color:#111;">
-                    ${safeTitle}
-                  </h3>
-                  <p style="margin:0 0 10px;font-size:14px;color:#444;">
-                    ${safeMessage}
-                  </p>
-                  ${
-                    notification.actionUrl
-                      ? `<a href="${safeUrl}"
-                           style="font-size:14px;color:#2e7d32;text-decoration:none;">
-                          View details →
-                        </a>`
-                      : ''
-                  }
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      `;
-    })
-    .join('');
+  const cardsHtml = deliveries.map(({ notification }) => renderNotificationCard(notification)).join('');
 
   const subject =
     deliveries.length === 1
       ? deliveries[0].notification.title
       : `You have ${deliveries.length} new updates from Contract to Cozy`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<body style="margin:0;background:#f4f5f7;font-family:Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0">
-<tr>
-<td align="center" style="padding:24px;">
-<table width="600" style="background:#ffffff;border-radius:8px;">
-<tr>
-<td style="padding:20px;border-bottom:1px solid #eee;">
-<h2 style="margin:0;color:#2e7d32;">Contract to Cozy</h2>
-<p style="margin:6px 0 0;color:#555;">
-See what’s happening with your home
-</p>
-</td>
-</tr>
-
-<tr>
-<td style="padding:20px;">
-<table width="100%">
-${cardsHtml}
-</table>
-</td>
-</tr>
-
-<tr>
-<td style="padding:16px;color:#777;font-size:12px;">
-Manage notifications in your dashboard.
-</td>
-</tr>
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>
-`;
+  const html = renderEmailShell({
+    title: 'Contract to Cozy',
+    subtitle: 'See what’s happening with your home',
+    bodyHtml: cardsHtml,
+    footerHtml: 'Manage notifications in your dashboard.',
+  });
 
   // 4️⃣ Send ONE email
   try {
