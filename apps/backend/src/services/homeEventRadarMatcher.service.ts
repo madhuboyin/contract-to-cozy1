@@ -12,6 +12,7 @@ import {
 } from '../modules/homeEventRadar/services/radarMatchDiscovery.service';
 import { radarIncidentPromotionService } from '../modules/homeEventRadar/services/radarIncidentPromotion.service';
 import { radarNotificationDecisionService } from '../modules/homeEventRadar/services/radarNotificationDecision.service';
+import { reconcileRadarCompoundInsightsForProperty } from '../modules/homeEventRadar/services/radarCompoundInsight.service';
 import {
   computeRadarImpact,
   type RadarImpactPropertyInput,
@@ -317,6 +318,7 @@ export async function runMatchingForEvent(
           isMaterialRevision: lifecycle.isMaterialUpdate,
           evaluatedAt,
         });
+        await reconcileRadarCompoundInsightsForProperty(property.id, db, evaluatedAt);
         continue;
       }
 
@@ -393,6 +395,7 @@ export async function runMatchingForEvent(
           isMaterialRevision: lifecycle.isMaterialUpdate,
           evaluatedAt,
         });
+        await reconcileRadarCompoundInsightsForProperty(property.id, db, evaluatedAt);
         matched++;
         continue;
       }
@@ -588,6 +591,7 @@ export async function runMatchingForEvent(
         isMaterialRevision: lifecycle.isMaterialUpdate,
         evaluatedAt,
       });
+      await reconcileRadarCompoundInsightsForProperty(property.id, db, evaluatedAt);
       matched++;
     } catch (err) {
       logger.error(

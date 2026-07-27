@@ -3534,6 +3534,34 @@ export interface RadarCanonicalDetail extends RadarCanonicalFeedItem {
       href: string | null;
     };
   }>;
+  compoundInsights?: Array<{
+    id: string;
+    ruleCode: string;
+    ruleVersion: string;
+    title: string;
+    summary: string;
+    sourceMatchIds: string[];
+    sourceEventIds: string[];
+    sourceEvidence: Array<{
+      matchId: string;
+      eventId: string;
+      eventType: string;
+      eventSubType: string | null;
+      severity: string;
+      effectiveAt: string;
+      expiresAt: string | null;
+      sourceDefinitionId: string | null;
+      sourceName: string | null;
+      provider: string | null;
+      canonicalUrl: string | null;
+    }>;
+    factEvidence: Array<{
+      factKey: string;
+      state: 'confirmed' | 'absent' | 'unknown' | 'current' | 'due';
+      value: string | boolean | null;
+    }>;
+    evaluatedAt: string;
+  }>;
   canonicalUrl: string | null;
   observedAt: string;
   revision: {

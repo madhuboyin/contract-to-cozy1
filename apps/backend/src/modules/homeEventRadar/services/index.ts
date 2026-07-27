@@ -5,3 +5,4 @@ export * from './radarEventIngestion.service';
 export * from './radarMatchDiscovery.service';
 export * from './radarIncidentPromotion.service';
 export * from './radarInteraction.service';
+export * from './radarCompoundInsight.service';

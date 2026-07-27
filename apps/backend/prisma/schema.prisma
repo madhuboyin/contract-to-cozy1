@@ -2702,6 +2702,7 @@ model Property {
   radarCoverage                PropertyRadarCoverage[]
   radarNotificationPreferences PropertyRadarNotificationPreference[]
   radarNotificationDecisions   PropertyRadarNotificationDecision[]
+  radarCompoundInsights         PropertyRadarCompoundInsight[]
   homeRiskReplayRuns           HomeRiskReplayRun[]
   homeRiskReplayEventMatches   HomeRiskReplayEventMatch[]
 
@@ -9415,6 +9416,11 @@ enum RadarNotificationDecisionOutcome {
   suppressed
 }
 
+enum RadarCompoundInsightStatus {
+  active
+  resolved
+}
+
 enum RadarEventType {
   weather
   earthquake
@@ -9791,6 +9797,36 @@ model PropertyRadarMatch {
   @@index([isVisible, visibleFrom])
   @@index([createdAt])
   @@map("property_radar_matches")
+}
+
+// Durable property-level intelligence created only by reviewed deterministic
+// correlations. Constituent event/provider severity remains authoritative;
+// this model never creates a synthetic provider event or severity.
+model PropertyRadarCompoundInsight {
+  id                     String                     @id @default(uuid())
+  propertyId             String
+  ruleCode               String
+  ruleVersion            String
+  correlationKey         String                     @unique
+  status                 RadarCompoundInsightStatus @default(active)
+  title                  String
+  summary                String
+  sourceMatchIdsJson     Json
+  sourceEventIdsJson     Json
+  sourceEvidenceJson     Json
+  factEvidenceJson       Json
+  recommendedActionsJson Json
+  evaluatedAt            DateTime
+  resolvedAt             DateTime?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, status])
+  @@index([propertyId, ruleCode])
+  @@index([status, evaluatedAt])
+  @@map("property_radar_compound_insights")
 }
 
 // Per-user interaction state on a property-event match.

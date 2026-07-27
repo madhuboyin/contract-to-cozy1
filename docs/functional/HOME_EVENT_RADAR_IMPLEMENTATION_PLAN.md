@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-606 decision complete |
+| Status | In progress — HER-607 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -67,7 +67,7 @@
 | HER-604 Tax pilot | Complete; seed application and monitored-property production activation pending | NYC DOF Bronx Tax Class 1 uses the official current roll, exact borough/address/ZIP routing, parcel ambiguity suppression, latest-year republish deduplication, stable fiscal-year lifecycle, PII-minimized field projection, and governed appeal information |
 | HER-605 Utility source decision | Complete; contract and adapter implementation pending | New Jersey electric pilot, licensed commercial aggregator path, territory/precision gates, conservative restoration lifecycle, SLA, quota, cost, privacy, and activation controls are recorded in `docs/architecture/adr-home-event-radar-utility-source.md` |
 | HER-606 Insurance source decision | Complete; accepted no-go pending licensed structured source and governance | NJDOBI/SERFF is the authoritative evaluation system, but no approved automated/republication feed exists; Insurance remains unavailable under the source, semantics, carrier-match, review, financial-governance, and procurement gates in `docs/architecture/adr-home-event-radar-insurance-source.md` |
-| HER-607 | Not started | Compound-event rules remain |
+| HER-607 Compound-event rules | Complete; DB schema application pending | Deterministic `compound-v1` property insights correlate reviewed event/fact combinations, preserve every constituent source and severity, reconcile durable active/resolved lifecycle, add registry-owned actions, and render source evidence without creating synthetic provider events |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1788,14 +1788,37 @@ start with an RFI and evidence sample, not production code or a paid trial integ
 
 ### HER-607 — Compound-event rules
 
-After multi-source stability, add reviewed correlations such as:
+**Status: Complete — schema application pending.**
 
-- heavy rain + outage + no confirmed sump backup;
-- smoke + aging/unknown HVAC filter state;
-- freeze + electric heat + outage;
-- severe weather + unresolved roof issue.
+HER-607 implements deterministic property-level compound insights rather than synthetic
+provider events. `compound-v1` currently covers:
 
-Compound rules cannot invent provider severity and must expose each source.
+- heavy rain/flood risk + overlapping outage + confirmed sump pump without a confirmed
+  backup;
+- wildfire smoke + due or unknown HVAC-filter maintenance;
+- freeze + overlapping outage + confirmed electric primary heat;
+- provider-reported severe weather + an unresolved roof task.
+
+Only fresh, visible Now/Upcoming constituent matches qualify. Multi-event windows must
+overlap, Upcoming constituents are bounded to 72 hours, missing facts never become
+confirmed vulnerabilities, and stale/terminal events fail closed. Every insight stores
+a deterministic correlation key, rule version, constituent match/event IDs, provider
+names, original severities, source links, fact evidence, and registry-owned actions.
+`derivedSeverity` is always null.
+
+`PropertyRadarCompoundInsight` persists active/resolved lifecycle. Complete
+property-level reconciliation runs after ordinary match create/update/terminal changes,
+so a constituent ending resolves the compound insight instead of leaving stale
+correlation text embedded in another event. Event detail exposes a Combined conditions
+section and preserves each source independently. Compound actions pass through the
+existing fail-closed action registry and are deduplicated with the base event actions.
+
+Utility-dependent rules remain naturally dormant until HER-605 activation gates pass;
+smoke rules require fresh real smoke matches. No compound insight creates a standalone
+Incident or notification in this slice.
+
+The Prisma schema adds the compound insight model and status enum. Per repository
+policy, no migration script is included; the owner applies the schema.
 
 **Phase 6 exit gate**
 
@@ -2081,6 +2104,9 @@ flowchart TB
   H605 --> H608["Future licensed utility adapter"]
   H600 --> H606["HER-606 insurance source decision"]
   H606 --> H609["Future licensed insurance pilot"]
+  H203 --> H607["HER-607 compound-event rules"]
+  H301 --> H607
+  H500 --> H607
 ```
 
 ---
@@ -2114,7 +2140,7 @@ Do not wait for every source. Minimum credible launch is:
 - source health;
 - critical automated acceptance.
 
-AirNow, tax, compound intelligence, and richer action execution can follow.
+AirNow, tax, and richer action execution can follow.
 Utility implementation follows only after the HER-605 commercial license, coverage,
 precision, and budget gates are satisfied.
 Insurance implementation follows only after the HER-606 licensed structured-source,
@@ -2146,6 +2172,10 @@ completeness, semantics, governance, and budget gates are satisfied.
 | R-18 | Insurance brand or group is falsely matched to a policy legal entity/program | High | Critical | Confirmed active policy plus reviewed NAIC legal-company aliases; fail closed on ambiguity |
 | R-19 | SERFF/public-record automation or reuse exceeds permitted access | High until licensed | High | No scraping; require documented API/export and automated-use, storage, display, and notification rights |
 | R-20 | Partial insurance filing coverage is represented as market coverage | High | High | Twelve-month completeness study; explicit jurisdiction/line/entity/disposition coverage contract |
+| R-21 | Compound rule manufactures or obscures provider severity | Medium | Critical | No derived severity; persist and render each constituent source/severity independently |
+| R-22 | Ended/stale constituent leaves an active compound warning | Medium | High | Complete property reconciliation after every match lifecycle change; resolve absent correlations |
+| R-23 | Unknown property fact becomes a confirmed vulnerability | Medium | High | Three-state fact evidence; separate verification wording; reviewed fixtures |
+| R-24 | Concurrent/replayed match jobs duplicate compound insights | Medium | Medium | SHA-256 property/rule/sorted-match correlation key and unique idempotent upsert |
 
 ---
 

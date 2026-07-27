@@ -226,6 +226,70 @@ describe('RadarDetailSheet', () => {
     );
   });
 
+  it('renders compound conditions with each constituent source and original severity', async () => {
+    jest.mocked(api.getRadarEventDetail).mockResolvedValue({
+      ...detail,
+      compoundInsights: [{
+        id: 'compound-1',
+        ruleCode: 'HEAVY_RAIN_OUTAGE_SUMP_BACKUP',
+        ruleVersion: 'compound-v1',
+        title: 'Rain and outage may affect sump protection',
+        summary: 'Heavy rain and a utility outage overlap, and a sump backup is not confirmed.',
+        sourceMatchIds: ['match-1', 'match-outage'],
+        sourceEventIds: ['event-1', 'event-outage'],
+        sourceEvidence: [
+          {
+            matchId: 'match-1',
+            eventId: 'event-1',
+            eventType: 'heavy_rain',
+            eventSubType: null,
+            severity: 'high',
+            effectiveAt: '2026-07-26T14:00:00.000Z',
+            expiresAt: '2026-07-26T20:00:00.000Z',
+            sourceDefinitionId: 'source-weather',
+            sourceName: 'NWS',
+            provider: 'National Weather Service',
+            canonicalUrl: 'https://www.weather.gov/example',
+          },
+          {
+            matchId: 'match-outage',
+            eventId: 'event-outage',
+            eventType: 'utility_outage',
+            eventSubType: null,
+            severity: 'medium',
+            effectiveAt: '2026-07-26T15:00:00.000Z',
+            expiresAt: '2026-07-26T19:00:00.000Z',
+            sourceDefinitionId: 'source-utility',
+            sourceName: 'Utility source',
+            provider: 'Utility provider',
+            canonicalUrl: 'https://utility.example/outage',
+          },
+        ],
+        factEvidence: [{
+          factKey: 'property.hasSumpPumpBackup',
+          state: 'unknown',
+          value: null,
+        }],
+        evaluatedAt: '2026-07-26T12:00:00.000Z',
+      }],
+    });
+    renderSheet();
+
+    expect(await screen.findByText('Combined conditions')).toBeInTheDocument();
+    expect(screen.getByText('Rain and outage may affect sump protection')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'NWS' })).toHaveAttribute(
+      'href',
+      'https://www.weather.gov/example',
+    );
+    expect(screen.getByRole('link', { name: 'Utility source' })).toHaveAttribute(
+      'href',
+      'https://utility.example/outage',
+    );
+    expect(screen.getByText(/provider severity high/i)).toBeInTheDocument();
+    expect(screen.getByText(/provider severity medium/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not create a new provider severity/i)).toBeInTheDocument();
+  });
+
   it('renders completed resolution continuity without an actionable continuation link', async () => {
     jest.mocked(api.getRadarEventDetail).mockResolvedValue({
       ...detail,

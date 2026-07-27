@@ -1049,6 +1049,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 | **Rate limiting** | `apiRateLimiter` applied to all endpoints |
 | **Background workers** | QA/E2E fixture ingestion is disabled in production; real tax-assessment, NWS alert, and Open-Meteo freeze-forecast adapters exist; Utility remains contract/integration-gated, while Insurance has an accepted no-go decision and no production source |
 | **Incident lifecycle** | Eligible `moderate`/`high` matches project through `RadarIncidentPromotionService`; terminal events and impact downgrades reconcile via `IncidentService.setStatus` |
+| **Compound intelligence** | `compound-v1` durably correlates reviewed fresh property matches/facts, preserves constituent source/severity provenance, reconciles active/resolved lifecycle, and adds only registry-owned actions |
 | **Guidance engine** | `tax_reassessment_resolution` journey auto-created on promotion; weather-family journeys route to `Incidents`, not Home Event Radar |
 | **Audit log** | Analytics events written to platform audit log via `AuditLog` model |
 | **Dashboard widget** | `MobileDashboardHome.tsx` queries radar feed to show new/active event counts on the home screen |
@@ -1060,6 +1061,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 - Three real external source paths exist: tax reassessment (code-complete but disabled pending an accepted configured pilot), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
 - Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed. `match-lifecycle-v1` persists Now/Upcoming/Recently Ended, independently marks source freshness, detects homeowner-material revisions, and closes matches/Incidents that no longer intersect current property geography. Property creation, geography/fact/responsibility changes, Radar mitigation state, and canonical completion changes publish durable database-backed reconciliation events that replay active events in bounded cursor pages. An hourly leased safety net resumes incomplete revision/property pages, retries capped Radar dead letters, materializes source coverage, and expires visibility/material-update markers without interpreting source failure as clear.
+- `compound-v1` creates durable property-level insights for reviewed rain/outage/sump, smoke/filter, freeze/outage/electric-heat, and severe-weather/open-roof combinations. It retains each constituent match, source, URL, timing, and original severity, never creates a derived provider severity, and resolves insights when the complete active constituent set no longer qualifies.
 - The utility source strategy is decided, but no licensed utility adapter is active. New Jersey is its first territory and a commercial aggregator requires a negotiated end-user display license. Insurance has an accepted no-go decision: NJDOBI/SERFF is authoritative for evaluation, but no licensed structured production feed or approved governance path exists (see Pending Phases).
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
@@ -1127,6 +1129,21 @@ review process, lifecycle, procurement, and reconsideration gates are in
 [`adr-home-event-radar-insurance-source.md`](../architecture/adr-home-event-radar-insurance-source.md).
 A future pilot begins with a licensed structured feed and 12-month completeness study,
 not production integration.
+
+### Compound-event intelligence (implemented; schema application pending)
+
+HER-607 adds `PropertyRadarCompoundInsight` and deterministic `compound-v1` rules.
+The engine evaluates only fresh visible Now/Upcoming matches, requires time overlap for
+multi-event rules, treats unknown facts separately from confirmed vulnerabilities, and
+uses a replay-stable property/rule/constituent correlation key. Insights store every
+source and its original severity; no synthetic provider event or severity is created.
+
+Complete property reconciliation runs after match lifecycle changes and resolves
+insights whose constituents ended, became stale, or no longer qualify. Event detail
+shows Combined conditions with official source links and provider severities, while
+recommended actions continue through the reviewed action registry. Utility-dependent
+rules remain dormant until a licensed Utility source is activated, and compound
+insights do not independently create Incidents or notifications in this slice.
 
 ### `energy_inefficiency_detected` / `high_utility_cost` tool mapping (open, small)
 

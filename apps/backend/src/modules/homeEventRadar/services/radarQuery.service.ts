@@ -299,6 +299,35 @@ function detailMissingFacts(match: any): Array<Record<string, string>> {
   });
 }
 
+function jsonStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+}
+
+function serializeCompoundInsight(value: any): Record<string, unknown> {
+  return {
+    id: String(value.id),
+    ruleCode: String(value.ruleCode),
+    ruleVersion: String(value.ruleVersion),
+    title: String(value.title),
+    summary: String(value.summary),
+    sourceMatchIds: jsonStringArray(value.sourceMatchIdsJson),
+    sourceEventIds: jsonStringArray(value.sourceEventIdsJson),
+    sourceEvidence: Array.isArray(value.sourceEvidenceJson)
+      ? value.sourceEvidenceJson
+      : [],
+    factEvidence: Array.isArray(value.factEvidenceJson)
+      ? value.factEvidenceJson
+      : [],
+    evaluatedAt: iso(value.evaluatedAt),
+  };
+}
+
+function uniqueProjectedActions(actions: Array<Record<string, any>>): Array<Record<string, any>> {
+  return [...new Map(actions.map((action) => [String(action.code), action])).values()];
+}
+
 function detailActions(
   value: unknown,
   match: any,
@@ -761,6 +790,32 @@ export class RadarQueryService {
       ?? match.radarEvent.createdAt
       ?? match.radarEvent.observedAt,
     ) as string;
+    const compoundInsightRows = this.db.propertyRadarCompoundInsight?.findMany
+      ? await this.db.propertyRadarCompoundInsight.findMany({
+          where: {
+            propertyId,
+            status: 'active',
+          },
+          orderBy: [
+            { evaluatedAt: 'desc' },
+            { id: 'asc' },
+          ],
+          take: 20,
+        })
+      : [];
+    const relevantCompoundInsights = compoundInsightRows.filter((candidate: any) =>
+      jsonStringArray(candidate.sourceMatchIdsJson).includes(String(match.id)));
+    const baseActions = detailActions(match.recommendedActionsJson, match, {
+      incidentId: incident?.id ? String(incident.id) : null,
+      guidanceJourneyId: guidance?.id ? String(guidance.id) : null,
+      guidanceStepKey: guidance?.currentStepKey ?? null,
+    });
+    const compoundActions = relevantCompoundInsights.flatMap((candidate: any) =>
+      detailActions(candidate.recommendedActionsJson, match, {
+        incidentId: incident?.id ? String(incident.id) : null,
+        guidanceJourneyId: guidance?.id ? String(guidance.id) : null,
+        guidanceStepKey: guidance?.currentStepKey ?? null,
+      }));
     return {
       ...serializeFeedItem(match, match.states?.[0]),
       geography: storedGeography(match),
@@ -768,11 +823,8 @@ export class RadarQueryService {
       impactSummary: match.impactSummary ?? null,
       impactFactors: match.impactFactorsJson ?? null,
       matchedSystems: storedArray(match.matchedSystemsJson, 'systems'),
-      recommendedActions: detailActions(match.recommendedActionsJson, match, {
-        incidentId: incident?.id ? String(incident.id) : null,
-        guidanceJourneyId: guidance?.id ? String(guidance.id) : null,
-        guidanceStepKey: guidance?.currentStepKey ?? null,
-      }),
+      recommendedActions: uniqueProjectedActions([...baseActions, ...compoundActions]),
+      compoundInsights: relevantCompoundInsights.map(serializeCompoundInsight),
       canonicalUrl: match.radarEvent.canonicalUrl ?? null,
       observedAt,
       revision: {

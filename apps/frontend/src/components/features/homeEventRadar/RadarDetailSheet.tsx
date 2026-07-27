@@ -426,6 +426,7 @@ function DetailContent({
   propertyId: string;
 }) {
   const drivers = detail.impactFactors?.drivers ?? [];
+  const compoundInsights = detail.compoundInsights ?? [];
   const explanation = detail.matchExplanation;
   const confidenceLimited = detail.confidence === 'low' || detail.confidence === 'medium';
 
@@ -464,6 +465,57 @@ function DetailContent({
           )}
         </div>
       </DetailSection>
+
+      {compoundInsights.length > 0 ? (
+        <DetailSection title="Combined conditions">
+          <div className="space-y-3">
+            {compoundInsights.map((insight) => (
+              <div
+                key={insight.id}
+                className={cn(
+                  MOBILE_CARD_RADIUS,
+                  'border border-sky-200 bg-sky-50 px-4 py-3',
+                )}
+              >
+                <p className="mb-0 flex items-start gap-2 text-sm font-semibold text-sky-950">
+                  <Link2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <span>{insight.title}</span>
+                </p>
+                <p className={cn('mb-0 mt-1 text-sky-900', MOBILE_TYPE_TOKENS.caption)}>
+                  {insight.summary}
+                </p>
+                <ul className="mb-0 mt-3 space-y-1 pl-5 text-xs text-sky-900">
+                  {insight.sourceEvidence.map((source) => (
+                    <li key={`${insight.id}-${source.matchId}`} className="list-disc">
+                      {source.canonicalUrl ? (
+                        <a
+                          href={source.canonicalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium underline underline-offset-2"
+                        >
+                          {source.sourceName ?? source.provider ?? formatEventType(source.eventType)}
+                        </a>
+                      ) : (
+                        <span className="font-medium">
+                          {source.sourceName ?? source.provider ?? formatEventType(source.eventType)}
+                        </span>
+                      )}
+                      {' · '}
+                      {formatEventType(source.eventType)}
+                      {' · provider severity '}
+                      {source.severity}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mb-0 mt-2 text-xs text-sky-800">
+                  Each source keeps its original severity; this combined insight does not create a new provider severity.
+                </p>
+              </div>
+            ))}
+          </div>
+        </DetailSection>
+      ) : null}
 
       <DetailSection title="Event timing">
         <dl className={cn(MOBILE_CARD_RADIUS, 'grid gap-3 border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm')}>

@@ -547,6 +547,35 @@ export const radarNotificationPreferenceResponseSchema = z.object({
   updatedAt: z.iso.datetime({ offset: true }).nullable(),
 });
 
+export const radarCompoundInsightSchema = z.object({
+  id: z.string().min(1),
+  ruleCode: z.string().min(1).max(128),
+  ruleVersion: z.string().min(1).max(80),
+  title: z.string().min(1).max(300),
+  summary: z.string().min(1).max(2_000),
+  sourceMatchIds: z.array(z.string().min(1)).min(1),
+  sourceEventIds: z.array(z.string().min(1)).min(1),
+  sourceEvidence: z.array(z.object({
+    matchId: z.string().min(1),
+    eventId: z.string().min(1),
+    eventType: z.string().min(1).max(128),
+    eventSubType: z.string().min(1).max(160).nullable(),
+    severity: z.string().min(1).max(40),
+    effectiveAt: z.iso.datetime({ offset: true }),
+    expiresAt: z.iso.datetime({ offset: true }).nullable(),
+    sourceDefinitionId: z.string().nullable(),
+    sourceName: z.string().nullable(),
+    provider: z.string().nullable(),
+    canonicalUrl: z.url().nullable(),
+  })).min(1),
+  factEvidence: z.array(z.object({
+    factKey: z.string().min(1).max(160),
+    state: z.enum(['confirmed', 'absent', 'unknown', 'current', 'due']),
+    value: z.union([z.string(), z.boolean()]).nullable(),
+  })),
+  evaluatedAt: z.iso.datetime({ offset: true }),
+});
+
 export const radarDetailResponseSchema = radarFeedItemSchema.extend({
   geography: normalizedGeographySchema.nullable(),
   matchExplanation: radarMatchExplanationSchema.nullable(),
@@ -616,6 +645,7 @@ export const radarDetailResponseSchema = radarFeedItemSchema.extend({
       href: z.string().min(1).nullable(),
     }),
   })),
+  compoundInsights: z.array(radarCompoundInsightSchema),
   canonicalUrl: z.url().nullable(),
   observedAt: z.iso.datetime({ offset: true }),
   revision: z.object({

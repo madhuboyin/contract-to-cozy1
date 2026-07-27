@@ -198,6 +198,9 @@ function serviceWith(overrides = {}) {
     propertyRadarAction: {
       create: async (args) => writes.push(['action.create', args]),
     },
+    propertyRadarCompoundInsight: {
+      findMany: async () => overrides.compoundInsights ?? [],
+    },
     guidanceJourney: {
       findMany: async () => overrides.guidanceCandidates
         ?? (overrides.guidance ? [overrides.guidance] : []),
@@ -392,7 +395,58 @@ test('detail is a pure persisted-projection read and exposes revision provenance
   assert.equal(detail.propertyGeographyVersion, 3);
   assert.equal(detail.matcherVersion, 'geo-v1');
   assert.equal(detail.userFeedback, null);
+  assert.deepEqual(detail.compoundInsights, []);
   assert.deepEqual(writes, []);
+  assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
+});
+
+test('detail exposes relevant compound source provenance and reviewed actions', async () => {
+  const { service } = serviceWith({
+    compoundInsights: [{
+      id: 'compound-1',
+      propertyId: 'property-1',
+      ruleCode: 'SEVERE_WEATHER_OPEN_ROOF_ISSUE',
+      ruleVersion: 'compound-v1',
+      title: 'Severe weather overlaps an open roof issue',
+      summary: 'A provider-reported severe weather event overlaps an unresolved roof issue.',
+      sourceMatchIdsJson: ['match-1'],
+      sourceEventIdsJson: ['event-1'],
+      sourceEvidenceJson: [{
+        matchId: 'match-1',
+        eventId: 'event-1',
+        eventType: 'wind',
+        eventSubType: null,
+        severity: 'critical',
+        effectiveAt: '2026-07-26T14:00:00.000Z',
+        expiresAt: '2026-07-26T20:00:00.000Z',
+        sourceDefinitionId: 'source-weather',
+        sourceName: 'NWS',
+        provider: 'National Weather Service',
+        canonicalUrl: 'https://example.test/event-1',
+      }],
+      factEvidenceJson: [{
+        factKey: 'maintenance.unresolvedRoofIssue',
+        state: 'confirmed',
+        value: true,
+      }],
+      recommendedActionsJson: {
+        actions: [{
+          code: 'INSPECT_ROOF',
+          label: 'Inspect safely after conditions pass',
+          priority: 'high',
+          responsibilityScope: 'ROOF',
+        }],
+      },
+      evaluatedAt: NOW,
+    }],
+  });
+
+  const detail = await service.getDetail('property-1', 'match-1', 'user-1');
+
+  assert.equal(detail.compoundInsights.length, 1);
+  assert.equal(detail.compoundInsights[0].ruleVersion, 'compound-v1');
+  assert.equal(detail.compoundInsights[0].sourceEvidence[0].severity, 'critical');
+  assert.ok(detail.recommendedActions.some((action) => action.code === 'INSPECT_ROOF'));
   assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
 });
 
