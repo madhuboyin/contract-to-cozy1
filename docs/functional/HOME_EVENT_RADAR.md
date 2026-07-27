@@ -801,10 +801,18 @@ but no materialized source-coverage rows receives
 in plain homeowner language, explains that no action is required, and refreshes
 the overview automatically every 15 seconds while initialization remains pending.
 It does not present a manual "check again" action that merely repeats a read.
-The Unified Home card follows the same automatic refresh behavior and leads with Radar’s homeowner
-purpose, suppresses a misleading zero before monitoring is ready, and uses
-“events need attention” rather than the internal “active material events”
-terminology.
+Unified Home does not show a permanent Radar status card. Material Radar matches that qualify for
+action reach its ranked attention feed through the canonical Incident/Guidance bridge. Missing
+location context uses the shared Home Record setup experience. Initializing, active-clear, partial,
+uncovered, and other passive states remain available on the Radar page and through contextual Home
+Tools without displacing higher-value homeowner actions.
+
+**Product-framework placement:** Home Event Radar is a contextual `PROTECT_MONITOR` capability with
+`LOW_CONSEQUENCE` safety and `OUTPUT_VIEWED` completion. Framework-owned capability suggestions and
+Explore Tools provide passive discovery, including readiness and recommendation analytics.
+Awareness-only matches stay in Radar; eligible material matches use the shared attention pipeline.
+Unified Home must not introduce a separate client-side Radar ranking or duplicate a promoted
+Incident.
 
 **Experience hierarchy:** the page does not lead with source diagnostics, raw
 coverage details, zero-value metrics, or URL/filter mechanics. It first explains

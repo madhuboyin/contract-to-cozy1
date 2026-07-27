@@ -60,7 +60,8 @@
 | HER-504 Notification eligibility/dedup | Complete; DB application pending | Versioned pure policy and durable per-user revision decisions enforce materiality/escalation, confidence and preference thresholds, timing, channels, DST-aware quiet hours, opt-in critical override, terminal/test suppression, and exact deduplication without delivering |
 | HER-505 Notification delivery integration | Complete; DB application pending | Eligible decisions idempotently materialize canonical in-app notifications and exact outbound rows; immediate/deferred delivery uses durable worker claims, retry release, transport gates, and canonical deep links |
 | HER-506 Incident/Guidance UI continuity | Complete | Canonical detail normalizes Incident and Guidance resolution state, prefers an actionable journey over terminal history, exposes the current step and safe continuation link, renders terminal truth, and keeps personal dismiss separate from shared resolution |
-| HER-507 Unified Home summary | Complete | Canonical overview projects the non-zero-impact active count and highest-priority explainable match; Unified Home renders monitoring truth, explicit failure/degraded states, and an exact property/match deep link |
+| HER-507 Unified Home summary | Complete | Canonical overview projects the non-zero-impact active count and highest-priority explainable match for downstream product surfaces and contextual recommendations |
+| HER-508 Product-framework Home placement | Complete | Removed the unconditional standalone Radar card; material events reach ranked attention through the Incident/Guidance bridge, location gaps use shared Home Record setup, and passive discovery remains in contextual Home Tools |
 | HER-600 Admin source operations | Complete; DB application pending | Admin + MFA + capability-gated source console exposes redacted source detail, coverage/counts, effective health, run history, dry-run tests, allowlisted scoped runs, replay, persistent audited pause/resume, event lineage API, and anomaly detection |
 | HER-601 AirNow adapter | Complete; DB application and credentialed activation pending | New 2026 latitudeLongitude current/forecast services feed the canonical pipeline with AQI 101 materiality, bounded reporting-area radius, particle/smoke evidence, source freshness/health, ZIP request caching, dry-run/property scope, launch-closed policy, and HVAC/filter actions |
 | HER-602 USGS adapter | Complete; DB application and production activation pending | Real-time v1.0 GeoJSON feed uses reviewed M2.5+ magnitude/distance bands, point/radius matching, stable event revisions, retraction/expiry lifecycle, source freshness/health, dry-run/property scope, and observational homeowner copy |
@@ -247,7 +248,7 @@ owner. Existing pre-launch Radar data may be reset.
 | `RadarUtils.ts` | Labels/icons | Move contracts to typed domain helpers |
 | `lib/api/client.ts` | Radar client methods | Replace with overview/feed/detail/preferences/action DTOs |
 | `types/index.ts` | Broad Radar types | Prefer feature-local generated/narrow types |
-| `MobileDashboardHome.tsx` | Radar summary | Consume canonical overview |
+| `UnifiedHomeSurface.tsx` | Ranked attention and contextual tools | Do not render a permanent Radar card; consume promoted incidents/actions and framework-owned capability suggestions |
 
 ### 3.4 Deployment baseline
 
@@ -1570,9 +1571,9 @@ misleading CTA. The UI explicitly states that personal feed actions do not close
 Incident or Guidance journey. The projection remains a pure read and requires no database schema
 change or migration script.
 
-### HER-507 — Unified Home summary
+### HER-507 — Unified Home projection
 
-Use Radar overview/read model to show:
+Use the Radar overview/read model to project for downstream surfaces:
 
 - active material event count;
 - most urgent explainable match;
@@ -1586,12 +1587,38 @@ match carries only homeowner-safe source, severity, impact, confidence, timing, 
 fields. Its canonical property route restores the `now` view, source-family filter, exact match,
 and `unified_home` launch surface.
 
-Unified Home consumes this overview through one dedicated summary card. It shows the authoritative
-active material count, most urgent explainable event, source and impact context, and exact event
-handoff. Active monitoring with no material events receives qualified clear copy. Partial,
-degraded, uncovered, and setup-needed states remain explicit; degraded and request-failure states
-are never presented as an all-clear and retain retry or monitoring-detail paths. No database schema
-change or migration script is required.
+The bounded projection remains available to product surfaces, notifications, contextual
+recommendations, and canonical deep links. It is not, by itself, authorization to occupy a
+permanent high-prominence position on Unified Home. Monitoring and setup truth remains explicit
+on the Radar page. No database schema change or migration script is required.
+
+### HER-508 — Product-framework Unified Home placement
+
+Home Event Radar is registered as:
+
+- outcome category `PROTECT_MONITOR`;
+- contextual capability mode;
+- `LOW_CONSEQUENCE` safety tier;
+- `OUTPUT_VIEWED` completion.
+
+Unified Home therefore follows the shared framework rather than maintaining a second Radar-specific
+ranking surface:
+
+- eligible material Radar matches promote idempotently to Incident/Guidance and enter the canonical
+  ranked attention feed there;
+- awareness-only matches remain in Radar and do not displace actionable home work;
+- incomplete property geography uses the shared Home Record setup path;
+- initializing, active-clear, partial, uncovered, and passive monitoring states do not render a
+  standalone first-position card;
+- Radar remains available through framework-owned contextual Home Tools and Explore Tools.
+
+**Implemented:** the unconditional `HomeEventRadarSummaryCard` and its independent overview request
+were removed from `UnifiedHomeSurface`. Ranked NOW/SOON safety and environment actions continue to
+render through the existing Incident/Maintenance attention classifications. The contextual
+capability registry remains the discovery owner for Radar, preserving readiness, recommendation
+reason, impression, launch-context, and click analytics. This prevents duplicate signals and keeps
+the highest-value homeowner action above passive monitoring. No API, database, or migration change
+is required.
 
 **Phase 5 exit gate**
 

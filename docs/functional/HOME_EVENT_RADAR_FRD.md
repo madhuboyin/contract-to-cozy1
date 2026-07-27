@@ -1030,7 +1030,16 @@ Initial recommended retention:
 | HER-FR-064 | Every notification shall deep-link to the property match. |
 | HER-FR-065 | Users shall control categories, channels, minimum impact, and digest/immediate mode. |
 
-### 15.8 Administration and operations
+### 15.8 Unified Home product placement
+
+| ID | Requirement |
+| --- | --- |
+| HER-FR-066 | Radar shall not render as an unconditional standalone card above ranked Unified Home actions. |
+| HER-FR-067 | Eligible material matches shall reach Unified Home attention through the canonical Incident/Guidance/action-ranking path, without a duplicate Radar card. |
+| HER-FR-068 | Awareness-only, initializing, active-clear, partial, and uncovered states shall remain discoverable through Radar and framework-owned Home Tools without displacing actionable work. |
+| HER-FR-069 | Missing Radar geography shall use the shared Home Record setup path rather than a duplicate Radar-specific home-page alert. |
+
+### 15.9 Administration and operations
 
 | ID | Requirement |
 | --- | --- |
@@ -1604,7 +1613,7 @@ Outcome: Radar helps the homeowner act before impact.
 - per-category notification preferences;
 - escalation and quiet-hour policy;
 - action and resolution lineage;
-- Unified Home summary integration.
+- framework-aligned Unified Home attention and contextual-discovery integration.
 
 ### Phase 4 — Source expansion
 
