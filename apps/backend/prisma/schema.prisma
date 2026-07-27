@@ -10976,11 +10976,12 @@ model HomeTwinComponent {
   // "<TYPE>:PRIMARY"; components backed by a specific inventory item use
   // "<TYPE>:<inventoryItemId>" so multiple real systems of the same type
   // (e.g. two HVAC zones) become distinct rows instead of collapsing.
-  // Defaulted to a random uuid so existing rows can be backfilled without
-  // --force-reset; a random default never collides with a real
+  // Defaulted to a database-generated random uuid (not Prisma's client-side
+  // uuid()) so `prisma db push` can backfill existing rows in place without
+  // --force-reset. A random default never collides with a real
   // "<TYPE>:..." key, so the next twin build/refresh naturally retires
   // these legacy rows as orphaned and creates correctly-keyed replacements.
-  identityKey String @default(uuid())
+  identityKey String @default(dbgenerated("(gen_random_uuid())::text"))
 
   componentType     HomeTwinComponentType
   label             String? // e.g. "Main HVAC", "Upper Floor AC"
