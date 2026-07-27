@@ -153,6 +153,10 @@ data:
   # and the reviewed magnitude/distance bands in the target environment.
   WORKER_JOB_USGS_EARTHQUAKES_ENABLED: "false"
   USGS_EARTHQUAKE_CRON: "*/5 * * * *"
+  # Recovery-context source; launch closed until exact county/state matching
+  # and declaration lifecycle are verified with an allowlisted property.
+  WORKER_JOB_OPENFEMA_DECLARATIONS_ENABLED: "false"
+  OPEN_FEMA_DECLARATIONS_CRON: "17 */6 * * *"
 
   # Rate Limiting
   RATE_LIMIT_WINDOW_MS: "60000"

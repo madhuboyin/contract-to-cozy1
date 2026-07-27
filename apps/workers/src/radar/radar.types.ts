@@ -3,6 +3,7 @@ export type DummyRadarRawSignal = {
     | 'weather_provider'
     | 'air_quality_provider'
     | 'seismic_provider'
+    | 'disaster_provider'
     | 'insurance_market_feed'
     | 'utility_feed'
     | 'tax_assessor_feed'
@@ -12,6 +13,7 @@ export type DummyRadarRawSignal = {
   signalType:
     | 'weather'
     | 'earthquake'
+    | 'disaster_declaration'
     | 'insurance_market'
     | 'utility_outage'
     | 'utility_rate_change'

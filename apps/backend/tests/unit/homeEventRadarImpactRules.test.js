@@ -283,6 +283,26 @@ test('earthquake impact copy is observational and routes to official updates', (
   );
 });
 
+test('FEMA declaration impact is recovery context with conditional documentation guidance', () => {
+  const result = computeRadarImpact(
+    event('disaster_declaration', 'medium'),
+    property(),
+    EVALUATED_AT,
+  );
+
+  assert.match(result.impactSummary, /recovery and assistance context/i);
+  assert.match(result.impactSummary, /not an immediate hazard warning/i);
+  assert.match(result.impactSummary, /does not confirm.*damaged.*qualifies/i);
+  assert.deepEqual(
+    result.recommendedActionsJson.actions.map((action) => action.code),
+    ['MONITOR_SITUATION', 'DOCUMENT_DAMAGE'],
+  );
+  assert.match(
+    result.recommendedActionsJson.actions[1].label,
+    /^If your home was affected/i,
+  );
+});
+
 test('pure impact rule module has no database or service dependency', () => {
   const source = fs.readFileSync(
     path.resolve(

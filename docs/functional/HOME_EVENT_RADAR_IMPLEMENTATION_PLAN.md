@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-602 implemented |
+| Status | In progress — HER-603 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -63,7 +63,8 @@
 | HER-600 Admin source operations | Complete; DB application pending | Admin + MFA + capability-gated source console exposes redacted source detail, coverage/counts, effective health, run history, dry-run tests, allowlisted scoped runs, replay, persistent audited pause/resume, event lineage API, and anomaly detection |
 | HER-601 AirNow adapter | Complete; DB application and credentialed activation pending | New 2026 latitudeLongitude current/forecast services feed the canonical pipeline with AQI 101 materiality, bounded reporting-area radius, particle/smoke evidence, source freshness/health, ZIP request caching, dry-run/property scope, launch-closed policy, and HVAC/filter actions |
 | HER-602 USGS adapter | Complete; DB application and production activation pending | Real-time v1.0 GeoJSON feed uses reviewed M2.5+ magnitude/distance bands, point/radius matching, stable event revisions, retraction/expiry lifecycle, source freshness/health, dry-run/property scope, and observational homeowner copy |
-| HER-603+ | Not started | Additional reviewed source adapters remain |
+| HER-603 OpenFEMA adapter | Complete; DB application and production activation pending | OpenFEMA v2 declarations use exact county FIPS or literal statewide geography, deterministic hash revisions, closeout/18-month lifecycle, six-hour monitoring, assistance truthfulness, and recovery/documentation guidance |
+| HER-604+ | Not started | Additional reviewed source adapters remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1632,6 +1633,20 @@ Add:
 - slower-frequency monitoring;
 - recovery/documentation guidance;
 - clear distinction from immediate hazard alert.
+
+Implemented against OpenFEMA v2 `DisasterDeclarationsSummaries`, queried once
+per monitored property state on a six-hour schedule. County declarations
+require an exact five-digit FIPS match. Because FEMA also uses county code
+`000` for tribal and reservation designations, only the literal designated
+area `Statewide` may broaden to state geography; other non-county designations
+are ignored rather than overmatched. Provider hashes and `lastRefresh` drive
+revisions, `disasterCloseoutDate` resolves declarations, and otherwise events
+expire after an 18-month recovery-relevance window. Copy explicitly identifies
+the record as recovery/assistance context, distinguishes public assistance
+from homeowner assistance, and never implies property damage or eligibility.
+Production activation remains fail-closed until
+`WORKER_JOB_OPENFEMA_DECLARATIONS_ENABLED=true` after an allowlisted dry run
+validates county/state matching and official FEMA links.
 
 ### HER-604 — Tax pilot
 

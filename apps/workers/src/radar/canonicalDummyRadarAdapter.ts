@@ -32,6 +32,8 @@ export function dummyRadarSourceFamily(
       return 'air_quality';
     case 'seismic_provider':
       return 'disaster';
+    case 'disaster_provider':
+      return 'disaster';
     case 'insurance_market_feed':
       return 'insurance';
     case 'utility_feed':

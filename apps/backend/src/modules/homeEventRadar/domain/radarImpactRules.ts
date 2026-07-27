@@ -729,6 +729,19 @@ function computeUtilityOutage(
 }
 
 function computeStaticEvent(baseScore: number, eventType: string): EventImpactPartial {
+  if (eventType === 'disaster_declaration') {
+    return {
+      matchScore: clamp(baseScore),
+      impactSummary:
+        'FEMA issued a disaster declaration covering this property’s county or state. This is recovery and assistance context, not an immediate hazard warning, and it does not confirm that this home was damaged or qualifies for assistance.',
+      drivers: [],
+      actions: [
+        action('MONITOR_SITUATION', 'Review the official FEMA declaration and assistance details', 'high'),
+        action('DOCUMENT_DAMAGE', 'If your home was affected, document damage and keep receipts', 'medium'),
+      ],
+      systems: [],
+    };
+  }
   if (eventType === 'earthquake') {
     return {
       matchScore: clamp(baseScore),

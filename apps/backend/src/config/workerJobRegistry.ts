@@ -423,6 +423,26 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'openfema-declarations',
+    name: 'OpenFEMA Disaster Declarations',
+    description:
+      'Polls OpenFEMA v2 disaster declarations by property state and emits county/state recovery-context events with exact FIPS matching.',
+    category: 'RISK_SAFETY',
+    schedule: 'Every 6 hours at minute 17',
+    cronExpression: '17 */6 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'openfema-declarations',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: false,
+    supportsDryRun: true,
+    supportsPropertyScope: true,
+    externalProvider: 'FEMA OpenFEMA',
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'weekly-score-snapshots',
     name: 'Weekly Score Snapshots',
     description:
