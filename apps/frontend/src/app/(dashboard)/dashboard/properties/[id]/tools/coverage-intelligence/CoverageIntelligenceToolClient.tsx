@@ -16,6 +16,7 @@ import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadin
 import CoverageReviewQuestionsPanel from '@/components/coverage/CoverageReviewQuestionsPanel';
 import CoverageComparisonPanel from '@/components/coverage/CoverageComparisonPanel';
 import InsuranceHandoffPanel from '@/components/coverage/InsuranceHandoffPanel';
+import InsuranceMarketContextPanel from '@/components/coverage/InsuranceMarketContextPanel';
 
 type CoverageStage = 'current' | 'questions' | 'renewal' | 'compare' | 'risk';
 
@@ -184,8 +185,9 @@ export default function CoverageIntelligenceToolClient() {
         </div>
       )}
       {activeStage === 'renewal' && (
-        <div id="coverage-stage-renewal" role="tabpanel">
+        <div id="coverage-stage-renewal" role="tabpanel" className="space-y-4">
           <InsuranceTrendClient embedded />
+          <InsuranceMarketContextPanel propertyId={propertyId} />
         </div>
       )}
       {activeStage === 'compare' && (

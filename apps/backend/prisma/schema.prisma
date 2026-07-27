@@ -3815,6 +3815,74 @@ model InsurancePolicyTermChange {
   @@map("insurance_policy_term_changes")
 }
 
+// A market source is unusable until its rights and domain reviews are both
+// approved. Sources are never inferred from unlabeled configuration values.
+model InsuranceMarketBenchmarkSource {
+  id                 String   @id @default(uuid())
+  sourceKey          String   @unique
+  name               String
+  ownerName          String
+  sourceUrl          String
+  rightsStatus       String
+  rightsSummary      String
+  domainReviewStatus String
+  isActive           Boolean  @default(false)
+  approvedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  releases InsuranceMarketBenchmarkRelease[]
+
+  @@index([isActive, rightsStatus, domainReviewStatus])
+  @@map("insurance_market_benchmark_sources")
+}
+
+// Releases freeze the period, methodology, coverage basis, retrieval time,
+// and expiry used by every observation.
+model InsuranceMarketBenchmarkRelease {
+  id                  String   @id @default(uuid())
+  sourceId            String
+  version             String
+  status              String   @default("DRAFT")
+  observationStart    DateTime
+  observationEnd      DateTime
+  publishedAt         DateTime?
+  retrievedAt         DateTime
+  expiresAt           DateTime
+  coverageBasisJson   Json
+  methodologySummary  String
+  approvedByUserId    String?
+  approvedAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  source       InsuranceMarketBenchmarkSource        @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  observations InsuranceMarketBenchmarkObservation[]
+
+  @@unique([sourceId, version])
+  @@index([status, expiresAt, observationEnd(sort: Desc)])
+  @@map("insurance_market_benchmark_releases")
+}
+
+model InsuranceMarketBenchmarkObservation {
+  id                String   @id @default(uuid())
+  releaseId         String
+  geographyType     String
+  geographyCode     String
+  metricKey         String
+  value             Decimal  @db.Decimal(14, 2)
+  currency          String   @default("USD") @db.VarChar(3)
+  sampleSize        Int?
+  observationNotes  String?
+  createdAt         DateTime @default(now())
+
+  release InsuranceMarketBenchmarkRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, geographyType, geographyCode, metricKey])
+  @@index([geographyType, geographyCode, metricKey])
+  @@map("insurance_market_benchmark_observations")
+}
+
 // A regulated policy-choice workspace. The current verified term is the
 // baseline; price is deliberately excluded from protection equivalence.
 model CoverageComparison {
