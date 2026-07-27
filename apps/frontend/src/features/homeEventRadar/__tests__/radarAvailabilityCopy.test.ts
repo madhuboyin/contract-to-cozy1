@@ -1,6 +1,7 @@
 import {
   formatRadarLastCheck,
   getRadarEmptyStateCopy,
+  getRadarReadinessPresentation,
   isRadarFamilyFilterAvailable,
   RADAR_COVERAGE_LABELS,
   RADAR_MONITORING_PRESENTATION,
@@ -52,5 +53,37 @@ describe('Home Event Radar coverage-aware copy', () => {
     expect(formatRadarLastCheck('2026-07-26T11:45:00.000Z', now)).toBe(
       'Last successful check 15 min ago',
     );
+  });
+
+  it('names the exact homeowner-correctable location requirements', () => {
+    const copy = getRadarReadinessPresentation({
+      monitoringState: 'SETUP_NEEDED',
+      readiness: {
+        state: 'PROPERTY_SETUP_REQUIRED',
+        reasonCode: 'PROPERTY_LOCATION_INCOMPLETE',
+        missingLocationFields: ['state', 'postal_or_locality'],
+      },
+    });
+
+    expect(copy?.title).toBe('Complete this property’s location');
+    expect(copy?.description).toContain('state and ZIP code or city/county');
+    expect(copy?.action).toBe('edit_property');
+    expect(copy?.actionLabel).toBe('Update property location');
+  });
+
+  it('does not blame homeowner setup when the first coverage check is missing', () => {
+    const copy = getRadarReadinessPresentation({
+      monitoringState: 'UNCOVERED',
+      readiness: {
+        state: 'MONITORING_NOT_INITIALIZED',
+        reasonCode: 'COVERAGE_EVALUATION_NOT_RECORDED',
+        missingLocationFields: [],
+      },
+    });
+
+    expect(copy?.title).toBe('First monitoring check is pending');
+    expect(copy?.description).toContain('already has a usable location');
+    expect(copy?.action).toBe('retry');
+    expect(copy?.actionLabel).toBe('Check again');
   });
 });

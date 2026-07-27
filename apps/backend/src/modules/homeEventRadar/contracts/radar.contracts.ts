@@ -472,10 +472,28 @@ export const radarPropertyContextEnvelopeSchema = z.object({
   decision: z.unknown(),
 });
 
+export const radarReadinessSchema = z.object({
+  state: z.enum([
+    'READY',
+    'PROPERTY_SETUP_REQUIRED',
+    'MONITORING_NOT_INITIALIZED',
+  ]),
+  reasonCode: z.enum([
+    'PROPERTY_LOCATION_INCOMPLETE',
+    'COVERAGE_EVALUATION_NOT_RECORDED',
+  ]).nullable(),
+  missingLocationFields: z.array(z.enum([
+    'state',
+    'postal_or_locality',
+    'verified_location',
+  ])),
+});
+
 export const radarOverviewResponseSchema = z.object({
   propertyId: z.string().min(1),
   generatedAt: z.iso.datetime({ offset: true }),
   monitoringState: radarMonitoringStateSchema,
+  readiness: radarReadinessSchema,
   lastSuccessfulCheckAt: z.iso.datetime({ offset: true }).nullable(),
   coverage: z.array(radarCategoryCoverageSchema),
   counts: radarCountsSchema,

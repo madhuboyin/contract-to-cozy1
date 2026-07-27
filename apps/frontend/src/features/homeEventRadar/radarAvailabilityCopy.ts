@@ -3,7 +3,64 @@ import type {
   RadarFeedState,
   RadarMonitoringState,
   RadarSourceFamily,
+  RadarOverview,
 } from '@/types';
+
+export type RadarReadinessPresentation = {
+  label: string;
+  title: string;
+  description: string;
+  action: 'edit_property' | 'retry' | null;
+  actionLabel: string | null;
+};
+
+const LOCATION_FIELD_LABELS: Record<
+  NonNullable<RadarOverview['readiness']>['missingLocationFields'][number],
+  string
+> = {
+  state: 'state',
+  postal_or_locality: 'ZIP code or city/county',
+  verified_location: 'a verified property location',
+};
+
+export function getRadarReadinessPresentation(
+  overview: Pick<RadarOverview, 'monitoringState' | 'readiness'>,
+): RadarReadinessPresentation | null {
+  if (overview.readiness?.state === 'PROPERTY_SETUP_REQUIRED') {
+    const fields = overview.readiness.missingLocationFields
+      .map((field) => LOCATION_FIELD_LABELS[field]);
+    return {
+      label: 'Setup needed',
+      title: 'Complete this property’s location',
+      description: fields.length > 0
+        ? `Add ${fields.join(' and ')} so Radar can match this home to available sources.`
+        : 'Add or verify this property’s location so Radar can match it to available sources.',
+      action: 'edit_property',
+      actionLabel: 'Update property location',
+    };
+  }
+  if (overview.readiness?.state === 'MONITORING_NOT_INITIALIZED') {
+    return {
+      label: 'Check pending',
+      title: 'First monitoring check is pending',
+      description:
+        'This property already has a usable location. Radar has not recorded its first source-coverage evaluation yet.',
+      action: 'retry',
+      actionLabel: 'Check again',
+    };
+  }
+  // Backward-compatible fallback for an older API response.
+  if (!overview.readiness && overview.monitoringState === 'SETUP_NEEDED') {
+    return {
+      label: 'Setup needed',
+      title: 'Complete this property’s location',
+      description: 'Add or verify this property’s location so Radar can evaluate source coverage.',
+      action: 'edit_property',
+      actionLabel: 'Update property location',
+    };
+  }
+  return null;
+}
 
 export const RADAR_MONITORING_PRESENTATION: Record<
   RadarMonitoringState,

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   installAuthenticatedContext,
   installRadarApi,
+  propertyId,
   type MonitoringState,
 } from './fixtures';
 
@@ -71,8 +72,8 @@ test('every monitoring state has truthful zero-feed copy', async ({ page }, test
     },
     {
       state: 'SETUP_NEEDED',
-      monitoringTitle: 'Property setup is needed',
-      emptyTitle: 'Complete property setup',
+      monitoringTitle: 'Complete this property’s location',
+      emptyTitle: 'Complete this property’s location',
     },
   ];
 
@@ -81,6 +82,10 @@ test('every monitoring state has truthful zero-feed copy', async ({ page }, test
     await page.goto(`${acceptancePath}?scenario=${scenario.state.toLowerCase()}`);
     await expect(page.getByRole('status')).toContainText(scenario.monitoringTitle);
     await expect(page.getByRole('heading', { name: scenario.emptyTitle })).toBeVisible();
+    if (scenario.state === 'SETUP_NEEDED') {
+      await expect(page.getByRole('link', { name: 'Update property location' }).first())
+        .toHaveAttribute('href', `/dashboard/properties/${propertyId}/edit`);
+    }
   }
 });
 

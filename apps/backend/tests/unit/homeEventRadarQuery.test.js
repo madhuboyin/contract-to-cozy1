@@ -289,6 +289,44 @@ test('monitoring state distinguishes setup, uncovered, partial, and degraded pro
   }
 });
 
+test('usable location without coverage rows is operationally pending, not homeowner setup', async () => {
+  const { service } = serviceWith({ coverageRows: [] });
+
+  const coverage = await service.getCoverage('property-1');
+
+  assert.equal(coverage.monitoringState, 'UNCOVERED');
+  assert.deepEqual(coverage.readiness, {
+    state: 'MONITORING_NOT_INITIALIZED',
+    reasonCode: 'COVERAGE_EVALUATION_NOT_RECORDED',
+    missingLocationFields: [],
+  });
+});
+
+test('incomplete location identifies the fields the homeowner can correct', async () => {
+  const { service } = serviceWith({
+    property: property({
+      latitude: null,
+      longitude: null,
+      state: '',
+      city: '',
+      zipCode: '',
+      normalizedZipCode: null,
+      county: null,
+      countyFips: null,
+    }),
+    coverageRows: [],
+  });
+
+  const coverage = await service.getCoverage('property-1');
+
+  assert.equal(coverage.monitoringState, 'SETUP_NEEDED');
+  assert.deepEqual(coverage.readiness, {
+    state: 'PROPERTY_SETUP_REQUIRED',
+    reasonCode: 'PROPERTY_LOCATION_INCOMPLETE',
+    missingLocationFields: ['state', 'postal_or_locality'],
+  });
+});
+
 test('feed uses persisted priority and freshness and reports total independently of the page', async () => {
   const persisted = match();
   const { service } = serviceWith({

@@ -17,6 +17,11 @@ const overview: RadarOverview = {
   propertyId: 'property-1',
   generatedAt: '2026-07-26T12:00:00.000Z',
   monitoringState: 'ACTIVE',
+  readiness: {
+    state: 'READY',
+    reasonCode: null,
+    missingLocationFields: [],
+  },
   lastSuccessfulCheckAt: '2026-07-26T11:55:00.000Z',
   coverage: [],
   counts: {
@@ -133,6 +138,55 @@ describe('HomeEventRadarSummaryCard', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Radar summary is unavailable');
     expect(screen.getByRole('alert')).toHaveTextContent('not an all-clear');
+  });
+
+  it('links directly to property editing and names missing location fields', async () => {
+    jest.mocked(api.getRadarOverview).mockResolvedValue({
+      ...overview,
+      monitoringState: 'SETUP_NEEDED',
+      readiness: {
+        state: 'PROPERTY_SETUP_REQUIRED',
+        reasonCode: 'PROPERTY_LOCATION_INCOMPLETE',
+        missingLocationFields: ['state', 'postal_or_locality'],
+      },
+      lastSuccessfulCheckAt: null,
+      homeSummary: {
+        activeMaterialEventCount: 0,
+        mostUrgentMatch: null,
+      },
+    });
+    renderCard();
+
+    expect(await screen.findByText('Complete this property’s location')).toBeInTheDocument();
+    expect(screen.getAllByText(/state and ZIP code or city\/county/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /Update property location/i })).toHaveAttribute(
+      'href',
+      '/dashboard/properties/property-1/edit',
+    );
+    expect(screen.queryByText('No successful check recorded')).not.toBeInTheDocument();
+  });
+
+  it('shows a retry action when coverage initialization—not property data—is missing', async () => {
+    jest.mocked(api.getRadarOverview).mockResolvedValue({
+      ...overview,
+      monitoringState: 'UNCOVERED',
+      readiness: {
+        state: 'MONITORING_NOT_INITIALIZED',
+        reasonCode: 'COVERAGE_EVALUATION_NOT_RECORDED',
+        missingLocationFields: [],
+      },
+      lastSuccessfulCheckAt: null,
+      homeSummary: {
+        activeMaterialEventCount: 0,
+        mostUrgentMatch: null,
+      },
+    });
+    renderCard();
+
+    expect(await screen.findByText('First monitoring check is pending')).toBeInTheDocument();
+    expect(screen.getAllByText(/already has a usable location/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument();
+    expect(screen.queryByText('Setup needed')).not.toBeInTheDocument();
   });
 });
 

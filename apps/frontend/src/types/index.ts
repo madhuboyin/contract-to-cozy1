@@ -3358,6 +3358,14 @@ export interface RadarOverview {
   propertyId: string;
   generatedAt: string;
   monitoringState: RadarMonitoringState;
+  readiness?: {
+    state: 'READY' | 'PROPERTY_SETUP_REQUIRED' | 'MONITORING_NOT_INITIALIZED';
+    reasonCode:
+      | 'PROPERTY_LOCATION_INCOMPLETE'
+      | 'COVERAGE_EVALUATION_NOT_RECORDED'
+      | null;
+    missingLocationFields: Array<'state' | 'postal_or_locality' | 'verified_location'>;
+  };
   lastSuccessfulCheckAt: string | null;
   coverage: RadarCategoryCoverage[];
   counts: {

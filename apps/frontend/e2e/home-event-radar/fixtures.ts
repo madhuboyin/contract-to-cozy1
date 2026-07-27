@@ -354,6 +354,17 @@ export async function installRadarApi(
         propertyId,
         generatedAt: timestamps.now,
         monitoringState,
+        readiness: monitoringState === 'SETUP_NEEDED'
+          ? {
+              state: 'PROPERTY_SETUP_REQUIRED',
+              reasonCode: 'PROPERTY_LOCATION_INCOMPLETE',
+              missingLocationFields: ['state', 'postal_or_locality'],
+            }
+          : {
+              state: 'READY',
+              reasonCode: null,
+              missingLocationFields: [],
+            },
         lastSuccessfulCheckAt: monitoringState === 'SETUP_NEEDED' ? null : timestamps.checked,
         coverage: coverageFor(monitoringState),
         counts: {

@@ -28,7 +28,6 @@ import type {
   Property,
   RadarCategoryCoverage,
   RadarCanonicalFeedItem,
-  RadarMonitoringState,
   RadarOverview,
   RadarSourceFamily,
   RadarUserState,
@@ -40,6 +39,7 @@ import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary
 import {
   formatRadarLastCheck,
   getRadarEmptyStateCopy,
+  getRadarReadinessPresentation,
   isRadarFamilyFilterAvailable,
   RADAR_COVERAGE_LABELS,
   RADAR_FAMILY_LABELS,
@@ -128,26 +128,31 @@ function compactPropertyAddress(property: Property | null | undefined): string {
 }
 
 function RadarDesktopSidebar({
+  propertyId,
   propertyAddress,
   totalCount,
   newCount,
   dismissedCount,
   activeFilter,
-  monitoringState,
-  lastSuccessfulCheckAt,
+  overview,
+  onRetry,
 }: {
+  propertyId: string;
   propertyAddress?: string;
   totalCount: number;
   newCount: number;
   dismissedCount: number;
   activeFilter: FilterKey;
-  monitoringState?: RadarMonitoringState;
-  lastSuccessfulCheckAt?: string | null;
+  overview?: RadarOverview | null;
+  onRetry: () => void;
 }) {
   const activeFilterLabel =
     activeFilter === 'all' ? 'All' : RADAR_FAMILY_LABELS[activeFilter];
-  const monitoring = monitoringState
-    ? RADAR_MONITORING_PRESENTATION[monitoringState]
+  const readiness = overview
+    ? getRadarReadinessPresentation(overview)
+    : null;
+  const monitoring = overview?.monitoringState
+    ? RADAR_MONITORING_PRESENTATION[overview.monitoringState]
     : null;
 
   return (
@@ -167,14 +172,36 @@ function RadarDesktopSidebar({
               Selected property
             </p>
             <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-              {monitoring?.title ?? 'Loading monitoring status'}
+              {readiness?.title ?? monitoring?.title ?? 'Loading monitoring status'}
             </p>
             <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
               {propertyAddress || 'Events are matched against the selected property and available home details.'}
             </p>
-            {monitoring ? (
+            {readiness ? (
+              <div className="mt-2">
+                <p className="mb-0 text-xs font-medium text-amber-800">
+                  {readiness.label}
+                </p>
+                {readiness.action === 'edit_property' ? (
+                  <Link
+                    href={`/dashboard/properties/${encodeURIComponent(propertyId)}/edit`}
+                    className="mt-2 inline-flex min-h-[36px] items-center text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
+                  >
+                    {readiness.actionLabel}
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="mt-2 min-h-[36px] text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
+                  >
+                    {readiness.actionLabel}
+                  </button>
+                )}
+              </div>
+            ) : monitoring ? (
               <p className="mb-0 mt-2 text-xs font-medium text-[hsl(var(--mobile-brand-strong))]">
-                {monitoring.label} · {formatRadarLastCheck(lastSuccessfulCheckAt ?? null)}
+                {monitoring.label} · {formatRadarLastCheck(overview?.lastSuccessfulCheckAt ?? null)}
               </p>
             ) : null}
           </div>
@@ -310,23 +337,42 @@ function ViewChips({
 function RadarEmptyState({
   filtered = false,
   propertyId,
-  monitoringState,
+  overview,
   feedState,
+  onRetry,
 }: {
   filtered?: boolean;
   propertyId: string;
-  monitoringState?: RadarMonitoringState;
+  overview?: RadarOverview | null;
   feedState?: Parameters<typeof getRadarEmptyStateCopy>[0]['feedState'];
+  onRetry: () => void;
 }) {
+  const monitoringState = overview?.monitoringState;
+  const readiness = overview ? getRadarReadinessPresentation(overview) : null;
   const copy = getRadarEmptyStateCopy({ filtered, monitoringState, feedState });
 
   return (
     <EmptyStateCard
       titleAsHeading
-      title={copy.title}
-      description={copy.description}
+      title={readiness?.title ?? copy.title}
+      description={readiness?.description ?? copy.description}
       action={
-        filtered ? undefined : (
+        filtered ? undefined : readiness?.action === 'edit_property' ? (
+          <Link
+            href={`/dashboard/properties/${encodeURIComponent(propertyId)}/edit`}
+            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
+          >
+            {readiness.actionLabel}
+          </Link>
+        ) : readiness?.action === 'retry' ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+          >
+            {readiness.actionLabel}
+          </button>
+        ) : (
           <Link
             href={`/dashboard/properties/${encodeURIComponent(propertyId)}/incidents`}
             className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
@@ -379,12 +425,13 @@ function RadarMonitoringNotice({
   }
 
   const presentation = RADAR_MONITORING_PRESENTATION[overview.monitoringState];
+  const readiness = getRadarReadinessPresentation(overview);
   const toneClass = {
     positive: 'border-emerald-200 bg-emerald-50 text-emerald-950',
     warning: 'border-amber-200 bg-amber-50 text-amber-950',
     danger: 'border-rose-200 bg-rose-50 text-rose-950',
     neutral: 'border-slate-200 bg-slate-50 text-slate-900',
-  }[presentation.tone];
+  }[readiness ? 'warning' : presentation.tone];
 
   return (
     <MobileSection>
@@ -397,17 +444,34 @@ function RadarMonitoringNotice({
           )}
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="mb-0 text-sm font-semibold">{presentation.title}</p>
+              <p className="mb-0 text-sm font-semibold">{readiness?.title ?? presentation.title}</p>
               <span className="rounded-full border border-current/20 bg-white/70 px-2 py-0.5 text-[10px] font-semibold">
-                {presentation.label}
+                {readiness?.label ?? presentation.label}
               </span>
             </div>
             <p className={cn('mb-0 mt-1 opacity-80', MOBILE_TYPE_TOKENS.caption)}>
-              {presentation.description}
+              {readiness?.description ?? presentation.description}
             </p>
-            <p className="mb-0 mt-2 text-xs font-medium">
-              {formatRadarLastCheck(overview.lastSuccessfulCheckAt)}
-            </p>
+            {readiness?.action === 'edit_property' ? (
+              <Link
+                href={`/dashboard/properties/${encodeURIComponent(overview.propertyId)}/edit`}
+                className="mt-2 inline-flex min-h-[36px] items-center text-xs font-semibold underline underline-offset-2"
+              >
+                {readiness.actionLabel}
+              </Link>
+            ) : readiness?.action === 'retry' ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-2 min-h-[36px] text-xs font-semibold underline underline-offset-2"
+              >
+                {readiness.actionLabel}
+              </button>
+            ) : (
+              <p className="mb-0 mt-2 text-xs font-medium">
+                {formatRadarLastCheck(overview.lastSuccessfulCheckAt)}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -978,8 +1042,9 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
                 <RadarEmptyState
                   filtered={filter !== 'all' || view !== 'all'}
                   propertyId={propertyId}
-                  monitoringState={overviewQuery.data?.monitoringState}
+                  overview={overviewQuery.data}
                   feedState={feedSummary?.feedState}
+                  onRetry={() => void overviewQuery.refetch()}
                 />
                 <DismissedNotice
                   count={dismissedCount}
@@ -1042,13 +1107,14 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
         </div>
 
         <RadarDesktopSidebar
+          propertyId={propertyId}
           propertyAddress={propertyAddress || undefined}
           totalCount={totalCount}
           newCount={newCount}
           dismissedCount={dismissedCount}
           activeFilter={filter}
-          monitoringState={overviewQuery.data?.monitoringState}
-          lastSuccessfulCheckAt={overviewQuery.data?.lastSuccessfulCheckAt}
+          overview={overviewQuery.data}
+          onRetry={() => void overviewQuery.refetch()}
         />
       </div>
 

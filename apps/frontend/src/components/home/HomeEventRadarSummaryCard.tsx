@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { getRadarReadinessPresentation } from '@/features/homeEventRadar/radarAvailabilityCopy';
 
 const MONITORING_COPY: Record<
   RadarMonitoringState,
@@ -114,7 +115,14 @@ export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }
   }
 
   const overview: RadarOverview = query.data;
-  const presentation = MONITORING_COPY[overview.monitoringState];
+  const readiness = getRadarReadinessPresentation(overview);
+  const presentation = readiness
+    ? {
+        label: readiness.label,
+        description: readiness.description,
+        attention: true,
+      }
+    : MONITORING_COPY[overview.monitoringState];
   const summary = overview.homeSummary;
   const urgent = summary.mostUrgentMatch;
   const checkedAt = lastCheckLabel(overview.lastSuccessfulCheckAt);
@@ -171,7 +179,7 @@ export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }
           <span className="text-sm text-slate-600">
             active material event{summary.activeMaterialEventCount === 1 ? '' : 's'}
           </span>
-          {presentation.attention && checkedAt ? (
+          {presentation.attention && checkedAt && !readiness ? (
             <span className="text-xs text-amber-800">· {checkedAt}</span>
           ) : null}
         </div>
@@ -208,16 +216,42 @@ export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }
           )}>
             {summary.activeMaterialEventCount > 0
               ? `${summary.activeMaterialEventCount} active material event${summary.activeMaterialEventCount === 1 ? ' is' : 's are'} still being evaluated. Open Radar for the latest available evidence.`
-              : radarHomeEmptyCopy(overview.monitoringState)}
+              : readiness?.title ?? radarHomeEmptyCopy(overview.monitoringState)}
+            {readiness ? (
+              <span className="mt-1 block text-xs text-amber-800">
+                {readiness.description}
+              </span>
+            ) : null}
           </div>
         )}
 
-        <Link
-          href={urgent?.href ?? baseHref}
-          className="inline-flex min-h-[44px] items-center text-sm font-semibold text-teal-700 underline underline-offset-2"
-        >
-          {urgent ? 'Open Home Event Radar' : 'View monitoring details'}
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {readiness?.action === 'edit_property' ? (
+            <Button asChild size="sm" className="rounded-full">
+              <Link href={`/dashboard/properties/${encodeURIComponent(propertyId)}/edit`}>
+                {readiness.actionLabel}
+                <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
+              </Link>
+            </Button>
+          ) : null}
+          {readiness?.action === 'retry' ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-full bg-white"
+              onClick={() => query.refetch()}
+            >
+              {readiness.actionLabel}
+            </Button>
+          ) : null}
+          <Link
+            href={urgent?.href ?? baseHref}
+            className="inline-flex min-h-[44px] items-center text-sm font-semibold text-teal-700 underline underline-offset-2"
+          >
+            {urgent ? 'Open Home Event Radar' : 'View monitoring details'}
+          </Link>
+        </div>
       </CardContent>
     </Card>
   );

@@ -121,8 +121,19 @@ function normalizeSourceFamily(value: string | null | undefined): string {
 }
 
 function hasUsableGeography(property: any): boolean {
+  const latitudePresent =
+    property?.latitude !== null
+    && property?.latitude !== undefined
+    && property?.latitude !== '';
+  const longitudePresent =
+    property?.longitude !== null
+    && property?.longitude !== undefined
+    && property?.longitude !== '';
   const pointIsUsable =
-    Number.isFinite(Number(property?.latitude)) && Number.isFinite(Number(property?.longitude));
+    latitudePresent
+    && longitudePresent
+    && Number.isFinite(Number(property.latitude))
+    && Number.isFinite(Number(property.longitude));
   const postalIsUsable = Boolean(property?.state && (property?.normalizedZipCode || property?.zipCode));
   const administrativeAreaIsUsable = Boolean(
     property?.state && (property?.city || property?.countyFips || property?.county),
@@ -130,8 +141,51 @@ function hasUsableGeography(property: any): boolean {
   return pointIsUsable || postalIsUsable || administrativeAreaIsUsable;
 }
 
+function missingRadarLocationFields(property: any): string[] {
+  if (hasUsableGeography(property)) return [];
+  const missing: string[] = [];
+  if (!property?.state) missing.push('state');
+  if (
+    !property?.normalizedZipCode
+    && !property?.zipCode
+    && !property?.city
+    && !property?.countyFips
+    && !property?.county
+  ) {
+    missing.push('postal_or_locality');
+  }
+  if (missing.length === 0) missing.push('verified_location');
+  return missing;
+}
+
+function deriveRadarReadiness(property: any, rows: any[]) {
+  const missingLocationFields = missingRadarLocationFields(property);
+  if (missingLocationFields.length > 0) {
+    return {
+      state: 'PROPERTY_SETUP_REQUIRED' as const,
+      reasonCode: 'PROPERTY_LOCATION_INCOMPLETE' as const,
+      missingLocationFields,
+    };
+  }
+  if (rows.length === 0) {
+    return {
+      state: 'MONITORING_NOT_INITIALIZED' as const,
+      reasonCode: 'COVERAGE_EVALUATION_NOT_RECORDED' as const,
+      missingLocationFields: [],
+    };
+  }
+  return {
+    state: 'READY' as const,
+    reasonCode: null,
+    missingLocationFields: [],
+  };
+}
+
 function deriveMonitoringState(property: any, rows: any[]): RadarMonitoringState {
-  if (!hasUsableGeography(property) || rows.length === 0) return 'SETUP_NEEDED';
+  if (!hasUsableGeography(property)) return 'SETUP_NEEDED';
+  // A usable property with no materialized source rows is an operational
+  // initialization state, not missing homeowner setup.
+  if (rows.length === 0) return 'UNCOVERED';
   if (rows.some((row) => row.status === 'failed' || row.status === 'stale')) return 'DEGRADED';
 
   const covered = rows.filter((row) => row.status === 'covered').length;
@@ -531,6 +585,7 @@ export class RadarQueryService {
     return {
       propertyId,
       monitoringState,
+      readiness: deriveRadarReadiness(property, rows),
       evaluatedAt: latestEvaluatedAt,
       lastSuccessfulCheckAt,
       propertyGeographyVersion: property.geographyVersion,
@@ -600,6 +655,7 @@ export class RadarQueryService {
       propertyId,
       generatedAt: now.toISOString(),
       monitoringState: coverage.monitoringState,
+      readiness: coverage.readiness,
       lastSuccessfulCheckAt: coverage.lastSuccessfulCheckAt,
       coverage: coverage.categories,
       counts,
