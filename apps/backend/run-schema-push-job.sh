@@ -267,11 +267,17 @@ spec:
                     --schema=/config/schema.prisma
               fi
               echo "Ensuring Radar notification enum compatibility before Prisma reconciliation..."
-              printf '%s\n' \
-                'DO \$\$ BEGIN IF EXISTS (SELECT 1 FROM pg_type WHERE typname = \$channel\$RadarNotificationChannel\$channel\$) THEN ALTER TABLE "property_radar_notification_decisions" ADD COLUMN IF NOT EXISTS "eligibleChannels" "RadarNotificationChannel"[] NOT NULL DEFAULT ARRAY[]::"RadarNotificationChannel"[]; END IF; END \$\$;' | \
+              if printf '%s\n' \
+                'SELECT NULL::"RadarNotificationChannel";' | \
                 npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
                   --stdin \
-                  --schema=/config/schema.prisma
+                  --schema=/config/schema.prisma >/dev/null 2>&1; then
+                printf '%s\n' \
+                  'ALTER TABLE "property_radar_notification_decisions" ADD COLUMN IF NOT EXISTS "eligibleChannels" "RadarNotificationChannel"[] NOT NULL DEFAULT ARRAY[]::"RadarNotificationChannel"[];' | \
+                  npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
+                    --stdin \
+                    --schema=/config/schema.prisma
+              fi
               npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db push \
                 --accept-data-loss \
                 --skip-generate \
