@@ -27,6 +27,12 @@ test('core feed and detail semantics work in every supported desktop browser', a
   const dialog = page.getByRole('dialog', { name: 'Severe thunderstorm warning' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('heading', { name: 'Official event details' })).toBeVisible();
+  await expect(dialog.getByText('Resolution in progress')).toBeVisible();
+  await expect(dialog.getByText(/Current step: Secure exposed property/i)).toBeVisible();
+  await expect(dialog.getByRole('link', { name: 'Continue resolution' })).toHaveAttribute(
+    'href',
+    /guidanceJourneyId=journey-weather.*guidanceStepKey=secure-property/,
+  );
   await expect(page).toHaveURL(/matchId=match-weather/);
 
   await page.keyboard.press('Escape');

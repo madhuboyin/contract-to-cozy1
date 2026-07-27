@@ -133,17 +133,37 @@ const detail: RadarCanonicalDetail = {
   relatedIncident: {
     id: 'incident-1',
     status: 'ACTIVE',
+    resolutionState: 'not_started',
     title: 'Wind preparation',
     summary: 'Prepare exposed areas.',
+    resolvedAt: null,
+    expiredAt: null,
     updatedAt: '2026-07-26T11:40:00.000Z',
     href: '/dashboard/properties/property-1/incidents/incident-1',
   },
   relatedGuidance: {
     id: 'journey-1',
     status: 'ACTIVE',
+    resolutionState: 'in_progress',
     currentStepKey: 'secure-items',
+    currentStep: {
+      key: 'secure-items',
+      label: 'Secure outdoor items',
+      status: 'IN_PROGRESS',
+      order: 1,
+    },
+    completedAt: null,
     updatedAt: '2026-07-26T11:42:00.000Z',
-    href: '/dashboard/properties/property-1/guidance/step?journeyId=journey-1',
+    href: '/dashboard/properties/property-1/guidance/step?journeyId=journey-1&guidanceJourneyId=journey-1&guidanceStepKey=secure-items',
+  },
+  resolutionContinuity: {
+    state: 'in_progress',
+    incidentState: 'not_started',
+    guidanceState: 'in_progress',
+    continueResolution: {
+      label: 'Continue resolution',
+      href: '/dashboard/properties/property-1/guidance/step?journeyId=journey-1&guidanceJourneyId=journey-1&guidanceStepKey=secure-items',
+    },
   },
   userFeedback: null,
 };
@@ -198,7 +218,43 @@ describe('RadarDetailSheet', () => {
       'href',
       '/dashboard/properties/property-1/incidents/incident-1',
     );
-    expect(screen.getByRole('link', { name: /Open guidance/i })).toBeInTheDocument();
+    expect(screen.getByText('Resolution in progress')).toBeInTheDocument();
+    expect(screen.getByText(/Current step:/i)).toHaveTextContent('Secure outdoor items');
+    expect(screen.getByRole('link', { name: 'Continue resolution' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('guidanceStepKey=secure-items'),
+    );
+  });
+
+  it('renders completed resolution continuity without an actionable continuation link', async () => {
+    jest.mocked(api.getRadarEventDetail).mockResolvedValue({
+      ...detail,
+      relatedIncident: {
+        ...detail.relatedIncident!,
+        status: 'RESOLVED',
+        resolutionState: 'resolved',
+        resolvedAt: '2026-07-26T12:00:00.000Z',
+      },
+      relatedGuidance: {
+        ...detail.relatedGuidance!,
+        status: 'COMPLETED',
+        resolutionState: 'resolved',
+        currentStepKey: null,
+        currentStep: null,
+        completedAt: '2026-07-26T12:00:00.000Z',
+      },
+      resolutionContinuity: {
+        state: 'resolved',
+        incidentState: 'resolved',
+        guidanceState: 'resolved',
+        continueResolution: null,
+      },
+    });
+    renderSheet();
+
+    expect(await screen.findByText('Resolution complete')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Continue resolution' })).not.toBeInTheDocument();
+    expect(screen.getByText(/do not close the shared Incident or Guidance journey/i)).toBeInTheDocument();
   });
 
   it('renders only the destination behavior declared by the action registry', async () => {

@@ -121,6 +121,16 @@ function humanize(value: string): string {
     .replace(/^./, (character) => character.toUpperCase());
 }
 
+const RESOLUTION_STATE_LABEL: Record<
+  RadarCanonicalDetail['resolutionContinuity']['state'],
+  string
+> = {
+  not_started: 'Resolution not started',
+  in_progress: 'Resolution in progress',
+  resolved: 'Resolution complete',
+  closed: 'Resolution closed',
+};
+
 export function formatRadarGeography(geography: RadarNormalizedGeography | null): string {
   if (!geography) return 'The provider did not supply a displayable coverage area.';
   switch (geography.type) {
@@ -647,18 +657,58 @@ function DetailContent({
       ) : null}
 
       {detail.relatedIncident || detail.relatedGuidance ? (
-        <DetailSection title="Related resolution">
-          <div className="space-y-2">
+        <DetailSection title="Resolution continuity">
+          <div
+            className={cn(
+              MOBILE_CARD_RADIUS,
+              'space-y-3 border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-subtle))] p-3.5',
+            )}
+          >
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-brand-strong))]" aria-hidden />
+              <div>
+                <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                  {RESOLUTION_STATE_LABEL[detail.resolutionContinuity.state]}
+                </p>
+                <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+                  Personal feed actions such as dismissing this event do not close the shared Incident or Guidance journey.
+                </p>
+              </div>
+            </div>
             {detail.relatedIncident ? (
               <Link href={detail.relatedIncident.href} className={cn(MOBILE_CARD_RADIUS, 'block min-h-[44px] border border-[hsl(var(--mobile-border-subtle))] bg-white p-3.5')}>
                 <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">{detail.relatedIncident.title}</p>
-                <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">Incident · {humanize(detail.relatedIncident.status)}</p>
+                <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+                  Incident · {humanize(detail.relatedIncident.status)} · {humanize(detail.relatedIncident.resolutionState)}
+                </p>
               </Link>
             ) : null}
             {detail.relatedGuidance ? (
-              <Link href={detail.relatedGuidance.href} className={cn(MOBILE_CARD_RADIUS, 'block min-h-[44px] border border-[hsl(var(--mobile-border-subtle))] bg-white p-3.5')}>
-                <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">Open guidance</p>
-                <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">Status · {humanize(detail.relatedGuidance.status)}</p>
+              <div className={cn(MOBILE_CARD_RADIUS, 'border border-[hsl(var(--mobile-border-subtle))] bg-white p-3.5')}>
+                <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">Guidance journey</p>
+                <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+                  Status · {humanize(detail.relatedGuidance.status)}
+                </p>
+                {detail.relatedGuidance.currentStep ? (
+                  <p className="mb-0 mt-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                    Current step: <span className="font-semibold">{detail.relatedGuidance.currentStep.label}</span>
+                    {' · '}{humanize(detail.relatedGuidance.currentStep.status)}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {detail.resolutionContinuity.continueResolution ? (
+              <Link
+                href={detail.resolutionContinuity.continueResolution.href}
+                onClick={() => trackRadarSheetEvent(propertyId, 'RESOLUTION_CONTINUED', {
+                  property_event_match_id: detail.propertyMatchId,
+                  incident_id: detail.relatedIncident?.id ?? null,
+                  guidance_journey_id: detail.relatedGuidance?.id ?? null,
+                  resolution_state: detail.resolutionContinuity.state,
+                })}
+                className="inline-flex min-h-[44px] items-center font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
+              >
+                {detail.resolutionContinuity.continueResolution.label}
               </Link>
             ) : null}
           </div>

@@ -3538,19 +3538,54 @@ export interface RadarCanonicalDetail extends RadarCanonicalFeedItem {
   matcherVersion: string | null;
   relatedIncident: {
     id: string;
-    status: string;
+    status:
+      | 'DETECTED'
+      | 'EVALUATED'
+      | 'ACTIVE'
+      | 'ACTIONED'
+      | 'MITIGATED'
+      | 'RESOLVED'
+      | 'SUPPRESSED'
+      | 'EXPIRED';
+    resolutionState: 'not_started' | 'in_progress' | 'resolved' | 'closed';
     title: string;
     summary: string | null;
+    resolvedAt: string | null;
+    expiredAt: string | null;
     updatedAt: string;
     href: string;
   } | null;
   relatedGuidance: {
     id: string;
-    status: string;
+    status:
+      | 'NOT_STARTED'
+      | 'ACTIVE'
+      | 'BRANCHED'
+      | 'COMPLETED'
+      | 'ABORTED'
+      | 'ARCHIVED'
+      | 'DISMISSED';
+    resolutionState: 'not_started' | 'in_progress' | 'resolved' | 'closed';
     currentStepKey: string | null;
+    currentStep: {
+      key: string;
+      label: string;
+      status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED' | 'BLOCKED';
+      order: number;
+    } | null;
+    completedAt: string | null;
     updatedAt: string;
     href: string;
   } | null;
+  resolutionContinuity: {
+    state: 'not_started' | 'in_progress' | 'resolved' | 'closed';
+    incidentState: 'not_started' | 'in_progress' | 'resolved' | 'closed' | null;
+    guidanceState: 'not_started' | 'in_progress' | 'resolved' | 'closed' | null;
+    continueResolution: {
+      label: 'Start resolution' | 'Continue resolution';
+      href: string;
+    } | null;
+  };
   userFeedback: RadarFeedbackRecord | null;
 }
 

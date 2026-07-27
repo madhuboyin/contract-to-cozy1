@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-504 implemented |
+| Status | In progress — HER-506 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -58,7 +58,8 @@
 | HER-503 Notification preference persistence | Complete; DB application pending | Property-authorized per-user preferences persist enabled categories, available channels, canonical minimum severity/impact, immediate/digest mode, normalized quiet hours, and validated IANA timezone |
 | HER-504 Notification eligibility/dedup | Complete; DB application pending | Versioned pure policy and durable per-user revision decisions enforce materiality/escalation, confidence and preference thresholds, timing, channels, DST-aware quiet hours, opt-in critical override, terminal/test suppression, and exact deduplication without delivering |
 | HER-505 Notification delivery integration | Complete; DB application pending | Eligible decisions idempotently materialize canonical in-app notifications and exact outbound rows; immediate/deferred delivery uses durable worker claims, retry release, transport gates, and canonical deep links |
-| HER-506+ | Not started | Guidance continuity expansion, Unified Home summary, additional sources, and operations remain |
+| HER-506 Incident/Guidance UI continuity | Complete | Canonical detail normalizes Incident and Guidance resolution state, prefers an actionable journey over terminal history, exposes the current step and safe continuation link, renders terminal truth, and keeps personal dismiss separate from shared resolution |
+| HER-507+ | Not started | Unified Home summary, additional sources, and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1516,6 +1517,20 @@ Radar detail shall show:
 - resolution state.
 
 Personal dismiss does not close the Incident.
+
+**Implemented:** The canonical detail read now exposes typed Incident and Guidance statuses,
+system-specific and combined resolution states, terminal timestamps, the active Guidance step, and
+a property-scoped continuation destination. When multiple journeys reference the promoted Incident,
+an `ACTIVE` or `NOT_STARTED` journey wins over newer terminal history; otherwise the newest terminal
+journey remains visible as resolution evidence. Continuation links preserve both journey aliases and
+the exact current step so the Guidance workspace resumes deterministically.
+
+The detail sheet renders the combined resolution state, linked Incident status, Guidance journey
+status, current step label/status, and a single `Start resolution` or `Continue resolution` action
+only while the journey remains actionable. Completed/closed resolution remains visible without a
+misleading CTA. The UI explicitly states that personal feed actions do not close the household
+Incident or Guidance journey. The projection remains a pure read and requires no database schema
+change or migration script.
 
 ### HER-507 — Unified Home summary
 

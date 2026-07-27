@@ -103,6 +103,12 @@ const initialItems = [
 ];
 
 function detail(item: ReturnType<typeof feedItem>, feedback: Record<string, unknown> | null) {
+  const hasResolution = item.propertyMatchId === 'match-weather';
+  const continueResolutionHref =
+    '/dashboard/properties/property-acceptance/guidance/step'
+    + '?journeyId=journey-weather'
+    + '&guidanceJourneyId=journey-weather'
+    + '&guidanceStepKey=secure-property';
   return {
     ...item,
     geography: {
@@ -167,8 +173,41 @@ function detail(item: ReturnType<typeof feedItem>, feedback: Record<string, unkn
     missingFacts: [],
     propertyGeographyVersion: 3,
     matcherVersion: 'acceptance-geo-v1',
-    relatedIncident: null,
-    relatedGuidance: null,
+    relatedIncident: hasResolution ? {
+      id: 'incident-weather',
+      status: 'ACTIONED',
+      resolutionState: 'in_progress',
+      title: 'Severe thunderstorm preparation',
+      summary: 'Protect exposed property before the warning arrives.',
+      resolvedAt: null,
+      expiredAt: null,
+      updatedAt: timestamps.observed,
+      href: '/dashboard/properties/property-acceptance/incidents/incident-weather',
+    } : null,
+    relatedGuidance: hasResolution ? {
+      id: 'journey-weather',
+      status: 'ACTIVE',
+      resolutionState: 'in_progress',
+      currentStepKey: 'secure-property',
+      currentStep: {
+        key: 'secure-property',
+        label: 'Secure exposed property',
+        status: 'IN_PROGRESS',
+        order: 1,
+      },
+      completedAt: null,
+      updatedAt: timestamps.observed,
+      href: continueResolutionHref,
+    } : null,
+    resolutionContinuity: {
+      state: hasResolution ? 'in_progress' : 'not_started',
+      incidentState: hasResolution ? 'in_progress' : null,
+      guidanceState: hasResolution ? 'in_progress' : null,
+      continueResolution: hasResolution ? {
+        label: 'Continue resolution',
+        href: continueResolutionHref,
+      } : null,
+    },
     userFeedback: feedback,
   };
 }

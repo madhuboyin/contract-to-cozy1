@@ -43,6 +43,12 @@ export type RadarFeedState =
 
 export type RadarUserState = RadarFilterUserState;
 
+type RadarResolutionState =
+  | 'not_started'
+  | 'in_progress'
+  | 'resolved'
+  | 'closed';
+
 type QueryDependencies = {
   db?: any;
   now?: () => Date;
@@ -209,6 +215,72 @@ function displayCode(value: unknown): string {
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/^./, (character: string) => character.toUpperCase());
+}
+
+function incidentResolutionState(status: unknown): RadarResolutionState {
+  if (status === 'RESOLVED') return 'resolved';
+  if (status === 'SUPPRESSED' || status === 'EXPIRED') return 'closed';
+  if (status === 'ACTIONED' || status === 'MITIGATED') return 'in_progress';
+  return 'not_started';
+}
+
+function guidanceResolutionState(status: unknown): RadarResolutionState {
+  if (status === 'COMPLETED') return 'resolved';
+  if (status === 'ACTIVE') return 'in_progress';
+  if (status === 'NOT_STARTED') return 'not_started';
+  return 'closed';
+}
+
+function currentGuidanceStep(guidance: any): Record<string, unknown> | null {
+  if (!guidance) return null;
+  const steps = Array.isArray(guidance.steps) ? guidance.steps : [];
+  const current = steps.find(
+    (step: any) => step.stepKey === guidance.currentStepKey,
+  ) ?? steps.find(
+    (step: any) => ['IN_PROGRESS', 'PENDING', 'BLOCKED'].includes(String(step.status)),
+  );
+  if (!current) return null;
+  return {
+    key: String(current.stepKey),
+    label: String(current.label),
+    status: String(current.status),
+    order: Number(current.stepOrder),
+  };
+}
+
+function selectGuidanceContinuity(candidates: any[]): any | null {
+  return candidates.find(
+    (candidate) => candidate.status === 'ACTIVE' || candidate.status === 'NOT_STARTED',
+  ) ?? candidates[0] ?? null;
+}
+
+function resolutionContinuity(
+  propertyId: string,
+  incident: any,
+  guidance: any,
+): Record<string, unknown> {
+  const incidentState = incident
+    ? incidentResolutionState(incident.status)
+    : null;
+  const guidanceState = guidance
+    ? guidanceResolutionState(guidance.status)
+    : null;
+  const state = guidanceState ?? incidentState ?? 'not_started';
+  const step = currentGuidanceStep(guidance);
+  const canContinueGuidance = guidance
+    && (guidance.status === 'ACTIVE' || guidance.status === 'NOT_STARTED');
+  const href = canContinueGuidance
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/guidance/step?journeyId=${encodeURIComponent(guidance.id)}&guidanceJourneyId=${encodeURIComponent(guidance.id)}${step ? `&guidanceStepKey=${encodeURIComponent(String(step.key))}` : ''}`
+    : null;
+  return {
+    state,
+    incidentState,
+    guidanceState,
+    continueResolution: href ? {
+      label: state === 'not_started' ? 'Start resolution' : 'Continue resolution',
+      href,
+    } : null,
+  };
 }
 
 function detailMissingFacts(match: any): Array<Record<string, string>> {
@@ -577,6 +649,8 @@ export class RadarQueryService {
             status: true,
             title: true,
             summary: true,
+            resolvedAt: true,
+            expiredAt: true,
             updatedAt: true,
           },
         },
@@ -586,8 +660,8 @@ export class RadarQueryService {
 
     const revision = latestRevision(match);
     const incident = match.incident ?? null;
-    const guidance = incident && this.db.guidanceJourney?.findFirst
-      ? await this.db.guidanceJourney.findFirst({
+    const guidanceCandidates = incident && this.db.guidanceJourney?.findMany
+      ? await this.db.guidanceJourney.findMany({
           where: {
             propertyId,
             primarySignal: {
@@ -601,11 +675,25 @@ export class RadarQueryService {
             id: true,
             status: true,
             currentStepKey: true,
+            completedAt: true,
             updatedAt: true,
+            steps: {
+              select: {
+                stepKey: true,
+                label: true,
+                status: true,
+                stepOrder: true,
+              },
+              orderBy: { stepOrder: 'asc' },
+            },
           },
           orderBy: { updatedAt: 'desc' },
+          take: 10,
         })
-      : null;
+      : [];
+    const guidance = selectGuidanceContinuity(guidanceCandidates);
+    const guidanceStep = currentGuidanceStep(guidance);
+    const continuity = resolutionContinuity(propertyId, incident, guidance);
     const observedAt = iso(revision?.observedAt ?? match.radarEvent.observedAt) as string;
     const receivedAt = iso(
       revision?.createdAt
@@ -645,18 +733,26 @@ export class RadarQueryService {
       relatedIncident: incident ? {
         id: String(incident.id),
         status: String(incident.status),
+        resolutionState: incidentResolutionState(incident.status),
         title: String(incident.title),
         summary: incident.summary ?? null,
+        resolvedAt: iso(incident.resolvedAt),
+        expiredAt: iso(incident.expiredAt),
         updatedAt: iso(incident.updatedAt),
         href: `/dashboard/properties/${encodeURIComponent(propertyId)}/incidents/${encodeURIComponent(incident.id)}`,
       } : null,
       relatedGuidance: guidance ? {
         id: String(guidance.id),
         status: String(guidance.status),
+        resolutionState: guidanceResolutionState(guidance.status),
         currentStepKey: guidance.currentStepKey ?? null,
+        currentStep: guidanceStep,
+        completedAt: iso(guidance.completedAt),
         updatedAt: iso(guidance.updatedAt),
-        href: `/dashboard/properties/${encodeURIComponent(propertyId)}/guidance/step?journeyId=${encodeURIComponent(guidance.id)}`,
+        href: (continuity.continueResolution as Record<string, unknown> | null)?.href
+          ?? `/dashboard/properties/${encodeURIComponent(propertyId)}/guidance/step?journeyId=${encodeURIComponent(guidance.id)}&guidanceJourneyId=${encodeURIComponent(guidance.id)}`,
       } : null,
+      resolutionContinuity: continuity,
       userFeedback: serializeRadarFeedback(match.feedback?.[0]),
     };
   }

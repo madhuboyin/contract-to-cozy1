@@ -192,7 +192,8 @@ function serviceWith(overrides = {}) {
       create: async (args) => writes.push(['action.create', args]),
     },
     guidanceJourney: {
-      findFirst: async () => overrides.guidance ?? null,
+      findMany: async () => overrides.guidanceCandidates
+        ?? (overrides.guidance ? [overrides.guidance] : []),
     },
   };
   return {
@@ -454,6 +455,8 @@ test('detail projects related Incident and Guidance without mutating either syst
       status: 'ACTIVE',
       title: 'Wind preparation',
       summary: 'Prepare exposed areas.',
+      resolvedAt: null,
+      expiredAt: null,
       updatedAt: new Date('2026-07-26T11:40:00.000Z'),
     },
   });
@@ -463,16 +466,35 @@ test('detail projects related Incident and Guidance without mutating either syst
       id: 'journey-1',
       status: 'ACTIVE',
       currentStepKey: 'secure-outdoor-items',
+      completedAt: null,
       updatedAt: new Date('2026-07-26T11:42:00.000Z'),
+      steps: [{
+        stepKey: 'secure-outdoor-items',
+        label: 'Secure outdoor items',
+        status: 'IN_PROGRESS',
+        stepOrder: 1,
+      }],
     },
   });
 
   const detail = await service.getDetail('property-1', 'match-1', 'user-1');
 
   assert.equal(detail.relatedIncident.id, 'incident-1');
+  assert.equal(detail.relatedIncident.resolutionState, 'not_started');
   assert.equal(detail.relatedGuidance.id, 'journey-1');
+  assert.equal(detail.relatedGuidance.resolutionState, 'in_progress');
+  assert.equal(detail.relatedGuidance.currentStep.label, 'Secure outdoor items');
+  assert.equal(detail.resolutionContinuity.state, 'in_progress');
+  assert.equal(
+    detail.resolutionContinuity.continueResolution.label,
+    'Continue resolution',
+  );
   assert.match(detail.relatedIncident.href, /incidents\/incident-1$/);
-  assert.match(detail.relatedGuidance.href, /journeyId=journey-1$/);
+  assert.match(detail.relatedGuidance.href, /journeyId=journey-1/);
+  assert.match(
+    detail.resolutionContinuity.continueResolution.href,
+    /guidanceStepKey=secure-outdoor-items/,
+  );
   const handoff = new URL(
     detail.recommendedActions[0].destination.href,
     'https://example.test',
@@ -484,6 +506,85 @@ test('detail projects related Incident and Guidance without mutating either syst
   assert.equal(handoff.searchParams.get('guidanceStepKey'), 'secure-outdoor-items');
   assert.deepEqual(writes, []);
   assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
+});
+
+test('detail exposes terminal Incident and Guidance resolution without a continue action', async () => {
+  const linked = match({
+    incident: {
+      id: 'incident-1',
+      status: 'RESOLVED',
+      title: 'Wind preparation',
+      summary: 'Preparation is complete.',
+      resolvedAt: new Date('2026-07-26T11:40:00.000Z'),
+      expiredAt: null,
+      updatedAt: new Date('2026-07-26T11:40:00.000Z'),
+    },
+  });
+  const { service } = serviceWith({
+    matches: [linked],
+    guidance: {
+      id: 'journey-1',
+      status: 'COMPLETED',
+      currentStepKey: null,
+      completedAt: new Date('2026-07-26T11:42:00.000Z'),
+      updatedAt: new Date('2026-07-26T11:42:00.000Z'),
+      steps: [],
+    },
+  });
+
+  const detail = await service.getDetail('property-1', 'match-1', 'user-1');
+
+  assert.equal(detail.relatedIncident.resolutionState, 'resolved');
+  assert.equal(detail.relatedGuidance.resolutionState, 'resolved');
+  assert.equal(detail.resolutionContinuity.state, 'resolved');
+  assert.equal(detail.resolutionContinuity.continueResolution, null);
+  assert.equal(radarDetailResponseSchema.safeParse(detail).success, true);
+});
+
+test('detail prefers an actionable Guidance journey over newer terminal history', async () => {
+  const linked = match({
+    incident: {
+      id: 'incident-1',
+      status: 'ACTIVE',
+      title: 'Wind preparation',
+      summary: 'Prepare exposed areas.',
+      resolvedAt: null,
+      expiredAt: null,
+      updatedAt: new Date('2026-07-26T11:40:00.000Z'),
+    },
+  });
+  const { service } = serviceWith({
+    matches: [linked],
+    guidanceCandidates: [
+      {
+        id: 'journey-completed',
+        status: 'COMPLETED',
+        currentStepKey: null,
+        completedAt: new Date('2026-07-26T11:59:00.000Z'),
+        updatedAt: new Date('2026-07-26T11:59:00.000Z'),
+        steps: [],
+      },
+      {
+        id: 'journey-active',
+        status: 'ACTIVE',
+        currentStepKey: 'protect-property',
+        completedAt: null,
+        updatedAt: new Date('2026-07-26T11:50:00.000Z'),
+        steps: [{
+          stepKey: 'protect-property',
+          label: 'Protect the property',
+          status: 'PENDING',
+          stepOrder: 1,
+        }],
+      },
+    ],
+  });
+
+  const detail = await service.getDetail('property-1', 'match-1', 'user-1');
+
+  assert.equal(detail.relatedGuidance.id, 'journey-active');
+  assert.equal(detail.relatedGuidance.currentStep.label, 'Protect the property');
+  assert.equal(detail.resolutionContinuity.state, 'in_progress');
 });
 
 test('state views apply server-side user-state predicates', async () => {
