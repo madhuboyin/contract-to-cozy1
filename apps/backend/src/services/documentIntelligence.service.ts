@@ -28,7 +28,10 @@ export interface DocumentInsights {
     premiumAmount?: number;
     deductible?: number;
     dwellingLimit?: number;
+    personalPropertyLimit?: number;
     liabilityLimit?: number;
+    valuationBasis?: string;
+    endorsements?: string[];
     coverageLimits?: string;
     startDate?: Date;
     expiryDate?: Date;
@@ -61,7 +64,10 @@ For INSURANCE documents (Declaration pages) extract:
 - Premium amount (Annual cost)
 - Deductible amount
 - Dwelling coverage limit
+- Personal-property coverage limit
 - Personal liability limit
+- Valuation basis (for example replacement cost or actual cash value)
+- Listed endorsements
 - Major coverage limits (e.g., Dwelling: $450k, Liability: $300k)
 - Policy start date (YYYY-MM-DD)
 - Policy expiration/renewal date (YYYY-MM-DD)
@@ -85,7 +91,10 @@ Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
     "premiumAmount": number or null,
     "deductible": number or null,
     "dwellingLimit": number or null,
+    "personalPropertyLimit": number or null,
     "liabilityLimit": number or null,
+    "valuationBasis": "string or null",
+    "endorsements": ["string"] or null,
     "coverageLimits": "string or null",
     "startDate": "YYYY-MM-DD or null",
     "expiryDate": "YYYY-MM-DD or null",
@@ -350,7 +359,10 @@ export class DocumentIntelligenceService {
         premiumAmount: extractedData.premiumAmount,
         deductibleAmount: extractedData.deductible,
         dwellingLimit: extractedData.dwellingLimit,
+        personalPropertyLimit: extractedData.personalPropertyLimit,
         liabilityLimit: extractedData.liabilityLimit,
+        valuationBasis: extractedData.valuationBasis,
+        endorsements: extractedData.endorsements,
         coverageLimits: extractedData.coverageLimits,
         termStart: extractedData.startDate,
         termEnd: extractedData.expiryDate,

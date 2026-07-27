@@ -7,7 +7,7 @@ function source(relativePath) {
   return fs.readFileSync(path.resolve(__dirname, relativePath), 'utf8');
 }
 
-test('insurance trend labels synthetic values as modeled and exposes no unsupported savings or dead quote action', () => {
+test('renewal history exposes only observed terms with no unsupported savings or dead quote action', () => {
   const trend = source(
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/insurance-trend/InsuranceTrendClient.tsx',
   );
@@ -25,9 +25,10 @@ test('insurance trend labels synthetic values as modeled and exposes no unsuppor
     assert.equal(trend.includes(unsupportedClaim), false, unsupportedClaim);
   }
 
-  assert.match(trend, /Modeled home estimate/);
-  assert.match(trend, /not a\s+quote, a coverage-equivalent comparison, or evidence of what you paid/);
-  assert.match(trend, /licensed insurance\s+professional/);
+  assert.match(trend, /Observed confirmed annual premium/);
+  assert.match(trend, /Modeled estimates are not included/);
+  assert.match(trend, /does not predict future premiums/);
+  assert.doesNotMatch(trend, /getInsuranceTrend|insuranceTrendApi/);
 });
 
 test('risk optimizer UI contains loss-prevention actions without fixed savings ranges', () => {

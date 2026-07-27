@@ -2613,6 +2613,7 @@ model Property {
   insurancePolicies          InsurancePolicy[]
   insurancePolicyTerms       InsurancePolicyTerm[]
   coverageReviews            CoverageReview[]
+  insurancePolicyTermChanges InsurancePolicyTermChange[]
   expenses                   Expense[]
   checklistItems             ChecklistItem[]
   maintenanceTasks           PropertyMaintenanceTask[]
@@ -3576,6 +3577,7 @@ model InsurancePolicy {
   claims              Claim[]
   homeSavingsAccounts HomeSavingsAccount[]
   terms               InsurancePolicyTerm[]
+  termChanges         InsurancePolicyTermChange[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3614,6 +3616,8 @@ model InsurancePolicyTerm {
   sourceDocument  Document?       @relation("InsurancePolicyTermSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
   facts           InsurancePolicyFact[]
   coverageReviews CoverageReview[]
+  changesFrom     InsurancePolicyTermChange[] @relation("InsurancePolicyTermChangeFrom")
+  changesTo       InsurancePolicyTermChange[] @relation("InsurancePolicyTermChangeTo")
 
   @@index([insurancePolicyId, termStart(sort: Desc)])
   @@index([propertyId, termStart(sort: Desc)])
@@ -3707,6 +3711,35 @@ model CoverageReviewQuestion {
   @@unique([coverageReviewId, questionKey])
   @@index([coverageReviewId, isPrimary, priority])
   @@map("coverage_review_questions")
+}
+
+// An observed difference between two verified terms for the same policy.
+// Values and evidence are snapshots so the renewal timeline remains auditable.
+model InsurancePolicyTermChange {
+  id                String   @id @default(uuid())
+  insurancePolicyId String
+  propertyId        String
+  fromTermId        String
+  toTermId          String
+  changeKey         String
+  category          String
+  status            String   @default("CURRENT")
+  oldValueJson      Json
+  newValueJson      Json
+  sourceEvidenceJson Json
+  observedAt        DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  insurancePolicy InsurancePolicy     @relation(fields: [insurancePolicyId], references: [id], onDelete: Cascade)
+  property        Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  fromTerm        InsurancePolicyTerm @relation("InsurancePolicyTermChangeFrom", fields: [fromTermId], references: [id], onDelete: Cascade)
+  toTerm          InsurancePolicyTerm @relation("InsurancePolicyTermChangeTo", fields: [toTermId], references: [id], onDelete: Cascade)
+
+  @@unique([fromTermId, toTermId, changeKey])
+  @@index([propertyId, observedAt(sort: Desc)])
+  @@index([insurancePolicyId, observedAt(sort: Desc)])
+  @@map("insurance_policy_term_changes")
 }
 
 // ============================================================================

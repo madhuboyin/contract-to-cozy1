@@ -20,7 +20,10 @@ export interface ExtractedPolicyTermInput {
   premiumAmount?: number;
   deductibleAmount?: number;
   dwellingLimit?: number;
+  personalPropertyLimit?: number;
   liabilityLimit?: number;
+  valuationBasis?: string;
+  endorsements?: string[];
   coverageLimits?: string;
   termStart?: Date;
   termEnd?: Date;
@@ -73,12 +76,37 @@ function extractedFacts(input: ExtractedPolicyTermInput) {
           ...common,
         }
       : null,
+    input.personalPropertyLimit != null
+      ? {
+          factKey: 'PERSONAL_PROPERTY_LIMIT',
+          valueType: 'AMOUNT',
+          amountValue: input.personalPropertyLimit,
+          currency: 'USD',
+          ...common,
+        }
+      : null,
     input.liabilityLimit != null
       ? {
           factKey: 'LIABILITY_LIMIT',
           valueType: 'AMOUNT',
           amountValue: input.liabilityLimit,
           currency: 'USD',
+          ...common,
+        }
+      : null,
+    input.valuationBasis
+      ? {
+          factKey: 'VALUATION_BASIS',
+          valueType: 'TEXT',
+          textValue: input.valuationBasis,
+          ...common,
+        }
+      : null,
+    input.endorsements?.length
+      ? {
+          factKey: 'ENDORSEMENTS',
+          valueType: 'JSON',
+          jsonValue: input.endorsements,
           ...common,
         }
       : null,

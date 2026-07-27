@@ -7,6 +7,7 @@ import { validateBody } from '../middleware/validate.middleware';
 import {
   getCoverageAnalysis,
   getCoverageReview,
+  getInsuranceHistory,
   runCoverageAnalysis,
   simulateCoverageAnalysis,
 } from '../controllers/coverageAnalysis.controller';
@@ -39,6 +40,12 @@ const simulateBodySchema = z.object({
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+router.get(
+  '/properties/:propertyId/insurance-history',
+  propertyAuthMiddleware,
+  getInsuranceHistory
+);
 
 router.get(
   '/properties/:propertyId/coverage-review',

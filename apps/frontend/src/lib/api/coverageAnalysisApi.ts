@@ -51,6 +51,96 @@ export type CoverageReviewDTO = {
   questions: CoverageReviewQuestionDTO[];
 };
 
+export type InsuranceHistoryValueDTO = {
+  valueType: 'AMOUNT' | 'TEXT' | 'BOOLEAN' | 'JSON';
+  amountValue?: number;
+  currency?: string;
+  textValue?: string;
+  booleanValue?: boolean;
+  jsonValue?: unknown;
+};
+
+export type InsurancePolicyHistoryDTO = {
+  propertyId: string;
+  historyState:
+    | 'NO_CONFIRMED_TERMS'
+    | 'ONE_CONFIRMED_TERM'
+    | 'PARTIAL_HISTORY'
+    | 'HISTORY';
+  terms: Array<{
+    id: string;
+    insurancePolicyId: string;
+    termStart: string | null;
+    termEnd: string | null;
+    verificationStatus: 'VERIFIED';
+    insurancePolicy: {
+      id: string;
+      carrierName: string;
+      policyNumber: string;
+      coverageType: string | null;
+    };
+    sourceDocument: { id: string; name: string } | null;
+    facts: Array<{
+      id: string;
+      factKey: string;
+      valueType: string;
+      amountValue: string | number | null;
+      textValue: string | null;
+      booleanValue: boolean | null;
+      jsonValue: unknown;
+      currency: string | null;
+      sourceDocumentId: string | null;
+      sourcePage: number | null;
+      sourceDocument: { id: string; name: string } | null;
+    }>;
+  }>;
+  changes: Array<{
+    id: string;
+    fromTermId: string;
+    toTermId: string;
+    changeKey: string;
+    category: 'PREMIUM' | 'DEDUCTIBLE' | 'LIMIT' | 'ENDORSEMENT' | 'FORM';
+    oldValueJson: InsuranceHistoryValueDTO;
+    newValueJson: InsuranceHistoryValueDTO;
+    sourceEvidenceJson: {
+      from: {
+        policyTermId: string;
+        factId: string;
+        sourceDocumentId: string | null;
+        sourcePage: number | null;
+      };
+      to: {
+        policyTermId: string;
+        factId: string;
+        sourceDocumentId: string | null;
+        sourcePage: number | null;
+      };
+    };
+    observedAt: string;
+  }>;
+  premiumSeries: Array<{
+    policyTermId: string;
+    insurancePolicyId: string;
+    termStart: string | null;
+    termEnd: string | null;
+    annualPremium: number;
+    currency: string;
+    sourceDocumentId: string | null;
+    sourcePage: number | null;
+  }>;
+  renewalAction: {
+    status: 'DATE_UNKNOWN' | 'OVERDUE' | 'DUE' | 'UPCOMING' | 'LATER';
+    dueAt: string | null;
+    label: string;
+    detail: string;
+  };
+  meta: {
+    classification: 'OBSERVED_CONFIRMED_HISTORY';
+    includesEstimatedValues: false;
+    generatedAt: string;
+  };
+};
+
 export type CoverageAnalysisOverrides = {
   annualPremiumUsd?: number;
   deductibleUsd?: number;
@@ -223,6 +313,15 @@ export async function getCoverageReview(
     `/api/properties/${propertyId}/coverage-review${query ? `?${query}` : ''}`
   );
   return res.data.review;
+}
+
+export async function getInsurancePolicyHistory(
+  propertyId: string
+): Promise<InsurancePolicyHistoryDTO> {
+  const res = await api.get<{ history: InsurancePolicyHistoryDTO }>(
+    `/api/properties/${propertyId}/insurance-history`
+  );
+  return res.data.history;
 }
 
 export async function runCoverageAnalysis(

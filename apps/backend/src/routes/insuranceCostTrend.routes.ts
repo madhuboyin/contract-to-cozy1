@@ -8,11 +8,8 @@ import * as controller from '../controllers/insuranceCostTrend.controller';
 const router = Router();
 
 /**
- * GET /api/properties/:propertyId/tools/insurance-trend?years=5
- * Optional query overrides:
- *  - homeValueNow
- *  - insuranceAnnualNow
- *  - inflationRate
+ * Retired homeowner heuristic endpoint. Returns 410 so older clients cannot
+ * mistake modeled, reverse-generated values for observed policy history.
  */
 router.get(
   '/properties/:propertyId/tools/insurance-trend',

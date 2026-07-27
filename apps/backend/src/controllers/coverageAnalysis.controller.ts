@@ -13,9 +13,30 @@ import { InventoryService } from '../services/inventory.service';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 import { APIError } from '../middleware/error.middleware';
 import { getOrCreateCoverageReview } from '../services/coverageReview.service';
+import { getInsurancePolicyHistory } from '../services/insurancePolicyHistory.service';
 
 const service = new CoverageIntelligenceService();
 const inventoryService = new InventoryService();
+
+export async function getInsuranceHistory(req: CustomRequest, res: Response) {
+  try {
+    const propertyId = req.params.propertyId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+    const history = await getInsurancePolicyHistory(propertyId, userId);
+    return res.json({ success: true, data: { history } });
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error fetching insurance policy history');
+    const statusCode = error instanceof APIError ? error.statusCode : 500;
+    return res.status(statusCode).json({
+      success: false,
+      code: error instanceof APIError ? error.code : undefined,
+      message: error?.message || 'Failed to fetch insurance policy history.',
+    });
+  }
+}
 
 export async function getCoverageReview(req: CustomRequest, res: Response) {
   try {
