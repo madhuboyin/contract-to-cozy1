@@ -13,10 +13,10 @@
 | Distinct capabilities | 52 |
 | Canonical routes verified | 52 |
 | Canonical explicit-relationship coverage | 32 |
-| Canonical contextual capabilities | 24 |
+| Canonical contextual capabilities | 22 |
 | Workflow-only | 1 |
 | Backend lifecycle canonicalized | 52 |
-| Canonical catalog-only capabilities | 27 |
+| Canonical catalog-only capabilities | 29 |
 
 ## Capability Matrix
 
@@ -30,8 +30,8 @@
 | cost-explainer | Cost Explainer | home, ai | `/dashboard/properties/[id]/tools/cost-explainer` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
 | cost-growth | Cost Growth | home, ai | `/dashboard/properties/[id]/tools/cost-growth` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | cost-volatility | Volatility | home, ai | `/dashboard/properties/[id]/tools/cost-volatility` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
-| coverage-intelligence | Coverage Intelligence | ai | `/dashboard/coverage-intelligence` | Verified | SAVE_OPTIMIZE | ACTIVE | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | No | CATALOG_ONLY |
-| coverage-options | Coverage Options | home | `/dashboard/properties/[id]/tools/coverage-options` | Verified | SAVE_OPTIMIZE | ACTIVE | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| coverage-intelligence | Coverage Intelligence | ai | `/dashboard/coverage-intelligence` | Verified | SAVE_OPTIMIZE | BETA | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | No | CATALOG_ONLY |
+| coverage-options | Coverage Options | home | `/dashboard/properties/[id]/tools/coverage-options` | Verified | SAVE_OPTIMIZE | BETA | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
 | diy | DIY Project Center | home | `/dashboard/properties/[id]/tools/diy` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | No | CONTEXTUAL_CANONICAL |
 | do-nothing-simulator | Do-Nothing Simulator | ai | `/dashboard/do-nothing-simulator` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | No | CATALOG_ONLY |
 | documents | Document Vault | ai | `/dashboard/documents` | Verified | PLAN_BUDGET | BETA | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
@@ -51,7 +51,7 @@
 | home-savings | Home Savings Check | ai | `/dashboard/home-savings` | Verified | SAVE_OPTIMIZE | ACTIVE | LOW_CONSEQUENCE | OUTPUT_GENERATED | Canonical | No | CATALOG_ONLY |
 | home-timeline | Home Timeline | home | `/dashboard/properties/[id]/timeline` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CATALOG_ONLY |
 | inspection-hub | Inspection Hub | home | `/dashboard/properties/[id]/inspection-hub` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
-| insurance-trend | Insurance Trend | home, ai | `/dashboard/properties/[id]/tools/insurance-trend` | Verified | SAVE_OPTIMIZE | BETA | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| insurance-trend | Insurance Trend | home, ai | `/dashboard/properties/[id]/tools/insurance-trend` | Verified | SAVE_OPTIMIZE | BETA | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
 | material-specs | Material Specs | home | `/dashboard/properties/[id]/materials` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | modifications | Home Upgrades | ai | `/dashboard/modifications` | Verified | PLAN_BUDGET | BETA | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
 | mortgage-refinance-radar | Mortgage Refinance Radar | home, ai | `/dashboard/properties/[id]/tools/mortgage-refinance-radar` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
@@ -66,7 +66,7 @@
 | quote-comparison | Quote Comparison | home, ai | `/dashboard/properties/[id]/tools/quote-comparison` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | WORKFLOW_ONLY |
 | replace-repair | Repair vs Replace | ai | `/dashboard/replace-repair` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | No | CATALOG_ONLY |
 | reserve-fund | Reserve Fund Planner | home | `/dashboard/properties/[id]/tools/reserve-fund` | Verified | PLAN_BUDGET | ACTIVE | MATERIAL_FINANCIAL | PLAN_CREATED | Canonical | Yes | CATALOG_ONLY |
-| risk-premium-optimizer | Risk Optimizer | ai | `/dashboard/risk-premium-optimizer` | Verified | SAVE_OPTIMIZE | ACTIVE | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | No | CATALOG_ONLY |
+| risk-premium-optimizer | Risk Optimizer | ai | `/dashboard/risk-premium-optimizer` | Verified | SAVE_OPTIMIZE | BETA | REGULATED_COVERAGE | OUTPUT_GENERATED | Canonical | No | CATALOG_ONLY |
 | sell-hold-rent | Sell / Hold / Rent | home, ai | `/dashboard/properties/[id]/tools/sell-hold-rent` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | seller-prep | Seller Prep | home | `/dashboard/properties/[id]/seller-prep` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | service-price-radar | Service Price Radar | home, ai | `/dashboard/properties/[id]/tools/service-price-radar` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |

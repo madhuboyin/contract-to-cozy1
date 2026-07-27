@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ChevronDown, Sparkles, TrendingDown, TrendingUp, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Sparkles, TrendingUp, ShieldCheck } from 'lucide-react';
 
 import MultiLineChart from './MultiLineChart';
 import { getInsuranceTrend, InsuranceCostTrendDTO } from './insuranceTrendApi';
@@ -85,8 +85,8 @@ export default function InsuranceTrendClient() {
       return {
         x: ['—', '—'],
         series: [
-          { key: 'premium', label: 'Your premium', values: [0, 0], opacity: 1, strokeWidth: 3 },
-          { key: 'state', label: 'Local average', values: [0, 0], opacity: 0.4, dash: '6 5', strokeWidth: 1.5 },
+          { key: 'premium', label: 'Modeled home estimate', values: [0, 0], opacity: 1, strokeWidth: 3 },
+          { key: 'state', label: 'Modeled state baseline', values: [0, 0], opacity: 0.4, dash: '6 5', strokeWidth: 1.5 },
         ],
       };
     }
@@ -94,15 +94,15 @@ export default function InsuranceTrendClient() {
     return {
       x: slice.map((h) => String(h.year)),
       series: [
-        { key: 'premium', label: 'Your premium', values: slice.map((h) => h.annualPremium), opacity: 1, strokeWidth: 3 },
-        { key: 'state', label: 'Local average', values: slice.map((h) => h.stateAvgAnnual), opacity: 0.4, dash: '6 5', strokeWidth: 1.5 },
+        { key: 'premium', label: 'Modeled home estimate', values: slice.map((h) => h.annualPremium), opacity: 1, strokeWidth: 3 },
+        { key: 'state', label: 'Modeled state baseline', values: slice.map((h) => h.stateAvgAnnual), opacity: 0.4, dash: '6 5', strokeWidth: 1.5 },
       ],
     };
   }, [data, trendYears]);
 
   // Derived values
   const deltaNow = data?.current?.deltaVsStateNow ?? 0;
-  const isOverpaying = deltaNow > 100;
+  const isAboveModeledBaseline = deltaNow > 100;
   const allDrivers = data?.drivers ?? [];
   const visibleDrivers = showAllDrivers ? allDrivers : allDrivers.slice(0, 3);
 
@@ -188,18 +188,16 @@ export default function InsuranceTrendClient() {
             {/* Left column — headline, description, chips, horizontal CTA row */}
             <div className="space-y-3.5">
               <h2 className="text-lg font-semibold leading-snug text-slate-900 dark:text-slate-100 md:text-[1.25rem]">
-                {isOverpaying
-                  ? `You may be paying ${money(deltaNow)} more than similar homes`
+                {isAboveModeledBaseline
+                  ? `The modeled estimate is ${money(deltaNow)} above its state baseline`
                   : deltaNow <= 0
-                  ? `Your premium is ${money(Math.abs(deltaNow))} below the local average`
-                  : `Your premium is close to the local average`
+                  ? `The modeled estimate is ${money(Math.abs(deltaNow))} below its state baseline`
+                  : `The modeled estimate is close to its state baseline`
                 }
               </h2>
               <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                {isOverpaying
-                  ? `Your estimated premium is above the local average for ${data.input?.state ?? 'your area'}. Comparing coverage options now gives you leverage before renewal.`
-                  : `A healthy position. Review coverage limits at renewal to make sure protection keeps pace with your home's current value.`
-                }
+                This is regional context generated from property and state assumptions. It is not a
+                quote, a coverage-equivalent comparison, or evidence of what you paid.
               </p>
               {/* Chips */}
               <div className="flex flex-wrap gap-2">
@@ -210,44 +208,29 @@ export default function InsuranceTrendClient() {
                 <span className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                   {confidenceText}
                 </span>
-                {isOverpaying && (
-                  <span className="inline-flex items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300">
-                    Potential savings: 10–15%
-                  </span>
-                )}
               </div>
               {/* Horizontal CTA row */}
               <div className="flex flex-wrap items-center gap-3 pt-0.5">
                 <a
-                  href="#"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="#why-costs"
                   className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(15,23,42,0.20)] transition-all hover:-translate-y-px hover:bg-slate-700 hover:shadow-[0_4px_14px_rgba(15,23,42,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
                 >
-                  Compare Quotes
+                  Review modeled factors
                 </a>
-                {isOverpaying && (
-                  <a
-                    href="#why-costs"
-                    className="text-sm font-medium text-slate-500 underline-offset-2 transition-colors hover:text-slate-800 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
-                  >
-                    Why costs are rising →
-                  </a>
-                )}
               </div>
             </div>
 
             {/* Right column — supporting panel, desktop only */}
-            {isOverpaying ? (
-              <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-emerald-200/60 lg:bg-emerald-50/40 lg:px-5 lg:py-5 dark:lg:border-emerald-700/40 dark:lg:bg-emerald-950/20">
+            {isAboveModeledBaseline ? (
+              <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-amber-200/60 lg:bg-amber-50/40 lg:px-5 lg:py-5 dark:lg:border-amber-700/40 dark:lg:bg-amber-950/20">
                 <div className="text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
-                  Potential savings
+                  Modeled difference
                 </div>
-                <div className="mt-1.5 text-[2rem] font-bold leading-none text-slate-800 dark:text-slate-200">
-                  10–15%
+                <div className="mt-1.5 text-[1.75rem] font-semibold leading-none tabular-nums text-amber-800 dark:text-amber-300">
+                  {money(deltaNow)} <span className="text-base font-medium">above</span>
                 </div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  by comparing carriers
+                  not an observed policy cost
                 </div>
               </div>
             ) : (
@@ -261,10 +244,10 @@ export default function InsuranceTrendClient() {
                 <div className="mt-4 border-t border-emerald-200/50 pt-4 dark:border-emerald-700/30">
                   <div className="flex items-center gap-1.5">
                     <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Well-positioned</span>
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Modeled below baseline</span>
                   </div>
                   <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                    Below the local average
+                    Not a coverage or price verdict
                   </div>
                 </div>
               </div>
@@ -281,7 +264,7 @@ export default function InsuranceTrendClient() {
 
           {/* Card 1 — Estimated premium */}
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
-            <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Your estimated premium</div>
+            <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Modeled annual estimate</div>
             <div className="mt-2 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums text-slate-900 dark:text-slate-100">
               {data ? money(data.current?.insuranceAnnualNow) : <span className="text-slate-200 dark:text-slate-700">—</span>}
             </div>
@@ -317,7 +300,7 @@ export default function InsuranceTrendClient() {
               : 'border-emerald-200/80 bg-emerald-50/50 dark:border-emerald-800/50 dark:bg-emerald-950/25'
           }`}>
             <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
-              {deltaNow > 0 ? 'Extra vs local average' : 'Under local average by'}
+              {deltaNow > 0 ? 'Modeled difference above baseline' : 'Modeled difference below baseline'}
             </div>
             <div className={`mt-2 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums ${
               deltaNow > 0
@@ -329,7 +312,7 @@ export default function InsuranceTrendClient() {
             <div className={`mt-2.5 text-xs font-medium ${
               deltaNow > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
             }`}>
-              {deltaNow > 0 ? '↑ above local average' : '↓ below local average'}
+              {deltaNow > 0 ? '↑ modeled above baseline' : '↓ modeled below baseline'}
             </div>
           </div>
         </div>
@@ -339,7 +322,7 @@ export default function InsuranceTrendClient() {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Premium trend vs local average
+                Modeled regional trend
               </h3>
               {data?.input?.addressLabel && (
                 <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{data.input.addressLabel}</p>
@@ -374,9 +357,9 @@ export default function InsuranceTrendClient() {
             <MultiLineChart
               xLabels={chartModel.x}
               series={chartModel.series}
-              ariaLabel="Insurance premium trend vs local average chart"
+              ariaLabel="Modeled insurance cost trend and state baseline chart"
               gapFill
-              annotation={isOverpaying && deltaNow > 0 ? `+${money(deltaNow)} vs local avg` : undefined}
+              annotation={isAboveModeledBaseline && deltaNow > 0 ? `+${money(deltaNow)} vs modeled baseline` : undefined}
             />
           </div>
 
@@ -384,13 +367,13 @@ export default function InsuranceTrendClient() {
           <div className="mt-4 flex flex-wrap items-end justify-between gap-2 border-t border-slate-100/80 pt-4 dark:border-slate-700/40">
             {data?.rollup?.cagrPremium != null && data?.rollup?.cagrStateAvg != null && (
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                Your growth:{' '}
+                Modeled home growth:{' '}
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{pct(data.rollup.cagrPremium)}/yr</span>
                 {' · '}
-                Local avg:{' '}
+                Modeled state growth:{' '}
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{pct(data.rollup.cagrStateAvg)}/yr</span>
                 {data.rollup.cagrPremium > data.rollup.cagrStateAvg && (
-                  <span className="ml-1.5 text-amber-600 dark:text-amber-400">· Growing faster than local</span>
+                  <span className="ml-1.5 text-amber-600 dark:text-amber-400">· Modeled faster than baseline</span>
                 )}
               </p>
             )}
@@ -404,7 +387,7 @@ export default function InsuranceTrendClient() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_10px_24px_rgba(15,23,42,0.10)] dark:border-slate-700/70 dark:bg-slate-900/60">
             <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
-              Total paid over {trendYears}y
+              Modeled home total · {trendYears}y
             </div>
             <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-900 dark:text-slate-100">
               {money(data?.rollup?.totalPremiumPaid)}
@@ -413,7 +396,7 @@ export default function InsuranceTrendClient() {
 
           <div className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_10px_24px_rgba(15,23,42,0.10)] dark:border-slate-700/70 dark:bg-slate-900/60">
             <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
-              Typical local cost · {trendYears}y
+              Modeled state baseline · {trendYears}y
             </div>
             <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-900 dark:text-slate-100">
               {money(data?.rollup?.totalStateAvgPaid)}
@@ -427,11 +410,11 @@ export default function InsuranceTrendClient() {
           }`}>
             <div className="flex items-start justify-between gap-2">
               <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                Extra paid over {trendYears}y
+                Modeled cumulative difference · {trendYears}y
               </div>
               {(data?.rollup?.totalDeltaVsState ?? 0) > 0 && (
                 <span className="shrink-0 rounded-full border border-amber-200/70 bg-amber-100/80 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-700/50 dark:bg-amber-950/50 dark:text-amber-300">
-                  opportunity
+                  estimate
                 </span>
               )}
             </div>
@@ -444,7 +427,7 @@ export default function InsuranceTrendClient() {
             </div>
             {(data?.rollup?.totalDeltaVsState ?? 0) > 0 && (
               <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-                vs. paying the local average
+                not observed payments or savings
               </p>
             )}
           </div>
@@ -454,7 +437,7 @@ export default function InsuranceTrendClient() {
         {allDrivers.length > 0 && (
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              What&apos;s driving your premium
+              Factors used in this model
             </h3>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
               Local area factors for {data?.input?.state ?? '—'} · {data?.input?.zipCode ?? '—'}
@@ -481,18 +464,6 @@ export default function InsuranceTrendClient() {
                   <p className="mt-2 text-xs leading-[1.6] text-slate-600 dark:text-slate-300">
                     {d.explanation}
                   </p>
-                  {d.impact === 'HIGH' && (
-                    <div className="mt-2.5 border-t border-slate-100 pt-2.5 dark:border-slate-700/50">
-                      <a
-                        href="#"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[11px] font-medium text-teal-700 underline-offset-2 transition-colors hover:text-teal-900 hover:underline dark:text-teal-400 dark:hover:text-teal-300"
-                      >
-                        Compare coverage options →
-                      </a>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -515,48 +486,35 @@ export default function InsuranceTrendClient() {
       {data && (
         <section aria-label="Your next step">
           <div className={`rounded-2xl border p-6 ${
-            isOverpaying
+            isAboveModeledBaseline
               ? 'border-teal-200/70 bg-gradient-to-br from-teal-50/60 to-white dark:border-teal-800/50 dark:from-teal-950/30 dark:to-slate-900/60'
               : 'border-emerald-200/70 bg-gradient-to-br from-emerald-50/60 to-white dark:border-emerald-800/50 dark:from-emerald-950/30 dark:to-slate-900/60'
           }`}>
             <div className="flex items-start gap-3">
               <span className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                isOverpaying
+                isAboveModeledBaseline
                   ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
                   : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
               }`}>
-                {isOverpaying
-                  ? <TrendingDown className="h-5 w-5" />
-                  : <ShieldCheck className="h-5 w-5" />
-                }
+                <ShieldCheck className="h-5 w-5" />
               </span>
               <div className="min-w-0">
                 <h3 className="text-lg font-bold leading-snug text-slate-900 dark:text-slate-100">
-                  {isOverpaying
-                    ? 'A 10–15% reduction may be within reach'
-                    : 'Your premium is well-positioned'}
+                  Review the controlling policy before making a cost or coverage decision
                 </h3>
               </div>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-              {isOverpaying
-                ? 'Switching carriers or adjusting your deductible can often close the gap against the local average — the sooner you compare, the more leverage you have before your next renewal.'
-                : "You're at or below the local average — a strong position. Review your coverage limits annually to make sure protection keeps pace with your home's current value."}
+              Regional models cannot determine whether a policy is fairly priced or whether options
+              provide equivalent protection. Confirm premium, deductible, limits, exclusions, and
+              endorsements from policy documents or with a licensed insurance professional.
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-all hover:-translate-y-px hover:bg-slate-700 hover:shadow-[0_6px_18px_rgba(0,0,0,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
-              >
-                Compare Quotes
-              </a>
               <a
                 href={`/dashboard/properties/${propertyId}/tools/true-cost`}
                 className="inline-flex items-center justify-center rounded-xl border border-slate-200/80 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-all hover:-translate-y-px hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300"
               >
-                {isOverpaying ? 'View full ownership cost →' : 'Review savings opportunities →'}
+                View full ownership cost →
               </a>
             </div>
           </div>

@@ -209,14 +209,6 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     triggerFamily: 'FINANCIAL_PRESSURE_ACTIVE',
     reason: 'Current financial pressure may compound into longer-term ownership costs.',
   },
-  'coverage-options': {
-    sourceKinds: ['COVERAGE'],
-    triggerFamily: 'COVERAGE_GAPS_PRESENT',
-    reason: 'Confirmed coverage gaps make a coverage comparison useful now.',
-    readinessRequirements: [
-      { kind: 'COVERAGE_GAPS', minimum: 1, reason: 'Identify at least one coverage gap.' },
-    ],
-  },
   diy: {
     sourceKinds: ['MAINTENANCE', 'PROJECT'],
     triggerFamily: 'LOW_RISK_DIY_ELIGIBLE',
@@ -283,11 +275,6 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     recommendationDefinitionCodes: ['INSPECTION_DOCUMENT_AVAILABLE'],
     requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'DOCUMENT', 'ISSUE', 'JOURNEY'],
-  },
-  'insurance-trend': {
-    sourceKinds: ['COVERAGE', 'GUIDANCE'],
-    triggerFamily: 'INSURANCE_PRESSURE_ACTIVE',
-    reason: 'Insurance or renewal signals indicate premium pressure worth reviewing.',
   },
   'material-specs': {
     sourceKinds: ['PROJECT', 'MAINTENANCE'],

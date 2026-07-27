@@ -197,17 +197,6 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
     return showAllDrivers ? analysis.premiumDrivers : analysis.premiumDrivers.slice(0, 3);
   }, [analysis, showAllDrivers]);
 
-  const savingsLabel = useMemo(() => {
-    if (!analysis) return '—';
-    if (analysis.estimatedSavingsMin == null && analysis.estimatedSavingsMax == null) {
-      return '—';
-    }
-    if (analysis.estimatedSavingsMin != null && analysis.estimatedSavingsMax != null) {
-      return `${money(analysis.estimatedSavingsMin)} - ${money(analysis.estimatedSavingsMax)}`;
-    }
-    return money(analysis.estimatedSavingsMax ?? analysis.estimatedSavingsMin ?? null);
-  }, [analysis]);
-
   if (loading) {
     return (
       <div className="rounded-2xl border border-black/10 bg-white p-8 flex items-center justify-center gap-2">
@@ -334,11 +323,11 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           )}
 
           <ResultHeroCard
-            eyebrow="Optimizer Result"
-            title="Risk-to-Premium Optimizer"
-            value={savingsLabel}
+            eyebrow="Loss-prevention review"
+            title="Risk reduction plan"
+            value={`${analysis.recommendations.length} actions`}
             status={<StatusChip tone={statusChipTone(analysis.status)}>{analysis.status}</StatusChip>}
-            summary={analysis.summary || 'No summary available yet.'}
+            summary="Review possible loss-prevention actions. Any premium eligibility or change must be confirmed by the carrier and is not guaranteed."
             highlights={[
               `Confidence: ${analysis.confidence}`,
               `Annual premium input: ${money(analysis.inputs.annualPremium)}`,
@@ -368,7 +357,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           <ReadOnlySummaryBlock
             columns={2}
             items={[
-              { label: 'Estimated savings range', value: savingsLabel, emphasize: true },
+              { label: 'Recommended actions', value: String(analysis.recommendations.length), emphasize: true },
               { label: 'Confidence', value: analysis.confidence },
               { label: 'Annual premium input', value: money(analysis.inputs.annualPremium) },
               { label: 'Computed', value: compactDate(analysis.computedAt) },
@@ -443,13 +432,9 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                   </div>
                   <div className="text-xs text-gray-600 mt-1">{recommendation.detail}</div>
                   <div className="text-xs text-gray-500 mt-2">{recommendation.whyThisMatters}</div>
-                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-gray-600">
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600">
                     <div>Type: {recommendation.type}</div>
                     <div>Cost: {money(recommendation.estimatedCost)}</div>
-                    <div>
-                      Savings: {money(recommendation.estimatedSavingsMin)} -{' '}
-                      {money(recommendation.estimatedSavingsMax)}
-                    </div>
                   </div>
                 </div>
               ))}
@@ -483,7 +468,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                       </div>
                       <div className="text-xs text-gray-600 mt-1">{item.why}</div>
                       <div className="text-xs text-gray-500 mt-2">
-                        Cost: {money(item.estimatedCost)} • Savings: {money(item.estimatedSavingsMin)} - {money(item.estimatedSavingsMax)}
+                        Estimated project cost: {money(item.estimatedCost)}
                       </div>
                     </div>
 

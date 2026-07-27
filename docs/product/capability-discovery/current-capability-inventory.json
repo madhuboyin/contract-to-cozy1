@@ -20,10 +20,10 @@
     "distinctCapabilities": 52,
     "routeVerified": 52,
     "canonicalRelationshipCoverage": 32,
-    "contextualCapabilities": 24,
+    "contextualCapabilities": 22,
     "workflowOnly": 1,
     "lifecycleCanonicalized": 52,
-    "catalogOnlyCapabilities": 27
+    "catalogOnlyCapabilities": 29
   },
   "capabilities": [
     {
@@ -186,7 +186,7 @@
       "workflowOnly": false,
       "outcomeCategory": "SAVE_OPTIMIZE",
       "rolloutKey": "COVERAGE_INTELLIGENCE",
-      "releaseStage": "ACTIVE",
+      "releaseStage": "BETA",
       "safetyTier": "REGULATED_COVERAGE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
@@ -204,12 +204,12 @@
       "workflowOnly": false,
       "outcomeCategory": "SAVE_OPTIMIZE",
       "rolloutKey": "COVERAGE_OPTIONS",
-      "releaseStage": "ACTIVE",
+      "releaseStage": "BETA",
       "safetyTier": "REGULATED_COVERAGE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "diy",
@@ -579,7 +579,7 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "material-specs",
@@ -851,7 +851,7 @@
       "workflowOnly": false,
       "outcomeCategory": "SAVE_OPTIMIZE",
       "rolloutKey": "RISK_PREMIUM_OPTIMIZER",
-      "releaseStage": "ACTIVE",
+      "releaseStage": "BETA",
       "safetyTier": "REGULATED_COVERAGE",
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,

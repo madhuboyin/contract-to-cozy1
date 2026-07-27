@@ -705,10 +705,10 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
         ...lowConsequenceGovernance(), safetyTier: 'REGULATED_COVERAGE',
         professionalBoundary: 'Coverage guidance is educational and does not replace advice from a licensed insurance professional or the controlling policy language.',
         jurisdictionCheck: {
-          status: 'VERIFIED',
+          status: 'UNKNOWN',
           jurisdiction: analysis.property.state,
           checkedAt: analysis.computedAt.toISOString(),
-          source: 'Coverage analysis property jurisdiction',
+          source: 'No reviewed jurisdiction rule source is attached to this analysis',
         },
       },
       primaryCta: { kind: 'COMPARE', label: 'Review coverage', href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence` },

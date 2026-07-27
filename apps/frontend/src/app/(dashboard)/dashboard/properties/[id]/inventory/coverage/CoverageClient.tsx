@@ -9,7 +9,6 @@ import { api } from '@/lib/api/client';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { formatEnumLabel } from '@/lib/utils/formatters';
-import InsuranceQuoteModal from '@/app/(dashboard)/dashboard/components/coverage/InsuranceQuoteModal';
 import WhatsCoveredModal from '@/app/(dashboard)/dashboard/components/coverage/WhatsCoveredModal';
 import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms, waiveCoverage } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
@@ -64,7 +63,6 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
     guidanceStepKey === 'activate_warranty_coverage' ||
     guidanceStepKey === 'bind_policy_and_record_documents';
 
-  const [quoteOpen, setQuoteOpen] = React.useState(false);
   const [coveredOpen, setCoveredOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<any>(null);
   const [editingItem, setEditingItem] = React.useState<InventoryItem | null>(null);
@@ -234,7 +232,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           <MobilePageIntro
             eyebrow="Inventory"
             title="Coverage"
-            subtitle="Review high-value items missing warranty or insurance coverage."
+            subtitle="Review high-value items with missing or incomplete protection records."
           />
         </div>
       }
@@ -243,7 +241,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           title="Coverage Gaps"
           value={counts.total || 0}
           status={<StatusChip tone={(counts.total || 0) > 0 ? 'elevated' : 'good'}>{(counts.NO_COVERAGE || 0) > 0 ? 'Needs action' : 'Stable'}</StatusChip>}
-          summary={`${counts.NO_COVERAGE || 0} uncovered • ${
+          summary={`${counts.NO_COVERAGE || 0} missing records • ${
             (counts.WARRANTY_ONLY || 0) +
             (counts.INSURANCE_ONLY || 0) +
             (counts.EXPIRED_WARRANTY || 0) +
@@ -326,8 +324,8 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         <>
           {gaps.length === 0 ? (
             <EmptyStateCard
-              title="No high-value coverage gaps"
-              description="All tracked high-value items currently have coverage or no gaps were detected."
+              title="No high-value record questions"
+              description="No missing protection records were detected for tracked high-value items. This does not confirm what a policy covers."
             />
           ) : (
         <ScenarioInputCard title="Priority Items" subtitle="Resolve uncovered or partially covered inventory first.">
@@ -395,15 +393,6 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
                       <button
                         onClick={() => {
                           setSelected(gap);
-                          setQuoteOpen(true);
-                        }}
-                        className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
-                      >
-                        Quotes
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelected(gap);
                           setCoveredOpen(true);
                         }}
                         className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
@@ -467,24 +456,6 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           )}
         </>
       )}
-
-      <InsuranceQuoteModal
-        open={quoteOpen}
-        onClose={() => setQuoteOpen(false)}
-        apiBase={apiBase}
-        propertyId={propertyId}
-        gapType={selected?.gapType}
-        inventoryItem={
-          selected
-            ? {
-                id: selected.inventoryItemId,
-                name: selected.itemName,
-                replacementCostCents: selected.exposureCents,
-                currency: selected.currency,
-              }
-            : undefined
-        }
-      />
 
       {selected?.inventoryItemId ? (
         <WhatsCoveredModal

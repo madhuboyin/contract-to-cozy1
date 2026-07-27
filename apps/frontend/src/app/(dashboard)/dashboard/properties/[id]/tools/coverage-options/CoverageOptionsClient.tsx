@@ -132,8 +132,8 @@ export default function CoverageOptionsClient() {
       : gaps.length === 0
         ? {
             kind: 'success' as const,
-            title: 'No coverage gaps found',
-            description: 'All tracked items currently have coverage. No policy comparisons are needed right now.',
+            title: 'No missing item protection records found',
+            description: 'The tracked records do not raise an item-level question. This does not confirm what an insurance policy covers.',
           }
         : undefined;
 
@@ -149,32 +149,6 @@ export default function CoverageOptionsClient() {
       }),
     [guidanceJourneyId, guidanceStepKey, propertyId]
   );
-
-  React.useEffect(() => {
-    if (!propertyId || !guidanceJourneyId || proofCompleted) return;
-    if (Number(totalGaps) > 0) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        await recordGuidanceToolStatus(propertyId, {
-          stepKey: guidanceStepKey,
-          journeyId: guidanceJourneyId,
-          sourceToolKey: 'coverage-options',
-          status: 'COMPLETED',
-          producedData: {
-            proofType: 'coverage_gap_snapshot',
-            proofId: `coverage-options:${propertyId}`,
-            totalCoverageGaps: Number(totalGaps),
-            capturedAt: new Date().toISOString(),
-          },
-        });
-        if (!cancelled) setProofCompleted(true);
-      } catch (error) {
-        console.error('[CoverageOptions] failed to auto-complete proof-backed step', error);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [guidanceJourneyId, guidanceStepKey, proofCompleted, propertyId, totalGaps]);
 
   // Only surface guidance context when there are gaps to resolve or the user
   // arrived via an explicit guidance journey link. Avoids contradicting a clean
@@ -242,14 +216,14 @@ export default function CoverageOptionsClient() {
           {/* Fix 6: Priority hero already shows the count when there's only 1 gap */}
           {totalGaps !== 1 && (
             <ResultHeroCard
-              title="Open Coverage Gaps"
+              title="Open Protection Record Questions"
               value={totalGaps}
               status={
                 <StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>
-                  {totalGaps > 0 ? 'Review options' : 'Covered'}
+                  {totalGaps > 0 ? 'Review records' : 'No questions found'}
                 </StatusChip>
               }
-              summary={`${counts.NO_COVERAGE ?? 0} uncovered · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} partially covered`}
+              summary={`${counts.NO_COVERAGE ?? 0} missing records · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} incomplete records`}
             />
           )}
 

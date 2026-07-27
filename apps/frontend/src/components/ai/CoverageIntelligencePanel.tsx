@@ -81,6 +81,12 @@ function humanizeEnum(value?: string | null) {
     .join(' ');
 }
 
+function insuranceReviewState(analysis: CoverageAnalysisDTO): string {
+  return analysis.insurance.flags.length > 0
+    ? 'Questions to review'
+    : 'Limited record review';
+}
+
 function normalizeOverrides(overrides: CoverageAnalysisOverrides): CoverageAnalysisOverrides {
   const parsed: CoverageAnalysisOverrides = {
     riskTolerance: overrides.riskTolerance ?? 'MEDIUM',
@@ -604,7 +610,7 @@ export default function CoverageIntelligencePanel({
               summary={analysis.summary || 'No summary available.'}
               highlights={[
                 `Confidence: ${analysis.confidence}`,
-                `Insurance verdict: ${humanizeEnum(analysis.insuranceVerdict)}`,
+                `Insurance review: ${insuranceReviewState(analysis)}`,
                 `Warranty verdict: ${humanizeEnum(analysis.warrantyVerdict)}`,
               ]}
               className={verdictHeroClass(analysis.overallVerdict)}
@@ -662,7 +668,7 @@ export default function CoverageIntelligencePanel({
               items={[
                 { label: 'Overall verdict', value: humanizeEnum(analysis.overallVerdict), emphasize: true },
                 { label: 'Impact level', value: humanizeEnum(analysis.impactLevel) },
-                { label: 'Insurance verdict', value: humanizeEnum(analysis.insuranceVerdict) },
+                { label: 'Insurance review', value: insuranceReviewState(analysis) },
                 { label: 'Warranty verdict', value: humanizeEnum(analysis.warrantyVerdict) },
                 { label: 'Computed', value: compactDate(analysis.computedAt) },
                 { label: 'Guidance', value: 'Educational only; not carrier advice.' },
@@ -697,7 +703,9 @@ export default function CoverageIntelligencePanel({
                 <div className="mb-2 text-sm font-medium text-gray-900">Flags</div>
                 <div className="space-y-2">
                   {analysis.insurance.flags.length === 0 && (
-                    <div className="text-sm text-gray-500">No critical flags detected.</div>
+                    <div className="text-sm text-gray-500">
+                      No questions were generated from the limited record inputs. This does not confirm coverage.
+                    </div>
                   )}
                   {analysis.insurance.flags.map((flag) => (
                     <div key={flag.code} className="rounded-xl border border-gray-200 p-3 text-sm">
@@ -972,7 +980,7 @@ export default function CoverageIntelligencePanel({
           const risk = getBiggestRisk(analysis);
           const metricItems = [
             { label: 'Overall verdict', value: humanizeEnum(analysis.overallVerdict) },
-            { label: 'Insurance', value: humanizeEnum(analysis.insuranceVerdict) },
+            { label: 'Insurance review', value: insuranceReviewState(analysis) },
             { label: 'Warranty', value: humanizeEnum(analysis.warrantyVerdict) },
             { label: 'Confidence', value: humanizeEnum(analysis.confidence) },
             { label: 'Impact level', value: humanizeEnum(analysis.impactLevel) },
@@ -1378,17 +1386,17 @@ export default function CoverageIntelligencePanel({
                 )}
               </div>
 
-              {/* Recommended Protection */}
+              {/* Topics to review */}
               <div className="mt-5">
                 <div className="mb-3 flex items-center gap-2">
                   <Shield className="h-3.5 w-3.5 text-slate-400" />
                   <p className="text-[11px] font-semibold tracking-normal text-slate-400">
-                    Recommended Protection
+                    Topics to Review
                   </p>
                 </div>
                 {analysis.insurance.recommendedAddOns.length === 0 ? (
                   <p className="pl-5 text-sm text-slate-400">
-                    No add-ons flagged for the current profile.
+                    No topics were generated from the current limited signals. This does not confirm coverage.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -1425,6 +1433,10 @@ export default function CoverageIntelligencePanel({
                   value={money(analysis.insurance.inputsUsed.cashBufferUsd)}
                 />
               </div>
+              <p className="mt-4 text-xs leading-relaxed text-slate-500">
+                Educational record review only. Confirm coverage, exclusions, limits, and eligibility
+                using the controlling policy language or a licensed insurance professional.
+              </p>
             </section>
           </div>
         )}

@@ -13,13 +13,11 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
       'break-even',
       'capital-timeline',
       'cost-growth',
-      'coverage-options',
       'hidden-asset-finder',
       'home-digital-twin',
       'home-event-radar',
       'home-habit-coach',
       'home-risk-replay',
-      'insurance-trend',
       'neighborhood-change-radar',
       'service-price-radar',
       'status-board',
@@ -154,7 +152,7 @@ readonly CapabilityGoldenRankingExpectation[] = [
   }),
   expectation({
     fixtureId: 'sparse-new-home',
-    ineligibleCapabilityId: 'coverage-options',
+    ineligibleCapabilityId: 'seller-prep',
     duplicateCapabilityId: 'home-digital-twin',
     expectedTopCapabilityIds: ['hidden-asset-finder', 'home-digital-twin'],
     expectedReasonCodes: {
@@ -194,7 +192,7 @@ readonly CapabilityGoldenRankingExpectation[] = [
   }),
   expectation({
     fixtureId: 'minor-inspection-findings',
-    ineligibleCapabilityId: 'coverage-options',
+    ineligibleCapabilityId: 'home-digital-will',
     duplicateCapabilityId: 'diy',
     expectedTopCapabilityIds: [
       'diy',

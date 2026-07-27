@@ -169,7 +169,8 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
 
 const BETA_TOOL_IDS = new Set([
   'emergency', 'documents', 'budget', 'climate', 'modifications', 'energy',
-  'insurance-trend', 'neighborhood-change-radar',
+  'coverage-intelligence', 'coverage-options', 'insurance-trend',
+  'risk-premium-optimizer', 'neighborhood-change-radar',
 ]);
 
 const MATERIAL_TOOL_IDS = new Set([
