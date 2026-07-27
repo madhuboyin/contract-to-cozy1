@@ -36,6 +36,9 @@ Run from the repository root:
 cd apps/backend
 npm run test:coverage-launch-gate
 npm run drill:coverage-launch
+#
+# Against a dedicated staging test property and short-lived test-user token:
+npm run preflight:coverage-load
 npx tsc --noEmit
 npx prisma validate --schema=prisma/schema.prisma
 
@@ -54,6 +57,12 @@ containment, partner disablement, incident blocking, configuration restoration,
 and a bounded 10,000-iteration evaluator burst. This local deterministic drill
 does not replace the production-like concurrency test required before
 promotion.
+
+The coverage load preflight exercises only authenticated read-only endpoints
+and emits a machine-readable latency, error, response-contract, and peak
+concurrency report. It refuses known production hosts, requires the configured
+allowlisted hostname to match exactly, and requires HTTPS for staging. The
+report excludes authorization values, response bodies, and the property ID.
 
 Only after all commands pass for the deployed revision may CI/deployment set:
 
@@ -191,6 +200,30 @@ Before promotion, test at expected peak concurrency plus safety margin:
 Record test revision, environment, load profile, latency/error results, and
 owner in the release evidence. A failed or unrecorded test leaves the technical
 evidence variable unset.
+
+Run the bounded read-only preflight from `apps/backend` with a dedicated test
+user and property:
+
+```bash
+COVERAGE_LOAD_BASE_URL=https://coverage.staging.example.com \
+COVERAGE_LOAD_ALLOWED_HOST=coverage.staging.example.com \
+COVERAGE_LOAD_TARGET_CLASS=STAGING \
+COVERAGE_LOAD_PROPERTY_ID=<dedicated-test-property-id> \
+COVERAGE_LOAD_ACCESS_TOKEN=<short-lived-test-user-token> \
+COVERAGE_LOAD_REQUESTS=300 \
+COVERAGE_LOAD_CONCURRENCY=10 \
+COVERAGE_LOAD_TIMEOUT_MS=5000 \
+COVERAGE_LOAD_MAX_P95_MS=1500 \
+COVERAGE_LOAD_MAX_ERROR_RATE=0 \
+npm run preflight:coverage-load
+```
+
+Store the JSON output with the release evidence; do not commit it if the target
+hostname is considered internal. A nonzero exit, contract error, timeout, HTTP
+error, network error, exceeded p95 threshold, or exceeded error-rate threshold
+blocks promotion. This preflight does not exercise mutations, so it complements
+rather than replaces the decision/handoff concurrency and idempotency checks
+above.
 
 Coverage decision persistence uses an atomic `DRAFT` → `DECIDED` claim.
 Identical retries return the recorded decision as an idempotent replay and do
