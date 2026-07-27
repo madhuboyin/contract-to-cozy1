@@ -192,3 +192,18 @@ test('missing Radar notification decision table is bootstrapped before the full 
     /SELECT 1 FROM "property_radar_notification_decisions"[\s\S]*CREATE TABLE IF NOT EXISTS "property_radar_notification_decisions"[\s\S]*prisma db push[\s\S]*schema=\/config\/schema\.prisma/,
   );
 });
+
+test('legacy Radar channel enum is reconciled only after the new usage column exists', () => {
+  assert.match(
+    scriptSource,
+    /pg_type WHERE typname = \\\$channel\\\$RadarNotificationChannel\\\$channel\\\$/,
+  );
+  assert.match(
+    scriptSource,
+    /ADD COLUMN IF NOT EXISTS "eligibleChannels" "RadarNotificationChannel"\[\] NOT NULL DEFAULT ARRAY\[\]::"RadarNotificationChannel"\[\]/,
+  );
+  assert.match(
+    scriptSource,
+    /CREATE TABLE IF NOT EXISTS "property_radar_notification_decisions"[\s\S]*ADD COLUMN IF NOT EXISTS "eligibleChannels"[\s\S]*prisma db push/,
+  );
+});
