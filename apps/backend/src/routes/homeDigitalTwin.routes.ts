@@ -7,11 +7,14 @@ import {
   initTwinBodySchema,
   createScenarioBodySchema,
   updateScenarioBodySchema,
+  confirmComponentBodySchema,
 } from '../validators/homeDigitalTwin.validators';
 import {
   getTwin,
   initTwin,
   refreshTwin,
+  getFactReadiness,
+  confirmComponent,
   getRecommendedScenarios,
   listScenarios,
   createScenario,
@@ -78,6 +81,50 @@ router.post(
   propertyAuthMiddleware,
   requireHouseholdRole('CONTRIBUTOR'),
   refreshTwin,
+);
+
+// ============================================================================
+// FACT READINESS (Home Record hub summary)
+// ============================================================================
+
+/**
+ * GET /api/properties/:propertyId/home-digital-twin/fact-readiness
+ *
+ * Lightweight summary for the Home Record hub: how many facts are known
+ * vs. need attention (conflicting, defaulted, or unknown), plus a bounded
+ * list of specific items — each with a homeowner-readable reason and a
+ * link to the existing surface that owns that fact (property edit, a
+ * specific inventory item, or the inventory list). Does not itself accept
+ * corrections; nothing here is a new place to edit data.
+ *
+ * Returns hasTwin=false (not a 404) when no twin exists yet — that's a
+ * normal state for a new property, not an error.
+ */
+router.get(
+  '/properties/:propertyId/home-digital-twin/fact-readiness',
+  propertyAuthMiddleware,
+  getFactReadiness,
+);
+
+/**
+ * PATCH /api/properties/:propertyId/home-digital-twin/components/:componentId
+ *
+ * Confirms (or un-confirms) a component's currently derived values as
+ * accurate. This is the "I reviewed this, it's correct" action — a
+ * confirmed component is left untouched by future rebuilds. It is not a
+ * value-correction API: to fix a wrong value, the homeowner still goes to
+ * the canonical source (property edit, inventory, ...), which the
+ * fact-readiness summary links to directly.
+ *
+ * Body:
+ *   isUserConfirmed  boolean (required)
+ */
+router.patch(
+  '/properties/:propertyId/home-digital-twin/components/:componentId',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(confirmComponentBodySchema),
+  confirmComponent,
 );
 
 // ============================================================================

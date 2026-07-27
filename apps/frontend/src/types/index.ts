@@ -3915,6 +3915,34 @@ export interface HomeDigitalTwinDTO {
   recentScenarios: HomeTwinScenarioDTO[];
 }
 
+/**
+ * A single fact needing homeowner attention on the Home Record hub —
+ * conflicting, defaulted, or unknown. correctionDestination links to the
+ * existing surface that owns this fact (property edit, a specific
+ * inventory item, or the inventory list); there is no separate correction
+ * UI to build.
+ */
+export interface HomeTwinFactReadinessItemDTO {
+  componentId: string;
+  componentType: HomeTwinComponentType;
+  componentLabel: string;
+  fieldName: string;
+  fieldLabel: string;
+  factState: HomeTwinFactState;
+  reason: string;
+  correctionDestination: string | null;
+  isConflict: boolean;
+}
+
+export interface HomeTwinFactReadinessSummaryDTO {
+  hasTwin: boolean;
+  knownFactCount: number;
+  needsAttentionCount: number;
+  confirmedComponentCount: number;
+  totalComponentCount: number;
+  items: HomeTwinFactReadinessItemDTO[];
+}
+
 export interface ScenarioSuggestionDTO {
   key: string;
   title: string;

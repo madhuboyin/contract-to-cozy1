@@ -5,11 +5,13 @@ import { APIError } from '../middleware/error.middleware';
 import { HomeDigitalTwinService } from '../services/homeDigitalTwin.service';
 import { HomeDigitalTwinScenarioService } from '../services/homeDigitalTwinScenario.service';
 import { HomeDigitalTwinRecommendationsService } from '../services/homeDigitalTwinRecommendations.service';
+import { HomeDigitalTwinFactReadinessService } from '../services/homeDigitalTwinFactReadiness.service';
 import { getPlanningContextEnvelope } from '../services/planningContext/context';
 
 const twinService = new HomeDigitalTwinService();
 const scenarioService = new HomeDigitalTwinScenarioService();
 const recommendationsService = new HomeDigitalTwinRecommendationsService();
+const factReadinessService = new HomeDigitalTwinFactReadinessService();
 
 // ============================================================================
 // TWIN ENDPOINTS
@@ -65,6 +67,42 @@ export async function refreshTwin(
     const { propertyId } = req.params;
     const twin = await twinService.refreshTwin(propertyId);
     res.json({ success: true, data: { twin } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ============================================================================
+// FACT READINESS (Home Record hub summary)
+// ============================================================================
+
+export async function getFactReadiness(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId } = req.params;
+    const summary = await factReadinessService.getSummary(propertyId);
+    res.json({ success: true, data: { summary } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function confirmComponent(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId, componentId } = req.params;
+    const component = await factReadinessService.setComponentConfirmed(
+      propertyId,
+      componentId,
+      req.body.isUserConfirmed,
+    );
+    res.json({ success: true, data: { component } });
   } catch (err) {
     next(err);
   }

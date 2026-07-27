@@ -67,6 +67,7 @@ import PlantAdvisorDashboardCard from './components/PlantAdvisorDashboardCard';
 import EnvironmentReportDashboardCard from './components/EnvironmentReportDashboardCard';
 import GazetteDashboardCard from './components/GazetteDashboardCard';
 import RefinanceRadarDashboardCard from './components/RefinanceRadarDashboardCard';
+import HomeRecordReadinessCard from './components/HomeRecordReadinessCard';
 import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner';
 import PropertyHubTemplate from './components/PropertyHubTemplate';
 import { HomeScoreReportCard } from '../../components/HomeScoreReportCard';
@@ -464,6 +465,8 @@ const PropertyOverview = ({ property }: { property: Property }) => {
             </div>
           </div>
         </MobileCard>
+
+        <HomeRecordReadinessCard propertyId={property.id} />
 
         <EnvironmentReportDashboardCard propertyId={property.id} />
 

@@ -176,6 +176,7 @@ type ProjectedFactSpec = {
   derivationMethod?: string | null;
   confidenceScore?: number | null;
   conflictGroupId?: string | null;
+  correctionDestination?: string | null;
 };
 
 /** A conflicted fact always needs homeowner review, regardless of source type. */
@@ -354,6 +355,46 @@ function replacementCostFact(params: {
   };
 }
 
+// Component types whose install-year-relevant fields have a dedicated
+// section in the property edit form (the "structure" subsection of
+// "Critical systems" — see edit/page.tsx). Other types either have no
+// dedicated field yet (ELECTRICAL, PLUMBING, FOUNDATION) or live elsewhere
+// (EXTERIOR — "exterior" section).
+const STRUCTURE_SECTION_TYPES = new Set<HomeTwinComponentType>(['HVAC', 'WATER_HEATER', 'ROOF']);
+
+/**
+ * Where a homeowner would go to correct this fact at its canonical source.
+ * Per the Slice 2 scope decision, this must point at an existing surface —
+ * property edit, a specific inventory item, or the inventory list — never a
+ * new correction UI. Returns null when no such surface exists yet (e.g.
+ * ELECTRICAL/PLUMBING/FOUNDATION install dates have no dedicated edit
+ * field) rather than link to something that won't actually help.
+ */
+function correctionDestinationFor(
+  componentType: HomeTwinComponentType,
+  fact: ProjectedFactSpec,
+  propertyId: string,
+): string | null {
+  if (fact.sourceType === 'INVENTORY' && fact.sourceRecordId) {
+    return `/dashboard/properties/${propertyId}/inventory/items/${fact.sourceRecordId}`;
+  }
+  if (fact.fieldName === 'replacementCostEstimate' && fact.factState === 'DEFAULT') {
+    // No inventory record backs this estimate — the fix is adding the item,
+    // not editing a field that doesn't exist yet.
+    return `/dashboard/properties/${propertyId}/inventory`;
+  }
+  if (STRUCTURE_SECTION_TYPES.has(componentType)) {
+    return `/dashboard/properties/${propertyId}/edit#structure`;
+  }
+  if (componentType === 'EXTERIOR') {
+    return `/dashboard/properties/${propertyId}/edit#exterior`;
+  }
+  // ELECTRICAL, PLUMBING, FOUNDATION: no dedicated field exists in the edit
+  // form yet. Point at the general edit page rather than fabricate an
+  // anchor that goes nowhere.
+  return `/dashboard/properties/${propertyId}/edit`;
+}
+
 // ============================================================================
 // COMPONENT SPEC (internal transfer object)
 // ============================================================================
@@ -472,7 +513,7 @@ export class HomeDigitalTwinBuilderService {
       }),
     ]);
 
-    const specs = this.deriveSpecs(property, inventoryItems, riskReport);
+    const specs = this.deriveSpecs(property, inventoryItems, riskReport, propertyId);
     const dependencyFingerprint = this.computeDependencyFingerprint(property, inventoryItems, riskReport);
 
     await prisma.$transaction(async (tx) => {
@@ -574,6 +615,7 @@ export class HomeDigitalTwinBuilderService {
           derivationMethod: fact.derivationMethod ?? null,
           confidenceScore: fact.confidenceScore ?? null,
           conflictGroupId: fact.conflictGroupId ?? null,
+          correctionDestination: fact.correctionDestination ?? null,
         },
         update: {
           valueNumeric: fact.valueNumeric ?? null,
@@ -588,6 +630,7 @@ export class HomeDigitalTwinBuilderService {
           derivationMethod: fact.derivationMethod ?? null,
           confidenceScore: fact.confidenceScore ?? null,
           conflictGroupId: fact.conflictGroupId ?? null,
+          correctionDestination: fact.correctionDestination ?? null,
         },
       });
     }
@@ -650,6 +693,7 @@ export class HomeDigitalTwinBuilderService {
     property: PropertyRow,
     inventoryItems: InventoryItemRow[],
     riskReport: RiskReportRow,
+    propertyId: string,
   ): ComponentSpec[] {
     const specs: ComponentSpec[] = [];
     const yr = currentYear();
@@ -1165,6 +1209,12 @@ export class HomeDigitalTwinBuilderService {
           facts: [resolved.fact, cost.fact],
         });
       });
+    }
+
+    for (const spec of specs) {
+      for (const fact of spec.facts) {
+        fact.correctionDestination = correctionDestinationFor(spec.componentType, fact, propertyId);
+      }
     }
 
     return specs;

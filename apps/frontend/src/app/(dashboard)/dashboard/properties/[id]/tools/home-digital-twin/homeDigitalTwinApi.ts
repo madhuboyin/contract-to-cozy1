@@ -3,6 +3,8 @@ import type {
   HomeDigitalTwinDTO,
   ScenarioSuggestionDTO,
   HomeTwinScenarioDTO,
+  HomeTwinComponentDTO,
+  HomeTwinFactReadinessSummaryDTO,
   CreateScenarioInput,
   UpdateScenarioInput,
 } from '@/types';
@@ -30,6 +32,32 @@ export async function initHomeDigitalTwin(
 export async function refreshHomeDigitalTwin(propertyId: string): Promise<HomeDigitalTwinDTO> {
   const result = await api.refreshHomeDigitalTwin(propertyId);
   if (!result) throw new Error('Failed to refresh digital twin');
+  return result;
+}
+
+const EMPTY_FACT_READINESS_SUMMARY: HomeTwinFactReadinessSummaryDTO = {
+  hasTwin: false,
+  knownFactCount: 0,
+  needsAttentionCount: 0,
+  confirmedComponentCount: 0,
+  totalComponentCount: 0,
+  items: [],
+};
+
+export async function getHomeDigitalTwinFactReadiness(
+  propertyId: string,
+): Promise<HomeTwinFactReadinessSummaryDTO> {
+  const result = await api.getHomeDigitalTwinFactReadiness(propertyId);
+  return result ?? EMPTY_FACT_READINESS_SUMMARY;
+}
+
+export async function confirmHomeDigitalTwinComponent(
+  propertyId: string,
+  componentId: string,
+  isUserConfirmed: boolean,
+): Promise<HomeTwinComponentDTO> {
+  const result = await api.confirmHomeDigitalTwinComponent(propertyId, componentId, isUserConfirmed);
+  if (!result) throw new Error('Failed to update component confirmation');
   return result;
 }
 

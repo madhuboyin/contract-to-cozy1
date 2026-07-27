@@ -54,7 +54,7 @@ function specFor(specs, identityKey) {
 // render as KNOWN, and its projected fact must be INFERRED, not REPORTED.
 test('HVAC install year inferred from yearBuilt is ESTIMATED/INFERRED, not KNOWN/REPORTED', () => {
   const property = baseProperty({ yearBuilt: 2000 });
-  const specs = builder.deriveSpecs(property, [], null);
+  const specs = builder.deriveSpecs(property, [], null, 'property-1');
   const hvac = specFor(specs, 'HVAC:PRIMARY');
 
   assert.ok(hvac, 'expected a PRIMARY HVAC component when no inventory exists');
@@ -67,7 +67,7 @@ test('HVAC install year inferred from yearBuilt is ESTIMATED/INFERRED, not KNOWN
 
 test('HVAC install year reported on the property profile is KNOWN/REPORTED', () => {
   const property = baseProperty({ yearBuilt: 2000, hvacInstallYear: 2018 });
-  const specs = builder.deriveSpecs(property, [], null);
+  const specs = builder.deriveSpecs(property, [], null, 'property-1');
   const hvac = specFor(specs, 'HVAC:PRIMARY');
 
   assert.equal(hvac.status, 'KNOWN');
@@ -79,7 +79,7 @@ test('HVAC install year reported on the property profile is KNOWN/REPORTED', () 
 
 test('with no signal at all, install year fact is DEFAULT, not silently INFERRED', () => {
   const property = baseProperty();
-  const specs = builder.deriveSpecs(property, [], null);
+  const specs = builder.deriveSpecs(property, [], null, 'property-1');
   const hvac = specFor(specs, 'HVAC:PRIMARY');
 
   assert.equal(hvac.status, 'ESTIMATED');
@@ -96,7 +96,7 @@ test('multiple HVAC inventory items become distinct components with stable ident
     inventoryItem({ id: 'hvac-a', name: 'Upstairs Unit', installedOn: new Date('2015-01-01') }),
     inventoryItem({ id: 'hvac-b', name: 'Downstairs Unit', installedOn: new Date('2020-01-01') }),
   ];
-  const specs = builder.deriveSpecs(property, items, null);
+  const specs = builder.deriveSpecs(property, items, null, 'property-1');
   const hvacSpecs = specs.filter((s) => s.componentType === 'HVAC');
 
   assert.equal(hvacSpecs.length, 2, 'expected one component per HVAC inventory item');
@@ -113,7 +113,7 @@ test('multiple HVAC inventory items become distinct components with stable ident
 test('a single HVAC inventory item still allows the profile install year to apply', () => {
   const property = baseProperty({ hvacInstallYear: 2018 });
   const items = [inventoryItem({ id: 'hvac-a' })];
-  const specs = builder.deriveSpecs(property, items, null);
+  const specs = builder.deriveSpecs(property, items, null, 'property-1');
   const hvacSpecs = specs.filter((s) => s.componentType === 'HVAC');
 
   assert.equal(hvacSpecs.length, 1);
@@ -123,7 +123,7 @@ test('a single HVAC inventory item still allows the profile install year to appl
 
 test('roof and electrical keep single-instance PRIMARY identity', () => {
   const property = baseProperty({ roofReplacementYear: 2010, electricalPanelAge: 5 });
-  const specs = builder.deriveSpecs(property, [], null);
+  const specs = builder.deriveSpecs(property, [], null, 'property-1');
 
   assert.ok(specFor(specs, 'ROOF:PRIMARY'));
   assert.ok(specFor(specs, 'ELECTRICAL:PRIMARY'));
@@ -132,7 +132,7 @@ test('roof and electrical keep single-instance PRIMARY identity', () => {
 test('disagreeing property-profile and inventory install years are CONFLICTED, not silently resolved', () => {
   const property = baseProperty({ hvacInstallYear: 2010 });
   const items = [inventoryItem({ id: 'hvac-a', installedOn: new Date('2019-01-01') })];
-  const specs = builder.deriveSpecs(property, items, null);
+  const specs = builder.deriveSpecs(property, items, null, 'property-1');
   const hvac = specFor(specs, 'HVAC:hvac-a');
 
   assert.equal(hvac.status, 'NEEDS_REVIEW');
@@ -147,14 +147,38 @@ test('replacement cost fact reflects real inventory cost as REPORTED, category d
     property,
     [inventoryItem({ id: 'hvac-a', replacementCostCents: 1000000 })],
     null,
+    'property-1',
   );
   const hvacWithCost = specFor(withCost, 'HVAC:hvac-a');
   const costFact = hvacWithCost.facts.find((f) => f.fieldName === 'replacementCostEstimate');
   assert.equal(costFact.factState, 'REPORTED');
   assert.equal(hvacWithCost.replacementCostEstimate, 10000);
 
-  const withoutCost = builder.deriveSpecs(property, [], null);
+  const withoutCost = builder.deriveSpecs(property, [], null, 'property-1');
   const hvacNoCost = specFor(withoutCost, 'HVAC:PRIMARY');
   const defaultCostFact = hvacNoCost.facts.find((f) => f.fieldName === 'replacementCostEstimate');
   assert.equal(defaultCostFact.factState, 'DEFAULT');
+});
+
+// Slice 2: every fact must link to an existing owning surface, never a
+// fabricated one.
+test('correction destinations point at real existing surfaces', () => {
+  const property = baseProperty({ yearBuilt: 2000, electricalPanelAge: 5 });
+  const items = [inventoryItem({ id: 'hvac-a', installedOn: new Date('2015-01-01') })];
+  const specs = builder.deriveSpecs(property, items, null, 'property-77');
+
+  const hvac = specFor(specs, 'HVAC:hvac-a');
+  const hvacInstallFact = hvac.facts.find((f) => f.fieldName === 'installYear');
+  assert.equal(hvacInstallFact.correctionDestination, '/dashboard/properties/property-77/inventory/items/hvac-a');
+
+  const electrical = specFor(specs, 'ELECTRICAL:PRIMARY');
+  const electricalInstallFact = electrical.facts.find((f) => f.fieldName === 'installYear');
+  assert.equal(electricalInstallFact.correctionDestination, '/dashboard/properties/property-77/edit');
+
+  const roof = specFor(specs, 'ROOF:PRIMARY');
+  const roofInstallFact = roof.facts.find((f) => f.fieldName === 'installYear');
+  assert.equal(roofInstallFact.correctionDestination, '/dashboard/properties/property-77/edit#structure');
+
+  const roofCostFact = roof.facts.find((f) => f.fieldName === 'replacementCostEstimate');
+  assert.equal(roofCostFact.correctionDestination, '/dashboard/properties/property-77/inventory');
 });

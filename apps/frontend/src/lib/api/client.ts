@@ -4287,6 +4287,27 @@ class APIClient {
     return res.data?.twin ?? null;
   }
 
+  async getHomeDigitalTwinFactReadiness(
+    propertyId: string
+  ): Promise<import('@/types').HomeTwinFactReadinessSummaryDTO | null> {
+    const res = await this.get<{ summary: import('@/types').HomeTwinFactReadinessSummaryDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/fact-readiness`
+    );
+    return res.data?.summary ?? null;
+  }
+
+  async confirmHomeDigitalTwinComponent(
+    propertyId: string,
+    componentId: string,
+    isUserConfirmed: boolean
+  ): Promise<import('@/types').HomeTwinComponentDTO | null> {
+    const res = await this.patch<{ component: import('@/types').HomeTwinComponentDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/components/${componentId}`,
+      { isUserConfirmed }
+    );
+    return res.data?.component ?? null;
+  }
+
   async getDigitalTwinRecommendations(
     propertyId: string
   ): Promise<import('@/types').ScenarioSuggestionDTO[] | null> {
