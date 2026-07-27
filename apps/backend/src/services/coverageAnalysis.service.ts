@@ -89,7 +89,7 @@ export type CoverageAnalysisDTO = {
     action?: {
       label: string;
       href: string;
-      targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+      targetTool: 'providers' | 'insurance' | 'coverage-intelligence';
     };
   }>;
 
@@ -145,7 +145,7 @@ export type ItemCoverageAnalysisDTO = {
     action?: {
       label: string;
       href: string;
-      targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+      targetTool: 'providers' | 'insurance' | 'coverage-intelligence';
     };
   }>;
 
@@ -202,7 +202,7 @@ type NextStep = {
   action?: {
     label: string;
     href: string;
-    targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+    targetTool: 'providers' | 'insurance' | 'coverage-intelligence';
   };
 };
 
@@ -1749,7 +1749,7 @@ export class CoverageIntelligenceService {
         action: {
           label: 'Open Service Price Radar',
           href: `/dashboard/properties/${propertyId}/tools/service-price-radar?launchSurface=home_tools&category=APPLIANCE_REPLACEMENT`,
-          targetTool: 'coverage-options',
+          targetTool: 'coverage-intelligence',
         },
       });
     }
@@ -1761,7 +1761,7 @@ export class CoverageIntelligenceService {
         action: {
           label: 'Open inventory item',
           href: `/dashboard/properties/${propertyId}/inventory/items/${item.id}`,
-          targetTool: 'coverage-options',
+          targetTool: 'coverage-intelligence',
         },
       });
     }

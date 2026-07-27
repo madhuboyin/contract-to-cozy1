@@ -101,43 +101,43 @@ export const TOOL_EXPLAINERS: Record<ToolExplainerKey, ToolExplainer> = {
     ],
   },
   coverageIntelligence: {
-    subtitle: 'A quick, transparent overview of how we generate your results.',
+    subtitle: 'One place to review available policy records, renewal context, and loss-prevention actions.',
     whatItDoes: {
       statement:
-        'This tool checks your insurance + warranties against your home inventory to find protection gaps and improve claims readiness.',
+        'This workspace shows what the Home Record currently knows and identifies questions worth confirming before a coverage decision.',
     },
     howItWorks: [
       {
-        title: 'Review connected coverage',
-        description: 'We analyze uploaded policies, declarations, and warranties.',
+        title: 'Review current records',
+        description: 'See linked policies, declarations, warranties, and the facts currently available.',
       },
       {
-        title: 'Map coverage to items',
-        description: 'We match coverage against each tracked home item.',
+        title: 'Identify record questions',
+        description: 'Find missing or incomplete evidence without treating missing records as proof of no coverage.',
       },
       {
-        title: 'Detect gaps and overlaps',
-        description: 'We flag uncovered items and redundant coverage.',
+        title: 'Prepare for renewal',
+        description: 'Review modeled regional context separately from actual policy history or quotes.',
       },
       {
-        title: 'Assess claims readiness',
-        description: 'We check if key docs are attached for smoother claims.',
+        title: 'Reduce loss risk',
+        description: 'Plan practical mitigation work without promising a premium change.',
       },
       {
-        title: 'Recommend next steps',
-        description: 'We suggest exactly what to fix and why.',
+        title: 'Confirm consequential choices',
+        description: 'Use controlling policy language or a licensed insurance professional for coverage decisions.',
       },
     ],
     whyItsSmart: [
-      'Connects coverage to the actual things you own',
-      'Finds uncovered high-value items',
-      'Improves claims readiness with document checks',
-      'Surfaces savings opportunities',
+      'Keeps policy records, questions, renewal context, and mitigation together',
+      'Separates confirmed facts from modeled context',
+      'Preserves source and launch context across stages',
+      'Keeps consequential decisions with the homeowner',
     ],
     whenToUseIt: [
-      'After adding new items',
-      'Before filing a claim',
-      'When reviewing policies or warranties',
+      'Before renewal',
+      'After adding or correcting a policy record',
+      'After a material home change or loss-prevention project',
     ],
   },
 };

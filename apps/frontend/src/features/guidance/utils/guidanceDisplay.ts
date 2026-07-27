@@ -42,8 +42,8 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'home-savings': '/dashboard/properties/:propertyId/tools/home-savings',
   'capital-timeline': '/dashboard/properties/:propertyId/tools/capital-timeline',
   'true-cost': '/dashboard/properties/:propertyId/tools/true-cost',
-  'insurance-trend': '/dashboard/properties/:propertyId/tools/insurance-trend',
-  'coverage-options': '/dashboard/properties/:propertyId/tools/coverage-options',
+  'insurance-trend': '/dashboard/properties/:propertyId/tools/coverage-intelligence?stage=renewal',
+  'coverage-options': '/dashboard/properties/:propertyId/tools/coverage-intelligence?stage=questions',
   'guidance-overview': '/dashboard/properties/:propertyId/tools/guidance-overview',
 };
 

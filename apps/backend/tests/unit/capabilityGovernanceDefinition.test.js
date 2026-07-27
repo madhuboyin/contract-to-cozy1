@@ -34,7 +34,7 @@ test('CAP-903 material and regulated definitions require professional boundaries
     ['MATERIAL_PROFESSIONAL_BOUNDARY_MISSING'],
   );
 
-  const regulated = capability('coverage-options');
+  const regulated = capability('coverage-intelligence');
   regulated.governance.professionalBoundary = null;
   regulated.governance.jurisdictionPolicy = 'NOT_REQUIRED';
   assert.deepEqual(

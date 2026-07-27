@@ -115,15 +115,14 @@ export default function RiskPremiumOptimizerToolCard({
         const latest = await runRiskPremiumOptimizer(propertyId);
         setHasAnalysis(true);
         setAnalysis(latest);
-        const freshSavingsRange = computeSavingsRange(latest, true);
-        router.push(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer?source=dashboard-card&action=run&savingsRange=${encodeURIComponent(freshSavingsRange)}`);
+        router.push(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=risk&source=dashboard-card&action=run`);
       } finally {
         setRunning(false);
       }
       return;
     }
 
-    router.push(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer?source=dashboard-card&hasAnalysis=${hasAnalysis}&status=${analysis?.status || 'ready'}`);
+    router.push(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=risk&source=dashboard-card&hasAnalysis=${hasAnalysis}&status=${analysis?.status || 'ready'}`);
   };
 
   const status = statusMeta(loading, analysis, hasAnalysis);

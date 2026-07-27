@@ -66,21 +66,22 @@ test('quote lead capture is unavailable until governed handoff controls exist', 
   assert.doesNotMatch(inventory, /InsuranceQuoteModal|setQuoteOpen|>Quotes</);
 });
 
-test('coverage capability family is beta, catalog-only, and does not claim jurisdiction verification', () => {
+test('coverage capability family has one beta, catalog-only definition and does not claim jurisdiction verification', () => {
   const definitions = source('../../src/productFramework/capabilities/definitions/saveOptimize.ts');
   const promotion = source('../../src/services/homeActionSourcePromotion.service.ts');
 
-  for (const capabilityId of [
-    'coverage-intelligence',
+  const definition = definitions
+    .split('\n')
+    .find((line) => line.includes("['coverage-intelligence'"));
+  assert.ok(definition);
+  assert.match(definition, /Coverage & Premium Review/);
+  assert.match(definition, /'BETA', 'REGULATED_COVERAGE', 'CATALOG_ONLY'/);
+  for (const retiredCapabilityId of [
     'coverage-options',
     'insurance-trend',
     'risk-premium-optimizer',
   ]) {
-    const definition = definitions
-      .split('\n')
-      .find((line) => line.includes(`['${capabilityId}'`));
-    assert.ok(definition, capabilityId);
-    assert.match(definition, /'BETA', 'REGULATED_COVERAGE', 'CATALOG_ONLY'/);
+    assert.doesNotMatch(definitions, new RegExp(`\\['${retiredCapabilityId}'`));
   }
 
   const coveragePromotion = promotion.slice(

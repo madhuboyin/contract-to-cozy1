@@ -523,8 +523,8 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
         decisionStage: 'DECISION',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
-        toolKey: 'coverage-options',
-        routePath: '/dashboard/properties/:propertyId/tools/coverage-options',
+        toolKey: 'coverage-intelligence',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-intelligence?stage=questions',
         skipPolicy: 'DISCOURAGED',
       },
       {
@@ -1268,8 +1268,8 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
         decisionStage: 'DECISION',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: false,
-        toolKey: 'insurance-trend',
-        routePath: '/dashboard/properties/:propertyId/tools/insurance-trend',
+        toolKey: 'coverage-intelligence',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-intelligence?stage=renewal',
         skipPolicy: 'ALLOWED',
       },
       {
@@ -1414,8 +1414,8 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
         decisionStage: 'DECISION',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: false,
-        toolKey: 'insurance-trend',
-        routePath: '/dashboard/properties/:propertyId/tools/insurance-trend',
+        toolKey: 'coverage-intelligence',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-intelligence?stage=renewal',
         skipPolicy: 'ALLOWED',
       },
       {
@@ -1480,8 +1480,8 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
         decisionStage: 'DECISION',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: false,
-        toolKey: 'insurance-trend',
-        routePath: '/dashboard/properties/:propertyId/tools/insurance-trend',
+        toolKey: 'coverage-intelligence',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-intelligence?stage=renewal',
         skipPolicy: 'ALLOWED',
       },
       {

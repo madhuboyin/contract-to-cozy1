@@ -25,6 +25,7 @@ interface ToolWorkspaceTemplateProps {
   priorityAction?: PriorityActionHeroProps;
   rail?: ReactNode;
   introAction?: ReactNode;
+  embedded?: boolean;
   children: ReactNode;
 }
 
@@ -38,8 +39,13 @@ export default function ToolWorkspaceTemplate({
   priorityAction,
   rail,
   introAction,
+  embedded = false,
   children,
 }: ToolWorkspaceTemplateProps) {
+  if (embedded) {
+    return <div className="space-y-4">{children}</div>;
+  }
+
   return (
     <MobilePageContainer className="space-y-4 lg:max-w-7xl lg:px-8 lg:pb-10">
       <Button variant="ghost" className={`${CTC_INTERACTION_RULES_V1.tapTarget} w-fit px-0 text-muted-foreground`} asChild>

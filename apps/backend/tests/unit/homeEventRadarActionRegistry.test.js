@@ -52,10 +52,15 @@ test('registry is complete, unique, and bound to canonical capability routes', (
       definition.destination.targetCapability,
     );
     assert.ok(capability, `${definition.code} references a known capability`);
-    assert.equal(
+    const reviewedRoutePath = definition.destination.routeTemplate.split('?')[0];
+    const acceptedRoutePaths = new Set([
       capability.destination.routeTemplate,
-      definition.destination.routeTemplate,
-      `${definition.code} uses the capability registry route`,
+      `/dashboard/properties/[id]/tools/${capability.id}`,
+    ]);
+    assert.equal(
+      acceptedRoutePaths.has(reviewedRoutePath),
+      true,
+      `${definition.code} uses the capability registry route or its property-scoped form`,
     );
   }
 });
@@ -172,13 +177,14 @@ test('internal destinations use reviewed routes and preserve encoded lineage', (
     impact: 'watch',
   });
 
-  assert.equal(action.targetCapability, 'coverage-options');
+  assert.equal(action.targetCapability, 'coverage-intelligence');
   assert.equal(action.destination.kind, 'internal');
   const url = new URL(action.destination.href, 'https://example.test');
   assert.equal(
     url.pathname,
-    '/dashboard/properties/property%20%2F%20one/tools/coverage-options',
+    '/dashboard/properties/property%20%2F%20one/tools/coverage-intelligence',
   );
+  assert.equal(url.searchParams.get('stage'), 'questions');
   assert.equal(url.searchParams.get('propertyId'), 'property / one');
   assert.equal(url.searchParams.get('radarMatchId'), 'match / one');
   assert.equal(url.searchParams.get('radarEventId'), 'event / one');

@@ -59,7 +59,7 @@ function buildToolPath(tool: OrchestrationToolId, propertyId: string) {
     case 'coverage-intelligence':
       return `/dashboard/properties/${propertyId}/tools/coverage-intelligence`;
     case 'risk-premium-optimizer':
-      return `/dashboard/properties/${propertyId}/tools/risk-premium-optimizer`;
+      return `/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=risk`;
     case 'do-nothing':
       return `/dashboard/properties/${propertyId}/tools/do-nothing`;
     case 'sell-hold-rent':

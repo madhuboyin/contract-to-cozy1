@@ -1,7 +1,5 @@
-'use client';
-
-import InsuranceTrendClient from './InsuranceTrendClient';
+import LegacyCoverageStageRedirect from '@/components/coverage/LegacyCoverageStageRedirect';
 
 export default function InsuranceTrendPage() {
-  return <InsuranceTrendClient />;
+  return <LegacyCoverageStageRedirect stage="renewal" />;
 }

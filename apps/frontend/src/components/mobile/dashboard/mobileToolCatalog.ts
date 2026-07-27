@@ -162,16 +162,6 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/property-tax(\/|$)/.test(pathname),
   },
   {
-    key: 'insurance-trend',
-    title: 'Insurance Trend',
-    description: 'Monitor premium pressure and renewal risk',
-    href: '/dashboard/insurance-trend',
-    icon: resolveToolIcon('home', 'insurance-trend'),
-    emoji: '🛡️',
-    group: 'wealth',
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/insurance-trend(\/|$)/.test(pathname),
-  },
-  {
     key: 'mortgage-refinance-radar',
     title: 'Refi Radar',
     description: 'Track mortgage optimization windows',
@@ -183,8 +173,8 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   },
   {
     key: 'coverage-intelligence',
-    title: 'Coverage Intelligence',
-    description: 'Detect and close protection gaps',
+    title: 'Coverage & Premium Review',
+    description: 'Review protection records and prepare for renewal',
     href: '/dashboard/coverage-intelligence',
     icon: resolveToolIcon('ai', 'coverage-intelligence'),
     emoji: '🧾',
@@ -192,20 +182,7 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     artworkKey: 'coverage-intelligence',
     isActive: (pathname) =>
       /^\/dashboard\/coverage-intelligence(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/coverage-intelligence(\/|$)/.test(pathname),
-  },
-  {
-    key: 'risk-premium-optimizer',
-    title: 'Risk Optimizer',
-    description: 'Reduce risk and premium pressure',
-    href: '/dashboard/risk-premium-optimizer',
-    icon: resolveToolIcon('ai', 'risk-premium-optimizer'),
-    emoji: '📉',
-    group: 'wealth',
-    artworkKey: 'risk-optimizer',
-    isActive: (pathname) =>
-      /^\/dashboard\/risk-premium-optimizer(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/risk-premium-optimizer(\/|$)/.test(pathname),
+      /^\/dashboard\/properties\/[^/]+\/tools\/(?:coverage-intelligence|coverage-options|insurance-trend|risk-premium-optimizer)(\/|$)/.test(pathname),
   },
   {
     key: 'hidden-asset-finder',
@@ -541,7 +518,6 @@ export const MOBILE_AI_TOOL_GROUPS: Array<{
 
 export const MOBILE_HOME_AI_TILE_KEYS: MobileAiToolKey[] = [
   'replace-repair',
-  'risk-premium-optimizer',
   'coverage-intelligence',
   'view-all',
 ];
@@ -671,17 +647,6 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     navTarget: 'tool:cost-growth',
     icon: resolveToolIcon('home', 'cost-growth'),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-growth(\/|$)/.test(pathname),
-  },
-  {
-    key: 'insurance-trend',
-    group: 'ownership',
-    name: 'Insurance Trend',
-    description: "Track premium pressure",
-    desktopDescription: "Track premium pressure and renewal risk based on your property profile and trends.",
-    hrefSuffix: 'tools/insurance-trend',
-    navTarget: 'tool:insurance-trend',
-    icon: resolveToolIcon('home', 'insurance-trend'),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/insurance-trend(\/|$)/.test(pathname),
   },
   {
     key: 'negotiation-shield',
@@ -944,18 +909,6 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     icon: resolveToolIcon('home', 'home-gazette'),
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/home-gazette(\/|$)/.test(pathname),
-  },
-  {
-    key: 'coverage-options',
-    group: 'ownership',
-    name: 'Coverage Options',
-    description: "Compare policy and warranty options for your coverage gaps",
-    desktopDescription: "Compare available home warranty and insurance policy options to close identified coverage gaps.",
-    hrefSuffix: 'tools/coverage-options',
-    navTarget: 'tool:coverage-options',
-    icon: resolveToolIcon('home', 'coverage-options'),
-    isActive: (pathname) =>
-      /^\/dashboard\/properties\/[^/]+\/tools\/coverage-options(\/|$)/.test(pathname),
   },
   {
     key: 'guidance-overview',

@@ -50,7 +50,7 @@ export default function CoverageOptionsClient() {
   React.useEffect(() => {
     if (!propertyId) return;
     track('workflow_started', {
-      tool: 'coverage-options',
+      tool: 'coverage-intelligence',
       propertyId,
       entryPoint: guidanceJourneyId ? 'guidance' : 'direct',
     });
@@ -78,7 +78,7 @@ export default function CoverageOptionsClient() {
       await recordGuidanceToolStatus(propertyId, {
         stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
-        sourceToolKey: 'coverage-options',
+        sourceToolKey: 'coverage-intelligence',
         status: 'COMPLETED',
         producedData: {
           proofType: 'coverage_options_review',
@@ -91,7 +91,7 @@ export default function CoverageOptionsClient() {
         },
       });
       setProofCompleted(true);
-      track('workflow_completed', { tool: 'coverage-options', propertyId });
+      track('workflow_completed', { tool: 'coverage-intelligence', propertyId });
     } catch (e) {
       console.error('[CoverageOptions] failed to record completion', e);
     } finally {
@@ -279,7 +279,7 @@ export default function CoverageOptionsClient() {
           propertyId={propertyId}
           title="Guidance"
           subtitle="Any active plans tied to your coverage gaps will appear here."
-          toolKey="coverage-options"
+          toolKey="coverage-intelligence"
           limit={1}
           journeyId={guidanceJourneyId}
         />

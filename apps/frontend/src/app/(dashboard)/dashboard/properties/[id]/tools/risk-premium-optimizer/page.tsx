@@ -1,5 +1,5 @@
-import RiskPremiumOptimizerToolClient from './RiskPremiumOptimizerToolClient';
+import LegacyCoverageStageRedirect from '@/components/coverage/LegacyCoverageStageRedirect';
 
 export default function RiskPremiumOptimizerToolPage() {
-  return <RiskPremiumOptimizerToolClient />;
+  return <LegacyCoverageStageRedirect stage="risk" />;
 }

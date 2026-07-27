@@ -14,16 +14,16 @@
     "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
   ],
   "summary": {
-    "aiCatalogEntries": 40,
-    "homeCatalogEntries": 37,
-    "overlappingEntries": 25,
-    "distinctCapabilities": 52,
-    "routeVerified": 52,
-    "canonicalRelationshipCoverage": 32,
+    "aiCatalogEntries": 38,
+    "homeCatalogEntries": 35,
+    "overlappingEntries": 24,
+    "distinctCapabilities": 49,
+    "routeVerified": 49,
+    "canonicalRelationshipCoverage": 30,
     "contextualCapabilities": 22,
     "workflowOnly": 1,
-    "lifecycleCanonicalized": 52,
-    "catalogOnlyCapabilities": 29
+    "lifecycleCanonicalized": 49,
+    "catalogOnlyCapabilities": 26
   },
   "capabilities": [
     {
@@ -177,7 +177,7 @@
     },
     {
       "id": "coverage-intelligence",
-      "label": "Coverage Intelligence",
+      "label": "Coverage & Premium Review",
       "sources": [
         "ai"
       ],
@@ -191,24 +191,6 @@
       "completionKind": "OUTPUT_GENERATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
-      "recommendationDisposition": "CATALOG_ONLY"
-    },
-    {
-      "id": "coverage-options",
-      "label": "Coverage Options",
-      "sources": [
-        "home"
-      ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/coverage-options",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "COVERAGE_OPTIONS",
-      "releaseStage": "BETA",
-      "safetyTier": "REGULATED_COVERAGE",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -563,25 +545,6 @@
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
-      "id": "insurance-trend",
-      "label": "Insurance Trend",
-      "sources": [
-        "home",
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/insurance-trend",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "INSURANCE_TREND",
-      "releaseStage": "BETA",
-      "safetyTier": "REGULATED_COVERAGE",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CATALOG_ONLY"
-    },
-    {
       "id": "material-specs",
       "label": "Material Specs",
       "sources": [
@@ -838,24 +801,6 @@
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CATALOG_ONLY"
-    },
-    {
-      "id": "risk-premium-optimizer",
-      "label": "Risk Optimizer",
-      "sources": [
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/risk-premium-optimizer",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "RISK_PREMIUM_OPTIMIZER",
-      "releaseStage": "BETA",
-      "safetyTier": "REGULATED_COVERAGE",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {

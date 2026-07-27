@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import Link from 'next/link';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { TrendingUp } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { track } from '@/lib/analytics/events';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
@@ -11,14 +9,18 @@ import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSecti
 import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import CoverageOptionsClient from '../coverage-options/CoverageOptionsClient';
+import InsuranceTrendClient from '../insurance-trend/InsuranceTrendClient';
+import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
-type CoverageTab = 'coverage' | 'options';
+type CoverageStage = 'current' | 'questions' | 'renewal' | 'risk';
 
-const TABS: { key: CoverageTab; label: string }[] = [
-  { key: 'coverage', label: 'Coverage' },
-  { key: 'options', label: 'Options' },
+const STAGES: { key: CoverageStage; label: string; description: string }[] = [
+  { key: 'current', label: 'Current protection', description: 'Review the records currently available.' },
+  { key: 'questions', label: 'Questions', description: 'Resolve missing or incomplete protection records.' },
+  { key: 'renewal', label: 'Renewal', description: 'Review modeled regional cost context.' },
+  { key: 'risk', label: 'Reduce loss risk', description: 'Plan loss-prevention work without savings promises.' },
 ];
 
 export default function CoverageIntelligenceToolClient() {
@@ -28,8 +30,16 @@ export default function CoverageIntelligenceToolClient() {
   const router = useRouter();
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
-  const rawTab = searchParams.get('tab') as CoverageTab | null;
-  const activeTab: CoverageTab = rawTab === 'options' ? 'options' : 'coverage';
+  const requestedStage = searchParams.get('stage');
+  const legacyTab = searchParams.get('tab');
+  const activeStage: CoverageStage =
+    requestedStage === 'questions' ||
+    requestedStage === 'renewal' ||
+    requestedStage === 'risk'
+      ? requestedStage
+      : legacyTab === 'options'
+        ? 'questions'
+        : 'current';
   const selectedInventoryItemId =
     searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
   const fromProtect = searchParams.get('from') === 'protect';
@@ -79,12 +89,13 @@ export default function CoverageIntelligenceToolClient() {
     return null;
   }
 
-  function switchTab(tab: CoverageTab) {
+  function switchStage(stage: CoverageStage) {
     const next = new URLSearchParams(searchParams.toString());
-    if (tab === 'coverage') {
-      next.delete('tab');
+    next.delete('tab');
+    if (stage === 'current') {
+      next.delete('stage');
     } else {
-      next.set('tab', tab);
+      next.set('stage', stage);
     }
     router.replace(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?${next.toString()}`);
   }
@@ -100,26 +111,28 @@ export default function CoverageIntelligenceToolClient() {
       ? 'Back to Protect'
       : 'Back to property';
   const trust = coverageLoopTrust({
-    confidenceLabel: 'Medium-High, based on linked policy and inventory signals',
+    confidenceLabel: 'Record review only; confidence depends on confirmed policy facts',
     freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',
-    sourceLabel: 'Coverage graph + property inventory + policy details',
+    sourceLabel: 'Linked policy records + property inventory + homeowner-confirmed details',
   });
 
   const tabNav = (
-    <div role="tablist" aria-label="Coverage views" className="flex gap-1 rounded-xl border border-border bg-muted/40 p-1">
-      {TABS.map(({ key, label }) => (
+    <div role="tablist" aria-label="Coverage and premium review stages" className="grid gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-2 lg:grid-cols-4">
+      {STAGES.map(({ key, label, description }) => (
         <button
           key={key}
           role="tab"
-          aria-selected={activeTab === key}
-          onClick={() => switchTab(key)}
-          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === key
+          aria-selected={activeStage === key}
+          aria-controls={`coverage-stage-${key}`}
+          onClick={() => switchStage(key)}
+          className={`rounded-lg px-3 py-2 text-left transition-colors ${
+            activeStage === key
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {label}
+          <span className="block text-xs font-semibold">{label}</span>
+          <span className="mt-0.5 block text-[11px] leading-snug opacity-75">{description}</span>
         </button>
       ))}
     </div>
@@ -129,12 +142,12 @@ export default function CoverageIntelligenceToolClient() {
     <ToolWorkspaceTemplate
       backHref={backHref}
       backLabel={backLabel}
-      eyebrow={fromProtect ? 'Full audit report' : 'Home tool'}
-      title="Coverage Intelligence"
+      eyebrow={fromProtect ? 'Full review' : 'Protection workspace'}
+      title="Coverage & Premium Review"
       subtitle={
         fromProtect
-          ? 'Full property coverage audit — insurance, warranty economics, and decision trace.'
-          : 'Insurance and warranty coverage assessment for this property.'
+          ? 'Review current records, material questions, renewal context, and loss-prevention actions.'
+          : 'See what the Home Record knows, identify questions worth resolving, and prepare for renewal.'
       }
       trust={trust}
       introAction={
@@ -144,36 +157,35 @@ export default function CoverageIntelligenceToolClient() {
       {/* Tab navigation */}
       {tabNav}
 
-      {activeTab === 'coverage' && (
+      {activeStage === 'current' && (
         <ToolExplainerSection toolKey="coverageIntelligence" id="how-it-works" />
       )}
 
       {/* Tab content */}
-      {activeTab === 'coverage' && (
-        <>
+      {activeStage === 'current' && (
+        <div id="coverage-stage-current" role="tabpanel">
           <CoverageIntelligencePanel propertyId={propertyId} />
           <PropertyContextCapturePanel
             propertyId={propertyId}
             featureKey="COVERAGE_INTELLIGENCE"
             operationKey="ASSESS_PROPERTY_COVERAGE"
           />
-          <Link
-            href={`/dashboard/properties/${propertyId}/tools/insurance-trend?from=coverage-intelligence`}
-            className="flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 text-sm hover:bg-teal-50 transition-colors"
-          >
-            <div className="flex items-center gap-2.5">
-              <TrendingUp className="h-4 w-4 shrink-0 text-teal-700" />
-              <span className="text-teal-900">
-                <span className="font-medium">See how local premiums are trending</span>
-                <span className="ml-1.5 text-teal-700">— compare your estimate against your area in Home Lab</span>
-              </span>
-            </div>
-            <span className="shrink-0 text-teal-700">→</span>
-          </Link>
-        </>
+        </div>
       )}
-      {activeTab === 'options' && (
-        <CoverageOptionsClient />
+      {activeStage === 'questions' && (
+        <div id="coverage-stage-questions" role="tabpanel">
+          <CoverageOptionsClient />
+        </div>
+      )}
+      {activeStage === 'renewal' && (
+        <div id="coverage-stage-renewal" role="tabpanel">
+          <InsuranceTrendClient embedded />
+        </div>
+      )}
+      {activeStage === 'risk' && (
+        <div id="coverage-stage-risk" role="tabpanel" className="space-y-4">
+          <RiskPremiumOptimizerPanel propertyId={propertyId} />
+        </div>
       )}
 
     </ToolWorkspaceTemplate>

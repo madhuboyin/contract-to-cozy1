@@ -31,14 +31,14 @@ test('tool lifecycle events use the durable TOOL_USED taxonomy', () => {
   assert.equal(events[0].eventType, 'TOOL_USED');
   assert.equal(events[0].eventName, 'TOOL_COMPLETED');
   assert.equal(events[0].moduleKey, 'tool_discovery');
-  assert.equal(events[0].featureKey, 'coverage-options');
+  assert.equal(events[0].featureKey, 'coverage-intelligence');
   assert.equal(events[0].source, 'unified_home');
   assert.equal(events[0].metadataJson.lifecycleContractVersion, 'capability-lifecycle-v2');
   assert.equal(events[0].metadataJson.manifestVersion > 0, true);
   assert.equal(typeof events[0].metadataJson.registryVersion, 'string');
   assert.equal(events[0].metadataJson.recommendationVersion, 'capability-recommendation-v1');
   assert.equal(events[0].metadataJson.sourceKind, 'DIRECT');
-  assert.equal(events[0].metadataJson.sourceId, 'direct:coverage-options');
+  assert.equal(events[0].metadataJson.sourceId, 'direct:coverage-intelligence');
   assert.equal(events[0].metadataJson.readiness, 'UNKNOWN');
   assert.equal(events[0].metadataJson.rolloutCohort, 'UNKNOWN');
   assert.equal(events[0].metadataJson.surface, 'unified_home');
@@ -54,7 +54,7 @@ test('tool lifecycle stage names remain queryable without a Prisma enum change',
 
 test('client lifecycle ingestion cannot forge server-owned eligibility', () => {
   const base = {
-    toolId: 'coverage-options',
+    toolId: 'coverage-intelligence',
     surface: 'unified_home',
   };
   assert.equal(toolLifecycleEventSchema.safeParse({
@@ -76,6 +76,9 @@ test('client lifecycle ingestion cannot forge server-owned eligibility', () => {
 
 test('backend feature aliases converge on the discovery catalog', () => {
   assert.equal(canonicalizeToolLifecycleId('coverage_analysis'), 'coverage-intelligence');
+  assert.equal(canonicalizeToolLifecycleId('coverage-options'), 'coverage-intelligence');
+  assert.equal(canonicalizeToolLifecycleId('insurance-trend'), 'coverage-intelligence');
+  assert.equal(canonicalizeToolLifecycleId('risk-premium-optimizer'), 'coverage-intelligence');
   assert.equal(canonicalizeToolLifecycleId('RENOVATION_ADVISOR_SESSION'), 'home-renovation-risk-advisor');
   assert.equal(canonicalizeToolLifecycleId('hoa'), 'hoa-compliance');
   assert.equal(canonicalizeToolLifecycleId('unrelated_backend_feature'), null);
@@ -112,7 +115,7 @@ test('canonical lifecycle rejects stale manifests and protects envelope fields',
       },
     }],
   });
-  assert.equal(event.metadataJson.canonicalToolId, 'coverage-options');
+  assert.equal(event.metadataJson.canonicalToolId, 'coverage-intelligence');
   assert.equal(event.metadataJson.sourceId, 'project-1');
   assert.equal(event.metadataJson.analyticsAudience, 'REAL_USER');
   assert.equal(event.metadataJson.syntheticQa, false);

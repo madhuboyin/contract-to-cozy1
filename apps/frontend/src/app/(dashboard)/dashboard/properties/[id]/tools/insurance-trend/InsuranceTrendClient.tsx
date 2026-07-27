@@ -24,7 +24,7 @@ function pct(n: number | null | undefined) {
   return `${(n * 100).toFixed(1)}%`;
 }
 
-export default function InsuranceTrendClient() {
+export default function InsuranceTrendClient({ embedded = false }: { embedded?: boolean }) {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const searchParams = useSearchParams();
@@ -52,7 +52,7 @@ export default function InsuranceTrendClient() {
   useEffect(() => {
     if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
     workflowCompletedTrackedRef.current = true;
-    track('workflow_completed', { tool: 'insurance-trend', propertyId });
+    track('workflow_completed', { tool: 'coverage-intelligence', propertyId });
   }, [propertyId, data]);
 
   async function getAndSet(years: 5 | 10) {
@@ -75,7 +75,7 @@ export default function InsuranceTrendClient() {
   useEffect(() => {
     if (!propertyId) return;
     getAndSet(trendYears);
-    track('workflow_started', { tool: 'insurance-trend', propertyId, entryPoint: 'direct' });
+    track('workflow_started', { tool: 'coverage-intelligence', propertyId, entryPoint: 'direct' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
@@ -115,6 +115,7 @@ export default function InsuranceTrendClient() {
 
   return (
     <ToolWorkspaceTemplate
+      embedded={embedded}
       backHref={
         guidanceBackHref
           ? guidanceBackHref
@@ -132,7 +133,7 @@ export default function InsuranceTrendClient() {
       eyebrow="Estimate"
       title="Insurance Cost Trend"
       subtitle="Based on local trends — not your actual policy data."
-      introAction={
+      introAction={embedded ? undefined : (
         /* Mobile-only Home tools trigger — hidden on desktop */
         <HomeToolsRail
           propertyId={propertyId}
@@ -140,7 +141,7 @@ export default function InsuranceTrendClient() {
           currentToolId="insurance-trend"
           showDesktop={false}
         />
-      }
+      )}
       trust={insuranceTrendTrust({
         confidenceLabel: data?.meta?.confidence ?? 'Heuristic estimate — confidence reflects local trend data quality.',
         freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest local trend data' : 'Analyzing your property…',
@@ -162,12 +163,14 @@ export default function InsuranceTrendClient() {
       )}
 
       {/* ── Tool identity + Related tools — desktop only, above NBA ──── */}
-      <HomeToolHeader
-        toolId="insurance-trend"
-        propertyId={propertyId}
-        context="insurance-trend"
-        currentToolId="insurance-trend"
-      />
+      {!embedded ? (
+        <HomeToolHeader
+          toolId="coverage-intelligence"
+          propertyId={propertyId}
+          context="coverage-intelligence"
+          currentToolId="coverage-intelligence"
+        />
+      ) : null}
 
       {/* ── Hero: Next Best Action — 2-column on desktop ────────────────── */}
       {loading && !data ? (

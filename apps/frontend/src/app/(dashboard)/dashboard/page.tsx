@@ -33,8 +33,6 @@ import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import AhaHero from './components/AhaHero';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
-import CoverageIntelligenceToolCard from './components/CoverageIntelligenceToolCard';
-import RiskPremiumOptimizerToolCard from './components/RiskPremiumOptimizerToolCard';
 import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard';
 import HomeSavingsCheckToolCard from './components/HomeSavingsCheckToolCard';
 import MorningHomePulseCard from './components/MorningHomePulseCard';

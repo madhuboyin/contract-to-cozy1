@@ -80,8 +80,11 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
   },
   '/dashboard/risk-premium-optimizer': {
     navTarget: 'risk-premium-optimizer',
-    toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer`, query),
+    toPropertyHref: (propertyId, query) => {
+      const nextQuery = new URLSearchParams(query);
+      nextQuery.set('stage', 'risk');
+      return buildHref(`/dashboard/properties/${propertyId}/tools/coverage-intelligence`, nextQuery);
+    },
   },
   '/dashboard/do-nothing-simulator': {
     navTarget: 'do-nothing',
@@ -147,8 +150,11 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
   },
   '/dashboard/insurance-trend': {
     navTarget: 'insurance-trend',
-    toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/tools/insurance-trend`, query),
+    toPropertyHref: (propertyId, query) => {
+      const nextQuery = new URLSearchParams(query);
+      nextQuery.set('stage', 'renewal');
+      return buildHref(`/dashboard/properties/${propertyId}/tools/coverage-intelligence`, nextQuery);
+    },
   },
   '/dashboard/cost-growth': {
     navTarget: 'cost-growth',

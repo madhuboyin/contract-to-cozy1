@@ -10,11 +10,13 @@ describe('toolDiscoveryRegistry', () => {
     expect(canonicalizeDiscoverableToolId('maintenance')).toBeNull();
   });
 
-  it('retains presentation lookup for canonical tool identifiers', () => {
+  it('maps legacy coverage tools to one canonical presentation', () => {
     expect(getDiscoverableTool('coverage-options')).toMatchObject({
-      id: 'coverage-options',
-      label: 'Coverage Options',
+      id: 'coverage-intelligence',
+      label: 'Coverage & Premium Review',
     });
+    expect(canonicalizeDiscoverableToolId('insurance-trend')).toBe('coverage-intelligence');
+    expect(canonicalizeDiscoverableToolId('risk-premium-optimizer')).toBe('coverage-intelligence');
     expect(getDiscoverableTool('quote-comparison')).toMatchObject({
       id: 'quote-comparison',
       workflowOnly: true,
@@ -22,7 +24,7 @@ describe('toolDiscoveryRegistry', () => {
   });
 
   it('preserves safe recommendation context in property-aware links', () => {
-    const tool = getDiscoverableTool('coverage-options')!;
+    const tool = getDiscoverableTool('coverage-intelligence')!;
     const href = tool.buildHref('property-1', {
       launchSurface: 'unified_home',
       sourceActionId: 'action-1',
@@ -32,7 +34,7 @@ describe('toolDiscoveryRegistry', () => {
       recommendationVersion: 'capability-recommendation-v1',
     });
 
-    expect(href).toContain('/dashboard/properties/property-1/tools/coverage-options');
+    expect(href).toContain('/dashboard/properties/property-1/tools/coverage-intelligence');
     expect(href).toContain('launchSurface=unified_home');
     expect(href).toContain('sourceActionId=action-1');
     expect(href).toContain('sourceEntityId=furnace-1');

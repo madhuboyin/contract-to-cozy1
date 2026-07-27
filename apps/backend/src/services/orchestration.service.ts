@@ -668,7 +668,7 @@ function buildToolPath(params: {
       );
     case 'risk-premium-optimizer':
       return appendQueryParams(
-        `/dashboard/properties/${params.propertyId}/tools/risk-premium-optimizer`,
+        `/dashboard/properties/${params.propertyId}/tools/coverage-intelligence?stage=risk`,
         queryParams
       );
     case 'do-nothing':
@@ -1279,7 +1279,7 @@ function buildFeatureDecisionCandidates(params: {
           ? recommendation.detail
           : params.riskPremiumAnalysis.summary ??
             'Risk-to-Premium Optimizer identified a near-term premium action.',
-      targetTool: 'risk-premium-optimizer',
+      targetTool: 'coverage-intelligence',
       targetPath: buildToolPath({
         propertyId: params.base.propertyId,
         tool: 'risk-premium-optimizer',

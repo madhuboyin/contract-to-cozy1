@@ -61,7 +61,7 @@ export type CoverageAnalysisDTO = {
     action?: {
       label: string;
       href: string;
-      targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+      targetTool: 'providers' | 'insurance' | 'coverage-intelligence';
     };
   }>;
 
@@ -117,7 +117,7 @@ export type ItemCoverageAnalysisDTO = {
     action?: {
       label: string;
       href: string;
-      targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+      targetTool: 'providers' | 'insurance' | 'coverage-intelligence';
     };
   }>;
 

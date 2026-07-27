@@ -119,7 +119,6 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   climate: 'CLIMATE_RISK',
   modifications: 'HOME_UPGRADES',
   'coverage-intelligence': 'COVERAGE_INTELLIGENCE',
-  'risk-premium-optimizer': 'RISK_PREMIUM_OPTIMIZER',
   'replace-repair': 'REPLACE_OR_REPAIR',
   'do-nothing-simulator': 'DO_NOTHING_SIMULATOR',
   'home-savings': 'HOME_SAVINGS',
@@ -131,7 +130,6 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'service-price-radar': 'SERVICE_PRICE_RADAR',
   'property-tax': 'PROPERTY_TAX',
   'cost-growth': 'COST_GROWTH',
-  'insurance-trend': 'INSURANCE_TREND',
   'negotiation-shield': 'NEGOTIATION_SHIELD',
   'price-finalization': 'PRICE_FINALIZATION',
   'cost-explainer': 'COST_EXPLAINER',
@@ -158,7 +156,6 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'reserve-fund': 'RESERVE_FUND',
   'home-timeline': 'HOME_TIMELINE',
   financing: 'FINANCING',
-  'coverage-options': 'COVERAGE_OPTIONS',
   'material-specs': 'MATERIAL_SPECS',
   diy: 'DIY',
   permits: 'PERMITS',
@@ -169,8 +166,7 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
 
 const BETA_TOOL_IDS = new Set([
   'emergency', 'documents', 'budget', 'climate', 'modifications', 'energy',
-  'coverage-intelligence', 'coverage-options', 'insurance-trend',
-  'risk-premium-optimizer', 'neighborhood-change-radar',
+  'coverage-intelligence', 'neighborhood-change-radar',
 ]);
 
 const MATERIAL_TOOL_IDS = new Set([
@@ -180,11 +176,10 @@ const MATERIAL_TOOL_IDS = new Set([
 ]);
 
 const COVERAGE_TOOL_IDS = new Set([
-  'coverage-intelligence', 'coverage-options', 'insurance-trend', 'risk-premium-optimizer',
+  'coverage-intelligence',
 ]);
 
 const REQUIREMENT_OVERRIDES: Record<string, Partial<DiscoverableToolDefinition['requirements']>> = {
-  'coverage-options': { minimumCoverageGaps: 1 },
   'capital-timeline': { minimumTrackedSystems: 1 },
   'reserve-fund': { minimumTrackedSystems: 1 },
   'hidden-asset-finder': { minimumTrackedSystems: 1 },
@@ -313,7 +308,9 @@ const aiOnlyTools: DiscoverableToolDefinition[] = MOBILE_AI_TOOL_CATALOG
     icon: tool.icon,
     workflowOnly: false,
     baseHref: (propertyId) => buildPropertyAwareDashboardHref(propertyId, tool.href),
-    routeHints: [tool.href],
+    routeHints: tool.key === 'coverage-intelligence'
+      ? [tool.href, 'coverage-options', 'insurance-trend', 'risk-premium-optimizer']
+      : [tool.href],
   }));
 
 const DISCOVERABLE_TOOLS = [...homeTools, ...aiOnlyTools];
@@ -322,9 +319,12 @@ const TOOL_ID_ALIASES: Record<string, string> = {
   'budget-planner': 'budget',
   'climate-risk': 'climate',
   'coverage-analysis': 'coverage-intelligence',
+  'coverage-options': 'coverage-intelligence',
   'document-vault': 'documents',
   'do-nothing': 'do-nothing-simulator',
   'energy-audit': 'energy',
+  'insurance-trend': 'coverage-intelligence',
+  'risk-premium-optimizer': 'coverage-intelligence',
   hoa: 'hoa-compliance',
   'home-capital-timeline': 'capital-timeline',
   'home-upgrades': 'modifications',

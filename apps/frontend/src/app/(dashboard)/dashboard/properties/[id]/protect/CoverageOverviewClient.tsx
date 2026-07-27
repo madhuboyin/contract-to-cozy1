@@ -154,13 +154,13 @@ export default function CoverageOverviewClient() {
     NO_PROPERTY_POLICY:        { href: `/dashboard/properties/${propertyId}/vault`,                             label: 'Add Insurance Policy'      },
     DEDUCTIBLE_VS_BUFFER_HIGH: { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,      label: 'Review Deductible Strategy' },
     DEDUCTIBLE_VS_BUFFER_MEDIUM: { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,    label: 'Review Deductible Strategy' },
-    PROPERTY_RISK_HIGH:        { href: `/dashboard/properties/${propertyId}/tools/coverage-options`,            label: 'Review Coverage Limits'     },
+    PROPERTY_RISK_HIGH:        { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=questions`, label: 'Review Coverage Questions' },
     CLAIMS_FREQUENCY:          { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,      label: 'View Coverage Analysis'     },
     INVENTORY_COVERAGE_GAPS:   { href: `/dashboard/properties/${propertyId}/inventory`,                        label: 'Review Item Coverage'       },
     MAINTENANCE_BACKLOG:       { href: `/dashboard/properties/${propertyId}/fix`,                              label: 'View Pending Tasks'         },
     PREMIUM_PRESSURE:          { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,      label: 'Run Value Check'            },
   };
-  const GAP_FALLBACK = { href: `/dashboard/properties/${propertyId}/tools/coverage-options`, label: 'View Coverage Options' };
+  const GAP_FALLBACK = { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=questions`, label: 'Review Coverage Questions' };
 
   if (analysisLoading || claimsLoading) {
     return (
@@ -428,7 +428,7 @@ export default function CoverageOverviewClient() {
                       ? <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
                       : (
                         <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-brand-600 hover:text-white transition-all shrink-0" asChild>
-                          <Link href={`/dashboard/properties/${propertyId}/tools/coverage-options`}>Explore <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+                          <Link href={`/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=questions`}>Review <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
                         </Button>
                       )
                     }
