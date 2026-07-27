@@ -8,6 +8,7 @@ import {
   createScenarioBodySchema,
   updateScenarioBodySchema,
   confirmComponentBodySchema,
+  scenarioDecisionBodySchema,
 } from '../validators/homeDigitalTwin.validators';
 import {
   getTwin,
@@ -23,6 +24,8 @@ import {
   computeScenario,
   getScenarioReadiness,
   compareScenarios,
+  recordScenarioDecision,
+  getScenarioHandoff,
 } from '../controllers/homeDigitalTwin.controller';
 
 const router = Router();
@@ -317,6 +320,50 @@ router.get(
   '/properties/:propertyId/home-digital-twin/components/:componentId/scenarios/compare',
   propertyAuthMiddleware,
   compareScenarios,
+);
+
+// ============================================================================
+// DECISION AND EXECUTION LOOP
+// ============================================================================
+
+/**
+ * PATCH /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/decision
+ *
+ * Records the homeowner's disposition on a computed option — select, defer,
+ * reject, or close. Separate from scenario `status` (which only tracks
+ * whether it has been computed). Calling this again with a new status is
+ * how a decision gets revised (e.g. DEFERRED -> SELECTED later); there's no
+ * separate "revise" verb.
+ *
+ * Body:
+ *   decisionStatus  OPEN | SELECTED | DEFERRED | REJECTED | CLOSED (required)
+ *   decisionReason  string (required for DEFERRED/REJECTED, optional otherwise)
+ */
+router.patch(
+  '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/decision',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(scenarioDecisionBodySchema),
+  recordScenarioDecision,
+);
+
+/**
+ * GET /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/handoff
+ *
+ * Everything needed to act on a decision without re-entering what's already
+ * known: a link to any project already created from this scenario (matched
+ * via ProjectRecord.sourceEntityType/sourceEntityId — the same generic
+ * linkage every other capability uses to hand off to Project Tracker), a
+ * pre-fill payload + href for creating a new one, and wayfinding links to
+ * the other surfaces a decision might need next (inspection, Service Price
+ * Radar, Renovation Advisor, reserve fund, capital timeline). This does not
+ * create or modify anything — it only assembles links to existing owning
+ * surfaces, consistent with the twin being a lens over canonical data.
+ */
+router.get(
+  '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/handoff',
+  propertyAuthMiddleware,
+  getScenarioHandoff,
 );
 
 export default router;

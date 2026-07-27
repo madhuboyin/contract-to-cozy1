@@ -14,9 +14,12 @@
 import {
   HomeTwinScenarioType,
   HomeTwinScenarioStatus,
+  HomeTwinScenarioDecisionStatus,
   HomeTwinImpactType,
   HomeTwinImpactDirection,
   HomeTwinComponentType,
+  ProjectType,
+  InventoryItemCategory,
   Prisma,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -129,6 +132,55 @@ const SAFETY_BOUNDARY_BY_COMPONENT: Partial<Record<HomeTwinComponentType, string
   ROOF: 'Roof condition should be confirmed by a physical inspection before committing to repair or replacement — age and evidence-based estimates cannot substitute for seeing the actual surface and flashing.',
   FOUNDATION: 'Foundation issues should be evaluated by a structural engineer or licensed contractor before any repair decision — this estimate is a planning range, not a structural assessment.',
 };
+
+// Maps a component type to the Project Tracker's own category/type
+// vocabulary, so "create a project from this decision" can hand off to the
+// existing project creation flow pre-filled instead of asking the homeowner
+// to re-describe what they just decided (HDT slice 5: "move from question to
+// decision to accepted next action without duplicate entry").
+const PROJECT_TYPE_BY_COMPONENT: Partial<Record<HomeTwinComponentType, ProjectType>> = {
+  ROOF: 'ROOF_REPLACEMENT',
+  HVAC: 'HVAC_REPLACEMENT',
+  WATER_HEATER: 'WATER_HEATER',
+  PLUMBING: 'PLUMBING_REPIPING',
+  ELECTRICAL: 'ELECTRICAL_PANEL',
+  WINDOWS: 'WINDOW_REPLACEMENT',
+  SOLAR: 'SOLAR_INSTALLATION',
+  FLOORING: 'FLOORING',
+  FOUNDATION: 'FOUNDATION_WORK',
+};
+
+const CATEGORY_BY_COMPONENT: Record<HomeTwinComponentType, InventoryItemCategory> = {
+  ROOF: 'ROOF_EXTERIOR',
+  HVAC: 'HVAC',
+  WATER_HEATER: 'PLUMBING',
+  PLUMBING: 'PLUMBING',
+  ELECTRICAL: 'ELECTRICAL',
+  INSULATION: 'STRUCTURAL',
+  WINDOWS: 'EXTERIOR',
+  SOLAR: 'EXTERIOR',
+  FLOORING: 'INTERIOR',
+  EXTERIOR: 'EXTERIOR',
+  FOUNDATION: 'STRUCTURAL',
+  APPLIANCE: 'APPLIANCE',
+  OTHER: 'OTHER',
+};
+
+/**
+ * Only HVAC has a dedicated "_REPAIR" ProjectType — every other component
+ * falls back to GENERAL_REPAIR for a repair-only scenario rather than
+ * mislabeling a repair as a replacement project.
+ */
+export function projectContextForScenario(
+  componentType: HomeTwinComponentType | null,
+  scenarioType: HomeTwinScenarioType,
+): { projectType: ProjectType; category: InventoryItemCategory | null } {
+  const category = componentType ? CATEGORY_BY_COMPONENT[componentType] : null;
+  if (scenarioType === 'REPAIR_COMPONENT') {
+    return { projectType: componentType === 'HVAC' ? 'HVAC_REPAIR' : 'GENERAL_REPAIR', category };
+  }
+  return { projectType: (componentType && PROJECT_TYPE_BY_COMPONENT[componentType]) || 'CUSTOM', category };
+}
 
 /**
  * Turns a point estimate into a low/base/high range, with the spread
@@ -865,7 +917,7 @@ const COMPONENT_SELECT = {
 
 const SCENARIO_INCLUDE = {
   impacts: { orderBy: { sortOrder: 'asc' as const } },
-  component: { select: { id: true, componentType: true, label: true } },
+  component: { select: { id: true, componentType: true, label: true, sourceType: true, sourceReferenceId: true } },
   computationRuns: {
     where: { runType: 'SCENARIO_COMPUTE' as const },
     orderBy: { startedAt: 'desc' as const },
@@ -888,6 +940,7 @@ function withSafetyBoundary(scenario: ScenarioWithRelations) {
     ?? (inputPayload.componentType as HomeTwinComponentType | undefined)
     ?? null;
   const latestRun = scenario.computationRuns[0] ?? null;
+  const projectContext = projectContextForScenario(componentType, scenario.scenarioType);
   return {
     ...scenario,
     safetyBoundary: componentType ? SAFETY_BOUNDARY_BY_COMPONENT[componentType] ?? null : null,
@@ -895,6 +948,14 @@ function withSafetyBoundary(scenario: ScenarioWithRelations) {
     latestRun: latestRun
       ? { status: latestRun.status, startedAt: latestRun.startedAt, completedAt: latestRun.completedAt, errorMessage: latestRun.errorMessage }
       : null,
+    // Pre-fill for the existing "new project" flow, which already accepts
+    // sourceEntityType/sourceEntityId/projectType/category/itemId as query
+    // params — see homeDigitalTwinScenario.service.ts getHandoffContext().
+    projectPrefill: {
+      projectType: projectContext.projectType,
+      category: projectContext.category,
+      inventoryItemId: scenario.component?.sourceType === 'INVENTORY' ? scenario.component.sourceReferenceId : null,
+    },
   };
 }
 
@@ -1221,6 +1282,94 @@ export class HomeDigitalTwinScenarioService {
     return {
       component,
       options: scenarios.map(withSafetyBoundary),
+    };
+  }
+
+  // ── Decision (select / defer / reject / close) ─────────────────────────────
+  /**
+   * Records the homeowner's disposition on a computed option. This is a
+   * deliberate action distinct from `status` (which just tracks whether the
+   * numbers have been computed) — see HDT slice 5's decision-and-execution
+   * loop. "Revise" is just calling this again with a new status; there's no
+   * separate state machine to enforce since a homeowner can always change
+   * their mind (e.g. DEFERRED -> SELECTED later).
+   */
+  async recordDecision(
+    scenarioId: string,
+    digitalTwinId: string,
+    input: { decisionStatus: HomeTwinScenarioDecisionStatus; decisionReason?: string | null; userId: string },
+  ) {
+    const existing = await prisma.homeTwinScenario.findFirst({
+      where: { id: scenarioId, digitalTwinId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
+    }
+
+    const scenario = await prisma.homeTwinScenario.update({
+      where: { id: scenarioId },
+      data: {
+        decisionStatus: input.decisionStatus,
+        decisionReason: input.decisionReason ?? null,
+        decidedAt: new Date(),
+        decidedByUserId: input.userId,
+      },
+      include: SCENARIO_INCLUDE,
+    });
+
+    logger.info(
+      `[HomeDigitalTwin] scenario decision recorded — id=${scenarioId} decision=${input.decisionStatus}`,
+    );
+
+    return withSafetyBoundary(scenario);
+  }
+
+  // ── Handoff (execute the decision without duplicate entry) ────────────────
+  /**
+   * Everything the UI needs to move from "I've decided" to "I've acted,"
+   * pointing at each option's actual owning surface rather than rebuilding
+   * project creation, inspection, quote review, etc. inside the twin — see
+   * HDT-002/HDT-012 ("the twin is a lens over canonical data, not a new
+   * system of record").
+   */
+  async getHandoffContext(scenarioId: string, digitalTwinId: string, propertyId: string) {
+    const scenario = await prisma.homeTwinScenario.findFirst({
+      where: { id: scenarioId, digitalTwinId },
+      include: SCENARIO_INCLUDE,
+    });
+    if (!scenario) {
+      throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
+    }
+
+    const linkedProject = await prisma.projectRecord.findFirst({
+      where: { propertyId, sourceEntityType: 'HomeTwinScenario', sourceEntityId: scenarioId },
+      select: { id: true, name: true, status: true, projectType: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const { projectPrefill } = withSafetyBoundary(scenario);
+    const base = `/dashboard/properties/${propertyId}`;
+    const prefillParams = new URLSearchParams({
+      sourceEntityType: 'HomeTwinScenario',
+      sourceEntityId: scenarioId,
+      projectType: projectPrefill.projectType,
+      name: scenario.name,
+    });
+    if (projectPrefill.category) prefillParams.set('category', projectPrefill.category);
+    if (projectPrefill.inventoryItemId) prefillParams.set('itemId', projectPrefill.inventoryItemId);
+
+    return {
+      linkedProject,
+      projectPrefill,
+      createProjectHref: `${base}/projects/new?${prefillParams.toString()}`,
+      handoffLinks: {
+        inspection: `${base}/tools/inspection-hub?fromScenarioId=${scenarioId}`,
+        servicePriceRadar: `${base}/tools/service-price-radar?fromScenarioId=${scenarioId}`,
+        renovationAdvisor: `${base}/tools/home-renovation-risk-advisor?fromScenarioId=${scenarioId}`,
+        reserveFund: `${base}/tools/reserve-fund?fromScenarioId=${scenarioId}`,
+        capitalTimeline: `${base}/tools/capital-timeline?fromScenarioId=${scenarioId}`,
+      },
     };
   }
 }

@@ -3915,6 +3915,45 @@ export interface HomeTwinScenarioDTO {
     completedAt: string | null;
     errorMessage: string | null;
   } | null;
+  // Decision and execution loop — the homeowner's disposition on this
+  // option, separate from `status` above (which only tracks computation).
+  decisionStatus: HomeTwinScenarioDecisionStatus;
+  decisionReason: string | null;
+  decidedAt: string | null;
+  // Pre-fill for the existing "new project" flow (see projectPrefill on the
+  // backend service) — not persisted, computed at read time from the
+  // linked component's type.
+  projectPrefill: {
+    projectType: string;
+    category: string | null;
+    inventoryItemId: string | null;
+  };
+}
+
+export type HomeTwinScenarioDecisionStatus = 'OPEN' | 'SELECTED' | 'DEFERRED' | 'REJECTED' | 'CLOSED';
+
+/**
+ * Everything needed to act on a decided scenario without re-entering what's
+ * already known — a link to any project already created from it, a
+ * pre-fill href for creating a new one, and wayfinding links to the other
+ * surfaces a decision might need next. Assembled at read time; nothing here
+ * is persisted by this endpoint.
+ */
+export interface HomeTwinScenarioHandoffDTO {
+  linkedProject: { id: string; name: string; status: string; projectType: string } | null;
+  projectPrefill: {
+    projectType: string;
+    category: string | null;
+    inventoryItemId: string | null;
+  };
+  createProjectHref: string;
+  handoffLinks: {
+    inspection: string;
+    servicePriceRadar: string;
+    renovationAdvisor: string;
+    reserveFund: string;
+    capitalTimeline: string;
+  };
 }
 
 export interface HomeDigitalTwinDTO {

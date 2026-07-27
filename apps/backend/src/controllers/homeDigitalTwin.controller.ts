@@ -268,6 +268,44 @@ export async function compareScenarios(
   }
 }
 
+export async function recordScenarioDecision(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId, scenarioId } = req.params;
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new APIError('Authentication required', 401, 'NOT_AUTHENTICATED');
+    }
+    const twin = await getTwinIdForProperty(propertyId);
+    const scenario = await scenarioService.recordDecision(scenarioId, twin.id, {
+      decisionStatus: req.body.decisionStatus,
+      decisionReason: req.body.decisionReason,
+      userId,
+    });
+    res.json({ success: true, data: { scenario } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getScenarioHandoff(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId, scenarioId } = req.params;
+    const twin = await getTwinIdForProperty(propertyId);
+    const handoff = await scenarioService.getHandoffContext(scenarioId, twin.id, propertyId);
+    res.json({ success: true, data: { handoff } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ============================================================================
 // HELPER
 // ============================================================================

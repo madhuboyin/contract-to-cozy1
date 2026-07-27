@@ -7,6 +7,8 @@ import type {
   HomeTwinFactReadinessSummaryDTO,
   HomeTwinScenarioReadinessDTO,
   HomeTwinScenarioComparisonDTO,
+  HomeTwinScenarioHandoffDTO,
+  HomeTwinScenarioDecisionStatus,
   CreateScenarioInput,
   UpdateScenarioInput,
 } from '@/types';
@@ -118,4 +120,21 @@ export async function compareDigitalTwinScenarios(
   componentId: string,
 ): Promise<HomeTwinScenarioComparisonDTO | null> {
   return api.compareDigitalTwinScenarios(propertyId, componentId);
+}
+
+export async function recordDigitalTwinScenarioDecision(
+  propertyId: string,
+  scenarioId: string,
+  input: { decisionStatus: HomeTwinScenarioDecisionStatus; decisionReason?: string | null },
+): Promise<HomeTwinScenarioDTO> {
+  const result = await api.recordDigitalTwinScenarioDecision(propertyId, scenarioId, input);
+  if (!result) throw new Error('Failed to record scenario decision');
+  return result;
+}
+
+export async function getDigitalTwinScenarioHandoff(
+  propertyId: string,
+  scenarioId: string,
+): Promise<HomeTwinScenarioHandoffDTO | null> {
+  return api.getDigitalTwinScenarioHandoff(propertyId, scenarioId);
 }

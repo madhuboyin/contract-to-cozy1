@@ -58,6 +58,7 @@ import type {
   HomeTwinComponentDTO,
   HomeTwinComponentType,
   HomeTwinScenarioDTO,
+  HomeTwinScenarioDecisionStatus,
   HomeTwinScenarioImpactDTO,
   HomeTwinScenarioType,
   ScenarioSuggestionDTO,
@@ -70,6 +71,8 @@ import {
   createDigitalTwinScenario,
   computeDigitalTwinScenario,
   updateDigitalTwinScenario,
+  recordDigitalTwinScenarioDecision,
+  getDigitalTwinScenarioHandoff,
 } from './homeDigitalTwinApi';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 
@@ -177,6 +180,22 @@ const SCENARIO_STATUS_LABEL: Record<string, string> = {
   COMPUTED: 'Results Ready',
   FAILED: 'Compute Failed',
   ARCHIVED: 'Archived',
+};
+
+const DECISION_STATUS_LABEL: Record<HomeTwinScenarioDecisionStatus, string> = {
+  OPEN: 'No decision yet',
+  SELECTED: 'Selected',
+  DEFERRED: 'Deferred',
+  REJECTED: 'Rejected',
+  CLOSED: 'Closed',
+};
+
+const DECISION_STATUS_TONE: Record<HomeTwinScenarioDecisionStatus, 'good' | 'elevated' | 'danger' | 'info'> = {
+  OPEN: 'info',
+  SELECTED: 'good',
+  DEFERRED: 'elevated',
+  REJECTED: 'danger',
+  CLOSED: 'good',
 };
 
 type UrgencyTone = 'danger' | 'elevated' | 'info';
@@ -870,8 +889,10 @@ function ScenarioDetailSheet({
   onCompute,
   onPin,
   onArchive,
+  onDecide,
   isComputing,
   isUpdating,
+  isDeciding,
 }: {
   scenario: HomeTwinScenarioDTO | null;
   propertyId: string;
@@ -880,10 +901,35 @@ function ScenarioDetailSheet({
   onCompute: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
   onArchive: (id: string) => void;
+  onDecide: (id: string, decisionStatus: HomeTwinScenarioDecisionStatus, decisionReason: string | null) => void;
   isComputing: boolean;
   isUpdating: boolean;
+  isDeciding: boolean;
 }) {
+  const [decisionReason, setDecisionReason] = useState('');
+  const [reasonError, setReasonError] = useState<string | null>(null);
+
+  const { data: handoff } = useQuery({
+    queryKey: ['home-digital-twin-scenario-handoff', propertyId, scenario?.id],
+    queryFn: () => getDigitalTwinScenarioHandoff(propertyId, scenario?.id ?? ''),
+    enabled: open && !!scenario,
+  });
+
+  useEffect(() => {
+    setDecisionReason(scenario?.decisionReason ?? '');
+    setReasonError(null);
+  }, [scenario?.id]);
+
   if (!scenario) return null;
+
+  const handleDecide = (decisionStatus: HomeTwinScenarioDecisionStatus) => {
+    if ((decisionStatus === 'DEFERRED' || decisionStatus === 'REJECTED') && !decisionReason.trim()) {
+      setReasonError('Add a reason before deferring or rejecting.');
+      return;
+    }
+    setReasonError(null);
+    onDecide(scenario.id, decisionStatus, decisionReason.trim() || null);
+  };
 
   const canCompute = scenario.status === 'DRAFT' || scenario.status === 'READY';
   const statusTone =
@@ -910,7 +956,90 @@ function ScenarioDetailSheet({
               {SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
             </StatusChip>
             <StatusChip tone="info">{SCENARIO_TYPE_LABEL[scenario.scenarioType]}</StatusChip>
+            <StatusChip tone={DECISION_STATUS_TONE[scenario.decisionStatus]}>
+              {DECISION_STATUS_LABEL[scenario.decisionStatus]}
+            </StatusChip>
           </div>
+
+          {/* Decision — select / defer / reject / close, with a recorded reason */}
+          <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5">
+            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+              Your decision
+            </h3>
+            {scenario.decisionReason && (
+              <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                &ldquo;{scenario.decisionReason}&rdquo;
+                {scenario.decidedAt ? ` — ${formatDate(scenario.decidedAt)}` : ''}
+              </p>
+            )}
+            <textarea
+              className="w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-transparent px-2.5 py-1.5 text-xs"
+              rows={2}
+              placeholder="Reason (required to defer or reject)"
+              value={decisionReason}
+              onChange={(e) => {
+                setDecisionReason(e.target.value);
+                if (reasonError) setReasonError(null);
+              }}
+              aria-label="Decision reason"
+            />
+            {reasonError && <p className="text-xs text-red-600">{reasonError}</p>}
+            <div className="flex flex-wrap gap-1.5">
+              {(['SELECTED', 'DEFERRED', 'REJECTED', 'CLOSED'] as HomeTwinScenarioDecisionStatus[]).map((status) => (
+                <Button
+                  key={status}
+                  variant={scenario.decisionStatus === status ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-[70px]"
+                  disabled={isDeciding}
+                  onClick={() => handleDecide(status)}
+                  aria-label={`Mark this option as ${DECISION_STATUS_LABEL[status].toLowerCase()}`}
+                >
+                  {DECISION_STATUS_LABEL[status]}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Handoff — act on the decision without re-entering what's already known */}
+          {handoff && scenario.decisionStatus === 'SELECTED' && (
+            <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+                Next step
+              </h3>
+              {handoff.linkedProject ? (
+                <Link
+                  href={`/dashboard/properties/${propertyId}/projects/${handoff.linkedProject.id}`}
+                  className="block text-sm font-medium text-[hsl(var(--mobile-brand-strong))] underline-offset-2 hover:underline"
+                >
+                  View project: {handoff.linkedProject.name}
+                </Link>
+              ) : (
+                <Link href={handoff.createProjectHref} className="block">
+                  <Button variant="outline" size="sm" className="w-full">
+                    Create project from this decision
+                  </Button>
+                </Link>
+              )}
+              <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
+                <Link href={handoff.handoffLinks.servicePriceRadar} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                  Review quotes
+                </Link>
+                <Link href={handoff.handoffLinks.inspection} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                  Get an inspection
+                </Link>
+                <Link href={handoff.handoffLinks.renovationAdvisor} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                  Check renovation risk
+                </Link>
+                <Link href={handoff.handoffLinks.reserveFund} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                  Check reserve fund
+                </Link>
+                <Link href={handoff.handoffLinks.capitalTimeline} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                  View capital timeline
+                </Link>
+              </div>
+            </div>
+          )}
 
           {/* Category-specific professional/safety boundary */}
           {scenario.safetyBoundary && (
@@ -1294,6 +1423,32 @@ export default function HomeDigitalTwinClient() {
       toast({ title: 'Could not update scenario. Please try again.', variant: 'destructive' }),
   });
 
+  // ── Decision mutation (select / defer / reject / close) ────────────────────
+  const decisionMutation = useMutation({
+    mutationFn: ({
+      id,
+      decisionStatus,
+      decisionReason,
+    }: {
+      id: string;
+      decisionStatus: HomeTwinScenarioDecisionStatus;
+      decisionReason: string | null;
+    }) => recordDigitalTwinScenarioDecision(propertyId, id, { decisionStatus, decisionReason }),
+    onSuccess: (scenario) => {
+      queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
+      toast({
+        title: 'Decision recorded',
+        description: `Marked as ${DECISION_STATUS_LABEL[scenario.decisionStatus].toLowerCase()}.`,
+      });
+    },
+    onError: (error) =>
+      toast({
+        title: 'Could not record decision',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      }),
+  });
+
   // Distinguish "not yet built" (API returned null) from "failed to load" (request error)
   const twinNotFound = !twinError && twin === null;
   const twinLoadError = twinError;
@@ -1517,8 +1672,12 @@ export default function HomeDigitalTwinClient() {
         onCompute={(id) => computeMutation.mutate(id)}
         onPin={(id, pinned) => updateMutation.mutate({ id, input: { isPinned: pinned } })}
         onArchive={(id) => updateMutation.mutate({ id, input: { isArchived: true } })}
+        onDecide={(id, decisionStatus, decisionReason) =>
+          decisionMutation.mutate({ id, decisionStatus, decisionReason })
+        }
         isComputing={computeMutation.isPending}
         isUpdating={updateMutation.isPending}
+        isDeciding={decisionMutation.isPending}
       />
     </MobilePageContainer>
   );

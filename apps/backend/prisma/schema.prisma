@@ -1821,6 +1821,7 @@ model User {
   radarNotificationDecisions       PropertyRadarNotificationDecision[]
   radarTaskLinksCreated            PropertyRadarTaskLink[] @relation("RadarTaskLinkCreator")
   createdHomeTwinScenarios         HomeTwinScenario[]
+  decidedHomeTwinScenarios         HomeTwinScenario[] @relation("HomeTwinScenarioDecidedBy")
   assumptionSetsCreated            AssumptionSet[]
 
   // Admin Analytics relations
@@ -10944,6 +10945,16 @@ enum HomeTwinScenarioStatus {
   ARCHIVED
 }
 
+// The homeowner's disposition on a computed option — separate from
+// HomeTwinScenarioStatus (which tracks whether it has been computed).
+enum HomeTwinScenarioDecisionStatus {
+  OPEN // no decision recorded yet
+  SELECTED // homeowner intends to move forward with this option
+  DEFERRED // acknowledged, revisit later (with reason)
+  REJECTED // ruled out (with reason)
+  CLOSED // execution loop finished — see linked ProjectRecord / Home Timeline
+}
+
 enum HomeTwinImpactType {
   UPFRONT_COST
   ANNUAL_SAVINGS
@@ -11250,6 +11261,15 @@ model HomeTwinScenario {
   isArchived       Boolean                @default(false)
   lastComputedAt   DateTime?
 
+  // Decision and execution loop (HDT slice 5): a homeowner's disposition on
+  // this option, distinct from computation `status` above. A scenario can be
+  // COMPUTED and still sit at decisionStatus=OPEN indefinitely — recording a
+  // decision is a deliberate homeowner action, not a side effect of compute.
+  decisionStatus   HomeTwinScenarioDecisionStatus @default(OPEN)
+  decisionReason   String?
+  decidedAt        DateTime?
+  decidedByUserId  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -11258,6 +11278,7 @@ model HomeTwinScenario {
   property    Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   component   HomeTwinComponent?       @relation(fields: [componentId], references: [id], onDelete: SetNull)
   createdBy   User?                    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  decidedBy   User?                    @relation("HomeTwinScenarioDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
   impacts     HomeTwinScenarioImpact[]
   computationRuns HomeTwinComputationRun[]
 
@@ -11268,6 +11289,7 @@ model HomeTwinScenario {
   @@index([propertyId, createdAt])
   @@index([createdByUserId, createdAt])
   @@index([componentId])
+  @@index([decisionStatus])
   @@map("home_twin_scenarios")
 }
 

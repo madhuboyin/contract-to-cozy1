@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   HomeTwinScenarioType,
+  HomeTwinScenarioDecisionStatus,
   HomeTwinImpactType,
   HomeTwinImpactDirection,
   HomeTwinComponentType,
@@ -237,3 +238,24 @@ export const updateScenarioBodySchema = z
     (d) => d.isPinned !== undefined || d.isArchived !== undefined,
     { message: 'At least one of isPinned or isArchived must be provided' },
   );
+
+// ============================================================================
+// SCENARIO DECISION (select / defer / reject / close)
+// ============================================================================
+
+export const scenarioDecisionBodySchema = z
+  .object({
+    decisionStatus: z.nativeEnum(HomeTwinScenarioDecisionStatus),
+    decisionReason: z.string().min(1).max(1000).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    // DEFERRED/REJECTED are only meaningful with a reason attached — this
+    // mirrors the "recorded reason" requirement from the HDT slice 5 plan.
+    if ((data.decisionStatus === 'DEFERRED' || data.decisionStatus === 'REJECTED') && !data.decisionReason?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['decisionReason'],
+        message: 'A reason is required when deferring or rejecting an option.',
+      });
+    }
+  });
