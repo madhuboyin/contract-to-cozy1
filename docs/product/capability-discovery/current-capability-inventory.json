@@ -370,8 +370,8 @@
       "outcomeCategory": "PROTECT_MONITOR",
       "rolloutKey": "HOME_DIGITAL_TWIN",
       "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_VIEWED",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "ARTIFACT_CREATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

@@ -3825,6 +3825,10 @@ export interface HomeTwinScenarioImpactDTO {
   unit: string | null;
   confidenceScore: number | null;
   sortOrder: number;
+  // True when this row reflects a homeowner-entered assumption rather than
+  // an engine-computed figure. Must be rendered distinctly from computed
+  // impacts, never blended in as system evidence.
+  isUserSupplied: boolean;
 }
 
 export interface HomeTwinScenarioDTO {

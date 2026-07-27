@@ -10839,6 +10839,10 @@ model HomeTwinScenarioImpact {
   direction       HomeTwinImpactDirection @default(UNKNOWN)
   confidenceScore Float?
   sortOrder       Int                     @default(0)
+  // True when this row's values were supplied directly by the caller
+  // (CUSTOM scenario expectedImpacts) rather than computed by the engine.
+  // Must never be presented as system-computed evidence.
+  isUserSupplied  Boolean                 @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -311,11 +311,16 @@ export class HomeDigitalTwinBuilderService {
       let sourceRef: string | null = null;
       let knownPoints = 0;
       let dataSourceNote: string;
+      // Tracks whether installYear reflects a real observed date rather than
+      // a system-derived assumption — status must key off this, not off
+      // whether installYear happens to be non-null.
+      let isKnownSource = false;
 
       if (installYear) {
         knownPoints++;
         sourceType = 'PROPERTY_PROFILE';
         dataSourceNote = 'Install year from property profile';
+        isKnownSource = true;
       } else if (primaryHvac?.installedOn || primaryHvac?.purchasedOn) {
         const invAge = ageFromDate(primaryHvac.installedOn ?? primaryHvac.purchasedOn);
         installYear = invAge ? yr - Math.floor(invAge) : null;
@@ -323,6 +328,7 @@ export class HomeDigitalTwinBuilderService {
         sourceRef = primaryHvac.id;
         knownPoints++;
         dataSourceNote = 'Age derived from inventory item date';
+        isKnownSource = true;
       } else if (property.yearBuilt) {
         // Assume HVAC was replaced ~5 years after build as a conservative estimate
         installYear = property.yearBuilt + 5;
@@ -347,7 +353,7 @@ export class HomeDigitalTwinBuilderService {
       specs.push({
         componentType: 'HVAC',
         label: 'HVAC System',
-        status: installYear ? 'KNOWN' : 'ESTIMATED',
+        status: isKnownSource ? 'KNOWN' : 'ESTIMATED',
         sourceType,
         sourceReferenceId: sourceRef,
         installYear,
@@ -386,10 +392,15 @@ export class HomeDigitalTwinBuilderService {
       let sourceRef: string | null = null;
       let knownPoints = 0;
       let dataSourceNote: string;
+      // Tracks whether installYear reflects a real observed date rather than
+      // a system-derived assumption — status must key off this, not off
+      // whether installYear happens to be non-null.
+      let isKnownSource = false;
 
       if (installYear) {
         knownPoints++;
         dataSourceNote = 'Install year from property profile';
+        isKnownSource = true;
       } else if (primaryWh?.installedOn || primaryWh?.purchasedOn) {
         const invAge = ageFromDate(primaryWh.installedOn ?? primaryWh.purchasedOn);
         installYear = invAge ? yr - Math.floor(invAge) : null;
@@ -397,6 +408,7 @@ export class HomeDigitalTwinBuilderService {
         sourceRef = primaryWh.id;
         knownPoints++;
         dataSourceNote = 'Age derived from inventory item date';
+        isKnownSource = true;
       } else if (property.yearBuilt) {
         installYear = property.yearBuilt;
         sourceType = 'SYSTEM_DERIVED';
@@ -413,7 +425,7 @@ export class HomeDigitalTwinBuilderService {
       specs.push({
         componentType: 'WATER_HEATER',
         label: 'Water Heater',
-        status: installYear ? 'KNOWN' : 'ESTIMATED',
+        status: isKnownSource ? 'KNOWN' : 'ESTIMATED',
         sourceType,
         sourceReferenceId: sourceRef,
         installYear,

@@ -173,6 +173,11 @@ const MATERIAL_TOOL_IDS = new Set([
   'replace-repair', 'sell-hold-rent', 'break-even', 'do-nothing-simulator',
   'property-tax', 'cost-growth', 'cost-explainer', 'true-cost', 'cost-volatility',
   'capital-timeline', 'reserve-fund', 'financing', 'mortgage-refinance-radar',
+  // Mixed-consequence: the same route surfaces low-consequence record
+  // projection and MATERIAL_FINANCIAL scenario computation (replacement
+  // cost, savings, risk claims). See
+  // HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md Slice 0.
+  'home-digital-twin',
 ]);
 
 const COVERAGE_TOOL_IDS = new Set([
@@ -206,6 +211,7 @@ const COMPLETION_KIND_BY_CATEGORY: Record<ToolOutcomeCategory, ToolCompletionKin
 
 const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'home-digital-will': 'ARTIFACT_CREATED',
+  'home-digital-twin': 'ARTIFACT_CREATED',
   'material-specs': 'ARTIFACT_CREATED',
   'plant-advisor': 'OUTPUT_GENERATED',
   diy: 'DECISION_RECORDED',

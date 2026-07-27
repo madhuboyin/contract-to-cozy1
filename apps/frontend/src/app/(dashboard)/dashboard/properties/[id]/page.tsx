@@ -70,7 +70,6 @@ import RefinanceRadarDashboardCard from './components/RefinanceRadarDashboardCar
 import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner';
 import PropertyHubTemplate from './components/PropertyHubTemplate';
 import { HomeScoreReportCard } from '../../components/HomeScoreReportCard';
-import { DigitalTwinPreview } from './components/DigitalTwinPreview';
 import { buildHealthInsightResolutionHref } from '@/lib/navigation/healthInsightRouting';
 
 
@@ -422,65 +421,58 @@ const PropertyOverview = ({ property }: { property: Property }) => {
       {/* 1. HomeScore Hero */}
       <HomeScoreReportCard propertyId={property.id} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 2. Digital Twin Preview (Span 2) */}
-        <div className="lg:col-span-2">
-          <DigitalTwinPreview propertyId={property.id} />
-        </div>
-
-        {/* 3. Property Snapshot / Settings */}
-        <div className="space-y-4">
-          <MobileCard className="bg-white border-2 border-slate-50 shadow-sm p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h4 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <Home className="h-4 w-4 text-brand-600" />
-                Property Snapshot
-              </h4>
-              <div className="flex items-center gap-1">
-                <Link href={`/dashboard/properties/${property.id}/household`}>
-                  <Button variant="ghost" size="sm" className="h-10 min-h-[44px] px-2 text-[11px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
-                    <Users className="h-3 w-3 mr-1" />
-                    Household
-                  </Button>
-                </Link>
-                <Link href={`/dashboard/properties/${property.id}/edit`}>
-                  <Button variant="ghost" size="sm" className="h-10 min-h-[44px] px-2 text-[11px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
-                    <Edit className="h-3 w-3 mr-1" />
-                    Edit
-                  </Button>
-                </Link>
-              </div>
+      {/* 2. Property snapshot and contextual dashboard cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <MobileCard className="bg-white border-2 border-slate-50 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h4 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Home className="h-4 w-4 text-brand-600" />
+              Property Snapshot
+            </h4>
+            <div className="flex items-center gap-1">
+              <Link href={`/dashboard/properties/${property.id}/household`}>
+                <Button variant="ghost" size="sm" className="h-10 min-h-[44px] px-2 text-[11px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
+                  <Users className="h-3 w-3 mr-1" />
+                  Household
+                </Button>
+              </Link>
+              <Link href={`/dashboard/properties/${property.id}/edit`}>
+                <Button variant="ghost" size="sm" className="h-10 min-h-[44px] px-2 text-[11px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
+                  <Edit className="h-3 w-3 mr-1" />
+                  Edit
+                </Button>
+              </Link>
             </div>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500 font-medium">Type</span>
-                <span className="text-sm font-bold text-slate-900">{propertyTypeLabel}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500 font-medium">Size</span>
-                <span className="text-sm font-bold text-slate-900">{property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "—"}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500 font-medium">Built</span>
-                <span className="text-sm font-bold text-slate-900">{property.yearBuilt ?? "—"}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500 font-medium">Layout</span>
-                <span className="text-sm font-bold text-slate-900">{occupancyLabel}</span>
-              </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500 font-medium">Type</span>
+              <span className="text-sm font-bold text-slate-900">{propertyTypeLabel}</span>
             </div>
-          </MobileCard>
-          
-          <EnvironmentReportDashboardCard propertyId={property.id} />
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500 font-medium">Size</span>
+              <span className="text-sm font-bold text-slate-900">{property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "—"}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500 font-medium">Built</span>
+              <span className="text-sm font-bold text-slate-900">{property.yearBuilt ?? "—"}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500 font-medium">Layout</span>
+              <span className="text-sm font-bold text-slate-900">{occupancyLabel}</span>
+            </div>
+          </div>
+        </MobileCard>
 
-          <GazetteDashboardCard propertyId={property.id} />
+        <EnvironmentReportDashboardCard propertyId={property.id} />
 
-          <RefinanceRadarDashboardCard propertyId={property.id} />
+        <GazetteDashboardCard propertyId={property.id} />
 
-          {/* Legacy Plant Advisor */}
-          <PlantAdvisorDashboardCard propertyId={property.id} />
-        </div>
+        <RefinanceRadarDashboardCard propertyId={property.id} />
+
+        {/* Legacy Plant Advisor */}
+        <PlantAdvisorDashboardCard propertyId={property.id} />
       </div>
     </div>
   );

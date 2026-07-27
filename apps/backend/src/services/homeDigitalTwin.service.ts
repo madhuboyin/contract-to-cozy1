@@ -12,7 +12,6 @@ import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { HomeDigitalTwinBuilderService } from './homeDigitalTwinBuilder.service';
 import { HomeDigitalTwinQualityService } from './homeDigitalTwinQuality.service';
-import { maybeMarkPropertyActivated } from './property.service';
 import { getPlanningContextDecisions } from './planningContext/context';
 import { logger } from '../lib/logger';
 
@@ -256,19 +255,16 @@ export class HomeDigitalTwinService {
         data: { status: 'SUCCEEDED', completedAt: new Date() },
       });
 
-      // Analytics: digital twin initialized/activated
+      // Analytics: digital twin initialized. Initializing a projection is
+      // exposure, not homeowner value — it must not count as property
+      // activation (see
+      // HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md Slice 0).
       analyticsEmitter.featureOpened({
         propertyId,
         moduleKey: AnalyticsModule.DIGITAL_TWIN,
         featureKey: AnalyticsFeature.DIGITAL_TWIN,
         metadataJson: { twinId: twin.id, isNewTwin: !existing },
       });
-
-      // For new twins, digital twin initialization is a strong activation signal.
-      // This is idempotent — marks ACTIVATED only if not already set.
-      if (!existing) {
-        void maybeMarkPropertyActivated(propertyId, null);
-      }
     } catch (err) {
       // Mark run failed — don't swallow the error
       await prisma.homeTwinComputationRun.update({

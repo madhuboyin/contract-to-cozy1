@@ -40,7 +40,7 @@
 | guidance-overview | Guidance Overview | home, ai | `/dashboard/properties/[id]/tools/guidance-overview` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CATALOG_ONLY |
 | hidden-asset-finder | Hidden Asset Finder | home, ai | `/dashboard/properties/[id]/tools/hidden-asset-finder` | Verified | SAVE_OPTIMIZE | ACTIVE | LOW_CONSEQUENCE | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | hoa-compliance | HOA Compliance | home | `/dashboard/properties/[id]/tools/hoa` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
-| home-digital-twin | Home Digital Twin | home, ai | `/dashboard/properties/[id]/tools/home-digital-twin` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| home-digital-twin | Home Digital Twin | home, ai | `/dashboard/properties/[id]/tools/home-digital-twin` | Verified | PROTECT_MONITOR | ACTIVE | MATERIAL_FINANCIAL | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-digital-will | Home Digital Will | home, ai | `/dashboard/properties/[id]/tools/home-digital-will` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-event-radar | Home Event Radar | home, ai | `/dashboard/properties/[id]/tools/home-event-radar` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-gazette | Home Gazette | home, ai | `/dashboard/properties/[id]/tools/home-gazette` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CATALOG_ONLY |

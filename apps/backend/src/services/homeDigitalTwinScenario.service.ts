@@ -48,6 +48,9 @@ type ImpactSpec = {
   direction: HomeTwinImpactDirection;
   confidenceScore: number | null;
   sortOrder: number;
+  // True when values are caller-supplied rather than engine-computed.
+  // Defaulted per-branch below; only the CUSTOM branch sets this true.
+  isUserSupplied: boolean;
 };
 
 // ============================================================================
@@ -84,30 +87,6 @@ const DEFAULT_ANNUAL_MAINTENANCE: Record<HomeTwinComponentType, number> = {
   EXTERIOR:     300,
   FOUNDATION:   300,
   OTHER:        100,
-};
-
-// Fraction of upfront cost typically recovered in property resale value
-const PROPERTY_VALUE_ROI: Record<HomeTwinComponentType, number> = {
-  HVAC:         0.50,
-  WATER_HEATER: 0.45,
-  ROOF:         0.65,
-  PLUMBING:     0.40,
-  ELECTRICAL:   0.50,
-  INSULATION:   0.55,
-  WINDOWS:      0.60,
-  SOLAR:        0.70,
-  APPLIANCE:    0.35,
-  FLOORING:     0.55,
-  EXTERIOR:     0.50,
-  FOUNDATION:   0.45,
-  OTHER:        0.35,
-};
-
-// Estimated insurance discount per component replacement (fraction of current premium, rough heuristic)
-const INSURANCE_IMPACT_BY_COMPONENT: Partial<Record<HomeTwinComponentType, number>> = {
-  ROOF:       0.07,  // new roof → ~7% discount
-  ELECTRICAL: 0.05,
-  PLUMBING:   0.03,
 };
 
 // Components where replacing has notable comfort impact
@@ -191,14 +170,18 @@ function computeImpacts(
 
     const totalAnnualSavings = annualMaintSavings + annualEnergySavings;
     const paybackYears = totalAnnualSavings > 0 ? upfrontCost / totalAnnualSavings : null;
-    const propertyValueChange =
-      upfrontCost * (PROPERTY_VALUE_ROI[compType] ?? PROPERTY_VALUE_ROI.OTHER);
 
     const newUsefulLife = toNum(assumptions.newUsefulLifeYears);
     const riskReductionPct = toNum(assumptions.riskReductionPercent);
 
     // Confidence is higher when we have the component on record
     const hasComponent = component != null;
+
+    // NOTE: PROPERTY_VALUE_CHANGE is intentionally not computed here. It was
+    // previously derived from a static ROI-of-upfront-cost table with no
+    // appraisal or market evidence and presented as a confident dollar
+    // figure. Suppressed until a real evidence source exists (see
+    // HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md HDT-004).
 
     impacts.push(
       {
@@ -209,6 +192,7 @@ function computeImpacts(
         direction: 'NEGATIVE',
         confidenceScore: hasComponent ? 0.80 : 0.55,
         sortOrder: 0,
+        isUserSupplied: false,
       },
       {
         impactType: 'ANNUAL_SAVINGS',
@@ -218,6 +202,7 @@ function computeImpacts(
         direction: totalAnnualSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: hasComponent ? 0.70 : 0.45,
         sortOrder: 1,
+        isUserSupplied: false,
       },
       {
         impactType: 'PAYBACK_PERIOD',
@@ -227,15 +212,7 @@ function computeImpacts(
         direction: paybackYears != null && paybackYears <= 10 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: 0.65,
         sortOrder: 2,
-      },
-      {
-        impactType: 'PROPERTY_VALUE_CHANGE',
-        valueNumeric: Math.round(propertyValueChange),
-        valueText: null,
-        unit: 'USD',
-        direction: 'POSITIVE',
-        confidenceScore: 0.50,
-        sortOrder: 3,
+        isUserSupplied: false,
       },
       {
         impactType: 'MAINTENANCE_COST_CHANGE',
@@ -245,6 +222,7 @@ function computeImpacts(
         direction: annualMaintSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: hasComponent ? 0.70 : 0.45,
         sortOrder: 4,
+        isUserSupplied: false,
       },
     );
 
@@ -261,6 +239,7 @@ function computeImpacts(
         direction: 'POSITIVE',
         confidenceScore: 0.60,
         sortOrder: 5,
+        isUserSupplied: false,
       });
     }
 
@@ -283,25 +262,16 @@ function computeImpacts(
         direction: 'POSITIVE',
         confidenceScore: riskReductionPct != null ? 0.80 : 0.55,
         sortOrder: 6,
+        isUserSupplied: false,
       });
     }
 
-    // Insurance discount for components with known insurer response
-    const insuranceFraction = INSURANCE_IMPACT_BY_COMPONENT[compType];
-    if (insuranceFraction != null) {
-      // Rough estimate: median US home insurance is ~$1,800/yr
-      const estimatedAnnualPremium = 1800;
-      const annualInsuranceSaving = Math.round(estimatedAnnualPremium * insuranceFraction);
-      impacts.push({
-        impactType: 'INSURANCE_IMPACT',
-        valueNumeric: -annualInsuranceSaving,
-        valueText: `~$${annualInsuranceSaving}/yr insurance discount (estimate)`,
-        unit: 'USD',
-        direction: 'POSITIVE',
-        confidenceScore: 0.40, // heuristic — low confidence
-        sortOrder: 7,
-      });
-    }
+    // NOTE: INSURANCE_IMPACT is intentionally not computed here. It was
+    // previously derived from a fixed national premium assumption ($1,800/yr)
+    // and a per-component discount fraction with no carrier evidence, and
+    // presented as a specific dollar discount. Suppressed until a real
+    // insurer-eligibility source exists (see
+    // HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md HDT-004).
 
     // Comfort impact for relevant systems
     if (COMFORT_IMPACT_TYPES.has(compType)) {
@@ -313,10 +283,11 @@ function computeImpacts(
         direction: 'POSITIVE',
         confidenceScore: 0.75,
         sortOrder: 8,
+        isUserSupplied: false,
       });
     }
 
-    // CUSTOM takeaway: 10-year net financial picture
+    // System-generated summary (not a homeowner assumption — see isUserSupplied: false).
     if (totalAnnualSavings > 0) {
       const net10yr = Math.round(totalAnnualSavings * 10 - upfrontCost);
       const takeawayText =
@@ -331,6 +302,7 @@ function computeImpacts(
         direction: net10yr >= 0 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: 0.55,
         sortOrder: 9,
+        isUserSupplied: false,
       });
     }
 
@@ -343,6 +315,10 @@ function computeImpacts(
     const comfortDesc = inputPayload.comfortImpactDescription as string | undefined;
     const resilienceDesc = inputPayload.resilienceImpactDescription as string | undefined;
 
+    // upfrontCost, annualSavings, carbonOffset, comfortDesc, and resilienceDesc
+    // are homeowner-entered inputPayload values echoed back verbatim — marked
+    // isUserSupplied. Derived figures (payback, the restated energy-use
+    // number, the 10-yr summary) are engine-computed.
     impacts.push(
       {
         impactType: 'UPFRONT_COST',
@@ -352,6 +328,7 @@ function computeImpacts(
         direction: 'NEGATIVE',
         confidenceScore: 0.85,
         sortOrder: 0,
+        isUserSupplied: true,
       },
       {
         impactType: 'ANNUAL_SAVINGS',
@@ -361,6 +338,7 @@ function computeImpacts(
         direction: annualSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: 0.75,
         sortOrder: 1,
+        isUserSupplied: true,
       },
       {
         impactType: 'PAYBACK_PERIOD',
@@ -370,6 +348,7 @@ function computeImpacts(
         direction: paybackYears != null && paybackYears <= 10 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: 0.70,
         sortOrder: 2,
+        isUserSupplied: false,
       },
       {
         impactType: 'ENERGY_USE_CHANGE',
@@ -379,6 +358,7 @@ function computeImpacts(
         direction: annualSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: 0.70,
         sortOrder: 3,
+        isUserSupplied: false,
       },
     );
 
@@ -391,6 +371,7 @@ function computeImpacts(
         direction: 'POSITIVE',
         confidenceScore: 0.55,
         sortOrder: 4,
+        isUserSupplied: true,
       });
     }
 
@@ -403,6 +384,7 @@ function computeImpacts(
         direction: 'POSITIVE',
         confidenceScore: 0.65,
         sortOrder: 5,
+        isUserSupplied: true,
       });
     }
 
@@ -415,10 +397,11 @@ function computeImpacts(
         direction: 'POSITIVE',
         confidenceScore: 0.50,
         sortOrder: 6,
+        isUserSupplied: true,
       });
     }
 
-    // CUSTOM takeaway for energy improvement
+    // System-generated summary (not a homeowner assumption — see isUserSupplied: false).
     if (annualSavings > 0) {
       const net10yr = Math.round(annualSavings * 10 - upfrontCost);
       const takeawayText =
@@ -433,6 +416,7 @@ function computeImpacts(
         direction: net10yr >= 0 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: 0.55,
         sortOrder: 7,
+        isUserSupplied: false,
       });
     }
 
@@ -452,6 +436,7 @@ function computeImpacts(
       direction: 'NEGATIVE',
       confidenceScore: 0.85,
       sortOrder: 0,
+      isUserSupplied: true,
     });
 
     impacts.push({
@@ -465,19 +450,24 @@ function computeImpacts(
       direction: 'POSITIVE',
       confidenceScore: riskReductionPct != null ? 0.65 : 0.45,
       sortOrder: 1,
+      isUserSupplied: true,
     });
 
+    // Insurance savings and property-value change here are homeowner-entered
+    // assumptions (inputPayload.estimated*), not engine-computed claims — they
+    // are echoed back, not derived from carrier or appraisal evidence.
     if (insuranceSavings != null && insuranceSavings > 0) {
       const payback = insuranceSavings > 0 ? upfrontCost / insuranceSavings : null;
       impacts.push(
         {
           impactType: 'INSURANCE_IMPACT',
           valueNumeric: -insuranceSavings,
-          valueText: `Save ~$${insuranceSavings}/yr on insurance`,
+          valueText: `Save ~$${insuranceSavings}/yr on insurance (your estimate)`,
           unit: 'USD',
           direction: 'POSITIVE',
           confidenceScore: 0.55,
           sortOrder: 2,
+          isUserSupplied: true,
         },
         {
           impactType: 'PAYBACK_PERIOD',
@@ -487,6 +477,7 @@ function computeImpacts(
           direction: payback != null && payback <= 10 ? 'POSITIVE' : 'NEUTRAL',
           confidenceScore: 0.55,
           sortOrder: 3,
+          isUserSupplied: false,
         },
       );
     }
@@ -500,6 +491,7 @@ function computeImpacts(
         direction: propertyValueChange >= 0 ? 'POSITIVE' : 'NEGATIVE',
         confidenceScore: 0.40,
         sortOrder: 4,
+        isUserSupplied: true,
       });
     }
 
@@ -517,8 +509,10 @@ function computeImpacts(
       direction: 'NEGATIVE',
       confidenceScore: 0.80,
       sortOrder: 0,
+      isUserSupplied: true,
     });
 
+    // Homeowner-entered assumption, echoed back — not appraisal evidence.
     if (propertyValueChange != null) {
       impacts.push({
         impactType: 'PROPERTY_VALUE_CHANGE',
@@ -528,6 +522,7 @@ function computeImpacts(
         direction: propertyValueChange >= 0 ? 'POSITIVE' : 'NEGATIVE',
         confidenceScore: 0.45,
         sortOrder: 1,
+        isUserSupplied: true,
       });
     }
 
@@ -542,6 +537,7 @@ function computeImpacts(
           direction: annualSavings >= 0 ? 'POSITIVE' : 'NEGATIVE',
           confidenceScore: 0.55,
           sortOrder: 2,
+          isUserSupplied: true,
         },
         {
           impactType: 'PAYBACK_PERIOD',
@@ -551,6 +547,7 @@ function computeImpacts(
           direction: payback != null && payback <= 10 ? 'POSITIVE' : 'NEUTRAL',
           confidenceScore: 0.50,
           sortOrder: 3,
+          isUserSupplied: false,
         },
       );
     }
@@ -570,6 +567,7 @@ function computeImpacts(
         direction: 'NEGATIVE',
         confidenceScore: 0.75,
         sortOrder: 0,
+        isUserSupplied: true,
       });
     }
 
@@ -582,9 +580,11 @@ function computeImpacts(
         direction: annualSavings >= 0 ? 'POSITIVE' : 'NEGATIVE',
         confidenceScore: 0.60,
         sortOrder: 1,
+        isUserSupplied: true,
       });
     }
 
+    // Homeowner-entered assumption, echoed back — not appraisal evidence.
     if (propertyValueChange != null) {
       impacts.push({
         impactType: 'PROPERTY_VALUE_CHANGE',
@@ -594,11 +594,14 @@ function computeImpacts(
         direction: propertyValueChange >= 0 ? 'POSITIVE' : 'NEGATIVE',
         confidenceScore: 0.40,
         sortOrder: 2,
+        isUserSupplied: true,
       });
     }
 
   // ── CUSTOM ─────────────────────────────────────────────────────────────────
   } else {
+    // Caller-supplied — must never be presented as system-computed evidence.
+    // See HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md HDT-005.
     const expectedImpacts = inputPayload.expectedImpacts;
     if (Array.isArray(expectedImpacts)) {
       expectedImpacts.forEach((ei: unknown, idx: number) => {
@@ -611,6 +614,7 @@ function computeImpacts(
           direction: (item.direction as HomeTwinImpactDirection) ?? 'UNKNOWN',
           confidenceScore: toNum(item.confidenceScore),
           sortOrder: idx,
+          isUserSupplied: true,
         });
       });
     }

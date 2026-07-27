@@ -1249,19 +1249,23 @@ When work is completed:
 
 ### Slice 2 — Home Record correction and reconciliation
 
-**Goal:** Give homeowners control over the facts that drive the projection.
+**Goal:** Give homeowners control over the facts that drive the projection, without creating a new universal record surface.
+
+**Scope clarification:** "Home Record" is the existing property overview hub (`/dashboard/properties/[id]`, reached via `recordHref` from Unified Home and the Home Record job navigation entry), not a page that needs to be built. This slice adds a property-scoped fact-readiness and reconciliation *summary* to that existing hub. Corrections themselves remain owned by their existing canonical surfaces — property profile/edit, inventory, rooms, documents, policy, warranty, and project detail. A new universal Home Record CRUD page is explicitly out of scope.
 
 **Work**
 
-- Move fact readiness to Home Record and entity detail.
-- Add direct correction, confirmation, leave-unknown, and conflict-resolution actions.
-- Write corrections to canonical models.
+- Add a fact-readiness and reconciliation summary to the existing property overview hub: known, inferred, missing, and conflicting facts relevant to the projection.
+- Link each summary row to its existing owning surface (property edit, inventory, rooms, documents, policy, warranty, project detail) rather than building new correction UI.
+- Add confirmation, leave-unknown, and conflict-resolution actions at the point where each fact is already editable today.
+- Write corrections to canonical models via the existing surfaces.
 - Add document/inventory source linking.
 - Reconcile additions, deletions, replacement, retirement, and duplicate components.
 - Recompute affected projection fields after canonical changes.
+- Preserve entity focus and return context when linking out from the summary.
 
 **Dependencies:** Slice 1  
-**Exit criterion:** Every material inferred or conflicting fact has an understandable correction path and audit trail.
+**Exit criterion:** Every material inferred or conflicting fact is visible from the Home Record hub summary, links to its correct existing owning surface, and has an audit trail — without a new standalone correction page.
 
 ### Slice 3 — Status and lifecycle consolidation
 

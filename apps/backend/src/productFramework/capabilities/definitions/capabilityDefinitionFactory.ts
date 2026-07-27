@@ -236,7 +236,9 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     sourceKinds: ['SYSTEM', 'PERSONALIZATION'],
     triggerFamily: 'PROPERTY_CONTEXT_INCOMPLETE',
     reason: 'Known, missing, or conflicting Home Record facts can be reviewed together.',
-    safePartialValue: true,
+    // Not safe-partial-value: the capability also surfaces MATERIAL_FINANCIAL
+    // scenario computation, which safePartialValue is restricted from (see
+    // capability.contract.ts superRefine).
     readinessRequirements: [
       { kind: 'KNOWN_FACTS', minimum: 1, reason: 'Add at least one verified Home Record fact.' },
     ],

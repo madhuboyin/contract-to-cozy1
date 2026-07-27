@@ -58,6 +58,7 @@ import type {
   HomeTwinComponentDTO,
   HomeTwinComponentType,
   HomeTwinScenarioDTO,
+  HomeTwinScenarioImpactDTO,
   HomeTwinScenarioType,
   ScenarioSuggestionDTO,
 } from '@/types';
@@ -203,6 +204,17 @@ function componentStatusTone(
   if (c.status === 'NEEDS_REVIEW' || (ratio != null && ratio >= 0.60)) return 'elevated';
   if (c.status === 'KNOWN' && (ratio == null || ratio < 0.40)) return 'good';
   return 'info';
+}
+
+// Buckets an age-derived score into planning-window language. This is not a
+// calibrated failure probability — it reflects age relative to a typical
+// service-life range, nothing more.
+function planningAttentionLabel(score: number | null | undefined): string {
+  if (score == null) return 'Unknown';
+  if (score < 0.30) return 'Low — well within typical service life';
+  if (score < 0.50) return 'Moderate — within typical service life';
+  if (score < 0.70) return 'Elevated — approaching typical replacement window';
+  return 'High — past typical service life; inspection recommended';
 }
 
 function readinessLabel(score: number | null): string {
@@ -507,17 +519,18 @@ function ComponentDetailSheet({
             </div>
           </div>
 
-          {/* Risk */}
+          {/* Planning attention — age-based signal, not a failure probability */}
           {component.failureRiskScore != null && (
             <div className="space-y-1">
               <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
-                Failure Risk
+                Planning Attention
               </h3>
               <p className="text-sm font-semibold">
-                {formatPct(component.failureRiskScore)}
+                {planningAttentionLabel(component.failureRiskScore)}
               </p>
               <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                Estimated probability of a failure event requiring significant repair or replacement.
+                Based on age relative to a typical service-life range for this system. Age alone does not predict
+                failure — confirm current condition with an inspection before planning replacement.
               </p>
             </div>
           )}
@@ -849,11 +862,51 @@ function ScenarioDetailSheet({
 
           {/* Computed impacts */}
           {scenario.status === 'COMPUTED' && scenario.impacts.length > 0 && (() => {
-            const takeaway = scenario.impacts.find((i) => i.impactType === 'CUSTOM');
-            const mainImpacts = scenario.impacts.filter((i) => i.impactType !== 'CUSTOM');
+            // The takeaway banner may only come from a system-generated summary
+            // row, never a caller-supplied one — see HDT-005. isUserSupplied
+            // rows are rendered separately below as "Your estimates" so they
+            // are never blended in with computed evidence.
+            const takeaway = scenario.impacts.find(
+              (i) => i.impactType === 'CUSTOM' && !i.isUserSupplied,
+            );
+            const computedImpacts = scenario.impacts.filter(
+              (i) => i.impactType !== 'CUSTOM' && !i.isUserSupplied,
+            );
+            const userSuppliedImpacts = scenario.impacts.filter((i) => i.isUserSupplied);
+
+            const renderImpactRow = (impact: HomeTwinScenarioImpactDTO) => (
+              <div key={impact.id} className="flex items-start justify-between gap-3 text-sm">
+                <span className="text-[hsl(var(--mobile-text-secondary))]">
+                  {IMPACT_TYPE_LABEL[impact.impactType] ?? impact.impactType}
+                </span>
+                <span
+                  className={cn(
+                    'shrink-0 font-medium',
+                    impact.direction === 'POSITIVE'
+                      ? 'text-green-700'
+                      : impact.direction === 'NEGATIVE'
+                        ? 'text-red-600'
+                        : 'text-[hsl(var(--foreground))]',
+                  )}
+                >
+                  {impact.impactType === 'PAYBACK_PERIOD' && impact.valueText
+                    ? impact.valueText
+                    : impact.impactType === 'COMFORT_IMPACT' && impact.valueText
+                      ? impact.valueText
+                      : impact.valueNumeric != null
+                        ? impact.unit === 'USD'
+                          ? formatUSD(impact.valueNumeric)
+                          : impact.unit === 'PERCENT'
+                            ? `${impact.valueNumeric}%`
+                            : `${impact.valueNumeric}${impact.unit ? ` ${impact.unit.toLowerCase()}` : ''}`
+                        : impact.valueText ?? '—'}
+                </span>
+              </div>
+            );
+
             return (
               <div className="space-y-3">
-                {/* Takeaway banner */}
+                {/* Takeaway banner — system-generated summaries only */}
                 {takeaway?.valueText && (
                   <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
                     <p className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))] mb-1">
@@ -872,50 +925,31 @@ function ScenarioDetailSheet({
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
-                    Projected impacts
-                  </h3>
-                  <div className="space-y-1.5">
-                    {mainImpacts.map((impact) => (
-                      <div
-                        key={impact.id}
-                        className="flex items-start justify-between gap-3 text-sm"
-                      >
-                        <span className="text-[hsl(var(--mobile-text-secondary))]">
-                          {IMPACT_TYPE_LABEL[impact.impactType] ?? impact.impactType}
-                        </span>
-                        <span
-                          className={cn(
-                            'shrink-0 font-medium',
-                            impact.direction === 'POSITIVE'
-                              ? 'text-green-700'
-                              : impact.direction === 'NEGATIVE'
-                                ? 'text-red-600'
-                                : 'text-[hsl(var(--foreground))]',
-                          )}
-                        >
-                          {impact.impactType === 'PAYBACK_PERIOD' && impact.valueText
-                            ? impact.valueText
-                            : impact.impactType === 'COMFORT_IMPACT' && impact.valueText
-                              ? impact.valueText
-                              : impact.valueNumeric != null
-                                ? impact.unit === 'USD'
-                                  ? formatUSD(impact.valueNumeric)
-                                  : impact.unit === 'PERCENT'
-                                    ? `${impact.valueNumeric}%`
-                                    : `${impact.valueNumeric}${impact.unit ? ` ${impact.unit.toLowerCase()}` : ''}`
-                                : impact.valueText ?? '—'}
-                        </span>
-                      </div>
-                    ))}
+                {computedImpacts.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+                      Projected impacts
+                    </h3>
+                    <div className="space-y-1.5">{computedImpacts.map(renderImpactRow)}</div>
+                    {scenario.lastComputedAt && (
+                      <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                        Computed {formatDate(scenario.lastComputedAt)}
+                      </p>
+                    )}
                   </div>
-                  {scenario.lastComputedAt && (
+                )}
+
+                {userSuppliedImpacts.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+                      Your estimates
+                    </h3>
+                    <div className="space-y-1.5">{userSuppliedImpacts.map(renderImpactRow)}</div>
                     <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                      Computed {formatDate(scenario.lastComputedAt)}
+                      You entered these values. They have not been independently verified or computed.
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })()}
