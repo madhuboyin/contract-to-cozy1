@@ -53,8 +53,8 @@ export type InsuranceMarketContextDTO =
     });
 
 export async function getInsuranceMarketContext(propertyId: string) {
-  const response = await api.get<{ success: true; data: InsuranceMarketContextDTO }>(
+  const response = await api.get<InsuranceMarketContextDTO>(
     `/api/properties/${propertyId}/insurance-market-context`
   );
-  return response.data.data;
+  return response.data;
 }

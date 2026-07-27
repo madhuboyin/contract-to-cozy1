@@ -80,6 +80,7 @@ export default function InsuranceMarketContextPanel({ propertyId }: { propertyId
               target="_blank"
               rel="noreferrer"
               className="underline underline-offset-2"
+              style={{ color: 'hsl(var(--foreground))' }}
             >
               {context.source.name}
             </a>
@@ -130,6 +131,7 @@ export default function InsuranceMarketContextPanel({ propertyId }: { propertyId
               target="_blank"
               rel="noreferrer"
               className="font-medium underline underline-offset-2"
+              style={{ color: 'hsl(var(--foreground))' }}
             >
               {current.source.name}
             </a>{' '}

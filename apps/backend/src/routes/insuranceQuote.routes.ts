@@ -15,6 +15,7 @@ import {
   withdrawInsuranceHandoffRequest,
 } from '../services/insuranceHandoff.service';
 import { getCoverageOperationsHealth } from '../services/coverageLifecycle.service';
+import { getCoverageLaunchGate } from '../services/coverageLaunchGate.service';
 
 export const insuranceQuoteRouter = Router();
 
@@ -27,6 +28,18 @@ insuranceQuoteRouter.get(
   handler(async (_req, res) => {
     const health = await getCoverageOperationsHealth();
     res.json({ success: true, data: health });
+  })
+);
+
+insuranceQuoteRouter.get(
+  '/admin/coverage-operations/launch-gate',
+  authenticate,
+  requireMfa,
+  requireRole(UserRole.ADMIN),
+  requireCapability('RELEASE_GATE_VIEW'),
+  handler(async (_req, res) => {
+    const gate = await getCoverageLaunchGate();
+    res.json({ success: true, data: gate });
   })
 );
 
