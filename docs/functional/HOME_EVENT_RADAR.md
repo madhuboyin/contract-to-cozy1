@@ -1047,7 +1047,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 | **Route mounting** | Both `homeEventRadar.routes` and `homeEvents.routes` are registered in `backend/src/index.ts` |
 | **Auth** | All endpoints behind JWT middleware + `propertyAuth.middleware` for property-scoped routes |
 | **Rate limiting** | `apiRateLimiter` applied to all endpoints |
-| **Background workers** | QA/E2E fixture ingestion is disabled in production; real tax-assessment, NWS alert, and Open-Meteo freeze-forecast adapters exist; the utility production source is decided but remains contract/integration-gated, and no insurance source exists |
+| **Background workers** | QA/E2E fixture ingestion is disabled in production; real tax-assessment, NWS alert, and Open-Meteo freeze-forecast adapters exist; Utility remains contract/integration-gated, while Insurance has an accepted no-go decision and no production source |
 | **Incident lifecycle** | Eligible `moderate`/`high` matches project through `RadarIncidentPromotionService`; terminal events and impact downgrades reconcile via `IncidentService.setStatus` |
 | **Guidance engine** | `tax_reassessment_resolution` journey auto-created on promotion; weather-family journeys route to `Incidents`, not Home Event Radar |
 | **Audit log** | Analytics events written to platform audit log via `AuditLog` model |
@@ -1060,7 +1060,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 - Three real external source paths exist: tax reassessment (code-complete but disabled pending an accepted configured pilot), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
 - Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed. `match-lifecycle-v1` persists Now/Upcoming/Recently Ended, independently marks source freshness, detects homeowner-material revisions, and closes matches/Incidents that no longer intersect current property geography. Property creation, geography/fact/responsibility changes, Radar mitigation state, and canonical completion changes publish durable database-backed reconciliation events that replay active events in bounded cursor pages. An hourly leased safety net resumes incomplete revision/property pages, retries capped Radar dead letters, materializes source coverage, and expires visibility/material-update markers without interpreting source failure as clear.
-- The utility source strategy is decided, but no licensed utility adapter is active. New Jersey is the first territory and a commercial aggregator requires a negotiated end-user display license; insurance has no viable provider yet (see Pending Phases).
+- The utility source strategy is decided, but no licensed utility adapter is active. New Jersey is its first territory and a commercial aggregator requires a negotiated end-user display license. Insurance has an accepted no-go decision: NJDOBI/SERFF is authoritative for evaluation, but no licensed structured production feed or approved governance path exists (see Pending Phases).
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
 - `energy_inefficiency_detected`/`high_utility_cost` guidance families still point at the (mostly dataless) Home Event Radar tool — known gap, not yet fixed.
@@ -1108,9 +1108,25 @@ Utility remains unavailable until a licensed adapter, official territory mapping
 provider coverage catalog, conservative restoration convergence, quota enforcement,
 and live scoped acceptance all pass.
 
-### Insurance market integration (deferred indefinitely)
+### Insurance market integration (accepted no-go; reconsideration gates defined)
 
-No real data source exists today. "Insurance Trend" (a separate, already-shipped tool) is a heuristic/computed estimate, not live market data — its own DTO is explicitly labeled `EDUCATIONAL_ESTIMATE` and disclaims that it's *"not derived from live DOI rate filings, FEMA/NOAA actuarial data, or your actual policy records."* There's a dead adapter stub (`insuranceRateFiling.adapter.ts`) that explicitly doesn't call any real API yet — building it out would mean per-state DOI bulletin ingestion (inconsistent formats, mostly PDF filings, no uniform API), the least reliable of any candidate integration. Not scheduled.
+HER-606 keeps Insurance unavailable. NJDOBI records and the public filings it exposes
+through SERFF are authoritative for a New Jersey evaluation, but SERFF Filing Access is
+a state-selected document search interface rather than an approved complete ingestion
+feed. Contract-to-Cozy will not scrape it. No licensed structured provider, automated
+use/republication rights, service objective, or approved financial/commercial
+governance path has been established.
+
+"Insurance Trend" remains a separate heuristic/computed estimate. Its DTO is explicitly
+`EDUCATIONAL_ESTIMATE` and disclaims live DOI filing or policy grounding, so it cannot
+feed Radar. The existing `insuranceRateFiling.adapter.ts` is also not a source adapter;
+it only classifies a supplied modeled annual series and performs no external request.
+
+The accepted source, filing semantics, exact carrier-match rules, copy constraints,
+review process, lifecycle, procurement, and reconsideration gates are in
+[`adr-home-event-radar-insurance-source.md`](../architecture/adr-home-event-radar-insurance-source.md).
+A future pilot begins with a licensed structured feed and 12-month completeness study,
+not production integration.
 
 ### `energy_inefficiency_detected` / `high_utility_cost` tool mapping (open, small)
 

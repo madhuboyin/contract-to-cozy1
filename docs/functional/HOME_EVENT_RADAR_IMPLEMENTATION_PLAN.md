@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-605 decision complete |
+| Status | In progress — HER-606 decision complete |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -66,7 +66,8 @@
 | HER-603 OpenFEMA adapter | Complete; DB application and production activation pending | OpenFEMA v2 declarations use exact county FIPS or literal statewide geography, deterministic hash revisions, closeout/18-month lifecycle, six-hour monitoring, assistance truthfulness, and recovery/documentation guidance |
 | HER-604 Tax pilot | Complete; seed application and monitored-property production activation pending | NYC DOF Bronx Tax Class 1 uses the official current roll, exact borough/address/ZIP routing, parcel ambiguity suppression, latest-year republish deduplication, stable fiscal-year lifecycle, PII-minimized field projection, and governed appeal information |
 | HER-605 Utility source decision | Complete; contract and adapter implementation pending | New Jersey electric pilot, licensed commercial aggregator path, territory/precision gates, conservative restoration lifecycle, SLA, quota, cost, privacy, and activation controls are recorded in `docs/architecture/adr-home-event-radar-utility-source.md` |
-| HER-606+ | Not started | Insurance source decision and compound-event rules remain |
+| HER-606 Insurance source decision | Complete; accepted no-go pending licensed structured source and governance | NJDOBI/SERFF is the authoritative evaluation system, but no approved automated/republication feed exists; Insurance remains unavailable under the source, semantics, carrier-match, review, financial-governance, and procurement gates in `docs/architecture/adr-home-event-radar-insurance-source.md` |
+| HER-607 | Not started | Compound-event rules remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1759,13 +1760,31 @@ activate the Utility category or enable a utility until all ADR gates pass.
 
 ### HER-606 — Insurance source decision
 
-Keep Insurance unavailable until:
+**Status: Complete — accepted no-go; Insurance remains unavailable.**
 
-- authoritative source identified;
-- state/jurisdiction coverage understood;
-- update frequency and filing semantics validated;
-- homeowner copy reviewed;
-- financial/commercial governance approved.
+The accepted decision is documented in
+[`adr-home-event-radar-insurance-source.md`](../architecture/adr-home-event-radar-insurance-source.md).
+NJDOBI records and public SERFF filings are authoritative for evaluating a New Jersey
+homeowners pilot, but SERFF Filing Access is a state-selected, document-oriented public
+search interface. No documented public third-party ingestion API, complete change
+feed, service objective, or homeowner republication contract was identified.
+
+The decision therefore:
+
+- prohibits scraping SERFF or undocumented endpoints;
+- rejects the Insurance Trend heuristic as Radar evidence;
+- keeps `insurance_market` production coverage disabled;
+- distinguishes submitted/requested filings from final dispositions;
+- requires exact state, homeowners line, active policy, and NAIC legal-carrier matching;
+- forbids individual premium predictions and filing-derived dollar estimates;
+- defines approved/modified, withdrawn/rejected, correction, supersession, effective,
+  stale, and terminal lifecycle semantics;
+- requires a licensed structured feed, a 12-month completeness study, dual-review
+  shadow mode, Legal/Compliance approval, and an approved budget before implementation.
+
+The future implementation may evaluate a documented NJDOBI/NAIC export, a licensed
+commercial filing-data provider, or a narrower official regulator notice feed. It must
+start with an RFI and evidence sample, not production code or a paid trial integration.
 
 ### HER-607 — Compound-event rules
 
@@ -2060,6 +2079,8 @@ flowchart TB
   H600 --> H604["HER-604 tax pilot"]
   H600 --> H605["HER-605 utility source decision"]
   H605 --> H608["Future licensed utility adapter"]
+  H600 --> H606["HER-606 insurance source decision"]
+  H606 --> H609["Future licensed insurance pilot"]
 ```
 
 ---
@@ -2093,9 +2114,11 @@ Do not wait for every source. Minimum credible launch is:
 - source health;
 - critical automated acceptance.
 
-AirNow, tax, insurance, compound intelligence, and richer action execution can follow.
+AirNow, tax, compound intelligence, and richer action execution can follow.
 Utility implementation follows only after the HER-605 commercial license, coverage,
 precision, and budget gates are satisfied.
+Insurance implementation follows only after the HER-606 licensed structured-source,
+completeness, semantics, governance, and budget gates are satisfied.
 
 ---
 
@@ -2119,6 +2142,10 @@ precision, and budget gates are satisfied.
 | R-14 | Coarse utility geography creates false property outage claims | High | Critical | Require ZIP/point/polygon resolution; county-only awareness cannot match or notify |
 | R-15 | Missing/failed utility snapshots falsely restore outages | Medium | High | Explicit provider terminal state or two complete successful missing snapshots at least 10 minutes apart |
 | R-16 | Utility polling exceeds quota or creates unapproved spend | Medium | High | Batched polling, configured call budget, 70%/90% alerts, fail closed before overage |
+| R-17 | Requested insurance filing is presented as an approved or personal premium change | High | Critical | Publish final dispositions only; preserve requested/final fields; prohibit premium predictions and dollar estimates |
+| R-18 | Insurance brand or group is falsely matched to a policy legal entity/program | High | Critical | Confirmed active policy plus reviewed NAIC legal-company aliases; fail closed on ambiguity |
+| R-19 | SERFF/public-record automation or reuse exceeds permitted access | High until licensed | High | No scraping; require documented API/export and automated-use, storage, display, and notification rights |
+| R-20 | Partial insurance filing coverage is represented as market coverage | High | High | Twelve-month completeness study; explicit jurisdiction/line/entity/disposition coverage contract |
 
 ---
 

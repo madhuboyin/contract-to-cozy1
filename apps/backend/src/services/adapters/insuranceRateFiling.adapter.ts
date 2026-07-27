@@ -21,8 +21,10 @@ function isCatState(state: string) {
 }
 
 /**
- * Phase-2: Identify “step-change years” and classify.
- * This does NOT call external DOI APIs yet; it prepares the adapter boundary.
+ * @deprecated This is a heuristic classifier over a caller-supplied modeled series,
+ * not a rate-filing source adapter. It must not produce Home Event Radar observations
+ * or be represented as DOI/SERFF evidence. HER-606 keeps Insurance unavailable until
+ * the source and governance gates in the insurance-source ADR are satisfied.
  */
 export function detectInsuranceStepEvents(state: string, yoySeriesPct: Array<{ year: number; yoyInsurancePct: number | null }>) {
   const key = `insStep:${state}:${yoySeriesPct.map((x) => `${x.year}:${x.yoyInsurancePct ?? 'n'}`).join('|')}`;
