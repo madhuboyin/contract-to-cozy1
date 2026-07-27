@@ -87,6 +87,9 @@ export async function recordCoverageComparisonDecision(req: CustomRequest, res: 
       userId,
       req.body
     );
+    if (result.idempotentReplay) {
+      return res.status(200).json({ success: true, data: result });
+    }
 
     try {
       await resolveCoverageHomeActionFromDecision({

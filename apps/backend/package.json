@@ -28,6 +28,7 @@
     "drill:capability-catalog-only": "ts-node scripts/capability-catalog-only-drill.ts",
     "review:capability-copy": "ts-node scripts/capability-copy-review.ts",
     "drill:capability-incident": "ts-node scripts/capability-incident-drill.ts",
+    "drill:coverage-launch": "ts-node scripts/coverage-operational-drill.ts",
     "acceptance:phase3": "node --test tests/integration/phase3VerifiedClosure.db.test.js",
     "acceptance:phase6": "node --test tests/integration/phase6NewHomeControlledPilot.db.test.js",
     "lint:ssrf": "node scripts/check-ssrf-guards.js",

@@ -435,11 +435,11 @@ export async function recordCoverageDecision(
 ) {
   await authorizeProperty(propertyId, userId);
   const comparison = await prisma.coverageComparison.findFirst({
-    where: { id: comparisonId, propertyId, status: 'DRAFT' },
+    where: { id: comparisonId, propertyId },
     include: { options: true },
   });
   if (!comparison) {
-    throw new APIError('Open coverage comparison not found', 404, 'COVERAGE_COMPARISON_NOT_FOUND');
+    throw new APIError('Coverage comparison not found', 404, 'COVERAGE_COMPARISON_NOT_FOUND');
   }
   const selected = input.selectedOptionId
     ? comparison.options.find((option) => option.id === input.selectedOptionId)
@@ -462,9 +462,74 @@ export async function recordCoverageDecision(
     );
   }
 
+  const normalizedRationale = input.rationale?.trim() || null;
+  const matchesReplay = (decision: {
+    decision: string;
+    selectedOptionId: string | null;
+    rationale: string | null;
+    decidedByUserId: string;
+  }) =>
+    decision.decision === input.decision &&
+    decision.selectedOptionId === (selected?.id ?? null) &&
+    decision.rationale === normalizedRationale &&
+    decision.decidedByUserId === userId;
+
+  if (comparison.status !== 'DRAFT') {
+    const existing = await prisma.coverageDecision.findFirst({
+      where: { comparisonId, propertyId },
+      orderBy: { decidedAt: 'desc' },
+    });
+    if (!existing || !matchesReplay(existing)) {
+      throw new APIError(
+        'Coverage comparison already has a different decision',
+        409,
+        'COVERAGE_DECISION_CONFLICT'
+      );
+    }
+    const homeEvent = existing.homeEventId
+      ? await prisma.homeEvent.findUnique({ where: { id: existing.homeEventId } })
+      : null;
+    if (!homeEvent) {
+      throw new APIError(
+        'Recorded coverage decision is missing its timeline event',
+        409,
+        'COVERAGE_DECISION_INCOMPLETE'
+      );
+    }
+    return { decision: existing, homeEvent, idempotentReplay: true as const };
+  }
+
   const decisionId = randomUUID();
   const occurredAt = new Date();
   return prisma.$transaction(async (tx) => {
+    const claim = await tx.coverageComparison.updateMany({
+      where: { id: comparisonId, propertyId, status: 'DRAFT' },
+      data: { status: 'DECIDED' },
+    });
+    if (claim.count === 0) {
+      const existing = await tx.coverageDecision.findFirst({
+        where: { comparisonId, propertyId },
+        orderBy: { decidedAt: 'desc' },
+      });
+      if (!existing || !matchesReplay(existing)) {
+        throw new APIError(
+          'Coverage comparison already has a different decision',
+          409,
+          'COVERAGE_DECISION_CONFLICT'
+        );
+      }
+      const homeEvent = existing.homeEventId
+        ? await tx.homeEvent.findUnique({ where: { id: existing.homeEventId } })
+        : null;
+      if (!homeEvent) {
+        throw new APIError(
+          'Recorded coverage decision is missing its timeline event',
+          409,
+          'COVERAGE_DECISION_INCOMPLETE'
+        );
+      }
+      return { decision: existing, homeEvent, idempotentReplay: true as const };
+    }
     const decision = await tx.coverageDecision.create({
       data: {
         id: decisionId,
@@ -472,7 +537,7 @@ export async function recordCoverageDecision(
         propertyId,
         decision: input.decision,
         selectedOptionId: selected?.id ?? null,
-        rationale: input.rationale?.trim() || null,
+        rationale: normalizedRationale,
         decidedByUserId: userId,
         decidedAt: occurredAt,
         guidanceJourneyId: input.guidanceJourneyId ?? comparison.guidanceJourneyId,
@@ -502,7 +567,7 @@ export async function recordCoverageDecision(
           decision: input.decision,
           selectedOptionId: selected?.id ?? null,
           selectedOptionEquivalenceStatus: selected?.equivalenceStatus ?? null,
-          rationale: input.rationale?.trim() || null,
+          rationale: normalizedRationale,
           sourceActionId: comparison.sourceActionId ?? input.sourceActionId,
         },
       },
@@ -510,10 +575,6 @@ export async function recordCoverageDecision(
     const recorded = await tx.coverageDecision.update({
       where: { id: decision.id },
       data: { homeEventId: homeEvent.id },
-    });
-    await tx.coverageComparison.update({
-      where: { id: comparisonId },
-      data: { status: 'DECIDED' },
     });
     await tx.auditLog.create({
       data: {
@@ -530,6 +591,6 @@ export async function recordCoverageDecision(
         },
       },
     });
-    return { decision: recorded, homeEvent };
+    return { decision: recorded, homeEvent, idempotentReplay: false as const };
   });
 }

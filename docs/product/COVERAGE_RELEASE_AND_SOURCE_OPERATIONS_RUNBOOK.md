@@ -35,6 +35,7 @@ Run from the repository root:
 ```bash
 cd apps/backend
 npm run test:coverage-launch-gate
+npm run drill:coverage-launch
 npx tsc --noEmit
 npx prisma validate --schema=prisma/schema.prisma
 
@@ -46,6 +47,13 @@ npm run test:coverage-launch:e2e
 The browser suite exercises desktop and mobile layouts, source provenance,
 source-outage containment, horizontal overflow, and automated WCAG 2.0–2.2
 A/AA checks.
+
+The operational drill emits machine-readable JSON and verifies the real-user
+kill switch, contextual-action suppression, unavailable and stale benchmark
+containment, partner disablement, incident blocking, configuration restoration,
+and a bounded 10,000-iteration evaluator burst. This local deterministic drill
+does not replace the production-like concurrency test required before
+promotion.
 
 Only after all commands pass for the deployed revision may CI/deployment set:
 
@@ -183,6 +191,11 @@ Before promotion, test at expected peak concurrency plus safety margin:
 Record test revision, environment, load profile, latency/error results, and
 owner in the release evidence. A failed or unrecorded test leaves the technical
 evidence variable unset.
+
+Coverage decision persistence uses an atomic `DRAFT` → `DECIDED` claim.
+Identical retries return the recorded decision as an idempotent replay and do
+not emit duplicate Home Action, Guidance, completion, or analytics hooks.
+Conflicting retries fail with `COVERAGE_DECISION_CONFLICT`.
 
 ## Final promotion checklist
 
