@@ -7,7 +7,21 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, Building2, CheckCircle2, Filter, Radio } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Bell,
+  Check,
+  CheckCircle2,
+  CloudLightning,
+  Radio,
+  ReceiptText,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  Wind,
+  Zap,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
@@ -22,7 +36,7 @@ import { RadarFeedItem } from '@/components/features/homeEventRadar/RadarFeedIte
 import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFeedSkeleton';
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
 import { RadarNotificationPreferencesCard } from '@/components/features/homeEventRadar/RadarNotificationPreferences';
-import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import RelatedTools from '@/components/tools/RelatedTools';
 import { track } from '@/lib/analytics/events';
 import type {
   Property,
@@ -34,7 +48,6 @@ import type {
 } from '@/types';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
-import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 import {
   formatRadarLastCheck,
@@ -60,13 +73,13 @@ type FilterKey = 'all' | RadarSourceFamily;
 type FilterOption = { key: FilterKey; label: string; disabled?: boolean; status?: string };
 
 const TIMING_GROUPS = [
-  { key: 'now', label: 'Now' },
+  { key: 'now', label: 'Needs attention' },
   { key: 'upcoming', label: 'Upcoming' },
-  { key: 'recently_ended', label: 'Recently Ended' },
+  { key: 'recently_ended', label: 'Recently ended' },
 ] as const;
 
 const VIEW_OPTIONS: Array<{ key: RadarView; label: string }> = [
-  { key: 'all', label: 'All times' },
+  { key: 'all', label: 'Any time' },
   ...TIMING_GROUPS,
 ];
 
@@ -83,7 +96,7 @@ function radarFilterOptions(coverage: RadarCategoryCoverage[]): FilterOption[] {
 }
 
 // ---------------------------------------------------------------------------
-// Compact intro hero
+// Benefit-led introduction and monitoring summary
 // ---------------------------------------------------------------------------
 
 function RadarHero({ propertyAddress }: { propertyAddress?: string }) {
@@ -91,28 +104,29 @@ function RadarHero({ propertyAddress }: { propertyAddress?: string }) {
     <div
       className={cn(
         MOBILE_CARD_RADIUS,
-        'border border-[hsl(var(--mobile-border-subtle))]',
-        'bg-[linear-gradient(145deg,hsl(var(--mobile-brand-soft)),#fff)]',
-        'p-4'
+        'overflow-hidden border border-[hsl(var(--mobile-brand-border))]',
+        'bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.18),transparent_38%),linear-gradient(145deg,hsl(var(--mobile-brand-soft)),#fff_68%)]',
+        'p-5 sm:p-7'
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-white">
-          <Radio className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />
+      <div className="flex items-start gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[hsl(var(--mobile-brand-border))] bg-white shadow-sm">
+          <Radio className="h-5 w-5 text-[hsl(var(--mobile-brand-strong))]" />
         </div>
         <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
-            Home tool
-          </p>
-          <h1 className="mb-0 text-base font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
+          <p className="mb-0 text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--mobile-brand-strong))]">
             Home Event Radar
+          </p>
+          <h1 className="mb-0 mt-2 max-w-2xl text-2xl font-semibold leading-tight tracking-tight text-[hsl(var(--mobile-text-primary))] sm:text-3xl">
+            Know what could affect your home before it becomes a problem.
           </h1>
-          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-            Events that may affect your property — matched to your specific home.
+          <p className="mb-0 mt-3 max-w-2xl text-sm leading-relaxed text-[hsl(var(--mobile-text-secondary))] sm:text-base">
+            Radar watches trusted weather, air-quality, disaster, and property sources,
+            then explains what each update could mean for this home.
           </p>
           {propertyAddress && (
-            <p className={cn('mb-0 mt-1.5 text-[hsl(var(--mobile-brand-strong))]', MOBILE_TYPE_TOKENS.caption)}>
-              Selected property: {propertyAddress}
+            <p className="mb-0 mt-4 inline-flex rounded-full border border-[hsl(var(--mobile-brand-border))] bg-white/80 px-3 py-1.5 text-xs font-medium text-[hsl(var(--mobile-brand-strong))]">
+              Watching {propertyAddress}
             </p>
           )}
         </div>
@@ -127,128 +141,96 @@ function compactPropertyAddress(property: Property | null | undefined): string {
   return [property.address, locality].filter(Boolean).join(' · ');
 }
 
-function RadarDesktopSidebar({
-  propertyId,
-  propertyAddress,
-  totalCount,
-  newCount,
-  dismissedCount,
-  activeFilter,
+const WATCH_CATEGORIES: Array<{
+  family: RadarSourceFamily;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { family: 'weather', description: 'Storms, floods, freezes, and other severe conditions', icon: CloudLightning },
+  { family: 'air_quality', description: 'Smoke and unhealthy outdoor air near your home', icon: Wind },
+  { family: 'disaster', description: 'Official disaster declarations and recovery updates', icon: ShieldAlert },
+  { family: 'tax', description: 'Property assessment changes in supported areas', icon: ReceiptText },
+  { family: 'utility', description: 'Local power and utility interruptions', icon: Zap },
+  { family: 'insurance', description: 'Insurance market changes that could affect coverage', icon: ShieldCheck },
+];
+
+function categoryStatus(
+  source: RadarCategoryCoverage | undefined,
+  overview: RadarOverview | null | undefined,
+): { label: string; className: string } {
+  if (overview?.readiness?.state === 'MONITORING_NOT_INITIALIZED' || !overview) {
+    return { label: 'Checking availability', className: 'text-amber-700 bg-amber-50' };
+  }
+  if (
+    overview.readiness?.state === 'PROPERTY_SETUP_REQUIRED'
+    || (!overview.readiness && overview.monitoringState === 'SETUP_NEEDED')
+  ) {
+    return { label: 'Waiting for home address', className: 'text-amber-700 bg-amber-50' };
+  }
+  if (!source || source.status === 'disabled') {
+    return { label: 'Not available yet', className: 'text-slate-600 bg-slate-100' };
+  }
+  if (source.status === 'covered') {
+    return { label: 'Watching now', className: 'text-emerald-700 bg-emerald-50' };
+  }
+  if (source.status === 'failed' || source.status === 'stale') {
+    return { label: 'Temporarily delayed', className: 'text-rose-700 bg-rose-50' };
+  }
+  return { label: 'Not available here', className: 'text-slate-600 bg-slate-100' };
+}
+
+function RadarWatchlist({
   overview,
-  onRetry,
+  compact = false,
 }: {
-  propertyId: string;
-  propertyAddress?: string;
-  totalCount: number;
-  newCount: number;
-  dismissedCount: number;
-  activeFilter: FilterKey;
   overview?: RadarOverview | null;
-  onRetry: () => void;
+  compact?: boolean;
 }) {
-  const activeFilterLabel =
-    activeFilter === 'all' ? 'All' : RADAR_FAMILY_LABELS[activeFilter];
-  const readiness = overview
-    ? getRadarReadinessPresentation(overview)
-    : null;
-  const monitoring = overview?.monitoringState
-    ? RADAR_MONITORING_PRESENTATION[overview.monitoringState]
-    : null;
-
   return (
-    <aside className="hidden space-y-4 lg:block lg:sticky lg:top-4">
-      <div
-        className={cn(
-          MOBILE_CARD_RADIUS,
-          'border border-[hsl(var(--mobile-border-subtle))] bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.07)]'
-        )}
-      >
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] text-[hsl(var(--mobile-text-primary))]">
-            <Building2 className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <p className={cn('mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]')}>
-              Selected property
-            </p>
-            <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-              {readiness?.title ?? monitoring?.title ?? 'Loading monitoring status'}
-            </p>
-            <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-              {propertyAddress || 'Events are matched against the selected property and available home details.'}
-            </p>
-            {readiness ? (
-              <div className="mt-2">
-                <p className="mb-0 text-xs font-medium text-amber-800">
-                  {readiness.label}
-                </p>
-                {readiness.action === 'edit_property' ? (
-                  <Link
-                    href={`/dashboard/properties/${encodeURIComponent(propertyId)}/edit`}
-                    className="mt-2 inline-flex min-h-[36px] items-center text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
-                  >
-                    {readiness.actionLabel}
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onRetry}
-                    className="mt-2 min-h-[36px] text-xs font-semibold text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
-                  >
-                    {readiness.actionLabel}
-                  </button>
-                )}
+    <div
+      className={cn(
+        MOBILE_CARD_RADIUS,
+        'border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 shadow-[0_12px_32px_rgba(15,23,42,0.05)]',
+        compact && 'p-5',
+      )}
+    >
+      <p className="mb-0 text-base font-semibold text-[hsl(var(--mobile-text-primary))]">
+        What Radar watches
+      </p>
+      <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+        Availability depends on trusted data offered for this home&apos;s location.
+      </p>
+      <div className={cn('mt-4 grid gap-2.5', compact ? 'grid-cols-1' : 'sm:grid-cols-2')}>
+        {WATCH_CATEGORIES.map((category) => {
+          const source = overview?.coverage.find((item) => item.family === category.family);
+          const status = categoryStatus(source, overview);
+          const Icon = category.icon;
+          return (
+            <div
+              key={category.family}
+              className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))]/60 p-3"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[hsl(var(--mobile-brand-strong))] shadow-sm">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                    {RADAR_FAMILY_LABELS[category.family]}
+                  </p>
+                  <p className="mb-0 mt-0.5 text-xs leading-relaxed text-[hsl(var(--mobile-text-muted))]">
+                    {category.description}
+                  </p>
+                  <span className={cn('mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold', status.className)}>
+                    {status.label}
+                  </span>
+                </div>
               </div>
-            ) : monitoring ? (
-              <p className="mb-0 mt-2 text-xs font-medium text-[hsl(var(--mobile-brand-strong))]">
-                {monitoring.label} · {formatRadarLastCheck(overview?.lastSuccessfulCheckAt ?? null)}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
-            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Events in view</p>
-            <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{totalCount}</p>
-          </div>
-          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
-            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>New</p>
-            <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{newCount}</p>
-          </div>
-          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
-            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Dismissed</p>
-            <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{dismissedCount}</p>
-          </div>
-          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
-            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Filter</p>
-            <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">{activeFilterLabel}</p>
-          </div>
-        </div>
+            </div>
+          );
+        })}
       </div>
-
-      <div
-        className={cn(
-          MOBILE_CARD_RADIUS,
-          'border border-[hsl(var(--mobile-border-subtle))] bg-[linear-gradient(160deg,#ffffff,hsl(var(--mobile-brand-soft)))] p-5'
-        )}
-      >
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-white text-[hsl(var(--mobile-brand-strong))]">
-            <Filter className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">How radar works</p>
-            <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-              Radar reports events only from configured sources that currently cover this property.
-            </p>
-            <p className={cn('mb-0 mt-3 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-              Event severity reflects the signal itself. Impact reflects what it may mean for this specific property.
-            </p>
-          </div>
-        </div>
-      </div>
-    </aside>
+    </div>
   );
 }
 
@@ -336,51 +318,54 @@ function ViewChips({
 
 function RadarEmptyState({
   filtered = false,
-  propertyId,
   overview,
   feedState,
-  onRetry,
 }: {
   filtered?: boolean;
-  propertyId: string;
   overview?: RadarOverview | null;
   feedState?: Parameters<typeof getRadarEmptyStateCopy>[0]['feedState'];
-  onRetry: () => void;
 }) {
   const monitoringState = overview?.monitoringState;
-  const readiness = overview ? getRadarReadinessPresentation(overview) : null;
   const copy = getRadarEmptyStateCopy({ filtered, monitoringState, feedState });
+  const isPreparing = overview?.readiness?.state === 'MONITORING_NOT_INITIALIZED';
+  const needsAddress = overview?.readiness?.state === 'PROPERTY_SETUP_REQUIRED'
+    || (!overview?.readiness && overview?.monitoringState === 'SETUP_NEEDED');
+
+  if (!filtered && (isPreparing || needsAddress)) {
+    return (
+      <div className={cn(MOBILE_CARD_RADIUS, 'border border-[hsl(var(--mobile-border-subtle))] bg-white p-5')}>
+        <div className="flex items-start gap-3">
+          <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-[hsl(var(--mobile-brand-strong))]" />
+          <div>
+            <h3 className="mb-0 text-base font-semibold text-[hsl(var(--mobile-text-primary))]">
+              What you&apos;ll find here
+            </h3>
+            <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+              When something relevant happens, Radar turns it into a clear, useful home update.
+            </p>
+            <ul className="mt-4 space-y-2 text-sm text-[hsl(var(--mobile-text-secondary))]">
+              {[
+                'A plain-language summary of what happened',
+                'Why it may matter to this specific home',
+                'Practical next steps and the official source',
+              ].map((item) => (
+                <li key={item} className="flex gap-2">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-brand-strong))]" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <EmptyStateCard
       titleAsHeading
-      title={readiness?.title ?? copy.title}
-      description={readiness?.description ?? copy.description}
-      action={
-        filtered ? undefined : readiness?.action === 'edit_property' ? (
-          <Link
-            href={`/dashboard/properties/${encodeURIComponent(propertyId)}/edit`}
-            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
-          >
-            {readiness.actionLabel}
-          </Link>
-        ) : readiness?.action === 'retry' ? (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-          >
-            {readiness.actionLabel}
-          </button>
-        ) : (
-          <Link
-            href={`/dashboard/properties/${encodeURIComponent(propertyId)}/incidents`}
-            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-          >
-            View Incidents
-          </Link>
-        )
-      }
+      title={copy.title}
+      description={copy.description}
     />
   );
 }
@@ -426,6 +411,7 @@ function RadarMonitoringNotice({
 
   const presentation = RADAR_MONITORING_PRESENTATION[overview.monitoringState];
   const readiness = getRadarReadinessPresentation(overview);
+  const isPreparing = overview.readiness?.state === 'MONITORING_NOT_INITIALIZED';
   const toneClass = {
     positive: 'border-emerald-200 bg-emerald-50 text-emerald-950',
     warning: 'border-amber-200 bg-amber-50 text-amber-950',
@@ -444,7 +430,7 @@ function RadarMonitoringNotice({
           )}
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="mb-0 text-sm font-semibold">{readiness?.title ?? presentation.title}</p>
+              <p className="mb-0 text-base font-semibold">{readiness?.title ?? presentation.title}</p>
               <span className="rounded-full border border-current/20 bg-white/70 px-2 py-0.5 text-[10px] font-semibold">
                 {readiness?.label ?? presentation.label}
               </span>
@@ -452,73 +438,33 @@ function RadarMonitoringNotice({
             <p className={cn('mb-0 mt-1 opacity-80', MOBILE_TYPE_TOKENS.caption)}>
               {readiness?.description ?? presentation.description}
             </p>
-            {readiness?.action === 'edit_property' ? (
+            {isPreparing ? (
+              <div className="mt-4 space-y-2" aria-label="Monitoring setup progress">
+                <div className="flex items-center gap-2 text-xs font-medium">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                  Home location is ready
+                </div>
+                <div className="flex items-center gap-2 text-xs font-medium">
+                  <span className="h-4 w-4 animate-pulse rounded-full border-4 border-amber-600/25 bg-amber-600" />
+                  Finding trusted updates available near this address
+                </div>
+                <p className="mb-0 pl-6 text-xs opacity-75">
+                  This page updates automatically. You can leave and come back anytime.
+                </p>
+              </div>
+            ) : readiness?.action === 'edit_property' ? (
               <Link
                 href={`/dashboard/properties/${encodeURIComponent(overview.propertyId)}/edit`}
-                className="mt-2 inline-flex min-h-[36px] items-center text-xs font-semibold underline underline-offset-2"
+                className="mt-3 inline-flex min-h-[40px] items-center rounded-xl bg-amber-950 px-4 py-2 text-xs font-semibold text-white"
               >
                 {readiness.actionLabel}
               </Link>
-            ) : readiness?.action === 'retry' ? (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="mt-2 min-h-[36px] text-xs font-semibold underline underline-offset-2"
-              >
-                {readiness.actionLabel}
-              </button>
             ) : (
               <p className="mb-0 mt-2 text-xs font-medium">
                 {formatRadarLastCheck(overview.lastSuccessfulCheckAt)}
               </p>
             )}
           </div>
-        </div>
-      </div>
-    </MobileSection>
-  );
-}
-
-function RadarCoverageNotice({ coverage }: { coverage: RadarCategoryCoverage[] }) {
-  if (!coverage.length) return null;
-  return (
-    <MobileSection>
-      <div
-        role="region"
-        aria-label="Current source availability"
-        className={cn(
-          MOBILE_CARD_RADIUS,
-          'border border-[hsl(var(--mobile-border-subtle))] bg-white p-4'
-        )}
-      >
-        <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-          Current source availability
-        </p>
-        <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-          Availability is evaluated for this property. Unavailable or delayed sources are not evidence that no event exists.
-        </p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {coverage.map((source) => (
-            <div
-              key={source.family}
-              className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                  {RADAR_FAMILY_LABELS[source.family]}
-                </p>
-                <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-[hsl(var(--mobile-text-secondary))]">
-                  {RADAR_COVERAGE_LABELS[source.status]}
-                </span>
-              </div>
-              <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">{source.detail}</p>
-              {source.dataFreshThrough ? (
-                <p className="mb-0 mt-1 text-[10px] text-[hsl(var(--mobile-text-muted))]">
-                  Data fresh through {new Date(source.dataFreshThrough).toLocaleString()}
-                </p>
-              ) : null}
-            </div>
-          ))}
         </div>
       </div>
     </MobileSection>
@@ -704,6 +650,11 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
     },
     enabled: !!propertyId,
     staleTime: 2 * 60 * 1000,
+    refetchInterval: (query) =>
+      query.state.data?.readiness?.state === 'MONITORING_NOT_INITIALIZED'
+        ? 15_000
+        : false,
+    refetchIntervalInBackground: false,
   });
 
   const feedQuery = useInfiniteQuery({
@@ -915,6 +866,11 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
   const newCount = filter === 'all'
     ? (overviewQuery.data?.counts.new ?? 0)
     : allItems.filter((item) => item.userState === 'new').length;
+  const showEventControls =
+    totalCount > 0
+    || dismissedCount > 0
+    || filter !== 'all'
+    || view !== 'all';
 
   return (
     <MobilePageContainer className="space-y-5 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -931,59 +887,21 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
         </Link>
       </MobileSection>
 
+      <MobileSection>
+        <RadarHero propertyAddress={propertyAddress || undefined} />
+      </MobileSection>
+
       <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
-          <MobileSection className="lg:hidden">
-            <RadarHero propertyAddress={propertyAddress || undefined} />
-          </MobileSection>
-
-          <HomeToolHeader
-            toolId="home-event-radar"
-            propertyId={propertyId}
-            monitoringAddress={propertyAddress || undefined}
-          />
-
-          <PropertyContextStatusNotice
-            context={overviewQuery.data?.propertyContext}
-            title="Event matching context"
-          />
           <RadarMonitoringNotice
             overview={overviewQuery.data ?? undefined}
             isLoading={overviewQuery.isLoading}
             isError={overviewQuery.isError}
             onRetry={() => void overviewQuery.refetch()}
           />
-          <RadarCoverageNotice coverage={overviewQuery.data?.coverage ?? []} />
-          <MobileSection>
-            <RadarNotificationPreferencesCard propertyId={propertyId} />
-          </MobileSection>
 
-          <MobileSection className="space-y-3 lg:space-y-4">
-            <div className="space-y-2 lg:hidden">
-              <ViewChips active={view} onChange={handleViewChange} />
-              <FilterChips active={filter} options={filterOptions} onChange={handleFilterChange} />
-            </div>
-            <div className="hidden lg:block">
-              <div
-                className={cn(
-                  MOBILE_CARD_RADIUS,
-                  'border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 shadow-[0_12px_32px_rgba(15,23,42,0.05)]'
-                )}
-              >
-                <div className="space-y-3">
-                  <div>
-                    <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">Filter events</p>
-                    <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-                      Narrow the feed by timing and source family. Your selection is saved in the page link.
-                    </p>
-                  </div>
-                  <div className="min-w-0 space-y-2">
-                    <ViewChips active={view} onChange={handleViewChange} />
-                    <FilterChips active={filter} options={filterOptions} onChange={handleFilterChange} />
-                  </div>
-                </div>
-              </div>
-            </div>
+          <MobileSection className="lg:hidden">
+            <RadarWatchlist overview={overviewQuery.data} />
           </MobileSection>
 
           {urlState.matchId && linkedDetailQuery.isError && !selectedItem ? (
@@ -1016,9 +934,22 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
 
           <MobileSection>
             <MobileSectionHeader
-              title="Events"
-              subtitle={newCount > 0 ? `${newCount} new` : undefined}
+              title="Your home updates"
+              subtitle={newCount > 0 ? `${newCount} new update${newCount === 1 ? '' : 's'}` : undefined}
             />
+
+            {showEventControls ? (
+              <div className={cn(MOBILE_CARD_RADIUS, 'mb-4 space-y-3 border border-[hsl(var(--mobile-border-subtle))] bg-white p-4')}>
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]">When</p>
+                  <ViewChips active={view} onChange={handleViewChange} />
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]">Type</p>
+                  <FilterChips active={filter} options={filterOptions} onChange={handleFilterChange} />
+                </div>
+              </div>
+            ) : null}
 
             {feedQuery.isLoading ? (
               <RadarFeedSkeleton count={4} />
@@ -1041,10 +972,8 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
               <>
                 <RadarEmptyState
                   filtered={filter !== 'all' || view !== 'all'}
-                  propertyId={propertyId}
                   overview={overviewQuery.data}
                   feedState={feedSummary?.feedState}
-                  onRetry={() => void overviewQuery.refetch()}
                 />
                 <DismissedNotice
                   count={dismissedCount}
@@ -1063,7 +992,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
                         id={`radar-${group.key}`}
                         className="mb-2 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--mobile-text-muted))]"
                       >
-                        {group.label}
+                        {group.key === 'now' ? 'Needs attention now' : group.label}
                       </h3>
                       <div className="space-y-3 lg:space-y-4">
                         {items.map((item) => (
@@ -1099,23 +1028,49 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
           </MobileSection>
 
           <MobileSection>
-            <div className="flex items-center justify-center gap-2 pb-2 text-xs text-[hsl(var(--mobile-text-muted))] lg:justify-start">
-              <Radio className="h-3.5 w-3.5" />
-              Events are matched from configured sources to your property location and home details
+            <div className="mb-3 flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-soft))] text-[hsl(var(--mobile-brand-strong))]">
+                <Bell className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="mb-0 text-base font-semibold text-[hsl(var(--mobile-text-primary))]">
+                  Choose how Radar keeps you informed
+                </h2>
+                <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                  Control which updates matter to you and where you receive them.
+                </p>
+              </div>
             </div>
+            <RadarNotificationPreferencesCard propertyId={propertyId} />
+          </MobileSection>
+
+          <MobileSection>
+            <RelatedTools
+              context="home-event-radar"
+              currentToolId="home-event-radar"
+              propertyId={propertyId}
+              title="Explore related home tools"
+            />
           </MobileSection>
         </div>
 
-        <RadarDesktopSidebar
-          propertyId={propertyId}
-          propertyAddress={propertyAddress || undefined}
-          totalCount={totalCount}
-          newCount={newCount}
-          dismissedCount={dismissedCount}
-          activeFilter={filter}
-          overview={overviewQuery.data}
-          onRetry={() => void overviewQuery.refetch()}
-        />
+        <aside className="hidden space-y-4 lg:block lg:sticky lg:top-4">
+          <RadarWatchlist overview={overviewQuery.data} compact />
+          <div className={cn(MOBILE_CARD_RADIUS, 'border border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] p-5')}>
+            <div className="flex items-start gap-3">
+              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-[hsl(var(--mobile-brand-strong))]" />
+              <div>
+                <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                  Built around your home
+                </p>
+                <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                  Radar uses this property&apos;s location and home details to prioritize relevant
+                  updates and explain why they may matter.
+                </p>
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
 
       {guidanceJourneyId ? (

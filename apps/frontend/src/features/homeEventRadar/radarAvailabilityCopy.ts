@@ -45,8 +45,8 @@ export function getRadarReadinessPresentation(
       title: 'We’re setting up monitoring',
       description:
         'Radar is checking which event sources cover this address. No action is needed right now.',
-      action: 'retry',
-      actionLabel: 'Refresh status',
+      action: null,
+      actionLabel: null,
     };
   }
   // Backward-compatible fallback for an older API response.
@@ -68,26 +68,26 @@ export const RADAR_MONITORING_PRESENTATION: Record<
 > = {
   ACTIVE: {
     label: 'Active',
-    title: 'Monitoring is active',
-    description: 'Configured sources currently cover this home and are reporting normally.',
+    title: 'Radar is watching this home',
+    description: 'We’re checking available trusted sources for updates that could affect this property.',
     tone: 'positive',
   },
   PARTIAL: {
-    label: 'Partial coverage',
-    title: 'Some monitoring is active',
-    description: 'Active sources are monitoring this home, but one or more categories are unavailable.',
+    label: 'Watching available updates',
+    title: 'Radar is watching this home',
+    description: 'Some kinds of updates are available here, while others are not offered for this location yet.',
     tone: 'warning',
   },
   DEGRADED: {
-    label: 'Degraded',
-    title: 'Monitoring is delayed',
-    description: 'One or more configured sources are stale or failing. Recent events may be delayed.',
+    label: 'Updates may be delayed',
+    title: 'Radar is having trouble checking some updates',
+    description: 'One or more trusted sources are temporarily delayed, so recent changes may take longer to appear.',
     tone: 'danger',
   },
   UNCOVERED: {
-    label: 'Unavailable',
-    title: 'Live monitoring is unavailable',
-    description: 'No configured Radar source currently covers this home.',
+    label: 'Limited availability',
+    title: 'Radar does not have updates for this location yet',
+    description: 'The trusted sources Radar uses do not currently offer coverage for this home.',
     tone: 'neutral',
   },
   SETUP_NEEDED: {
@@ -145,7 +145,7 @@ export function getRadarEmptyStateCopy(input: {
   if (input.filtered) {
     return {
       title: 'No events match this filter',
-      description: 'Try another available category or switch to All.',
+      description: 'Try another time or type, or show all updates.',
     };
   }
 
@@ -157,8 +157,8 @@ export function getRadarEmptyStateCopy(input: {
   }
   if (input.feedState === 'CONFIRMED_CLEAR' && input.monitoringState === 'ACTIVE') {
     return {
-      title: 'No active events detected',
-      description: 'No active events were reported by the sources currently covering this home.',
+      title: 'Nothing needs your attention right now',
+      description: 'Radar is watching available sources and will show relevant home updates here.',
     };
   }
   if (input.feedState === 'HAS_EVENTS' && input.monitoringState === 'ACTIVE') {

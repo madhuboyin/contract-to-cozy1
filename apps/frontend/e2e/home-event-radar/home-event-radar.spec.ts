@@ -16,7 +16,7 @@ test('core feed and detail semantics work in every supported desktop browser', a
   await installRadarApi(page);
   await page.goto(acceptancePath);
 
-  await expect(page.getByRole('status')).toContainText('Monitoring is active');
+  await expect(page.getByRole('status')).toContainText('Radar is watching this home');
   const eventButton = page.getByRole('button', {
     name: /Review update: Severe thunderstorm warning.*Source NWS Alerts.*Severe.*Moderate property impact/i,
   });
@@ -52,22 +52,22 @@ test('every monitoring state has truthful zero-feed copy', async ({ page }, test
   }> = [
     {
       state: 'ACTIVE',
-      monitoringTitle: 'Monitoring is active',
-      emptyTitle: 'No active events detected',
+      monitoringTitle: 'Radar is watching this home',
+      emptyTitle: 'Nothing needs your attention right now',
     },
     {
       state: 'PARTIAL',
-      monitoringTitle: 'Some monitoring is active',
+      monitoringTitle: 'Radar is watching this home',
       emptyTitle: 'No events detected by active sources',
     },
     {
       state: 'DEGRADED',
-      monitoringTitle: 'Monitoring is delayed',
+      monitoringTitle: 'Radar is having trouble checking some updates',
       emptyTitle: 'No events available while monitoring is delayed',
     },
     {
       state: 'UNCOVERED',
-      monitoringTitle: 'Live monitoring is unavailable',
+      monitoringTitle: 'Radar does not have updates for this location yet',
       emptyTitle: 'Live monitoring is not available',
     },
     {
@@ -108,7 +108,7 @@ test('server filters, URL state, pagination, and unavailable categories stay aut
   await expect.poll(() => api.eventQueries.at(-1)?.get('sourceFamily')).toBe('weather');
   await expect(page.getByRole('button', { name: /Planned utility maintenance/ })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Now', exact: true }).click();
+  await page.getByRole('button', { name: 'Needs attention', exact: true }).click();
   await expect(page).toHaveURL(/view=now/);
   await expect.poll(() => api.eventQueries.at(-1)?.get('lifecycle')).toBe('now');
 
@@ -130,7 +130,7 @@ test('deep links restore selection and preserve filters when the sheet closes', 
   await expect(page).toHaveURL(/view=now/);
   await expect(page).toHaveURL(/family=weather/);
   await expect(page).not.toHaveURL(/matchId=/);
-  await expect(page.getByRole('button', { name: 'Now', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: 'Needs attention', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -169,7 +169,7 @@ test('overview failure is not an all-clear and supports retry', async ({ page },
   expect(api.overviewAttempts()).toBe(3);
 
   await page.getByRole('button', { name: 'Retry status' }).click();
-  await expect(page.getByRole('status')).toContainText('Monitoring is active');
+  await expect(page.getByRole('status')).toContainText('Radar is watching this home');
   expect(api.overviewAttempts()).toBe(4);
 });
 

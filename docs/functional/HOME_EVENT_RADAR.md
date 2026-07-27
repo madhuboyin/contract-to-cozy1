@@ -783,11 +783,13 @@ Property resolution:
 - The property-scoped tool route redirects into the main page with `propertyId` in the URL.
 
 **Layout (mobile-first):**
-1. Hero section with feature title and description
-2. Horizontal filter chip row: All / Weather / Insurance / Utility / Tax
-3. Scrollable event feed with cursor-based pagination
-4. "Dismissed events" collapsible banner
-5. `RadarDetailSheet` — opens on card tap
+1. Benefit-led hero explaining what Radar does for the homeowner
+2. One state-aware monitoring card with a homeowner action only when address data is missing
+3. "What Radar watches" category overview with plain-language availability
+4. Home updates feed with cursor-based pagination
+5. Time/type controls shown only when there are updates, history, or an active filter
+6. Notification preferences and related tools after the primary feed
+7. `RadarDetailSheet` — opens on card tap
 
 **Monitoring readiness:** the overview contract separates homeowner-correctable
 property setup from operational coverage initialization. A property without a
@@ -796,13 +798,22 @@ usable point, state/postal combination, or state/locality combination receives
 `Update home address` link. A property that already has usable geography
 but no materialized source-coverage rows receives
 `MONITORING_NOT_INITIALIZED`; the UI says the first monitoring check is pending
-in plain homeowner language and offers `Refresh status` instead of incorrectly
-blaming property setup. The Unified Home card leads with Radar’s homeowner
+in plain homeowner language, explains that no action is required, and refreshes
+the overview automatically every 15 seconds while initialization remains pending.
+It does not present a manual "check again" action that merely repeats a read.
+The Unified Home card follows the same automatic refresh behavior and leads with Radar’s homeowner
 purpose, suppresses a misleading zero before monitoring is ready, and uses
 “events need attention” rather than the internal “active material events”
-terminology. The
-same distinction is rendered on Unified Home, the Radar status notice, the
-empty feed, and the desktop context panel.
+terminology.
+
+**Experience hierarchy:** the page does not lead with source diagnostics, raw
+coverage details, zero-value metrics, or URL/filter mechanics. It first explains
+the homeowner benefit, then shows whether the home is being watched, what kinds
+of changes Radar can watch, and any updates that need attention. Technical source
+detail remains available within event evidence rather than dominating the
+empty-state experience. While setup is pending, the feed previews the information
+each future update will provide: a plain-language summary, property-specific
+meaning, practical next steps, and the official source.
 
 **Filter → Event Type Mapping:**
 

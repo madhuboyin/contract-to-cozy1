@@ -52,6 +52,7 @@
 | HER-406 Deep links | Complete | URL-backed timing/family/match state restores exact property events; card history, invalid/missing match recovery, Unified Home, Guidance, worker notification, and property-route preservation use canonical links |
 | HER-407 State and feedback | Complete; DB application pending | Property-authorized idempotent personal-state writes persist seen/save/dismiss/addressed transitions, explicitly restore dismissed matches, audit transitions, and capture one bounded structured feedback response per user/match |
 | HER-408 Frontend acceptance | Complete | Fixture-gated production route exercises the real page and API client across Chromium, Firefox, WebKit, Pixel, and iPhone profiles; monitoring states, filters, pagination, detail, deep links, retries, state/feedback, and accessibility semantics are automated |
+| HER-409 Homeowner experience redesign | Complete | Benefit-led hero, one automatic state-aware monitoring flow, plain-language watch categories, event-first hierarchy, progressive filters, secondary notification/tool settings, and non-technical pending/empty states |
 | HER-500 Action registry | Complete | Versioned fail-closed registry covers every emitted action code, validates capability routes and policy metadata, enforces family/impact/confidence eligibility, and projects only registry-owned informational/internal/official destinations with lineage |
 | HER-501 Task/reminder integration | Complete; DB application pending | Reviewed Radar actions create or link canonical maintenance tasks, use bounded event-aware due-date policy, support household assignment, persist idempotent match/action/task lineage, and expose task continuity in event detail |
 | HER-502 Tool/provider handoffs | Complete; DB application pending | Typed reviewed destinations cover Coverage Intelligence/options, Service Price Radar, maintenance, Document Vault upload, provider search/booking, and HTTPS official instructions while preserving bounded Radar/Incident/Guidance lineage |
@@ -1319,6 +1320,32 @@ migration script is required.
 
 **Exit gate: met.** The production acceptance matrix passes with full Chromium behavioral
 coverage, Firefox/WebKit core keyboard and detail semantics, and Chrome/WebKit mobile coverage.
+
+### HER-409 — Homeowner experience redesign
+
+Reframe the Radar page around homeowner value rather than implementation state:
+
+- explain what Radar does and why the homeowner should return;
+- replace duplicate readiness, context, count, and empty-state panels with one
+  state-aware monitoring card;
+- automatically re-read readiness while coverage initialization is pending;
+- show monitored categories and availability in plain language;
+- put relevant updates before filters, notification preferences, and related tools;
+- reveal time/type controls only when they can change what the homeowner sees;
+- reserve source mechanics and freshness evidence for event detail and degraded/error states.
+
+**Implemented:** the page now opens with “Know what could affect your home before it
+becomes a problem” and explains the supported homeowner outcome. A pending first
+coverage evaluation shows address-ready and source-discovery progress, explicitly
+says no action is required, and refreshes automatically every 15 seconds. The
+manual “check again” action, raw event-state context, four zero-count tiles, technical
+source-coverage panel, and URL-mechanics filter copy have been removed. A
+plain-language “What Radar watches” overview always sets expectations across weather,
+air quality, disasters, tax, utility, and insurance without representing unavailable
+categories as active. The event feed is primary; controls appear progressively, while
+notifications and related tools follow the feed. Initialization uses a preview of the
+summary, home-specific meaning, next steps, and official evidence a future update will
+contain. No API, persistence, or database change is required.
 
 ---
 

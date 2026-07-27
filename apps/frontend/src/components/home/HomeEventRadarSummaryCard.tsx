@@ -83,6 +83,11 @@ export function HomeEventRadarSummaryCard({ propertyId }: { propertyId: string }
     staleTime: 2 * 60 * 1000,
     retry: 1,
     retryDelay: 250,
+    refetchInterval: (overviewQuery) =>
+      overviewQuery.state.data?.readiness?.state === 'MONITORING_NOT_INITIALIZED'
+        ? 15_000
+        : false,
+    refetchIntervalInBackground: false,
   });
 
   const baseHref =

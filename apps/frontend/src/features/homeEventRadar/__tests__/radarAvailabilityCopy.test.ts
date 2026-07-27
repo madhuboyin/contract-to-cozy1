@@ -15,8 +15,8 @@ describe('Home Event Radar coverage-aware copy', () => {
       feedState: 'CONFIRMED_CLEAR',
     });
 
-    expect(copy.title).toBe('No active events detected');
-    expect(copy.description).toContain('sources currently covering this home');
+    expect(copy.title).toBe('Nothing needs your attention right now');
+    expect(copy.description).toContain('watching available sources');
   });
 
   it.each([
@@ -30,7 +30,7 @@ describe('Home Event Radar coverage-aware copy', () => {
 
   it('presents every monitoring and coverage state explicitly', () => {
     expect(RADAR_MONITORING_PRESENTATION.SETUP_NEEDED.label).toBe('Setup needed');
-    expect(RADAR_MONITORING_PRESENTATION.DEGRADED.description).toContain('stale or failing');
+    expect(RADAR_MONITORING_PRESENTATION.DEGRADED.description).toContain('temporarily delayed');
     expect(RADAR_COVERAGE_LABELS.not_covered).toBe('Not available here');
     expect(RADAR_COVERAGE_LABELS.disabled).toBe('Coming later');
     expect(isRadarFamilyFilterAvailable('not_covered')).toBe(false);
@@ -83,7 +83,7 @@ describe('Home Event Radar coverage-aware copy', () => {
 
     expect(copy?.title).toBe('We’re setting up monitoring');
     expect(copy?.description).toContain('No action is needed right now');
-    expect(copy?.action).toBe('retry');
-    expect(copy?.actionLabel).toBe('Refresh status');
+    expect(copy?.action).toBeNull();
+    expect(copy?.actionLabel).toBeNull();
   });
 });

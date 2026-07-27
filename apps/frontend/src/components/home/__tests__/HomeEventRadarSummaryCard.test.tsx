@@ -167,7 +167,7 @@ describe('HomeEventRadarSummaryCard', () => {
     expect(screen.queryByText('No successful check recorded')).not.toBeInTheDocument();
   });
 
-  it('shows a retry action when coverage initialization—not property data—is missing', async () => {
+  it('waits automatically when coverage initialization—not property data—is missing', async () => {
     jest.mocked(api.getRadarOverview).mockResolvedValue({
       ...overview,
       monitoringState: 'UNCOVERED',
@@ -186,7 +186,8 @@ describe('HomeEventRadarSummaryCard', () => {
 
     expect(await screen.findByText('We’re setting up monitoring')).toBeInTheDocument();
     expect(screen.getAllByText(/No action is needed right now/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Refresh status' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh status' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See what Radar monitors' })).toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByText('Setup needed')).not.toBeInTheDocument();
   });
