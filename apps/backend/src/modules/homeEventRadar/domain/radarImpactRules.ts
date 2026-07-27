@@ -770,12 +770,12 @@ function computeStaticEvent(baseScore: number, eventType: string): EventImpactPa
     return {
       matchScore: clamp(baseScore),
       impactSummary: eventType === 'tax_reassessment'
-        ? 'A property tax reassessment is occurring in your area. Review the assessment and appeal options.'
+        ? 'An official assessment-roll value matched this property address. Assessed value is not the same as market value or the final tax bill; confirm accuracy, filing windows, and appeal eligibility with the assessor.'
         : 'A tax rate change has been detected in your area. Update your homeownership budget accordingly.',
       drivers: [],
       actions: [
         action('REVIEW_ASSESSMENT', 'Review the new tax assessment for accuracy', 'high'),
-        action('PREPARE_APPEAL', 'Gather comparable sales data if you plan to appeal', 'medium'),
+        action('PREPARE_APPEAL', 'Confirm the official filing window before preparing appeal evidence', 'medium'),
         action('UPDATE_BUDGET', 'Update your annual budget for the new tax obligation', 'medium'),
       ],
       systems: [],

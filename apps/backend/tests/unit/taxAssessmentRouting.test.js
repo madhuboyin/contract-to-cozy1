@@ -14,6 +14,13 @@ const {
   taxCoverageKey,
   taxCoverageRegistration,
 } = require('../../src/services/taxAssessmentFetch.service');
+const {
+  NYC_DOF_BRONX_TAX_CLASS_1_PILOT,
+  reviewedTaxPilotRuntimeConfig,
+} = require('../../src/services/taxAssessorAdapters/reviewedTaxPilotSources');
+const {
+  upsertReviewedTaxPilotSources,
+} = require('../../src/scripts/seedReviewedTaxPilots');
 
 function sourceFixture(overrides = {}) {
   return {
@@ -131,6 +138,182 @@ test('SoQL construction validates identifiers and escapes literal values', () =>
     ),
     /Unsafe Socrata query filter identifier/,
   );
+});
+
+test('reviewed Bronx pilot has a valid privacy-bounded split-address contract', () => {
+  const source = reviewedTaxPilotRuntimeConfig(
+    NYC_DOF_BRONX_TAX_CLASS_1_PILOT,
+    'pilot-source',
+  );
+  assert.deepEqual(validateTaxAssessorDataSource(source), {
+    valid: true,
+    errors: [],
+  });
+  assert.deepEqual(taxCoverageRegistration(source), {
+    coverageType: 'city',
+    countryCode: 'US',
+    stateCode: 'NY',
+    cityName: 'bronx',
+  });
+
+  const where = buildTaxAssessmentWhereClause(
+    {
+      street: '2563 Tiemann Avenue',
+      city: 'Bronx',
+      state: 'NY',
+      postalCode: '10469',
+    },
+    source.queryFilterJson,
+  );
+  assert.match(where, /housenum_lo='2563'/);
+  assert.match(where, /upper\(street_name\) like '%TIEMANN%AVE%'/);
+  assert.match(where, /zip_code='10469'/);
+  assert.match(where, /boro='2'/);
+  assert.match(where, /rectype='1'/);
+  assert.match(where, /curtaxclass='1'/);
+  assert.doesNotMatch(where, /appealInfoUrl|eventTtlDays|assessmentStage/);
+});
+
+test('reviewed pilot seeder performs an isolated idempotent source upsert', async () => {
+  const calls = [];
+  const count = await upsertReviewedTaxPilotSources({
+    taxAssessorDataSource: {
+      async upsert(input) {
+        calls.push(input);
+        return input.create;
+      },
+    },
+  });
+
+  assert.equal(count, 1);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].where, {
+    slug: 'nyc-dof-bronx-tax-class-1',
+  });
+  assert.equal(calls[0].create.datasetId, '8y4t-faws');
+  assert.equal(calls[0].create.normalizedCoverageKey, 'US-NY-bronx');
+  assert.equal(calls[0].update.queryFilterJson.latestTaxYearOnly, true);
+});
+
+test('Bronx pilot selects only reviewed fields and maps official split addresses', async () => {
+  let requestedUrl;
+  const source = reviewedTaxPilotRuntimeConfig(
+    NYC_DOF_BRONX_TAX_CLASS_1_PILOT,
+    'pilot-source',
+  );
+  const adapter = new SocrataTaxAdapter(
+    async (url) => {
+      requestedUrl = String(url);
+      return new Response(JSON.stringify([{
+        parid: '2044880067',
+        curacttot: '43080',
+        pyacttot: '39360',
+        year: '2027',
+        housenum_lo: '2563',
+        street_name: 'TIEMANN AVENUE',
+        zip_code: '10469',
+      }, {
+        parid: '2044880067',
+        curacttot: '43080',
+        pyacttot: '39360',
+        year: '2027',
+        housenum_lo: '2563',
+        street_name: 'TIEMANN AVENUE',
+        zip_code: '10469',
+      }, {
+        parid: '2044880067',
+        curacttot: '39360',
+        pyacttot: '40860',
+        year: '2026',
+        housenum_lo: '2563',
+        street_name: 'TIEMANN AVENUE',
+        zip_code: '10469',
+      }]), { status: 200 });
+    },
+    async () => {},
+    TAX_ASSESSMENT_FETCH_TIMEOUT_MS,
+    async () => {},
+    { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } },
+  );
+
+  const records = await adapter.fetchAssessments(source, {
+    street: '2563 Tiemann Avenue',
+    city: 'Bronx',
+    state: 'NY',
+    postalCode: '10469',
+  });
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].externalId, '2044880067');
+  assert.equal(records[0].parcelId, '2044880067');
+  assert.equal(records[0].situsAddress, '2563 TIEMANN AVENUE');
+  assert.equal(records[0].matchConfidence, 'high');
+  assert.equal(records[0].matchMethod, 'address_with_parcel_evidence');
+  const requestUrl = new URL(requestedUrl);
+  const selected = requestUrl.searchParams.get('$select').split(',');
+  assert.deepEqual(selected, [
+    'curacttot',
+    'housenum_lo',
+    'parid',
+    'pyacttot',
+    'street_name',
+    'year',
+    'zip_code',
+  ]);
+  assert.equal(requestUrl.searchParams.get('$order'), 'year DESC');
+  assert.doesNotMatch(requestedUrl, /owner|mail_address/);
+});
+
+test('Bronx pilot suppresses an ambiguous address that maps to multiple parcels', async () => {
+  const source = reviewedTaxPilotRuntimeConfig(
+    NYC_DOF_BRONX_TAX_CLASS_1_PILOT,
+    'pilot-source',
+  );
+  const warnings = [];
+  const adapter = new SocrataTaxAdapter(
+    async () => new Response(JSON.stringify([
+      {
+        parid: 'parcel-a',
+        curacttot: '43080',
+        pyacttot: '39360',
+        year: '2027',
+        housenum_lo: '2563',
+        street_name: 'TIEMANN AVENUE',
+        zip_code: '10469',
+      },
+      {
+        parid: 'parcel-b',
+        curacttot: '44000',
+        pyacttot: '40000',
+        year: '2027',
+        housenum_lo: '2563',
+        street_name: 'TIEMANN AVENUE',
+        zip_code: '10469',
+      },
+    ]), { status: 200 }),
+    async () => {},
+    TAX_ASSESSMENT_FETCH_TIMEOUT_MS,
+    async () => {},
+    {
+      info() {},
+      warn(value) { warnings.push(value); },
+      error() {},
+      debug() {},
+      fatal() {},
+      child() { return this; },
+    },
+  );
+
+  const records = await adapter.fetchAssessments(source, {
+    street: '2563 Tiemann Avenue',
+    city: 'Bronx',
+    state: 'NY',
+    postalCode: '10469',
+  });
+
+  assert.deepEqual(records, []);
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].distinctParcelCount, 2);
 });
 
 test('adapter keeps only address-confident rows and sends an abortable request', async () => {

@@ -4,6 +4,7 @@ import {
 } from '@worker-shared/modules/homeEventRadar/contracts';
 import type {
   RawTaxAssessmentRecord,
+  TaxAssessmentDatePolicy,
   TaxAssessorDataSourceConfig,
 } from '@worker-shared/services/taxAssessorAdapters/taxAssessmentTypes';
 
@@ -47,6 +48,32 @@ function safeDate(value: string | undefined, fallback: Date): Date {
   return Number.isFinite(parsed.getTime()) ? parsed : fallback;
 }
 
+function queryControls(
+  dataSource: TaxAssessorDataSourceConfig,
+): Record<string, unknown> {
+  const config = dataSource.queryFilterJson;
+  return config && typeof config === 'object' && !Array.isArray(config)
+    ? config as Record<string, unknown>
+    : {};
+}
+
+function effectiveDate(
+  record: RawTaxAssessmentRecord,
+  dataSource: TaxAssessorDataSourceConfig,
+  observedAt: Date,
+): Date {
+  const policy = queryControls(dataSource).assessmentDatePolicy as
+    | TaxAssessmentDatePolicy
+    | undefined;
+  if (policy === 'nyc_fiscal_year_start') {
+    const taxYear = Number(record.taxYear);
+    if (Number.isInteger(taxYear) && taxYear >= 2000 && taxYear <= 2200) {
+      return new Date(Date.UTC(taxYear - 1, 6, 1));
+    }
+  }
+  return safeDate(record.assessmentDate, observedAt);
+}
+
 function providerRevision(
   record: RawTaxAssessmentRecord,
   assessedValue: number | null,
@@ -70,7 +97,7 @@ export function normalizeTaxAssessmentRecord(
     throw new Error('Tax assessment record lacks acceptable property-match confidence');
   }
   const observedAt = safeDate(context.observedAt, new Date());
-  const effectiveAt = safeDate(record.assessmentDate, observedAt);
+  const effectiveAt = effectiveDate(record, dataSource, observedAt);
   const expiresAt = new Date(
     effectiveAt.getTime() + ttlDays(dataSource) * 24 * 60 * 60 * 1_000,
   );
@@ -103,6 +130,7 @@ export function normalizeTaxAssessmentRecord(
     record.externalId,
     property.id,
   ].join(':');
+  const controls = queryControls(dataSource);
 
   return canonicalRadarObservationSchema.parse({
     schemaVersion: 1,
@@ -146,6 +174,21 @@ export function normalizeTaxAssessmentRecord(
         countyFips: property.countyFips ?? null,
       },
       eventTtlDays: ttlDays(dataSource),
+      assessmentStage:
+        typeof controls.assessmentStage === 'string'
+          ? controls.assessmentStage
+          : null,
+      assessedValueIsMarketValue: false,
+      appealInformation: {
+        officialUrl:
+          typeof controls.appealInfoUrl === 'string'
+            ? controls.appealInfoUrl
+            : null,
+        disclaimer:
+          typeof controls.appealDisclaimer === 'string'
+            ? controls.appealDisclaimer
+            : 'Confirm filing windows and eligibility with the official assessor.',
+      },
     },
   });
 }

@@ -41,6 +41,24 @@ export interface RawTaxAssessmentRecord {
   rawData: Record<string, unknown>;
 }
 
+export type TaxAssessmentDatePolicy =
+  | 'provider_date'
+  | 'nyc_fiscal_year_start';
+
+export interface TaxAssessmentQueryControls {
+  addressColumn?: string;
+  addressNumberColumn?: string;
+  addressStreetColumn?: string;
+  postalCodeColumn?: string;
+  parcelIdFromExternalId?: boolean;
+  latestTaxYearOnly?: boolean;
+  eventTtlDays?: number;
+  assessmentDatePolicy?: TaxAssessmentDatePolicy;
+  assessmentStage?: string;
+  appealInfoUrl?: string;
+  appealDisclaimer?: string;
+}
+
 export type TaxAssessmentSourceValidation = {
   valid: boolean;
   errors: string[];

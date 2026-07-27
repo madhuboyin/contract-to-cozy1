@@ -604,7 +604,8 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     description:
       'Fetches reviewed property tax reassessment data from configured Socrata city, county-FIPS, ' +
       'or state sources and queues canonical Radar observations with bounded lifecycle and exact ' +
-      'source-run outcomes. Remains disabled until a pilot source passes acceptance. Override ' +
+      'source-run outcomes. The reviewed NYC Bronx Tax Class 1 pilot remains disabled until an ' +
+      'allowlisted monitored-property dry run passes acceptance. Override ' +
       'schedule via TAX_ASSESSMENT_INGEST_CRON env var.',
     category: 'RISK_SAFETY',
     schedule: 'Weekly, Mondays at 6:00 AM',
@@ -618,7 +619,7 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     defaultEnabledInBeta: false,
     supportsDryRun: true,
     supportsPropertyScope: true,
-    externalProvider: 'County Socrata open-data portals',
+    externalProvider: 'NYC Department of Finance and reviewed Socrata portals',
     humanApprovalClass: 'NONE',
   },
   {

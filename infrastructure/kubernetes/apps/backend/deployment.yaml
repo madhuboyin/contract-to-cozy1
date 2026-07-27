@@ -198,6 +198,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_OPENFEMA_DECLARATIONS_ENABLED
+            - name: WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

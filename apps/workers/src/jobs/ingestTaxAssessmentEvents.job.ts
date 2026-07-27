@@ -26,7 +26,7 @@ import { logger, type AppLogger } from '../lib/logger';
 import { normalizeTaxAssessmentRecord } from '../radar/normalizeTaxAssessment';
 
 export const TAX_ASSESSMENT_SOURCE_KEY = 'tax-assessment-ingest';
-export const TAX_ASSESSMENT_ADAPTER_VERSION = 'socrata-tax-canonical-v2';
+export const TAX_ASSESSMENT_ADAPTER_VERSION = 'socrata-tax-canonical-v3';
 const TAX_SOURCE_FRESHNESS_SECONDS = 8 * 24 * 60 * 60;
 
 export type TaxAssessmentIngestResult = WorkerRunResult & {

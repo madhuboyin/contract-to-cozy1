@@ -24,10 +24,24 @@ const CANONICAL_FIELDS = new Set([
   'assessmentDate',
   'taxYear',
   'situsAddress',
+  'situsHouseNumber',
+  'situsStreetName',
   'situsPostalCode',
 ]);
-const REQUIRED_CANONICAL_FIELDS = ['externalId', 'situsAddress'] as const;
-const CONTROL_FILTER_KEYS = new Set(['addressColumn', 'eventTtlDays']);
+const REQUIRED_CANONICAL_FIELDS = ['externalId'] as const;
+const CONTROL_FILTER_KEYS = new Set<string>([
+  'addressColumn',
+  'addressNumberColumn',
+  'addressStreetColumn',
+  'postalCodeColumn',
+  'parcelIdFromExternalId',
+  'latestTaxYearOnly',
+  'eventTtlDays',
+  'assessmentDatePolicy',
+  'assessmentStage',
+  'appealInfoUrl',
+  'appealDisclaimer',
+]);
 
 type FetchLike = typeof fetch;
 
@@ -81,6 +95,14 @@ export function validateTaxAssessorDataSource(
         errors.push(`fieldMappingJson must map ${required}`);
       }
     }
+    const mapsWholeAddress = targets.has('situsAddress');
+    const mapsSplitAddress =
+      targets.has('situsHouseNumber') && targets.has('situsStreetName');
+    if (!mapsWholeAddress && !mapsSplitAddress) {
+      errors.push(
+        'fieldMappingJson must map situsAddress or both situsHouseNumber and situsStreetName',
+      );
+    }
     if (
       !targets.has('assessedValueRaw')
       && !targets.has('previousAssessedValueRaw')
@@ -104,6 +126,91 @@ export function validateTaxAssessorDataSource(
     ) {
       errors.push('queryFilterJson.addressColumn must be a safe field identifier');
     }
+    for (const key of [
+      'addressNumberColumn',
+      'addressStreetColumn',
+      'postalCodeColumn',
+    ] as const) {
+      const value = dataSource.queryFilterJson[key];
+      if (
+        value !== undefined
+        && (typeof value !== 'string' || !SOQL_IDENTIFIER.test(value))
+      ) {
+        errors.push(`queryFilterJson.${key} must be a safe field identifier`);
+      }
+    }
+    const hasSplitNumber =
+      dataSource.queryFilterJson.addressNumberColumn !== undefined;
+    const hasSplitStreet =
+      dataSource.queryFilterJson.addressStreetColumn !== undefined;
+    if (hasSplitNumber !== hasSplitStreet) {
+      errors.push(
+        'queryFilterJson.addressNumberColumn and addressStreetColumn must be configured together',
+      );
+    }
+    if (addressColumn !== undefined && hasSplitNumber) {
+      errors.push(
+        'queryFilterJson must use either addressColumn or split address columns, not both',
+      );
+    }
+    const mappings = isObject(dataSource.fieldMappingJson)
+      ? dataSource.fieldMappingJson
+      : {};
+    if (
+      typeof addressColumn === 'string'
+      && mappings[addressColumn] !== 'situsAddress'
+    ) {
+      errors.push(
+        'queryFilterJson.addressColumn must map to canonical situsAddress',
+      );
+    }
+    if (
+      typeof dataSource.queryFilterJson.addressNumberColumn === 'string'
+      && mappings[dataSource.queryFilterJson.addressNumberColumn]
+        !== 'situsHouseNumber'
+    ) {
+      errors.push(
+        'queryFilterJson.addressNumberColumn must map to canonical situsHouseNumber',
+      );
+    }
+    if (
+      typeof dataSource.queryFilterJson.addressStreetColumn === 'string'
+      && mappings[dataSource.queryFilterJson.addressStreetColumn]
+        !== 'situsStreetName'
+    ) {
+      errors.push(
+        'queryFilterJson.addressStreetColumn must map to canonical situsStreetName',
+      );
+    }
+    if (
+      typeof dataSource.queryFilterJson.postalCodeColumn === 'string'
+      && mappings[dataSource.queryFilterJson.postalCodeColumn]
+        !== 'situsPostalCode'
+    ) {
+      errors.push(
+        'queryFilterJson.postalCodeColumn must map to canonical situsPostalCode',
+      );
+    }
+    if (
+      dataSource.queryFilterJson.parcelIdFromExternalId !== undefined
+      && typeof dataSource.queryFilterJson.parcelIdFromExternalId !== 'boolean'
+    ) {
+      errors.push('queryFilterJson.parcelIdFromExternalId must be boolean');
+    }
+    if (
+      dataSource.queryFilterJson.latestTaxYearOnly !== undefined
+      && typeof dataSource.queryFilterJson.latestTaxYearOnly !== 'boolean'
+    ) {
+      errors.push('queryFilterJson.latestTaxYearOnly must be boolean');
+    }
+    if (
+      dataSource.queryFilterJson.latestTaxYearOnly === true
+      && !Object.values(mappings).includes('taxYear')
+    ) {
+      errors.push(
+        'queryFilterJson.latestTaxYearOnly requires a canonical taxYear mapping',
+      );
+    }
     const eventTtlDays = dataSource.queryFilterJson.eventTtlDays;
     if (
       eventTtlDays !== undefined
@@ -115,6 +222,40 @@ export function validateTaxAssessorDataSource(
       )
     ) {
       errors.push('queryFilterJson.eventTtlDays must be an integer from 30 to 365');
+    }
+    const assessmentDatePolicy =
+      dataSource.queryFilterJson.assessmentDatePolicy;
+    if (
+      assessmentDatePolicy !== undefined
+      && !['provider_date', 'nyc_fiscal_year_start'].includes(
+        String(assessmentDatePolicy),
+      )
+    ) {
+      errors.push(
+        'queryFilterJson.assessmentDatePolicy must be provider_date or nyc_fiscal_year_start',
+      );
+    }
+    for (const key of ['assessmentStage', 'appealDisclaimer'] as const) {
+      const value = dataSource.queryFilterJson[key];
+      if (
+        value !== undefined
+        && (typeof value !== 'string' || value.trim().length === 0)
+      ) {
+        errors.push(`queryFilterJson.${key} must be a non-empty string`);
+      }
+    }
+    const appealInfoUrl = dataSource.queryFilterJson.appealInfoUrl;
+    if (appealInfoUrl !== undefined) {
+      try {
+        if (
+          typeof appealInfoUrl !== 'string'
+          || new URL(appealInfoUrl).protocol !== 'https:'
+        ) {
+          errors.push('queryFilterJson.appealInfoUrl must use HTTPS');
+        }
+      } catch {
+        errors.push('queryFilterJson.appealInfoUrl must be a valid HTTPS URL');
+      }
     }
     for (const [field, value] of Object.entries(dataSource.queryFilterJson)) {
       if (CONTROL_FILTER_KEYS.has(field)) continue;
@@ -216,12 +357,50 @@ export function buildTaxAssessmentWhereClause(
   }
   const addressColumn = typeof queryFilter?.addressColumn === 'string'
     ? queryFilter.addressColumn
-    : 'situs_address';
-  if (!SOQL_IDENTIFIER.test(addressColumn)) {
-    throw new Error('Unsafe Socrata address column identifier');
+    : undefined;
+  const addressNumberColumn =
+    typeof queryFilter?.addressNumberColumn === 'string'
+      ? queryFilter.addressNumberColumn
+      : undefined;
+  const addressStreetColumn =
+    typeof queryFilter?.addressStreetColumn === 'string'
+      ? queryFilter.addressStreetColumn
+      : undefined;
+  const parts: string[] = [];
+  if (addressNumberColumn || addressStreetColumn) {
+    if (
+      !addressNumberColumn
+      || !addressStreetColumn
+      || !SOQL_IDENTIFIER.test(addressNumberColumn)
+      || !SOQL_IDENTIFIER.test(addressStreetColumn)
+    ) {
+      throw new Error('Unsafe Socrata split-address column identifier');
+    }
+    parts.push(`${addressNumberColumn}=${soqlString(streetNumber)}`);
+    parts.push(
+      `upper(${addressStreetColumn}) like ${soqlString(`%${streetTokens.join('%')}%`)}`,
+    );
+  } else {
+    const wholeAddressColumn = addressColumn ?? 'situs_address';
+    if (!SOQL_IDENTIFIER.test(wholeAddressColumn)) {
+      throw new Error('Unsafe Socrata address column identifier');
+    }
+    const addressPattern = `%${[streetNumber, ...streetTokens].join('%')}%`;
+    parts.push(
+      `upper(${wholeAddressColumn}) like ${soqlString(addressPattern)}`,
+    );
   }
-  const addressPattern = `%${[streetNumber, ...streetTokens].join('%')}%`;
-  const parts = [`upper(${addressColumn}) like ${soqlString(addressPattern)}`];
+  const postalCodeColumn =
+    typeof queryFilter?.postalCodeColumn === 'string'
+      ? queryFilter.postalCodeColumn
+      : undefined;
+  if (postalCodeColumn) {
+    if (!SOQL_IDENTIFIER.test(postalCodeColumn)) {
+      throw new Error('Unsafe Socrata postal-code column identifier');
+    }
+    const postalCode = address.postalCode?.slice(0, 5);
+    if (postalCode) parts.push(`${postalCodeColumn}=${soqlString(postalCode)}`);
+  }
   for (const [field, value] of Object.entries(queryFilter ?? {})) {
     if (CONTROL_FILTER_KEYS.has(field)) continue;
     if (!SOQL_IDENTIFIER.test(field)) {
@@ -265,6 +444,16 @@ export class SocrataTaxAdapter {
         `${dataSource.baseUrl.replace(/\/+$/, '')}/resource/${dataSource.datasetId}.json`,
       );
       url.searchParams.set('$where', whereClause);
+      url.searchParams.set(
+        '$select',
+        Object.keys(fieldMapping).sort().join(','),
+      );
+      if (queryFilter?.latestTaxYearOnly === true) {
+        const taxYearField = Object.entries(fieldMapping).find(
+          ([, canonicalField]) => canonicalField === 'taxYear',
+        )?.[0];
+        if (taxYearField) url.searchParams.set('$order', `${taxYearField} DESC`);
+      }
       url.searchParams.set('$limit', String(PAGE_SIZE));
       url.searchParams.set('$offset', String(offset));
       const headers: Record<string, string> = {
@@ -325,23 +514,33 @@ export class SocrataTaxAdapter {
       for (const row of rows) {
         const mapped = mapFields(row, fieldMapping);
         if (!mapped.externalId?.trim()) continue;
+        const situsAddress = mapped.situsAddress
+          ?? [mapped.situsHouseNumber, mapped.situsStreetName]
+            .filter(Boolean)
+            .join(' ');
         const matchConfidence = addressConfidence(
           address,
-          mapped.situsAddress,
+          situsAddress,
           mapped.situsPostalCode,
         );
         if (!matchConfidence) continue;
+        const parcelId = mapped.parcelId
+          ?? (
+            queryFilter?.parcelIdFromExternalId === true
+              ? mapped.externalId
+              : undefined
+          );
         results.push({
           externalId: mapped.externalId!,
-          parcelId: mapped.parcelId,
+          parcelId,
           assessedValueRaw: mapped.assessedValueRaw,
           previousAssessedValueRaw: mapped.previousAssessedValueRaw,
           assessmentDate: mapped.assessmentDate,
           taxYear: mapped.taxYear,
-          situsAddress: mapped.situsAddress,
+          situsAddress,
           situsPostalCode: mapped.situsPostalCode,
           matchConfidence,
-          matchMethod: mapped.parcelId
+          matchMethod: parcelId
             ? 'address_with_parcel_evidence'
             : 'address',
           rawData: row,
@@ -351,7 +550,51 @@ export class SocrataTaxAdapter {
       offset += PAGE_SIZE;
       page += 1;
     }
-    return results;
+    let candidates = results;
+    if (queryFilter?.latestTaxYearOnly === true) {
+      const numericYears = candidates
+        .map((record) => Number(record.taxYear))
+        .filter(Number.isInteger);
+      if (numericYears.length > 0) {
+        const latestYear = Math.max(...numericYears);
+        candidates = candidates.filter(
+          (record) => Number(record.taxYear) === latestYear,
+        );
+      }
+    }
+    const deduplicated = new Map<string, RawTaxAssessmentRecord>();
+    for (const record of candidates) {
+      const identity = [
+        record.externalId,
+        record.taxYear ?? '',
+        record.assessmentDate ?? '',
+        record.assessedValueRaw ?? '',
+        record.previousAssessedValueRaw ?? '',
+        record.situsAddress ?? '',
+        record.situsPostalCode ?? '',
+      ].join('|');
+      if (!deduplicated.has(identity)) deduplicated.set(identity, record);
+    }
+    candidates = [...deduplicated.values()];
+    const distinctParcels = new Set(
+      candidates.map((record) => record.parcelId).filter(Boolean),
+    );
+    if (candidates.length > 1) {
+      this.log.warn(
+        {
+          dataSourceId: dataSource.id,
+          candidateCount: candidates.length,
+          distinctParcelCount: distinctParcels.size,
+          reason:
+            distinctParcels.size > 1
+              ? 'multiple_parcels'
+              : 'conflicting_latest_rows',
+        },
+        '[SocrataTaxAdapter] Ambiguous latest assessment rows; suppressing all candidates',
+      );
+      return [];
+    }
+    return candidates;
   }
 }
 

@@ -4,6 +4,9 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { seedKnowledgeHub } from './knowledgeHub.seed';
+import {
+  upsertReviewedTaxPilotSources,
+} from '../src/scripts/seedReviewedTaxPilots';
 
 const prisma = new PrismaClient();
 
@@ -33,6 +36,10 @@ async function seedOptionalProfileQuestions() {
       maxImpressions: 3,
     },
   });
+}
+
+async function seedReviewedTaxPilotSources() {
+  await upsertReviewedTaxPilotSources(prisma);
 }
 
 async function seedPlantCatalog() {
@@ -527,6 +534,11 @@ async function main() {
   console.log('🪴 Seeding starter plant catalog...');
   await seedPlantCatalog();
   console.log('✅ Seeded starter plant catalog');
+  console.log('');
+
+  console.log('📡 Seeding reviewed Home Event Radar tax pilot sources...');
+  await seedReviewedTaxPilotSources();
+  console.log('✅ Seeded reviewed tax pilot sources (worker remains launch-closed)');
   console.log('');
 
   const hashedPassword = await bcrypt.hash('password123', 10);

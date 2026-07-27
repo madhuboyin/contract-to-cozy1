@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-603 implemented |
+| Status | In progress — HER-604 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -64,7 +64,8 @@
 | HER-601 AirNow adapter | Complete; DB application and credentialed activation pending | New 2026 latitudeLongitude current/forecast services feed the canonical pipeline with AQI 101 materiality, bounded reporting-area radius, particle/smoke evidence, source freshness/health, ZIP request caching, dry-run/property scope, launch-closed policy, and HVAC/filter actions |
 | HER-602 USGS adapter | Complete; DB application and production activation pending | Real-time v1.0 GeoJSON feed uses reviewed M2.5+ magnitude/distance bands, point/radius matching, stable event revisions, retraction/expiry lifecycle, source freshness/health, dry-run/property scope, and observational homeowner copy |
 | HER-603 OpenFEMA adapter | Complete; DB application and production activation pending | OpenFEMA v2 declarations use exact county FIPS or literal statewide geography, deterministic hash revisions, closeout/18-month lifecycle, six-hour monitoring, assistance truthfulness, and recovery/documentation guidance |
-| HER-604+ | Not started | Additional reviewed source adapters remain |
+| HER-604 Tax pilot | Complete; seed application and monitored-property production activation pending | NYC DOF Bronx Tax Class 1 uses the official current roll, exact borough/address/ZIP routing, parcel ambiguity suppression, latest-year republish deduplication, stable fiscal-year lifecycle, PII-minimized field projection, and governed appeal information |
+| HER-605+ | Not started | Utility and insurance source decisions plus compound-event rules remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1666,6 +1667,65 @@ Only after acceptance add:
 ```text
 WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED=true
 ```
+
+Implemented as the NYC Department of Finance Bronx Tax Class 1 pilot against
+the official Socrata dataset `8y4t-faws`. The seed is
+`nyc-dof-bronx-tax-class-1`, with city coverage `US-NY-bronx` and provider
+filters `boro=2`, `rectype=1`, and `curtaxclass=1`.
+
+The reviewed field contract requests only:
+
+- `parid`;
+- `curacttot`;
+- `pyacttot`;
+- `year`;
+- `housenum_lo`;
+- `street_name`;
+- `zip_code`.
+
+This explicit `$select` excludes owner and mailing fields from the worker
+response. Address matching requires the exact house number, normalized street
+tokens, and five-digit ZIP. `parid` supplies parcel evidence. If one address
+maps to more than one distinct parcel, the adapter suppresses all candidates
+instead of guessing.
+
+The dataset republishes historical years and may repeat identical rows. The
+adapter orders by tax year, keeps only the maximum year, and collapses exact
+republishes before ambiguity review. Current and prior actual assessed totals
+drive the canonical revision. Assessed value is explicitly not represented as
+market value or a final tax bill.
+
+NYC tax year is treated as a fiscal-year lifecycle beginning July 1 of the
+prior calendar year. Events have a 365-day TTL, producing stable effective and
+expiration times across weekly refreshes. Appeal guidance links only to the
+official NYC Department of Finance assessment page and requires the homeowner
+to confirm the filing window and eligibility; Radar does not calculate or
+promise an appeal deadline.
+
+Production remains fail-closed:
+
+```text
+WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED=false
+TAX_ASSESSMENT_INGEST_CRON=0 6 * * 1
+```
+
+Before changing the worker flag to `true`, operators must:
+
+1. apply the schema, then run `npm run seed:radar-tax-pilots` from
+   `apps/backend` to idempotently upsert only the reviewed source configuration;
+2. choose an allowlisted monitored Bronx Tax Class 1 property whose address
+   and ZIP are known to match the official roll;
+3. run the admin property-scoped job with `dryRun=true`;
+4. confirm exactly one latest-year parcel candidate, no owner/mailing fields,
+   and the official assessment values;
+5. run the scoped job without dry-run and verify one canonical event/revision,
+   one property match, accurate assessed-value copy, and the official appeal
+   link;
+6. review an intentionally ambiguous fixture and confirm that it produces no
+   event;
+7. enable the flag and monitor source health, empty runs, rejected
+   observations, and unexpected candidate counts through at least two weekly
+   runs.
 
 ### HER-605 — Utility source decision
 

@@ -376,7 +376,11 @@ dedupe key; Radar matching and provider jobs do not call Guidance. Resolution th
 
 ### Tax Reassessment (first real integration — added this update)
 
-Property tax reassessment data, fetched from county Socrata open-data portals — the first non-dummy data source for Home Event Radar. Mirrors the existing permit-adapter pipeline's jurisdiction-config pattern.
+Property tax reassessment data, fetched from reviewed Socrata open-data
+portals. The first production-shaped pilot is the NYC Department of Finance
+Bronx Tax Class 1 current roll. It mirrors the existing permit-adapter
+pipeline's jurisdiction-config pattern while keeping production launch closed
+until a monitored-property dry run passes.
 
 **Data flow:**
 ```text

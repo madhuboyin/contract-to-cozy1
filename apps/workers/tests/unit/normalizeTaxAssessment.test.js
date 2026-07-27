@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+require('tsconfig-paths/register');
 
 const { normalizeTaxAssessmentRecord } = require('../../src/radar/normalizeTaxAssessment.ts');
 
@@ -95,4 +96,63 @@ test('normalizeTaxAssessmentRecord falls back gracefully with no assessed value'
   assert.equal(signal.severity, 'low');
   assert.match(signal.summary, /parcel-3/);
   assert.equal(signal.lifecycleStatus, 'expired');
+});
+
+test('NYC fiscal-year policy produces a stable annual lifecycle and governed appeal context', () => {
+  const pilotSource = {
+    ...dataSource,
+    slug: 'nyc-dof-bronx-tax-class-1',
+    normalizedCoverageKey: 'US-NY-bronx',
+    queryFilterJson: {
+      eventTtlDays: 365,
+      assessmentDatePolicy: 'nyc_fiscal_year_start',
+      assessmentStage: 'current_roll',
+      appealInfoUrl:
+        'https://www.nyc.gov/site/finance/property/property-assessments.page',
+      appealDisclaimer:
+        'Confirm the official filing window and eligibility with NYC Department of Finance.',
+    },
+  };
+  const record = {
+    externalId: '2044880067',
+    parcelId: '2044880067',
+    assessedValueRaw: '43080',
+    previousAssessedValueRaw: '39360',
+    taxYear: '2027',
+    situsAddress: '2563 TIEMANN AVENUE',
+    situsPostalCode: '10469',
+    matchConfidence: 'high',
+    matchMethod: 'address_with_parcel_evidence',
+    rawData: {},
+  };
+  const signal = normalizeTaxAssessmentRecord(
+    record,
+    pilotSource,
+    {
+      id: 'bronx-property',
+      address: '2563 Tiemann Avenue',
+      city: 'Bronx',
+      state: 'NY',
+      zipCode: '10469',
+    },
+    {
+      sourceDefinitionId: 'source-nyc',
+      observedAt: '2026-07-27T12:00:00.000Z',
+    },
+  );
+
+  assert.equal(signal.effectiveAt, '2026-07-01T00:00:00.000Z');
+  assert.equal(signal.expiresAt, '2027-07-01T00:00:00.000Z');
+  assert.equal(signal.lifecycleStatus, 'active');
+  assert.equal(signal.providerRevision, '2027:unknown-date:43080:39360');
+  assert.equal(signal.rawPayload.assessmentStage, 'current_roll');
+  assert.equal(signal.rawPayload.assessedValueIsMarketValue, false);
+  assert.equal(
+    signal.rawPayload.appealInformation.officialUrl,
+    'https://www.nyc.gov/site/finance/property/property-assessments.page',
+  );
+  assert.match(
+    signal.rawPayload.appealInformation.disclaimer,
+    /official filing window/,
+  );
 });
