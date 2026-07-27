@@ -318,6 +318,11 @@ function toPercent(value: number | null): number | null {
 }
 
 function mapPlanItemToDto(item: RiskMitigationPlanItem): RiskPremiumOptimizationDTO['planItems'][number] {
+  const legacyHelp = mitigationHandoff(
+    item.propertyId,
+    item.actionType,
+    item.title ?? item.actionType.toLowerCase().replace(/_/g, ' ')
+  );
   return {
     id: item.id,
     actionType: item.actionType,
@@ -328,9 +333,15 @@ function mapPlanItemToDto(item: RiskMitigationPlanItem): RiskPremiumOptimization
     why: item.why,
     estimatedCost: asNumber(item.estimatedCost) ?? null,
     carrierBenefitStatus: item.carrierBenefitStatus as RiskPremiumOptimizationDTO['planItems'][number]['carrierBenefitStatus'],
-    carrierReviewQuestion: item.carrierReviewQuestion,
-    professionalHelpLevel: item.professionalHelpLevel as RiskPremiumOptimizationDTO['planItems'][number]['professionalHelpLevel'],
-    handoff: item.handoffJson as RiskPremiumOptimizationDTO['planItems'][number]['handoff'],
+    carrierReviewQuestion:
+      item.carrierReviewQuestion ??
+      `Ask your carrier whether documented ${(item.title ?? 'loss-prevention work').toLowerCase()} affects eligibility or a policy-specific discount.`,
+    professionalHelpLevel:
+      (item.professionalHelpLevel as RiskPremiumOptimizationDTO['planItems'][number]['professionalHelpLevel'] | null) ??
+      legacyHelp.professionalHelpLevel,
+    handoff:
+      (item.handoffJson as RiskPremiumOptimizationDTO['planItems'][number]['handoff'] | null) ??
+      (legacyHelp.handoff as RiskPremiumOptimizationDTO['planItems'][number]['handoff']),
     evidenceDocumentId: item.evidenceDocumentId ?? null,
     linkedHomeEventId: item.linkedHomeEventId ?? null,
     completedAt: item.completedAt ? item.completedAt.toISOString() : null,

@@ -6918,9 +6918,12 @@ model RiskMitigationPlanItem {
   estimatedCost              Decimal? @db.Decimal(12, 2)
   carrierBenefitStatus       String   @default("UNKNOWN")
   carrierBenefitEvidenceJson Json?
-  carrierReviewQuestion      String
-  professionalHelpLevel      String
-  handoffJson                Json
+  // Nullable only for plan items created before the governed loss-prevention
+  // fields existed. New writes always populate these fields; reads derive a
+  // conservative action-specific fallback for legacy rows.
+  carrierReviewQuestion      String?
+  professionalHelpLevel      String?
+  handoffJson                Json?
 
   // Optional proof links (you already have Document + HomeEvent)
   evidenceDocumentId String?

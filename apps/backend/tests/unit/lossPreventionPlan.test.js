@@ -57,6 +57,9 @@ test('canonical schema links the plan to a coverage review and removes savings c
   assert.match(planItem, /carrierReviewQuestion/);
   assert.match(planItem, /professionalHelpLevel/);
   assert.match(planItem, /handoffJson/);
+  assert.match(planItem, /carrierReviewQuestion\s+String\?/);
+  assert.match(planItem, /professionalHelpLevel\s+String\?/);
+  assert.match(planItem, /handoffJson\s+Json\?/);
   assert.doesNotMatch(planItem, /estimatedSavings/);
 
   const statuses = schema.match(/enum MitigationPlanStatus \{([\s\S]*?)\n\}/)[1];
@@ -64,6 +67,15 @@ test('canonical schema links the plan to a coverage review and removes savings c
     assert.match(statuses, new RegExp(`\\b${status}\\b`));
   }
   assert.doesNotMatch(statuses, /\bDONE\b/);
+});
+
+test('legacy plan rows derive conservative guidance instead of requiring a destructive backfill', () => {
+  const service = read('apps/backend/src/services/riskPremiumOptimizer.service.ts');
+
+  assert.match(service, /const legacyHelp = mitigationHandoff/);
+  assert.match(service, /item\.carrierReviewQuestion \?\?/);
+  assert.match(service, /legacyHelp\.professionalHelpLevel/);
+  assert.match(service, /legacyHelp\.handoff/);
 });
 
 test('loss-prevention output contains no additive savings or policy-lever plan items', () => {
