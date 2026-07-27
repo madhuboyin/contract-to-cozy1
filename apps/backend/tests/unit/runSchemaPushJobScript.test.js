@@ -204,3 +204,22 @@ test('legacy Radar channel enum is reconciled only after the new usage column ex
     /CREATE TABLE IF NOT EXISTS "property_radar_notification_decisions"[\s\S]*SELECT NULL::"RadarNotificationChannel"[\s\S]*ADD COLUMN IF NOT EXISTS "eligibleChannels"[\s\S]*prisma db push/,
   );
 });
+
+test('missing insurance handoff event table is bootstrapped before enum reconciliation', () => {
+  assert.match(
+    scriptSource,
+    /SELECT 1 FROM "insurance_quote_request_events" LIMIT 0;/,
+  );
+  assert.match(
+    scriptSource,
+    /SELECT NULL::"QuoteRequestStatus";/,
+  );
+  assert.match(
+    scriptSource,
+    /CREATE TABLE IF NOT EXISTS "insurance_quote_request_events" \("id" TEXT NOT NULL, "status" "QuoteRequestStatus", CONSTRAINT "insurance_quote_request_events_pkey" PRIMARY KEY \("id"\)\);/,
+  );
+  assert.match(
+    scriptSource,
+    /SELECT 1 FROM "insurance_quote_request_events"[\s\S]*CREATE TABLE IF NOT EXISTS "insurance_quote_request_events"[\s\S]*prisma db push/,
+  );
+});

@@ -278,6 +278,31 @@ spec:
                     --stdin \
                     --schema=/config/schema.prisma
               fi
+              echo "Checking first-deployment insurance handoff event schema state..."
+              if ! printf '%s\n' \
+                'SELECT 1 FROM "insurance_quote_request_events" LIMIT 0;' | \
+                npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
+                  --stdin \
+                  --schema=/config/schema.prisma >/dev/null 2>&1; then
+                echo "Creating empty insurance_quote_request_events shell for Prisma enum reconciliation..."
+                if printf '%s\n' \
+                  'SELECT NULL::"QuoteRequestStatus";' | \
+                  npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
+                    --stdin \
+                    --schema=/config/schema.prisma >/dev/null 2>&1; then
+                  printf '%s\n' \
+                    'CREATE TABLE IF NOT EXISTS "insurance_quote_request_events" ("id" TEXT NOT NULL, "status" "QuoteRequestStatus", CONSTRAINT "insurance_quote_request_events_pkey" PRIMARY KEY ("id"));' | \
+                    npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
+                      --stdin \
+                      --schema=/config/schema.prisma
+                else
+                  printf '%s\n' \
+                    'CREATE TABLE IF NOT EXISTS "insurance_quote_request_events" ("id" TEXT NOT NULL, CONSTRAINT "insurance_quote_request_events_pkey" PRIMARY KEY ("id"));' | \
+                    npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db execute \
+                      --stdin \
+                      --schema=/config/schema.prisma
+                fi
+              fi
               npx --yes --package=prisma@${PRISMA_CLI_VERSION} prisma db push \
                 --accept-data-loss \
                 --skip-generate \
