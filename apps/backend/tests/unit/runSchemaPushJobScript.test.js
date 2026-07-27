@@ -185,77 +185,10 @@ test('missing Radar notification decision table is bootstrapped before the full 
   );
   assert.match(
     scriptSource,
-    /if ! printf[\s\S]*prisma db execute[\s\S]*schema-bootstrap\.prisma/,
+    /CREATE TABLE IF NOT EXISTS "property_radar_notification_decisions" \("id" TEXT NOT NULL, CONSTRAINT "property_radar_notification_decisions_pkey" PRIMARY KEY \("id"\)\);/,
   );
   assert.match(
     scriptSource,
-    /current_model == "Notification"[\s\S]*radarDecision[\s\S]*PropertyRadarNotificationDecision\?/,
+    /SELECT 1 FROM "property_radar_notification_decisions"[\s\S]*CREATE TABLE IF NOT EXISTS "property_radar_notification_decisions"[\s\S]*prisma db push[\s\S]*schema=\/config\/schema\.prisma/,
   );
-  assert.match(
-    scriptSource,
-    /current_model == "PropertyRadarNotificationDecision"[\s\S]*notificationId/,
-  );
-  assert.match(
-    scriptSource,
-    /prisma validate[\s\S]*schema=\/tmp\/schema-bootstrap\.prisma[\s\S]*prisma db push[\s\S]*schema=\/tmp\/schema-bootstrap\.prisma[\s\S]*prisma db push[\s\S]*schema=\/config\/schema\.prisma/,
-  );
-});
-
-test('Radar bootstrap transform removes only the not-yet-safe Notification relation and remains valid', () => {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'radar-schema-bootstrap-test-'));
-  const bootstrapPath = path.join(tempRoot, 'schema-bootstrap.prisma');
-  const sourceSchema = path.join(backendRoot, 'prisma/schema.prisma');
-  const transform = spawnSync(
-    'awk',
-    [
-      `
-        $1 == "model" { current_model = $2 }
-        current_model == "Notification" &&
-          $1 == "radarDecision" &&
-          $2 == "PropertyRadarNotificationDecision?" { next }
-        current_model == "PropertyRadarNotificationDecision" &&
-          $1 == "notificationId" { next }
-        current_model == "PropertyRadarNotificationDecision" &&
-          $1 == "notification" &&
-          $2 == "Notification?" { next }
-        { print }
-      `,
-      sourceSchema,
-    ],
-    { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
-  );
-  assert.equal(transform.status, 0, transform.stderr);
-  fs.writeFileSync(bootstrapPath, transform.stdout);
-  const bootstrapSchema = fs.readFileSync(bootstrapPath, 'utf8');
-  const notificationModel = bootstrapSchema.match(
-    /model Notification \{[\s\S]*?\n\}/,
-  )?.[0];
-  const decisionModel = bootstrapSchema.match(
-    /model PropertyRadarNotificationDecision \{[\s\S]*?\n\}/,
-  )?.[0];
-  assert.ok(notificationModel);
-  assert.ok(decisionModel);
-  assert.doesNotMatch(
-    notificationModel,
-    /radarDecision\s+PropertyRadarNotificationDecision\?/,
-  );
-  assert.doesNotMatch(
-    decisionModel,
-    /notificationId\s+String\?\s+@unique/,
-  );
-  assert.doesNotMatch(
-    decisionModel,
-    /notification\s+Notification\?\s+@relation\(fields: \[notificationId\]/,
-  );
-  const validation = spawnSync(
-    path.join(backendRoot, 'node_modules/.bin/prisma'),
-    ['validate', `--schema=${bootstrapPath}`],
-    {
-      cwd: backendRoot,
-      encoding: 'utf8',
-      env: process.env,
-    },
-  );
-  fs.rmSync(tempRoot, { recursive: true, force: true });
-  assert.equal(validation.status, 0, validation.stderr || validation.stdout);
 });
