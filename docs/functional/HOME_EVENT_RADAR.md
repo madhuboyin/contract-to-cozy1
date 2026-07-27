@@ -1047,7 +1047,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 | **Route mounting** | Both `homeEventRadar.routes` and `homeEvents.routes` are registered in `backend/src/index.ts` |
 | **Auth** | All endpoints behind JWT middleware + `propertyAuth.middleware` for property-scoped routes |
 | **Rate limiting** | `apiRateLimiter` applied to all endpoints |
-| **Background workers** | QA/E2E fixture ingestion is disabled in production; real tax-assessment, NWS alert, and Open-Meteo freeze-forecast adapters exist; utility and insurance sources do not |
+| **Background workers** | QA/E2E fixture ingestion is disabled in production; real tax-assessment, NWS alert, and Open-Meteo freeze-forecast adapters exist; the utility production source is decided but remains contract/integration-gated, and no insurance source exists |
 | **Incident lifecycle** | Eligible `moderate`/`high` matches project through `RadarIncidentPromotionService`; terminal events and impact downgrades reconcile via `IncidentService.setStatus` |
 | **Guidance engine** | `tax_reassessment_resolution` journey auto-created on promotion; weather-family journeys route to `Incidents`, not Home Event Radar |
 | **Audit log** | Analytics events written to platform audit log via `AuditLog` model |
@@ -1060,7 +1060,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 - Three real external source paths exist: tax reassessment (code-complete but disabled pending an accepted configured pilot), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
 - Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed. `match-lifecycle-v1` persists Now/Upcoming/Recently Ended, independently marks source freshness, detects homeowner-material revisions, and closes matches/Incidents that no longer intersect current property geography. Property creation, geography/fact/responsibility changes, Radar mitigation state, and canonical completion changes publish durable database-backed reconciliation events that replay active events in bounded cursor pages. An hourly leased safety net resumes incomplete revision/property pages, retries capped Radar dead letters, materializes source coverage, and expires visibility/material-update markers without interpreting source failure as clear.
-- No utility outage or insurance market real data source exists (insurance: not even a viable candidate provider identified yet — see Pending Phases).
+- The utility source strategy is decided, but no licensed utility adapter is active. New Jersey is the first territory and a commercial aggregator requires a negotiated end-user display license; insurance has no viable provider yet (see Pending Phases).
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
 - `energy_inefficiency_detected`/`high_utility_cost` guidance families still point at the (mostly dataless) Home Event Radar tool — known gap, not yet fixed.
@@ -1091,9 +1091,22 @@ ordering-only priority engine, HER-304's revision-aware match lifecycle, HER-305
 property reconciliation, HER-306's scheduled safety net, and HER-307's fail-closed tax routing
 correction are complete. Phase 4 homeowner query APIs are the next delivery slice.
 
-### Phase 3 — Utility outage integration (blocked on a provider/budget decision)
+### Phase 3 — Utility outage integration (source decided; contract and implementation pending)
 
-No single national utility outage API exists. Real options: a paid aggregator (e.g. PowerOutage.us) or per-utility-territory scraping scoped to wherever the actual user base lives. Needs a business decision before any code gets written — not just an engineering task.
+HER-605 selected a licensed commercial aggregator path, with PowerOutage.us / FE
+Bluefire preferred for contracting, and New Jersey electric service territories as
+the first launch. The vendor's published API terms do not permit authenticated
+homeowner display or redistribution, so production use requires a negotiated license.
+ODIN remains an evaluation fallback, but current New Jersey coverage observed through
+its public status catalog is incomplete and county-only for JCP&L; county data cannot
+assert that a specific property is affected. Scraping utility maps is rejected.
+
+The accepted source, geography, lifecycle, SLA, cost, privacy, and activation gates are
+in
+[`adr-home-event-radar-utility-source.md`](../architecture/adr-home-event-radar-utility-source.md).
+Utility remains unavailable until a licensed adapter, official territory mapping,
+provider coverage catalog, conservative restoration convergence, quota enforcement,
+and live scoped acceptance all pass.
 
 ### Insurance market integration (deferred indefinitely)
 

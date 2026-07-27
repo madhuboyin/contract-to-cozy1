@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-604 implemented |
+| Status | In progress — HER-605 decision complete |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -65,7 +65,8 @@
 | HER-602 USGS adapter | Complete; DB application and production activation pending | Real-time v1.0 GeoJSON feed uses reviewed M2.5+ magnitude/distance bands, point/radius matching, stable event revisions, retraction/expiry lifecycle, source freshness/health, dry-run/property scope, and observational homeowner copy |
 | HER-603 OpenFEMA adapter | Complete; DB application and production activation pending | OpenFEMA v2 declarations use exact county FIPS or literal statewide geography, deterministic hash revisions, closeout/18-month lifecycle, six-hour monitoring, assistance truthfulness, and recovery/documentation guidance |
 | HER-604 Tax pilot | Complete; seed application and monitored-property production activation pending | NYC DOF Bronx Tax Class 1 uses the official current roll, exact borough/address/ZIP routing, parcel ambiguity suppression, latest-year republish deduplication, stable fiscal-year lifecycle, PII-minimized field projection, and governed appeal information |
-| HER-605+ | Not started | Utility and insurance source decisions plus compound-event rules remain |
+| HER-605 Utility source decision | Complete; contract and adapter implementation pending | New Jersey electric pilot, licensed commercial aggregator path, territory/precision gates, conservative restoration lifecycle, SLA, quota, cost, privacy, and activation controls are recorded in `docs/architecture/adr-home-event-radar-utility-source.md` |
+| HER-606+ | Not started | Insurance source decision and compound-event rules remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1729,17 +1730,32 @@ Before changing the worker flag to `true`, operators must:
 
 ### HER-605 — Utility source decision
 
-Produce a product/engineering decision covering:
+**Status: Complete — implementation and commercial activation remain closed.**
 
-- paid aggregator versus territory integrations;
-- launch territories;
-- licensing;
-- API/SLA;
-- service-territory mapping;
-- outage restoration lifecycle;
-- cost and rate limits.
+The accepted decision is documented in
+[`adr-home-event-radar-utility-source.md`](../architecture/adr-home-event-radar-utility-source.md).
+The production path is a licensed commercial aggregator, with PowerOutage.us / FE
+Bluefire preferred for contracting, and New Jersey electric service territories as
+the first launch scope. Published PowerOutage.us terms do not permit the intended
+homeowner display, so a negotiated commercial addendum is mandatory.
 
-Do not activate Utility category before implementation.
+ODIN remains an evaluation/fallback candidate. Its current public status catalog
+exposes JCP&L at county resolution but not the other searched New Jersey utilities;
+county data cannot create a property-level outage match. Scraping utility outage maps
+is explicitly rejected.
+
+The decision defines:
+
+- official, versioned service-territory polygon mapping and provider coverage joins;
+- ZIP/point/polygon minimum outage precision and fail-closed boundary behavior;
+- explicit restoration/retraction plus conservative two-snapshot disappearance;
+- 2-minute batched polling, 15-minute stale cutoff, health and retry objectives;
+- a minimum 25,000 monthly pilot polling-call allowance plus approved detail calls;
+- contract, attribution, retention, spend, privacy, security, and acceptance gates.
+
+The next utility implementation slice must complete contracting first, then add the
+territory/reference schema and licensed adapter without a migration script. Do not
+activate the Utility category or enable a utility until all ADR gates pass.
 
 ### HER-606 — Insurance source decision
 
@@ -2042,6 +2058,8 @@ flowchart TB
   H103 --> H600["HER-600 admin operations"]
   H600 --> H601["HER-601 AirNow"]
   H600 --> H604["HER-604 tax pilot"]
+  H600 --> H605["HER-605 utility source decision"]
+  H605 --> H608["Future licensed utility adapter"]
 ```
 
 ---
@@ -2075,7 +2093,9 @@ Do not wait for every source. Minimum credible launch is:
 - source health;
 - critical automated acceptance.
 
-AirNow, tax, utility, insurance, compound intelligence, and richer action execution can follow.
+AirNow, tax, insurance, compound intelligence, and richer action execution can follow.
+Utility implementation follows only after the HER-605 commercial license, coverage,
+precision, and budget gates are satisfied.
 
 ---
 
@@ -2095,6 +2115,10 @@ AirNow, tax, utility, insurance, compound intelligence, and richer action execut
 | R-10 | Source jobs false-green on zero work | High | Medium | Structured source-run outcomes and alerts |
 | R-11 | Broad replay overloads DB | Medium | High | Bounded claims, cursor pagination, concurrency/kill switch |
 | R-12 | Existing docs diverge | High | Low | Mark current-state doc as implementation reference; update after delivery |
+| R-13 | Utility feed license forbids homeowner display or retention | High until contracted | Critical | Written commercial addendum; Legal gate; no credentials or activation under published terms |
+| R-14 | Coarse utility geography creates false property outage claims | High | Critical | Require ZIP/point/polygon resolution; county-only awareness cannot match or notify |
+| R-15 | Missing/failed utility snapshots falsely restore outages | Medium | High | Explicit provider terminal state or two complete successful missing snapshots at least 10 minutes apart |
+| R-16 | Utility polling exceeds quota or creates unapproved spend | Medium | High | Batched polling, configured call budget, 70%/90% alerts, fail closed before overage |
 
 ---
 
