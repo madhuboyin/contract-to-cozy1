@@ -3783,13 +3783,50 @@ export type HomeTwinDataQualityDimension =
 
 export type HomeTwinDataQualityStatus = 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT' | 'UNKNOWN';
 
+export type HomeTwinFactState =
+  | 'VERIFIED'
+  | 'REPORTED'
+  | 'DOCUMENT_DERIVED'
+  | 'INFERRED'
+  | 'DEFAULT'
+  | 'CONFLICTED'
+  | 'UNKNOWN';
+
+export type HomeTwinComponentLifecycleState = 'ACTIVE' | 'RETIRED' | 'SUPERSEDED';
+
+/**
+ * Field-level provenance for a single derived value on a component — see
+ * HomeTwinProjectedFact in the backend schema. Each entry carries its own
+ * source and fact state; none of it should be presented with more
+ * confidence than that state implies.
+ */
+export interface HomeTwinProjectedFactDTO {
+  id: string;
+  fieldName: string;
+  valueNumeric: number | null;
+  valueText: string | null;
+  unit: string | null;
+  factState: HomeTwinFactState;
+  sourceType: string;
+  sourceRecordType: string | null;
+  sourceRecordId: string | null;
+  sourceField: string | null;
+  observedAt: string | null;
+  derivationMethod: string | null;
+  confidenceScore: number | null;
+  conflictGroupId: string | null;
+  correctionDestination: string | null;
+}
+
 export interface HomeTwinComponentDTO {
   id: string;
+  identityKey: string;
   componentType: HomeTwinComponentType;
   label: string | null;
   status: HomeTwinComponentStatus;
   sourceType: string;
   sourceReferenceId: string | null;
+  lifecycleState: HomeTwinComponentLifecycleState;
   installYear: number | null;
   estimatedAgeYears: number | null;
   usefulLifeYears: number | null;
@@ -3806,6 +3843,7 @@ export interface HomeTwinComponentDTO {
   lastModeledAt: string | null;
   createdAt: string;
   updatedAt: string;
+  projectedFacts: HomeTwinProjectedFactDTO[];
 }
 
 export interface HomeTwinDataQualityDTO {
@@ -3861,6 +3899,15 @@ export interface HomeDigitalTwinDTO {
   updatedAt: string;
   /** Property Context version the projection was computed from. */
   contextVersion: string | null;
+  /**
+   * Last successful build/refresh — preserved even after a failed run, so
+   * this always reflects real projection freshness rather than the most
+   * recent attempt.
+   */
+  lastGoodComputedAt: string | null;
+  lastGoodContextVersion: string | null;
+  /** Why the most recent run failed, if it did. Null once a run succeeds. */
+  staleReason: string | null;
   /** Current-context decision envelope attached by the twin read API. */
   context?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope | null;
   components: HomeTwinComponentDTO[];

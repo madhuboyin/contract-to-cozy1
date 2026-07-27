@@ -127,6 +127,34 @@ const COMPONENT_STATUS_LABEL: Record<string, string> = {
   RETIRED: 'Retired',
 };
 
+const FACT_FIELD_LABEL: Record<string, string> = {
+  installYear: 'Install year',
+  usefulLifeYears: 'Typical lifespan',
+  replacementCostEstimate: 'Replacement cost',
+};
+
+// Every derived fact carries its own provenance — this must never read more
+// confidently than the underlying source justifies.
+const FACT_STATE_LABEL: Record<string, string> = {
+  VERIFIED: 'Verified',
+  REPORTED: 'Reported by homeowner',
+  DOCUMENT_DERIVED: 'From a document',
+  INFERRED: 'System estimate',
+  DEFAULT: 'Category default (no home-specific data)',
+  CONFLICTED: 'Conflicting sources',
+  UNKNOWN: 'Unknown',
+};
+
+const FACT_STATE_TONE: Record<string, 'good' | 'elevated' | 'info' | 'danger'> = {
+  VERIFIED: 'good',
+  REPORTED: 'good',
+  DOCUMENT_DERIVED: 'good',
+  INFERRED: 'info',
+  DEFAULT: 'elevated',
+  CONFLICTED: 'danger',
+  UNKNOWN: 'elevated',
+};
+
 const IMPACT_TYPE_LABEL: Record<string, string> = {
   UPFRONT_COST: 'Upfront Cost',
   ANNUAL_SAVINGS: 'Annual Savings',
@@ -583,6 +611,38 @@ function ComponentDetailSheet({
               </p>
             )}
           </div>
+
+          {/* Per-field lineage — where each individual value came from */}
+          {component.projectedFacts.length > 0 && (
+            <div className="space-y-1.5">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+                Data Sources
+              </h3>
+              <div className="space-y-2">
+                {component.projectedFacts.map((fact) => (
+                  <div
+                    key={fact.id}
+                    className="rounded-lg border border-[hsl(var(--mobile-border-subtle))] px-3 py-2 space-y-1"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium">
+                        {FACT_FIELD_LABEL[fact.fieldName] ?? fact.fieldName}
+                      </span>
+                      <StatusChip tone={FACT_STATE_TONE[fact.factState] ?? 'info'}>
+                        {FACT_STATE_LABEL[fact.factState] ?? fact.factState}
+                      </StatusChip>
+                    </div>
+                    {fact.sourceField && (
+                      <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                        Source field: {fact.sourceField}
+                        {fact.sourceRecordType ? ` (${fact.sourceRecordType})` : ''}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>

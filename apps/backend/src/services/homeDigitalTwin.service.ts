@@ -59,11 +59,13 @@ function buildComponentConfidenceDisclosure(c: ComponentRow): string | null {
 function serializeComponent(c: ComponentRow) {
   return {
     id: c.id,
+    identityKey: c.identityKey,
     componentType: c.componentType,
     label: c.label,
     status: c.status,
     sourceType: c.sourceType,
     sourceReferenceId: c.sourceReferenceId,
+    lifecycleState: c.lifecycleState,
     installYear: c.installYear,
     estimatedAgeYears: c.estimatedAgeYears,
     usefulLifeYears: c.usefulLifeYears,
@@ -82,6 +84,26 @@ function serializeComponent(c: ComponentRow) {
     updatedAt: c.updatedAt,
     // Phase-3: confidence disclosure
     confidenceDisclosure: buildComponentConfidenceDisclosure(c),
+    // Field-level lineage — see HomeTwinProjectedFact. Every entry here
+    // carries its own source and fact state; none of it should be presented
+    // with more confidence than that state implies.
+    projectedFacts: c.projectedFacts.map((f) => ({
+      id: f.id,
+      fieldName: f.fieldName,
+      valueNumeric: f.valueNumeric,
+      valueText: f.valueText,
+      unit: f.unit,
+      factState: f.factState,
+      sourceType: f.sourceType,
+      sourceRecordType: f.sourceRecordType,
+      sourceRecordId: f.sourceRecordId,
+      sourceField: f.sourceField,
+      observedAt: f.observedAt,
+      derivationMethod: f.derivationMethod,
+      confidenceScore: f.confidenceScore,
+      conflictGroupId: f.conflictGroupId,
+      correctionDestination: f.correctionDestination,
+    })),
   };
 }
 
@@ -91,7 +113,13 @@ function serializeComponent(c: ComponentRow) {
 
 const TWIN_INCLUDE = {
   components: {
+    // Retired/superseded components remain in the database for traceability
+    // but drop out of the primary projection homeowners see.
+    where: { lifecycleState: 'ACTIVE' as const },
     orderBy: { componentType: 'asc' as const },
+    include: {
+      projectedFacts: true,
+    },
   },
   dataQuality: {
     orderBy: { dimension: 'asc' as const },
@@ -135,6 +163,12 @@ function serializeTwin(twin: TwinWithRelations) {
     updatedAt: twin.updatedAt,
     // Property Context version the projection was computed from.
     contextVersion: twin.contextVersion ?? null,
+    // Last successful build/refresh — preserved even after a failed run, so
+    // this always reflects real projection freshness rather than the most
+    // recent attempt.
+    lastGoodComputedAt: twin.lastGoodComputedAt ?? null,
+    lastGoodContextVersion: twin.lastGoodContextVersion ?? null,
+    staleReason: twin.staleReason ?? null,
     components: twin.components.map(serializeComponent),
     dataQuality: twin.dataQuality,
     recentScenarios: twin.scenarios,
@@ -228,23 +262,32 @@ export class HomeDigitalTwinService {
     try {
       logger.info(`[HomeDigitalTwin] init — building components for property=${propertyId} twin=${twin.id}`);
 
-      // Build components from existing property data
-      await builder.buildComponents(propertyId, twin.id);
+      // Build components from existing property data. buildComponents is
+      // transactional — a failure here rolls back rather than leaving a
+      // partially-rebuilt projection, so the twin update below never runs
+      // against a half-updated component set.
+      const { dependencyFingerprint } = await builder.buildComponents(propertyId, twin.id);
 
       // Evaluate data quality and update aggregate scores
       await quality.evaluate(twin.id, propertyId);
 
       // Mark twin as ACTIVE. The twin is a projection of canonical property
       // records; stamp the Property Context version it was computed from so
-      // staleness against current context is detectable.
+      // staleness against current context is detectable. lastGoodComputedAt
+      // only advances on success — a later failed run cannot regress it.
       const computedContextVersion = await resolveTwinContextVersion(propertyId);
+      const now = new Date();
       await prisma.homeDigitalTwin.update({
         where: { id: twin.id },
         data: {
           status: 'ACTIVE',
-          lastSyncedAt: new Date(),
-          lastComputedAt: new Date(),
+          lastSyncedAt: now,
+          lastComputedAt: now,
           contextVersion: computedContextVersion,
+          dependencyFingerprint,
+          lastGoodComputedAt: now,
+          lastGoodContextVersion: computedContextVersion,
+          staleReason: null,
           ...(existing ? { version: { increment: 1 } } : {}),
         },
       });
@@ -266,14 +309,23 @@ export class HomeDigitalTwinService {
         metadataJson: { twinId: twin.id, isNewTwin: !existing },
       });
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+
       // Mark run failed — don't swallow the error
       await prisma.homeTwinComputationRun.update({
         where: { id: run.id },
         data: {
           status: 'FAILED',
           completedAt: new Date(),
-          errorMessage: err instanceof Error ? err.message : 'Unknown error',
+          errorMessage,
         },
+      });
+      // Record why the projection is stale without touching
+      // lastGoodComputedAt/lastGoodContextVersion — the last good state
+      // (if any) stays exactly as it was.
+      await prisma.homeDigitalTwin.update({
+        where: { id: twin.id },
+        data: { staleReason: `Build failed: ${errorMessage}` },
       });
       logger.error({ err }, `[HomeDigitalTwin] init failed for property=${propertyId}`);
       throw err;
@@ -314,17 +366,24 @@ export class HomeDigitalTwinService {
 
     try {
       logger.info(`[HomeDigitalTwin] refresh — property=${propertyId} twin=${existing.id}`);
-      await builder.buildComponents(propertyId, existing.id);
+      // Transactional — a failure rolls back rather than leaving a
+      // partially-rebuilt projection.
+      const { dependencyFingerprint } = await builder.buildComponents(propertyId, existing.id);
       await quality.evaluate(existing.id, propertyId);
 
       const refreshedContextVersion = await resolveTwinContextVersion(propertyId);
+      const now = new Date();
       await prisma.homeDigitalTwin.update({
         where: { id: existing.id },
         data: {
           status: 'ACTIVE',
-          lastSyncedAt: new Date(),
-          lastComputedAt: new Date(),
+          lastSyncedAt: now,
+          lastComputedAt: now,
           contextVersion: refreshedContextVersion,
+          dependencyFingerprint,
+          lastGoodComputedAt: now,
+          lastGoodContextVersion: refreshedContextVersion,
+          staleReason: null,
           version: { increment: 1 },
         },
       });
@@ -334,13 +393,20 @@ export class HomeDigitalTwinService {
         data: { status: 'SUCCEEDED', completedAt: new Date() },
       });
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       await prisma.homeTwinComputationRun.update({
         where: { id: run.id },
         data: {
           status: 'FAILED',
           completedAt: new Date(),
-          errorMessage: err instanceof Error ? err.message : 'Unknown error',
+          errorMessage,
         },
+      });
+      // Preserve the last good projection — do not touch
+      // lastGoodComputedAt/lastGoodContextVersion on failure.
+      await prisma.homeDigitalTwin.update({
+        where: { id: existing.id },
+        data: { staleReason: `Refresh failed: ${errorMessage}` },
       });
       logger.error({ err }, `[HomeDigitalTwin] refresh failed for property=${propertyId}`);
       throw err;

@@ -65,7 +65,7 @@ async function updateDigitalTwin(
   if (!twin) return;
 
   const component = await prisma.homeTwinComponent.findFirst({
-    where: { digitalTwinId: twin.id, componentType: twinType as any },
+    where: { digitalTwinId: twin.id, componentType: twinType as any, lifecycleState: 'ACTIVE' },
     select: { id: true, conditionScore: true },
   });
   if (!component) return;

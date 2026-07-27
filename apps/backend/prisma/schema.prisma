@@ -10761,6 +10761,26 @@ enum HomeTwinRunStatus {
   FAILED
 }
 
+// Provenance classification for a single projected fact. Distinct from
+// HomeTwinComponentStatus (an aggregate, component-level display status) —
+// this is the field-level truth a correction UI and downstream consumers
+// must key off. Field population must never imply VERIFIED or REPORTED.
+enum HomeTwinFactState {
+  VERIFIED
+  REPORTED
+  DOCUMENT_DERIVED
+  INFERRED
+  DEFAULT
+  CONFLICTED
+  UNKNOWN
+}
+
+enum HomeTwinComponentLifecycleState {
+  ACTIVE
+  RETIRED
+  SUPERSEDED
+}
+
 // ============================================================================
 // NEIGHBORHOOD INTELLIGENCE ENGINE — ENUMS
 // ============================================================================
@@ -10825,12 +10845,25 @@ model HomeDigitalTwin {
   // Property Context version at last computation; used for staleness checks.
   contextVersion    String?
 
+  // Fingerprint of the source records the projection was last built from
+  // (property + inventory + risk report timestamps/ids). A changed
+  // fingerprint means the projection is stale relative to canonical data.
+  dependencyFingerprint  String?
+  // Last successful build/refresh — preserved even when a later run fails,
+  // so a failed recompute never silently degrades what homeowners see.
+  lastGoodComputedAt     DateTime?
+  lastGoodContextVersion String?
+  // Human-readable reason the most recent run failed, if it did. Cleared on
+  // the next successful run.
+  staleReason            String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   property        Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   components      HomeTwinComponent[]
+  projectedFacts  HomeTwinProjectedFact[]
   scenarios       HomeTwinScenario[]
   dataQuality     HomeTwinDataQuality[]
   computationRuns HomeTwinComputationRun[]
@@ -10846,11 +10879,26 @@ model HomeTwinComponent {
   digitalTwinId String
   propertyId    String
 
+  // Stable identity independent of label or display order, so a rebuild can
+  // tell "the same real system" apart from "a different one of the same
+  // type." Property-profile-derived components (one slot per type) use
+  // "<TYPE>:PRIMARY"; components backed by a specific inventory item use
+  // "<TYPE>:<inventoryItemId>" so multiple real systems of the same type
+  // (e.g. two HVAC zones) become distinct rows instead of collapsing.
+  identityKey String
+
   componentType     HomeTwinComponentType
   label             String? // e.g. "Main HVAC", "Upper Floor AC"
   status            HomeTwinComponentStatus @default(ESTIMATED)
   sourceType        HomeTwinSourceType      @default(MANUAL)
   sourceReferenceId String? // optional FK pointer to another domain model
+
+  lifecycleState HomeTwinComponentLifecycleState @default(ACTIVE)
+  // Set when this component's backing source (e.g. inventory item) was
+  // reconciled away because a homeowner recorded its replacement. Retirement
+  // without a link means the source simply disappeared (e.g. deleted item).
+  supersededByComponentId String?
+  retiredAt               DateTime?
 
   installYear                   Int?
   estimatedAgeYears             Float?
@@ -10871,13 +10919,69 @@ model HomeTwinComponent {
   updatedAt DateTime @updatedAt
 
   // Relations
-  digitalTwin HomeDigitalTwin @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
-  property    Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  digitalTwin        HomeDigitalTwin         @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+  property            Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  projectedFacts      HomeTwinProjectedFact[]
+  supersededBy        HomeTwinComponent?      @relation("ComponentSupersession", fields: [supersededByComponentId], references: [id], onDelete: SetNull)
+  supersededComponents HomeTwinComponent[]    @relation("ComponentSupersession")
 
+  @@unique([digitalTwinId, identityKey])
   @@index([digitalTwinId, componentType])
   @@index([digitalTwinId, status])
+  @@index([digitalTwinId, lifecycleState])
   @@index([propertyId, componentType])
   @@map("home_twin_components")
+}
+
+// Field-level provenance for a single derived value on a component. One
+// component has many facts (installYear, usefulLifeYears, replacement cost,
+// ...); each fact carries its own source and classification so a homeowner
+// question like "how do you know this?" has a specific, per-field answer
+// instead of one aggregate component status.
+model HomeTwinProjectedFact {
+  id            String @id @default(uuid())
+  componentId   String
+  digitalTwinId String
+
+  fieldName String // e.g. "installYear", "usefulLifeYears", "replacementCostEstimate"
+  valueNumeric Float?
+  valueText    String?
+  valueJson    Json?
+  unit         String?
+
+  factState HomeTwinFactState @default(UNKNOWN)
+
+  // Canonical source this value was derived from, if any.
+  sourceType     HomeTwinSourceType @default(SYSTEM_DERIVED)
+  sourceRecordType String? // e.g. "Property", "InventoryItem", "Document"
+  sourceRecordId   String?
+  sourceField      String? // e.g. "hvacInstallYear"
+  observedAt       DateTime?
+
+  derivationMethod  String? // short machine-readable rule id, e.g. "year_built_offset_5"
+  derivationVersion Int     @default(1)
+  confidenceScore   Float?
+
+  // Facts that disagree about the same real-world value share a
+  // conflictGroupId; a non-null value means the fact state should be
+  // CONFLICTED and the homeowner needs to resolve it at the source.
+  conflictGroupId String?
+  // Where a homeowner corrects this specific fact — a route or entity
+  // reference, not free text, once Slice 2 wires real correction actions.
+  correctionDestination String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  component   HomeTwinComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  digitalTwin HomeDigitalTwin   @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+
+  @@unique([componentId, fieldName])
+  @@index([digitalTwinId])
+  @@index([componentId, factState])
+  @@index([conflictGroupId])
+  @@map("home_twin_projected_facts")
 }
 
 // A saved "what if" scenario against a property's digital twin.

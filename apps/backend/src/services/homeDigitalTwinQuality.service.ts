@@ -229,7 +229,7 @@ export class HomeDigitalTwinQualityService {
       }),
       prisma.document.count({ where: { propertyId } }),
       prisma.homeTwinComponent.findMany({
-        where: { digitalTwinId },
+        where: { digitalTwinId, lifecycleState: 'ACTIVE' },
         select: { replacementCostEstimate: true, confidenceScore: true },
       }),
       prisma.riskAssessmentReport.findUnique({

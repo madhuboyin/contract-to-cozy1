@@ -205,7 +205,7 @@ export class HomeDigitalTwinRecommendationsService {
     }
 
     const components = await prisma.homeTwinComponent.findMany({
-      where: { digitalTwinId: twin.id, isUserConfirmed: false },
+      where: { digitalTwinId: twin.id, isUserConfirmed: false, lifecycleState: 'ACTIVE' },
       select: {
         id: true,
         componentType: true,

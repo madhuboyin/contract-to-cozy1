@@ -760,7 +760,7 @@ export class HomeDigitalTwinScenarioService {
       const compType = inputPayload.componentType as HomeTwinComponentType | undefined;
       if (compType) {
         component = await prisma.homeTwinComponent.findFirst({
-          where: { digitalTwinId, componentType: compType },
+          where: { digitalTwinId, componentType: compType, lifecycleState: 'ACTIVE' },
           select: {
             componentType: true,
             estimatedAgeYears: true,
