@@ -496,7 +496,22 @@ Two fixture modes exist:
 | `RADAR_DUMMY_TARGET_ZIPS` | ZIP list for ZIP-mode targeting | Default `08536,10019` |
 | `RADAR_DUMMY_TARGET_PROPERTY_IDS` | Explicit property allowlist | Overrides ZIP discovery when set |
 | `RADAR_DUMMY_MAX_PROPERTIES` | Optional cap for selected properties | Unset = no cap |
+| `WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED` | Per-job execution-policy override for EPA AirNow ingestion | Keep `"false"` until `AIRNOW_API_KEY` is in `app-secrets` and an allowlisted current/forecast dry run passes; `"true"` permits scheduled and manual execution and may create homeowner-visible Radar state |
+| `AIRNOW_AIR_QUALITY_CRON` | AirNow schedule override | Default `*/30 * * * *` (every 30 minutes, worker timezone) |
+| `WORKER_JOB_USGS_EARTHQUAKES_ENABLED` | Per-job execution-policy override for USGS earthquake ingestion | Keep `"false"` until an allowlisted feed/geography/materiality dry run passes; USGS is keyless, and `"true"` permits scheduled and manual execution |
+| `USGS_EARTHQUAKE_CRON` | USGS schedule override | Default `*/5 * * * *` (every 5 minutes, worker timezone) |
+| `WORKER_JOB_OPENFEMA_DECLARATIONS_ENABLED` | Per-job execution-policy override for OpenFEMA declaration ingestion | Keep `"false"` until exact county/state matching and lifecycle pass an allowlisted dry run; OpenFEMA is keyless, and `"true"` permits scheduled and manual execution |
+| `OPEN_FEMA_DECLARATIONS_CRON` | OpenFEMA schedule override | Default `17 */6 * * *` (minute 17 every 6 hours, worker timezone) |
+| `WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED` | Per-job execution-policy override for reviewed tax ingestion | Keep `"false"` until the HER-604 monitored-property acceptance gate passes |
 | `TAX_ASSESSMENT_INGEST_CRON` | Override for the real tax job's cron schedule | Default `0 6 * * 1` (weekly, Mon 6am) |
+
+The `WORKER_JOB_<NORMALIZED_JOB_KEY>_ENABLED` values are authoritative
+per-job overrides. An explicit `"true"` permits both scheduled and manual
+execution even while the broad `WORKER_EXTERNAL_INGEST_ENABLED` group flag is
+`"false"`; an explicit `"false"` blocks both. These flags are therefore
+activation controls, not display-only configuration. Provider jobs can create
+canonical events, property matches, Incidents, and notification decisions once
+enabled. Cron keys change only timing and do not enable a disabled job.
 
 ### E2E testing notes
 

@@ -455,6 +455,37 @@ sufficient evidence for general release.
 
 - Isolated production schema synchronization: apps/backend/run-schema-push-job.sh
 
+### Production alert configuration reference
+
+| Key | Responsibility | Required gates |
+| --- | --- | --- |
+| `REFINANCE_EXTERNAL_ALERTS_ENABLED` | Enables the refinance email-alert channel; it does not enable opportunity calculation or general Web Push | `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED=true`, SMTP readiness, explicit email consent, rollout admission, and the transition cooldown/materiality policy |
+| `REFINANCE_ALERT_ROLLOUT_MODE` | Selects the recipient cohort: `DISABLED`, `ALLOWLIST`, or `GENERAL` | Keep `ALLOWLIST` for controlled rollout; `ALLOWLIST` requires `REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST` in `app-secrets`; invalid values fail closed |
+| `WEB_PUSH_VAPID_PUBLIC_KEY` | Supplies the non-secret public VAPID identity used by the browser to create push subscriptions | Must be generated with and match `WEB_PUSH_VAPID_PRIVATE_KEY`; also configure `WEB_PUSH_VAPID_SUBJECT`. A public key alone never enables delivery |
+| `WEB_PUSH_DELIVERY_ENABLED` | Global Web Push transport kill switch across push-capable features | Complete VAPID configuration, `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED=true`, active subscriptions, and controlled delivery validation |
+| `REFINANCE_PUSH_ALERTS_ENABLED` | Enables the refinance-specific push channel | Global Web Push enabled, explicit push consent, active subscription, rollout admission, and refinance freshness/confidence/cooldown policy |
+
+The flags compose rather than replace one another. Email requires the refinance
+external-alert flag; refinance push requires both the refinance push flag and
+the global Web Push flag. Either channel remains subject to the global outbound
+notification gate and the recipient rollout decision. In-product refinance
+state remains available when all external-delivery flags are off.
+
+Recommended activation order:
+
+1. Provision `WEB_PUSH_VAPID_SUBJECT`, the public key in non-secret
+   configuration, and the matching private key in `app-secrets`; leave delivery
+   disabled.
+2. Configure an internal
+   `REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST` and retain
+   `REFINANCE_ALERT_ROLLOUT_MODE=ALLOWLIST`.
+3. Validate subscription, consent, suppression, stale-subscription cleanup,
+   SMTP, startup checks, and duplicate/cooldown behavior.
+4. Enable `WEB_PUSH_DELIVERY_ENABLED` and then the desired channel-specific
+   refinance flag for the controlled cohort.
+5. Move to `GENERAL` only through the recorded operational approval described
+   below.
+
 ### Remaining operational decisions
 
 - Assign the product, engineering, data, design, compliance, and operations owners for rollout evidence and incident response.

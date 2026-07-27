@@ -343,6 +343,35 @@ This pattern is consistent with how all other backend files shared with workers 
 | `RADAR_DUMMY_INGEST_CRON` | `*/30 * * * *` | Worker | QA radar ingest cron |
 | `NEIGHBORHOOD_DUMMY_INGEST_ENABLED` | `false` | Worker | Enable QA neighborhood ingest |
 | `HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED` | `false` | Worker | Enable QA home risk replay ingest |
+| `WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED` | `false` | API + Worker | Per-job override for AirNow ingestion; requires `AIRNOW_API_KEY` and acceptance before enabling |
+| `WORKER_JOB_USGS_EARTHQUAKES_ENABLED` | `false` | API + Worker | Per-job override for keyless USGS earthquake ingestion; keep disabled until scoped acceptance passes |
+| `WORKER_JOB_OPENFEMA_DECLARATIONS_ENABLED` | `false` | API + Worker | Per-job override for keyless OpenFEMA declaration ingestion; keep disabled until scoped acceptance passes |
+| `WEB_PUSH_DELIVERY_ENABLED` | `false` | API + Worker | Global Web Push transport kill switch; requires outbound delivery, a complete VAPID key set, and active subscriptions |
+| `WEB_PUSH_VAPID_PUBLIC_KEY` | empty | API + Worker | Non-secret public VAPID key exposed to clients for push subscription and paired with the private VAPID key |
+| `REFINANCE_EXTERNAL_ALERTS_ENABLED` | `false` | API + Worker | Enables consented refinance email alerts when global outbound delivery and rollout gates pass |
+| `REFINANCE_PUSH_ALERTS_ENABLED` | `false` | API + Worker | Enables consented refinance push alerts when global Web Push and rollout gates pass |
+| `REFINANCE_ALERT_ROLLOUT_MODE` | `ALLOWLIST` | API + Worker | Refinance recipient cohort: `DISABLED`, `ALLOWLIST`, or `GENERAL`; invalid values fail closed |
+
+---
+
+### External-ingest and notification activation rules
+
+- A per-job `WORKER_JOB_<KEY>_ENABLED="true"` override takes precedence
+  over `WORKER_EXTERNAL_INGEST_ENABLED="false"` and permits scheduled and
+  manual execution. Use it only after the named source passes its scoped
+  acceptance gate.
+- `WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED` additionally requires
+  `AIRNOW_API_KEY` in `app-secrets`. The reviewed USGS and OpenFEMA feeds are
+  keyless.
+- `WEB_PUSH_VAPID_PUBLIC_KEY` is not secret and does not enable delivery.
+  `WEB_PUSH_DELIVERY_ENABLED="true"` also requires
+  `WORKER_OUTBOUND_NOTIFICATIONS_ENABLED="true"`,
+  `WEB_PUSH_VAPID_SUBJECT`, and the matching
+  `WEB_PUSH_VAPID_PRIVATE_KEY` stored in `app-secrets`.
+- Refinance alerts remain subject to explicit channel consent, cadence,
+  quiet hours, freshness/confidence policy, cooldown, and
+  `REFINANCE_ALERT_ROLLOUT_MODE`. `ALLOWLIST` additionally requires
+  `REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST` in `app-secrets`.
 
 ---
 
