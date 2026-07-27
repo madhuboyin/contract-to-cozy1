@@ -599,6 +599,7 @@ function computeAirQualitySmoke(baseScore: number, eventType: string): EventImpa
     drivers: [],
     actions: [
       action('CHECK_AIR_FILTERS', 'Replace HVAC air filters — smoke can clog them quickly', 'high', 'HVAC'),
+      action('SERVICE_HVAC', 'Schedule HVAC service if filtration or recirculation is not working properly', 'medium', 'HVAC'),
       action('SEAL_WINDOWS', 'Keep windows and doors closed; seal gaps if possible', 'medium', 'BUILDING_EXTERIOR'),
       action('USE_AIR_PURIFIER', 'Run a HEPA air purifier indoors', 'medium'),
     ],

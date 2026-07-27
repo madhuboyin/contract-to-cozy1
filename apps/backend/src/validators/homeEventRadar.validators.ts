@@ -55,6 +55,7 @@ export const RADAR_EVENT_TYPES = [
 
 export const RADAR_EVENT_SOURCE_TYPES = [
   'weather_provider',
+  'air_quality_provider',
   'insurance_market_feed',
   'utility_feed',
   'tax_assessor_feed',

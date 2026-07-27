@@ -383,6 +383,26 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'airnow-air-quality',
+    name: 'EPA AirNow Air Quality',
+    description:
+      'Polls current and forecast AirNow AQI by reporting area and emits canonical air-quality or smoke events at the EPA unhealthy threshold.',
+    category: 'RISK_SAFETY',
+    schedule: 'Every 30 minutes',
+    cronExpression: '*/30 * * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'airnow-air-quality',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: false,
+    supportsDryRun: true,
+    supportsPropertyScope: true,
+    externalProvider: 'EPA AirNow',
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'weekly-score-snapshots',
     name: 'Weekly Score Snapshots',
     description:

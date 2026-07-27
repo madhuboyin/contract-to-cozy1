@@ -37,6 +37,7 @@ import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
 import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 import { severeWeatherAlertsJob } from './jobs/severeWeatherAlerts.job';
+import { airNowAirQualityJob } from './jobs/airNowAirQuality.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { ingestTaxAssessmentEventsJob } from './jobs/ingestTaxAssessmentEvents.job';
@@ -280,6 +281,24 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     const result = await severeWeatherAlertsJob(opts);
     logger.info({ ...result }, `[severe-weather-alerts] createdOrUpdated=${result.createdOrUpdated} resolved=${result.resolved}`);
   },
+  'airnow-air-quality':              async (opts) => {
+    const result = await airNowAirQualityJob(opts);
+    logger.info(
+      { ...result },
+      `[airnow-air-quality] status=${result.sourceRunStatus} actionable=${result.actionableReadings ?? 0} queued=${result.queued} failed=${result.failed}`,
+    );
+    return {
+      examined: result.queryPoints ?? 0,
+      refreshed: result.createdOrUpdated,
+      failed: result.sourceRunStatus === 'failed'
+        ? Math.max(1, result.queryPoints ?? 0)
+        : result.sourceRunStatus === 'partial' ? 1 : 0,
+      reason: result.failed > 0
+        ? `${result.endpointFailed ?? 0} endpoint request(s) failed; ${result.rejected ?? 0} record(s) rejected`
+        : undefined,
+      smokeCorrelationId: result.smokeCorrelationId,
+    };
+  },
   'neighborhood-change-notifications': async () => { await neighborhoodChangeNotificationJob(); },
   'neighborhood-radar-refresh':      async (opts) => {
     const result = await refreshNeighborhoodEventsJob(opts);
@@ -398,6 +417,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
 
 // Per-job cron expression overrides (env-var-based schedules)
 const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
+  'airnow-air-quality':         process.env.AIRNOW_AIR_QUALITY_CRON,
   'tax-assessment-ingest':      process.env.TAX_ASSESSMENT_INGEST_CRON,
   'radar-safety-net-reconciliation': process.env.RADAR_SAFETY_NET_RECONCILIATION_CRON,
   'inventory-draft-cleanup':    process.env.INVENTORY_DRAFT_CLEANUP_CRON,

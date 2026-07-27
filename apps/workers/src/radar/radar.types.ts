@@ -1,6 +1,7 @@
 export type DummyRadarRawSignal = {
   provider:
     | 'weather_provider'
+    | 'air_quality_provider'
     | 'insurance_market_feed'
     | 'utility_feed'
     | 'tax_assessor_feed'

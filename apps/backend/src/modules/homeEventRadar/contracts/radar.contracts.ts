@@ -39,6 +39,7 @@ export const radarEventTypeSchema = z.enum([
 
 export const radarSourceTypeSchema = z.enum([
   'weather_provider',
+  'air_quality_provider',
   'insurance_market_feed',
   'utility_feed',
   'tax_assessor_feed',
@@ -164,6 +165,7 @@ export const canonicalRadarObservationSchema = z.object({
   providerRevision: z.string().min(1).max(256).optional(),
   sourceFamily: radarSourceFamilySchema,
   eventType: z.string().min(1).max(128),
+  eventSubType: z.string().min(1).max(160).optional(),
   title: z.string().min(1).max(300),
   summary: z.string().min(1).max(4_000),
   severity: radarSeveritySchema,

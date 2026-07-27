@@ -108,6 +108,26 @@ test('unknown cooling is missing evidence, not a confirmed vulnerability', () =>
   );
 });
 
+test('unhealthy air quality maps to filter, HVAC, closure, and purifier actions', () => {
+  const result = computeRadarImpact(
+    event('air_quality', 'medium'),
+    property({ responsibilities: [{ scope: 'HVAC', party: 'OWNER' }] }),
+    EVALUATED_AT,
+  );
+  const actions = result.recommendedActionsJson.actions.map((candidate) => candidate.code);
+
+  assert.equal(result.impactLevel, 'moderate');
+  assert.deepEqual(actions, [
+    'CHECK_AIR_FILTERS',
+    'SERVICE_HVAC',
+    'SEAL_WINDOWS',
+    'USE_AIR_PURIFIER',
+  ]);
+  assert.deepEqual(result.matchedSystemsJson.systems, [
+    { type: 'hvac', relevance: 'medium' },
+  ]);
+});
+
 test('unknown, false, and true boolean facts have distinct freeze outcomes', () => {
   const common = {
     hasIrrigation: false,

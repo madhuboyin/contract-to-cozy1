@@ -161,6 +161,22 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED
+            - name: WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED
+            - name: AIRNOW_AIR_QUALITY_CRON
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: AIRNOW_AIR_QUALITY_CRON
+            - name: AIRNOW_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AIRNOW_API_KEY
+                  optional: true
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:

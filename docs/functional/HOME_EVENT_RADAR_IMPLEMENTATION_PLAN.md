@@ -61,7 +61,8 @@
 | HER-506 Incident/Guidance UI continuity | Complete | Canonical detail normalizes Incident and Guidance resolution state, prefers an actionable journey over terminal history, exposes the current step and safe continuation link, renders terminal truth, and keeps personal dismiss separate from shared resolution |
 | HER-507 Unified Home summary | Complete | Canonical overview projects the non-zero-impact active count and highest-priority explainable match; Unified Home renders monitoring truth, explicit failure/degraded states, and an exact property/match deep link |
 | HER-600 Admin source operations | Complete; DB application pending | Admin + MFA + capability-gated source console exposes redacted source detail, coverage/counts, effective health, run history, dry-run tests, allowlisted scoped runs, replay, persistent audited pause/resume, event lineage API, and anomaly detection |
-| HER-601+ | Not started | Additional reviewed source adapters remain |
+| HER-601 AirNow adapter | Complete; DB application and credentialed activation pending | New 2026 latitudeLongitude current/forecast services feed the canonical pipeline with AQI 101 materiality, bounded reporting-area radius, particle/smoke evidence, source freshness/health, ZIP request caching, dry-run/property scope, launch-closed policy, and HVAC/filter actions |
+| HER-602+ | Not started | Additional reviewed source adapters remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1596,6 +1597,12 @@ Add:
 - freshness;
 - health;
 - HVAC/filter action mapping.
+
+Implemented against AirNow's 2026 `latitudeLongitude` service family rather
+than the `latLong` endpoints scheduled for retirement on September 30, 2026.
+Production activation remains fail-closed until `AIRNOW_API_KEY` exists in
+`app-secrets`, `WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED=true`, and an
+allowlisted property dry run verifies both current and forecast responses.
 
 ### HER-602 — USGS adapter
 

@@ -28,6 +28,8 @@ export function dummyRadarSourceFamily(
   switch (sourceType) {
     case 'weather_provider':
       return 'weather';
+    case 'air_quality_provider':
+      return 'air_quality';
     case 'insurance_market_feed':
       return 'insurance';
     case 'utility_feed':

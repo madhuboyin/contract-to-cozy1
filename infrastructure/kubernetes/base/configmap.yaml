@@ -145,6 +145,10 @@ data:
   # permit-fetch, generate-diy-ai-guide) without review.
   WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED: "true"
   WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED: "true"
+  # Launch closed until AIRNOW_API_KEY is added to app-secrets and an
+  # allowlisted dry run confirms the 2026 latitudeLongitude endpoints.
+  WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED: "false"
+  AIRNOW_AIR_QUALITY_CRON: "*/30 * * * *"
 
   # Rate Limiting
   RATE_LIMIT_WINDOW_MS: "60000"

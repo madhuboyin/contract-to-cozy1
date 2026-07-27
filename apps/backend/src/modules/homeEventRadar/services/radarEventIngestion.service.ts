@@ -193,6 +193,7 @@ function eventWriteData(
     providerEventId: observation.providerEventId,
     providerRevision: observation.providerRevision ?? null,
     eventType: observation.eventType as never,
+    eventSubType: observation.eventSubType ?? null,
     title: observation.title,
     summary: observation.summary,
     sourceType: source.sourceType as never,
