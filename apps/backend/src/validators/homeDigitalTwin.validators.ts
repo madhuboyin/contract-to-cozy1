@@ -61,6 +61,34 @@ const replaceOrUpgradePayloadSchema = z.object({
 });
 
 /**
+ * REPAIR_COMPONENT
+ * Smaller-scope alternative to replace/upgrade — addresses the immediate
+ * issue without resetting the system's age. Both fields are optional
+ * because a reasonable reviewed default exists for each (see
+ * REPAIR_COST_FRACTION_OF_REPLACEMENT / REPAIR_DEFAULT_EXTENDED_LIFE_YEARS
+ * in homeDigitalTwinScenario.service.ts) — the homeowner isn't required to
+ * have a quote in hand to explore the option.
+ */
+const repairPayloadSchema = z.object({
+  componentType: z.nativeEnum(HomeTwinComponentType),
+  assumptions: z
+    .object({
+      repairCost:        z.number().positive().optional(),
+      extendedLifeYears: z.number().min(0).max(30).optional(),
+    })
+    .optional()
+    .default({}),
+});
+
+/**
+ * WAIT_MONITOR
+ * The "do nothing yet" option — no cost inputs, just when to revisit.
+ */
+const waitMonitorPayloadSchema = z.object({
+  reviewMonths: z.number().int().min(1).max(60).optional(),
+});
+
+/**
  * ENERGY_IMPROVEMENT (insulation / windows / solar)
  * upfrontCost + energySavingsPerYear are the primary inputs.
  */
@@ -138,6 +166,10 @@ function payloadSchemaFor(
     case 'REPLACE_COMPONENT':
     case 'UPGRADE_COMPONENT':
       return replaceOrUpgradePayloadSchema;
+    case 'REPAIR_COMPONENT':
+      return repairPayloadSchema;
+    case 'WAIT_MONITOR':
+      return waitMonitorPayloadSchema;
     case 'ENERGY_IMPROVEMENT':
       return energyImprovementPayloadSchema;
     case 'RESILIENCE_IMPROVEMENT':
@@ -164,6 +196,10 @@ export const createScenarioBodySchema = z
     description:   z.string().max(1000).optional().nullable(),
     inputPayload:  z.record(z.string(), z.unknown()),
     isPinned:      z.boolean().optional().default(false),
+    // The specific real system this decision is about. Optional for
+    // whole-property scenario types; recommended for REPAIR/REPLACE/
+    // UPGRADE/WAIT once a property has more than one system of that type.
+    componentId:   z.string().uuid().optional().nullable(),
   })
   .superRefine((data, ctx) => {
     const schema = payloadSchemaFor(data.scenarioType);
@@ -177,6 +213,16 @@ export const createScenarioBodySchema = z
       }
     }
   });
+
+// ============================================================================
+// SCENARIO READINESS QUERY
+// ============================================================================
+
+export const scenarioReadinessQuerySchema = z.object({
+  componentId: z.string().uuid().optional(),
+  componentType: z.nativeEnum(HomeTwinComponentType).optional(),
+  scenarioType: z.nativeEnum(HomeTwinScenarioType),
+});
 
 // ============================================================================
 // UPDATE SCENARIO (archive / pin)

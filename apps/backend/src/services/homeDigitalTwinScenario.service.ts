@@ -33,6 +33,10 @@ export type CreateScenarioInput = {
   description?: string | null;
   inputPayload: Record<string, unknown>;
   isPinned?: boolean;
+  // The specific real system this decision is about. See
+  // HomeTwinScenario.componentId in the schema for why this matters now
+  // that a property can have multiple components of the same type.
+  componentId?: string | null;
 };
 
 export type UpdateScenarioInput = {
@@ -43,6 +47,8 @@ export type UpdateScenarioInput = {
 type ImpactSpec = {
   impactType: HomeTwinImpactType;
   valueNumeric: number | null;
+  valueLow?: number | null;
+  valueHigh?: number | null;
   valueText: string | null;
   unit: string | null;
   direction: HomeTwinImpactDirection;
@@ -51,6 +57,16 @@ type ImpactSpec = {
   // True when values are caller-supplied rather than engine-computed.
   // Defaulted per-branch below; only the CUSTOM branch sets this true.
   isUserSupplied: boolean;
+};
+
+type ComponentRecord = {
+  componentType: HomeTwinComponentType;
+  estimatedAgeYears: number | null;
+  conditionScore: number | null;
+  failureRiskScore: number | null;
+  annualMaintenanceCostEstimate: Prisma.Decimal | null;
+  annualOperatingCostEstimate: Prisma.Decimal | null;
+  replacementCostEstimate: Prisma.Decimal | null;
 };
 
 // ============================================================================
@@ -96,6 +112,99 @@ const COMFORT_IMPACT_TYPES = new Set<HomeTwinComponentType>([
   'WINDOWS',
 ]);
 
+// A repair is assumed to cost this fraction of full replacement, and to
+// address the immediate issue without resetting overall age-related risk
+// the way a replacement does. Both are reviewed rough planning defaults,
+// not quotes — see the wide uncertainty band applied via rangeFromPoint.
+const REPAIR_COST_FRACTION_OF_REPLACEMENT = 0.3;
+const REPAIR_DEFAULT_EXTENDED_LIFE_YEARS = 3;
+const REPAIR_RISK_CLEARANCE_FRACTION = 0.4; // vs. ~0.8 for a full replacement
+
+// Category-specific professional/safety boundary shown alongside any
+// scenario touching that component type — HDT: "a safe recommendation
+// boundary" must accompany safety-sensitive systems, not just cost/savings
+// figures.
+const SAFETY_BOUNDARY_BY_COMPONENT: Partial<Record<HomeTwinComponentType, string>> = {
+  ELECTRICAL: 'Electrical panel and wiring work should be scoped and performed by a licensed electrician. Do not attempt panel or wiring work yourself.',
+  ROOF: 'Roof condition should be confirmed by a physical inspection before committing to repair or replacement — age and evidence-based estimates cannot substitute for seeing the actual surface and flashing.',
+  FOUNDATION: 'Foundation issues should be evaluated by a structural engineer or licensed contractor before any repair decision — this estimate is a planning range, not a structural assessment.',
+};
+
+/**
+ * Turns a point estimate into a low/base/high range, with the spread
+ * reflecting how much basis the estimate actually has:
+ *  - a real component/inventory record narrows the range
+ *  - a category default (no home-specific data) widens it
+ * This is the mechanism behind HDT-004 ("use ranges rather than
+ * unsupported point values") — every system-computed dollar figure below
+ * goes through this rather than being presented as a single confident
+ * number.
+ */
+export function rangeFromPoint(base: number, uncertaintyPct: number): { low: number; base: number; high: number } {
+  const spread = Math.abs(base) * uncertaintyPct;
+  return {
+    low: Math.round(base - spread),
+    base: Math.round(base),
+    high: Math.round(base + spread),
+  };
+}
+
+type SensitivityFactor = {
+  assumption: string;
+  baselineYears: number | null;
+  lowYears: number | null;
+  highYears: number | null;
+  swingYears: number;
+};
+
+/**
+ * Which assumption (cost vs. savings) moves the payback estimate more,
+ * holding the other fixed at its base value. This is what "sensitivity
+ * analysis" means for a two-input payback calculation — not a fabricated
+ * confidence claim, just: if you're going to double-check one number
+ * before trusting this range, check the one with the bigger swing.
+ */
+export function computePaybackSensitivity(
+  costBase: number,
+  costUncertaintyPct: number,
+  savingsBase: number,
+  savingsUncertaintyPct: number,
+): SensitivityFactor[] {
+  if (savingsBase <= 0) return [];
+  const paybackAt = (cost: number, savings: number): number | null => (savings > 0 ? cost / savings : null);
+  const baseline = paybackAt(costBase, savingsBase);
+
+  const costLow = paybackAt(costBase * (1 - costUncertaintyPct), savingsBase);
+  const costHigh = paybackAt(costBase * (1 + costUncertaintyPct), savingsBase);
+  const costSwing = costLow != null && costHigh != null ? Math.abs(costHigh - costLow) : 0;
+
+  // Higher savings shortens payback, so the "low" payback case is at high savings.
+  const savingsLowPayback = paybackAt(costBase, savingsBase * (1 + savingsUncertaintyPct));
+  const savingsHighPayback = paybackAt(costBase, savingsBase * (1 - savingsUncertaintyPct));
+  const savingsSwing = savingsLowPayback != null && savingsHighPayback != null
+    ? Math.abs(savingsHighPayback - savingsLowPayback)
+    : 0;
+
+  const round1 = (n: number | null) => (n != null ? Math.round(n * 10) / 10 : null);
+
+  return [
+    {
+      assumption: 'Upfront cost estimate',
+      baselineYears: round1(baseline),
+      lowYears: round1(costLow),
+      highYears: round1(costHigh),
+      swingYears: round1(costSwing) ?? 0,
+    },
+    {
+      assumption: 'Annual savings estimate',
+      baselineYears: round1(baseline),
+      lowYears: round1(savingsLowPayback),
+      highYears: round1(savingsHighPayback),
+      swingYears: round1(savingsSwing) ?? 0,
+    },
+  ].sort((a, b) => b.swingYears - a.swingYears);
+}
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -120,36 +229,129 @@ function decimalToNumber(d: Prisma.Decimal | null | undefined): number | null {
 // IMPACT COMPUTATION
 // ============================================================================
 
-function computeImpacts(
+export function computeImpacts(
   scenarioType: HomeTwinScenarioType,
   inputPayload: Record<string, unknown>,
-  component: {
-    componentType: HomeTwinComponentType;
-    estimatedAgeYears: number | null;
-    conditionScore: number | null;
-    failureRiskScore: number | null;
-    annualMaintenanceCostEstimate: Prisma.Decimal | null;
-    annualOperatingCostEstimate: Prisma.Decimal | null;
-    replacementCostEstimate: Prisma.Decimal | null;
-  } | null,
-): ImpactSpec[] {
+  component: ComponentRecord | null,
+): { impacts: ImpactSpec[]; sensitivity: SensitivityFactor[] } {
   const impacts: ImpactSpec[] = [];
+  let sensitivity: SensitivityFactor[] = [];
+
+  // ── REPAIR_COMPONENT ─────────────────────────────────────────────────────
+  if (scenarioType === 'REPAIR_COMPONENT') {
+    const assumptions = (inputPayload.assumptions as Record<string, unknown>) ?? {};
+    const compType = (inputPayload.componentType as HomeTwinComponentType) ?? component?.componentType ?? 'OTHER';
+
+    const replacementBasis =
+      decimalToNumber(component?.replacementCostEstimate) ??
+      DEFAULT_REPLACEMENT_COST[compType] ??
+      DEFAULT_REPLACEMENT_COST.OTHER;
+    const userRepairCost = toNum(assumptions.repairCost);
+    const repairCostBase = userRepairCost ?? Math.round(replacementBasis * REPAIR_COST_FRACTION_OF_REPLACEMENT);
+    // A homeowner-supplied number still gets a range — it's an estimate,
+    // not an accepted quote — but a narrower one than a category default.
+    const repairCostUncertainty = userRepairCost != null ? 0.15 : 0.4;
+    const repairCostRange = rangeFromPoint(repairCostBase, repairCostUncertainty);
+
+    const extendedLifeYears = toNum(assumptions.extendedLifeYears) ?? REPAIR_DEFAULT_EXTENDED_LIFE_YEARS;
+    const hasComponent = component != null;
+
+    impacts.push({
+      impactType: 'UPFRONT_COST',
+      valueNumeric: repairCostRange.base,
+      valueLow: repairCostRange.low,
+      valueHigh: repairCostRange.high,
+      valueText: null,
+      unit: 'USD',
+      direction: 'NEGATIVE',
+      confidenceScore: userRepairCost != null ? 0.65 : hasComponent ? 0.4 : 0.25,
+      sortOrder: 0,
+      isUserSupplied: false,
+    });
+
+    const derivedRiskReduction = component?.failureRiskScore != null
+      ? Math.round(component.failureRiskScore * REPAIR_RISK_CLEARANCE_FRACTION * 100)
+      : null;
+    if (derivedRiskReduction != null) {
+      impacts.push({
+        impactType: 'RISK_REDUCTION',
+        valueNumeric: derivedRiskReduction,
+        valueText: `Addresses the immediate issue; extends useful life by ~${extendedLifeYears} yrs without resetting overall age-related risk`,
+        unit: 'PERCENT',
+        direction: 'POSITIVE',
+        confidenceScore: 0.4,
+        sortOrder: 1,
+        isUserSupplied: false,
+      });
+    }
+
+    impacts.push({
+      impactType: 'CUSTOM',
+      valueNumeric: null,
+      valueText: `A repair is typically the lower-cost, lower-certainty option — it buys time (~${extendedLifeYears} yrs) rather than resetting the system's age.`,
+      unit: null,
+      direction: 'NEUTRAL',
+      confidenceScore: 0.5,
+      sortOrder: 9,
+      isUserSupplied: false,
+    });
+
+  // ── WAIT_MONITOR ─────────────────────────────────────────────────────────
+  } else if (scenarioType === 'WAIT_MONITOR') {
+    const reviewMonths = toNum(inputPayload.reviewMonths) ?? 6;
+
+    impacts.push(
+      {
+        impactType: 'UPFRONT_COST',
+        valueNumeric: 0,
+        valueLow: 0,
+        valueHigh: 0,
+        valueText: 'Nothing spent now',
+        unit: 'USD',
+        direction: 'NEUTRAL',
+        confidenceScore: 1,
+        sortOrder: 0,
+        isUserSupplied: false,
+      },
+      {
+        impactType: 'RISK_REDUCTION',
+        valueNumeric: 0,
+        valueText: 'No change — condition-related risk continues to accumulate with age while waiting',
+        unit: 'PERCENT',
+        direction: 'NEUTRAL',
+        confidenceScore: 0.6,
+        sortOrder: 1,
+        isUserSupplied: false,
+      },
+      {
+        impactType: 'CUSTOM',
+        valueNumeric: null,
+        valueText: `Revisit this decision in about ${reviewMonths} months, or sooner if condition changes (leaks, noise, reduced performance).`,
+        unit: null,
+        direction: 'NEUTRAL',
+        confidenceScore: 0.6,
+        sortOrder: 9,
+        isUserSupplied: false,
+      },
+    );
 
   // ── REPLACE_COMPONENT / UPGRADE_COMPONENT ──────────────────────────────────
-  if (
+  } else if (
     scenarioType === 'REPLACE_COMPONENT' ||
     scenarioType === 'UPGRADE_COMPONENT'
   ) {
     const assumptions = (inputPayload.assumptions as Record<string, unknown>) ?? {};
-    const compType = (inputPayload.componentType as HomeTwinComponentType) ?? 'OTHER';
+    const compType = (inputPayload.componentType as HomeTwinComponentType) ?? component?.componentType ?? 'OTHER';
 
     // Accept projectCost as alias for replacementCost
+    const userProvidedCost = toNum(assumptions.replacementCost) ?? toNum(assumptions.projectCost);
     const upfrontCost =
-      toNum(assumptions.replacementCost) ??
-      toNum(assumptions.projectCost) ??
+      userProvidedCost ??
       decimalToNumber(component?.replacementCostEstimate) ??
       DEFAULT_REPLACEMENT_COST[compType] ??
       DEFAULT_REPLACEMENT_COST.OTHER;
+    const upfrontCostUncertainty = userProvidedCost != null ? 0.1 : component?.replacementCostEstimate != null ? 0.15 : 0.35;
+    const upfrontCostRange = rangeFromPoint(upfrontCost, upfrontCostUncertainty);
 
     const oldAnnualMaint =
       decimalToNumber(component?.annualMaintenanceCostEstimate) ??
@@ -170,6 +372,18 @@ function computeImpacts(
 
     const totalAnnualSavings = annualMaintSavings + annualEnergySavings;
     const paybackYears = totalAnnualSavings > 0 ? upfrontCost / totalAnnualSavings : null;
+    // Savings estimates are inherently rougher than the cost estimate —
+    // fixed uncertainty band regardless of source.
+    const savingsRange = rangeFromPoint(totalAnnualSavings, 0.25);
+    // Payback range from the combination that makes it best/worst case,
+    // not just the range of one input in isolation.
+    const paybackRange = totalAnnualSavings > 0
+      ? {
+          low: savingsRange.high > 0 ? Math.round((upfrontCostRange.low / savingsRange.high) * 10) / 10 : null,
+          high: savingsRange.low > 0 ? Math.round((upfrontCostRange.high / savingsRange.low) * 10) / 10 : null,
+        }
+      : { low: null, high: null };
+    sensitivity = computePaybackSensitivity(upfrontCost, upfrontCostUncertainty, totalAnnualSavings, 0.25);
 
     const newUsefulLife = toNum(assumptions.newUsefulLifeYears);
     const riskReductionPct = toNum(assumptions.riskReductionPercent);
@@ -186,7 +400,9 @@ function computeImpacts(
     impacts.push(
       {
         impactType: 'UPFRONT_COST',
-        valueNumeric: upfrontCost,
+        valueNumeric: upfrontCostRange.base,
+        valueLow: upfrontCostRange.low,
+        valueHigh: upfrontCostRange.high,
         valueText: null,
         unit: 'USD',
         direction: 'NEGATIVE',
@@ -196,7 +412,9 @@ function computeImpacts(
       },
       {
         impactType: 'ANNUAL_SAVINGS',
-        valueNumeric: Math.round(totalAnnualSavings),
+        valueNumeric: savingsRange.base,
+        valueLow: savingsRange.low,
+        valueHigh: savingsRange.high,
         valueText: null,
         unit: 'USD',
         direction: totalAnnualSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
@@ -207,7 +425,13 @@ function computeImpacts(
       {
         impactType: 'PAYBACK_PERIOD',
         valueNumeric: paybackYears != null ? Math.round(paybackYears * 10) / 10 : null,
-        valueText: paybackYears != null ? `${paybackYears.toFixed(1)} years` : 'N/A',
+        valueLow: paybackRange.low,
+        valueHigh: paybackRange.high,
+        valueText: paybackYears != null
+          ? paybackRange.low != null && paybackRange.high != null
+            ? `${paybackRange.low}–${paybackRange.high} years`
+            : `${paybackYears.toFixed(1)} years`
+          : 'N/A',
         unit: 'YEARS',
         direction: paybackYears != null && paybackYears <= 10 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: 0.65,
@@ -620,12 +844,59 @@ function computeImpacts(
     }
   }
 
-  return impacts;
+  return { impacts, sensitivity };
 }
 
 // ============================================================================
 // SERVICE
 // ============================================================================
+
+const COMPONENT_SELECT = {
+  id: true,
+  componentType: true,
+  label: true,
+  estimatedAgeYears: true,
+  conditionScore: true,
+  failureRiskScore: true,
+  annualMaintenanceCostEstimate: true,
+  annualOperatingCostEstimate: true,
+  replacementCostEstimate: true,
+} satisfies Prisma.HomeTwinComponentSelect;
+
+const SCENARIO_INCLUDE = {
+  impacts: { orderBy: { sortOrder: 'asc' as const } },
+  component: { select: { id: true, componentType: true, label: true } },
+  computationRuns: {
+    where: { runType: 'SCENARIO_COMPUTE' as const },
+    orderBy: { startedAt: 'desc' as const },
+    take: 1,
+    select: { id: true, status: true, summary: true, startedAt: true, completedAt: true, errorMessage: true },
+  },
+} satisfies Prisma.HomeTwinScenarioInclude;
+
+type ScenarioWithRelations = Prisma.HomeTwinScenarioGetPayload<{ include: typeof SCENARIO_INCLUDE }>;
+
+/**
+ * Attaches the category-specific professional/safety boundary, computed
+ * from the linked component (or, for scenarios created before componentId
+ * existed, from inputPayload.componentType). Not persisted — it's a pure
+ * function of component type, so it can't go stale.
+ */
+function withSafetyBoundary(scenario: ScenarioWithRelations) {
+  const inputPayload = scenario.inputPayload as Record<string, unknown>;
+  const componentType = scenario.component?.componentType
+    ?? (inputPayload.componentType as HomeTwinComponentType | undefined)
+    ?? null;
+  const latestRun = scenario.computationRuns[0] ?? null;
+  return {
+    ...scenario,
+    safetyBoundary: componentType ? SAFETY_BOUNDARY_BY_COMPONENT[componentType] ?? null : null,
+    sensitivity: (latestRun?.summary as { sensitivity?: SensitivityFactor[] } | null)?.sensitivity ?? [],
+    latestRun: latestRun
+      ? { status: latestRun.status, startedAt: latestRun.startedAt, completedAt: latestRun.completedAt, errorMessage: latestRun.errorMessage }
+      : null,
+  };
+}
 
 export class HomeDigitalTwinScenarioService {
   // ── List ────────────────────────────────────────────────────────────────────
@@ -639,23 +910,24 @@ export class HomeDigitalTwinScenarioService {
       ...(!filters.includeArchived ? { isArchived: false } : {}),
     };
 
-    return prisma.homeTwinScenario.findMany({
+    const scenarios = await prisma.homeTwinScenario.findMany({
       where,
       orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
-      include: { impacts: { orderBy: { sortOrder: 'asc' } } },
+      include: SCENARIO_INCLUDE,
     });
+    return scenarios.map(withSafetyBoundary);
   }
 
   // ── Get one ─────────────────────────────────────────────────────────────────
   async getScenario(scenarioId: string, digitalTwinId: string) {
     const scenario = await prisma.homeTwinScenario.findFirst({
       where: { id: scenarioId, digitalTwinId },
-      include: { impacts: { orderBy: { sortOrder: 'asc' } } },
+      include: SCENARIO_INCLUDE,
     });
     if (!scenario) {
       throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
     }
-    return scenario;
+    return withSafetyBoundary(scenario);
   }
 
   // ── Create ──────────────────────────────────────────────────────────────────
@@ -670,11 +942,39 @@ export class HomeDigitalTwinScenarioService {
       select: { completenessScore: true, confidenceScore: true, status: true, version: true },
     });
 
+    let componentId = input.componentId ?? null;
+    if (componentId) {
+      const component = await prisma.homeTwinComponent.findFirst({
+        where: { id: componentId, digitalTwinId },
+        select: { id: true },
+      });
+      if (!component) {
+        throw new APIError('Component not found on this twin', 404, 'COMPONENT_NOT_FOUND');
+      }
+    } else {
+      // Backward-compat convenience: if the caller only sent a
+      // componentType (the old contract) and exactly one ACTIVE component
+      // of that type exists, resolve it unambiguously. If there are
+      // multiple (now possible — see HomeTwinComponent identityKey), don't
+      // guess; leave componentId null rather than silently picking one.
+      const inputPayload = input.inputPayload as Record<string, unknown>;
+      const compType = inputPayload?.componentType as HomeTwinComponentType | undefined;
+      if (compType) {
+        const candidates = await prisma.homeTwinComponent.findMany({
+          where: { digitalTwinId, componentType: compType, lifecycleState: 'ACTIVE' },
+          select: { id: true },
+          take: 2,
+        });
+        if (candidates.length === 1) componentId = candidates[0].id;
+      }
+    }
+
     const scenario = await prisma.homeTwinScenario.create({
       data: {
         digitalTwinId,
         propertyId,
         createdByUserId,
+        componentId,
         name: input.name,
         scenarioType: input.scenarioType,
         status: 'DRAFT',
@@ -689,14 +989,14 @@ export class HomeDigitalTwinScenarioService {
         isPinned: input.isPinned ?? false,
         isArchived: false,
       },
-      include: { impacts: true },
+      include: SCENARIO_INCLUDE,
     });
 
     logger.info(
       `[HomeDigitalTwin] scenario created — id=${scenario.id} type=${input.scenarioType} property=${propertyId}`,
     );
 
-    return scenario;
+    return withSafetyBoundary(scenario);
   }
 
   // ── Update (archive / pin) ───────────────────────────────────────────────
@@ -713,14 +1013,15 @@ export class HomeDigitalTwinScenarioService {
       throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
     }
 
-    return prisma.homeTwinScenario.update({
+    const scenario = await prisma.homeTwinScenario.update({
       where: { id: scenarioId },
       data: {
         ...(input.isPinned !== undefined && { isPinned: input.isPinned }),
         ...(input.isArchived !== undefined && { isArchived: input.isArchived }),
       },
-      include: { impacts: { orderBy: { sortOrder: 'asc' } } },
+      include: SCENARIO_INCLUDE,
     });
+    return withSafetyBoundary(scenario);
   }
 
   // ── Compute ─────────────────────────────────────────────────────────────────
@@ -742,40 +1043,61 @@ export class HomeDigitalTwinScenarioService {
 
     const inputPayload = scenario.inputPayload as Record<string, unknown>;
 
-    // Load the relevant component for replace/upgrade scenarios
-    let component: {
-      componentType: HomeTwinComponentType;
-      estimatedAgeYears: number | null;
-      conditionScore: number | null;
-      failureRiskScore: number | null;
-      annualMaintenanceCostEstimate: Prisma.Decimal | null;
-      annualOperatingCostEstimate: Prisma.Decimal | null;
-      replacementCostEstimate: Prisma.Decimal | null;
-    } | null = null;
-
-    if (
-      scenario.scenarioType === 'REPLACE_COMPONENT' ||
-      scenario.scenarioType === 'UPGRADE_COMPONENT'
-    ) {
-      const compType = inputPayload.componentType as HomeTwinComponentType | undefined;
-      if (compType) {
+    // Resolve the specific component this decision is about. componentId
+    // (set at creation) is authoritative; inputPayload.componentType is a
+    // fallback for scenarios created before componentId existed.
+    let component: ComponentRecord | null = null;
+    const needsComponent = ['REPAIR_COMPONENT', 'REPLACE_COMPONENT', 'UPGRADE_COMPONENT'].includes(scenario.scenarioType);
+    if (needsComponent) {
+      if (scenario.componentId) {
         component = await prisma.homeTwinComponent.findFirst({
-          where: { digitalTwinId, componentType: compType, lifecycleState: 'ACTIVE' },
-          select: {
-            componentType: true,
-            estimatedAgeYears: true,
-            conditionScore: true,
-            failureRiskScore: true,
-            annualMaintenanceCostEstimate: true,
-            annualOperatingCostEstimate: true,
-            replacementCostEstimate: true,
-          },
-          orderBy: { createdAt: 'desc' },
+          where: { id: scenario.componentId, digitalTwinId, lifecycleState: 'ACTIVE' },
+          select: COMPONENT_SELECT,
         });
+      } else {
+        const compType = inputPayload.componentType as HomeTwinComponentType | undefined;
+        if (compType) {
+          component = await prisma.homeTwinComponent.findFirst({
+            where: { digitalTwinId, componentType: compType, lifecycleState: 'ACTIVE' },
+            select: COMPONENT_SELECT,
+            orderBy: { createdAt: 'desc' },
+          });
+        }
       }
     }
 
-    const impactSpecs = computeImpacts(scenario.scenarioType, inputPayload, component);
+    const run = await prisma.homeTwinComputationRun.create({
+      data: {
+        digitalTwinId,
+        scenarioId,
+        runType: 'SCENARIO_COMPUTE',
+        status: 'RUNNING',
+        startedAt: new Date(),
+        inputSnapshot: {
+          inputPayload,
+          component: component ? { ...component, replacementCostEstimate: decimalToNumber(component.replacementCostEstimate), annualMaintenanceCostEstimate: decimalToNumber(component.annualMaintenanceCostEstimate), annualOperatingCostEstimate: decimalToNumber(component.annualOperatingCostEstimate) } : null,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    let impactSpecs: ImpactSpec[];
+    let sensitivity: SensitivityFactor[];
+    try {
+      const result = computeImpacts(scenario.scenarioType, inputPayload, component);
+      impactSpecs = result.impacts;
+      sensitivity = result.sensitivity;
+    } catch (err) {
+      await prisma.homeTwinComputationRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'FAILED',
+          completedAt: new Date(),
+          errorMessage: err instanceof Error ? err.message : 'Unknown error',
+        },
+      });
+      logger.error({ err }, `[HomeDigitalTwin] scenario compute failed — id=${scenarioId}`);
+      throw err;
+    }
 
     // Atomically replace old impacts and mark computed
     await prisma.$transaction(async (tx) => {
@@ -791,15 +1113,114 @@ export class HomeDigitalTwinScenarioService {
         where: { id: scenarioId },
         data: { status: 'COMPUTED', lastComputedAt: new Date() },
       });
+
+      await tx.homeTwinComputationRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'SUCCEEDED',
+          completedAt: new Date(),
+          summary: { impactCount: impactSpecs.length, sensitivity } as Prisma.InputJsonValue,
+        },
+      });
     });
 
     logger.info(
       `[HomeDigitalTwin] scenario computed — id=${scenarioId} type=${scenario.scenarioType} impacts=${impactSpecs.length}`,
     );
 
-    return prisma.homeTwinScenario.findUniqueOrThrow({
+    const updated = await prisma.homeTwinScenario.findUniqueOrThrow({
       where: { id: scenarioId },
-      include: { impacts: { orderBy: { sortOrder: 'asc' } } },
+      include: SCENARIO_INCLUDE,
     });
+    return withSafetyBoundary(updated);
+  }
+
+  // ── Scenario-specific readiness ────────────────────────────────────────────
+  /**
+   * What's known vs. missing for THIS decision, not the twin's global
+   * completeness score. A repair/replace/upgrade decision about one HVAC
+   * system doesn't need the roof's data to be trustworthy — see HDT-008.
+   */
+  async getReadiness(
+    digitalTwinId: string,
+    params: { componentId?: string; componentType?: HomeTwinComponentType; scenarioType: HomeTwinScenarioType },
+  ) {
+    const component = params.componentId
+      ? await prisma.homeTwinComponent.findFirst({
+          where: { id: params.componentId, digitalTwinId, lifecycleState: 'ACTIVE' },
+          include: { projectedFacts: true },
+        })
+      : params.componentType
+        ? await prisma.homeTwinComponent.findFirst({
+            where: { digitalTwinId, componentType: params.componentType, lifecycleState: 'ACTIVE' },
+            include: { projectedFacts: true },
+            orderBy: { createdAt: 'desc' },
+          })
+        : null;
+
+    const known: string[] = [];
+    const missing: { field: string; whyItMatters: string }[] = [];
+
+    const installFact = component?.projectedFacts.find((f) => f.fieldName === 'installYear');
+    if (installFact && (installFact.factState === 'REPORTED' || installFact.factState === 'VERIFIED' || installFact.factState === 'DOCUMENT_DERIVED')) {
+      known.push('Install year and age');
+    } else if (installFact?.factState === 'CONFLICTED') {
+      missing.push({ field: 'installYear', whyItMatters: 'Your Home Record has two different install dates on file — resolve this before trusting an age-based estimate.' });
+    } else {
+      missing.push({ field: 'installYear', whyItMatters: 'Without a confirmed install date, age and remaining useful life are rough guesses.' });
+    }
+
+    const costFact = component?.projectedFacts.find((f) => f.fieldName === 'replacementCostEstimate');
+    if (costFact && (costFact.factState === 'REPORTED' || costFact.factState === 'VERIFIED')) {
+      known.push('Replacement cost basis');
+    } else {
+      missing.push({ field: 'replacementCost', whyItMatters: 'Cost is a category default, not a quote — get a real quote for a decision-grade number.' });
+    }
+
+    if (component?.isUserConfirmed) known.push('Homeowner-confirmed record');
+
+    if (['ENERGY_IMPROVEMENT'].includes(params.scenarioType)) {
+      missing.push({ field: 'energyUsageBaseline', whyItMatters: 'Without a current energy bill baseline, annual savings can only be estimated from a homeowner-entered number, not measured.' });
+    }
+
+    const readiness: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT' =
+      !component ? 'INSUFFICIENT' : missing.length === 0 ? 'SUFFICIENT' : known.length > 0 ? 'PARTIAL' : 'INSUFFICIENT';
+
+    return {
+      readiness,
+      componentFound: component != null,
+      known,
+      missing,
+      safetyBoundary: component ? SAFETY_BOUNDARY_BY_COMPONENT[component.componentType] ?? null : null,
+    };
+  }
+
+  // ── Compare options for one component ──────────────────────────────────────
+  /**
+   * All non-archived, computed scenarios targeting one specific component,
+   * side by side. Reuses whatever the homeowner already created and
+   * computed via the normal CRUD — this does not compute anything new, it
+   * just assembles the comparison view (HDT-011: repair/replace/upgrade/
+   * wait, compared with ranges, not a single winner picked for them).
+   */
+  async compareScenarios(digitalTwinId: string, componentId: string) {
+    const component = await prisma.homeTwinComponent.findFirst({
+      where: { id: componentId, digitalTwinId },
+      select: { id: true, componentType: true, label: true },
+    });
+    if (!component) {
+      throw new APIError('Component not found', 404, 'COMPONENT_NOT_FOUND');
+    }
+
+    const scenarios = await prisma.homeTwinScenario.findMany({
+      where: { digitalTwinId, componentId, isArchived: false, status: 'COMPUTED' },
+      orderBy: { createdAt: 'asc' },
+      include: SCENARIO_INCLUDE,
+    });
+
+    return {
+      component,
+      options: scenarios.map(withSafetyBoundary),
+    };
   }
 }

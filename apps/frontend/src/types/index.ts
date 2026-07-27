@@ -3746,8 +3746,10 @@ export type HomeTwinComponentType =
 export type HomeTwinComponentStatus = 'KNOWN' | 'ESTIMATED' | 'NEEDS_REVIEW' | 'RETIRED';
 
 export type HomeTwinScenarioType =
+  | 'REPAIR_COMPONENT'
   | 'REPLACE_COMPONENT'
   | 'UPGRADE_COMPONENT'
+  | 'WAIT_MONITOR'
   | 'ENERGY_IMPROVEMENT'
   | 'RESILIENCE_IMPROVEMENT'
   | 'ADD_FEATURE'
@@ -3859,6 +3861,12 @@ export interface HomeTwinScenarioImpactDTO {
   impactType: HomeTwinImpactType;
   direction: HomeTwinImpactDirection;
   valueNumeric: number | null;
+  // Low/high bound the same figure with the uncertainty implied by its
+  // source. Null on both when no defensible range exists (e.g. a
+  // homeowner-typed number with no basis for a spread) — render the point
+  // value in that case, not a fabricated range.
+  valueLow: number | null;
+  valueHigh: number | null;
   valueText: string | null;
   unit: string | null;
   confidenceScore: number | null;
@@ -3867,6 +3875,14 @@ export interface HomeTwinScenarioImpactDTO {
   // an engine-computed figure. Must be rendered distinctly from computed
   // impacts, never blended in as system evidence.
   isUserSupplied: boolean;
+}
+
+export interface HomeTwinScenarioSensitivityFactorDTO {
+  assumption: string;
+  baselineYears: number | null;
+  lowYears: number | null;
+  highYears: number | null;
+  swingYears: number;
 }
 
 export interface HomeTwinScenarioDTO {
@@ -3883,6 +3899,22 @@ export interface HomeTwinScenarioDTO {
   createdAt: string;
   updatedAt: string;
   impacts: HomeTwinScenarioImpactDTO[];
+  // The specific real system this decision is about, when set.
+  componentId: string | null;
+  component: { id: string; componentType: HomeTwinComponentType; label: string | null } | null;
+  // Category-specific professional/safety boundary for the linked
+  // component, computed at read time — null when the component type has
+  // none.
+  safetyBoundary: string | null;
+  // Which assumption (cost vs. savings) moves the payback estimate more —
+  // empty when the scenario type has no payback math to be sensitive about.
+  sensitivity: HomeTwinScenarioSensitivityFactorDTO[];
+  latestRun: {
+    status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+    startedAt: string;
+    completedAt: string | null;
+    errorMessage: string | null;
+  } | null;
 }
 
 export interface HomeDigitalTwinDTO {
@@ -3943,12 +3975,27 @@ export interface HomeTwinFactReadinessSummaryDTO {
   items: HomeTwinFactReadinessItemDTO[];
 }
 
+/** Scenario-specific readiness — what's known/missing for one decision, not the twin's global completeness score. */
+export interface HomeTwinScenarioReadinessDTO {
+  readiness: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT';
+  componentFound: boolean;
+  known: string[];
+  missing: { field: string; whyItMatters: string }[];
+  safetyBoundary: string | null;
+}
+
+export interface HomeTwinScenarioComparisonDTO {
+  component: { id: string; componentType: HomeTwinComponentType; label: string | null };
+  options: HomeTwinScenarioDTO[];
+}
+
 export interface ScenarioSuggestionDTO {
   key: string;
   title: string;
   description: string;
   scenarioType: HomeTwinScenarioType;
   componentType: HomeTwinComponentType | null;
+  componentId: string | null;
   urgency: 'HIGH' | 'MEDIUM' | 'LOW';
   estimatedUpfrontCost: number | null;
   reason: string;
@@ -3961,6 +4008,7 @@ export interface CreateScenarioInput {
   description?: string | null;
   inputPayload: Record<string, unknown>;
   isPinned?: boolean;
+  componentId?: string | null;
 }
 
 export interface UpdateScenarioInput {

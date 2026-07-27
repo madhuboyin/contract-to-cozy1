@@ -110,8 +110,10 @@ const COMPONENT_ICON: Record<HomeTwinComponentType, LucideIcon> = {
 };
 
 const SCENARIO_TYPE_LABEL: Record<HomeTwinScenarioType, string> = {
+  REPAIR_COMPONENT: 'Repair',
   REPLACE_COMPONENT: 'Replace Component',
   UPGRADE_COMPONENT: 'Upgrade Component',
+  WAIT_MONITOR: 'Wait & Monitor',
   ENERGY_IMPROVEMENT: 'Energy Improvement',
   RESILIENCE_IMPROVEMENT: 'Resilience Improvement',
   ADD_FEATURE: 'Add Feature',
@@ -910,6 +912,17 @@ function ScenarioDetailSheet({
             <StatusChip tone="info">{SCENARIO_TYPE_LABEL[scenario.scenarioType]}</StatusChip>
           </div>
 
+          {/* Category-specific professional/safety boundary */}
+          {scenario.safetyBoundary && (
+            <div
+              role="note"
+              className="flex items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2.5"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+              <p className="text-xs leading-snug text-amber-800">{scenario.safetyBoundary}</p>
+            </div>
+          )}
+
           {/* Description */}
           {scenario.description && (
             <div className="space-y-1">
@@ -934,35 +947,44 @@ function ScenarioDetailSheet({
             );
             const userSuppliedImpacts = scenario.impacts.filter((i) => i.isUserSupplied);
 
-            const renderImpactRow = (impact: HomeTwinScenarioImpactDTO) => (
-              <div key={impact.id} className="flex items-start justify-between gap-3 text-sm">
-                <span className="text-[hsl(var(--mobile-text-secondary))]">
-                  {IMPACT_TYPE_LABEL[impact.impactType] ?? impact.impactType}
-                </span>
-                <span
-                  className={cn(
-                    'shrink-0 font-medium',
-                    impact.direction === 'POSITIVE'
-                      ? 'text-green-700'
-                      : impact.direction === 'NEGATIVE'
-                        ? 'text-red-600'
-                        : 'text-[hsl(var(--foreground))]',
-                  )}
-                >
-                  {impact.impactType === 'PAYBACK_PERIOD' && impact.valueText
-                    ? impact.valueText
-                    : impact.impactType === 'COMFORT_IMPACT' && impact.valueText
+            const formatImpactValue = (impact: HomeTwinScenarioImpactDTO, value: number) =>
+              impact.unit === 'USD'
+                ? formatUSD(value)
+                : impact.unit === 'PERCENT'
+                  ? `${value}%`
+                  : `${value}${impact.unit ? ` ${impact.unit.toLowerCase()}` : ''}`;
+
+            const renderImpactRow = (impact: HomeTwinScenarioImpactDTO) => {
+              const hasRange =
+                impact.valueLow != null && impact.valueHigh != null && impact.valueLow !== impact.valueHigh;
+              return (
+                <div key={impact.id} className="flex items-start justify-between gap-3 text-sm">
+                  <span className="text-[hsl(var(--mobile-text-secondary))]">
+                    {IMPACT_TYPE_LABEL[impact.impactType] ?? impact.impactType}
+                  </span>
+                  <span
+                    className={cn(
+                      'shrink-0 font-medium text-right',
+                      impact.direction === 'POSITIVE'
+                        ? 'text-green-700'
+                        : impact.direction === 'NEGATIVE'
+                          ? 'text-red-600'
+                          : 'text-[hsl(var(--foreground))]',
+                    )}
+                  >
+                    {impact.impactType === 'PAYBACK_PERIOD' && impact.valueText
                       ? impact.valueText
-                      : impact.valueNumeric != null
-                        ? impact.unit === 'USD'
-                          ? formatUSD(impact.valueNumeric)
-                          : impact.unit === 'PERCENT'
-                            ? `${impact.valueNumeric}%`
-                            : `${impact.valueNumeric}${impact.unit ? ` ${impact.unit.toLowerCase()}` : ''}`
-                        : impact.valueText ?? '—'}
-                </span>
-              </div>
-            );
+                      : impact.impactType === 'COMFORT_IMPACT' && impact.valueText
+                        ? impact.valueText
+                        : hasRange
+                          ? `${formatImpactValue(impact, impact.valueLow!)}–${formatImpactValue(impact, impact.valueHigh!)}`
+                          : impact.valueNumeric != null
+                            ? formatImpactValue(impact, impact.valueNumeric)
+                            : impact.valueText ?? '—'}
+                  </span>
+                </div>
+              );
+            };
 
             return (
               <div className="space-y-3">
@@ -1007,6 +1029,26 @@ function ScenarioDetailSheet({
                     <div className="space-y-1.5">{userSuppliedImpacts.map(renderImpactRow)}</div>
                     <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
                       You entered these values. They have not been independently verified or computed.
+                    </p>
+                  </div>
+                )}
+
+                {/* Sensitivity — which assumption moves the payback estimate more */}
+                {scenario.sensitivity.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+                      What drives this range
+                    </h3>
+                    <div className="space-y-1">
+                      {scenario.sensitivity.map((factor) => (
+                        <div key={factor.assumption} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-[hsl(var(--mobile-text-secondary))]">{factor.assumption}</span>
+                          <span className="font-medium">±{factor.swingYears.toFixed(1)} yrs on payback</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      If you're going to double-check one number before trusting this range, check the one with the larger swing.
                     </p>
                   </div>
                 )}

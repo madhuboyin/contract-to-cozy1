@@ -10924,8 +10924,10 @@ enum HomeTwinSourceType {
 }
 
 enum HomeTwinScenarioType {
+  REPAIR_COMPONENT
   REPLACE_COMPONENT
   UPGRADE_COMPONENT
+  WAIT_MONITOR
   ADD_FEATURE
   REMOVE_FEATURE
   ENERGY_IMPROVEMENT
@@ -11162,6 +11164,7 @@ model HomeTwinComponent {
   projectedFacts      HomeTwinProjectedFact[]
   supersededBy        HomeTwinComponent?      @relation("ComponentSupersession", fields: [supersededByComponentId], references: [id], onDelete: SetNull)
   supersededComponents HomeTwinComponent[]    @relation("ComponentSupersession")
+  scenarios            HomeTwinScenario[]
 
   @@unique([digitalTwinId, identityKey])
   @@index([digitalTwinId, componentType])
@@ -11229,6 +11232,14 @@ model HomeTwinScenario {
   propertyId      String
   createdByUserId String?
 
+  // The specific real system this decision is about. Optional because
+  // whole-property scenarios (ADD_FEATURE, RENOVATION, CUSTOM) don't target
+  // one component — but REPAIR/REPLACE/UPGRADE/WAIT scenarios should always
+  // set this once a component exists, since a property can now have
+  // multiple real systems of the same type (see HomeTwinComponent
+  // identityKey) and matching by componentType alone is ambiguous.
+  componentId String?
+
   name             String
   scenarioType     HomeTwinScenarioType
   status           HomeTwinScenarioStatus @default(DRAFT)
@@ -11245,8 +11256,10 @@ model HomeTwinScenario {
   // Relations
   digitalTwin HomeDigitalTwin          @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
   property    Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  component   HomeTwinComponent?       @relation(fields: [componentId], references: [id], onDelete: SetNull)
   createdBy   User?                    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   impacts     HomeTwinScenarioImpact[]
+  computationRuns HomeTwinComputationRun[]
 
   // Home Renovation Risk Advisor linkage (back-reference)
   renovationAdvisorSessions HomeRenovationAdvisorSession[]
@@ -11254,6 +11267,7 @@ model HomeTwinScenario {
   @@index([digitalTwinId, status])
   @@index([propertyId, createdAt])
   @@index([createdByUserId, createdAt])
+  @@index([componentId])
   @@map("home_twin_scenarios")
 }
 
@@ -11263,7 +11277,15 @@ model HomeTwinScenarioImpact {
   scenarioId String
 
   impactType      HomeTwinImpactType
+  // valueNumeric is the base/midpoint estimate, kept for backward-compat
+  // display. valueLow/valueHigh bound the same figure with the uncertainty
+  // implied by its source (a homeowner quote vs. a category default carry
+  // very different ranges) — see HDT-004: "Use ranges rather than
+  // unsupported point values." Null on both when no defensible range
+  // exists (e.g. a homeowner-typed number with no basis for a spread).
   valueNumeric    Float?
+  valueLow        Float?
+  valueHigh       Float?
   valueText       String?
   valueJson       Json?
   unit            String? // e.g. USD, YEARS, PERCENT, SCORE
@@ -11309,10 +11331,16 @@ model HomeTwinDataQuality {
   @@map("home_twin_data_quality")
 }
 
-// Tracks computation/sync attempts for observability.
+// Tracks computation/sync attempts for observability. For SCENARIO_COMPUTE
+// runs, also carries the immutable snapshot the result was computed from
+// (component facts + assumptions) — a later recompute against changed
+// canonical data produces a new run with its own snapshot, so "why did this
+// change?" always has a concrete before/after (HDT-013: scenario runs must
+// be reproducible).
 model HomeTwinComputationRun {
   id            String @id @default(uuid())
   digitalTwinId String
+  scenarioId    String?
 
   runType      HomeTwinRunType
   status       HomeTwinRunStatus @default(QUEUED)
@@ -11321,15 +11349,22 @@ model HomeTwinComputationRun {
   errorMessage String?
   summary      Json?
 
+  // SCENARIO_COMPUTE only: the exact input assumptions and component facts
+  // used for this run, frozen at compute time.
+  inputSnapshot      Json?
+  calculationVersion Int  @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  digitalTwin HomeDigitalTwin @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+  digitalTwin HomeDigitalTwin   @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+  scenario    HomeTwinScenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
 
   @@index([digitalTwinId])
   @@index([digitalTwinId, status])
   @@index([startedAt])
+  @@index([scenarioId, startedAt(sort: Desc)])
   @@map("home_twin_computation_runs")
 }
 

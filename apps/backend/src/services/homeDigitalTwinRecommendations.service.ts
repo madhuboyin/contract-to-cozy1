@@ -26,6 +26,11 @@ export type ScenarioSuggestion = {
   description: string;
   scenarioType: HomeTwinScenarioType;
   componentType: HomeTwinComponentType | null;
+  // The specific real system this suggestion is about, when the suggestion
+  // engine resolved to exactly one — pass through as componentId when
+  // creating a scenario from this suggestion so it's never ambiguous which
+  // system the decision targets (see HomeTwinComponent identityKey).
+  componentId: string | null;
   urgency: 'HIGH' | 'MEDIUM' | 'LOW';
   estimatedUpfrontCost: number | null; // USD
   reason: string;                      // human-readable explanation for the card
@@ -163,6 +168,7 @@ function replaceSuggestion(
     description,
     scenarioType: 'REPLACE_COMPONENT',
     componentType: c.componentType,
+    componentId: c.id,
     urgency,
     estimatedUpfrontCost: cost,
     reason: reasonParts.join('; '),
@@ -306,6 +312,7 @@ export class HomeDigitalTwinRecommendationsService {
           'Adding or upgrading insulation is one of the highest-ROI energy improvements. Typical payback is 3–7 years with ongoing comfort and energy savings.',
         scenarioType: 'ENERGY_IMPROVEMENT',
         componentType: 'INSULATION',
+        componentId: insulation?.id ?? null,
         urgency: 'LOW',
         estimatedUpfrontCost: insulationCost,
         reason: insulation
@@ -332,6 +339,7 @@ export class HomeDigitalTwinRecommendationsService {
             'Aging windows reduce energy efficiency and comfort. Modern double-pane or triple-pane windows cut heat loss significantly.',
           scenarioType: 'ENERGY_IMPROVEMENT',
           componentType: 'WINDOWS',
+          componentId: windows.id,
           urgency: resolveUrgency(ratio, windows.failureRiskScore),
           estimatedUpfrontCost: cost,
           reason: `Windows are ${Math.round(ratio * 100)}% through their typical lifespan`,
@@ -355,6 +363,7 @@ export class HomeDigitalTwinRecommendationsService {
           'Solar panels can significantly reduce electricity bills and increase property value. Typical payback is 6–10 years.',
         scenarioType: 'ENERGY_IMPROVEMENT',
         componentType: 'SOLAR',
+        componentId: null,
         urgency: 'LOW',
         estimatedUpfrontCost: 18000,
         reason: 'No solar system has been detected on this property',

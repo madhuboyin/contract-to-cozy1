@@ -229,6 +229,45 @@ export async function computeScenario(
   }
 }
 
+export async function getScenarioReadiness(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId } = req.params;
+    const twin = await getTwinIdForProperty(propertyId);
+    const { componentId, componentType, scenarioType } = req.query as {
+      componentId?: string;
+      componentType?: string;
+      scenarioType: string;
+    };
+    const readiness = await scenarioService.getReadiness(twin.id, {
+      componentId,
+      componentType: componentType as any,
+      scenarioType: scenarioType as any,
+    });
+    res.json({ success: true, data: { readiness } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function compareScenarios(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId, componentId } = req.params;
+    const twin = await getTwinIdForProperty(propertyId);
+    const comparison = await scenarioService.compareScenarios(twin.id, componentId);
+    res.json({ success: true, data: { comparison } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ============================================================================
 // HELPER
 // ============================================================================

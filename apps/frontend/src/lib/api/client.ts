@@ -4365,6 +4365,30 @@ class APIClient {
     return res.data?.scenario ?? null;
   }
 
+  async getDigitalTwinScenarioReadiness(
+    propertyId: string,
+    params: { scenarioType: string; componentId?: string; componentType?: string }
+  ): Promise<import('@/types').HomeTwinScenarioReadinessDTO | null> {
+    const qs = new URLSearchParams();
+    qs.set('scenarioType', params.scenarioType);
+    if (params.componentId) qs.set('componentId', params.componentId);
+    if (params.componentType) qs.set('componentType', params.componentType);
+    const res = await this.get<{ readiness: import('@/types').HomeTwinScenarioReadinessDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/scenarios/readiness?${qs.toString()}`
+    );
+    return res.data?.readiness ?? null;
+  }
+
+  async compareDigitalTwinScenarios(
+    propertyId: string,
+    componentId: string
+  ): Promise<import('@/types').HomeTwinScenarioComparisonDTO | null> {
+    const res = await this.get<{ comparison: import('@/types').HomeTwinScenarioComparisonDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/components/${componentId}/scenarios/compare`
+    );
+    return res.data?.comparison ?? null;
+  }
+
   // ==========================================================================
   // NEIGHBORHOOD CHANGE RADAR
   // ==========================================================================

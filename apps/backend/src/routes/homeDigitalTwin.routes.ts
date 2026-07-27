@@ -21,6 +21,8 @@ import {
   getScenario,
   updateScenario,
   computeScenario,
+  getScenarioReadiness,
+  compareScenarios,
 } from '../controllers/homeDigitalTwin.controller';
 
 const router = Router();
@@ -187,12 +189,23 @@ router.get(
  *   description   string (optional)
  *   inputPayload  object (required) — see per-type shapes below
  *   isPinned      boolean (optional, default false)
+ *   componentId   uuid (optional) — the specific real system this decision is
+ *                 about. Recommended once a property has more than one
+ *                 component of the same type (see HomeTwinComponent
+ *                 identityKey) — without it, componentType-based lookups
+ *                 can't tell which one you mean.
  *
  * inputPayload shapes by scenarioType:
  *
  * REPLACE_COMPONENT / UPGRADE_COMPONENT:
  *   { componentType, assumptions: { replacementCost?, projectCost?, newUsefulLifeYears?,
  *     efficiencyGainPercent?, riskReductionPercent?, annualSavings? } }
+ *
+ * REPAIR_COMPONENT:
+ *   { componentType, assumptions: { repairCost?, extendedLifeYears? } }
+ *
+ * WAIT_MONITOR:
+ *   { reviewMonths? }
  *
  * ENERGY_IMPROVEMENT:
  *   { upfrontCost, energySavingsPerYear, carbonOffsetTonsCO2PerYear?,
@@ -218,6 +231,28 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createScenarioBodySchema),
   createScenario,
+);
+
+/**
+ * GET /api/properties/:propertyId/home-digital-twin/scenarios/readiness
+ *
+ * What's known vs. missing for a specific decision — not the twin's global
+ * completeness score. Scoped to one component (by componentId, or by
+ * componentType as a convenience when there's exactly one) and one
+ * scenarioType, since different decisions need different evidence.
+ *
+ * Registered before /scenarios/:scenarioId so "readiness" is never matched
+ * as a scenarioId.
+ *
+ * Query params:
+ *   scenarioType   HomeTwinScenarioType (required)
+ *   componentId    uuid (optional)
+ *   componentType  HomeTwinComponentType (optional — used if componentId absent)
+ */
+router.get(
+  '/properties/:propertyId/home-digital-twin/scenarios/readiness',
+  propertyAuthMiddleware,
+  getScenarioReadiness,
 );
 
 /**
@@ -268,6 +303,20 @@ router.post(
   propertyAuthMiddleware,
   requireHouseholdRole('CONTRIBUTOR'),
   computeScenario,
+);
+
+/**
+ * GET /api/properties/:propertyId/home-digital-twin/components/:componentId/scenarios/compare
+ *
+ * All non-archived, computed scenarios targeting one specific component,
+ * side by side (repair / replace / upgrade / wait). Assembles what the
+ * homeowner already created and computed via the normal CRUD — does not
+ * compute anything new.
+ */
+router.get(
+  '/properties/:propertyId/home-digital-twin/components/:componentId/scenarios/compare',
+  propertyAuthMiddleware,
+  compareScenarios,
 );
 
 export default router;

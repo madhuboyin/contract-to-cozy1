@@ -5,6 +5,8 @@ import type {
   HomeTwinScenarioDTO,
   HomeTwinComponentDTO,
   HomeTwinFactReadinessSummaryDTO,
+  HomeTwinScenarioReadinessDTO,
+  HomeTwinScenarioComparisonDTO,
   CreateScenarioInput,
   UpdateScenarioInput,
 } from '@/types';
@@ -102,4 +104,18 @@ export async function updateDigitalTwinScenario(
   const result = await api.updateDigitalTwinScenario(propertyId, scenarioId, input);
   if (!result) throw new Error('Failed to update scenario');
   return result;
+}
+
+export async function getDigitalTwinScenarioReadiness(
+  propertyId: string,
+  params: { scenarioType: string; componentId?: string; componentType?: string },
+): Promise<HomeTwinScenarioReadinessDTO | null> {
+  return api.getDigitalTwinScenarioReadiness(propertyId, params);
+}
+
+export async function compareDigitalTwinScenarios(
+  propertyId: string,
+  componentId: string,
+): Promise<HomeTwinScenarioComparisonDTO | null> {
+  return api.compareDigitalTwinScenarios(propertyId, componentId);
 }
