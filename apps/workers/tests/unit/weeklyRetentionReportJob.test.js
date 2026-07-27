@@ -93,13 +93,13 @@ test('computes week-over-week retention rate from properties active in both week
     await runWeeklyRetentionReportJob(deps);
 
     const html = calls.sentEmails[0].html;
-    assert.match(html, /Active properties last week: <strong>2<\/strong>/);
     // property-1 is the only property active in both weeks → 1 retained / 2 previous = 50%
-    assert.match(html, /Retained into this week: <strong>1<\/strong> \(50%\)/);
+    assert.match(html, />50%</);
+    assert.match(html, /1 of 2 properties active last week came back this week/);
   });
 });
 
-test('reports "no prior-week baseline" instead of a bogus 0%/NaN% when there were zero prior-week properties', async () => {
+test('reports "no baseline" instead of a bogus 0%/NaN% when there were zero prior-week properties', async () => {
   await withEnv({ RETENTION_REPORT_EMAIL: 'ops@example.com' }, async () => {
     const { deps, calls } = fakeDeps({
       currentWeekEvents: [{ eventType: 'TOOL_USED', featureKey: 'budget', propertyId: 'property-1', userId: 'user-1' }],
@@ -108,7 +108,9 @@ test('reports "no prior-week baseline" instead of a bogus 0%/NaN% when there wer
 
     await runWeeklyRetentionReportJob(deps);
 
-    assert.match(calls.sentEmails[0].html, /no prior-week baseline/);
+    const html = calls.sentEmails[0].html;
+    assert.match(html, /No properties were active last week/);
+    assert.doesNotMatch(html, /NaN/);
   });
 });
 
@@ -127,9 +129,13 @@ test('groups events by type and by feature correctly', async () => {
     await runWeeklyRetentionReportJob(deps);
 
     const html = calls.sentEmails[0].html;
-    assert.match(html, /TOOL_USED<\/td><td[^>]*>3/);
-    assert.match(html, /PAGE_VIEW<\/td><td[^>]*>1/);
-    assert.match(html, /budget<\/td><td[^>]*>2/);
-    assert.match(html, /\(none\)<\/td><td[^>]*>1/);
+    // Labels are humanized (SCREAMING_SNAKE_CASE / snake_case / kebab-case →
+    // Title Case) and rows no longer sit directly adjacent to their count
+    // cell (a bar-chart cell sits between them), so match label ... count
+    // within the same row rather than immediate <td> adjacency.
+    assert.match(html, />Tool Used<\/td>[\s\S]*?>3<\/td>/);
+    assert.match(html, />Page View<\/td>[\s\S]*?>1<\/td>/);
+    assert.match(html, />Budget<\/td>[\s\S]*?>2<\/td>/);
+    assert.match(html, />Untagged<\/td>[\s\S]*?>1<\/td>/);
   });
 });
