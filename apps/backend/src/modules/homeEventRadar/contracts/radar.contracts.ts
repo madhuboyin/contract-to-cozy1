@@ -473,6 +473,24 @@ export const radarOverviewResponseSchema = z.object({
   lastSuccessfulCheckAt: z.iso.datetime({ offset: true }).nullable(),
   coverage: z.array(radarCategoryCoverageSchema),
   counts: radarCountsSchema,
+  homeSummary: z.object({
+    activeMaterialEventCount: z.number().int().nonnegative(),
+    mostUrgentMatch: z.object({
+      propertyMatchId: z.string().min(1),
+      eventId: z.string().min(1),
+      title: z.string().min(1),
+      explanation: z.string().min(1).max(1_000),
+      sourceFamily: radarSourceFamilySchema,
+      sourceName: z.string().min(1),
+      severity: radarSeveritySchema,
+      impact: radarImpactSchema,
+      confidence: radarConfidenceSchema.nullable(),
+      priorityBand: radarPriorityBandSchema,
+      effectiveAt: z.iso.datetime({ offset: true }),
+      expiresAt: z.iso.datetime({ offset: true }).nullable(),
+      href: z.string().min(1),
+    }).nullable(),
+  }),
   propertyContext: radarPropertyContextEnvelopeSchema,
 });
 

@@ -3368,6 +3368,24 @@ export interface RadarOverview {
     saved: number;
     dismissed: number;
   };
+  homeSummary: {
+    activeMaterialEventCount: number;
+    mostUrgentMatch: {
+      propertyMatchId: string;
+      eventId: string;
+      title: string;
+      explanation: string;
+      sourceFamily: RadarSourceFamily;
+      sourceName: string;
+      severity: RadarCanonicalSeverity;
+      impact: RadarCanonicalImpact;
+      confidence: RadarConfidence | null;
+      priorityBand: RadarPriorityBand;
+      effectiveAt: string;
+      expiresAt: string | null;
+      href: string;
+    } | null;
+  };
   propertyContext: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
 }
 

@@ -373,6 +373,33 @@ function serializeFeedItem(match: any, state?: any): Record<string, unknown> {
   };
 }
 
+function serializeHomeSummaryMatch(match: any): Record<string, unknown> {
+  const event = match.radarEvent;
+  const revision = latestRevision(match);
+  const family = normalizeSourceFamily(event.sourceDefinition?.family);
+  const query = new URLSearchParams({
+    view: 'now',
+    family,
+    matchId: String(match.id),
+    launchSurface: 'unified_home',
+  });
+  return {
+    propertyMatchId: String(match.id),
+    eventId: String(event.id),
+    title: String(event.title),
+    explanation: String(match.impactSummary),
+    sourceFamily: family,
+    sourceName: String(event.sourceDefinition?.name ?? event.sourceType),
+    severity: normalizeSeverity(String(event.severity)),
+    impact: normalizeImpact(String(match.impactLevel)),
+    confidence: match.confidence ?? null,
+    priorityBand: String(match.priorityBand),
+    effectiveAt: iso(revision?.effectiveAt ?? event.startAt),
+    expiresAt: iso(revision?.expiresAt ?? event.endAt),
+    href: `/dashboard/properties/${encodeURIComponent(match.propertyId)}/tools/home-event-radar?${query.toString()}`,
+  };
+}
+
 export class RadarQueryService {
   private readonly db: any;
   private readonly clock: () => Date;
@@ -508,18 +535,51 @@ export class RadarQueryService {
   }
 
   async getOverview(propertyId: string, userId: string): Promise<Record<string, unknown>> {
-    const [coverage, counts, context] = await Promise.all([
+    const now = this.clock();
+    const materialWhere = {
+      ...visibleMatchWhere(propertyId, now),
+      lifecycleStatus: 'now',
+      impactLevel: { in: ['watch', 'moderate', 'high'] },
+    };
+    const [coverage, counts, context, activeMaterialEventCount, mostUrgentMatch] = await Promise.all([
       this.getCoverage(propertyId),
       this.getCounts(propertyId, userId),
       this.loadPropertyContext(propertyId, userId, 'EVENT_RADAR'),
+      this.db.propertyRadarMatch.count({ where: materialWhere }),
+      this.db.propertyRadarMatch.findFirst({
+        where: {
+          ...materialWhere,
+          impactSummary: { not: null },
+        },
+        include: {
+          radarEvent: {
+            include: {
+              sourceDefinition: {
+                select: { family: true, name: true, provider: true },
+              },
+              revisions: {
+                orderBy: [{ observedAt: 'desc' }, { id: 'desc' }],
+                take: 1,
+              },
+            },
+          },
+        },
+        orderBy: RADAR_FEED_ORDER_BY,
+      }),
     ]);
     return {
       propertyId,
-      generatedAt: this.clock().toISOString(),
+      generatedAt: now.toISOString(),
       monitoringState: coverage.monitoringState,
       lastSuccessfulCheckAt: coverage.lastSuccessfulCheckAt,
       coverage: coverage.categories,
       counts,
+      homeSummary: {
+        activeMaterialEventCount,
+        mostUrgentMatch: mostUrgentMatch
+          ? serializeHomeSummaryMatch(mostUrgentMatch)
+          : null,
+      },
       propertyContext: {
         propertyId,
         contextVersion: context.contextVersion,

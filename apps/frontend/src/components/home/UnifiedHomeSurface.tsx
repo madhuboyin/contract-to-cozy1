@@ -35,6 +35,7 @@ import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigat
 import {
   RefinanceRadarPortfolioCard,
 } from '@/app/(dashboard)/dashboard/properties/[id]/components/RefinanceRadarDashboardCard';
+import { HomeEventRadarSummaryCard } from '@/components/home/HomeEventRadarSummaryCard';
 
 function priorityTone(priority: RankedHomeActionDTO['priority']) {
   if (priority === 'NOW') return 'border-rose-200 bg-rose-50 text-rose-700';
@@ -609,6 +610,8 @@ export function UnifiedHomeSurface({
           <Badge variant="outline" className="rounded-full bg-white">{home.glance.recordCompleteness}% record complete</Badge>
         </div>
       </header>
+
+      <HomeEventRadarSummaryCard propertyId={propertyId} />
 
       <section aria-labelledby="attention-heading" className="space-y-3">
         <div className="flex items-end justify-between gap-4">

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-506 implemented |
+| Status | In progress — HER-507 implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -59,7 +59,8 @@
 | HER-504 Notification eligibility/dedup | Complete; DB application pending | Versioned pure policy and durable per-user revision decisions enforce materiality/escalation, confidence and preference thresholds, timing, channels, DST-aware quiet hours, opt-in critical override, terminal/test suppression, and exact deduplication without delivering |
 | HER-505 Notification delivery integration | Complete; DB application pending | Eligible decisions idempotently materialize canonical in-app notifications and exact outbound rows; immediate/deferred delivery uses durable worker claims, retry release, transport gates, and canonical deep links |
 | HER-506 Incident/Guidance UI continuity | Complete | Canonical detail normalizes Incident and Guidance resolution state, prefers an actionable journey over terminal history, exposes the current step and safe continuation link, renders terminal truth, and keeps personal dismiss separate from shared resolution |
-| HER-507+ | Not started | Unified Home summary, additional sources, and operations remain |
+| HER-507 Unified Home summary | Complete | Canonical overview projects the non-zero-impact active count and highest-priority explainable match; Unified Home renders monitoring truth, explicit failure/degraded states, and an exact property/match deep link |
+| HER-600+ | Not started | Additional sources and operations remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1540,6 +1541,20 @@ Use Radar overview/read model to show:
 - most urgent explainable match;
 - monitoring degraded state when material;
 - canonical deep link.
+
+**Implemented:** The canonical Radar overview now includes a bounded Unified Home projection:
+the count of currently visible `now` matches whose property impact is not `none`, plus the
+highest-priority match that has a persisted property-specific impact explanation. The selected
+match carries only homeowner-safe source, severity, impact, confidence, timing, and priority
+fields. Its canonical property route restores the `now` view, source-family filter, exact match,
+and `unified_home` launch surface.
+
+Unified Home consumes this overview through one dedicated summary card. It shows the authoritative
+active material count, most urgent explainable event, source and impact context, and exact event
+handoff. Active monitoring with no material events receives qualified clear copy. Partial,
+degraded, uncovered, and setup-needed states remain explicit; degraded and request-failure states
+are never presented as an all-clear and retain retry or monitoring-detail paths. No database schema
+change or migration script is required.
 
 **Phase 5 exit gate**
 

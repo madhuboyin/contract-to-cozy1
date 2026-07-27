@@ -151,6 +151,7 @@ function match(overrides = {}) {
 function serviceWith(overrides = {}) {
   const writes = [];
   const matchFindCalls = [];
+  const matchFirstCalls = [];
   const matchCountCalls = [];
   const coverageRows = overrides.coverageRows ?? [coverageRow()];
   const matches = overrides.matches ?? [match()];
@@ -166,9 +167,15 @@ function serviceWith(overrides = {}) {
         matchFindCalls.push(args);
         return matches;
       },
-      findFirst: async () => matches[0] ?? null,
+      findFirst: async (args) => {
+        matchFirstCalls.push(args);
+        return overrides.mostUrgentMatch === undefined
+          ? matches[0] ?? null
+          : overrides.mostUrgentMatch;
+      },
       count: async ({ where }) => {
         matchCountCalls.push(where);
+        if (where.impactLevel) return overrides.activeMaterialCount ?? 4;
         if (where.lifecycleStatus === 'now') return 4;
         if (where.lifecycleStatus === 'upcoming') return 2;
         if (where.lifecycleStatus === 'recently_ended') return 1;
@@ -199,6 +206,7 @@ function serviceWith(overrides = {}) {
   return {
     writes,
     matchFindCalls,
+    matchFirstCalls,
     matchCountCalls,
     db,
     service: new RadarQueryService({
@@ -228,7 +236,35 @@ test('overview returns authoritative lifecycle/user counts and materialized cove
     dismissed: 1,
   });
   assert.equal(overview.coverage[0].family, 'weather');
+  assert.equal(overview.homeSummary.activeMaterialEventCount, 4);
+  assert.equal(overview.homeSummary.mostUrgentMatch.propertyMatchId, 'match-1');
+  assert.equal(
+    overview.homeSummary.mostUrgentMatch.explanation,
+    'Protect outdoor equipment.',
+  );
+  const summaryHref = new URL(
+    overview.homeSummary.mostUrgentMatch.href,
+    'https://example.test',
+  );
+  assert.equal(summaryHref.pathname, '/dashboard/properties/property-1/tools/home-event-radar');
+  assert.equal(summaryHref.searchParams.get('view'), 'now');
+  assert.equal(summaryHref.searchParams.get('family'), 'weather');
+  assert.equal(summaryHref.searchParams.get('matchId'), 'match-1');
+  assert.equal(summaryHref.searchParams.get('launchSurface'), 'unified_home');
   assert.equal(overview.propertyContext.contextVersion, 'context-v3');
+  assert.equal(radarOverviewResponseSchema.safeParse(overview).success, true);
+});
+
+test('overview reports zero material events without fabricating an urgent match', async () => {
+  const { service } = serviceWith({
+    activeMaterialCount: 0,
+    mostUrgentMatch: null,
+  });
+
+  const overview = await service.getOverview('property-1', 'user-1');
+
+  assert.equal(overview.homeSummary.activeMaterialEventCount, 0);
+  assert.equal(overview.homeSummary.mostUrgentMatch, null);
   assert.equal(radarOverviewResponseSchema.safeParse(overview).success, true);
 });
 

@@ -344,6 +344,10 @@ export async function installRadarApi(
     const dismissed = countableItems.filter((item) => item.userState === 'dismissed').length;
     const saved = countableItems.filter((item) => item.userState === 'saved').length;
     const active = countableItems.filter((item) => item.matchLifecycleStatus === 'now').length;
+    const materialItems = countableItems.filter(
+      (item) => item.matchLifecycleStatus === 'now' && item.impact !== 'none',
+    );
+    const mostUrgentMatch = materialItems[0] ?? null;
     await fulfillJson(route, {
       success: true,
       data: {
@@ -359,6 +363,24 @@ export async function installRadarApi(
           recentlyEnded: countableItems.filter((item) => item.matchLifecycleStatus === 'recently_ended').length,
           saved,
           dismissed,
+        },
+        homeSummary: {
+          activeMaterialEventCount: materialItems.length,
+          mostUrgentMatch: mostUrgentMatch ? {
+            propertyMatchId: mostUrgentMatch.propertyMatchId,
+            eventId: mostUrgentMatch.eventId,
+            title: mostUrgentMatch.title,
+            explanation: 'Review the event and protect exposed areas.',
+            sourceFamily: mostUrgentMatch.sourceFamily,
+            sourceName: mostUrgentMatch.sourceName,
+            severity: mostUrgentMatch.severity,
+            impact: mostUrgentMatch.impact,
+            confidence: mostUrgentMatch.confidence ?? null,
+            priorityBand: mostUrgentMatch.priorityBand,
+            effectiveAt: mostUrgentMatch.effectiveAt,
+            expiresAt: mostUrgentMatch.expiresAt,
+            href: `/dashboard/properties/${propertyId}/tools/home-event-radar?view=now&family=${mostUrgentMatch.sourceFamily}&matchId=${mostUrgentMatch.propertyMatchId}&launchSurface=unified_home`,
+          } : null,
         },
         propertyContext: {
           propertyId,
