@@ -122,6 +122,46 @@ export interface WorkerExecutionDecision {
 }
 
 /**
+ * A reviewed property-scoped dry run validates a launch-closed job without
+ * activating its scheduled or real manual execution paths.
+ */
+export function evaluateScopedDryRunExecution(
+  jobKey: string,
+  policy: WorkerExecutionPolicy,
+  hasPropertyScope: boolean,
+  env: NodeJS.ProcessEnv = process.env,
+): WorkerExecutionDecision {
+  if (!policy.supportsDryRun) {
+    return { allowed: false, reason: `dry-run not supported for ${jobKey}` };
+  }
+  if (!policy.supportsPropertyScope || !hasPropertyScope) {
+    return {
+      allowed: false,
+      reason: `property-scoped dry-run required for ${jobKey}`,
+    };
+  }
+  if (!areWorkerManualTriggersEnabled(env)) {
+    return {
+      allowed: false,
+      reason: `${WORKER_FLAG_KEYS.manualTriggersEnabled}=false`,
+    };
+  }
+  if (
+    policy.humanApprovalClass === 'HIGH_IMPACT_MANUAL'
+    && areWorkerManualTriggerApprovalsEnforced(env)
+  ) {
+    return {
+      allowed: false,
+      reason: 'ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS=true and no approval workflow is wired for this high-impact job',
+    };
+  }
+  return {
+    allowed: true,
+    reason: 'reviewed property-scoped dry-run bypasses activation gates',
+  };
+}
+
+/**
  * Single scheduler/manual/poller decision function (WKR-004).
  *
  * Precedence:

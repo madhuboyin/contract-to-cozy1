@@ -504,6 +504,7 @@ Two fixture modes exist:
 | `OPEN_FEMA_DECLARATIONS_CRON` | OpenFEMA schedule override | Default `17 */6 * * *` (minute 17 every 6 hours, worker timezone) |
 | `WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED` | Per-job execution-policy override for reviewed tax ingestion | Keep `"false"` until the HER-604 monitored-property acceptance gate passes |
 | `TAX_ASSESSMENT_INGEST_CRON` | Override for the real tax job's cron schedule | Default `0 6 * * 1` (weekly, Mon 6am) |
+| `SMOKE_TEST_PROPERTY_ALLOWLIST` | Comma-separated canonical property IDs eligible for reviewed property-scoped worker acceptance | Required for scoped source dry runs; an empty value fails closed |
 
 The `WORKER_JOB_<NORMALIZED_JOB_KEY>_ENABLED` values are authoritative
 per-job overrides. An explicit `"true"` permits both scheduled and manual
@@ -511,7 +512,11 @@ execution even while the broad `WORKER_EXTERNAL_INGEST_ENABLED` group flag is
 `"false"`; an explicit `"false"` blocks both. These flags are therefore
 activation controls, not display-only configuration. Provider jobs can create
 canonical events, property matches, Incidents, and notification decisions once
-enabled. Cron keys change only timing and do not enable a disabled job.
+enabled. Cron keys change only timing and do not enable a disabled job. A
+declared dry-run-capable source may bypass these activation gates only when the
+request is property-scoped and its property is in
+`SMOKE_TEST_PROPERTY_ALLOWLIST`; dry-run output cannot persist canonical state.
+The same restriction is enforced before queueing and again inside the worker.
 
 ### E2E testing notes
 
@@ -543,7 +548,10 @@ A contributing data-quality factor: at least one real property had a `zipCode` c
 4. A startup guardrail was added (see [Production guardrail](#production-guardrail-new)) so this class of misconfiguration fails fast instead of silently redeploying.
 5. As a longer-term fix (this update), the architecture was changed so `RadarEvent` promotes into `Incident` for high-impact matches, and a real data source (tax reassessment) was built — see [RadarEvent → Incident Promotion Bridge](#radarevent--incident-promotion-bridge) and [Real Provider Ingestion](#real-provider-ingestion).
 
-`energy_inefficiency_detected`/`high_utility_cost` guidance families still point at `home-event-radar` and were **not** fixed in this pass — no verified real data source exists for them yet (candidate: repoint to `home-savings`, which has genuinely real, live account-tracking data, but the fit for `energy_inefficiency_detected` specifically is weaker than for `high_utility_cost`). This remains open.
+`high_utility_cost` now starts at the live `home-savings` step instead of the
+mostly dataless Radar category. `energy_inefficiency_detected` remains on Radar:
+Home Savings does not establish physical energy inefficiency, so that family
+still requires an approved evidence source and destination.
 
 ---
 
@@ -1080,7 +1088,9 @@ PropertyRadarState updated + PropertyRadarAction logged
 - The utility source strategy is decided, but no licensed utility adapter is active. New Jersey is its first territory and a commercial aggregator requires a negotiated end-user display license. Insurance has an accepted no-go decision: NJDOBI/SERFF is authoritative for evaluation, but no licensed structured production feed or approved governance path exists (see Pending Phases).
 - The dummy ingest path is QA/E2E only, now disabled in production and guardrailed against re-enabling.
 - Real-time guarantees do not exist in the current architecture; freshness depends on when canonical events are ingested (tax reassessment: weekly cron).
-- `energy_inefficiency_detected`/`high_utility_cost` guidance families still point at the (mostly dataless) Home Event Radar tool — known gap, not yet fixed.
+- `high_utility_cost` now routes to the live Home Savings step.
+  `energy_inefficiency_detected` remains on the mostly dataless Radar tool until
+  an approved evidence source and destination exist.
 
 ---
 
@@ -1106,7 +1116,9 @@ existing Incident evaluator can activate eligible notifications. HER-300 indexed
 matching, HER-301's pure impact rules, HER-302's bounded confidence engine, HER-303's
 ordering-only priority engine, HER-304's revision-aware match lifecycle, HER-305's durable
 property reconciliation, HER-306's scheduled safety net, and HER-307's fail-closed tax routing
-correction are complete. Phase 4 homeowner query APIs are the next delivery slice.
+correction are complete. The homeowner query APIs, UI, actions, notifications,
+admin operations, and additional reviewed source slices listed in the progress
+table are also implemented.
 
 ### Phase 3 — Utility outage integration (source decided; contract and implementation pending)
 

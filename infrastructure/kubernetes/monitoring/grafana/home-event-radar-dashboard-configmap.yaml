@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-home-event-radar
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  home-event-radar-observability.json: |
+    {
+      "id": null,
+      "uid": "ctc-home-event-radar",
+      "title": "Home Event Radar - Sources and Delivery",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "tags": ["home-event-radar", "sources", "matching"],
+      "time": {"from": "now-24h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "Source Runs by Outcome",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {
+              "expr": "sum by (source, outcome) (rate(radar_source_runs_total[15m]))",
+              "legendFormat": "{{source}} / {{outcome}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "Seconds Since Last Complete Source Success",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {
+              "expr": "time() - radar_source_last_success_timestamp_seconds",
+              "legendFormat": "{{source}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Durable Ingestion Outcomes",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+          "targets": [
+            {
+              "expr": "sum by (outcome) (rate(radar_ingest_observations_total[15m]))",
+              "legendFormat": "{{outcome}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Property Match Outcomes",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+          "targets": [
+            {
+              "expr": "sum by (outcome) (rate(radar_match_properties_total[15m]))",
+              "legendFormat": "{{outcome}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Ingest and Match Dead Letters",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+          "targets": [
+            {
+              "expr": "increase(radar_ingest_dead_letter_total[1h])",
+              "legendFormat": "ingest",
+              "refId": "A"
+            },
+            {
+              "expr": "increase(radar_match_dead_letter_total[1h])",
+              "legendFormat": "match",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Canonical Read Requests",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+          "targets": [
+            {
+              "expr": "sum by (endpoint, outcome) (rate(radar_feed_requests_total[5m]))",
+              "legendFormat": "{{endpoint}} / {{outcome}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Canonical Read Latency p95",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (endpoint, le) (rate(radar_feed_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{endpoint}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Source Fetch Duration p95",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (source, le) (rate(radar_source_fetch_duration_seconds_bucket[30m])))",
+              "legendFormat": "{{source}}",
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    }

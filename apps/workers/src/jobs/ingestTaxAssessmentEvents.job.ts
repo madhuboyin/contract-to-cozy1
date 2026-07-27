@@ -27,6 +27,7 @@ import { normalizeTaxAssessmentRecord } from '../radar/normalizeTaxAssessment';
 
 export const TAX_ASSESSMENT_SOURCE_KEY = 'tax-assessment-ingest';
 export const TAX_ASSESSMENT_ADAPTER_VERSION = 'socrata-tax-canonical-v3';
+export const DEFAULT_TAX_ASSESSMENT_INGEST_CRON = '0 6 * * 1';
 const TAX_SOURCE_FRESHNESS_SECONDS = 8 * 24 * 60 * 60;
 
 export type TaxAssessmentIngestResult = WorkerRunResult & {
@@ -91,7 +92,9 @@ function sourceRegistration(
     contractVersion: 1,
     isEnabled: prepared.sources.length > 0,
     environments: [resolveRadarRuntimeEnvironment(env)],
-    scheduleCron: '0 6 * * 1',
+    scheduleCron:
+      env.TAX_ASSESSMENT_INGEST_CRON?.trim()
+      || DEFAULT_TAX_ASSESSMENT_INGEST_CRON,
     freshnessSeconds: TAX_SOURCE_FRESHNESS_SECONDS,
     supportedEventTypes: ['tax_reassessment'],
     coverageDescription:

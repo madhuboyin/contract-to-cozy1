@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress — HER-607 implemented |
+| Status | In progress — launch acceptance and observability baseline implemented |
 | Version | 1.0 |
 | Date | July 26, 2026 |
 | Governing requirements | [Home Event Radar FRD](./HOME_EVENT_RADAR_FRD.md) |
@@ -68,6 +68,9 @@
 | HER-605 Utility source decision | Complete; contract and adapter implementation pending | New Jersey electric pilot, licensed commercial aggregator path, territory/precision gates, conservative restoration lifecycle, SLA, quota, cost, privacy, and activation controls are recorded in `docs/architecture/adr-home-event-radar-utility-source.md` |
 | HER-606 Insurance source decision | Complete; accepted no-go pending licensed structured source and governance | NJDOBI/SERFF is the authoritative evaluation system, but no approved automated/republication feed exists; Insurance remains unavailable under the source, semantics, carrier-match, review, financial-governance, and procurement gates in `docs/architecture/adr-home-event-radar-insurance-source.md` |
 | HER-607 Compound-event rules | Complete; DB schema application pending | Deterministic `compound-v1` property insights correlate reviewed event/fact combinations, preserve every constituent source and severity, reconcile durable active/resolved lifecycle, add registry-owned actions, and render source evidence without creating synthetic provider events |
+| Launch-closed source acceptance | Complete | Allowlisted property-scoped dry runs can exercise reviewed source adapters while their per-job activation flag remains false; unscoped dry runs and all real runs remain subject to normal activation policy, and the worker rechecks the same policy |
+| Operational observability baseline | Complete; extended product-quality telemetry pending | Source run/fetch/freshness metrics, canonical read request/latency metrics, a Grafana operations dashboard, and source/dead-letter/funnel/read alerts are defined without high-cardinality property or user labels |
+| Guidance destination correction | Partially complete | `high_utility_cost` starts at the live `home-savings` step; `energy_inefficiency_detected` remains on Radar until an approved live evidence source and destination are selected |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database
@@ -1716,11 +1719,15 @@ Before changing the worker flag to `true`, operators must:
 1. apply the schema, then run `npm run seed:radar-tax-pilots` from
    `apps/backend` to idempotently upsert only the reviewed source configuration;
 2. choose an allowlisted monitored Bronx Tax Class 1 property whose address
-   and ZIP are known to match the official roll;
-3. run the admin property-scoped job with `dryRun=true`;
+   and ZIP are known to match the official roll, and put its canonical ID in
+   `SMOKE_TEST_PROPERTY_ALLOWLIST`;
+3. run the admin property-scoped job with `dryRun=true`; this reviewed
+   acceptance path intentionally works while
+   `WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED=false`, but it cannot persist an
+   event or broaden beyond the allowlisted property;
 4. confirm exactly one latest-year parcel candidate, no owner/mailing fields,
    and the official assessment values;
-5. run the scoped job without dry-run and verify one canonical event/revision,
+5. enable the per-job flag, run the scoped job without dry-run, and verify one canonical event/revision,
    one property match, accurate assessed-value copy, and the official appeal
    link;
 6. review an intentionally ambiguous fixture and confirm that it produces no
@@ -1978,23 +1985,27 @@ No legacy Radar feed fallback is required.
 
 ### 15.1 Metrics
 
-Add:
+The first operational baseline is implemented with:
 
 ```text
 radar_source_runs_total{source,outcome}
 radar_source_fetch_duration_seconds{source}
-radar_source_last_success_timestamp{source}
-radar_observations_total{source,outcome}
-radar_events_total{source,lifecycle}
-radar_event_revisions_total{source,change_type}
-radar_match_attempts_total{event_type,outcome}
-radar_match_duration_seconds{event_type}
-radar_active_matches{source,event_type,impact}
-radar_incident_promotions_total{outcome}
-radar_notifications_total{channel,outcome}
-radar_feed_requests_total{outcome,feed_state}
-radar_feed_duration_seconds
+radar_source_last_success_timestamp_seconds{source}
+radar_ingest_observations_total{outcome}
+radar_ingest_failures_total{error_class}
+radar_ingest_dead_letter_total
+radar_match_properties_total{outcome}
+radar_match_failures_total{error_class}
+radar_match_dead_letter_total
+radar_feed_requests_total{endpoint,outcome}
+radar_feed_duration_seconds{endpoint,outcome}
 ```
+
+Prometheus labels are deliberately bounded; property, user, match, and provider
+identifiers belong in structured logs/traces, not metric labels. Extended
+product-quality telemetry remains to be added for active-match inventory,
+Incident promotion, notification delivery, coverage mismatch, and feedback
+quality.
 
 ### 15.2 Structured log context
 
@@ -2013,7 +2024,10 @@ Every pipeline log should include as applicable:
 
 ### 15.3 Dashboards
 
-Required dashboards:
+The deployed dashboard artifact
+`infrastructure/kubernetes/monitoring/grafana/home-event-radar-dashboard-configmap.yaml`
+covers the initial source, durable pipeline, and homeowner-read operating
+surface. The required dashboard domains are:
 
 1. Source availability and freshness.
 2. Ingest → event → match funnel.
@@ -2023,7 +2037,10 @@ Required dashboards:
 
 ### 15.4 Alerts
 
-Required alert rules:
+The alert artifact
+`infrastructure/kubernetes/monitoring/prometheus/home-event-radar-alert-rules.yaml`
+implements source freshness/failure, dead-letter, ingest-without-match, and feed
+error/latency alerts. The complete required alert set is:
 
 - source freshness breach;
 - repeated source failure;
@@ -2035,6 +2052,18 @@ Required alert rules:
 - active stale-event growth;
 - feed API error/latency breach;
 - notification volume spike.
+
+Queue backlog age, covered-but-uncovered, duplicate-Incident, stale-active-event,
+and notification-volume alerts remain pending until their bounded gauges or
+counters are exposed.
+
+The monitoring objects are standalone operational manifests and must be applied
+to the monitoring namespace as part of deployment:
+
+```bash
+kubectl apply -f infrastructure/kubernetes/monitoring/prometheus/home-event-radar-alert-rules.yaml
+kubectl apply -f infrastructure/kubernetes/monitoring/grafana/home-event-radar-dashboard-configmap.yaml
+```
 
 ---
 

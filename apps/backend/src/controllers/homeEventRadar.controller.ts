@@ -5,6 +5,10 @@ import { CustomRequest } from '../types';
 import { HomeEventRadarService } from '../services/homeEventRadar.service';
 import { APIError } from '../middleware/error.middleware';
 import { logger } from '../lib/logger';
+import {
+  radarFeedDurationSeconds,
+  radarFeedRequestsTotal,
+} from '../lib/metrics';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { prisma } from '../config/database';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
@@ -35,6 +39,26 @@ function requireUser(req: CustomRequest): { userId: string } {
   const userId = req.user?.userId;
   if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
   return { userId };
+}
+
+async function observeRadarRead<T>(
+  endpoint: 'overview' | 'coverage' | 'counts' | 'feed' | 'detail' | 'state',
+  read: () => Promise<T>,
+): Promise<T> {
+  const startedAt = process.hrtime.bigint();
+  let outcome = 'success';
+  try {
+    return await read();
+  } catch (error) {
+    outcome = 'error';
+    throw error;
+  } finally {
+    radarFeedRequestsTotal.inc({ endpoint, outcome });
+    radarFeedDurationSeconds.observe(
+      { endpoint, outcome },
+      Number(process.hrtime.bigint() - startedAt) / 1_000_000_000,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +164,8 @@ export async function getRadarEvent(req: CustomRequest, res: Response, next: Nex
 export async function getRadarOverview(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { userId } = requireUser(req);
-    const data = await radarQueryService.getOverview(req.params.propertyId, userId);
+    const data = await observeRadarRead('overview', () =>
+      radarQueryService.getOverview(req.params.propertyId, userId));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -150,7 +175,8 @@ export async function getRadarOverview(req: CustomRequest, res: Response, next: 
 export async function getRadarCoverage(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     requireUser(req);
-    const data = await radarQueryService.getCoverage(req.params.propertyId);
+    const data = await observeRadarRead('coverage', () =>
+      radarQueryService.getCoverage(req.params.propertyId));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -160,7 +186,8 @@ export async function getRadarCoverage(req: CustomRequest, res: Response, next: 
 export async function getRadarCounts(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { userId } = requireUser(req);
-    const data = await radarQueryService.getCounts(req.params.propertyId, userId);
+    const data = await observeRadarRead('counts', () =>
+      radarQueryService.getCounts(req.params.propertyId, userId));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -207,7 +234,8 @@ export async function listRadarEvents(req: CustomRequest, res: Response, next: N
     const { userId } = requireUser(req);
     const { propertyId } = req.params;
     const query = listRadarEventsQuerySchema.parse(req.query);
-    const data = await radarQueryService.listFeed(propertyId, userId, query);
+    const data = await observeRadarRead('feed', () =>
+      radarQueryService.listFeed(propertyId, userId, query));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -217,11 +245,12 @@ export async function listRadarEvents(req: CustomRequest, res: Response, next: N
 export async function getRadarEventDetail(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { userId } = requireUser(req);
-    const data = await radarQueryService.getDetail(
-      req.params.propertyId,
-      req.params.matchId,
-      userId,
-    );
+    const data = await observeRadarRead('detail', () =>
+      radarQueryService.getDetail(
+        req.params.propertyId,
+        req.params.matchId,
+        userId,
+      ));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -232,12 +261,13 @@ export async function getRadarStateView(req: CustomRequest, res: Response, next:
   try {
     const { userId } = requireUser(req);
     const query = listRadarEventsQuerySchema.omit({ state: true }).parse(req.query);
-    const data = await radarQueryService.getStateView(
-      req.params.propertyId,
-      userId,
-      req.params.state as RadarUserState,
-      query,
-    );
+    const data = await observeRadarRead('state', () =>
+      radarQueryService.getStateView(
+        req.params.propertyId,
+        userId,
+        req.params.state as RadarUserState,
+        query,
+      ));
     res.json({ success: true, data });
   } catch (err) {
     next(err);

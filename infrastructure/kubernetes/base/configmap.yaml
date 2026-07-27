@@ -115,6 +115,9 @@ data:
   RADAR_MATCH_PAGE_SIZE: "100"
   WORKER_MUTATING_SWEEPS_ENABLED: "false"
   WORKER_MANUAL_TRIGGERS_ENABLED: "true"
+  # Comma-separated operator-controlled property IDs allowed for scoped
+  # acceptance runs. Keep empty until an explicit smoke target is selected.
+  SMOKE_TEST_PROPERTY_ALLOWLIST: ""
   # Synced from live 2026-07-24 (was "false" here, "true" on the cluster).
   # This blocks every HIGH_IMPACT_MANUAL job's manual trigger while no
   # approval workflow exists (see workerExecutionPolicy.ts) — confirm this

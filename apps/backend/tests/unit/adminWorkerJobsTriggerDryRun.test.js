@@ -195,3 +195,37 @@ test('an allowlisted propertyId is queued as job data for a property-scope-capab
     assert.deepEqual(calls.added[0].data, { dryRun: false, propertyId: 'property-allowed' });
   });
 });
+
+test('allowlisted scoped dry-run is accepted while its per-job activation flag is false', async () => {
+  await withEnv({
+    SMOKE_TEST_PROPERTY_ALLOWLIST: 'property-allowed',
+    WORKER_MANUAL_TRIGGERS_ENABLED: 'true',
+    WORKER_JOB_TEST_PROPERTY_SCOPE_SUPPORTED_ENABLED: 'false',
+  }, async () => {
+    const { triggerJob, calls } = loadTriggerJob();
+
+    const result = await triggerJob('test-property-scope-supported', {
+      dryRun: true,
+      propertyId: 'property-allowed',
+    });
+
+    assert.equal(result.queued, true);
+    assert.deepEqual(calls.added[0].data, {
+      dryRun: true,
+      propertyId: 'property-allowed',
+    });
+  });
+});
+
+test('unscoped dry-run cannot bypass a disabled job', async () => {
+  await withEnv({
+    WORKER_MANUAL_TRIGGERS_ENABLED: 'true',
+    WORKER_JOB_TEST_DRY_RUN_SUPPORTED_ENABLED: 'false',
+  }, async () => {
+    const { triggerJob } = loadTriggerJob();
+    await assert.rejects(
+      () => triggerJob('test-dry-run-supported', { dryRun: true }),
+      /property-scoped dry-run required/,
+    );
+  });
+});

@@ -1,0 +1,83 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: production-home-event-radar-alert-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: contract-to-cozy-home-event-radar
+      rules:
+        - alert: RadarSourceRepeatedFailures
+          expr: sum by (source) (increase(radar_source_runs_total{outcome=~"failure|dry_run_failure"}[30m])) >= 3
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: Home Event Radar source repeatedly failing
+            description: Radar source {{ $labels.source }} failed at least three times in 30 minutes.
+
+        - alert: RadarSourceFreshnessBreach
+          expr: >-
+            (time() - radar_source_last_success_timestamp_seconds{source="tax-assessment-ingest"} > 691200)
+            or (time() - radar_source_last_success_timestamp_seconds{source="openfema-declarations"} > 28800)
+            or (time() - radar_source_last_success_timestamp_seconds{source!~"tax-assessment-ingest|openfema-declarations"} > 7200)
+          for: 15m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: Home Event Radar source has not completed successfully
+            description: Radar source {{ $labels.source }} exceeded its schedule-aware complete-success freshness threshold.
+
+        - alert: RadarDurableIngestDeadLetters
+          expr: increase(radar_ingest_dead_letter_total[15m]) > 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: Home Event Radar ingestion exhausted retries
+            description: At least one canonical Radar ingestion job entered dead-letter state.
+
+        - alert: RadarDurableMatchDeadLetters
+          expr: increase(radar_match_dead_letter_total[15m]) > 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: Home Event Radar matching exhausted retries
+            description: At least one Radar matching job entered dead-letter state.
+
+        - alert: RadarIngestWithoutPropertyEvaluation
+          expr: sum(increase(radar_ingest_observations_total{outcome=~"created|updated|resolved|retracted"}[30m])) > 0 and sum(increase(radar_match_properties_total[30m])) == 0
+          for: 15m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: Radar observations are not reaching property matching
+            description: Canonical observations changed during the last 30 minutes without any recorded property match evaluation.
+
+        - alert: RadarFeedErrorRatioHigh
+          expr: sum(rate(radar_feed_requests_total{outcome="error"}[10m])) / clamp_min(sum(rate(radar_feed_requests_total[10m])), 0.001) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: Home Event Radar read error ratio is high
+            description: More than 5% of canonical Radar reads have failed for ten minutes.
+
+        - alert: RadarFeedP95LatencyHigh
+          expr: histogram_quantile(0.95, sum by (le) (rate(radar_feed_duration_seconds_bucket[10m]))) > 1
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: Home Event Radar read latency is high
+            description: Canonical Radar read p95 latency has exceeded one second for ten minutes.

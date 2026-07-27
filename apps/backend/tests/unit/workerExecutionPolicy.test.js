@@ -11,6 +11,7 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const {
+  evaluateScopedDryRunExecution,
   evaluateWorkerExecution,
   readWorkerFlag,
   getJobOverride,
@@ -54,6 +55,57 @@ test('manual trigger requires WORKER_MANUAL_TRIGGERS_ENABLED, not WORKER_AUTOMAT
   });
   assert.equal(blocked.allowed, false);
   assert.match(blocked.reason, /WORKER_MANUAL_TRIGGERS_ENABLED=false/);
+});
+
+test('property-scoped dry-run can validate a launch-closed external job', () => {
+  const decision = evaluateScopedDryRunExecution(
+    'tax-assessment-ingest',
+    policy({
+      defaultEnabledInBeta: false,
+      supportsDryRun: true,
+      supportsPropertyScope: true,
+      externalProvider: 'NYC DOF',
+    }),
+    true,
+    {
+      WORKER_MANUAL_TRIGGERS_ENABLED: 'true',
+      WORKER_EXTERNAL_INGEST_ENABLED: 'false',
+      WORKER_JOB_TAX_ASSESSMENT_INGEST_ENABLED: 'false',
+    },
+  );
+  assert.equal(decision.allowed, true);
+  assert.match(decision.reason, /dry-run bypasses activation gates/);
+});
+
+test('dry-run activation bypass requires declared capability and property scope', () => {
+  const env = { WORKER_MANUAL_TRIGGERS_ENABLED: 'true' };
+  assert.equal(
+    evaluateScopedDryRunExecution(
+      'job-a',
+      policy({ supportsDryRun: true, supportsPropertyScope: true }),
+      false,
+      env,
+    ).allowed,
+    false,
+  );
+  assert.equal(
+    evaluateScopedDryRunExecution(
+      'job-a',
+      policy({ supportsDryRun: false, supportsPropertyScope: true }),
+      true,
+      env,
+    ).allowed,
+    false,
+  );
+  assert.equal(
+    evaluateScopedDryRunExecution(
+      'job-a',
+      policy({ supportsDryRun: true, supportsPropertyScope: true }),
+      true,
+      { WORKER_MANUAL_TRIGGERS_ENABLED: 'false' },
+    ).allowed,
+    false,
+  );
 });
 
 test('defaultEnabledInBeta=false blocks even with every flag on', () => {

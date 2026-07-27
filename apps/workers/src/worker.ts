@@ -84,6 +84,7 @@ import { captureWeeklyScoreSnapshotsJob } from './jobs/propertyScoreSnapshots.jo
 import { processMaintenanceReminders } from '@worker-shared/services/maintenanceReminder.service';
 import { JOB_REGISTRY, RUNNER_REGISTRY } from '@worker-shared/config/workerJobRegistry';
 import {
+  evaluateScopedDryRunExecution,
   evaluateWorkerExecution,
   collectWorkerFlagDiagnostics,
 } from '@worker-shared/config/workerExecutionPolicy';
@@ -105,6 +106,9 @@ import {
   radarIngestRetriesTotal,
   radarMatchDeadLetterTotal,
   radarMatchRetriesTotal,
+  radarSourceFetchDurationSeconds,
+  radarSourceLastSuccessTimestamp,
+  radarSourceRunsTotal,
 } from './lib/metrics';
 import {
   getRadarIngestQueue,
@@ -466,6 +470,36 @@ const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'reserve-fund-reconciliation': process.env.RESERVE_FUND_RECONCILIATION_CRON,
 };
 
+const RADAR_SOURCE_JOB_KEYS = new Set([
+  'severe-weather-alerts',
+  'freeze-risk-incidents',
+  'airnow-air-quality',
+  'usgs-earthquakes',
+  'openfema-declarations',
+  'tax-assessment-ingest',
+]);
+
+function recordRadarSourceRun(
+  jobKey: string,
+  outcome: string,
+  durationSeconds?: number,
+): void {
+  if (!RADAR_SOURCE_JOB_KEYS.has(jobKey)) return;
+  radarSourceRunsTotal.inc({ source: jobKey, outcome });
+  if (durationSeconds !== undefined) {
+    radarSourceFetchDurationSeconds.observe(
+      { source: jobKey },
+      durationSeconds,
+    );
+  }
+  if (outcome === 'success') {
+    radarSourceLastSuccessTimestamp.set(
+      { source: jobKey },
+      Date.now() / 1000,
+    );
+  }
+}
+
 function scheduleCronJobs(): void {
   const cronEntries = JOB_REGISTRY.filter((j) => j.type === 'cron' && j.cronExpression);
   const missingHandlerKeys: string[] = [];
@@ -497,6 +531,7 @@ function scheduleCronJobs(): void {
           // in Redis history — the exact inconsistency between the two
           // outcome stores this finding called out.
           cronJobRunsTotal.inc({ job_key: entry.key, status: 'skipped' });
+          recordRadarSourceRun(entry.key, 'skipped');
           await recordCronRun(entry.key, {
             status: 'skipped',
             finishedAt: Date.now(),
@@ -533,10 +568,16 @@ function scheduleCronJobs(): void {
             logger.info(`[${entry.key}] ✅ Completed${isPartial ? ' (partial)' : ''}`);
             cronJobRunsTotal.inc({ job_key: entry.key, status: isPartial ? 'partial' : 'success' });
             cronJobLastSuccessTimestamp.set({ job_key: entry.key }, Date.now() / 1000);
+            const durationSeconds = stopTimer();
+            recordRadarSourceRun(
+              entry.key,
+              isPartial ? 'partial' : 'success',
+              durationSeconds,
+            );
             await recordCronRun(entry.key, {
               status: isPartial ? 'partial' : 'completed',
               finishedAt: Date.now(),
-              durationMs: stopTimer() * 1000,
+              durationMs: durationSeconds * 1000,
               failReason: isPartial
                 ? (outcome as WorkerRunResult).reason ??
                   `${(outcome as WorkerRunResult).failed} of ${(outcome as WorkerRunResult).examined} failed`
@@ -545,10 +586,12 @@ function scheduleCronJobs(): void {
           } catch (err) {
             logger.error({ err }, `[${entry.key}] ❌ Failed`);
             cronJobRunsTotal.inc({ job_key: entry.key, status: 'failure' });
+            const durationSeconds = stopTimer();
+            recordRadarSourceRun(entry.key, 'failure', durationSeconds);
             await recordCronRun(entry.key, {
               status: 'failed',
               finishedAt: Date.now(),
-              durationMs: stopTimer() * 1000,
+              durationMs: durationSeconds * 1000,
               failReason: err instanceof Error ? err.message : String(err),
             });
           }
@@ -562,6 +605,7 @@ function scheduleCronJobs(): void {
           // visible in metrics/history as one that's flag-disabled, not a
           // silent no-op only a debug log line would show.
           cronJobRunsTotal.inc({ job_key: entry.key, status: 'skipped' });
+          recordRadarSourceRun(entry.key, 'skipped');
           await recordCronRun(entry.key, {
             status: 'skipped',
             finishedAt: Date.now(),
@@ -1406,18 +1450,29 @@ const cronTriggerWorker = new Worker(
     if (!handler) {
       throw new Error(`[CRON-TRIGGER] No handler registered for job: ${job.name}`);
     }
-    // Defense in depth: adminWorkerJobs.service.ts#triggerJob() already
-    // rejects a disallowed manual trigger before it's queued, but a job
-    // already sitting in the queue when flags change (deploy, restart)
-    // must not silently run once picked up.
+    const dryRun = job.data?.dryRun === true;
+    const propertyId: string | undefined =
+      typeof job.data?.propertyId === 'string' && job.data.propertyId ? job.data.propertyId : undefined;
+    // Defense in depth: scoped dry runs use a narrow acceptance policy;
+    // real manual runs use the ordinary activation policy.
     const registryEntry = JOB_REGISTRY.find((j) => j.key === job.name);
     if (registryEntry) {
-      const decision = evaluateWorkerExecution(job.name, 'manual', registryEntry);
+      const ordinaryDecision = evaluateWorkerExecution(
+        job.name,
+        'manual',
+        registryEntry,
+      );
+      const decision = dryRun && !ordinaryDecision.allowed
+        ? evaluateScopedDryRunExecution(
+          job.name,
+          registryEntry,
+          Boolean(propertyId),
+        )
+        : ordinaryDecision;
       if (!decision.allowed) {
         throw new Error(`[CRON-TRIGGER] Manual trigger for "${job.name}" blocked — ${decision.reason}`);
       }
     }
-    const dryRun = job.data?.dryRun === true;
     // W4 item 8: same defense-in-depth reasoning as the policy check above —
     // adminWorkerJobs.service.ts#triggerJob() already rejects a dryRun
     // request for a job with no dry-run code path before queueing it, but a
@@ -1426,8 +1481,6 @@ const cronTriggerWorker = new Worker(
     if (dryRun && registryEntry && !registryEntry.supportsDryRun) {
       throw new Error(`[CRON-TRIGGER] Dry-run requested for "${job.name}" but it does not support dry-run`);
     }
-    const propertyId: string | undefined =
-      typeof job.data?.propertyId === 'string' && job.data.propertyId ? job.data.propertyId : undefined;
     // W6 item 2/5: same defense-in-depth reasoning — a scoped smoke run's
     // property allowlist membership is re-checked at the job/service layer
     // too (see permitInspectionReminderJob / processNewHomeWarrantyDeadlines),
@@ -1471,18 +1524,42 @@ cronTriggerWorker.on('active', (job) => {
   (job as unknown as Record<string, unknown>).__metricStart = process.hrtime();
 });
 
-cronTriggerWorker.on('completed', (job) => {
+cronTriggerWorker.on('completed', (job, result) => {
   const start = (job as unknown as Record<string, unknown>).__metricStart as [number, number] | undefined;
+  let durationSeconds: number | undefined;
   if (start) {
     const [sec, ns] = process.hrtime(start);
-    jobDurationSeconds.observe({ queue: 'cron-trigger-queue', job_name: job.name }, sec + ns / 1e9);
+    durationSeconds = sec + ns / 1e9;
+    jobDurationSeconds.observe({ queue: 'cron-trigger-queue', job_name: job.name }, durationSeconds);
   }
+  const resultStatus = isWorkerRunResult(result)
+    ? deriveRunStatus(result).toLowerCase()
+    : 'success';
+  recordRadarSourceRun(
+    job.name,
+    job.data?.dryRun === true ? `dry_run_${resultStatus}` : resultStatus,
+    durationSeconds,
+  );
   jobsActiveGauge.dec({ queue: 'cron-trigger-queue' });
   jobsProcessedTotal.inc({ queue: 'cron-trigger-queue', job_name: job.name, status: 'completed' });
   logger.info(`[CRON-TRIGGER] Job ${job.id} (${job.name}) completed successfully.`);
 });
 
 cronTriggerWorker.on('failed', (job, err) => {
+  if (job) {
+    const start = (job as unknown as Record<string, unknown>).__metricStart as
+      [number, number] | undefined;
+    let durationSeconds: number | undefined;
+    if (start) {
+      const [sec, ns] = process.hrtime(start);
+      durationSeconds = sec + ns / 1e9;
+    }
+    recordRadarSourceRun(
+      job.name,
+      job.data?.dryRun === true ? 'dry_run_failure' : 'failure',
+      durationSeconds,
+    );
+  }
   jobsActiveGauge.dec({ queue: 'cron-trigger-queue' });
   jobsProcessedTotal.inc({ queue: 'cron-trigger-queue', job_name: job?.name ?? 'unknown', status: 'failed' });
   logger.error(`[CRON-TRIGGER] Job ${job?.id} (${job?.name}) failed:`, err);

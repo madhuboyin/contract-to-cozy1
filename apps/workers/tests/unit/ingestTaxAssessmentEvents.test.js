@@ -6,6 +6,7 @@ require('tsconfig-paths/register');
 
 const {
   TAX_ASSESSMENT_ADAPTER_VERSION,
+  DEFAULT_TAX_ASSESSMENT_INGEST_CRON,
   ingestTaxAssessmentEventsJob,
 } = require('../../src/jobs/ingestTaxAssessmentEvents.job');
 
@@ -168,6 +169,7 @@ test('tax ingest registers reviewed coverage and queues durable canonical observ
     dryRun: false,
   });
   assert.equal(calls.register[0].adapterVersion, TAX_ASSESSMENT_ADAPTER_VERSION);
+  assert.equal(calls.register[0].scheduleCron, DEFAULT_TAX_ASSESSMENT_INGEST_CRON);
   assert.deepEqual(calls.register[0].coverage, [{
     coverageType: 'county',
     countryCode: 'US',
@@ -181,6 +183,19 @@ test('tax ingest registers reviewed coverage and queues durable canonical observ
   assert.equal(calls.complete[0].input.status, 'success');
   assert.equal(calls.complete[0].input.observationsReceived, 1);
   assert.equal(calls.fetch[0].options.recordBookkeeping, true);
+});
+
+test('tax source registration reports the resolved runtime cron override', async () => {
+  const { calls, deps } = fakeDeps({
+    env: {
+      NODE_ENV: 'test',
+      TAX_ASSESSMENT_INGEST_CRON: '15 7 * * 2',
+    },
+  });
+
+  await ingestTaxAssessmentEventsJob(undefined, deps);
+
+  assert.equal(calls.register[0].scheduleCron, '15 7 * * 2');
 });
 
 test('dry run fetches and validates without canonical or bookkeeping writes', async () => {

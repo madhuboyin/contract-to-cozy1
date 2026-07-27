@@ -93,7 +93,10 @@ const FIRST_STEP_BY_FAMILY: Record<string, string> = {
   hoa_violation_detected: 'review_compliance_requirement',
   safety_inspection_due: 'review_compliance_requirement',
   energy_inefficiency_detected: 'review_energy_signal',
-  high_utility_cost: 'review_energy_signal',
+  // Utility-cost signals already have a live savings destination. Start them
+  // at that reviewed step rather than sending the homeowner to a Radar
+  // category that has no utility-cost source.
+  high_utility_cost: 'find_energy_savings',
   tax_reassessment: 'review_assessment',
   generic_actionable_signal: 'review_signal',
 };
@@ -121,7 +124,7 @@ const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
   hoa_violation_detected: 'guidance-overview',
   safety_inspection_due: 'guidance-overview',
   energy_inefficiency_detected: 'home-event-radar',
-  high_utility_cost: 'home-event-radar',
+  high_utility_cost: 'home-savings',
   // Promoted RadarEvent -> Incident via RadarIncidentPromotionService;
   // Incidents is the real, populated surface.
   tax_reassessment: 'incidents',

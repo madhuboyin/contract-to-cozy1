@@ -153,6 +153,28 @@ export const radarMatchDurationSeconds = new Histogram({
   registers: [register],
 });
 
+export const radarSourceRunsTotal = new Counter({
+  name: 'radar_source_runs_total',
+  help: 'Home Event Radar source job executions by source and outcome',
+  labelNames: ['source', 'outcome'] as const,
+  registers: [register],
+});
+
+export const radarSourceFetchDurationSeconds = new Histogram({
+  name: 'radar_source_fetch_duration_seconds',
+  help: 'End-to-end duration of Home Event Radar source jobs',
+  labelNames: ['source'] as const,
+  buckets: [0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600],
+  registers: [register],
+});
+
+export const radarSourceLastSuccessTimestamp = new Gauge({
+  name: 'radar_source_last_success_timestamp_seconds',
+  help: 'Unix timestamp of the last successful complete source job',
+  labelNames: ['source'] as const,
+  registers: [register],
+});
+
 // ─── Severe weather alerts job metrics ───────────────────────────────────────
 
 export const nwsFetchOutcomeTotal = new Counter({

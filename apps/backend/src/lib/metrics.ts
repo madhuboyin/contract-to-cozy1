@@ -121,3 +121,22 @@ export const propertyContextFeatureCaptureDurationSeconds = new Histogram({
   buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
   registers: [register],
 });
+
+// ─── Home Event Radar homeowner-read metrics ────────────────────────────────
+// Endpoint/outcome labels are bounded. Property, user, match, and provider
+// identifiers must never be attached to Prometheus labels.
+
+export const radarFeedRequestsTotal = new Counter({
+  name: 'radar_feed_requests_total',
+  help: 'Canonical Home Event Radar read requests by endpoint and outcome',
+  labelNames: ['endpoint', 'outcome'] as const,
+  registers: [register],
+});
+
+export const radarFeedDurationSeconds = new Histogram({
+  name: 'radar_feed_duration_seconds',
+  help: 'Canonical Home Event Radar read latency by endpoint and outcome',
+  labelNames: ['endpoint', 'outcome'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [register],
+});

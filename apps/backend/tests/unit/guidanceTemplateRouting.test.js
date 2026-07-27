@@ -6,6 +6,9 @@ require('ts-node/register');
 const {
   getTemplateByIssueType,
 } = require('../../src/services/guidanceEngine/guidanceTemplateRegistry.ts');
+const {
+  guidanceSignalResolverService,
+} = require('../../src/services/guidanceEngine/guidanceSignalResolver.service.ts');
 
 test('service get_quotes follows the selected service template', () => {
   const cleaning = getTemplateByIssueType('get_quotes', 'SERVICE', 'cleaning_service');
@@ -21,6 +24,26 @@ test('high_utility_cost routes to the energy efficiency journey', () => {
   const template = getTemplateByIssueType('high_utility_cost', 'ITEM', null);
 
   assert.equal(template.journeyTypeKey, 'energy_efficiency_resolution');
+});
+
+test('high_utility_cost starts at the live Home Savings step', () => {
+  const signal = guidanceSignalResolverService.normalizeSignal({
+    propertyId: 'property-1',
+    signalIntentFamily: 'high_utility_cost',
+  });
+
+  assert.equal(signal.canonicalFirstStepKey, 'find_energy_savings');
+  assert.equal(signal.recommendedToolKey, 'home-savings');
+});
+
+test('energy inefficiency remains on Radar until an approved source exists', () => {
+  const signal = guidanceSignalResolverService.normalizeSignal({
+    propertyId: 'property-1',
+    signalIntentFamily: 'energy_inefficiency_detected',
+  });
+
+  assert.equal(signal.canonicalFirstStepKey, 'review_energy_signal');
+  assert.equal(signal.recommendedToolKey, 'home-event-radar');
 });
 
 test('service-specific issue variants map to their intended service journeys', () => {

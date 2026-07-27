@@ -99,6 +99,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_MANUAL_TRIGGERS_ENABLED
+            - name: SMOKE_TEST_PROPERTY_ALLOWLIST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SMOKE_TEST_PROPERTY_ALLOWLIST
             - name: ENFORCE_WORKER_MANUAL_TRIGGER_APPROVALS
               valueFrom:
                 configMapKeyRef:

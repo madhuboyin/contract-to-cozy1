@@ -8,7 +8,11 @@ import Redis from 'ioredis';
 import { connection } from './JobQueue.service';
 import { JOB_REGISTRY, RUNNER_REGISTRY } from '../config/workerJobRegistry';
 import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
-import { evaluateWorkerExecution, collectWorkerFlagDiagnostics } from '../config/workerExecutionPolicy';
+import {
+  collectWorkerFlagDiagnostics,
+  evaluateScopedDryRunExecution,
+  evaluateWorkerExecution,
+} from '../config/workerExecutionPolicy';
 import { areHumanPolicyApprovalsEnforced } from '../config/appConfig';
 import { isPropertyAllowlisted, isSmokeAllowlistConfigured } from '../config/smokeTestConfig';
 import { isSmokeCorrelationId } from '../lib/smokeTestCorrelation';
@@ -282,14 +286,6 @@ export async function triggerJob(
   if (!entry.triggerSupported) throw new Error(`Manual trigger not supported for job: ${jobKey}`);
   if (!entry.queueName || !entry.jobName) throw new Error(`Missing queue config for job: ${jobKey}`);
 
-  // Manual triggers must produce the same policy decision the scheduler
-  // would (WKR-004/WKR-007) — reject here instead of queueing a job the
-  // worker-side cron-trigger-queue processor would just throw on anyway.
-  const decision = evaluateWorkerExecution(jobKey, 'manual', entry);
-  if (!decision.allowed) {
-    throw new Error(`Manual trigger not supported for job: ${jobKey} (${decision.reason})`);
-  }
-
   const dryRun = options?.dryRun === true;
   // W4 item 8: dry-run is a per-job contract, not a universal capability —
   // a job that never declared supportsDryRun has no code path honoring the
@@ -311,6 +307,16 @@ export async function triggerJob(
     if (!isPropertyAllowlisted(propertyId)) {
       throw new Error(`propertyId ${propertyId} is not in SMOKE_TEST_PROPERTY_ALLOWLIST`);
     }
+  }
+
+  // Scoped dry runs are acceptance operations, so they can validate a job
+  // while its scheduled and real manual execution remains launch-closed.
+  const ordinaryDecision = evaluateWorkerExecution(jobKey, 'manual', entry);
+  const decision = dryRun && !ordinaryDecision.allowed
+    ? evaluateScopedDryRunExecution(jobKey, entry, Boolean(propertyId))
+    : ordinaryDecision;
+  if (!decision.allowed) {
+    throw new Error(`Manual trigger not supported for job: ${jobKey} (${decision.reason})`);
   }
 
   const q = getQueue(entry.queueName);
