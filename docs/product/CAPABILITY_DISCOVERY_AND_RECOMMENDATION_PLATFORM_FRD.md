@@ -92,6 +92,11 @@ after those declarations pass validation.
 This capability is specified in a dedicated FRD rather than by expanding the core Product
 Framework.
 
+Portfolio-quality and experience reviews are governed by the
+[Capability Outcome and Experience Audit Framework](./CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md).
+That framework determines whether a capability should remain independent and whether its
+functionality, readiness, placement, and homeowner experience fulfill this platform contract.
+
 The Product Framework remains the stable strategy and operating model. It defines:
 
 - the three customer jobs;

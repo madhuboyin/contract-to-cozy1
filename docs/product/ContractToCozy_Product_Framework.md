@@ -22,6 +22,11 @@ This document aligns company narrative, product architecture, experience design,
 
 > **CORE DECISION** — Use the three customer jobs as the product operating model—not as three rigid navigation tabs. Organize the experience around the homeowner’s present situation and next best action.
 
+The [Capability Outcome and Experience Audit Framework](./CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md)
+is the operating companion for reviewing existing capabilities, deciding whether to double down,
+improve, merge, reposition, or retire them, and translating approved decisions into bounded
+roadmaps.
+
 ### Framework map
 
 | **Section** | **Focus** | **What it governs** |
