@@ -187,6 +187,7 @@ const OUTPUT_ENTITY_TYPES: Record<
   permits: ['DOCUMENT'],
   'project-tracker': ['PROJECT'],
   'quote-comparison': ['SERVICE'],
+  'coverage-intelligence': ['COVERAGE_DECISION'],
   'seller-prep': ['PROJECT'],
 };
 

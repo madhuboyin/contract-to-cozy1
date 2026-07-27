@@ -32,6 +32,7 @@ export const CAPABILITY_CONTEXT_TYPES = [
   'ISSUE',
   'SERVICE',
   'JOURNEY',
+  'COVERAGE_DECISION',
 ] as const;
 
 export const CAPABILITY_RECOMMENDATION_MODES = [

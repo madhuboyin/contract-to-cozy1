@@ -2614,6 +2614,9 @@ model Property {
   insurancePolicyTerms       InsurancePolicyTerm[]
   coverageReviews            CoverageReview[]
   insurancePolicyTermChanges InsurancePolicyTermChange[]
+  coverageComparisons        CoverageComparison[]
+  coverageComparisonOptions  CoverageComparisonOption[]
+  coverageDecisions          CoverageDecision[]
   expenses                   Expense[]
   checklistItems             ChecklistItem[]
   maintenanceTasks           PropertyMaintenanceTask[]
@@ -3404,6 +3407,7 @@ model Document {
   insurancePolicy            InsurancePolicy?            @relation(fields: [policyId], references: [id], onDelete: Cascade)
   insurancePolicyTermSources InsurancePolicyTerm[]        @relation("InsurancePolicyTermSourceDocument")
   insurancePolicyFactSources InsurancePolicyFact[]        @relation("InsurancePolicyFactSourceDocument")
+  coverageComparisonOptions  CoverageComparisonOption[]    @relation("CoverageComparisonOptionDocument")
   providerCredential         ProviderCredential?         @relation(fields: [providerCredentialId], references: [id], onDelete: Cascade)
   project                    ProjectRecord?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
   inventoryItemId            String? // NEW: Link to an InventoryItem record
@@ -3618,6 +3622,8 @@ model InsurancePolicyTerm {
   coverageReviews CoverageReview[]
   changesFrom     InsurancePolicyTermChange[] @relation("InsurancePolicyTermChangeFrom")
   changesTo       InsurancePolicyTermChange[] @relation("InsurancePolicyTermChangeTo")
+  comparisonBaselines CoverageComparison[]     @relation("CoverageComparisonBaseline")
+  comparisonOptions   CoverageComparisonOption[] @relation("CoverageComparisonOptionPolicyTerm")
 
   @@index([insurancePolicyId, termStart(sort: Desc)])
   @@index([propertyId, termStart(sort: Desc)])
@@ -3740,6 +3746,91 @@ model InsurancePolicyTermChange {
   @@index([propertyId, observedAt(sort: Desc)])
   @@index([insurancePolicyId, observedAt(sort: Desc)])
   @@map("insurance_policy_term_changes")
+}
+
+// A regulated policy-choice workspace. The current verified term is the
+// baseline; price is deliberately excluded from protection equivalence.
+model CoverageComparison {
+  id                    String   @id @default(uuid())
+  propertyId            String
+  baselinePolicyTermId  String
+  status                String   @default("DRAFT")
+  equivalenceStatus     String   @default("INDETERMINATE")
+  materialFieldSetJson  Json
+  guidanceJourneyId     String?
+  guidanceStepKey       String?
+  sourceActionId        String?
+  createdByUserId       String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  property           Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  baselinePolicyTerm InsurancePolicyTerm @relation("CoverageComparisonBaseline", fields: [baselinePolicyTermId], references: [id], onDelete: Restrict)
+  options            CoverageComparisonOption[]
+  decisions          CoverageDecision[]
+
+  @@index([propertyId, status, updatedAt(sort: Desc)])
+  @@index([baselinePolicyTermId])
+  @@map("coverage_comparisons")
+}
+
+// Normalized facts from either a verified policy term or a quote document.
+// Confirmation and evidence travel with every field so unknowns fail closed.
+model CoverageComparisonOption {
+  id                    String   @id @default(uuid())
+  comparisonId          String
+  propertyId            String
+  optionType             String
+  label                  String
+  policyTermId           String?
+  sourceDocumentId       String?
+  carrierName            String?
+  annualPremium          Decimal? @db.Decimal(12, 2)
+  currency               String   @default("USD")
+  normalizedFactsJson    Json
+  sourceEvidenceJson     Json
+  equivalenceStatus      String   @default("INDETERMINATE")
+  materialUnknownsJson   Json
+  tradeoffsJson          Json
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  comparison    CoverageComparison  @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  property      Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  policyTerm    InsurancePolicyTerm? @relation("CoverageComparisonOptionPolicyTerm", fields: [policyTermId], references: [id], onDelete: SetNull)
+  sourceDocument Document?          @relation("CoverageComparisonOptionDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([comparisonId, createdAt])
+  @@index([propertyId])
+  @@index([policyTermId])
+  @@index([sourceDocumentId])
+  @@map("coverage_comparison_options")
+}
+
+// A homeowner-authored outcome, not a page-view completion signal.
+model CoverageDecision {
+  id                  String   @id @default(uuid())
+  comparisonId        String
+  propertyId          String
+  decision            String
+  selectedOptionId    String?
+  rationale           String?
+  decidedByUserId     String
+  decidedAt           DateTime @default(now())
+  homeEventId         String?
+  guidanceJourneyId   String?
+  guidanceStepKey     String?
+  sourceActionId      String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  comparison CoverageComparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  property   Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, decidedAt(sort: Desc)])
+  @@index([comparisonId, decidedAt(sort: Desc)])
+  @@index([homeEventId])
+  @@map("coverage_decisions")
 }
 
 // ============================================================================

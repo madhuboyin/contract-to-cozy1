@@ -14,9 +14,138 @@ import { evaluateFeatureContext } from '../modules/propertyContext/application/e
 import { APIError } from '../middleware/error.middleware';
 import { getOrCreateCoverageReview } from '../services/coverageReview.service';
 import { getInsurancePolicyHistory } from '../services/insurancePolicyHistory.service';
+import {
+  addCoverageComparisonOption,
+  getOrCreateCoverageComparison,
+  recordCoverageDecision,
+} from '../services/coverageComparison.service';
+import { recordCapabilityCompletionAndResolveNext } from '../services/capabilityCompletion.service';
 
 const service = new CoverageIntelligenceService();
 const inventoryService = new InventoryService();
+
+export async function getCoverageComparisonWorkspace(req: CustomRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+    const result = await getOrCreateCoverageComparison(req.params.propertyId, userId);
+    return res.json({ success: true, data: result });
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error fetching coverage comparison');
+    const statusCode = error instanceof APIError ? error.statusCode : 500;
+    return res.status(statusCode).json({
+      success: false,
+      code: error instanceof APIError ? error.code : undefined,
+      message: error?.message || 'Failed to fetch coverage comparison.',
+    });
+  }
+}
+
+export async function addCoverageOption(req: CustomRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+    const option = await addCoverageComparisonOption(
+      req.params.propertyId,
+      req.params.comparisonId,
+      userId,
+      req.body
+    );
+    return res.status(201).json({ success: true, data: { option } });
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error adding coverage comparison option');
+    const statusCode = error instanceof APIError ? error.statusCode : 500;
+    return res.status(statusCode).json({
+      success: false,
+      code: error instanceof APIError ? error.code : undefined,
+      message: error?.message || 'Failed to add coverage comparison option.',
+    });
+  }
+}
+
+export async function recordCoverageComparisonDecision(req: CustomRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+    const result = await recordCoverageDecision(
+      req.params.propertyId,
+      req.params.comparisonId,
+      userId,
+      req.body
+    );
+
+    if (req.body.guidanceJourneyId) {
+      try {
+        await guidanceJourneyService.recordToolCompletion({
+          propertyId: req.params.propertyId,
+          actorUserId: userId,
+          journeyId: req.body.guidanceJourneyId,
+          signalIntentFamily: 'coverage_decision',
+          issueDomain: 'INSURANCE',
+          sourceToolKey: 'coverage-intelligence',
+          sourceEntityType: 'COVERAGE_DECISION',
+          sourceEntityId: result.decision.id,
+          stepKey: req.body.guidanceStepKey || 'compare_options',
+          status: 'COMPLETED',
+          producedData: {
+            proofType: 'coverage_decision',
+            proofId: result.decision.id,
+            comparisonId: req.params.comparisonId,
+            decision: result.decision.decision,
+            homeEventId: result.homeEvent.id,
+          },
+        });
+      } catch (guidanceError) {
+        logger.warn({ guidanceError }, '[GUIDANCE] coverage decision hook failed');
+      }
+    }
+
+    try {
+      await recordCapabilityCompletionAndResolveNext({
+        propertyId: req.params.propertyId,
+        userId,
+        capabilityId: 'coverage-intelligence',
+        completionKind: 'DECISION_RECORDED',
+        outputEntityType: 'COVERAGE_DECISION',
+        outputEntityId: result.decision.id,
+        sourceActionId: req.body.sourceActionId ?? null,
+        journeyId: req.body.guidanceJourneyId ?? null,
+        surface: 'coverage-comparison',
+      });
+    } catch (completionError) {
+      logger.warn({ completionError }, '[CAPABILITY] coverage decision lifecycle hook failed');
+    }
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.FINANCIAL,
+      featureKey: AnalyticsFeature.COVERAGE_ANALYSIS,
+      metadataJson: {
+        actionType: 'coverage_decision_recorded',
+        comparisonId: req.params.comparisonId,
+        decision: result.decision.decision,
+        sourceActionId: req.body.sourceActionId ?? null,
+      },
+    });
+    return res.status(201).json({ success: true, data: result });
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error recording coverage decision');
+    const statusCode = error instanceof APIError ? error.statusCode : 500;
+    return res.status(statusCode).json({
+      success: false,
+      code: error instanceof APIError ? error.code : undefined,
+      message: error?.message || 'Failed to record coverage decision.',
+    });
+  }
+}
 
 export async function getInsuranceHistory(req: CustomRequest, res: Response) {
   try {

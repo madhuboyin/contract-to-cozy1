@@ -141,6 +141,68 @@ export type InsurancePolicyHistoryDTO = {
   };
 };
 
+export type CoverageComparisonFactDTO = {
+  factKey: string;
+  valueType: 'AMOUNT' | 'TEXT' | 'BOOLEAN' | 'JSON';
+  amountValue?: number | null;
+  textValue?: string | null;
+  booleanValue?: boolean | null;
+  jsonValue?: unknown;
+  currency?: string | null;
+  confirmationStatus: 'CONFIRMED' | 'PENDING';
+  sourceDocumentId?: string | null;
+  sourcePage?: number | null;
+  sourceFactId?: string | null;
+};
+
+export type CoverageComparisonOptionDTO = {
+  id: string;
+  comparisonId: string;
+  optionType: 'CURRENT_POLICY' | 'QUOTE_DOCUMENT' | 'POLICY_TERM';
+  label: string;
+  policyTermId: string | null;
+  sourceDocumentId: string | null;
+  carrierName: string | null;
+  annualPremium: string | number | null;
+  currency: string;
+  normalizedFactsJson: CoverageComparisonFactDTO[];
+  equivalenceStatus: 'BASELINE' | 'EQUIVALENT' | 'NON_EQUIVALENT' | 'INDETERMINATE';
+  materialUnknownsJson: Array<{
+    factKey: string;
+    missingFrom: 'BASELINE' | 'OPTION' | 'BOTH';
+  }>;
+  tradeoffsJson: Array<{
+    factKey: string;
+    baseline: CoverageComparisonFactDTO;
+    option: CoverageComparisonFactDTO;
+  }>;
+  sourceDocument: { id: string; name: string } | null;
+};
+
+export type CoverageComparisonDTO = {
+  id: string;
+  propertyId: string;
+  baselinePolicyTermId: string;
+  status: 'DRAFT' | 'DECIDED';
+  equivalenceStatus: 'EQUIVALENT' | 'NON_EQUIVALENT' | 'INDETERMINATE' | 'MIXED';
+  baselinePolicyTerm: {
+    id: string;
+    termStart: string | null;
+    termEnd: string | null;
+    insurancePolicy: { id: string; carrierName: string; policyNumber: string };
+    sourceDocument: { id: string; name: string } | null;
+  };
+  options: CoverageComparisonOptionDTO[];
+  decisions: Array<{
+    id: string;
+    decision: 'KEEP' | 'CHANGE' | 'SHOP' | 'DEFER' | 'PROFESSIONAL_REVIEW';
+    selectedOptionId: string | null;
+    rationale: string | null;
+    decidedAt: string;
+    homeEventId: string | null;
+  }>;
+};
+
 export type CoverageAnalysisOverrides = {
   annualPremiumUsd?: number;
   deductibleUsd?: number;
@@ -322,6 +384,57 @@ export async function getInsurancePolicyHistory(
     `/api/properties/${propertyId}/insurance-history`
   );
   return res.data.history;
+}
+
+export async function getCoverageComparisonWorkspace(
+  propertyId: string
+): Promise<{ state: 'BASELINE_REQUIRED' | 'READY'; comparison: CoverageComparisonDTO | null }> {
+  const res = await api.get<{
+    state: 'BASELINE_REQUIRED' | 'READY';
+    comparison: CoverageComparisonDTO | null;
+  }>(`/api/properties/${propertyId}/coverage-comparison`);
+  return res.data;
+}
+
+export async function addCoverageComparisonOption(
+  propertyId: string,
+  comparisonId: string,
+  input: {
+    optionType: 'QUOTE_DOCUMENT' | 'POLICY_TERM';
+    label: string;
+    policyTermId?: string | null;
+    sourceDocumentId?: string | null;
+    carrierName?: string | null;
+    facts?: CoverageComparisonFactDTO[];
+  }
+): Promise<CoverageComparisonOptionDTO> {
+  const res = await api.post<{ option: CoverageComparisonOptionDTO }>(
+    `/api/properties/${propertyId}/coverage-comparisons/${comparisonId}/options`,
+    input
+  );
+  return res.data.option;
+}
+
+export async function recordCoverageDecision(
+  propertyId: string,
+  comparisonId: string,
+  input: {
+    decision: 'KEEP' | 'CHANGE' | 'SHOP' | 'DEFER' | 'PROFESSIONAL_REVIEW';
+    selectedOptionId?: string | null;
+    rationale?: string | null;
+    guidanceJourneyId?: string | null;
+    guidanceStepKey?: string | null;
+    sourceActionId?: string | null;
+  }
+): Promise<{ decision: CoverageComparisonDTO['decisions'][number]; homeEvent: { id: string } }> {
+  const res = await api.post<{
+    decision: CoverageComparisonDTO['decisions'][number];
+    homeEvent: { id: string };
+  }>(
+    `/api/properties/${propertyId}/coverage-comparisons/${comparisonId}/decision`,
+    input
+  );
+  return res.data;
 }
 
 export async function runCoverageAnalysis(

@@ -174,11 +174,11 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   {
     key: 'coverage-intelligence',
     title: 'Coverage & Premium Review',
-    description: 'Review protection records and prepare for renewal',
+    description: 'Compare protection choices and record a coverage decision',
     href: '/dashboard/coverage-intelligence',
     icon: resolveToolIcon('ai', 'coverage-intelligence'),
     emoji: '🧾',
-    group: 'wealth',
+    group: 'core',
     artworkKey: 'coverage-intelligence',
     isActive: (pathname) =>
       /^\/dashboard\/coverage-intelligence(\/|$)/.test(pathname) ||

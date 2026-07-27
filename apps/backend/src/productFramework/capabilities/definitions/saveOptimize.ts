@@ -5,7 +5,7 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
   ['cost-explainer', 'Cost Explainer', 'Explain the components behind home expenses.', '/dashboard/properties/[id]/tools/cost-explainer', 'COST_EXPLAINER', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['cost-growth', 'Cost Growth', 'Model long-term ownership cost trends.', '/dashboard/properties/[id]/tools/cost-growth', 'COST_GROWTH', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['cost-volatility', 'Volatility', 'Review variability in ownership costs.', '/dashboard/properties/[id]/tools/cost-volatility', 'COST_VOLATILITY', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
-  ['coverage-intelligence', 'Coverage & Premium Review', 'Review protection records, renewal context, and loss-prevention actions.', '/dashboard/coverage-intelligence', 'COVERAGE_INTELLIGENCE', 'BETA', 'REGULATED_COVERAGE', 'CATALOG_ONLY'],
+  ['coverage-intelligence', 'Coverage & Premium Review', 'Review protection records, compare equivalent choices, and record a coverage decision.', '/dashboard/coverage-intelligence', 'COVERAGE_INTELLIGENCE', 'BETA', 'REGULATED_COVERAGE', 'CATALOG_ONLY'],
   ['financing', 'Financing Center', 'Review equity position and project payment options.', '/dashboard/properties/[id]/tools/financing', 'FINANCING', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['hidden-asset-finder', 'Hidden Asset Finder', 'Find rebates, credits, and benefits for home systems.', '/dashboard/properties/[id]/tools/hidden-asset-finder', 'HIDDEN_ASSET_FINDER', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['home-savings', 'Home Savings Check', 'Find recurring home savings opportunities.', '/dashboard/home-savings', 'HOME_SAVINGS', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
@@ -27,10 +27,12 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
   label,
   description,
   routeTemplate,
-  outcomeCategory: 'SAVE_OPTIMIZE' as const,
+  outcomeCategory:
+    id === 'coverage-intelligence' ? 'DECIDE_COMPARE' as const : 'SAVE_OPTIMIZE' as const,
   rolloutKey,
   releaseStage,
   safetyTier,
-  completionKind: 'OUTPUT_GENERATED' as const,
+  completionKind:
+    id === 'coverage-intelligence' ? 'DECISION_RECORDED' as const : 'OUTPUT_GENERATED' as const,
   mode,
 })));

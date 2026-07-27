@@ -14,13 +14,15 @@ import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadinessPanel';
 import CoverageReviewQuestionsPanel from '@/components/coverage/CoverageReviewQuestionsPanel';
+import CoverageComparisonPanel from '@/components/coverage/CoverageComparisonPanel';
 
-type CoverageStage = 'current' | 'questions' | 'renewal' | 'risk';
+type CoverageStage = 'current' | 'questions' | 'renewal' | 'compare' | 'risk';
 
 const STAGES: { key: CoverageStage; label: string; description: string }[] = [
   { key: 'current', label: 'Current protection', description: 'Review the records currently available.' },
   { key: 'questions', label: 'Questions', description: 'Resolve missing or incomplete protection records.' },
-  { key: 'renewal', label: 'Renewal', description: 'Review modeled regional cost context.' },
+  { key: 'renewal', label: 'Renewal', description: 'Review observed confirmed term changes.' },
+  { key: 'compare', label: 'Compare choices', description: 'See equivalence, unknowns, and tradeoffs.' },
   { key: 'risk', label: 'Reduce loss risk', description: 'Plan loss-prevention work without savings promises.' },
 ];
 
@@ -36,6 +38,7 @@ export default function CoverageIntelligenceToolClient() {
   const activeStage: CoverageStage =
     requestedStage === 'questions' ||
     requestedStage === 'renewal' ||
+    requestedStage === 'compare' ||
     requestedStage === 'risk'
       ? requestedStage
       : legacyTab === 'options'
@@ -118,7 +121,7 @@ export default function CoverageIntelligenceToolClient() {
   });
 
   const tabNav = (
-    <div role="tablist" aria-label="Coverage and premium review stages" className="grid gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-2 lg:grid-cols-4">
+    <div role="tablist" aria-label="Coverage and premium review stages" className="grid gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-2 lg:grid-cols-5">
       {STAGES.map(({ key, label, description }) => (
         <button
           key={key}
@@ -182,6 +185,16 @@ export default function CoverageIntelligenceToolClient() {
       {activeStage === 'renewal' && (
         <div id="coverage-stage-renewal" role="tabpanel">
           <InsuranceTrendClient embedded />
+        </div>
+      )}
+      {activeStage === 'compare' && (
+        <div id="coverage-stage-compare" role="tabpanel">
+          <CoverageComparisonPanel
+            propertyId={propertyId}
+            guidanceJourneyId={guidanceJourneyId}
+            guidanceStepKey={guidanceStepKey}
+            sourceActionId={searchParams.get('sourceActionId')}
+          />
         </div>
       )}
       {activeStage === 'risk' && (

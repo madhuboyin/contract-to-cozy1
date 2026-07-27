@@ -184,11 +184,11 @@
       "canonicalRoute": "/dashboard/coverage-intelligence",
       "routeVerified": true,
       "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
+      "outcomeCategory": "DECIDE_COMPARE",
       "rolloutKey": "COVERAGE_INTELLIGENCE",
       "releaseStage": "BETA",
       "safetyTier": "REGULATED_COVERAGE",
-      "completionKind": "OUTPUT_GENERATED",
+      "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
