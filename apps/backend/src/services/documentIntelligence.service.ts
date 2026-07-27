@@ -27,6 +27,8 @@ export interface DocumentInsights {
     policyNumber?: string;
     premiumAmount?: number;
     deductible?: number;
+    dwellingLimit?: number;
+    liabilityLimit?: number;
     coverageLimits?: string;
     startDate?: Date;
     expiryDate?: Date;
@@ -58,6 +60,8 @@ For INSURANCE documents (Declaration pages) extract:
 - Coverage type (Homeowners, Flood, Landlord)
 - Premium amount (Annual cost)
 - Deductible amount
+- Dwelling coverage limit
+- Personal liability limit
 - Major coverage limits (e.g., Dwelling: $450k, Liability: $300k)
 - Policy start date (YYYY-MM-DD)
 - Policy expiration/renewal date (YYYY-MM-DD)
@@ -80,6 +84,8 @@ Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
     "policyNumber": "string or null",
     "premiumAmount": number or null,
     "deductible": number or null,
+    "dwellingLimit": number or null,
+    "liabilityLimit": number or null,
     "coverageLimits": "string or null",
     "startDate": "YYYY-MM-DD or null",
     "expiryDate": "YYYY-MM-DD or null",
@@ -343,6 +349,8 @@ export class DocumentIntelligenceService {
         coverageType: extractedData.coverageType,
         premiumAmount: extractedData.premiumAmount,
         deductibleAmount: extractedData.deductible,
+        dwellingLimit: extractedData.dwellingLimit,
+        liabilityLimit: extractedData.liabilityLimit,
         coverageLimits: extractedData.coverageLimits,
         termStart: extractedData.startDate,
         termEnd: extractedData.expiryDate,

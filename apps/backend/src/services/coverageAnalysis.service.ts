@@ -991,7 +991,6 @@ export class CoverageIntelligenceService {
     }
 
     const recommendedAddOns: AddOnSuggestion[] = [];
-    const state = (property.state || '').toUpperCase();
     const hadWaterClaim = claims.some((claim) => claim.type === 'WATER_DAMAGE' || claim.type === 'PLUMBING');
 
     if (hadWaterClaim || property.hasDrainageIssues) {
@@ -999,22 +998,6 @@ export class CoverageIntelligenceService {
         code: 'WATER_BACKUP',
         label: 'Water backup / sump overflow rider',
         why: 'Water-related risk signals detected from claims or property attributes.',
-      });
-    }
-
-    if (['FL', 'LA', 'TX', 'SC', 'NC', 'NJ'].includes(state)) {
-      recommendedAddOns.push({
-        code: 'WINDSTORM_HAIL',
-        label: 'Wind / hail endorsement review',
-        why: 'Regional storm exposure can raise out-of-pocket risk during severe weather.',
-      });
-    }
-
-    if (['CA', 'CO', 'AZ', 'NM', 'OR', 'WA', 'ID', 'MT'].includes(state)) {
-      recommendedAddOns.push({
-        code: 'WILDFIRE_ENDORSEMENT',
-        label: 'Wildfire protection endorsement review',
-        why: 'Regional wildfire risk can materially change replacement and loss expectations.',
       });
     }
 

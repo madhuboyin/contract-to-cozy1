@@ -6,6 +6,7 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
   getCoverageAnalysis,
+  getCoverageReview,
   runCoverageAnalysis,
   simulateCoverageAnalysis,
 } from '../controllers/coverageAnalysis.controller';
@@ -38,6 +39,12 @@ const simulateBodySchema = z.object({
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+router.get(
+  '/properties/:propertyId/coverage-review',
+  propertyAuthMiddleware,
+  getCoverageReview
+);
 
 router.get(
   '/properties/:propertyId/coverage-analysis',

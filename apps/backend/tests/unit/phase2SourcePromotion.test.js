@@ -158,10 +158,20 @@ function stubSources({
       remedy: 'Stop use and contact the manufacturer', remedyUrl: 'https://example.com/remedy', source: 'CPSC',
       recalledAt: NOW, lastSeenAt: NOW, updatedAt: NOW },
     }] },
-    coverageAnalysis: { findMany: async () => [{
-    id: 'coverage-1', inventoryItemId: 'item-1', impactLevel: 'HIGH', overallVerdict: 'WORTH_IT',
-    summary: 'Coverage may reduce material exposure.', strategicAdvice: 'Compare current terms before renewal.',
-    confidence: 'HIGH', computedAt: NOW, createdAt: NOW, updatedAt: NOW, property: { state: 'NJ' },
+    coverageReview: { findMany: async () => [{
+    id: 'coverage-review-1', reviewVersion: 1, inputFingerprint: 'verified-inputs',
+    scopeStatus: 'SUPPORTED', overallState: 'QUESTIONS', status: 'READY',
+    generatedAt: NOW, expiresAt: LATER, createdAt: NOW, updatedAt: NOW,
+    property: { state: 'NJ' },
+    questions: [{
+      id: 'coverage-question-1', questionKey: 'HIGH_DEDUCTIBLE_AFFORDABILITY',
+      questionType: 'EVIDENCE_BASED', priority: 'HIGH',
+      plainLanguageQuestion: 'Could your household comfortably cover the confirmed deductible?',
+      whyItMatters: 'A higher retained amount can affect repair timing.',
+      evidenceJson: [{ factId: 'fact-1', confirmationStatus: 'CONFIRMED' }],
+      professionalBoundary: 'Use the controlling policy language and licensed help for coverage decisions.',
+      createdAt: NOW,
+    }],
     }] },
     projectRecord: { findMany: async () => [{
     id: 'project-1', name: 'Roof replacement', description: 'Replace aging roof', status: 'IN_PROGRESS',
@@ -209,7 +219,7 @@ test('promotes guidance, incident, recall, coverage, project, and seasonal recor
   assert.equal(actions.find((action) => action.source.kind === 'GUIDANCE').relatedJourneyId, 'journey-1');
   assert.equal(actions.find((action) => action.source.kind === 'INCIDENT').primaryCta.kind, 'ESCALATE');
   assert.equal(actions.find((action) => action.id === 'seasonal-checklist:seasonal-1').primaryCta.label, 'View seasonal checklist');
-  assert.equal(actions.find((action) => action.source.kind === 'COVERAGE').governance.jurisdictionCheck.status, 'VERIFIED');
+  assert.equal(actions.find((action) => action.source.kind === 'COVERAGE').governance.jurisdictionCheck.status, 'UNKNOWN');
 });
 
 test('turns a not-sure coverage journey into a clear confirmation action with inline deferral context', async () => {

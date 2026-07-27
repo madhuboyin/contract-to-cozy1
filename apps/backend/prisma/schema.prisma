@@ -2612,6 +2612,7 @@ model Property {
   warranties                 Warranty[]
   insurancePolicies          InsurancePolicy[]
   insurancePolicyTerms       InsurancePolicyTerm[]
+  coverageReviews            CoverageReview[]
   expenses                   Expense[]
   checklistItems             ChecklistItem[]
   maintenanceTasks           PropertyMaintenanceTask[]
@@ -3612,6 +3613,7 @@ model InsurancePolicyTerm {
   property        Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   sourceDocument  Document?       @relation("InsurancePolicyTermSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
   facts           InsurancePolicyFact[]
+  coverageReviews CoverageReview[]
 
   @@index([insurancePolicyId, termStart(sort: Desc)])
   @@index([propertyId, termStart(sort: Desc)])
@@ -3651,6 +3653,60 @@ model InsurancePolicyFact {
   @@index([sourceDocumentId])
   @@index([policyTermId, confirmationStatus])
   @@map("insurance_policy_facts")
+}
+
+// A deliberately narrow, evidence-qualified policy review. It records the
+// exact fact snapshot and deterministic rule version used to ask questions.
+model CoverageReview {
+  id                String   @id @default(uuid())
+  propertyId        String
+  policyTermId      String?
+  triggerType       String
+  triggerEntityType String?
+  triggerEntityId   String?
+  status            String   @default("READY")
+  scopeStatus       String
+  overallState      String
+  reviewVersion     Int
+  inputFingerprint  String   @db.VarChar(64)
+  generatedAt       DateTime @default(now())
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  property   Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  policyTerm InsurancePolicyTerm? @relation(fields: [policyTermId], references: [id], onDelete: SetNull)
+  questions  CoverageReviewQuestion[]
+
+  @@index([propertyId, status, generatedAt(sort: Desc)])
+  @@index([policyTermId])
+  @@map("coverage_reviews")
+}
+
+model CoverageReviewQuestion {
+  id                       String    @id @default(uuid())
+  coverageReviewId         String
+  questionKey              String
+  questionType             String
+  category                 String
+  priority                 String
+  isPrimary                Boolean   @default(true)
+  status                   String    @default("OPEN")
+  plainLanguageQuestion    String
+  whyItMatters             String
+  evidenceJson             Json
+  missingEvidenceJson      Json
+  jurisdictionReviewJson   Json?
+  professionalBoundary     String
+  resolvedAt               DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  coverageReview CoverageReview @relation(fields: [coverageReviewId], references: [id], onDelete: Cascade)
+
+  @@unique([coverageReviewId, questionKey])
+  @@index([coverageReviewId, isPrimary, priority])
+  @@map("coverage_review_questions")
 }
 
 // ============================================================================

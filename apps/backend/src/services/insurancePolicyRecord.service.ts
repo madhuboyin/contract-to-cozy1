@@ -19,6 +19,8 @@ export interface ExtractedPolicyTermInput {
   coverageType?: string;
   premiumAmount?: number;
   deductibleAmount?: number;
+  dwellingLimit?: number;
+  liabilityLimit?: number;
   coverageLimits?: string;
   termStart?: Date;
   termEnd?: Date;
@@ -58,6 +60,24 @@ function extractedFacts(input: ExtractedPolicyTermInput) {
           factKey: 'ALL_PERIL_DEDUCTIBLE',
           valueType: 'AMOUNT',
           amountValue: input.deductibleAmount,
+          currency: 'USD',
+          ...common,
+        }
+      : null,
+    input.dwellingLimit != null
+      ? {
+          factKey: 'DWELLING_LIMIT',
+          valueType: 'AMOUNT',
+          amountValue: input.dwellingLimit,
+          currency: 'USD',
+          ...common,
+        }
+      : null,
+    input.liabilityLimit != null
+      ? {
+          factKey: 'LIABILITY_LIMIT',
+          valueType: 'AMOUNT',
+          amountValue: input.liabilityLimit,
           currency: 'USD',
           ...common,
         }
@@ -127,6 +147,11 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
         facts: { create: extractedFacts(input) },
       },
       include: { facts: true },
+    });
+
+    await tx.coverageReview.updateMany({
+      where: { propertyId: input.propertyId, status: 'READY' },
+      data: { status: 'STALE' },
     });
 
     await tx.auditLog.create({
@@ -303,6 +328,10 @@ export async function confirmPolicyFact(params: {
       policyPatch.coverageType = updated.textValue;
     }
     await tx.insurancePolicy.update({ where: { id: params.policyId }, data: policyPatch });
+    await tx.coverageReview.updateMany({
+      where: { propertyId: fact.policyTerm.propertyId, status: 'READY' },
+      data: { status: 'STALE' },
+    });
 
     await tx.auditLog.create({
       data: {

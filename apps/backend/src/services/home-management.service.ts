@@ -17,6 +17,7 @@ import { logger } from '../lib/logger';
 import { uploadDocumentBuffer } from './storage/reportStorage';
 import { presignGetObject } from './storage/presign';
 import { evaluateCoverageRecord } from './coverage/contextPolicy';
+import { markCoverageReviewsStale } from './coverageReview.service';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -524,6 +525,7 @@ export async function createInsurancePolicy(
       await markItemCoverageAnalysesStale(rawPolicy.propertyId);
       await markRiskPremiumOptimizerStale(rawPolicy.propertyId);
       await markDoNothingRunsStale(rawPolicy.propertyId);
+      await markCoverageReviewsStale(rawPolicy.propertyId);
     }
 
     return mapRawPolicyToInsurancePolicy(rawPolicy);
@@ -577,6 +579,7 @@ export async function updateInsurancePolicy(
     await markItemCoverageAnalysesStale(rawUpdatedPolicy.propertyId);
     await markRiskPremiumOptimizerStale(rawUpdatedPolicy.propertyId);
     await markDoNothingRunsStale(rawUpdatedPolicy.propertyId);
+    await markCoverageReviewsStale(rawUpdatedPolicy.propertyId);
   }
 
   return mapRawPolicyToInsurancePolicy(rawUpdatedPolicy);
@@ -600,6 +603,7 @@ export async function deleteInsurancePolicy(
     await markItemCoverageAnalysesStale(policyToDelete.propertyId);
     await markRiskPremiumOptimizerStale(policyToDelete.propertyId);
     await markDoNothingRunsStale(policyToDelete.propertyId);
+    await markCoverageReviewsStale(policyToDelete.propertyId);
   }
   
   return mapRawPolicyToInsurancePolicy(rawDeletedPolicy);

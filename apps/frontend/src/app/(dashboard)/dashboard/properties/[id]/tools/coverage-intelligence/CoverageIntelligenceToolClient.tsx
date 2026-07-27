@@ -8,12 +8,12 @@ import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel
 import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
 import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
-import CoverageOptionsClient from '../coverage-options/CoverageOptionsClient';
 import InsuranceTrendClient from '../insurance-trend/InsuranceTrendClient';
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadinessPanel';
+import CoverageReviewQuestionsPanel from '@/components/coverage/CoverageReviewQuestionsPanel';
 
 type CoverageStage = 'current' | 'questions' | 'renewal' | 'risk';
 
@@ -176,7 +176,7 @@ export default function CoverageIntelligenceToolClient() {
       )}
       {activeStage === 'questions' && (
         <div id="coverage-stage-questions" role="tabpanel">
-          <CoverageOptionsClient />
+          <CoverageReviewQuestionsPanel propertyId={propertyId} />
         </div>
       )}
       {activeStage === 'renewal' && (

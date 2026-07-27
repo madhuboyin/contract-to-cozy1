@@ -16,7 +16,7 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 ];
 
 export type HomeActionSourceDb = Pick<typeof prisma,
-  'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageAnalysis' | 'projectRecord' |
+  'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
   Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile'>>;
 
@@ -673,48 +673,104 @@ async function loadRecallActions(propertyId: string, db: HomeActionSourceDb): Pr
 }
 
 async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
-  const analyses = await db.coverageAnalysis.findMany({
-    where: { propertyId, status: 'READY', overallVerdict: { not: 'NOT_WORTH_IT' } },
-    orderBy: { computedAt: 'desc' },
-    take: 10,
-    include: { property: { select: { state: true } } },
-  });
-  return analyses.map((analysis) => {
-    const material = analysis.impactLevel === 'HIGH';
-    return adaptHomeActionSource('COVERAGE', {
-      id: `coverage:${analysis.id}`,
-      propertyId, lineageId: `coverage:${analysis.inventoryItemId ?? 'property'}`, sourceEntityId: analysis.id,
-      sourceVersion: analysis.computedAt.toISOString(), state: 'OPEN', priority: material ? 'SOON' : 'PLAN',
-      signal: analysis.summary ?? `Coverage review: ${analysis.overallVerdict.toLowerCase().replace(/_/g, ' ')}`,
-      whyItMatters: analysis.strategicAdvice ?? 'Coverage gaps can shift repair or replacement cost to the household.',
-      recommendedAction: 'Review coverage assumptions and available options',
-      expectedOutcome: 'Make a deliberate coverage decision with the current policy, warranty, and exposure context visible.',
-      timing: { dueAt: null, windowStart: analysis.computedAt.toISOString(), windowEnd: null, rationale: 'Review before the next covered loss, renewal, or material purchase decision.' },
-      evidence: [{ id: analysis.id, type: 'SYSTEM_DERIVATION', label: 'Coverage analysis', source: 'Coverage intelligence', observedAt: analysis.computedAt.toISOString(), freshness: 'CURRENT', confidence: analysis.confidence === 'HIGH' ? 0.9 : analysis.confidence === 'MEDIUM' ? 0.7 : 0.45 }],
-      assumptions: [{ key: 'analysis-current', label: 'Analysis currency', value: `Computed ${analysis.computedAt.toISOString()}`, source: 'SYSTEM_DEFAULT', editable: true }],
-      options: [
-        { id: 'keep-current', label: 'Keep current coverage', summary: 'Accept the current protection and retained exposure.', recommended: false },
-        { id: 'review-options', label: 'Review coverage options', summary: 'Compare policy, warranty, self-insurance, and mitigation options.', recommended: true },
-      ],
-      tradeoffs: [
-        { optionId: 'keep-current', dimension: 'RISK', summary: 'Keeps current cost but retains identified exposure.' },
-        { optionId: 'review-options', dimension: 'COST', summary: 'May increase near-term cost or effort while reducing retained exposure.' },
-      ],
-      confidence: { score: analysis.confidence === 'HIGH' ? 0.9 : analysis.confidence === 'MEDIUM' ? 0.7 : 0.45, label: analysis.confidence, missing: [] },
-      governance: {
-        ...lowConsequenceGovernance(), safetyTier: 'REGULATED_COVERAGE',
-        professionalBoundary: 'Coverage guidance is educational and does not replace advice from a licensed insurance professional or the controlling policy language.',
-        jurisdictionCheck: {
-          status: 'UNKNOWN',
-          jurisdiction: analysis.property.state,
-          checkedAt: analysis.computedAt.toISOString(),
-          source: 'No reviewed jurisdiction rule source is attached to this analysis',
+  const freshnessCutoff = new Date();
+  freshnessCutoff.setUTCDate(freshnessCutoff.getUTCDate() - 30);
+  const reviews = await db.coverageReview.findMany({
+    where: {
+      propertyId,
+      status: 'READY',
+      overallState: 'QUESTIONS',
+      generatedAt: { gte: freshnessCutoff },
+      policyTerm: { verificationStatus: 'VERIFIED' },
+      questions: {
+        some: {
+          isPrimary: true,
+          status: 'OPEN',
+          questionType: 'EVIDENCE_BASED',
+          priority: 'HIGH',
         },
       },
-      primaryCta: { kind: 'COMPARE', label: 'Review coverage', href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence` },
-      secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Correct coverage facts', href: `/dashboard/properties/${propertyId}/inventory?filter=missing-coverage` }],
+    },
+    orderBy: { generatedAt: 'desc' },
+    take: 10,
+    include: {
+      property: { select: { state: true } },
+      questions: {
+        where: {
+          isPrimary: true,
+          status: 'OPEN',
+          questionType: 'EVIDENCE_BASED',
+          priority: 'HIGH',
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+      },
+    },
+  });
+  return reviews.flatMap((review) => {
+    const question = review.questions[0];
+    if (!question) return [];
+    const evidenceRows = Array.isArray(question.evidenceJson)
+      ? question.evidenceJson
+      : [];
+    return adaptHomeActionSource('COVERAGE', {
+      id: `coverage-review:${review.id}`,
+      propertyId,
+      lineageId: `coverage-review:${question.questionKey}`,
+      sourceEntityId: review.id,
+      sourceVersion: `${review.reviewVersion}:${review.inputFingerprint}`,
+      state: 'OPEN',
+      priority: 'SOON',
+      signal: question.plainLanguageQuestion,
+      whyItMatters: question.whyItMatters,
+      recommendedAction: 'Review the confirmed policy fact and decide whether to ask your carrier',
+      expectedOutcome: 'Resolve the material question using the controlling policy or licensed help.',
+      timing: {
+        dueAt: review.expiresAt?.toISOString() ?? null,
+        windowStart: review.generatedAt.toISOString(),
+        windowEnd: review.expiresAt?.toISOString() ?? null,
+        rationale: 'Only current, verified high-priority coverage questions are promoted.',
+      },
+      evidence: [{
+        id: question.id,
+        type: 'SYSTEM_DERIVATION',
+        label: 'Evidence-qualified coverage question',
+        source: 'Confirmed policy facts',
+        observedAt: review.generatedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence: evidenceRows.length > 0 ? 0.9 : 0.6,
+      }],
+      assumptions: [{
+        key: 'confirmed-policy-fact',
+        label: 'Confirmed policy fact is current',
+        value: 'The question uses a homeowner-confirmed fact from the latest verified policy term.',
+        source: 'PROPERTY_FACT',
+        editable: true,
+      }],
+      options: [
+        { id: 'review-evidence', label: 'Review the evidence', summary: 'Confirm the source fact and prepare a carrier question.', recommended: true },
+        { id: 'licensed-help', label: 'Seek licensed help', summary: 'Ask a licensed professional to interpret the controlling policy language.', recommended: false },
+      ],
+      tradeoffs: [
+        { optionId: 'review-evidence', dimension: 'EFFORT', summary: 'Requires reviewing the source record without assuming an answer.' },
+        { optionId: 'licensed-help', dimension: 'COST', summary: 'May add time or cost while reducing interpretation uncertainty.' },
+      ],
+      confidence: { score: 0.9, label: 'HIGH', missing: [] },
+      governance: {
+        ...lowConsequenceGovernance(), safetyTier: 'MATERIAL_FINANCIAL',
+        professionalBoundary: question.professionalBoundary,
+        jurisdictionCheck: {
+          status: 'UNKNOWN',
+          jurisdiction: review.property.state,
+          checkedAt: review.generatedAt.toISOString(),
+          source: 'No jurisdiction-specific rule is used or represented as verified',
+        },
+      },
+      primaryCta: { kind: 'REVIEW', label: 'Review question', href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=questions` },
+      secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Correct policy facts', href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence` }],
       feedbackControls: DEFAULT_FEEDBACK, relatedJourneyId: null,
-      createdAt: analysis.createdAt.toISOString(), lastEvaluatedAt: analysis.updatedAt.toISOString(),
+      createdAt: review.createdAt.toISOString(),
+      lastEvaluatedAt: review.updatedAt.toISOString(),
     });
   });
 }

@@ -1,0 +1,65 @@
+[
+  {
+    "name": "positive scoped healthy",
+    "term": {
+      "id": "term-positive",
+      "verificationStatus": "VERIFIED",
+      "termStart": "2026-01-01T00:00:00.000Z",
+      "termEnd": "2027-01-01T00:00:00.000Z",
+      "facts": [
+        { "id": "f1", "factKey": "ALL_PERIL_DEDUCTIBLE", "confirmationStatus": "CONFIRMED", "valueType": "AMOUNT", "amountValue": 2500 },
+        { "id": "f2", "factKey": "DWELLING_LIMIT", "confirmationStatus": "CONFIRMED", "valueType": "AMOUNT", "amountValue": 500000 },
+        { "id": "f3", "factKey": "LIABILITY_LIMIT", "confirmationStatus": "CONFIRMED", "valueType": "AMOUNT", "amountValue": 300000 },
+        { "id": "f4", "factKey": "POLICY_FORM", "confirmationStatus": "CONFIRMED", "valueType": "TEXT", "textValue": "HO-3" }
+      ]
+    },
+    "expected": { "scopeStatus": "SUPPORTED", "overallState": "HEALTHY_SCOPED", "questionKeys": [] }
+  },
+  {
+    "name": "negative material questions",
+    "term": {
+      "id": "term-negative",
+      "verificationStatus": "VERIFIED",
+      "termStart": "2025-01-01T00:00:00.000Z",
+      "termEnd": "2026-01-01T00:00:00.000Z",
+      "facts": [
+        { "id": "f5", "factKey": "ALL_PERIL_DEDUCTIBLE", "confirmationStatus": "CONFIRMED", "valueType": "AMOUNT", "amountValue": 7500 },
+        { "id": "f6", "factKey": "DWELLING_LIMIT", "confirmationStatus": "CONFIRMED", "valueType": "AMOUNT", "amountValue": 500000 },
+        { "id": "f7", "factKey": "LIABILITY_LIMIT", "confirmationStatus": "CONFIRMED", "valueType": "AMOUNT", "amountValue": 300000 },
+        { "id": "f8", "factKey": "POLICY_FORM", "confirmationStatus": "CONFIRMED", "valueType": "TEXT", "textValue": "HO-3" }
+      ]
+    },
+    "expected": { "scopeStatus": "SUPPORTED", "overallState": "QUESTIONS", "questionKeys": ["TERM_EXPIRED", "HIGH_DEDUCTIBLE_AFFORDABILITY"] }
+  },
+  {
+    "name": "unknown policy term",
+    "term": null,
+    "expected": { "scopeStatus": "UNSUPPORTED", "overallState": "NEEDS_EVIDENCE", "questionKeys": ["ADD_POLICY_TERM"] }
+  },
+  {
+    "name": "partial reviewed fields",
+    "term": {
+      "id": "term-partial",
+      "verificationStatus": "VERIFIED",
+      "termStart": "2026-01-01T00:00:00.000Z",
+      "termEnd": "2027-01-01T00:00:00.000Z",
+      "facts": [
+        { "id": "f9", "factKey": "ALL_PERIL_DEDUCTIBLE", "confirmationStatus": "CONFIRMED", "valueType": "AMOUNT", "amountValue": 2000 }
+      ]
+    },
+    "expected": { "scopeStatus": "PARTIAL", "overallState": "QUESTIONS", "questionKeys": ["CONFIRM_POLICY_FORM", "CONFIRM_MATERIAL_LIMITS"] }
+  },
+  {
+    "name": "unsupported raw policy language",
+    "term": {
+      "id": "term-unsupported",
+      "verificationStatus": "VERIFIED",
+      "termStart": "2026-01-01T00:00:00.000Z",
+      "termEnd": "2027-01-01T00:00:00.000Z",
+      "facts": [
+        { "id": "f10", "factKey": "COVERAGE_LIMITS_RAW", "confirmationStatus": "CONFIRMED", "valueType": "TEXT", "textValue": "Special limits and exclusions apply." }
+      ]
+    },
+    "expected": { "scopeStatus": "UNSUPPORTED", "overallState": "UNSUPPORTED", "questionKeys": ["CONFIRM_POLICY_FORM", "CONFIRM_MATERIAL_LIMITS"] }
+  }
+]

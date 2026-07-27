@@ -6,6 +6,51 @@ export type CoverageImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 export type CoverageAnalysisStatus = 'READY' | 'STALE' | 'ERROR';
 export type CoverageRiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 
+export type CoverageReviewQuestionDTO = {
+  id: string;
+  questionKey: string;
+  questionType: 'EVIDENCE_BASED' | 'GENERAL';
+  category: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  isPrimary: boolean;
+  status: 'OPEN' | 'RESOLVED' | 'DISMISSED';
+  plainLanguageQuestion: string;
+  whyItMatters: string;
+  evidenceJson: Array<{
+    factId?: string;
+    factKey?: string;
+    confirmationStatus?: string;
+    sourceDocumentId?: string | null;
+    sourcePage?: number | null;
+    policyTermId?: string;
+    verificationStatus?: string;
+    termEnd?: string;
+  }>;
+  missingEvidenceJson: Array<{ factKey: string; reason: string }>;
+  professionalBoundary: string;
+};
+
+export type CoverageReviewDTO = {
+  id: string;
+  propertyId: string;
+  policyTermId: string | null;
+  status: 'READY' | 'STALE';
+  scopeStatus: 'SUPPORTED' | 'PARTIAL' | 'UNSUPPORTED';
+  overallState: 'HEALTHY_SCOPED' | 'QUESTIONS' | 'NEEDS_EVIDENCE' | 'UNSUPPORTED';
+  reviewVersion: number;
+  generatedAt: string;
+  expiresAt: string | null;
+  policyTerm: {
+    id: string;
+    termStart: string | null;
+    termEnd: string | null;
+    verificationStatus: 'VERIFIED' | 'UNVERIFIED';
+    insurancePolicy: { id: string; carrierName: string; policyNumber: string };
+    sourceDocument: { id: string; name: string } | null;
+  } | null;
+  questions: CoverageReviewQuestionDTO[];
+};
+
 export type CoverageAnalysisOverrides = {
   annualPremiumUsd?: number;
   deductibleUsd?: number;
@@ -164,6 +209,20 @@ export async function getCoverageAnalysis(
     `/api/properties/${propertyId}/coverage-analysis`
   );
   return res.data;
+}
+
+export async function getCoverageReview(
+  propertyId: string,
+  context?: { triggerEntityType?: string | null; triggerEntityId?: string | null }
+): Promise<CoverageReviewDTO> {
+  const params = new URLSearchParams();
+  if (context?.triggerEntityType) params.set('triggerEntityType', context.triggerEntityType);
+  if (context?.triggerEntityId) params.set('triggerEntityId', context.triggerEntityId);
+  const query = params.toString();
+  const res = await api.get<{ review: CoverageReviewDTO }>(
+    `/api/properties/${propertyId}/coverage-review${query ? `?${query}` : ''}`
+  );
+  return res.data.review;
 }
 
 export async function runCoverageAnalysis(
