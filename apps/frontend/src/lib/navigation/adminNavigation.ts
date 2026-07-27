@@ -19,6 +19,7 @@ import {
   ShieldEllipsis,
   KeyRound,
   LayoutDashboard,
+  Radar,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -117,6 +118,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/worker-jobs',
     icon: Cpu,
     description: 'Background job registry',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-radar-sources',
+    name: 'Radar Sources',
+    href: '/dashboard/admin/radar-sources',
+    icon: Radar,
+    description: 'Source coverage, health, runs, replay, and kill switches',
     engines: [],
     globalHref: true,
   },

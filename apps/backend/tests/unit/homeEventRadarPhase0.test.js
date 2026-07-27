@@ -107,15 +107,30 @@ test('homeowner Radar routes expose property-scoped reads and state only', () =>
   assert.match(publicRoutes, /\/properties\/:propertyId\/radar\/matches\/:matchId/);
 });
 
-test('temporary Radar operations require the complete admin authorization chain and audit writes', () => {
+test('Radar operations require the complete admin authorization chain and audit writes', () => {
   const adminRoutes = read('apps/backend/src/routes/homeEventRadarAdmin.routes.ts');
   const controller = read('apps/backend/src/controllers/homeEventRadar.controller.ts');
+  const operationsController = read('apps/backend/src/controllers/homeEventRadarAdmin.controller.ts');
+  const operationsService = read(
+    'apps/backend/src/modules/homeEventRadar/services/radarAdminOperations.service.ts',
+  );
+  const schema = read('apps/backend/prisma/schema.prisma');
 
   assert.match(adminRoutes, /['"]\/admin\/radar['"]/);
   assert.match(adminRoutes, /authenticate[\s\S]*requireMfa[\s\S]*requireRole\(UserRole\.ADMIN\)/);
   assert.match(adminRoutes, /requireCapability\(['"]INTEGRATION_MANAGE['"]\)/);
+  assert.match(adminRoutes, /\/sources\/:sourceKey\/test-fetch/);
+  assert.match(adminRoutes, /\/sources\/:sourceKey\/run/);
+  assert.match(adminRoutes, /\/runs\/:runId\/replay/);
+  assert.match(adminRoutes, /\/events\/:eventId\/lineage/);
+  assert.match(adminRoutes, /\/radar\/anomalies/);
   assert.match(controller, /recordAdminAction/);
   assert.match(controller, /RADAR_EVENT_MATCH_TRIGGER/);
+  assert.match(operationsController, /RADAR_SOURCE_PAUSE/);
+  assert.match(operationsController, /RADAR_SOURCE_RUN_REPLAY/);
+  assert.match(operationsService, /SOURCE_JOB_KEYS/);
+  assert.match(operationsService, /redactRadarSourceConfig/);
+  assert.match(schema, /operationsPausedAt\s+DateTime\?/);
 });
 
 test('worker safety policies remain fail-closed for dummy and unreviewed tax ingestion', () => {

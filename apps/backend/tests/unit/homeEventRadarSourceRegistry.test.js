@@ -30,6 +30,9 @@ function source(overrides = {}) {
     supportedEventTypes: ['weather'],
     coverageDescription: 'US weather alert coverage',
     configJson: {},
+    operationsPausedAt: null,
+    operationsPausedBy: null,
+    operationsPauseReason: null,
     health: {
       status: 'healthy',
       lastAttemptAt: new Date('2026-07-26T12:00:00Z'),
@@ -169,6 +172,17 @@ test('runtime environment and worker policy are fail-closed', () => {
       { NODE_ENV: 'production', WORKER_JOB_NWS_ALERTS_ENABLED: 'true' },
     ).allowed,
     false,
+  );
+  assert.deepEqual(
+    registry.executionDecision(
+      {
+        ...productionSource,
+        operationsPausedAt: new Date('2026-07-26T12:00:00Z'),
+      },
+      'manual',
+      { NODE_ENV: 'production', WORKER_JOB_NWS_ALERTS_ENABLED: 'true' },
+    ),
+    { allowed: false, reason: 'source is paused by an operator' },
   );
 });
 

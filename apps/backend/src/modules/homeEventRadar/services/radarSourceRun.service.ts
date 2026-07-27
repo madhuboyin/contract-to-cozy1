@@ -158,7 +158,7 @@ export class RadarSourceRunService {
         where: { sourceDefinitionId: run.sourceDefinitionId },
       });
       const health = this.healthTransition(
-        run.sourceDefinition.isEnabled,
+        run.sourceDefinition.isEnabled && !run.sourceDefinition.operationsPausedAt,
         currentHealth,
         completion,
       );

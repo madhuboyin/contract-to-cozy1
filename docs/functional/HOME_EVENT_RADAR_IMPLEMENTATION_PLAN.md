@@ -60,7 +60,8 @@
 | HER-505 Notification delivery integration | Complete; DB application pending | Eligible decisions idempotently materialize canonical in-app notifications and exact outbound rows; immediate/deferred delivery uses durable worker claims, retry release, transport gates, and canonical deep links |
 | HER-506 Incident/Guidance UI continuity | Complete | Canonical detail normalizes Incident and Guidance resolution state, prefers an actionable journey over terminal history, exposes the current step and safe continuation link, renders terminal truth, and keeps personal dismiss separate from shared resolution |
 | HER-507 Unified Home summary | Complete | Canonical overview projects the non-zero-impact active count and highest-priority explainable match; Unified Home renders monitoring truth, explicit failure/degraded states, and an exact property/match deep link |
-| HER-600+ | Not started | Additional sources and operations remain |
+| HER-600 Admin source operations | Complete; DB application pending | Admin + MFA + capability-gated source console exposes redacted source detail, coverage/counts, effective health, run history, dry-run tests, allowlisted scoped runs, replay, persistent audited pause/resume, event lineage API, and anomaly detection |
+| HER-601+ | Not started | Additional reviewed source adapters remain |
 
 Implementation constraint: Prisma schema changes may be committed in later phases, but migration
 scripts will not be created by this implementation. The repository owner will perform database

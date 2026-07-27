@@ -9540,6 +9540,12 @@ model RadarSourceDefinition {
   supportedEventTypes RadarEventType[]
   coverageDescription String
   configJson          Json?
+  // Operator-owned circuit breaker. Adapter registration intentionally does
+  // not overwrite these fields, so an emergency pause survives restarts and
+  // subsequent source metadata reconciliation.
+  operationsPausedAt     DateTime?
+  operationsPausedBy     String?
+  operationsPauseReason String?
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
 

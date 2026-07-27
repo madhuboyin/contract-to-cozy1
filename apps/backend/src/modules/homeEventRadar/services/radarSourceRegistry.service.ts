@@ -68,6 +68,9 @@ type SourceRecord = {
   supportedEventTypes: string[];
   coverageDescription: string;
   configJson: unknown;
+  operationsPausedAt?: Date | null;
+  operationsPausedBy?: string | null;
+  operationsPauseReason?: string | null;
   health?: {
     status: string;
     lastAttemptAt: Date | null;
@@ -289,11 +292,14 @@ export class RadarSourceRegistryService {
   }
 
   executionDecision(
-    source: Pick<SourceRecord, 'key' | 'provider' | 'sourceType' | 'isEnabled' | 'environments'>,
+    source: Pick<SourceRecord, 'key' | 'provider' | 'sourceType' | 'isEnabled' | 'environments' | 'operationsPausedAt'>,
     triggerType: WorkerTriggerType,
     env: NodeJS.ProcessEnv = process.env,
   ): WorkerExecutionDecision {
     if (!source.isEnabled) return { allowed: false, reason: 'source definition is disabled' };
+    if (source.operationsPausedAt) {
+      return { allowed: false, reason: 'source is paused by an operator' };
+    }
     const runtimeEnvironment = resolveRadarRuntimeEnvironment(env);
     if (!source.environments.includes(runtimeEnvironment)) {
       return { allowed: false, reason: `source is not enabled for ${runtimeEnvironment}` };

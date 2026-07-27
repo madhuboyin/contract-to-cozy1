@@ -13,6 +13,22 @@ import {
   triggerMatchBodySchema,
   upsertRadarEventBodySchema,
 } from '../validators/homeEventRadar.validators';
+import {
+  getRadarEventLineage,
+  getRadarSource,
+  listRadarAnomalies,
+  listRadarSources,
+  replayRadarRun,
+  runRadarSourceScoped,
+  setRadarSourcePause,
+  testRadarSource,
+} from '../controllers/homeEventRadarAdmin.controller';
+import {
+  radarReplayBodySchema,
+  radarSourcePauseBodySchema,
+  radarSourceRunBodySchema,
+  radarSourceTestBodySchema,
+} from '../validators/homeEventRadarAdmin.validators';
 
 const router = Router();
 
@@ -45,5 +61,32 @@ router.post(
 );
 
 router.get('/admin/radar/events/:eventId', getRadarEvent);
+
+// Canonical source operations console. All routes inherit Admin + MFA +
+// INTEGRATION_MANAGE above; commands additionally produce business audit rows.
+router.get('/admin/radar/sources', listRadarSources);
+router.get('/admin/radar/sources/:sourceKey', getRadarSource);
+router.post(
+  '/admin/radar/sources/:sourceKey/test-fetch',
+  validateBody(radarSourceTestBodySchema),
+  testRadarSource,
+);
+router.post(
+  '/admin/radar/sources/:sourceKey/run',
+  validateBody(radarSourceRunBodySchema),
+  runRadarSourceScoped,
+);
+router.put(
+  '/admin/radar/sources/:sourceKey/pause',
+  validateBody(radarSourcePauseBodySchema),
+  setRadarSourcePause,
+);
+router.post(
+  '/admin/radar/runs/:runId/replay',
+  validateBody(radarReplayBodySchema),
+  replayRadarRun,
+);
+router.get('/admin/radar/events/:eventId/lineage', getRadarEventLineage);
+router.get('/admin/radar/anomalies', listRadarAnomalies);
 
 export default router;
