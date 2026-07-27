@@ -39,21 +39,6 @@ function statusMeta(loading: boolean, analysis: RiskPremiumOptimizationDTO | nul
   return { status: 'good' as BadgeStatus, customLabel: 'Stable' };
 }
 
-function money(value?: number | null): string {
-  if (value === null || value === undefined) return '—';
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function computeSavingsRange(analysis: RiskPremiumOptimizationDTO | null, hasAnalysis: boolean): string {
-  return analysis && hasAnalysis
-    ? `${money(analysis.estimatedSavingsMin)} - ${money(analysis.estimatedSavingsMax)}`
-    : '—';
-}
-
 export default function RiskPremiumOptimizerToolCard({
   propertyId,
 }: RiskPremiumOptimizerToolCardProps) {
@@ -101,8 +86,8 @@ export default function RiskPremiumOptimizerToolCard({
   }, [propertyId]);
 
   const ctaLabel = useMemo(() => {
-    if (!hasAnalysis || !analysis) return 'Run optimizer';
-    if (analysis.status === 'STALE') return 'Re-run';
+    if (!hasAnalysis || !analysis) return 'Build plan';
+    if (analysis.status === 'STALE') return 'Refresh plan';
     return 'View details';
   }, [analysis, hasAnalysis]);
 
@@ -127,7 +112,6 @@ export default function RiskPremiumOptimizerToolCard({
 
   const status = statusMeta(loading, analysis, hasAnalysis);
 
-  const savingsRange = computeSavingsRange(analysis, hasAnalysis);
   const topRecommendation = analysis?.recommendations?.[0]?.title ?? 'Pending';
   const confidence = analysis?.confidence ? analysis.confidence.toLowerCase() : '—';
 
@@ -138,43 +122,45 @@ export default function RiskPremiumOptimizerToolCard({
           <div className={HEADER_ICON_WRAP}>
             <ShieldAlert className={HEADER_ICON} />
           </div>
-          <h3 className={TITLE_CLASS}>Lower Your Insurance Cost</h3>
+          <h3 className={TITLE_CLASS}>Loss-Prevention Plan</h3>
         </div>
         <StatusBadge status={status.status} customLabel={status.customLabel} />
       </div>
 
       <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">
-        Lower premium pressure without increasing risk.
+        Plan relevant risk-reduction work and keep completion evidence.
       </p>
 
       <div className={VALUE_ZONE}>
         {loading ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
-            Checking optimization profile…
+            Checking loss-prevention plan…
           </span>
         ) : hasAnalysis && analysis ? (
           <div>
-            <p className="text-xl font-medium leading-tight tracking-tight text-gray-800">{savingsRange}</p>
-            <p className="mt-1 text-sm text-gray-600">Potential annual savings range.</p>
+            <p className="text-xl font-medium leading-tight tracking-tight text-gray-800">
+              {analysis.planItems.length} plan item{analysis.planItems.length === 1 ? '' : 's'}
+            </p>
+            <p className="mt-1 text-sm text-gray-600">Carrier benefit remains unknown unless documented.</p>
           </div>
         ) : (
           <div>
-            <p className="text-sm font-medium leading-tight tracking-tight text-gray-800">Run optimizer</p>
-            <p className="mt-1 text-sm text-gray-600">Get the highest-impact premium moves for this home.</p>
+            <p className="text-sm font-medium leading-tight tracking-tight text-gray-800">Build a plan</p>
+            <p className="mt-1 text-sm text-gray-600">Review loss-prevention actions for this home.</p>
           </div>
         )}
       </div>
 
       <div className="mt-1.5 space-y-1">
         <p className="line-clamp-1 text-[11px] font-normal leading-snug text-gray-600">
-          Top move:{' '}
+          Top action:{' '}
           <span className="font-normal text-gray-600">{hasAnalysis ? topRecommendation : 'Shown after first run'}</span>
         </p>
         <p className="text-[11px] font-normal leading-snug text-gray-600">
           <span className="font-normal capitalize text-gray-600">{confidence}</span> confidence{' '}
           <span className="text-gray-300">·</span>{' '}
-          {hasAnalysis ? analysis?.recommendations.length ?? 0 : '—'} recommendations
+          {hasAnalysis ? analysis?.planItems.length ?? 0 : '—'} plan items
         </p>
       </div>
 

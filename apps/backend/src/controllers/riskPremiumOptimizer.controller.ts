@@ -62,7 +62,11 @@ export async function runRiskPremiumOptimizer(req: CustomRequest, res: Response)
       propertyId,
       moduleKey: AnalyticsModule.FINANCIAL,
       featureKey: AnalyticsFeature.RISK_PREMIUM_OPTIMIZER,
-      metadataJson: { actionType: 'run_optimization', estimatedSavingsMax: analysis.estimatedSavingsMax ?? null },
+      metadataJson: {
+        actionType: 'loss_prevention_plan_created',
+        coverageReviewId: analysis.coverageReviewId ?? null,
+        planItemCount: analysis.planItems.length,
+      },
     });
 
     return res.json({ success: true, data: { analysis } });

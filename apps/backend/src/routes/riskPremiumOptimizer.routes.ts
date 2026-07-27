@@ -20,14 +20,13 @@ const runBodySchema = z.object({
       deductibleAmount: z.number().nonnegative().optional(),
       cashBuffer: z.number().nonnegative().optional(),
       riskTolerance: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
-      assumeBundled: z.boolean().optional(),
       assumeNewMitigations: z.array(z.string().min(1)).optional(),
     })
     .optional(),
 });
 
 const updatePlanItemBodySchema = z.object({
-  status: z.enum(['RECOMMENDED', 'PLANNED', 'DONE', 'SKIPPED']).optional(),
+  status: z.enum(['RECOMMENDED', 'PLANNED', 'COMPLETED', 'SKIPPED', 'RESTORED']).optional(),
   completedAt: z.string().datetime().nullable().optional(),
   evidenceDocumentId: z.string().uuid().nullable().optional(),
   linkedHomeEventId: z.string().uuid().nullable().optional(),

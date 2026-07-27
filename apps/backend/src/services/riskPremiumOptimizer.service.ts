@@ -21,6 +21,7 @@ import { SharedSignalKey, signalService } from './signal.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
 import { getProtectionContextDecisions } from './protection/context';
 import type { FeatureDecision } from '../modules/propertyContext';
+import { getOrCreateCoverageReview } from './coverageReview.service';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -33,7 +34,6 @@ export type RiskPremiumOptimizerOverrides = {
   deductibleAmount?: number;
   cashBuffer?: number;
   riskTolerance?: RiskTolerance;
-  assumeBundled?: boolean;
   assumeNewMitigations?: string[];
 };
 
@@ -42,7 +42,7 @@ export type RiskPremiumRunOptions = {
 };
 
 export type UpdateRiskMitigationPlanItemInput = {
-  status?: 'RECOMMENDED' | 'PLANNED' | 'DONE' | 'SKIPPED';
+  status?: 'RECOMMENDED' | 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'RESTORED';
   completedAt?: string | null;
   evidenceDocumentId?: string | null;
   linkedHomeEventId?: string | null;
@@ -64,8 +64,7 @@ export type RiskPremiumOptimizationDTO = {
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   summary?: string;
-  estimatedSavingsMin?: number | null;
-  estimatedSavingsMax?: number | null;
+  coverageReviewId?: string | null;
   inputs: {
     annualPremium?: number | null;
     deductibleAmount?: number | null;
@@ -88,27 +87,36 @@ export type RiskPremiumOptimizationDTO = {
     priority: 'LOW' | 'MEDIUM' | 'HIGH';
     targetPeril?: 'WATER' | 'FIRE' | 'WIND_HAIL' | 'THEFT' | 'LIABILITY' | 'ELECTRICAL' | 'OTHER';
     estimatedCost?: number | null;
-    estimatedSavingsMin?: number | null;
-    estimatedSavingsMax?: number | null;
     whyThisMatters: string;
   }>;
   planItems: Array<{
     id: string;
     actionType: string;
-    status: 'RECOMMENDED' | 'PLANNED' | 'DONE' | 'SKIPPED';
+    status: 'RECOMMENDED' | 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'RESTORED';
     priority: 'LOW' | 'MEDIUM' | 'HIGH';
     targetPeril?: string | null;
     title?: string | null;
     why: string;
     estimatedCost?: number | null;
-    estimatedSavingsMin?: number | null;
-    estimatedSavingsMax?: number | null;
+    carrierBenefitStatus: 'UNKNOWN' | 'CONFIRMED_ELIGIBLE' | 'CONFIRMED_NOT_ELIGIBLE';
+    carrierReviewQuestion: string;
+    professionalHelpLevel:
+      | 'DIY_ALLOWED'
+      | 'PROFESSIONAL_RECOMMENDED'
+      | 'QUALIFIED_PROFESSIONAL_REQUIRED'
+      | 'ASK_CARRIER';
+    handoff: {
+      kind: 'DIY' | 'PROVIDER' | 'CARRIER';
+      label: string;
+      href: string;
+      safetyNote: string;
+    };
     evidenceDocumentId?: string | null;
     linkedHomeEventId?: string | null;
     completedAt?: string | null;
   }>;
   computedAt: string;
-  mitigationVerification?: {
+  observedPremiumComparison?: {
     hasCompletedMitigations: boolean;
     completedCount: number;
     baselineComputedAt?: string | null;
@@ -130,7 +138,7 @@ type LatestAnalysisRecord = RiskPremiumOptimizationAnalysis & {
   planItems: RiskMitigationPlanItem[];
 };
 
-type MitigationVerification = NonNullable<RiskPremiumOptimizationDTO['mitigationVerification']>;
+type MitigationVerification = NonNullable<RiskPremiumOptimizationDTO['observedPremiumComparison']>;
 type MitigationVerificationDirection = MitigationVerification['observedDirection'];
 
 const STORM_EXPOSURE_STATES = new Set(['FL', 'TX', 'LA', 'AL', 'MS', 'SC', 'NC', 'GA', 'NJ']);
@@ -250,17 +258,17 @@ function parseSharedMetaFromSnapshot(
 
 function parseMitigationVerificationFromSnapshot(
   value: Prisma.JsonValue | null | undefined
-): RiskPremiumOptimizationDTO['mitigationVerification'] | undefined {
+): RiskPremiumOptimizationDTO['observedPremiumComparison'] | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined;
   }
 
   const root = value as Record<string, unknown>;
   const raw =
-    root.mitigationVerification &&
-    typeof root.mitigationVerification === 'object' &&
-    !Array.isArray(root.mitigationVerification)
-      ? (root.mitigationVerification as Record<string, unknown>)
+    root.observedPremiumComparison &&
+    typeof root.observedPremiumComparison === 'object' &&
+    !Array.isArray(root.observedPremiumComparison)
+      ? (root.observedPremiumComparison as Record<string, unknown>)
       : null;
   if (!raw) return undefined;
 
@@ -319,8 +327,10 @@ function mapPlanItemToDto(item: RiskMitigationPlanItem): RiskPremiumOptimization
     title: item.title ?? null,
     why: item.why,
     estimatedCost: asNumber(item.estimatedCost) ?? null,
-    estimatedSavingsMin: asNumber(item.estimatedSavingsMin) ?? null,
-    estimatedSavingsMax: asNumber(item.estimatedSavingsMax) ?? null,
+    carrierBenefitStatus: item.carrierBenefitStatus as RiskPremiumOptimizationDTO['planItems'][number]['carrierBenefitStatus'],
+    carrierReviewQuestion: item.carrierReviewQuestion,
+    professionalHelpLevel: item.professionalHelpLevel as RiskPremiumOptimizationDTO['planItems'][number]['professionalHelpLevel'],
+    handoff: item.handoffJson as RiskPremiumOptimizationDTO['planItems'][number]['handoff'],
     evidenceDocumentId: item.evidenceDocumentId ?? null,
     linkedHomeEventId: item.linkedHomeEventId ?? null,
     completedAt: item.completedAt ? item.completedAt.toISOString() : null,
@@ -334,7 +344,7 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     return a.createdAt.getTime() - b.createdAt.getTime();
   });
   const sharedMeta = parseSharedMetaFromSnapshot(record.inputsSnapshot);
-  const mitigationVerification = parseMitigationVerificationFromSnapshot(record.inputsSnapshot);
+  const observedPremiumComparison = parseMitigationVerificationFromSnapshot(record.inputsSnapshot);
 
   return {
     id: record.id,
@@ -346,8 +356,7 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     status: record.status,
     confidence: record.confidence,
     summary: record.summary ?? undefined,
-    estimatedSavingsMin: asNumber(record.estimatedSavingsMin) ?? null,
-    estimatedSavingsMax: asNumber(record.estimatedSavingsMax) ?? null,
+    coverageReviewId: record.coverageReviewId ?? null,
     inputs: inferInputSnapshot(record.inputsSnapshot),
     premiumDrivers: safeArray<PremiumDriver>(record.premiumDrivers),
     recommendations: safeArray<RiskPremiumOptimizationDTO['recommendations'][number]>(
@@ -355,7 +364,7 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     ),
     planItems: planItems.map(mapPlanItemToDto),
     computedAt: record.computedAt.toISOString(),
-    mitigationVerification,
+    observedPremiumComparison,
   };
 }
 
@@ -383,14 +392,6 @@ function cashBufferFromPosture(posture: PreferencePostureDefaults['cashBufferPos
   return undefined;
 }
 
-function bundlingFromPreference(
-  preference: PreferencePostureDefaults['bundlingPreference']
-): boolean | undefined {
-  if (preference === 'PREFER_BUNDLED') return true;
-  if (preference === 'PREFER_UNBUNDLED') return false;
-  return undefined;
-}
-
 function parseRiskPremiumOverrides(value: Record<string, unknown>): RiskPremiumOptimizerOverrides {
   const asFinite = (input: unknown): number | undefined => {
     const numeric = Number(input);
@@ -412,7 +413,6 @@ function parseRiskPremiumOverrides(value: Record<string, unknown>): RiskPremiumO
     deductibleAmount: asFinite(value.deductibleAmount),
     cashBuffer: asFinite(value.cashBuffer),
     riskTolerance,
-    assumeBundled: typeof value.assumeBundled === 'boolean' ? value.assumeBundled : undefined,
     assumeNewMitigations,
   };
 }
@@ -433,7 +433,6 @@ function applyPreferenceDefaults(
     riskTolerance,
     deductibleAmount: base.deductibleAmount ?? deductibleFromPreferenceStyle(posture.deductiblePreferenceStyle),
     cashBuffer: base.cashBuffer ?? cashBufferFromPosture(posture.cashBufferPosture),
-    assumeBundled: base.assumeBundled ?? bundlingFromPreference(posture.bundlingPreference),
   };
 }
 
@@ -490,6 +489,57 @@ function mapPerilToActionType(peril: Peril, strategy: 'PRIMARY' | 'SECONDARY'): 
   }
   if (peril === 'THEFT') return MitigationActionType.SECURITY_SYSTEM;
   return MitigationActionType.REVIEW_DISCOUNTS;
+}
+
+export function professionalHelpForAction(actionType: MitigationActionType) {
+  const qualifiedProfessionalActions = new Set<MitigationActionType>([
+    MitigationActionType.AUTO_SHUTOFF_VALVE,
+    MitigationActionType.ROOF_INSPECTION_OR_REPAIR,
+    MitigationActionType.TREE_TRIMMING,
+    MitigationActionType.WIND_HAIL_HARDENING,
+    MitigationActionType.ELECTRICAL_PANEL_INSPECTION,
+  ]);
+  const professionalRecommendedActions = new Set<MitigationActionType>([
+    MitigationActionType.SUMP_PUMP_OR_BACKUP,
+    MitigationActionType.WATER_HEATER_REPLACEMENT,
+  ]);
+  if (qualifiedProfessionalActions.has(actionType)) return 'QUALIFIED_PROFESSIONAL_REQUIRED' as const;
+  if (professionalRecommendedActions.has(actionType)) return 'PROFESSIONAL_RECOMMENDED' as const;
+  return 'DIY_ALLOWED' as const;
+}
+
+export function mitigationHandoff(
+  propertyId: string,
+  actionType: MitigationActionType,
+  title: string
+) {
+  const helpLevel = professionalHelpForAction(actionType);
+  if (helpLevel === 'QUALIFIED_PROFESSIONAL_REQUIRED' || helpLevel === 'PROFESSIONAL_RECOMMENDED') {
+    return {
+      professionalHelpLevel: helpLevel,
+      handoff: {
+        kind: 'PROVIDER',
+        label:
+          helpLevel === 'QUALIFIED_PROFESSIONAL_REQUIRED'
+            ? 'Find qualified professional help'
+            : 'Review professional help',
+        href: `/dashboard/providers?propertyId=${encodeURIComponent(propertyId)}&serviceLabel=${encodeURIComponent(title)}`,
+        safetyNote:
+          helpLevel === 'QUALIFIED_PROFESSIONAL_REQUIRED'
+            ? 'Use a properly qualified professional; do not treat this as a DIY task.'
+            : 'Check permit, licensing, and safety requirements before starting.',
+      },
+    };
+  }
+  return {
+    professionalHelpLevel: helpLevel,
+    handoff: {
+      kind: 'DIY',
+      label: 'Review DIY safety steps',
+      href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/diy`,
+      safetyNote: 'Stop and use qualified help if the task exceeds your skills or involves regulated work.',
+    },
+  };
 }
 
 export class RiskPremiumOptimizerService {
@@ -589,6 +639,9 @@ export class RiskPremiumOptimizerService {
     }
 
     const property = await assertPropertyForUser(propertyId, userId);
+    const coverageReview = await getOrCreateCoverageReview(propertyId, userId, {
+      triggerType: 'LOSS_PREVENTION_PLAN',
+    });
     const now = new Date();
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 36);
@@ -647,7 +700,7 @@ export class RiskPremiumOptimizerService {
       }),
       signalService.getLatestSignalsByKeyWithFreshFallback(
         propertyId,
-        ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION', 'RISK_ACCUMULATION', 'FINANCIAL_DISCIPLINE'],
+        ['MAINT_ADHERENCE', 'RISK_ACCUMULATION'],
         {
           freshOnly: true,
           refreshIfStale: true,
@@ -699,28 +752,18 @@ export class RiskPremiumOptimizerService {
 
     const cashBuffer = effectiveOverrides.cashBuffer ?? inferredCashBuffer;
     const riskTolerance: RiskTolerance = effectiveOverrides.riskTolerance ?? 'MEDIUM';
-    const assumeBundled = Boolean(effectiveOverrides.assumeBundled);
     const assumedMitigations = new Set(
       (effectiveOverrides.assumeNewMitigations ?? []).map((value) => String(value).toUpperCase())
     );
 
     const riskScore = property.riskReport?.riskScore ?? null;
     const state = String(property.state || '').toUpperCase();
-    const coverageGapCount = sharedSignals.COVERAGE_GAP
-      ? extractSignalNumber(sharedSignals.COVERAGE_GAP, 'coverageGapCount')
-      : null;
     const maintenanceAdherenceScore = sharedSignals.MAINT_ADHERENCE
       ? extractSignalNumber(sharedSignals.MAINT_ADHERENCE, 'adherencePercent')
-      : null;
-    const savingsRealizationAnnual = sharedSignals.SAVINGS_REALIZATION
-      ? extractSignalNumber(sharedSignals.SAVINGS_REALIZATION, 'estimatedAnnualSavings')
       : null;
     const maintenanceAdherencePercent = toPercent(maintenanceAdherenceScore);
     const riskAccumulationScore = sharedSignals.RISK_ACCUMULATION
       ? extractSignalNumber(sharedSignals.RISK_ACCUMULATION, 'accumulationScore')
-      : null;
-    const financialDisciplineScore = sharedSignals.FINANCIAL_DISCIPLINE
-      ? extractSignalNumber(sharedSignals.FINANCIAL_DISCIPLINE, 'disciplineScore')
       : null;
     const sharedSignalsUsed = (Object.keys(sharedSignals) as SharedSignalKey[]).filter(
       (signalKey) => Boolean(sharedSignals[signalKey])
@@ -812,7 +855,7 @@ export class RiskPremiumOptimizerService {
       pushDriver({
         code: 'RISK_SCORE_ELEVATED',
         title: 'Property risk score is elevated',
-        detail: `Current risk score is ${riskScore.toFixed(0)}. Elevated risk often increases premium pressure.`,
+        detail: `Current risk score is ${riskScore.toFixed(0)}. Review the underlying property risks before choosing work.`,
         severity: 'HIGH',
         relatedPerils: ['OTHER'],
       });
@@ -820,21 +863,12 @@ export class RiskPremiumOptimizerService {
       pushDriver({
         code: 'RISK_SCORE_MODERATE',
         title: 'Property risk score is moderate',
-        detail: `Current risk score is ${riskScore.toFixed(0)}. There may be room for mitigation-led premium improvements.`,
+        detail: `Current risk score is ${riskScore.toFixed(0)}. Loss-prevention work may reduce specific exposures.`,
         severity: 'MEDIUM',
         relatedPerils: ['OTHER'],
       });
     }
 
-    if (coverageGapCount !== null && coverageGapCount > 0) {
-      pushDriver({
-        code: 'COVERAGE_GAP_SIGNAL',
-        title: 'Coverage gap signal indicates uncovered risk lanes',
-        detail: `${Math.round(coverageGapCount)} coverage gap signal(s) were detected in shared coverage intelligence.`,
-        severity: coverageGapCount >= 3 ? 'HIGH' : 'MEDIUM',
-        relatedPerils: ['OTHER'],
-      });
-    }
 
     if (maintenanceAdherencePercent !== null && maintenanceAdherencePercent < 70) {
       pushDriver({
@@ -852,16 +886,6 @@ export class RiskPremiumOptimizerService {
         title: 'Maintenance deferral pattern is accumulating risk',
         detail: `Pattern signal indicates accumulated deferred-risk pressure (${Math.round(riskAccumulationScore * 100)}).`,
         severity: riskAccumulationScore >= 0.78 ? 'HIGH' : 'MEDIUM',
-        relatedPerils: ['OTHER'],
-      });
-    }
-
-    if (financialDisciplineScore !== null && financialDisciplineScore >= 0.6) {
-      pushDriver({
-        code: 'FINANCIAL_DISCIPLINE_SIGNAL',
-        title: 'Financial discipline pattern improves premium resilience',
-        detail: 'Repeated realized savings behavior improves confidence in sustained risk-control execution.',
-        severity: 'LOW',
         relatedPerils: ['OTHER'],
       });
     }
@@ -891,7 +915,7 @@ export class RiskPremiumOptimizerService {
     if (waterSeverity !== 'LOW') {
       pushDriver({
         code: 'WATER_EXPOSURE',
-        title: 'Water damage exposure is a premium driver',
+        title: 'Water damage exposure deserves prevention work',
         detail:
           claimsByPeril.WATER > 0
             ? `${claimsByPeril.WATER} recent water/plumbing claim signal(s) plus system profile increase exposure.`
@@ -944,7 +968,7 @@ export class RiskPremiumOptimizerService {
     if (fireElectricalSeverity !== 'LOW') {
       pushDriver({
         code: 'FIRE_ELECTRICAL_EXPOSURE',
-        title: 'Fire/electrical resilience can improve premium posture',
+        title: 'Fire and electrical exposure deserves review',
         detail:
           property.electricalPanelAge && property.electricalPanelAge >= 25
             ? `Electrical panel age is ${property.electricalPanelAge} years; resilience upgrades can reduce loss probability.`
@@ -958,7 +982,7 @@ export class RiskPremiumOptimizerService {
     if (theftSignals) {
       pushDriver({
         code: 'THEFT_EXPOSURE',
-        title: 'Security posture may affect premium pressure',
+        title: 'Security posture may affect theft exposure',
         detail:
           claimsByPeril.THEFT > 0
             ? 'Recent theft/vandalism claim activity detected for this property.'
@@ -968,40 +992,11 @@ export class RiskPremiumOptimizerService {
       });
     }
 
-    if (deductibleAmount !== undefined && cashBuffer !== undefined && cashBuffer > 0) {
-      const ratio = deductibleAmount / cashBuffer;
-      if (ratio > 0.4) {
-        pushDriver({
-          code: 'DEDUCTIBLE_BUFFER_MISMATCH',
-          title: 'Deductible may be high for your current cash buffer',
-          detail: `Deductible is ${Math.round(ratio * 100)}% of cash buffer; this can increase out-of-pocket stress.`,
-          severity: 'HIGH',
-          relatedPerils: ['OTHER'],
-        });
-      } else if (ratio > 0.25) {
-        pushDriver({
-          code: 'DEDUCTIBLE_BUFFER_TIGHT',
-          title: 'Deductible-to-buffer ratio is moderately tight',
-          detail: `Deductible is ${Math.round(ratio * 100)}% of cash buffer; monitor liquidity for claim events.`,
-          severity: 'MEDIUM',
-          relatedPerils: ['OTHER'],
-        });
-      } else if (ratio < 0.1 && (annualPremium ?? 0) >= 3200 && riskTolerance !== 'LOW') {
-        pushDriver({
-          code: 'DEDUCTIBLE_LEVER_AVAILABLE',
-          title: 'Deductible lever may be available',
-          detail: 'Current deductible appears conservative relative to available cash buffer.',
-          severity: 'LOW',
-          relatedPerils: ['OTHER'],
-        });
-      }
-    }
-
     const claimsCount = claims.length;
     if (claimsCount >= 2) {
       pushDriver({
         code: 'CLAIMS_FREQUENCY',
-        title: 'Recent claim frequency can influence premium',
+        title: 'Recent claim frequency identifies recurring exposure',
         detail: `${claimsCount} claim records found in the last 36 months.`,
         severity: claimsCount >= 4 ? 'HIGH' : 'MEDIUM',
         relatedPerils: ['OTHER'],
@@ -1012,25 +1007,7 @@ export class RiskPremiumOptimizerService {
       pushDriver({
         code: 'DOCUMENTATION_GAPS',
         title: 'Mitigation documentation is limited',
-        detail: 'Missing inspection or mitigation proof can make discount eligibility harder to validate.',
-        severity: 'MEDIUM',
-        relatedPerils: ['OTHER'],
-      });
-    }
-
-    if ((annualPremium ?? 0) >= 4500) {
-      pushDriver({
-        code: 'PREMIUM_PRESSURE_HIGH',
-        title: 'Current annual premium pressure is high',
-        detail: `Estimated annual premium is $${annualPremium?.toFixed(0)} before optimization.`,
-        severity: 'HIGH',
-        relatedPerils: ['OTHER'],
-      });
-    } else if ((annualPremium ?? 0) >= 2800) {
-      pushDriver({
-        code: 'PREMIUM_PRESSURE_MODERATE',
-        title: 'Current annual premium pressure is moderate',
-        detail: `Estimated annual premium is $${annualPremium?.toFixed(0)}.`,
+        detail: 'Add inspection or completion evidence before asking a carrier to review eligibility.',
         severity: 'MEDIUM',
         relatedPerils: ['OTHER'],
       });
@@ -1068,9 +1045,7 @@ export class RiskPremiumOptimizerService {
           priority: waterDriverSeverity === 'HIGH' ? 'HIGH' : 'MEDIUM',
           targetPeril: 'WATER',
           estimatedCost: 120,
-          estimatedSavingsMin: 60,
-          estimatedSavingsMax: 220,
-          whyThisMatters: 'Early leak detection can reduce claim severity and supports mitigation-based underwriting reviews.',
+          whyThisMatters: 'Early leak detection can reduce the duration and severity of a water loss.',
           actionType: MitigationActionType.LEAK_SENSORS,
         });
       }
@@ -1087,9 +1062,7 @@ export class RiskPremiumOptimizerService {
           priority: 'HIGH',
           targetPeril: 'WATER',
           estimatedCost: 450,
-          estimatedSavingsMin: 120,
-          estimatedSavingsMax: 360,
-          whyThisMatters: 'High-severity water losses are a common premium driver; shutoff controls directly reduce exposure.',
+          whyThisMatters: 'Shutoff controls can reduce exposure to a long-running water loss.',
           actionType: MitigationActionType.AUTO_SHUTOFF_VALVE,
         });
       }
@@ -1108,8 +1081,6 @@ export class RiskPremiumOptimizerService {
         priority: windDriverSeverity,
         targetPeril: 'WIND_HAIL',
         estimatedCost: 275,
-        estimatedSavingsMin: 70,
-        estimatedSavingsMax: 250,
         whyThisMatters: 'Roof condition quality directly affects wind and hail loss expectations.',
         actionType: MitigationActionType.ROOF_INSPECTION_OR_REPAIR,
       });
@@ -1129,9 +1100,7 @@ export class RiskPremiumOptimizerService {
           priority: fireElectricalDriverSeverity,
           targetPeril: 'FIRE',
           estimatedCost: 140,
-          estimatedSavingsMin: 25,
-          estimatedSavingsMax: 110,
-          whyThisMatters: 'Life-safety hardening can reduce severe fire claim risk and support premium efficiency.',
+          whyThisMatters: 'Working smoke and carbon-monoxide detection is a life-safety control.',
           actionType: MitigationActionType.SMOKE_CO_DETECTORS,
         });
       }
@@ -1148,8 +1117,6 @@ export class RiskPremiumOptimizerService {
           priority: fireElectricalDriverSeverity,
           targetPeril: 'ELECTRICAL',
           estimatedCost: 220,
-          estimatedSavingsMin: 40,
-          estimatedSavingsMax: 170,
           whyThisMatters: 'Aging electrical systems can increase fire risk and create underwriting uncertainty.',
           actionType: MitigationActionType.ELECTRICAL_PANEL_INSPECTION,
         });
@@ -1165,59 +1132,8 @@ export class RiskPremiumOptimizerService {
         priority: claimsByPeril.THEFT > 0 ? 'MEDIUM' : 'LOW',
         targetPeril: 'THEFT',
         estimatedCost: 260,
-        estimatedSavingsMin: 50,
-        estimatedSavingsMax: 200,
-        whyThisMatters: 'Security controls can reduce theft frequency and support premium optimization discussions.',
+        whyThisMatters: 'Security controls can reduce theft exposure.',
         actionType: MitigationActionType.SECURITY_SYSTEM,
-      });
-    }
-
-    const deductibleDriverHigh = getDriverSeverity('DEDUCTIBLE_BUFFER_MISMATCH');
-    const deductibleDriverLever = getDriverSeverity('DEDUCTIBLE_LEVER_AVAILABLE');
-    if (deductibleDriverHigh) {
-      pushRecommendation({
-        code: 'DEDUCTIBLE_BUFFER_ALIGNMENT',
-        title: 'Rebalance deductible with emergency buffer',
-        detail: 'Current deductible appears high for available liquidity. Consider policy lever adjustments before renewal.',
-        type: 'POLICY_LEVER',
-        priority: 'HIGH',
-        targetPeril: 'OTHER',
-        estimatedCost: 0,
-        estimatedSavingsMin: 0,
-        estimatedSavingsMax: 120,
-        whyThisMatters: 'Deductible stress can increase financial risk during claims even when premium appears efficient.',
-        actionType: MitigationActionType.REVIEW_DISCOUNTS,
-      });
-    } else if (deductibleDriverLever && riskTolerance !== 'LOW') {
-      pushRecommendation({
-        code: 'DEDUCTIBLE_INCREASE_SCENARIO',
-        title: 'Model a higher deductible scenario',
-        detail: 'With current cash buffer, a moderate deductible increase may reduce annual premium pressure.',
-        type: 'POLICY_LEVER',
-        priority: 'MEDIUM',
-        targetPeril: 'OTHER',
-        estimatedCost: 0,
-        estimatedSavingsMin: 120,
-        estimatedSavingsMax: 520,
-        whyThisMatters: 'Deductible alignment is one of the largest non-carrier-specific premium levers.',
-        actionType: MitigationActionType.RAISE_DEDUCTIBLE,
-      });
-    }
-
-    const coverageGapDriver = getDriverSeverity('COVERAGE_GAP_SIGNAL');
-    if (coverageGapDriver) {
-      pushRecommendation({
-        code: 'COVERAGE_ALIGNMENT_REVIEW',
-        title: 'Align mitigation plan with known coverage gaps',
-        detail: 'Coverage Intelligence already flagged uncovered scenarios. Prioritize mitigation actions that close the highest-impact gaps first.',
-        type: 'POLICY_LEVER',
-        priority: coverageGapDriver,
-        targetPeril: 'OTHER',
-        estimatedCost: 0,
-        estimatedSavingsMin: 50,
-        estimatedSavingsMax: 240,
-        whyThisMatters: 'Resolving known gaps improves renewal negotiations and reduces unsupported exposure assumptions.',
-        actionType: MitigationActionType.REVIEW_DISCOUNTS,
       });
     }
 
@@ -1231,25 +1147,7 @@ export class RiskPremiumOptimizerService {
         priority: maintenanceAdherenceDriver,
         targetPeril: 'OTHER',
         estimatedCost: 80,
-        estimatedSavingsMin: 45,
-        estimatedSavingsMax: 210,
-        whyThisMatters: 'Sustained maintenance completion can reduce repeat incidents and strengthen insurer confidence.',
-        actionType: MitigationActionType.REVIEW_DISCOUNTS,
-      });
-    }
-
-    if (savingsRealizationAnnual !== null && savingsRealizationAnnual > 0) {
-      pushRecommendation({
-        code: 'REINVEST_REALIZED_SAVINGS',
-        title: 'Reinvest realized savings into top mitigation levers',
-        detail: 'Use a portion of confirmed savings outcomes to fund high-priority protection actions.',
-        type: 'POLICY_LEVER',
-        priority: 'LOW',
-        targetPeril: 'OTHER',
-        estimatedCost: 0,
-        estimatedSavingsMin: 30,
-        estimatedSavingsMax: 160,
-        whyThisMatters: 'Cross-feature savings realization creates budget room for risk-reduction work without increasing net household spend.',
+        whyThisMatters: 'Sustained maintenance completion can reduce repeat incidents.',
         actionType: MitigationActionType.REVIEW_DISCOUNTS,
       });
     }
@@ -1263,25 +1161,7 @@ export class RiskPremiumOptimizerService {
         priority: 'MEDIUM',
         targetPeril: 'OTHER',
         estimatedCost: 0,
-        estimatedSavingsMin: 40,
-        estimatedSavingsMax: 180,
-        whyThisMatters: 'Document quality often determines whether premium credits can be validated.',
-        actionType: MitigationActionType.REVIEW_DISCOUNTS,
-      });
-    }
-
-    if (recommendations.length === 0) {
-      pushRecommendation({
-        code: 'BASELINE_MONITORING',
-        title: 'Maintain current risk controls and monitor quarterly',
-        detail: 'No urgent premium pressure levers detected. Refresh after any policy or risk change.',
-        type: 'POLICY_LEVER',
-        priority: 'LOW',
-        targetPeril: 'OTHER',
-        estimatedCost: 0,
-        estimatedSavingsMin: 0,
-        estimatedSavingsMax: 80,
-        whyThisMatters: 'Periodic monitoring keeps coverage efficiency aligned with changing property risk.',
+        whyThisMatters: 'Document quality helps a carrier or licensed professional review completed work.',
         actionType: MitigationActionType.REVIEW_DISCOUNTS,
       });
     }
@@ -1295,10 +1175,7 @@ export class RiskPremiumOptimizerService {
     const sortedRecommendations = [...recommendations].sort((a, b) => {
       const priorityDelta = prioritySortValue(b.priority as MitigationPriority) - prioritySortValue(a.priority as MitigationPriority);
       if (priorityDelta !== 0) return priorityDelta;
-
-      const aSavings = (a.estimatedSavingsMax ?? 0) - (a.estimatedCost ?? 0);
-      const bSavings = (b.estimatedSavingsMax ?? 0) - (b.estimatedCost ?? 0);
-      return bSavings - aSavings;
+      return a.code.localeCompare(b.code);
     });
 
     const responsibilityByAction: Partial<Record<MitigationActionType, FeatureDecision>> = {
@@ -1314,29 +1191,9 @@ export class RiskPremiumOptimizerService {
       [MitigationActionType.SECURITY_SYSTEM]: protectionContext.decisions.commonSafetyActions,
     };
     const contextualRecommendations = sortedRecommendations.filter((recommendation) => (
+      recommendation.type !== 'POLICY_LEVER' &&
       responsibilityByAction[recommendation.actionType]?.status !== 'NOT_APPLICABLE'
     ));
-
-    const discountBoost = assumeBundled ? 1.15 : 1;
-    const savingsSignalBoost =
-      savingsRealizationAnnual !== null && savingsRealizationAnnual > 0
-        ? Math.min(280, savingsRealizationAnnual * 0.18)
-        : 0;
-    const totalSavingsMinRaw = contextualRecommendations.reduce(
-      (sum, recommendation) => sum + (recommendation.estimatedSavingsMin ?? 0),
-      0
-    ) * discountBoost + savingsSignalBoost * 0.5;
-    const totalSavingsMaxRaw = contextualRecommendations.reduce(
-      (sum, recommendation) => sum + (recommendation.estimatedSavingsMax ?? 0),
-      0
-    ) * discountBoost + savingsSignalBoost;
-
-    const estimatedSavingsMin = Number.isFinite(totalSavingsMinRaw)
-      ? Math.round(totalSavingsMinRaw * 100) / 100
-      : null;
-    const estimatedSavingsMax = Number.isFinite(totalSavingsMaxRaw)
-      ? Math.round(totalSavingsMaxRaw * 100) / 100
-      : null;
 
     const confidenceSignals = [
       annualPremium !== undefined,
@@ -1355,7 +1212,7 @@ export class RiskPremiumOptimizerService {
           : RiskPremiumOptimizationConfidence.LOW;
 
     const completedMitigations =
-      latestAnalysis?.planItems.filter((item) => item.status === MitigationPlanStatus.DONE) ?? [];
+      latestAnalysis?.planItems.filter((item) => item.status === MitigationPlanStatus.COMPLETED) ?? [];
     const baselineAnnualPremium = latestAnalysis
       ? inferInputSnapshot(latestAnalysis.inputsSnapshot).annualPremium ?? null
       : null;
@@ -1372,7 +1229,7 @@ export class RiskPremiumOptimizerService {
           : observedPremiumDelta > 1
             ? 'INCREASED'
             : 'UNCHANGED';
-    const mitigationVerification: RiskPremiumOptimizationDTO['mitigationVerification'] | undefined =
+    const observedPremiumComparison: RiskPremiumOptimizationDTO['observedPremiumComparison'] | undefined =
       completedMitigations.length > 0
         ? {
             hasCompletedMitigations: true,
@@ -1384,8 +1241,8 @@ export class RiskPremiumOptimizerService {
             observedDirection,
             note:
               observedPremiumDelta !== null
-                ? `Observed annual premium delta after completed mitigations: $${Math.abs(observedPremiumDelta).toFixed(0)} (${observedDirection.toLowerCase()}).`
-                : 'Completed mitigation items were found, but premium delta cannot be verified until premium inputs are available in consecutive runs.',
+                ? `Observed annual premium difference between recorded runs: $${Math.abs(observedPremiumDelta).toFixed(0)} (${observedDirection.toLowerCase()}). This is observational and does not establish that mitigation caused the change.`
+                : 'Completed loss-prevention items were found, but no premium comparison is available. A later observed change would not establish causality.',
           }
         : undefined;
 
@@ -1394,20 +1251,15 @@ export class RiskPremiumOptimizerService {
     if (topRecommendation) {
       summaryParts.push(`Top lever: ${topRecommendation.title.toLowerCase()}.`);
     }
-    if (estimatedSavingsMin !== null && estimatedSavingsMax !== null) {
-      summaryParts.push(
-        `Estimated premium pressure reduction range: $${estimatedSavingsMin.toFixed(0)}-$${estimatedSavingsMax.toFixed(0)} per year.`
-      );
+    if (observedPremiumComparison) {
+      summaryParts.push(observedPremiumComparison.note);
     }
-    if (mitigationVerification) {
-      summaryParts.push(mitigationVerification.note);
-    }
-    summaryParts.push('Educational guidance only; validate assumptions before policy changes.');
+    summaryParts.push('Carrier discount eligibility is unknown unless supported by named carrier evidence.');
     const summary = summaryParts.join(' ');
 
     const persistedRecommendations = contextualRecommendations.map(({ actionType: _actionType, ...rest }) => rest);
     const planItemInputs = contextualRecommendations
-      .filter((recommendation) => recommendation.type === 'MITIGATE' || recommendation.type === 'POLICY_LEVER')
+      .filter((recommendation) => recommendation.type === 'MITIGATE')
       .slice(0, 7);
 
     const created = await prisma.$transaction(async (tx) => {
@@ -1416,11 +1268,10 @@ export class RiskPremiumOptimizerService {
           homeownerProfileId: property.homeownerProfileId,
           propertyId,
           assumptionSetId: assumptionSetId ?? null,
+          coverageReviewId: coverageReview.id,
           status: RiskPremiumOptimizationStatus.READY,
           confidence,
           summary,
-          estimatedSavingsMin: estimatedSavingsMin,
-          estimatedSavingsMax: estimatedSavingsMax,
           inputsSnapshot: {
             version: 1,
             inputs: {
@@ -1429,7 +1280,6 @@ export class RiskPremiumOptimizerService {
               cashBuffer: cashBuffer ?? null,
               riskTolerance,
               policyId: activePolicy?.id ?? null,
-              assumeBundled,
               assumeNewMitigations: Array.from(assumedMitigations.values()),
               preferenceProfileId: posture.preferenceProfileId,
               assumptionSetId,
@@ -1441,12 +1291,10 @@ export class RiskPremiumOptimizerService {
               hasRoofInspectionDoc,
               hasMitigationReceipt,
               claimsByPeril,
-              coverageGapCount,
               maintenanceAdherencePercent,
-              savingsRealizationAnnual,
             },
             sharedSignalsUsed,
-            mitigationVerification: mitigationVerification ?? null,
+            observedPremiumComparison: observedPremiumComparison ?? null,
             propertyContext: {
               propertyId,
               contextVersion: protectionContext.contextVersion,
@@ -1459,24 +1307,30 @@ export class RiskPremiumOptimizerService {
 
       if (planItemInputs.length > 0) {
         await tx.riskMitigationPlanItem.createMany({
-          data: planItemInputs.map((recommendation) => ({
-            analysisId: analysis.id,
-            propertyId,
-            actionType: recommendation.actionType,
-            status: MitigationPlanStatus.RECOMMENDED,
-            priority:
-              recommendation.priority === 'HIGH'
-                ? MitigationPriority.HIGH
-                : recommendation.priority === 'LOW'
-                  ? MitigationPriority.LOW
-                  : MitigationPriority.MEDIUM,
-            targetPeril: recommendation.targetPeril as MitigationPeril | undefined,
-            title: recommendation.title,
-            why: recommendation.whyThisMatters,
-            estimatedCost: recommendation.estimatedCost ?? null,
-            estimatedSavingsMin: recommendation.estimatedSavingsMin ?? null,
-            estimatedSavingsMax: recommendation.estimatedSavingsMax ?? null,
-          })),
+          data: planItemInputs.map((recommendation) => {
+            const help = mitigationHandoff(propertyId, recommendation.actionType, recommendation.title);
+            return {
+              analysisId: analysis.id,
+              propertyId,
+              actionType: recommendation.actionType,
+              status: MitigationPlanStatus.RECOMMENDED,
+              priority:
+                recommendation.priority === 'HIGH'
+                  ? MitigationPriority.HIGH
+                  : recommendation.priority === 'LOW'
+                    ? MitigationPriority.LOW
+                    : MitigationPriority.MEDIUM,
+              targetPeril: recommendation.targetPeril as MitigationPeril | undefined,
+              title: recommendation.title,
+              why: recommendation.whyThisMatters,
+              estimatedCost: recommendation.estimatedCost ?? null,
+              carrierBenefitStatus: 'UNKNOWN',
+              carrierReviewQuestion:
+                `Ask your carrier whether documented ${recommendation.title.toLowerCase()} affects eligibility or a policy-specific discount.`,
+              professionalHelpLevel: help.professionalHelpLevel,
+              handoffJson: help.handoff,
+            };
+          }),
         });
       }
 
@@ -1519,6 +1373,9 @@ export class RiskPremiumOptimizerService {
       select: {
         id: true,
         status: true,
+        completedAt: true,
+        evidenceDocumentId: true,
+        linkedHomeEventId: true,
       },
     });
 
@@ -1578,9 +1435,13 @@ export class RiskPremiumOptimizerService {
       : existing.status;
 
     const shouldAutoCompleteAt =
-      input.status === MitigationPlanStatus.DONE &&
-      existing.status !== MitigationPlanStatus.DONE &&
+      input.status === MitigationPlanStatus.COMPLETED &&
+      existing.status !== MitigationPlanStatus.COMPLETED &&
       input.completedAt === undefined;
+    const shouldClearCompletedAt =
+      input.completedAt === undefined &&
+      input.status !== undefined &&
+      input.status !== MitigationPlanStatus.COMPLETED;
 
     const planItem = await prisma.riskMitigationPlanItem.update({
       where: { id: planItemId },
@@ -1593,7 +1454,9 @@ export class RiskPremiumOptimizerService {
               : null
             : shouldAutoCompleteAt
               ? new Date()
-              : undefined,
+              : shouldClearCompletedAt
+                ? null
+                : undefined,
         evidenceDocumentId:
           input.evidenceDocumentId !== undefined ? input.evidenceDocumentId || null : undefined,
         linkedHomeEventId:
@@ -1601,9 +1464,34 @@ export class RiskPremiumOptimizerService {
       },
     });
 
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'risk_mitigation_plan_item_updated',
+        entityType: 'RiskMitigationPlanItem',
+        entityId: planItemId,
+        oldValues: {
+          status: existing.status,
+          completedAt: existing.completedAt?.toISOString() ?? null,
+          evidenceDocumentId: existing.evidenceDocumentId,
+          linkedHomeEventId: existing.linkedHomeEventId,
+        },
+        newValues: {
+          status: planItem.status,
+          completedAt: planItem.completedAt?.toISOString() ?? null,
+          evidenceDocumentId: planItem.evidenceDocumentId,
+          linkedHomeEventId: planItem.linkedHomeEventId,
+        },
+      },
+    });
+
     if (
       existing.status !== nextStatus &&
-      (nextStatus === MitigationPlanStatus.DONE || nextStatus === MitigationPlanStatus.SKIPPED)
+      (
+        nextStatus === MitigationPlanStatus.COMPLETED ||
+        nextStatus === MitigationPlanStatus.SKIPPED ||
+        nextStatus === MitigationPlanStatus.RESTORED
+      )
     ) {
       await markRiskPremiumOptimizerStale(propertyId);
     }

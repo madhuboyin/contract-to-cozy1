@@ -9,11 +9,15 @@ export type RiskPremiumOptimizerOverrides = {
   deductibleAmount?: number;
   cashBuffer?: number;
   riskTolerance?: RiskPremiumRiskTolerance;
-  assumeBundled?: boolean;
   assumeNewMitigations?: string[];
 };
 
-export type RiskMitigationPlanItemStatus = 'RECOMMENDED' | 'PLANNED' | 'DONE' | 'SKIPPED';
+export type RiskMitigationPlanItemStatus =
+  | 'RECOMMENDED'
+  | 'PLANNED'
+  | 'COMPLETED'
+  | 'SKIPPED'
+  | 'RESTORED';
 
 export type RiskPremiumOptimizationDTO = {
   id: string;
@@ -27,8 +31,7 @@ export type RiskPremiumOptimizationDTO = {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   summary?: string;
 
-  estimatedSavingsMin?: number | null;
-  estimatedSavingsMax?: number | null;
+  coverageReviewId?: string | null;
 
   inputs: {
     annualPremium?: number | null;
@@ -54,8 +57,6 @@ export type RiskPremiumOptimizationDTO = {
     priority: RiskPremiumSeverity;
     targetPeril?: 'WATER' | 'FIRE' | 'WIND_HAIL' | 'THEFT' | 'LIABILITY' | 'ELECTRICAL' | 'OTHER';
     estimatedCost?: number | null;
-    estimatedSavingsMin?: number | null;
-    estimatedSavingsMax?: number | null;
     whyThisMatters: string;
   }>;
 
@@ -68,15 +69,26 @@ export type RiskPremiumOptimizationDTO = {
     title?: string | null;
     why: string;
     estimatedCost?: number | null;
-    estimatedSavingsMin?: number | null;
-    estimatedSavingsMax?: number | null;
+    carrierBenefitStatus: 'UNKNOWN' | 'CONFIRMED_ELIGIBLE' | 'CONFIRMED_NOT_ELIGIBLE';
+    carrierReviewQuestion: string;
+    professionalHelpLevel:
+      | 'DIY_ALLOWED'
+      | 'PROFESSIONAL_RECOMMENDED'
+      | 'QUALIFIED_PROFESSIONAL_REQUIRED'
+      | 'ASK_CARRIER';
+    handoff: {
+      kind: 'DIY' | 'PROVIDER' | 'CARRIER';
+      label: string;
+      href: string;
+      safetyNote: string;
+    };
     evidenceDocumentId?: string | null;
     linkedHomeEventId?: string | null;
     completedAt?: string | null;
   }>;
 
   computedAt: string;
-  mitigationVerification?: {
+  observedPremiumComparison?: {
     hasCompletedMitigations: boolean;
     completedCount: number;
     baselineComputedAt?: string | null;

@@ -3687,6 +3687,7 @@ model CoverageReview {
   property   Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   policyTerm InsurancePolicyTerm? @relation(fields: [policyTermId], references: [id], onDelete: SetNull)
   questions  CoverageReviewQuestion[]
+  riskMitigationAnalyses RiskPremiumOptimizationAnalysis[]
 
   @@index([propertyId, status, generatedAt(sort: Desc)])
   @@index([policyTermId])
@@ -6638,8 +6639,9 @@ enum RiskPremiumOptimizationConfidence {
 enum MitigationPlanStatus {
   RECOMMENDED
   PLANNED
-  DONE
+  COMPLETED
   SKIPPED
+  RESTORED
 }
 
 enum MitigationPriority {
@@ -6687,6 +6689,7 @@ model RiskPremiumOptimizationAnalysis {
   homeownerProfileId String
   propertyId         String
   assumptionSetId    String?
+  coverageReviewId   String?
 
   status     RiskPremiumOptimizationStatus     @default(READY)
   confidence RiskPremiumOptimizationConfidence
@@ -6700,10 +6703,6 @@ model RiskPremiumOptimizationAnalysis {
   // Ranked recommendations and rationale
   recommendations Json?
 
-  // Optional savings estimate range (Decimal to match InsurancePolicy.premiumAmount)
-  estimatedSavingsMin Decimal? @db.Decimal(12, 2)
-  estimatedSavingsMax Decimal? @db.Decimal(12, 2)
-
   computedAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -6711,11 +6710,13 @@ model RiskPremiumOptimizationAnalysis {
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   assumptionSet    AssumptionSet?   @relation(fields: [assumptionSetId], references: [id], onDelete: SetNull)
+  coverageReview   CoverageReview?  @relation(fields: [coverageReviewId], references: [id], onDelete: SetNull)
 
   planItems RiskMitigationPlanItem[]
 
   @@index([homeownerProfileId])
   @@index([assumptionSetId])
+  @@index([coverageReviewId])
   @@index([propertyId, computedAt(sort: Desc)])
   @@index([propertyId, status])
   @@map("risk_premium_optimization_analyses")
@@ -6846,10 +6847,14 @@ model RiskMitigationPlanItem {
   title String?
   why   String
 
-  // Optional estimates (Decimal keeps consistency with HomeEvent.amount and InsurancePolicy.premiumAmount)
-  estimatedCost       Decimal? @db.Decimal(12, 2)
-  estimatedSavingsMin Decimal? @db.Decimal(12, 2)
-  estimatedSavingsMax Decimal? @db.Decimal(12, 2)
+  // Planning cost is informational. Carrier benefit remains unknown unless a
+  // named carrier source is linked; loss reduction never promises a discount.
+  estimatedCost              Decimal? @db.Decimal(12, 2)
+  carrierBenefitStatus       String   @default("UNKNOWN")
+  carrierBenefitEvidenceJson Json?
+  carrierReviewQuestion      String
+  professionalHelpLevel      String
+  handoffJson                Json
 
   // Optional proof links (you already have Document + HomeEvent)
   evidenceDocumentId String?

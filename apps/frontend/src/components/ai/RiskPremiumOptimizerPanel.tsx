@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { AlertCircle, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 import {
   getRiskPremiumOptimizer,
@@ -20,6 +21,8 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
+import { api } from '@/lib/api/client';
+import type { Document } from '@/types';
 
 type RiskPremiumOptimizerPanelProps = {
   propertyId: string;
@@ -30,7 +33,6 @@ type OverrideInputs = {
   deductibleAmount: string;
   cashBuffer: string;
   riskTolerance: 'LOW' | 'MEDIUM' | 'HIGH';
-  assumeBundled: boolean;
 };
 
 const EMPTY_INPUTS: OverrideInputs = {
@@ -38,7 +40,6 @@ const EMPTY_INPUTS: OverrideInputs = {
   deductibleAmount: '',
   cashBuffer: '',
   riskTolerance: 'MEDIUM',
-  assumeBundled: false,
 };
 
 function parseOptionalNumber(value: string): number | undefined {
@@ -93,6 +94,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
   const [showAllRecommendations, setShowAllRecommendations] = useState(false);
   const [updatingPlanItemId, setUpdatingPlanItemId] = useState<string | null>(null);
   const [rerunRecommended, setRerunRecommended] = useState(false);
+  const [documents, setDocuments] = useState<Document[]>([]);
 
   const fetchStatus = async () => {
     if (!propertyId) return;
@@ -122,13 +124,18 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
+  useEffect(() => {
+    void api.listDocuments(propertyId).then((response) => {
+      if (response.success) setDocuments(response.data.documents);
+    });
+  }, [propertyId]);
+
   const normalizedOverrides = useMemo<RiskPremiumOptimizerOverrides>(() => {
     return {
       annualPremium: parseOptionalNumber(inputs.annualPremium),
       deductibleAmount: parseOptionalNumber(inputs.deductibleAmount),
       cashBuffer: parseOptionalNumber(inputs.cashBuffer),
       riskTolerance: inputs.riskTolerance,
-      assumeBundled: inputs.assumeBundled,
     };
   }, [inputs]);
 
@@ -158,7 +165,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
     try {
       const payload = {
         status: nextStatus,
-        completedAt: nextStatus === 'DONE' ? new Date().toISOString() : null,
+        completedAt: nextStatus === 'COMPLETED' ? new Date().toISOString() : null,
       };
 
       const result = await updateRiskMitigationPlanItem(propertyId, planItemId, payload);
@@ -168,7 +175,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
         return {
           ...prev,
           status:
-            nextStatus === 'DONE' || nextStatus === 'SKIPPED'
+            nextStatus === 'COMPLETED' || nextStatus === 'SKIPPED' || nextStatus === 'RESTORED'
               ? 'STALE'
               : prev.status,
           planItems: prev.planItems.map((item) =>
@@ -177,11 +184,33 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
         };
       });
 
-      if (nextStatus === 'DONE' || nextStatus === 'SKIPPED') {
+      if (nextStatus === 'COMPLETED' || nextStatus === 'SKIPPED' || nextStatus === 'RESTORED') {
         setRerunRecommended(true);
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to update mitigation plan item.');
+    } finally {
+      setUpdatingPlanItemId(null);
+    }
+  };
+
+  const handleEvidenceUpdate = async (planItemId: string, evidenceDocumentId: string | null) => {
+    setUpdatingPlanItemId(planItemId);
+    setError(null);
+    try {
+      const result = await updateRiskMitigationPlanItem(propertyId, planItemId, {
+        evidenceDocumentId,
+      });
+      setAnalysis((previous) => previous
+        ? {
+            ...previous,
+            planItems: previous.planItems.map((item) =>
+              item.id === planItemId ? result.planItem : item
+            ),
+          }
+        : previous);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update evidence.');
     } finally {
       setUpdatingPlanItemId(null);
     }
@@ -201,7 +230,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
     return (
       <div className="rounded-2xl border border-black/10 bg-white p-8 flex items-center justify-center gap-2">
         <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
-        <span className="text-sm text-gray-600">Loading optimizer…</span>
+        <span className="text-sm text-gray-600">Loading loss-prevention plan…</span>
       </div>
     );
   }
@@ -216,9 +245,9 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
       )}
 
       <ScenarioInputCard
-        title="Scenario Input"
-        subtitle="Compare mitigation actions and policy levers with your current premium posture."
-        badge={<StatusChip tone="info">Deterministic</StatusChip>}
+        title="Loss-prevention context"
+        subtitle="Use current home and policy context to identify practical ways to reduce loss exposure."
+        badge={<StatusChip tone="info">Planning only</StatusChip>}
       >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs text-gray-600">
@@ -273,15 +302,6 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           </label>
         </div>
 
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            type="checkbox"
-            checked={inputs.assumeBundled}
-            onChange={(e) => setInputs((prev) => ({ ...prev, assumeBundled: e.target.checked }))}
-          />
-          Assume bundled-discount posture in scenario
-        </label>
-
         <ActionPriorityRow
           primaryAction={
             <Button onClick={runNow} disabled={running}>
@@ -291,7 +311,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                   Running…
                 </>
               ) : (
-                'Run optimizer'
+                'Build loss-prevention plan'
               )}
             </Button>
           }
@@ -303,9 +323,9 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
         <section className="rounded-2xl border border-black/10 bg-white p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">No optimizer run yet</h3>
+              <h3 className="text-lg font-semibold text-gray-900">No loss-prevention plan yet</h3>
               <p className="text-sm text-gray-600 mt-1">
-                Run the optimizer to generate premium drivers and mitigation plan items.
+                Build a plan to organize relevant loss-prevention work and evidence.
               </p>
             </div>
             <ShieldAlert className="h-6 w-6 text-teal-700" />
@@ -318,7 +338,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           <PropertyContextStatusNotice context={analysis.propertyContext} title="Optimizer applicability" />
           {(analysis.status === 'STALE' || rerunRecommended) && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              Inputs changed or plan progress was updated. Re-run the optimizer for a fresh estimate.
+              Inputs changed or plan progress was updated. Rebuild the plan for a fresh review.
             </div>
           )}
 
@@ -364,37 +384,40 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
             ]}
           />
 
-          {analysis.mitigationVerification?.hasCompletedMitigations ? (
+          {analysis.observedPremiumComparison?.hasCompletedMitigations ? (
             <section className="rounded-2xl border border-black/10 bg-white p-5">
-              <h4 className="text-base font-semibold text-gray-900">Post-mitigation verification</h4>
-              <p className="mt-1 text-sm text-gray-600">{analysis.mitigationVerification.note}</p>
+              <h4 className="text-base font-semibold text-gray-900">Observed premium comparison</h4>
+              <p className="mt-1 text-sm text-gray-600">{analysis.observedPremiumComparison.note}</p>
+              <p className="mt-1 text-xs font-medium text-amber-800">
+                This comparison is observational. It does not establish that completed work caused a premium change.
+              </p>
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="rounded-xl border border-gray-200 bg-black/[0.02] p-3 text-xs text-gray-700">
-                  Completed actions: <span className="font-semibold">{analysis.mitigationVerification.completedCount}</span>
+                  Completed actions: <span className="font-semibold">{analysis.observedPremiumComparison.completedCount}</span>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-black/[0.02] p-3 text-xs text-gray-700">
-                  Baseline run: <span className="font-semibold">{compactDate(analysis.mitigationVerification.baselineComputedAt || undefined)}</span>
+                  Baseline run: <span className="font-semibold">{compactDate(analysis.observedPremiumComparison.baselineComputedAt || undefined)}</span>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-black/[0.02] p-3 text-xs text-gray-700">
-                  Baseline premium: <span className="font-semibold">{money(analysis.mitigationVerification.baselineAnnualPremium)}</span>
+                  Baseline premium: <span className="font-semibold">{money(analysis.observedPremiumComparison.baselineAnnualPremium)}</span>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-black/[0.02] p-3 text-xs text-gray-700">
-                  Current premium: <span className="font-semibold">{money(analysis.mitigationVerification.currentAnnualPremium)}</span>
+                  Current premium: <span className="font-semibold">{money(analysis.observedPremiumComparison.currentAnnualPremium)}</span>
                 </div>
               </div>
               <div className="mt-3 inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${verificationTone(analysis.mitigationVerification.observedDirection)}`}>
-                  {analysis.mitigationVerification.observedDirection}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${verificationTone(analysis.observedPremiumComparison.observedDirection)}`}>
+                  {analysis.observedPremiumComparison.observedDirection}
                 </span>
                 <span className="text-gray-700">
-                  Observed delta: {analysis.mitigationVerification.observedPremiumDelta == null ? '—' : money(analysis.mitigationVerification.observedPremiumDelta)}
+                  Observed delta: {analysis.observedPremiumComparison.observedPremiumDelta == null ? '—' : money(analysis.observedPremiumComparison.observedPremiumDelta)}
                 </span>
               </div>
             </section>
           ) : null}
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
-            <h4 className="text-base font-semibold text-gray-900">Premium drivers</h4>
+            <h4 className="text-base font-semibold text-gray-900">Loss exposure signals</h4>
             <div className="mt-3 space-y-2">
               {topDrivers.map((driver) => (
                 <div key={driver.code} className="rounded-xl border border-gray-200 p-3">
@@ -420,7 +443,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           </section>
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
-            <h4 className="text-base font-semibold text-gray-900">Recommendations</h4>
+            <h4 className="text-base font-semibold text-gray-900">Plan suggestions</h4>
             <div className="mt-3 space-y-2">
               {topRecommendations.map((recommendation) => (
                 <div key={recommendation.code} className="rounded-xl border border-gray-200 p-3">
@@ -453,7 +476,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           </section>
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
-            <h4 className="text-base font-semibold text-gray-900">Mitigation plan checklist</h4>
+            <h4 className="text-base font-semibold text-gray-900">Loss-prevention plan</h4>
             <div className="mt-3 space-y-2">
               {analysis.planItems.length === 0 && (
                 <div className="text-sm text-gray-600">No plan items generated yet.</div>
@@ -469,6 +492,58 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                       <div className="text-xs text-gray-600 mt-1">{item.why}</div>
                       <div className="text-xs text-gray-500 mt-2">
                         Estimated project cost: {money(item.estimatedCost)}
+                      </div>
+                      <div className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-700">
+                        <span className="font-semibold">Carrier benefit:</span>{' '}
+                        {item.carrierBenefitStatus === 'UNKNOWN'
+                          ? 'Unknown — no discount or premium effect is assumed.'
+                          : item.carrierBenefitStatus === 'CONFIRMED_ELIGIBLE'
+                            ? 'Eligibility confirmed by linked carrier evidence.'
+                            : 'Carrier evidence says this is not eligible.'}
+                        <div className="mt-1">{item.carrierReviewQuestion}</div>
+                      </div>
+                      <div className="mt-2 text-xs">
+                        <Link
+                          href={item.handoff.href}
+                          className="font-medium text-teal-700 underline-offset-2 hover:underline"
+                        >
+                          {item.handoff.label}
+                        </Link>
+                        <div className="mt-1 text-gray-500">{item.handoff.safetyNote}</div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-end gap-2">
+                        <label className="min-w-[220px] text-xs text-gray-600">
+                          Completion evidence
+                          <select
+                            value={item.evidenceDocumentId ?? ''}
+                            disabled={updatingPlanItemId === item.id}
+                            onChange={(event) =>
+                              void handleEvidenceUpdate(item.id, event.target.value || null)
+                            }
+                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs"
+                          >
+                            <option value="">No linked evidence</option>
+                            {documents.map((document) => (
+                              <option key={document.id} value={document.id}>{document.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                        {item.evidenceDocumentId ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            disabled={updatingPlanItemId === item.id}
+                            onClick={() => void handleEvidenceUpdate(item.id, null)}
+                          >
+                            Remove evidence
+                          </Button>
+                        ) : (
+                          <Button asChild type="button" variant="ghost">
+                            <Link href={`/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`}>
+                              Upload evidence
+                            </Link>
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -486,8 +561,9 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                       >
                         <option value="RECOMMENDED">Recommended</option>
                         <option value="PLANNED">Planned</option>
-                        <option value="DONE">Done</option>
+                        <option value="COMPLETED">Completed</option>
                         <option value="SKIPPED">Skipped</option>
+                        <option value="RESTORED">Restored</option>
                       </select>
                     </div>
                   </div>
