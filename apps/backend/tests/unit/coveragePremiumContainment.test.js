@@ -55,14 +55,18 @@ test('coverage record UI does not present a missing heuristic gap as proof of co
   assert.doesNotMatch(options, /proofType: 'coverage_gap_snapshot'/);
 });
 
-test('quote lead capture is unavailable until governed handoff controls exist', () => {
+test('quote lead capture is replaced by a governed, fail-closed handoff', () => {
   const route = source('../../src/routes/insuranceQuote.routes.ts');
+  const service = source('../../src/services/insuranceHandoff.service.ts');
   const inventory = source(
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/coverage/CoverageClient.tsx',
   );
 
-  assert.match(route, /INSURANCE_QUOTE_HANDOFF_UNAVAILABLE/);
-  assert.match(route, /res\.status\(503\)/);
+  assert.match(route, /insurance-handoff\/readiness/);
+  assert.match(route, /dataSharing: z\.literal\(true\)/);
+  assert.match(service, /INSURANCE_HANDOFF_UNAVAILABLE/);
+  assert.match(service, /evaluateRecipientEligibility/);
+  assert.match(service, /supportedJurisdictions/);
   assert.doesNotMatch(route, /insuranceQuoteRequest\.create/);
   assert.doesNotMatch(inventory, /InsuranceQuoteModal|setQuoteOpen|>Quotes</);
 });

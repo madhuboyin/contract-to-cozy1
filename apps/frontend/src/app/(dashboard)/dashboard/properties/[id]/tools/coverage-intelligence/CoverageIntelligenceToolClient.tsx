@@ -15,6 +15,7 @@ import { PropertyContextCapturePanel } from '@/components/property-context/Prope
 import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadinessPanel';
 import CoverageReviewQuestionsPanel from '@/components/coverage/CoverageReviewQuestionsPanel';
 import CoverageComparisonPanel from '@/components/coverage/CoverageComparisonPanel';
+import InsuranceHandoffPanel from '@/components/coverage/InsuranceHandoffPanel';
 
 type CoverageStage = 'current' | 'questions' | 'renewal' | 'compare' | 'risk';
 
@@ -188,13 +189,14 @@ export default function CoverageIntelligenceToolClient() {
         </div>
       )}
       {activeStage === 'compare' && (
-        <div id="coverage-stage-compare" role="tabpanel">
+        <div id="coverage-stage-compare" role="tabpanel" className="space-y-4">
           <CoverageComparisonPanel
             propertyId={propertyId}
             guidanceJourneyId={guidanceJourneyId}
             guidanceStepKey={guidanceStepKey}
             sourceActionId={searchParams.get('sourceActionId')}
           />
+          <InsuranceHandoffPanel propertyId={propertyId} />
         </div>
       )}
       {activeStage === 'risk' && (

@@ -908,7 +908,6 @@ model InventoryItem {
   importBatch      InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
 
   documents                 Document[]
-  insuranceQuoteRequests    InsuranceQuoteRequest[]
   homeEvents                HomeEvent[]
   homeItems                 HomeItem[]
   recallMatches             RecallMatch[]
@@ -943,49 +942,116 @@ model InventoryItem {
 }
 
 enum QuoteRequestStatus {
-  NEW
+  DRAFT
+  CONSENTED
   SUBMITTED
+  ACKNOWLEDGED
   IN_PROGRESS
+  QUOTE_RECEIVED
+  WITHDRAWN
+  FAILED
   CLOSED
 }
 
 enum QuoteRequestSource {
-  COVERAGE_GAP
+  COVERAGE_REVIEW
+  COVERAGE_COMPARISON
   MANUAL
+}
+
+// An approved handoff target. No request can be submitted until every review
+// field is approved and the property's jurisdiction is explicitly supported.
+model InsuranceHandoffRecipient {
+  id                         String   @id @default(uuid())
+  name                       String
+  recipientType              String
+  configVersion              String
+  supportedJurisdictions     String[]
+  licensingReviewStatus      String
+  licensingDisclosure        String
+  operatingModelStatus       String
+  privacyReviewStatus        String
+  commercialDisclosure       String
+  compensationDisclosure     String
+  marketScopeDisclosure      String
+  rankingDisclosure          String
+  fulfillmentSlaHours        Int
+  quoteIngestionEnabled      Boolean  @default(false)
+  isActive                   Boolean  @default(false)
+  effectiveAt                DateTime
+  expiresAt                  DateTime?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  quoteRequests InsuranceQuoteRequest[]
+
+  @@index([isActive, effectiveAt])
+  @@map("insurance_handoff_recipients")
 }
 
 model InsuranceQuoteRequest {
   id                 String  @id @default(uuid())
   homeownerProfileId String
   propertyId         String
-  inventoryItemId    String?
+  recipientId        String
+  coverageComparisonId String?
 
-  // Context
-  source        QuoteRequestSource @default(COVERAGE_GAP)
-  gapType       String?
-  exposureCents Int?
-  currency      String             @default("USD")
+  source QuoteRequestSource @default(MANUAL)
+  purpose String
 
-  // User input
-  preferredContact String? // "EMAIL" | "SMS" | "PHONE" (keep string to avoid churn)
+  // Explicit channel-specific contact authorization.
+  preferredContact String
   contactEmail     String?
   contactPhone     String?
-  zipCode          String?
+  jurisdictionCode String
   notes            String?
 
-  status QuoteRequestStatus @default(NEW)
+  disclosureVersion       String
+  disclosureSnapshotJson  Json
+  consentSnapshotJson     Json
+  sharedPayloadJson       Json
+  consentedAt             DateTime
+  submittedAt             DateTime?
+  acknowledgedAt          DateTime?
+  withdrawnAt             DateTime?
+  fulfilledAt             DateTime?
+  externalRequestId       String?
+  failureReason           String?
+  returnedQuoteDocumentId String?
+  comparisonOptionId      String?
+  outcome                 String?
+
+  status QuoteRequestStatus @default(CONSENTED)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  inventoryItem    InventoryItem?   @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  recipient        InsuranceHandoffRecipient @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+  events           InsuranceQuoteRequestEvent[]
 
   @@index([homeownerProfileId])
   @@index([propertyId])
-  @@index([status])
+  @@index([recipientId, status])
+  @@index([propertyId, status, createdAt(sort: Desc)])
   @@map("insurance_quote_requests")
+}
+
+model InsuranceQuoteRequestEvent {
+  id             String   @id @default(uuid())
+  quoteRequestId String
+  eventType      String
+  actorType      String
+  actorId        String?
+  status         QuoteRequestStatus?
+  detailsJson    Json
+  occurredAt     DateTime @default(now())
+
+  quoteRequest InsuranceQuoteRequest @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
+
+  @@index([quoteRequestId, occurredAt])
+  @@map("insurance_quote_request_events")
 }
 
 // NEW: Service 
