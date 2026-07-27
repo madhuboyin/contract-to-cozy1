@@ -197,6 +197,69 @@ function attachMissingFactors(analysis: any): any {
   };
 }
 
+// ─── Home Digital Twin evidence ──────────────────────────────────────
+
+type TwinTimelineEvidence = {
+  installYear: number | null;
+  isReported: boolean; // REPORTED/VERIFIED/DOCUMENT_DERIVED — safe to use in place of the flat age fallback
+  hasConflict: boolean;
+  componentLabel: string;
+};
+
+/**
+ * Loads install-year evidence the Home Digital Twin already resolved for
+ * this property's inventory-backed components, keyed by inventoryItemId.
+ * Capital Timeline's own lifespan/window/cost math is untouched — this
+ * only replaces the flat "assume 5 years old" fallback when a real,
+ * evidence-bounded age exists, and flags conflicting records it has no
+ * way to detect on its own (it never looks at the property profile).
+ */
+async function loadTwinTimelineEvidence(
+  propertyId: string,
+): Promise<Map<string, TwinTimelineEvidence>> {
+  const evidence = new Map<string, TwinTimelineEvidence>();
+
+  const twin = await prisma.homeDigitalTwin.findUnique({
+    where: { propertyId },
+    select: { id: true },
+  });
+  if (!twin) return evidence;
+
+  const components = await prisma.homeTwinComponent.findMany({
+    where: {
+      digitalTwinId: twin.id,
+      lifecycleState: 'ACTIVE',
+      sourceType: 'INVENTORY',
+      sourceReferenceId: { not: null },
+    },
+    select: {
+      label: true,
+      componentType: true,
+      sourceReferenceId: true,
+      projectedFacts: {
+        where: { fieldName: 'installYear' },
+        select: { valueNumeric: true, factState: true },
+      },
+    },
+  });
+
+  for (const component of components) {
+    const inventoryItemId = component.sourceReferenceId;
+    if (!inventoryItemId) continue;
+    const fact = component.projectedFacts[0];
+    if (!fact) continue;
+
+    evidence.set(inventoryItemId, {
+      installYear: fact.valueNumeric,
+      isReported: fact.factState === 'REPORTED' || fact.factState === 'VERIFIED' || fact.factState === 'DOCUMENT_DERIVED',
+      hasConflict: fact.factState === 'CONFLICTED',
+      componentLabel: component.label ?? component.componentType,
+    });
+  }
+
+  return evidence;
+}
+
 // ─── Service ────────────────────────────────────────────────────────
 export class HomeCapitalTimelineService {
   private financialAssumptionService = new FinancialAssumptionService();
@@ -232,7 +295,7 @@ export class HomeCapitalTimelineService {
     }
   ) {
     // 1. Fetch inputs (Phase-3: also fetch property state for climate adjustments)
-    const [propertyRecord, inventoryItems, homeEvents, overrides] = await Promise.all([
+    const [propertyRecord, inventoryItems, homeEvents, overrides, twinEvidenceByItem] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { state: true } }),
       prisma.inventoryItem.findMany({
         where: { propertyId },
@@ -252,6 +315,7 @@ export class HomeCapitalTimelineService {
       prisma.homeCapitalTimelineOverride.findMany({
         where: { propertyId },
       }),
+      loadTwinTimelineEvidence(propertyId),
     ]);
 
     const financialContext = await this.financialAssumptionService.resolveForTool({
@@ -319,8 +383,16 @@ export class HomeCapitalTimelineService {
       ];
       if (itemOverrides.some(o => o.type === 'DISABLE_ITEM')) continue;
 
-      // Age calculation
-      const age = ageInYears(item.installedOn || item.purchasedOn, 5);
+      // Home Digital Twin evidence for this inventory item, if any.
+      const twinEvidence = twinEvidenceByItem.get(item.id);
+      const twinInstallDate =
+        !item.installedOn && !item.purchasedOn && twinEvidence?.isReported && twinEvidence.installYear
+          ? new Date(`${twinEvidence.installYear}-01-01`)
+          : null;
+
+      // Age calculation — falls back to the Home Digital Twin's resolved
+      // install year (evidence-bounded) before the flat 5-year guess.
+      const age = ageInYears(item.installedOn || item.purchasedOn || twinInstallDate, 5);
 
       // Adjusted lifespan (Phase-3: apply climate/seasonal wear factor)
       const climateFactor = getClimateWearFactor(propertyState, timelineCat);
@@ -392,10 +464,14 @@ export class HomeCapitalTimelineService {
       costMax = Math.round(projectValueAtYear(costMax, capitalCostGrowthRate, yearsUntilEvent));
 
       // Confidence & priority
-      const hasInstallDate = !!(item.installedOn || item.purchasedOn);
+      const hasInstallDate = !!(item.installedOn || item.purchasedOn || twinInstallDate);
       const hasCondition = item.condition !== 'UNKNOWN';
       const hasReplacementCost = !!(item.replacementCostCents || costOverride);
-      const confidence = scoreConfidence(hasInstallDate, hasCondition, hasReplacementCost);
+      let confidence = scoreConfidence(hasInstallDate, hasCondition, hasReplacementCost);
+      // Conflicting Home Record sources mean this window rests on a
+      // disputed date — never present that as HIGH confidence, regardless
+      // of what the other factors say.
+      if (twinEvidence?.hasConflict && confidence === 'HIGH') confidence = 'MEDIUM';
 
       const yearsUntil = Math.max(0, remainingLife);
       const priority = scorePriority(yearsUntil);
@@ -404,6 +480,9 @@ export class HomeCapitalTimelineService {
       const whyParts: string[] = [];
       const itemLabel = item.name || timelineCat;
       whyParts.push(`${itemLabel} is estimated at ~${age.toFixed(1)} years old.`);
+      if (twinInstallDate) {
+        whyParts.push(`Install year filled in from your Home Record (property profile), not this inventory entry.`);
+      }
       whyParts.push(`Typical ${timelineCat.toLowerCase()} lifespan is ${defaults.lifespanYears} years.`);
       if (item.condition !== 'UNKNOWN') {
         whyParts.push(`Condition is ${item.condition.toLowerCase()}, adjusting expected lifespan.`);
@@ -416,6 +495,11 @@ export class HomeCapitalTimelineService {
       }
       if (remainingLifeOverride) {
         whyParts.push(`Remaining life manually set to ${(remainingLifeOverride.payload as any)?.remainingYears} years.`);
+      }
+      if (twinEvidence?.hasConflict) {
+        whyParts.push(
+          `Your Home Record has two different install dates on file for ${twinEvidence.componentLabel} — confirm which is right before relying on this window.`,
+        );
       }
       whyParts.push(
         `Future cost projected with ${(capitalCostGrowthRate * 100).toFixed(1)}% annual capital-cost growth.`

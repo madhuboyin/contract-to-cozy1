@@ -521,6 +521,70 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Home Digital Twin evidence
+// ---------------------------------------------------------------------------
+
+type TwinInstallEvidence = {
+  installYear: number | null;
+  isReported: boolean; // REPORTED/VERIFIED — safe to use as a fallback install date
+  hasConflict: boolean;
+  componentLabel: string;
+};
+
+/**
+ * Loads install-year evidence the Home Digital Twin already resolved for
+ * this property's inventory-backed components, keyed by inventoryItemId.
+ * Status Board's own condition/EOL math is untouched — this only fills a
+ * gap (missing install date) or surfaces a conflict Status Board has no
+ * way to detect on its own (it never looks at the property profile).
+ */
+async function loadTwinInstallEvidence(
+  propertyId: string,
+): Promise<Map<string, TwinInstallEvidence>> {
+  const evidence = new Map<string, TwinInstallEvidence>();
+
+  const twin = await prisma.homeDigitalTwin.findUnique({
+    where: { propertyId },
+    select: { id: true },
+  });
+  if (!twin) return evidence;
+
+  const components = await prisma.homeTwinComponent.findMany({
+    where: {
+      digitalTwinId: twin.id,
+      lifecycleState: 'ACTIVE',
+      sourceType: 'INVENTORY',
+      sourceReferenceId: { not: null },
+    },
+    select: {
+      label: true,
+      componentType: true,
+      sourceReferenceId: true,
+      projectedFacts: {
+        where: { fieldName: 'installYear' },
+        select: { valueNumeric: true, factState: true },
+      },
+    },
+  });
+
+  for (const component of components) {
+    const inventoryItemId = component.sourceReferenceId;
+    if (!inventoryItemId) continue;
+    const fact = component.projectedFacts[0];
+    if (!fact) continue;
+
+    evidence.set(inventoryItemId, {
+      installYear: fact.valueNumeric,
+      isReported: fact.factState === 'REPORTED' || fact.factState === 'VERIFIED' || fact.factState === 'DOCUMENT_DERIVED',
+      hasConflict: fact.factState === 'CONFLICTED',
+      componentLabel: component.label ?? component.componentType,
+    });
+  }
+
+  return evidence;
+}
+
+// ---------------------------------------------------------------------------
 // computeStatuses
 // ---------------------------------------------------------------------------
 
@@ -541,6 +605,12 @@ export async function computeStatuses(propertyId: string): Promise<void> {
       },
     },
   });
+
+  // Home Digital Twin evidence, keyed by the inventory item it was derived
+  // from. Status Board owns "what needs attention now" — this only feeds it
+  // evidence the twin already resolved (a reported install date; a
+  // conflict between two sources), it never recomputes condition itself.
+  const twinByInventoryItemId = await loadTwinInstallEvidence(propertyId);
 
   const now = new Date();
   const updates: any[] = [];
@@ -568,6 +638,14 @@ export async function computeStatuses(propertyId: string): Promise<void> {
     // Use override dates if present
     if (item.status.overrideInstalledAt) installDate = item.status.overrideInstalledAt;
 
+    // Home Digital Twin evidence for this inventory item, if any.
+    const twinEvidence = twinByInventoryItemId.get(item.inventoryItemId);
+    let installDateFromTwin = false;
+    if (!installDate && twinEvidence?.isReported && twinEvidence.installYear) {
+      installDate = new Date(`${twinEvidence.installYear}-01-01`);
+      installDateFromTwin = true;
+    }
+
     const expectedLife = getExpectedLife(assetType, inventoryCategory);
     const hasInstallDate = Boolean(installDate);
     const ageYears = installDate
@@ -588,6 +666,19 @@ export async function computeStatuses(propertyId: string): Promise<void> {
 
     if (!hasInstallDate) {
       reasons.push({ code: 'MISSING_INSTALL_DATE', detail: 'Install date is empty' });
+    } else if (installDateFromTwin) {
+      reasons.push({
+        code: 'INSTALL_DATE_FROM_HOME_RECORD',
+        detail: 'Install year filled in from your Home Record (property profile), not this inventory entry',
+      });
+    }
+
+    if (twinEvidence?.hasConflict) {
+      condition = condition === 'GOOD' ? 'MONITOR' : condition;
+      reasons.push({
+        code: 'HOME_RECORD_CONFLICT',
+        detail: `Your Home Record has two different install dates on file for ${twinEvidence.componentLabel} — confirm which is right`,
+      });
     }
 
     if (hasOverdueUrgent) {
@@ -627,11 +718,24 @@ export async function computeStatuses(propertyId: string): Promise<void> {
       recommendation = 'REPLACE_SOON';
     }
 
+    // Home Digital Twin evidence quality, when available. Conflicting
+    // records lower confidence regardless of anything else computed above;
+    // a twin-reported/verified date raises it. No twin signal leaves the
+    // field at its existing value rather than resetting to MEDIUM.
+    const derivedConfidence: 'HIGH' | 'MEDIUM' | 'LOW' | null = twinEvidence
+      ? twinEvidence.hasConflict
+        ? 'LOW'
+        : twinEvidence.isReported
+          ? 'HIGH'
+          : 'MEDIUM'
+      : null;
+
     // Only update if values changed
     const changed =
       item.status.computedCondition !== condition ||
       item.status.computedRecommendation !== recommendation ||
-      JSON.stringify(item.status.computedReasonJson) !== JSON.stringify(reasons);
+      JSON.stringify(item.status.computedReasonJson) !== JSON.stringify(reasons) ||
+      (derivedConfidence !== null && item.status.confidence !== derivedConfidence);
 
     if (changed) {
       updates.push(
@@ -642,6 +746,7 @@ export async function computeStatuses(propertyId: string): Promise<void> {
             computedRecommendation: recommendation,
             computedReasonJson: reasons,
             computedAt: now,
+            ...(derivedConfidence ? { confidence: derivedConfidence } : {}),
           },
         })
       );

@@ -18,7 +18,7 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -38,6 +38,15 @@ function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['gove
     },
     reviewedBy: [],
     policyVersion,
+  };
+}
+
+function materialFinancialGovernance(policyVersion: string): HomeAction['governance'] {
+  return {
+    ...lowConsequenceGovernance(policyVersion),
+    safetyTier: 'MATERIAL_FINANCIAL',
+    professionalBoundary:
+      'Estimates and comparisons are educational planning inputs, not financial, tax, valuation, or investment advice.',
   };
 }
 
@@ -1073,6 +1082,178 @@ async function loadRefinanceDataRequiredActions(
   })];
 }
 
+// ---------------------------------------------------------------------------
+// Home Digital Twin (Slice 3: contextual Home Actions for missing facts and
+// material planning windows). Both loaders only surface what the twin and
+// capital timeline already computed — neither recomputes anything here.
+// ---------------------------------------------------------------------------
+
+async function loadHomeDigitalTwinFactReviewActions(
+  propertyId: string,
+  db: HomeActionSourceDb,
+): Promise<HomeAction[]> {
+  if (!db.homeDigitalTwin || !db.homeTwinComponent) return [];
+
+  const twin = await db.homeDigitalTwin.findUnique({
+    where: { propertyId },
+    select: { id: true, updatedAt: true },
+  });
+  if (!twin) return [];
+
+  const components = await db.homeTwinComponent.findMany({
+    where: { digitalTwinId: twin.id, lifecycleState: 'ACTIVE', isUserConfirmed: false },
+    select: {
+      projectedFacts: {
+        where: { factState: { in: ['CONFLICTED', 'DEFAULT', 'UNKNOWN'] } },
+        select: { factState: true, correctionDestination: true },
+      },
+    },
+  });
+
+  const needsAttention = components.flatMap((c) => c.projectedFacts);
+  if (needsAttention.length === 0) return [];
+
+  const conflictCount = needsAttention.filter((f) => f.factState === 'CONFLICTED').length;
+  const singleDestination = needsAttention.length === 1 ? needsAttention[0].correctionDestination : null;
+
+  return [adaptHomeActionSource('SYSTEM', {
+    id: `home-digital-twin-fact-review:${propertyId}`,
+    propertyId,
+    lineageId: `home-digital-twin-fact-review:${propertyId}`,
+    sourceEntityId: twin.id,
+    sourceVersion: twin.updatedAt.toISOString(),
+    job: 'STAY_AHEAD',
+    state: 'OPEN',
+    priority: conflictCount > 0 ? 'SOON' : 'CONSIDER',
+    signal: conflictCount > 0
+      ? `${conflictCount} home fact${conflictCount === 1 ? '' : 's'} have conflicting records on file.`
+      : `${needsAttention.length} home fact${needsAttention.length === 1 ? '' : 's'} could use a confirmation.`,
+    whyItMatters:
+      'Your Home Record projection uses these facts for planning and cost estimates — confirming them keeps that projection trustworthy.',
+    recommendedAction: 'Review the flagged home facts',
+    expectedOutcome: 'Confirmed facts stop being re-guessed on every projection refresh.',
+    timing: {
+      dueAt: null,
+      windowStart: null,
+      windowEnd: null,
+      rationale: 'Low urgency — review whenever convenient.',
+    },
+    evidence: [{
+      id: twin.id,
+      type: 'SYSTEM_DERIVATION',
+      label: 'Home Digital Twin projection',
+      source: 'Home Record',
+      observedAt: twin.updatedAt.toISOString(),
+      freshness: 'CURRENT',
+      confidence: 1,
+    }],
+    assumptions: [],
+    options: [],
+    tradeoffs: [],
+    confidence: { score: 1, label: 'HIGH', missing: [] },
+    governance: lowConsequenceGovernance('home-digital-twin-fact-review-v1'),
+    primaryCta: {
+      kind: 'CORRECT_FACT',
+      label: 'Review home facts',
+      href: singleDestination ?? `/dashboard/properties/${propertyId}`,
+    },
+    secondaryCtas: [],
+    feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT', 'CORRECT_FACT'],
+    relatedJourneyId: null,
+    createdAt: twin.updatedAt.toISOString(),
+    lastEvaluatedAt: twin.updatedAt.toISOString(),
+  })];
+}
+
+const CAPITAL_TIMELINE_CATEGORY_LABEL: Record<string, string> = {
+  ROOF: 'Roof', HVAC: 'HVAC', WATER_HEATER: 'Water heater', APPLIANCE: 'Appliance',
+  PLUMBING: 'Plumbing', ELECTRICAL: 'Electrical', EXTERIOR: 'Exterior', FOUNDATION: 'Foundation', OTHER: 'System',
+};
+
+const CAPITAL_TIMELINE_CONFIDENCE_SCORE: Record<string, number> = { HIGH: 0.85, MEDIUM: 0.6, LOW: 0.35 };
+
+async function loadHomeCapitalTimelineMaterialWindowActions(
+  propertyId: string,
+  db: HomeActionSourceDb,
+): Promise<HomeAction[]> {
+  if (!db.homeCapitalTimelineAnalysis) return [];
+
+  const analysis = await db.homeCapitalTimelineAnalysis.findFirst({
+    where: { propertyId, status: 'READY' },
+    orderBy: { computedAt: 'desc' },
+    select: {
+      id: true,
+      computedAt: true,
+      items: {
+        where: { priority: 'HIGH' },
+        orderBy: { windowStart: 'asc' },
+        take: 3,
+        select: {
+          id: true, category: true, windowStart: true, windowEnd: true,
+          estimatedCostMinCents: true, estimatedCostMaxCents: true, confidence: true, why: true,
+        },
+      },
+    },
+  });
+  if (!analysis || analysis.items.length === 0) return [];
+
+  return analysis.items.map((item) => {
+    const costRange = item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null
+      ? `$${Math.round(item.estimatedCostMinCents / 100).toLocaleString()}–$${Math.round(item.estimatedCostMaxCents / 100).toLocaleString()}`
+      : null;
+    const windowLabel = item.windowStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const categoryLabel = CAPITAL_TIMELINE_CATEGORY_LABEL[item.category] ?? 'System';
+    const confidenceScore = CAPITAL_TIMELINE_CONFIDENCE_SCORE[item.confidence] ?? 0.5;
+    const governance = materialFinancialGovernance('home-capital-timeline-window-v1');
+    const decisionContract = guidanceDecisionContract(governance);
+
+    return adaptHomeActionSource('SYSTEM', {
+      id: `home-capital-timeline-window:${item.id}`,
+      propertyId,
+      lineageId: `home-capital-timeline-window:${item.id}`,
+      sourceEntityId: item.id,
+      sourceVersion: analysis.computedAt.toISOString(),
+      job: 'MAJOR_MOMENT',
+      state: 'OPEN',
+      priority: 'PLAN',
+      signal: `${categoryLabel} replacement window is approaching (${windowLabel}).`,
+      whyItMatters: item.why,
+      recommendedAction: 'Review the capital timeline for this system',
+      expectedOutcome: costRange
+        ? `A planning range (${costRange}) to budget or reserve against before this window arrives.`
+        : 'A planning window to budget or reserve against before it arrives.',
+      timing: {
+        dueAt: null,
+        windowStart: item.windowStart.toISOString(),
+        windowEnd: item.windowEnd.toISOString(),
+        rationale: "Reflects the capital timeline's predicted replacement window, not a fixed deadline.",
+      },
+      evidence: [{
+        id: item.id,
+        type: 'SYSTEM_DERIVATION',
+        label: 'Capital Timeline projection',
+        source: 'Home Capital Timeline',
+        observedAt: analysis.computedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence: confidenceScore,
+      }],
+      ...decisionContract,
+      confidence: { score: confidenceScore, label: item.confidence as 'LOW' | 'MEDIUM' | 'HIGH', missing: [] },
+      governance,
+      primaryCta: {
+        kind: 'REVIEW',
+        label: 'Review capital timeline',
+        href: `/dashboard/properties/${propertyId}/tools/capital-timeline`,
+      },
+      secondaryCtas: [],
+      feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT'],
+      relatedJourneyId: null,
+      createdAt: analysis.computedAt.toISOString(),
+      lastEvaluatedAt: analysis.computedAt.toISOString(),
+    });
+  });
+}
+
 export async function getPromotedHomeActions(
   propertyId: string,
   db: HomeActionSourceDb = prisma,
@@ -1101,6 +1282,8 @@ export async function getPromotedHomeActions(
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
     options.includePersonalization === false ? Promise.resolve([]) : loadPersonalizationActions(propertyId, db),
     loadRefinanceDataRequiredActions(propertyId, db),
+    loadHomeDigitalTwinFactReviewActions(propertyId, db),
+    loadHomeCapitalTimelineMaterialWindowActions(propertyId, db),
     Promise.resolve(environmentActions),
   ]);
   const candidates = groups.flat();
