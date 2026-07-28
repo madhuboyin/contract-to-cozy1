@@ -17,6 +17,9 @@ describe('Home Upgrade Planner accessibility and outcome contract', () => {
     );
     expect(intro).toContain('title="Home Upgrade Planner"');
     expect(intro).not.toContain('lg:hidden');
+    expect(source).toContain('Your home upgrade plan');
+    expect(source).toContain('is the next system worth reviewing');
+    expect(source).toContain('Your home systems');
   });
 
   it('announces stale and validation state to assistive technology', () => {
@@ -32,6 +35,17 @@ describe('Home Upgrade Planner accessibility and outcome contract', () => {
     expect(source).not.toContain('Scenario assumptions as JSON');
     expect(source).toContain('aria-label={`Mark this option as');
     expect(source).toContain('aria-label="Decision reason"');
+    expect(source).toContain('Does this option fit your plan?');
+    expect(source).toContain('Tune the comparison');
+  });
+
+  it('surfaces decision metrics before secondary planning controls', () => {
+    expect(source).toContain('Decision snapshot');
+    expect(source).toContain('What this option could mean');
+    expect(source).toContain("label: 'Upfront cost'");
+    expect(source).toContain("label: 'Annual savings'");
+    expect(source).toContain("label: 'Payback'");
+    expect(source).toContain('Build the full decision set');
   });
 
   it('makes preserved evidence and recomputation changes inspectable', () => {

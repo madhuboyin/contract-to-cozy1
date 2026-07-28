@@ -6,14 +6,20 @@ import { useParams } from 'next/navigation';
 import { track } from '@/lib/analytics/events';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
+  ArrowUpRight,
   Building2,
+  CalendarClock,
   ChevronRight,
   CheckCircle2,
+  CircleDollarSign,
+  Clock3,
   Droplets,
   FileCheck,
   Flame,
+  Gauge,
   Hammer,
   Home,
   Info,
@@ -22,8 +28,10 @@ import {
   Loader2,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   Square,
   Sun,
+  TrendingUp,
   type LucideIcon,
   Wind,
   Wrench,
@@ -43,7 +51,6 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import {
   EmptyStateCard,
-  MetricRow,
   MobileCard,
   MobileFilterSurface,
   MobilePageContainer,
@@ -261,6 +268,20 @@ function formatDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
+function formatImpactDisplay(impact: HomeTwinScenarioImpactDTO | undefined): string {
+  if (!impact) return '—';
+  const formatValue = (value: number) => {
+    if (impact.unit === 'USD') return formatUSD(value);
+    if (impact.unit === 'PERCENT') return `${value}%`;
+    return `${value}${impact.unit ? ` ${impact.unit.toLowerCase()}` : ''}`;
+  };
+  if (impact.valueLow != null && impact.valueHigh != null && impact.valueLow !== impact.valueHigh) {
+    return `${formatValue(impact.valueLow)}–${formatValue(impact.valueHigh)}`;
+  }
+  if (impact.valueNumeric != null) return formatValue(impact.valueNumeric);
+  return impact.valueText ?? '—';
+}
+
 function ageRatioPct(c: HomeTwinComponentDTO): number | null {
   if (c.estimatedAgeYears == null || c.usefulLifeYears == null || c.usefulLifeYears === 0) {
     return null;
@@ -292,18 +313,51 @@ function planningAttentionLabel(score: number | null | undefined): string {
   return 'High — past typical service life; inspection recommended';
 }
 
-function readinessLabel(score: number | null): string {
-  if (score == null) return 'Unknown';
-  if (score >= 0.70) return 'Good';
-  if (score >= 0.35) return 'Partial';
-  return 'Limited';
-}
-
-function readinessTone(score: number | null): 'good' | 'elevated' | 'info' {
-  if (score == null) return 'info';
-  if (score >= 0.70) return 'good';
-  if (score >= 0.35) return 'elevated';
-  return 'info';
+function componentPlanningMeta(component: HomeTwinComponentDTO): {
+  label: string;
+  detail: string;
+  toneClassName: string;
+  barClassName: string;
+} {
+  const pct = ageRatioPct(component);
+  if (component.status === 'NEEDS_REVIEW') {
+    return {
+      label: 'Needs fact review',
+      detail: 'Confirm home details before relying on this comparison',
+      toneClassName: 'text-amber-800',
+      barClassName: 'bg-amber-500',
+    };
+  }
+  if (component.status === 'RETIRED' || (pct != null && pct >= 85)) {
+    return {
+      label: 'Plan now',
+      detail: 'At or beyond the typical planning window',
+      toneClassName: 'text-rose-700',
+      barClassName: 'bg-rose-500',
+    };
+  }
+  if (pct != null && pct >= 60) {
+    return {
+      label: 'Plan ahead',
+      detail: 'Approaching the typical planning window',
+      toneClassName: 'text-amber-800',
+      barClassName: 'bg-amber-500',
+    };
+  }
+  if (pct != null) {
+    return {
+      label: 'Monitor',
+      detail: 'Within the typical service-life range',
+      toneClassName: 'text-emerald-700',
+      barClassName: 'bg-emerald-500',
+    };
+  }
+  return {
+    label: 'Add details',
+    detail: 'More home information will improve this comparison',
+    toneClassName: 'text-sky-700',
+    barClassName: 'bg-sky-500',
+  };
 }
 
 function splitDescriptionIntoPoints(description: string): string[] {
@@ -390,106 +444,119 @@ function TwinStatusCard({
   twin,
   onRefresh,
   isRefreshing,
+  onCompare,
 }: {
   twin: HomeDigitalTwinDTO;
   onRefresh: () => void;
   isRefreshing: boolean;
+  onCompare: (componentId: string) => void;
 }) {
-  const isDegraded = twin.completenessScore != null && twin.completenessScore < 0.35;
-  const isReturning = twin.recentScenarios.length > 0;
+  const rankedComponents = [...twin.components].sort((a, b) => {
+    const rank = (component: HomeTwinComponentDTO) => {
+      const pct = ageRatioPct(component);
+      if (component.status === 'RETIRED') return 4;
+      if (component.status === 'NEEDS_REVIEW') return 3.5;
+      if (pct != null && pct >= 85) return 3;
+      if (pct != null && pct >= 60) return 2;
+      return 1;
+    };
+    return rank(b) - rank(a);
+  });
+  const priorityComponent = rankedComponents[0] ?? null;
+  const priorityMeta = priorityComponent ? componentPlanningMeta(priorityComponent) : null;
+  const factsToReview = twin.components.filter(
+    (component) =>
+      component.status === 'NEEDS_REVIEW' ||
+      component.projectedFacts?.some((fact) =>
+        ['CONFLICTED', 'DEFAULT', 'UNKNOWN'].includes(fact.factState),
+      ),
+  ).length;
+  const modeledExposure = twin.components.reduce(
+    (sum, component) => sum + (component.replacementCostEstimate ?? 0),
+    0,
+  );
 
   return (
-    <MobileCard variant="standard" className="space-y-3">
-      {/* Stale — the last computed view no longer reflects current home data */}
-      {twin.staleReason && (
-        <div
-          role="status"
-          className="flex items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2.5"
-        >
-          <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
-          <div>
-            <p className="text-xs font-medium text-amber-900">This view may be out of date</p>
-            <p className="text-xs leading-snug text-amber-800">{twin.staleReason}</p>
+    <section
+      aria-labelledby="upgrade-plan-summary"
+      className="relative overflow-hidden rounded-[28px] border border-teal-200/70 bg-[linear-gradient(135deg,#073f3b_0%,#0f766e_55%,#155e75_100%)] px-5 py-6 text-white shadow-[0_28px_70px_-40px_rgba(6,78,74,0.85)] sm:px-7 sm:py-7"
+    >
+      <div
+        className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl"
+        aria-hidden="true"
+      />
+      <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] lg:items-end">
+        <div>
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-teal-50 backdrop-blur">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            Your home upgrade plan
+          </div>
+          <h2 id="upgrade-plan-summary" className="max-w-2xl text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">
+            {priorityComponent
+              ? `${priorityComponent.label ?? COMPONENT_LABEL[priorityComponent.componentType]} is the next system worth reviewing`
+              : 'Start building a clearer plan for your home'}
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-teal-50/85 sm:text-base">
+            {priorityMeta?.detail ??
+              'Add home systems to compare timing, cost, and tradeoffs with more confidence.'}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2.5">
+            {priorityComponent && (
+              <Button
+                onClick={() => onCompare(priorityComponent.id)}
+                className="gap-2 rounded-xl bg-white text-teal-900 shadow-lg shadow-black/10 hover:bg-teal-50"
+              >
+                Compare options
+                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="gap-2 rounded-xl border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            >
+              {isRefreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              ) : (
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              )}
+              {isRefreshing ? 'Updating…' : 'Refresh plan'}
+            </Button>
           </div>
         </div>
-      )}
 
-      {/* Dependency drift — your data changed since this was last computed */}
-      {twin.needsRecompute && !twin.staleReason && (
-        <div
-          role="status"
-          className="flex items-start justify-between gap-2 rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] px-3 py-2.5"
-        >
-          <div className="flex items-start gap-2">
-            <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-brand-strong))]" aria-hidden="true" />
-            <p className="text-xs leading-snug text-[hsl(var(--mobile-text-primary))]">
-              Your home data has changed since this view was last computed. Refresh to see current
-              numbers.
-            </p>
-          </div>
+        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/15 bg-black/10 p-2 backdrop-blur-sm">
+          {[
+            { label: 'Systems', value: String(twin.components.length), Icon: Activity },
+            { label: 'Review', value: String(factsToReview), Icon: FileCheck },
+            {
+              label: 'Exposure',
+              value: modeledExposure > 0 ? formatUSD(modeledExposure) : '—',
+              Icon: CircleDollarSign,
+            },
+          ].map(({ label, value, Icon }) => (
+            <div key={label} className="rounded-xl bg-white/10 px-3 py-3">
+              <Icon className="mb-2 h-4 w-4 text-teal-100" aria-hidden="true" />
+              <p className="truncate text-base font-semibold text-white sm:text-lg">{value}</p>
+              <p className="text-[11px] font-medium text-teal-50/80">{label}</p>
+            </div>
+          ))}
         </div>
-      )}
-
-      {/* Degraded — too little data to be much more than a placeholder */}
-      {isDegraded && !twin.staleReason && (
-        <div
-          role="status"
-          className="flex items-start gap-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5"
-        >
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-text-secondary))]" aria-hidden="true" />
-          <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-            Your home model is mostly estimates right now. Add property and inventory details to
-            replace defaults with real data.
-          </p>
-        </div>
-      )}
-
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 space-y-2">
-          <p className="text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
-            {isReturning ? 'Your Home Model — welcome back' : 'Your Home Model'}
-          </p>
-          <MetricRow
-            label="Data readiness"
-            value={
-              <span className="flex items-center gap-1.5">
-                <StatusChip tone={readinessTone(twin.completenessScore)}>
-                  {readinessLabel(twin.completenessScore)}
-                </StatusChip>
-                {twin.completenessScore != null && (
-                  <span className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                    ({formatPct(twin.completenessScore)})
-                  </span>
-                )}
-              </span>
-            }
-          />
-          <MetricRow
-            label="Systems tracked"
-            value={String(twin.components.length)}
-          />
-          <MetricRow
-            label="Last updated"
-            value={twin.lastSyncedAt ? formatDate(twin.lastSyncedAt) : 'Not yet synced'}
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          aria-label={isRefreshing ? 'Refreshing view...' : 'Refresh view'}
-          className="shrink-0 gap-1.5 rounded-full"
-        >
-          {isRefreshing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {isRefreshing ? 'Updating…' : 'Refresh'}
-        </Button>
       </div>
-    </MobileCard>
+
+      {(twin.staleReason || twin.needsRecompute) && (
+        <div
+          role="status"
+          className="relative mt-5 flex items-start gap-2 rounded-xl border border-amber-200/30 bg-amber-100/95 px-3 py-2.5 text-amber-950"
+        >
+          <RefreshCw className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p className="text-xs leading-snug">
+            {twin.staleReason ?? 'Your Home Record changed. Refresh the plan before making a decision.'}
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -504,61 +571,61 @@ function ComponentCard({
   component: HomeTwinComponentDTO;
   onClick: () => void;
 }) {
-  const tone = componentStatusTone(component);
   const pct = ageRatioPct(component);
   const ComponentIcon = COMPONENT_ICON[component.componentType] ?? Home;
+  const planning = componentPlanningMeta(component);
+  const title = component.label ?? COMPONENT_LABEL[component.componentType];
 
   return (
     <button
       type="button"
+      role="listitem"
       onClick={onClick}
-      aria-label={`View details for ${component.label ?? COMPONENT_LABEL[component.componentType]}`}
-      className="block w-full text-left"
+      aria-label={`Compare options for ${title}`}
+      className="group block w-full rounded-2xl text-left premium-focus"
     >
-      <MobileCard
-        variant="standard"
-        className="transition-colors hover:bg-[hsl(var(--mobile-bg-muted))]"
-      >
-        <div className="flex items-center justify-between gap-3">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_14px_38px_-30px_rgba(15,23,42,0.7)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-teal-300 group-hover:shadow-[0_22px_44px_-28px_rgba(15,118,110,0.35)] motion-reduce:transform-none">
+        <div className={cn('absolute inset-x-0 top-0 h-1', planning.barClassName)} aria-hidden="true" />
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-1.5">
-              <StatusChip tone={tone}>
-                {COMPONENT_STATUS_LABEL[component.status] ?? component.status}
-              </StatusChip>
-              {pct != null && (
-                <span className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">
-                  {pct}% of lifespan used
-                </span>
-              )}
-            </div>
-            <div className="mt-0.5 flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <span
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[hsl(var(--mobile-bg-muted))] text-[hsl(var(--mobile-text-secondary))]"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-100"
                 aria-hidden="true"
               >
-                <ComponentIcon className="h-4 w-4" />
+                <ComponentIcon className="h-5 w-5" />
               </span>
-              <p className="text-base font-semibold leading-tight">
-                {component.label ?? COMPONENT_LABEL[component.componentType]}
-              </p>
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold leading-tight text-slate-950">{title}</p>
+                <p className={cn('mt-1 text-xs font-semibold', planning.toneClassName)}>
+                  {planning.label}
+                </p>
+              </div>
             </div>
-            {component.estimatedAgeYears != null && (
-              <p className="mt-0.5 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                ~{Math.round(component.estimatedAgeYears)} years old
-                {component.usefulLifeYears != null
-                  ? ` · ${component.usefulLifeYears}-yr lifespan`
-                  : ''}
-              </p>
-            )}
           </div>
-          <div className="flex shrink-0 items-center gap-1 text-[hsl(var(--mobile-text-secondary))]">
-            {pct != null && pct >= 60 && (
-              <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden="true" />
-            )}
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition-colors group-hover:bg-teal-50 group-hover:text-teal-700">
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </div>
         </div>
-      </MobileCard>
+        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-xs">
+          <div>
+            <p className="text-slate-500">Age</p>
+            <p className="mt-0.5 font-semibold text-slate-900">
+              {component.estimatedAgeYears != null ? `~${Math.round(component.estimatedAgeYears)} yrs` : 'Unknown'}
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-500">Life used</p>
+            <p className="mt-0.5 font-semibold text-slate-900">{pct != null ? `${pct}%` : '—'}</p>
+          </div>
+          <div>
+            <p className="text-slate-500">Replace</p>
+            <p className="mt-0.5 truncate font-semibold text-slate-900">
+              {formatUSD(component.replacementCostEstimate)}
+            </p>
+          </div>
+        </div>
+      </div>
     </button>
   );
 }
@@ -957,45 +1024,71 @@ function ScenarioCard({
         ? 'danger'
         : 'info';
 
-  const topImpact = scenario.impacts.find((i) => i.direction === 'POSITIVE' && i.valueNumeric != null);
+  const cost = scenario.impacts.find((i) => i.impactType === 'UPFRONT_COST' && !i.isUserSupplied);
+  const savings = scenario.impacts.find((i) => i.impactType === 'ANNUAL_SAVINGS' && !i.isUserSupplied);
+  const payback = scenario.impacts.find((i) => i.impactType === 'PAYBACK_PERIOD' && !i.isUserSupplied);
+  const activeRun = isActiveScenarioRun(scenario.latestRun);
+  const ScenarioIcon =
+    scenario.scenarioType === 'WAIT_MONITOR'
+      ? Clock3
+      : scenario.scenarioType === 'MAINTAIN_COMPONENT' || scenario.scenarioType === 'REPAIR_COMPONENT'
+        ? Wrench
+        : TrendingUp;
 
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={`View scenario: ${scenario.name}`}
-      className="block w-full text-left"
+      className="group block w-full rounded-2xl text-left premium-focus"
     >
-      <MobileCard
-        variant="standard"
-        className="transition-colors hover:bg-[hsl(var(--mobile-bg-muted))]"
-      >
-        <div className="flex items-center justify-between gap-3">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_14px_38px_-30px_rgba(15,23,42,0.75)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-teal-300 group-hover:shadow-[0_22px_44px_-28px_rgba(15,118,110,0.3)] motion-reduce:transform-none">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-1.5">
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
               <StatusChip tone={statusTone}>
-                {SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
+                {activeRun
+                  ? scenario.latestRun?.status === 'RUNNING' ? 'Calculating' : 'Queued'
+                  : SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
               </StatusChip>
-              <StatusChip tone="info">{SCENARIO_TYPE_LABEL[scenario.scenarioType]}</StatusChip>
+              {scenario.decisionStatus !== 'OPEN' && (
+                <StatusChip tone={DECISION_STATUS_TONE[scenario.decisionStatus]}>
+                  {DECISION_STATUS_LABEL[scenario.decisionStatus]}
+                </StatusChip>
+              )}
               {scenario.isPinned && (
-                <span className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">Pinned</span>
+                <span className="text-[11px] font-medium text-teal-700">Pinned</span>
               )}
             </div>
-            <p className="text-base font-semibold leading-tight">{scenario.name}</p>
-            {topImpact && (
-              <p className="mt-0.5 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                {IMPACT_TYPE_LABEL[topImpact.impactType] ?? topImpact.impactType}
-                {topImpact.valueNumeric != null
-                  ? `: ${topImpact.unit === 'USD' ? formatUSD(topImpact.valueNumeric) : topImpact.valueNumeric}`
-                  : topImpact.valueText
-                    ? `: ${topImpact.valueText}`
-                    : ''}
-              </p>
-            )}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                <ScenarioIcon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold leading-tight text-slate-950">{scenario.name}</p>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">
+                  {SCENARIO_TYPE_LABEL[scenario.scenarioType]}
+                </p>
+              </div>
+            </div>
           </div>
-          <ChevronRight className="h-4 w-4 shrink-0 text-[hsl(var(--mobile-text-secondary))]" aria-hidden="true" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700">
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </div>
         </div>
-      </MobileCard>
+        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-xs">
+          {[
+            { label: 'Upfront', value: formatImpactDisplay(cost) },
+            { label: 'Savings / yr', value: formatImpactDisplay(savings) },
+            { label: 'Payback', value: formatImpactDisplay(payback) },
+          ].map((metric) => (
+            <div key={metric.label}>
+              <p className="text-slate-500">{metric.label}</p>
+              <p className="mt-0.5 truncate font-semibold text-slate-900">{metric.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </button>
   );
 }
@@ -1012,6 +1105,64 @@ type ScenarioAssumptionField = {
   step?: string;
   min?: string;
 };
+
+function ScenarioOutcomeSummary({ scenario }: { scenario: HomeTwinScenarioDTO }) {
+  const metrics = [
+    {
+      label: 'Upfront cost',
+      impact: scenario.impacts.find((impact) => impact.impactType === 'UPFRONT_COST' && !impact.isUserSupplied),
+      Icon: CircleDollarSign,
+    },
+    {
+      label: 'Annual savings',
+      impact: scenario.impacts.find((impact) => impact.impactType === 'ANNUAL_SAVINGS' && !impact.isUserSupplied),
+      Icon: TrendingUp,
+    },
+    {
+      label: 'Payback',
+      impact: scenario.impacts.find((impact) => impact.impactType === 'PAYBACK_PERIOD' && !impact.isUserSupplied),
+      Icon: CalendarClock,
+    },
+  ];
+  const hasResults = metrics.some(({ impact }) => impact);
+
+  return (
+    <section
+      aria-labelledby="scenario-outcome-heading"
+      className="shrink-0 overflow-hidden rounded-2xl border border-teal-200/80 bg-[linear-gradient(145deg,#f0fdfa_0%,#ffffff_52%,#eff6ff_100%)] p-4 shadow-[0_18px_42px_-34px_rgba(15,118,110,0.55)]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-teal-700">
+            Decision snapshot
+          </p>
+          <h3 id="scenario-outcome-heading" className="mt-1 text-lg font-semibold text-slate-950">
+            {hasResults ? 'What this option could mean' : 'Ready to compare this option'}
+          </h3>
+        </div>
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-teal-700 text-white shadow-md shadow-teal-900/15">
+          <Gauge className="h-4 w-4" aria-hidden="true" />
+        </span>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {metrics.map(({ label, impact, Icon }) => (
+          <div key={label} className="rounded-xl border border-white/90 bg-white/80 p-3 shadow-sm">
+            <Icon className="mb-2 h-4 w-4 text-teal-700" aria-hidden="true" />
+            <p className="text-[11px] font-medium text-slate-500">{label}</p>
+            <p className="mt-1 break-words text-sm font-semibold text-slate-950">
+              {formatImpactDisplay(impact)}
+            </p>
+          </div>
+        ))}
+      </div>
+      {!hasResults && (
+        <p className="mt-3 text-xs leading-relaxed text-slate-600">
+          Calculate this option to see a home-specific cost range, savings, timing, and the evidence behind them.
+        </p>
+      )}
+    </section>
+  );
+}
 
 function scenarioAssumptionFields(type: HomeTwinScenarioType): ScenarioAssumptionField[] {
   if (type === 'MAINTAIN_COMPONENT') {
@@ -1186,15 +1337,15 @@ function ScenarioDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-        <SheetHeader className="border-b px-5 py-4">
-          <SheetTitle className="pr-8 text-base">{scenario.name}</SheetTitle>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 border-l-slate-200 bg-[#fbfcfb] p-0 shadow-[0_0_80px_-30px_rgba(15,23,42,0.55)] sm:max-w-xl">
+        <SheetHeader className="border-b border-slate-200 bg-white px-5 py-4">
+          <SheetTitle className="pr-10 text-lg text-slate-950">{scenario.name}</SheetTitle>
           <SheetDescription className="sr-only">
             Scenario details for {scenario.name}.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 space-y-5">
+        <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 space-y-5 sm:px-6">
           {/* Status chips */}
           <div className="flex flex-wrap gap-2">
             <StatusChip tone={statusTone}>
@@ -1207,6 +1358,8 @@ function ScenarioDetailSheet({
               {DECISION_STATUS_LABEL[scenario.decisionStatus]}
             </StatusChip>
           </div>
+
+          <ScenarioOutcomeSummary scenario={scenario} />
 
           {computationPending && (
             <div role="status" aria-live="polite" className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
@@ -1265,10 +1418,13 @@ function ScenarioDetailSheet({
           )}
 
           {/* Decision — select / defer / reject / close, with a recorded reason */}
-          <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5">
-            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
-              Your decision
-            </h3>
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Your decision</p>
+              <h3 className="mt-1 text-base font-semibold text-slate-950">
+                Does this option fit your plan?
+              </h3>
+            </div>
             {scenario.decisionReason && (
               <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
                 &ldquo;{scenario.decisionReason}&rdquo;
@@ -1287,13 +1443,22 @@ function ScenarioDetailSheet({
               aria-label="Decision reason"
             />
             {reasonError && <p className="text-xs text-red-600">{reasonError}</p>}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
               {(['SELECTED', 'DEFERRED', 'REJECTED', 'CLOSED'] as HomeTwinScenarioDecisionStatus[]).map((status) => (
                 <Button
                   key={status}
-                  variant={scenario.decisionStatus === status ? 'default' : 'outline'}
+                  variant={
+                    scenario.decisionStatus === status || (status === 'SELECTED' && scenario.decisionStatus === 'OPEN')
+                      ? 'default'
+                      : 'outline'
+                  }
                   size="sm"
-                  className="flex-1 min-w-[70px]"
+                  className={cn(
+                    'min-w-[90px] rounded-xl',
+                    status === 'SELECTED' &&
+                      scenario.decisionStatus === 'OPEN' &&
+                      'bg-teal-700 text-white hover:bg-teal-800',
+                  )}
                   disabled={isDeciding}
                   onClick={() => handleDecide(status)}
                   aria-label={`Mark this option as ${DECISION_STATUS_LABEL[status].toLowerCase()}`}
@@ -1304,13 +1469,14 @@ function ScenarioDetailSheet({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
-              Assumptions
-            </h3>
-            <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-              Adjust the values used for this option, save, then recompute.
-            </p>
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Assumptions</p>
+              <h3 className="mt-1 text-base font-semibold text-slate-950">Tune the comparison</h3>
+              <p className="mt-1 text-xs text-slate-600">
+                Adjust the values used for this option, save, then recompute.
+              </p>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {assumptionFields.map((field) => (
                 <label key={`${field.scope ?? 'assumptions'}:${field.key}`} className="space-y-1 text-xs">
@@ -1319,7 +1485,7 @@ function ScenarioDetailSheet({
                     type={field.type ?? 'number'}
                     min={field.type === 'number' ? (field.min ?? '0') : undefined}
                     step={field.step ?? (field.type === 'number' ? '0.01' : undefined)}
-                    className="w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-transparent px-2.5 py-1.5 text-sm"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm outline-none transition focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-500/15"
                     value={assumptionValue(field)}
                     onChange={(event) => updateAssumptionField(field, event.target.value)}
                     aria-label={field.label}
@@ -1335,6 +1501,7 @@ function ScenarioDetailSheet({
             <Button
               variant="outline"
               size="sm"
+              className="rounded-xl"
               disabled={isUpdating}
               onClick={() => onUpdateAssumptions(scenario.id, assumptionsDraft)}
             >
@@ -1741,9 +1908,9 @@ function CompareScenariosSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-        <SheetHeader className="border-b px-5 py-4">
-          <SheetTitle className="pr-8 text-base">
+      <SheetContent side="right" className="flex w-full flex-col gap-0 border-l-slate-200 bg-[#f8faf9] p-0 shadow-[0_0_90px_-30px_rgba(15,23,42,0.55)] sm:max-w-3xl">
+        <SheetHeader className="border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+          <SheetTitle className="pr-10 text-lg text-slate-950">
             {comparison ? `Compare options: ${comparison.component.label ?? COMPONENT_LABEL[comparison.component.componentType]}` : 'Compare options'}
           </SheetTitle>
           <SheetDescription className="sr-only">
@@ -1751,7 +1918,7 @@ function CompareScenariosSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 space-y-3" aria-live="polite">
+        <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 space-y-5 sm:px-6" aria-live="polite">
           {isLoading && (
             <div className="animate-pulse motion-reduce:animate-none space-y-2">
               <div className="h-20 rounded-[22px] bg-gray-100" />
@@ -1760,14 +1927,22 @@ function CompareScenariosSheet({
           )}
 
           {!isLoading && comparison && comparison.options.length < 5 && (
-            <div className="space-y-3">
-              <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                Complete this comparison with maintain, repair, replace, upgrade, and wait options.
-              </p>
+            <div className="overflow-hidden rounded-2xl border border-teal-200 bg-[linear-gradient(135deg,#ecfdf5,#eff6ff)] p-5">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-white">
+                  <Layers className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <h3 className="font-semibold text-slate-950">Build the full decision set</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                    Add maintain, repair, replace, upgrade, and wait options so the tradeoffs are visible in one place.
+                  </p>
+                </div>
+              </div>
               <Button
                 onClick={() => ensureOptions.mutate()}
                 disabled={ensureOptions.isPending}
-                className="w-full"
+                className="mt-4 w-full rounded-xl bg-teal-700 hover:bg-teal-800"
               >
                 {ensureOptions.isPending ? 'Building options…' : 'Complete comparison'}
               </Button>
@@ -1780,58 +1955,61 @@ function CompareScenariosSheet({
             </p>
           )}
 
-          {!isLoading &&
-            comparison?.options.map((option) => {
+          {!isLoading && comparison && comparison.options.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+            {comparison.options.map((option) => {
               const cost = keyImpact(option, 'UPFRONT_COST');
               const savings = keyImpact(option, 'ANNUAL_SAVINGS');
               const payback = keyImpact(option, 'PAYBACK_PERIOD');
               const activeRun = isActiveScenarioRun(option.latestRun) ? option.latestRun : null;
+              const isSelected = option.decisionStatus === 'SELECTED';
               return (
                 <div
                   key={option.id}
-                  className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5 space-y-1.5"
+                  className={cn(
+                    'relative overflow-hidden rounded-2xl border bg-white p-4 shadow-[0_16px_38px_-32px_rgba(15,23,42,0.75)]',
+                    isSelected ? 'border-teal-400 ring-2 ring-teal-500/10' : 'border-slate-200',
+                  )}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold">{option.name}</span>
-                    <StatusChip tone={DECISION_STATUS_TONE[option.decisionStatus]}>
-                      {DECISION_STATUS_LABEL[option.decisionStatus]}
-                    </StatusChip>
+                  {isSelected && (
+                    <div className="absolute inset-x-0 top-0 h-1 bg-teal-500" aria-hidden="true" />
+                  )}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-teal-700">
+                        {SCENARIO_TYPE_LABEL[option.scenarioType]}
+                      </p>
+                      <h3 className="mt-1 text-base font-semibold text-slate-950">{option.name}</h3>
+                    </div>
+                    {isSelected && <StatusChip tone="good">Selected</StatusChip>}
                   </div>
-                  <StatusChip tone="info">{SCENARIO_TYPE_LABEL[option.scenarioType]}</StatusChip>
                   {activeRun && (
-                    <p role="status" className="text-xs text-blue-700">
+                    <p role="status" className="mt-2 text-xs font-medium text-blue-700">
                       {activeRun.status === 'RUNNING' ? 'Calculating…' : 'Queued…'}
                     </p>
                   )}
-                  <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
-                    <div>
-                      <p className="mb-0.5 text-[hsl(var(--mobile-text-secondary))]">Cost</p>
-                      <p className="font-medium">
-                        {cost?.valueLow != null && cost.valueHigh != null
-                          ? `${formatUSD(cost.valueLow)}–${formatUSD(cost.valueHigh)}`
-                          : cost?.valueNumeric != null
-                            ? formatUSD(cost.valueNumeric)
-                            : '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="mb-0.5 text-[hsl(var(--mobile-text-secondary))]">Savings/yr</p>
-                      <p className="font-medium">
-                        {savings?.valueNumeric != null ? formatUSD(savings.valueNumeric) : '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="mb-0.5 text-[hsl(var(--mobile-text-secondary))]">Payback</p>
-                      <p className="font-medium">{payback?.valueText ?? '—'}</p>
-                    </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-xs">
+                    {[
+                      { label: 'Upfront', value: formatImpactDisplay(cost) },
+                      { label: 'Savings / yr', value: formatImpactDisplay(savings) },
+                      { label: 'Payback', value: formatImpactDisplay(payback) },
+                    ].map((metric) => (
+                      <div key={metric.label}>
+                        <p className="text-slate-500">{metric.label}</p>
+                        <p className="mt-1 break-words font-semibold text-slate-950">{metric.value}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
             })}
+            </div>
+          )}
 
-          <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-            Figures are ranges based on your home&apos;s modeled state, not guaranteed quotes.
-          </p>
+          <div className="flex items-start gap-2 rounded-xl bg-slate-100 px-3 py-2.5 text-xs leading-snug text-slate-600">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            Figures are planning ranges based on your Home Record and assumptions, not guaranteed quotes.
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -2085,7 +2263,7 @@ export default function HomeDigitalTwinClient({
   const isRefreshing = refreshMutation.isPending;
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
+    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-[1440px] lg:px-8 lg:pb-12">
       {/* Back button */}
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
         <Link href={`/dashboard/properties/${propertyId}`}>
@@ -2106,11 +2284,6 @@ export default function HomeDigitalTwinClient({
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
-
-      {/* Projection context status */}
-      {twin?.context && (
-        <PropertyContextStatusNotice context={twin.context} title="Home data freshness" />
-      )}
 
       {/* Content states */}
       <div aria-live="polite" aria-busy={twinLoading}>
@@ -2155,92 +2328,68 @@ export default function HomeDigitalTwinClient({
           }
         />
       ) : (
-        <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start lg:gap-6 lg:space-y-0">
-        {/* ── Left column: decision entry points, not a second home-state view ── */}
-        <div className="space-y-4">
-          <MobileCard variant="standard" className="space-y-3">
-            <div>
-              <p className="text-sm font-semibold">Home facts live in their canonical views</p>
-              <p className="mt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-                Review or correct system facts in Home Record, current attention in Status Board,
-                and lifecycle timing in Capital Timeline. This planner only owns option comparisons and decisions.
-              </p>
-            </div>
-            {(twin.staleReason || twin.needsRecompute) && (
-              <div
-                role="status"
-                className="flex items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2.5"
-              >
-                <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
-                <p className="text-xs leading-snug text-amber-900">
-                  Decision inputs changed after this planner was last refreshed.
-                </p>
-              </div>
-            )}
-            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open Home Record</Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/dashboard/properties/${propertyId}/status-board`}>Open Status Board</Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/dashboard/properties/${propertyId}/tools/capital-timeline`}>Open Capital Timeline</Link>
-              </Button>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => refreshMutation.mutate()}
-              disabled={isRefreshing}
-              className="w-full gap-1.5"
-              aria-label={isRefreshing ? 'Refreshing decision inputs' : 'Refresh decision inputs'}
-            >
-              {isRefreshing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
-              {isRefreshing ? 'Refreshing…' : 'Refresh decision inputs'}
-            </Button>
-          </MobileCard>
+        <div className="space-y-7">
+          <TwinStatusCard
+            twin={twin}
+            onRefresh={() => refreshMutation.mutate()}
+            isRefreshing={isRefreshing}
+            onCompare={(componentId) => {
+              setCompareComponentId(componentId);
+              setCompareSheetOpen(true);
+              track('action_taken', {
+                tool: 'home-digital-twin',
+                propertyId,
+                actionType: 'scenario_compare_opened',
+              });
+            }}
+          />
 
-          {/* Names are shown only as decision targets; system state remains on canonical surfaces. */}
-          {twin.components.length > 0 && (
-            <MobileSection>
+          <div className="grid gap-7 lg:grid-cols-[minmax(0,1.12fr)_minmax(360px,0.88fr)] lg:items-start">
+            <MobileSection className="space-y-4">
               <MobileSectionHeader
-                title="Choose a system to compare"
-                subtitle="Start a maintain, repair, replace, upgrade, and wait comparison"
-              />
-              <div className="space-y-2" role="list" aria-label="Systems available for option comparison">
-                {twin.components.map((c) => (
-                  <Button
-                    key={c.id}
-                    role="listitem"
-                    variant="outline"
-                    className="h-auto w-full justify-between px-3 py-3 text-left"
-                    onClick={() => {
-                      setCompareComponentId(c.id);
-                      setCompareSheetOpen(true);
-                      track('action_taken', {
-                        tool: 'home-digital-twin',
-                        propertyId,
-                        actionType: 'scenario_compare_opened',
-                      });
-                    }}
-                    aria-label={`Compare options for ${c.label ?? COMPONENT_LABEL[c.componentType]}`}
-                  >
-                    <span>{c.label ?? COMPONENT_LABEL[c.componentType]}</span>
-                    <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                title="Your home systems"
+                subtitle="Planning signals from your Home Record — choose a system to compare options"
+                action={
+                  <Button variant="ghost" size="sm" asChild className="hidden gap-1.5 text-teal-700 sm:flex">
+                    <Link href={`/dashboard/properties/${propertyId}/inventory`}>
+                      Edit Home Record
+                      <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
                   </Button>
-                ))}
-              </div>
+                }
+              />
+              {twin.components.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2" role="list" aria-label="Systems available for option comparison">
+                  {twin.components.map((component) => (
+                    <ComponentCard
+                      key={component.id}
+                      component={component}
+                      onClick={() => {
+                        setCompareComponentId(component.id);
+                        setCompareSheetOpen(true);
+                        track('action_taken', {
+                          tool: 'home-digital-twin',
+                          propertyId,
+                          actionType: 'scenario_compare_opened',
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyStateCard
+                  title="Add your first home system"
+                  description="Track a roof, HVAC system, water heater, or another major system to begin comparing options."
+                  action={
+                    <Button asChild className="rounded-xl">
+                      <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open Home Record</Link>
+                    </Button>
+                  }
+                />
+              )}
             </MobileSection>
-          )}
-        </div>
 
-        {/* ── Right column: decisions to make ─────────────────────────────────── */}
-        <div className="space-y-4">
+            <div className="space-y-6">
           {/* ── SUGGESTIONS ─────────────────────────────────────────────────── */}
           {recLoading && (
             <div className="animate-pulse motion-reduce:animate-none space-y-2">
@@ -2251,8 +2400,8 @@ export default function HomeDigitalTwinClient({
           {!recLoading && recommendations && recommendations.length > 0 && (
             <MobileSection>
               <MobileSectionHeader
-                title="Suggested Scenarios"
-                subtitle="Based on your home's current state"
+                title="Recommended next moves"
+                subtitle="Evidence-bounded ideas worth exploring"
               />
               <div className="space-y-2" role="list" aria-label="Suggested what-if scenarios">
                 {recommendations.map((s) => (
@@ -2268,8 +2417,7 @@ export default function HomeDigitalTwinClient({
                 ))}
               </div>
               <p className="pt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-                Suggestions use evidence-bounded install dates and typical planning windows. Age is
-                not a failure prediction. Running a scenario creates a draft — nothing is scheduled or committed.
+                Planning suggestions use install dates and typical service-life windows. They are not failure predictions.
               </p>
             </MobileSection>
           )}
@@ -2278,8 +2426,8 @@ export default function HomeDigitalTwinClient({
           {twin.recentScenarios.length > 0 && (
             <MobileSection>
               <MobileSectionHeader
-                title="Recent Scenarios"
-                subtitle="Your saved what-if analyses"
+                title="Your saved options"
+                subtitle="Open a scenario to review impacts, assumptions, and your decision"
               />
               <div className="space-y-2" role="list" aria-label="Recent saved scenarios">
                 {twin.recentScenarios.map((s) => (
@@ -2297,14 +2445,58 @@ export default function HomeDigitalTwinClient({
             </MobileSection>
           )}
 
-          {/* Empty scenarios state */}
           {twin.recentScenarios.length === 0 && !recLoading && recommendations && recommendations.length === 0 && (
-            <EmptyStateCard
-              title="No what-if scenarios yet"
-              description="Refresh your view to generate suggestions, or add more details to your property profile to improve the analysis."
-            />
+            <div className="rounded-2xl border border-dashed border-teal-300 bg-teal-50/50 p-6 text-center">
+              <span className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-700 text-white">
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <h3 className="mt-3 font-semibold text-slate-950">Choose a system to start</h3>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                We&apos;ll build maintain, repair, replace, upgrade, and wait options side by side.
+              </p>
+            </div>
           )}
-        </div>
+            </div>
+          </div>
+
+          <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                  <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-950">Your Home Record stays in control</h2>
+                  <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">
+                    This planner compares decisions. Correct system facts in Home Record, review current attention on Status Board,
+                    and manage timing in Capital Timeline.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild className="rounded-xl">
+                  <Link href={`/dashboard/properties/${propertyId}/inventory`}>Home Record</Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild className="rounded-xl">
+                  <Link href={`/dashboard/properties/${propertyId}/status-board`}>Status Board</Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild className="rounded-xl">
+                  <Link href={`/dashboard/properties/${propertyId}/tools/capital-timeline`}>Capital Timeline</Link>
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          {twin.context && (
+            <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                Data freshness and planning sources
+              </summary>
+              <div className="mt-3">
+                <PropertyContextStatusNotice context={twin.context} title="Home data freshness" />
+              </div>
+            </details>
+          )}
         </div>
       )}
       </div>

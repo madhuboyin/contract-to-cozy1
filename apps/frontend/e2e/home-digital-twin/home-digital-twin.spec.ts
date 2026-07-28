@@ -145,6 +145,9 @@ test('initialized planner exercises comparison, typed assumptions, and run evide
   );
 
   await page.goto('/acceptance/home-digital-twin');
+  await expect(page.getByText('Your home upgrade plan')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Upstairs HVAC is the next system worth reviewing' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your home systems' })).toBeVisible();
   await page.getByRole('listitem', { name: 'Compare options for Upstairs HVAC' }).click();
   await expect(page.getByRole('heading', { name: 'Compare options: Upstairs HVAC' })).toBeVisible();
   await expect(page.getByText('Maintain Upstairs HVAC')).toBeVisible();
@@ -152,6 +155,7 @@ test('initialized planner exercises comparison, typed assumptions, and run evide
 
   await page.getByRole('button', { name: 'View scenario: Upgrade Upstairs HVAC' }).click();
   await expect(page.getByLabel('Project estimate ($)')).toHaveValue('12000');
+  await expect(page.getByRole('heading', { name: 'Ready to compare this option' })).toBeVisible();
   await page.getByText('Evidence used for latest calculation').click();
   await expect(page.getByText(/Changed since the previous run: inputs, source facts/)).toBeVisible();
   await page.getByText('Inputs and assumptions').click();
