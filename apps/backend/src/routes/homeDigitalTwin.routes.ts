@@ -26,6 +26,7 @@ import {
   compareScenarios,
   recordScenarioDecision,
   getScenarioHandoff,
+  deleteScenario,
 } from '../controllers/homeDigitalTwin.controller';
 
 const router = Router();
@@ -281,8 +282,10 @@ router.get(
  * At least one field must be provided.
  *
  * Body:
- *   isPinned    boolean (optional) — pin/unpin the scenario
- *   isArchived  boolean (optional) — archive/restore the scenario
+ *   isPinned     boolean (optional) — pin/unpin the scenario
+ *   isArchived   boolean (optional) — archive/restore the scenario
+ *   name         string (optional) — rename the scenario
+ *   description  string | null (optional)
  */
 router.patch(
   '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId',
@@ -290,6 +293,22 @@ router.patch(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updateScenarioBodySchema),
   updateScenario,
+);
+
+/**
+ * DELETE /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId
+ *
+ * Permanently removes a scenario and its impacts/computation runs. Only
+ * allowed once the scenario is archived (a deliberate second step after the
+ * reversible archive action) and only when nothing else references it (a
+ * linked project, matched via ProjectRecord.sourceEntityType/sourceEntityId,
+ * blocks deletion).
+ */
+router.delete(
+  '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  deleteScenario,
 );
 
 /**

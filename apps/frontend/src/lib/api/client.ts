@@ -4365,6 +4365,10 @@ class APIClient {
     return res.data?.scenario ?? null;
   }
 
+  async deleteDigitalTwinScenario(propertyId: string, scenarioId: string): Promise<void> {
+    await this.delete(`/api/properties/${propertyId}/home-digital-twin/scenarios/${scenarioId}`);
+  }
+
   async getDigitalTwinScenarioReadiness(
     propertyId: string,
     params: { scenarioType: string; componentId?: string; componentType?: string }

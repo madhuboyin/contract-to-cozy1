@@ -231,12 +231,14 @@ export const scenarioReadinessQuerySchema = z.object({
 
 export const updateScenarioBodySchema = z
   .object({
-    isPinned:   z.boolean().optional(),
-    isArchived: z.boolean().optional(),
+    isPinned:    z.boolean().optional(),
+    isArchived:  z.boolean().optional(),
+    name:        z.string().min(1).max(255).optional(),
+    description: z.string().max(1000).optional().nullable(),
   })
   .refine(
-    (d) => d.isPinned !== undefined || d.isArchived !== undefined,
-    { message: 'At least one of isPinned or isArchived must be provided' },
+    (d) => d.isPinned !== undefined || d.isArchived !== undefined || d.name !== undefined || d.description !== undefined,
+    { message: 'At least one of isPinned, isArchived, name, or description must be provided' },
   );
 
 // ============================================================================

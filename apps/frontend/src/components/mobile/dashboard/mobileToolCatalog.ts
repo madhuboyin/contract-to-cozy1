@@ -198,8 +198,8 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   // --- CONTINUOUS INTELLIGENCE ---
   {
     key: 'home-digital-twin',
-    title: 'Home Digital Twin',
-    description: 'Living model of your home systems and risks',
+    title: 'Home Upgrade Planner',
+    description: 'Compare repair, replace, and upgrade options with real cost ranges',
     href: '/dashboard/home-digital-twin',
     icon: resolveToolIcon('home', 'home-digital-twin'),
     emoji: '🧬',
@@ -818,9 +818,9 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-digital-twin',
     group: 'monitoring',
-    name: 'Home Digital Twin',
-    description: "A living model of your home — systems, age, risk, and what-if scenarios",
-    desktopDescription: "Use a living digital model of your home to evaluate systems, risk, and what-if scenarios.",
+    name: 'Home Upgrade Planner',
+    description: "See what we know about your home's systems, then compare the cost, timing, and savings of a repair or upgrade",
+    desktopDescription: "Review what we know about your home's systems, then compare the cost, timing, savings, and risk trade-offs of a specific repair or upgrade decision.",
     hrefSuffix: 'tools/home-digital-twin',
     navTarget: 'tool:home-digital-twin',
     icon: resolveToolIcon('home', 'home-digital-twin'),

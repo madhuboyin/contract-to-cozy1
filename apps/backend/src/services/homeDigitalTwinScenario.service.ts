@@ -45,6 +45,8 @@ export type CreateScenarioInput = {
 export type UpdateScenarioInput = {
   isPinned?: boolean;
   isArchived?: boolean;
+  name?: string;
+  description?: string | null;
 };
 
 type ImpactSpec = {
@@ -1079,10 +1081,45 @@ export class HomeDigitalTwinScenarioService {
       data: {
         ...(input.isPinned !== undefined && { isPinned: input.isPinned }),
         ...(input.isArchived !== undefined && { isArchived: input.isArchived }),
+        ...(input.name !== undefined && { name: input.name }),
+        ...(input.description !== undefined && { description: input.description }),
       },
       include: SCENARIO_INCLUDE,
     });
     return withSafetyBoundary(scenario);
+  }
+
+  // ── Delete (permanent) ──────────────────────────────────────────────────────
+  /**
+   * Hard delete — only allowed once a scenario is archived, so removing it
+   * is always a deliberate second step after the reversible "Archive"
+   * action, not a one-click accidental loss. Also refuses to delete a
+   * scenario with a linked project (see homeDigitalTwinScenario.service.ts
+   * getHandoffContext) since that link is looked up by scenarioId — deleting
+   * the scenario out from under it would orphan the reference.
+   */
+  async deleteScenario(scenarioId: string, digitalTwinId: string, propertyId: string) {
+    const existing = await prisma.homeTwinScenario.findFirst({
+      where: { id: scenarioId, digitalTwinId },
+      select: { id: true, isArchived: true },
+    });
+    if (!existing) {
+      throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
+    }
+    if (!existing.isArchived) {
+      throw new APIError('Archive this option before deleting it.', 409, 'SCENARIO_NOT_ARCHIVED');
+    }
+
+    const linkedProject = await prisma.projectRecord.findFirst({
+      where: { propertyId, sourceEntityType: 'HomeTwinScenario', sourceEntityId: scenarioId },
+      select: { id: true },
+    });
+    if (linkedProject) {
+      throw new APIError('This option has a linked project and cannot be deleted.', 409, 'SCENARIO_HAS_LINKED_PROJECT');
+    }
+
+    await prisma.homeTwinScenario.delete({ where: { id: scenarioId } });
+    logger.info(`[HomeDigitalTwin] scenario deleted — id=${scenarioId}`);
   }
 
   // ── Compute ─────────────────────────────────────────────────────────────────

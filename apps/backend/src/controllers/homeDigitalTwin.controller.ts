@@ -291,6 +291,21 @@ export async function recordScenarioDecision(
   }
 }
 
+export async function deleteScenario(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId, scenarioId } = req.params;
+    const twin = await getTwinIdForProperty(propertyId);
+    await scenarioService.deleteScenario(scenarioId, twin.id, propertyId);
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getScenarioHandoff(
   req: CustomRequest,
   res: Response,

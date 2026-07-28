@@ -73,8 +73,12 @@ import {
   updateDigitalTwinScenario,
   recordDigitalTwinScenarioDecision,
   getDigitalTwinScenarioHandoff,
+  getDigitalTwinScenarioReadiness,
+  compareDigitalTwinScenarios,
+  deleteDigitalTwinScenario,
 } from './homeDigitalTwinApi';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
+import HomeRecordReadinessCard from '../../components/HomeRecordReadinessCard';
 
 // ============================================================================
 // DISPLAY CONFIG
@@ -148,6 +152,17 @@ const FACT_STATE_LABEL: Record<string, string> = {
   DEFAULT: 'Category default (no home-specific data)',
   CONFLICTED: 'Conflicting sources',
   UNKNOWN: 'Unknown',
+};
+
+const SOURCE_TYPE_LABEL: Record<string, string> = {
+  PROPERTY_PROFILE: 'From your property profile',
+  INVENTORY: 'From your inventory',
+  DOCUMENT: 'From an uploaded document',
+  RISK_ENGINE: 'From risk modeling',
+  MANUAL: 'Entered manually',
+  SYSTEM_DERIVED: 'Calculated from other data',
+  IMPORT: 'Imported',
+  OTHER: 'Other source',
 };
 
 const FACT_STATE_TONE: Record<string, 'good' | 'elevated' | 'info' | 'danger'> = {
@@ -346,7 +361,7 @@ function DescriptionPointList({ description }: { description: string }) {
 
 function DigitalTwinSkeleton() {
   return (
-    <div className="animate-pulse space-y-3">
+    <div className="animate-pulse motion-reduce:animate-none space-y-3">
       <div className="h-28 rounded-[22px] bg-gray-100" />
       <div className="h-20 rounded-[22px] bg-gray-100" />
       {[...Array(4)].map((_, i) => (
@@ -369,12 +384,43 @@ function TwinStatusCard({
   onRefresh: () => void;
   isRefreshing: boolean;
 }) {
+  const isDegraded = twin.completenessScore != null && twin.completenessScore < 0.35;
+  const isReturning = twin.recentScenarios.length > 0;
+
   return (
-    <MobileCard variant="standard">
+    <MobileCard variant="standard" className="space-y-3">
+      {/* Stale — the last computed view no longer reflects current home data */}
+      {twin.staleReason && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2.5"
+        >
+          <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+          <div>
+            <p className="text-xs font-medium text-amber-900">This view may be out of date</p>
+            <p className="text-xs leading-snug text-amber-800">{twin.staleReason}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Degraded — too little data to be much more than a placeholder */}
+      {isDegraded && !twin.staleReason && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5"
+        >
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-text-secondary))]" aria-hidden="true" />
+          <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+            Your home model is mostly estimates right now. Add property and inventory details to
+            replace defaults with real data.
+          </p>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 space-y-2">
           <p className="text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
-            Your Home Model
+            {isReturning ? 'Your Home Model — welcome back' : 'Your Home Model'}
           </p>
           <MetricRow
             label="Data readiness"
@@ -409,7 +455,7 @@ function TwinStatusCard({
           className="shrink-0 gap-1.5 rounded-full"
         >
           {isRefreshing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
           ) : (
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
           )}
@@ -498,10 +544,12 @@ function ComponentDetailSheet({
   component,
   open,
   onOpenChange,
+  onCompare,
 }: {
   component: HomeTwinComponentDTO | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCompare: (componentId: string) => void;
 }) {
   if (!component) return null;
   const tone = componentStatusTone(component);
@@ -659,11 +707,27 @@ function ComponentDetailSheet({
                         {fact.sourceRecordType ? ` (${fact.sourceRecordType})` : ''}
                       </p>
                     )}
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      {SOURCE_TYPE_LABEL[fact.sourceType] ?? fact.sourceType}
+                      {fact.observedAt ? ` · as of ${formatDate(fact.observedAt)}` : ''}
+                    </p>
                   </div>
                 ))}
               </div>
             </div>
           )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t px-5 py-3">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => onCompare(component.id)}
+            aria-label={`Compare repair, replace, and upgrade options for ${component.label ?? COMPONENT_LABEL[component.componentType]}`}
+          >
+            Compare options for this system
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
@@ -723,17 +787,33 @@ function SuggestionCard({
 
 function SuggestionDetailSheet({
   suggestion,
+  propertyId,
   open,
   onOpenChange,
   onRunScenario,
   isRunning,
 }: {
   suggestion: ScenarioSuggestionDTO | null;
+  propertyId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onRunScenario: (s: ScenarioSuggestionDTO) => void;
   isRunning: boolean;
 }) {
+  // What's known/missing for THIS decision specifically — not the twin's
+  // global completeness score. See HDT-008: different decisions need
+  // different evidence, so this is scoped to the one component/type.
+  const { data: readiness } = useQuery({
+    queryKey: ['home-digital-twin-scenario-readiness', propertyId, suggestion?.componentId, suggestion?.componentType, suggestion?.scenarioType],
+    queryFn: () =>
+      getDigitalTwinScenarioReadiness(propertyId, {
+        scenarioType: suggestion!.scenarioType,
+        componentId: suggestion?.componentId ?? undefined,
+        componentType: suggestion?.componentType ?? undefined,
+      }),
+    enabled: open && !!suggestion,
+  });
+
   if (!suggestion) return null;
 
   return (
@@ -754,6 +834,22 @@ function SuggestionDetailSheet({
             </StatusChip>
             <StatusChip tone="info">{SCENARIO_TYPE_LABEL[suggestion.scenarioType]}</StatusChip>
           </div>
+
+          {/* What's known/missing for this specific decision */}
+          {readiness && readiness.missing.length > 0 && (
+            <div className="space-y-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+                Before you trust this estimate
+              </h3>
+              <ul className="space-y-1">
+                {readiness.missing.map((m) => (
+                  <li key={m.field} className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                    {m.whyItMatters}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Description */}
           <div className="space-y-1">
@@ -804,7 +900,7 @@ function SuggestionDetailSheet({
             aria-label={`Run what-if scenario: ${suggestion.title}`}
           >
             {isRunning ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
             ) : (
               <Zap className="h-3.5 w-3.5" aria-hidden="true" />
             )}
@@ -890,9 +986,12 @@ function ScenarioDetailSheet({
   onPin,
   onArchive,
   onDecide,
+  onRename,
+  onDelete,
   isComputing,
   isUpdating,
   isDeciding,
+  isDeleting,
 }: {
   scenario: HomeTwinScenarioDTO | null;
   propertyId: string;
@@ -900,14 +999,18 @@ function ScenarioDetailSheet({
   onOpenChange: (open: boolean) => void;
   onCompute: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
-  onArchive: (id: string) => void;
+  onArchive: (id: string, archived: boolean) => void;
   onDecide: (id: string, decisionStatus: HomeTwinScenarioDecisionStatus, decisionReason: string | null) => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
   isComputing: boolean;
   isUpdating: boolean;
   isDeciding: boolean;
+  isDeleting: boolean;
 }) {
   const [decisionReason, setDecisionReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
 
   const { data: handoff } = useQuery({
     queryKey: ['home-digital-twin-scenario-handoff', propertyId, scenario?.id],
@@ -918,9 +1021,16 @@ function ScenarioDetailSheet({
   useEffect(() => {
     setDecisionReason(scenario?.decisionReason ?? '');
     setReasonError(null);
+    setNameDraft(scenario?.name ?? '');
   }, [scenario?.id]);
 
   if (!scenario) return null;
+
+  const handleDelete = () => {
+    if (window.confirm(`Permanently delete "${scenario.name}"? This cannot be undone.`)) {
+      onDelete(scenario.id);
+    }
+  };
 
   const handleDecide = (decisionStatus: HomeTwinScenarioDecisionStatus) => {
     if ((decisionStatus === 'DEFERRED' || decisionStatus === 'REJECTED') && !decisionReason.trim()) {
@@ -1051,6 +1161,30 @@ function ScenarioDetailSheet({
               <p className="text-xs leading-snug text-amber-800">{scenario.safetyBoundary}</p>
             </div>
           )}
+
+          {/* Rename */}
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+              Name
+            </h3>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-transparent px-2.5 py-1.5 text-sm"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                aria-label="Scenario name"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isUpdating || !nameDraft.trim() || nameDraft.trim() === scenario.name}
+                onClick={() => onRename(scenario.id, nameDraft.trim())}
+                aria-label="Save name"
+              >
+                Save
+              </Button>
+            </div>
+          </div>
 
           {/* Description */}
           {scenario.description && (
@@ -1225,7 +1359,7 @@ function ScenarioDetailSheet({
               aria-label="Run analysis for this scenario"
             >
               {isComputing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
               ) : (
                 <Zap className="h-3.5 w-3.5" aria-hidden="true" />
               )}
@@ -1247,13 +1381,140 @@ function ScenarioDetailSheet({
               variant="outline"
               size="sm"
               className="flex-1 text-red-600 hover:text-red-700"
-              onClick={() => onArchive(scenario.id)}
+              onClick={() => onArchive(scenario.id, !scenario.isArchived)}
               disabled={isUpdating}
-              aria-label="Archive this scenario"
+              aria-label={scenario.isArchived ? 'Restore this scenario' : 'Archive this scenario'}
             >
-              Archive
+              {scenario.isArchived ? 'Restore' : 'Archive'}
             </Button>
           </div>
+          {scenario.isArchived && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-red-600 hover:text-red-700"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              aria-label="Delete this scenario permanently"
+            >
+              {isDeleting ? 'Deleting…' : 'Delete permanently'}
+            </Button>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ============================================================================
+// COMPARE SCENARIOS SHEET
+// ============================================================================
+
+/**
+ * Repair / replace / upgrade / wait, side by side — assembles whatever the
+ * homeowner already created and computed via the normal scenario flow. Does
+ * not compute anything new (see HDT-011).
+ */
+function CompareScenariosSheet({
+  propertyId,
+  componentId,
+  open,
+  onOpenChange,
+}: {
+  propertyId: string;
+  componentId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { data: comparison, isLoading } = useQuery({
+    queryKey: ['home-digital-twin-scenario-comparison', propertyId, componentId],
+    queryFn: () => compareDigitalTwinScenarios(propertyId, componentId ?? ''),
+    enabled: open && !!componentId,
+  });
+
+  const keyImpact = (scenario: HomeTwinScenarioDTO, type: string) =>
+    scenario.impacts.find((i) => i.impactType === type && !i.isUserSupplied);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="border-b px-5 py-4">
+          <SheetTitle className="pr-8 text-base">
+            {comparison ? `Compare options: ${comparison.component.label ?? COMPONENT_LABEL[comparison.component.componentType]}` : 'Compare options'}
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Side-by-side comparison of computed repair, replace, upgrade, and wait options.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 space-y-3" aria-live="polite">
+          {isLoading && (
+            <div className="animate-pulse motion-reduce:animate-none space-y-2">
+              <div className="h-20 rounded-[22px] bg-gray-100" />
+              <div className="h-20 rounded-[22px] bg-gray-100" />
+            </div>
+          )}
+
+          {!isLoading && comparison && comparison.options.length === 0 && (
+            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+              No computed options yet for this system. Run and compute at least two scenarios (e.g.
+              repair vs. replace) to compare them here.
+            </p>
+          )}
+
+          {!isLoading && comparison && comparison.options.length === 1 && (
+            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+              Only one computed option exists for this system so far. Create and compute another
+              (e.g. repair vs. replace) to compare them side by side.
+            </p>
+          )}
+
+          {!isLoading &&
+            comparison?.options.map((option) => {
+              const cost = keyImpact(option, 'UPFRONT_COST');
+              const savings = keyImpact(option, 'ANNUAL_SAVINGS');
+              const payback = keyImpact(option, 'PAYBACK_PERIOD');
+              return (
+                <div
+                  key={option.id}
+                  className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5 space-y-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold">{option.name}</span>
+                    <StatusChip tone={DECISION_STATUS_TONE[option.decisionStatus]}>
+                      {DECISION_STATUS_LABEL[option.decisionStatus]}
+                    </StatusChip>
+                  </div>
+                  <StatusChip tone="info">{SCENARIO_TYPE_LABEL[option.scenarioType]}</StatusChip>
+                  <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                    <div>
+                      <p className="mb-0.5 text-[hsl(var(--mobile-text-secondary))]">Cost</p>
+                      <p className="font-medium">
+                        {cost?.valueLow != null && cost.valueHigh != null
+                          ? `${formatUSD(cost.valueLow)}–${formatUSD(cost.valueHigh)}`
+                          : cost?.valueNumeric != null
+                            ? formatUSD(cost.valueNumeric)
+                            : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-0.5 text-[hsl(var(--mobile-text-secondary))]">Savings/yr</p>
+                      <p className="font-medium">
+                        {savings?.valueNumeric != null ? formatUSD(savings.valueNumeric) : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-0.5 text-[hsl(var(--mobile-text-secondary))]">Payback</p>
+                      <p className="font-medium">{payback?.valueText ?? '—'}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+          <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+            Figures are ranges based on your home&apos;s modeled state, not guaranteed quotes.
+          </p>
         </div>
       </SheetContent>
     </Sheet>
@@ -1288,6 +1549,9 @@ export default function HomeDigitalTwinClient() {
 
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [scenarioSheetOpen, setScenarioSheetOpen] = useState(false);
+
+  const [compareComponentId, setCompareComponentId] = useState<string | null>(null);
+  const [compareSheetOpen, setCompareSheetOpen] = useState(false);
 
   // ── Twin query ──────────────────────────────────────────────────────────────
   const {
@@ -1343,7 +1607,7 @@ export default function HomeDigitalTwinClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin-recommendations', propertyId] });
-      toast({ title: 'Home view ready', description: 'Your digital twin has been built.' });
+      toast({ title: 'Home view ready', description: 'Your home model is ready to explore.' });
     },
     onError: (error) =>
       toast({
@@ -1360,7 +1624,7 @@ export default function HomeDigitalTwinClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin-recommendations', propertyId] });
-      toast({ title: 'Model updated', description: 'Your digital twin has been refreshed.' });
+      toast({ title: 'Model updated', description: 'Your home model has been refreshed.' });
     },
     onError: (error) =>
       toast({
@@ -1411,16 +1675,36 @@ export default function HomeDigitalTwinClient() {
 
   // ── Update scenario mutation ────────────────────────────────────────────────
   const updateMutation = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: { isPinned?: boolean; isArchived?: boolean } }) =>
+    mutationFn: ({ id, input }: { id: string; input: { isPinned?: boolean; isArchived?: boolean; name?: string; description?: string | null } }) =>
       updateDigitalTwinScenario(propertyId, id, input),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
       if (variables.input.isArchived) {
         setScenarioSheetOpen(false);
       }
+      if (variables.input.name) {
+        toast({ title: 'Renamed', description: `Now called "${variables.input.name}".` });
+      }
     },
     onError: () =>
       toast({ title: 'Could not update scenario. Please try again.', variant: 'destructive' }),
+  });
+
+  // ── Delete scenario mutation (permanent, archived-only) ─────────────────────
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteDigitalTwinScenario(propertyId, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
+      setScenarioSheetOpen(false);
+      setSelectedScenarioId(null);
+      toast({ title: 'Deleted', description: 'The option was permanently removed.' });
+    },
+    onError: (error) =>
+      toast({
+        title: 'Could not delete',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      }),
   });
 
   // ── Decision mutation (select / defer / reject / close) ────────────────────
@@ -1467,8 +1751,8 @@ export default function HomeDigitalTwinClient() {
       {/* Page intro */}
       <MobilePageIntro
         eyebrow="Home tool"
-        title="Home Digital Twin"
-        subtitle="A living view of your home — systems, age, risk, and what-if scenarios. Data is derived from your property profile and inventory."
+        title="Home Upgrade Planner"
+        subtitle="See what we know about your home's systems, correct what's uncertain, and compare the cost, timing, savings, and risk trade-offs of a repair or upgrade."
        className="lg:hidden"/>
 
       {/* Tool rail */}
@@ -1478,17 +1762,18 @@ export default function HomeDigitalTwinClient() {
 
       {/* Projection context status */}
       {twin?.context && (
-        <PropertyContextStatusNotice context={twin.context} title="Digital twin context" />
+        <PropertyContextStatusNotice context={twin.context} title="Home data freshness" />
       )}
 
       {/* Content states */}
+      <div aria-live="polite" aria-busy={twinLoading}>
       {twinLoading ? (
         <DigitalTwinSkeleton />
       ) : twinLoadError ? (
         /* ── LOAD ERROR ─────────────────────────────────────────────────────── */
         <EmptyStateCard
           title="Couldn't load your home view"
-          description="There was a problem loading your digital twin. This is usually temporary."
+          description="There was a problem loading your home model. This is usually temporary."
           action={
             <Button
               variant="outline"
@@ -1505,16 +1790,16 @@ export default function HomeDigitalTwinClient() {
         /* ── NOT YET BUILT ──────────────────────────────────────────────────── */
         <EmptyStateCard
           title="Your home view isn't built yet"
-          description="Build your digital twin to see a living view of your home's systems, age estimates, and what-if scenarios. Takes just a moment."
+          description="Build your home model to see your systems' age and condition, correct anything that's wrong, and compare upgrade options. Takes just a moment."
           action={
             <Button
               onClick={() => initMutation.mutate()}
               disabled={initMutation.isPending}
               className="gap-2"
-              aria-label="Build home digital twin"
+              aria-label="Build my home model"
             >
               {initMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
               ) : (
                 <Zap className="h-4 w-4" aria-hidden="true" />
               )}
@@ -1523,13 +1808,18 @@ export default function HomeDigitalTwinClient() {
           }
         />
       ) : (
-        <>
+        <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start lg:gap-6 lg:space-y-0">
+        {/* ── Left column: current state of the home ─────────────────────────── */}
+        <div className="space-y-4">
           {/* ── STATUS CARD ──────────────────────────────────────────────────── */}
           <TwinStatusCard
             twin={twin}
             onRefresh={() => refreshMutation.mutate()}
             isRefreshing={isRefreshing}
           />
+
+          {/* ── FACT READINESS — known / missing / conflicting, with why it matters ── */}
+          <HomeRecordReadinessCard propertyId={propertyId} />
 
           {/* ── COMPONENTS ──────────────────────────────────────────────────── */}
           {twin.components.length > 0 && (
@@ -1567,10 +1857,13 @@ export default function HomeDigitalTwinClient() {
               </p>
             </MobileSection>
           )}
+        </div>
 
+        {/* ── Right column: decisions to make ─────────────────────────────────── */}
+        <div className="space-y-4">
           {/* ── SUGGESTIONS ─────────────────────────────────────────────────── */}
           {recLoading && (
-            <div className="animate-pulse space-y-2">
+            <div className="animate-pulse motion-reduce:animate-none space-y-2">
               <div className="h-4 w-32 rounded bg-gray-100" />
               <div className="h-20 rounded-[22px] bg-gray-100" />
             </div>
@@ -1631,8 +1924,10 @@ export default function HomeDigitalTwinClient() {
               description="Refresh your view to generate suggestions, or add more details to your property profile to improve the analysis."
             />
           )}
-        </>
+        </div>
+        </div>
       )}
+      </div>
 
       {/* Sheets */}
       <ComponentDetailSheet
@@ -1644,10 +1939,28 @@ export default function HomeDigitalTwinClient() {
             setSelectedComponentId(null);
           }
         }}
+        onCompare={(componentId) => {
+          setComponentSheetOpen(false);
+          setCompareComponentId(componentId);
+          setCompareSheetOpen(true);
+        }}
+      />
+
+      <CompareScenariosSheet
+        propertyId={propertyId}
+        componentId={compareComponentId}
+        open={compareSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCompareSheetOpen(false);
+            setCompareComponentId(null);
+          }
+        }}
       />
 
       <SuggestionDetailSheet
         suggestion={selectedSuggestion}
+        propertyId={propertyId}
         open={suggestionSheetOpen}
         onOpenChange={(open) => {
           if (!open) {
@@ -1671,13 +1984,16 @@ export default function HomeDigitalTwinClient() {
         }}
         onCompute={(id) => computeMutation.mutate(id)}
         onPin={(id, pinned) => updateMutation.mutate({ id, input: { isPinned: pinned } })}
-        onArchive={(id) => updateMutation.mutate({ id, input: { isArchived: true } })}
+        onArchive={(id, archived) => updateMutation.mutate({ id, input: { isArchived: archived } })}
+        onRename={(id, name) => updateMutation.mutate({ id, input: { name } })}
+        onDelete={(id) => deleteMutation.mutate(id)}
         onDecide={(id, decisionStatus, decisionReason) =>
           decisionMutation.mutate({ id, decisionStatus, decisionReason })
         }
         isComputing={computeMutation.isPending}
         isUpdating={updateMutation.isPending}
         isDeciding={decisionMutation.isPending}
+        isDeleting={deleteMutation.isPending}
       />
     </MobilePageContainer>
   );

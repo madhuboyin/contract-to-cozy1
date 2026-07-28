@@ -108,6 +108,10 @@ export async function updateDigitalTwinScenario(
   return result;
 }
 
+export async function deleteDigitalTwinScenario(propertyId: string, scenarioId: string): Promise<void> {
+  return api.deleteDigitalTwinScenario(propertyId, scenarioId);
+}
+
 export async function getDigitalTwinScenarioReadiness(
   propertyId: string,
   params: { scenarioType: string; componentId?: string; componentType?: string },

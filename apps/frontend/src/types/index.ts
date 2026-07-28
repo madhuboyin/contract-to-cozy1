@@ -4053,6 +4053,8 @@ export interface CreateScenarioInput {
 export interface UpdateScenarioInput {
   isPinned?: boolean;
   isArchived?: boolean;
+  name?: string;
+  description?: string | null;
 }
 
 // ============================================================================
