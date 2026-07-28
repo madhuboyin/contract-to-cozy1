@@ -171,7 +171,7 @@ export default function CoverageReviewQuestionsPanel({ propertyId }: { propertyI
       <div className="flex flex-wrap gap-2">
         <Link
           href={currentStageHref}
-          className="inline-flex min-h-10 items-center rounded-md border border-border px-3 text-sm font-medium"
+          className="no-brand-style inline-flex min-h-10 items-center rounded-md border border-border px-3 text-sm font-medium text-gray-900"
         >
           Review policy facts
         </Link>

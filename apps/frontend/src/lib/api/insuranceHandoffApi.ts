@@ -48,15 +48,16 @@ export type InsuranceHandoffRequestDTO = {
 };
 
 export async function getInsuranceHandoffReadiness(propertyId: string) {
-  const response = await api.get<{ success: true; data: InsuranceHandoffReadinessDTO }>(
+  const response = await api.get<InsuranceHandoffReadinessDTO>(
     `/api/properties/${propertyId}/insurance-handoff/readiness`
   );
-  return response.data.data;
+  return response.data;
 }
 
 export async function createInsuranceHandoffRequest(
   propertyId: string,
   input: {
+    requestId: string;
     recipientId: string;
     disclosureVersion: string;
     source: 'COVERAGE_COMPARISON';
@@ -74,17 +75,17 @@ export async function createInsuranceHandoffRequest(
     };
   }
 ) {
-  const response = await api.post<{
-    success: true;
-    data: { request: InsuranceHandoffRequestDTO };
-  }>(`/api/properties/${propertyId}/insurance-handoff/requests`, input);
-  return response.data.data.request;
+  const response = await api.post<{ request: InsuranceHandoffRequestDTO }>(
+    `/api/properties/${propertyId}/insurance-handoff/requests`,
+    input
+  );
+  return response.data.request;
 }
 
 export async function withdrawInsuranceHandoffRequest(propertyId: string, requestId: string) {
-  const response = await api.post<{
-    success: true;
-    data: { request: InsuranceHandoffRequestDTO };
-  }>(`/api/properties/${propertyId}/insurance-handoff/requests/${requestId}/withdraw`, {});
-  return response.data.data.request;
+  const response = await api.post<{ request: InsuranceHandoffRequestDTO }>(
+    `/api/properties/${propertyId}/insurance-handoff/requests/${requestId}/withdraw`,
+    {}
+  );
+  return response.data.request;
 }

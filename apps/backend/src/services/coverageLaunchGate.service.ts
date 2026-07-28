@@ -5,7 +5,7 @@ import { loadCapabilityGovernanceReadiness } from './capabilityGovernanceReview.
 import { checkGate } from './releaseGate.service';
 
 export const COVERAGE_LAUNCH_GATE_VERSION = 'coverage-launch-gate-v1';
-export const COVERAGE_LAUNCH_EVIDENCE_VERSION = 'coverage-slice-10-v1';
+export const COVERAGE_LAUNCH_EVIDENCE_VERSION = 'coverage-slice-10-v2';
 
 export const COVERAGE_COMPLETION_FUNNEL = [
   'ELIGIBLE',

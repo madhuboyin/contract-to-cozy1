@@ -770,11 +770,15 @@ The following journeys have financial exposure that may be partially or fully co
 
 The following pages are assigned as step destinations but have zero or partial guidance integration. Steps routed to these pages will remain in `PENDING` or `IN_PROGRESS` state indefinitely.
 
-#### P2-1: `coverage-intelligence` — Informational Panel Only
+#### P2-1: `coverage-intelligence` — Resolved by durable decision
 
-- **Steps stuck:** `check_coverage` (asset_lifecycle step 2), `check_coverage` (coverage_gap step 1)
-- **Gap:** Page renders `GuidanceInlinePanel` for context display but does not read guidance query params and does not call `POST /guidance/tool-completion` on any user action.
-- **Fix:** When the user completes a coverage review interaction (acknowledges a recommendation, views the full coverage report), call `recordToolCompletion` with `guidanceJourneyId` and `guidanceStepKey` from the URL.
+- The canonical Coverage & Premium Review workspace reads
+  `guidanceJourneyId`, `guidanceStepKey`, item context, and source-action
+  context from the launch URL.
+- Viewing or acknowledging generated output does not complete Guidance.
+- Recording a durable keep/change/shop/defer/professional-review decision
+  reconciles the Guidance step, canonical Home Action, Home Record, and Home
+  Timeline. Idempotent decision replays do not duplicate those writes.
 
 #### P2-3: `recalls` — Informational Panel Only
 
@@ -958,7 +962,9 @@ Ordered by impact and dependency. P0 items block correctness; P1 items block jou
 
 ### Sprint 3 — Wire Destination Pages (P2)
 
-10. **`coverage-intelligence`:** Add guidance param reading + completion trigger on coverage review acknowledgment.
+10. **`coverage-intelligence` (complete):** Guidance context is preserved and
+    completion occurs only after a durable coverage decision, not review
+    acknowledgment.
 11. **`do-nothing`, `home-savings`, `capital-timeline`:** Add guidance param reading + completion trigger. Add explicit `routePath` to template steps.
 12. **`insurance-trend`:** Add guidance param reading + acknowledgment completion trigger.
 

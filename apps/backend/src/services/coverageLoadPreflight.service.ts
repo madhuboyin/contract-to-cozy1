@@ -60,6 +60,11 @@ export type CoverageLoadPreflightConfig = {
   maxErrorRate: number;
 };
 
+export type CoveragePreflightTargetConfig = Pick<
+  CoverageLoadPreflightConfig,
+  'baseUrl' | 'allowedHost' | 'targetClass'
+>;
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -71,7 +76,7 @@ function percentile(values: number[], fraction: number) {
   return Math.round(sorted[index] * 100) / 100;
 }
 
-export function validateCoverageLoadTarget(config: CoverageLoadPreflightConfig) {
+export function validateCoveragePreflightTarget(config: CoveragePreflightTargetConfig) {
   const url = new URL(config.baseUrl);
   const hostname = url.hostname.toLowerCase();
   const allowedHost = config.allowedHost.trim().toLowerCase();
@@ -88,6 +93,11 @@ export function validateCoverageLoadTarget(config: CoverageLoadPreflightConfig) 
   } else if (url.protocol !== 'https:') {
     throw new Error('STAGING coverage load targets must use HTTPS.');
   }
+  return { url, hostname };
+}
+
+export function validateCoverageLoadTarget(config: CoverageLoadPreflightConfig) {
+  const target = validateCoveragePreflightTarget(config);
   if (!config.propertyId.trim()) throw new Error('COVERAGE_LOAD_PROPERTY_ID is required.');
   if (
     !Number.isInteger(config.totalRequests) ||
@@ -113,7 +123,7 @@ export function validateCoverageLoadTarget(config: CoverageLoadPreflightConfig) 
   if (config.maxErrorRate < 0 || config.maxErrorRate > 1) {
     throw new Error('COVERAGE_LOAD_MAX_ERROR_RATE must be between 0 and 1.');
   }
-  return { url, hostname };
+  return target;
 }
 
 export async function runCoverageLoadPreflight(

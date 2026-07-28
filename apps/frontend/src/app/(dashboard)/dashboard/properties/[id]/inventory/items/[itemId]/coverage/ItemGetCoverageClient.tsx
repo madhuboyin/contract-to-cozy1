@@ -146,7 +146,7 @@ function mergeOverridesWithPrefill(
 function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], recommendation?: string) {
   if (recommendation === 'REPLACE_SOON') {
     return {
-      headline: "Replace this item — don't cover it",
+      headline: 'Review replacement timing and protection choices',
       bg: 'bg-amber-50',
       border: 'border-amber-200',
       iconColor: 'text-amber-500',
@@ -154,7 +154,7 @@ function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], reco
   }
   if (verdict === 'WORTH_IT') {
     return {
-      headline: 'Coverage is worth getting',
+      headline: 'Protection cost is below modeled repair exposure',
       bg: 'bg-teal-50',
       border: 'border-teal-200',
       iconColor: 'text-teal-600',
@@ -162,14 +162,14 @@ function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], reco
   }
   if (verdict === 'NOT_WORTH_IT') {
     return {
-      headline: "Coverage isn't worth it right now",
+      headline: 'Protection cost is above modeled repair exposure',
       bg: 'bg-amber-50',
       border: 'border-amber-200',
       iconColor: 'text-amber-500',
     };
   }
   return {
-    headline: 'Worth considering for this item',
+    headline: 'Protection cost and modeled repair exposure are similar',
     bg: 'bg-sky-50',
     border: 'border-sky-200',
     iconColor: 'text-sky-600',
@@ -186,22 +186,19 @@ function strongVerdictRationale(
 ): string {
   if (recommendation === 'REPLACE_SOON') {
     const mo = remainingMonths ?? 0;
-    if (netImpact != null && netImpact > 0) {
-      return `Coverage saves ${money(netImpact)}/yr on paper — but with only ${mo} ${mo === 1 ? 'month' : 'months'} of expected life left, this item is entering its highest-risk period. Near-end-of-life appliances fail unpredictably, and one repair often uncovers another. A warranty can't fix an aging item. Put that money toward a replacement budget instead.`;
-    }
-    return `With only ${mo} ${mo === 1 ? 'month' : 'months'} of expected life left and coverage already costing more than expected repairs, the case for replacement is clear. Near-end-of-life items fail unpredictably — budget for a new one rather than maintaining a dying item.`;
+    return `The record estimates about ${mo} ${mo === 1 ? 'month' : 'months'} of useful life remaining. Compare replacement timing, contract terms, exclusions, service fees, and your cash buffer before choosing a protection or replacement path.`;
   }
   if (verdict === 'WORTH_IT') {
     if (repairRisk != null && coverageCost != null && netImpact != null) {
-      return `Your expected repair risk is ${money(repairRisk)}/yr — coverage costs ${money(coverageCost)}/yr, saving you ${money(netImpact)}/yr. Locking in a warranty now protects you from the next unexpected failure at a net benefit.`;
+      return `The model compares ${money(coverageCost)}/yr in protection cost with ${money(repairRisk)}/yr in estimated repair exposure, a difference of ${money(Math.abs(netImpact))}/yr. This is scenario math, not guaranteed savings or a determination that a contract is suitable.`;
     }
-    return 'Coverage costs less than your expected repair bills at current rates. Locking in a warranty now protects you from the next unexpected failure.';
+    return 'The modeled protection cost is below estimated repair exposure. Review the actual contract, exclusions, service fees, provider terms, and your ability to absorb a repair before deciding.';
   }
   if (verdict === 'NOT_WORTH_IT') {
     if (repairRisk != null && coverageCost != null && netImpact != null) {
-      return `Coverage costs ${money(coverageCost)}/yr but your expected repair risk is only ${money(repairRisk)}/yr — you'd pay ${money(Math.abs(netImpact))}/yr extra for coverage. Self-insure: keep a dedicated repair fund and you'll come out ahead.`;
+      return `The model compares ${money(coverageCost)}/yr in protection cost with ${money(repairRisk)}/yr in estimated repair exposure, a difference of ${money(Math.abs(netImpact))}/yr. This does not account for every contract term or determine that you should decline protection.`;
     }
-    return "At current pricing, the warranty costs more than what you'd likely spend on repairs. Self-insure — keep a dedicated repair fund instead and you'll come out ahead.";
+    return 'The modeled protection cost is above estimated repair exposure. Review the actual contract, exclusions, service fees, provider terms, and your cash buffer before deciding.';
   }
   if (repairRisk != null && coverageCost != null) {
     return `At ${money(coverageCost)}/yr for coverage vs ${money(repairRisk)}/yr expected repair risk, the numbers are nearly equal. Your risk tolerance is the deciding factor — if an unexpected repair would strain your budget, lean toward coverage.`;
@@ -663,8 +660,8 @@ export default function ItemGetCoverageClient() {
               <div>
                 <p className="font-semibold text-gray-900">No analysis yet for {itemName}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Run the analysis to find out whether coverage is worth it. We&apos;ll look at the item&apos;s
-                  age, replacement value, and typical repair costs to give you a recommendation.
+                  Compare a protection-cost scenario with modeled repair exposure. The result
+                  organizes assumptions and does not tell you whether to buy or decline a contract.
                 </p>
               </div>
             </div>
@@ -718,18 +715,16 @@ export default function ItemGetCoverageClient() {
                 <>
                   {/* REPLACE_SOON left — short-term saving */}
                   <div className="pr-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Short-term saving</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Modeled difference</p>
                     {netImpact != null && netImpact > 0 ? (
                       <>
                         <p className="text-base font-bold text-gray-900">{money(netImpact)}/yr</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Valid for ~{remainingMonths ?? '?'} {(remainingMonths ?? 2) === 1 ? 'month' : 'months'} only
-                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">Scenario estimate only</p>
                       </>
                     ) : netImpact != null ? (
                       <>
                         <p className="text-base font-bold text-rose-600">{money(Math.abs(netImpact))}/yr extra</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Coverage costs more than repairs</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Scenario estimate only</p>
                       </>
                     ) : (
                       <p className="text-xs text-gray-400">Run a scenario to see</p>
@@ -755,13 +750,13 @@ export default function ItemGetCoverageClient() {
                 </>
               ) : analysis.overallVerdict === 'WORTH_IT' ? (
                 <>
-                  {/* WORTH_IT left — annual savings */}
+                  {/* Internal model classification; homeowner copy remains neutral. */}
                   <div className="pr-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Annual savings</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Modeled difference</p>
                     {netImpact != null && netImpact > 0 ? (
                       <>
                         <p className="text-base font-bold text-teal-700">{money(netImpact)}/yr</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Coverage pays off</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Scenario estimate only</p>
                       </>
                     ) : (
                       <p className="text-xs text-gray-400">Run a scenario to see</p>
@@ -787,13 +782,13 @@ export default function ItemGetCoverageClient() {
                 </>
               ) : analysis.overallVerdict === 'NOT_WORTH_IT' ? (
                 <>
-                  {/* NOT_WORTH_IT left — extra cost */}
+                  {/* Internal model classification; homeowner copy remains neutral. */}
                   <div className="pr-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Extra cost</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Modeled difference</p>
                     {netImpact != null && netImpact < 0 ? (
                       <>
                         <p className="text-base font-bold text-rose-600">{money(Math.abs(netImpact))}/yr extra</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Coverage costs more than repairs</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Scenario estimate only</p>
                       </>
                     ) : (
                       <p className="text-xs text-gray-400">Run a scenario to see</p>
@@ -863,13 +858,13 @@ export default function ItemGetCoverageClient() {
                     Try scenario testing
                   </Button>
                   <Button variant="ghost" asChild>
-                    <Link href={addWarrantyHref}>Add coverage anyway</Link>
+                    <Link href={addWarrantyHref}>Record a protection option</Link>
                   </Button>
                 </>
               ) : analysis.overallVerdict === 'WORTH_IT' ? (
                 <>
                   <Button asChild>
-                    <Link href={addWarrantyHref}>Add warranty coverage</Link>
+                    <Link href={addWarrantyHref}>Review contract details</Link>
                   </Button>
                   <Button variant="ghost" onClick={openScenario}>
                     Try scenario testing
@@ -883,7 +878,7 @@ export default function ItemGetCoverageClient() {
                     disabled={waiving}
                     className="bg-white"
                   >
-                    {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Mark as skipped'}
+                    {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Keep record unchanged'}
                   </Button>
                   <Button variant="ghost" onClick={openScenario}>
                     Try scenario testing
@@ -893,23 +888,23 @@ export default function ItemGetCoverageClient() {
                 /* SITUATIONAL */
                 <>
                   <Button asChild>
-                    <Link href={addWarrantyHref}>Add warranty coverage</Link>
+                    <Link href={addWarrantyHref}>Review contract details</Link>
                   </Button>
                   <Button variant="ghost" onClick={openScenario}>
                     Try scenario testing
                   </Button>
                   <Button variant="ghost" onClick={handleSkipCoverage} disabled={waiving}>
-                    {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Skip for now'}
+                    {waiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Keep record unchanged'}
                   </Button>
                 </>
               )}
             </div>
           </div>
 
-          {/* Why we recommend this */}
+          {/* Assumptions behind the modeled comparison */}
           {analysis.decisionTrace.length > 0 && (
             <MobileCard className="space-y-3">
-              <p className="text-sm font-semibold text-gray-900">Why we recommend this</p>
+              <p className="text-sm font-semibold text-gray-900">Inputs behind this comparison</p>
               <div className="space-y-3">
                 {analysis.decisionTrace.slice(0, 5).map((trace, index) => {
                   const isUnknownConditionRow =

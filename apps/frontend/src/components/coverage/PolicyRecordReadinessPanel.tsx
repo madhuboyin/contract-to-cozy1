@@ -194,13 +194,11 @@ export default function PolicyRecordReadinessPanel({ propertyId }: { propertyId:
           <dl className="divide-y divide-border rounded-lg border border-border">
             {confirmedFacts.map((fact) => (
               <div key={fact.id} className="grid gap-1 p-3 sm:grid-cols-[1fr_auto]">
-                <div>
-                  <dt className="text-sm font-medium">
-                    {FACT_LABELS[fact.factKey] ?? fact.factKey}
-                  </dt>
-                  <dd className="text-sm">{formatFactValue(fact)}</dd>
-                </div>
-                <dd className="text-xs text-muted-foreground sm:text-right">
+                <dt className="text-sm font-medium">
+                  {FACT_LABELS[fact.factKey] ?? fact.factKey}
+                </dt>
+                <dd className="text-sm sm:text-right">{formatFactValue(fact)}</dd>
+                <dd className="text-xs text-muted-foreground sm:col-span-2 sm:text-right">
                   Confirmed
                   {fact.sourceDocument?.name ? ` from ${fact.sourceDocument.name}` : ''}
                   {fact.sourcePage ? `, page ${fact.sourcePage}` : ''}

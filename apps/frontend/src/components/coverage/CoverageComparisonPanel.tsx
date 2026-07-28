@@ -361,7 +361,7 @@ export default function CoverageComparisonPanel({
             <label className="block text-sm">Rationale
               <textarea value={rationale} onChange={(event) => setRationale(event.target.value)} rows={3} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2" placeholder="Optional unless changing to a non-equivalent or unresolved option." />
             </label>
-            <button type="button" disabled={saving || (decision === 'CHANGE' && !selectedOptionId)} onClick={() => void saveDecision()} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">Record decision</button>
+            <button type="button" disabled={saving || (decision === 'CHANGE' && !selectedOptionId)} onClick={() => void saveDecision()} className="rounded-md bg-teal-800 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">Record decision</button>
           </div>
         )}
       </section>

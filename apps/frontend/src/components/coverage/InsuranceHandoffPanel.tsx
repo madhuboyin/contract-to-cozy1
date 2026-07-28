@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createInsuranceHandoffRequest,
   getInsuranceHandoffReadiness,
@@ -30,6 +30,7 @@ export default function InsuranceHandoffPanel({ propertyId }: { propertyId: stri
   const [disclosureConsent, setDisclosureConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pendingRequestId = useRef<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -48,7 +49,9 @@ export default function InsuranceHandoffPanel({ propertyId }: { propertyId: stri
     setBusy(true);
     setError(null);
     try {
+      pendingRequestId.current ??= crypto.randomUUID();
       const created = await createInsuranceHandoffRequest(propertyId, {
+        requestId: pendingRequestId.current,
         recipientId: readiness.recipient.id,
         disclosureVersion: readiness.recipient.disclosureVersion,
         source: 'COVERAGE_COMPARISON',

@@ -88,7 +88,11 @@ test('handoff contract uses versioned consent, minimal payload, and revocation',
   assert.equal(INSURANCE_HANDOFF_DISCLOSURE_VERSION, 'coverage-handoff-v1');
   assert.match(routes, /dataSharing: z\.literal\(true\)/);
   assert.match(routes, /disclosuresAccepted: z\.literal\(true\)/);
+  assert.match(routes, /requestId: z\.string\(\)\.uuid\(\)/);
   assert.match(service, /CHANNEL_CONSENT_REQUIRED/);
+  assert.match(service, /INSURANCE_HANDOFF_IDEMPOTENCY_CONFLICT/);
+  assert.match(service, /error\.code === 'P2002'/);
+  assert.match(service, /idempotentReplay: true/);
   assert.match(service, /REQUEST_WITHDRAWN/);
   assert.match(service, /raw policy text/);
   assert.doesNotMatch(service, /exposureCents|inventoryItemId|gapType/);

@@ -2,7 +2,7 @@
 
 **Capability:** `coverage-intelligence`
 **Launch gate:** `coverage-launch-gate-v1`
-**Technical evidence:** `coverage-slice-10-v1`
+**Technical evidence:** `coverage-slice-10-v2`
 **Owner:** Product and Coverage Operations
 **Last reconciled:** July 27, 2026
 
@@ -39,6 +39,8 @@ npm run drill:coverage-launch
 #
 # Against a dedicated staging test property and short-lived test-user token:
 npm run preflight:coverage-load
+# Against disposable staging decision/handoff fixtures:
+npm run preflight:coverage-mutations
 npx tsc --noEmit
 npx prisma validate --schema=prisma/schema.prisma
 
@@ -47,9 +49,11 @@ npx tsc --noEmit
 npm run test:coverage-launch:e2e
 ```
 
-The browser suite exercises desktop and mobile layouts, source provenance,
-source-outage containment, horizontal overflow, and automated WCAG 2.0–2.2
-A/AA checks.
+The browser suite exercises the canonical policy record, evidence-qualified
+questions, non-equivalent choices, durable decision, loss-prevention evidence,
+licensed-help consent and withdrawal, market provenance and outage containment,
+desktop/mobile layouts, horizontal overflow, and automated WCAG 2.0–2.2 A/AA
+checks.
 
 The operational drill emits machine-readable JSON and verifies the real-user
 kill switch, contextual-action suppression, unavailable and stale benchmark
@@ -67,7 +71,7 @@ report excludes authorization values, response bodies, and the property ID.
 Only after all commands pass for the deployed revision may CI/deployment set:
 
 ```text
-COVERAGE_LAUNCH_EVIDENCE_VERSION=coverage-slice-10-v1
+COVERAGE_LAUNCH_EVIDENCE_VERSION=coverage-slice-10-v2
 ```
 
 ## Human review gate
@@ -224,6 +228,34 @@ error, network error, exceeded p95 threshold, or exceeded error-rate threshold
 blocks promotion. This preflight does not exercise mutations, so it complements
 rather than replaces the decision/handoff concurrency and idempotency checks
 above.
+
+Run the mutation preflight only against disposable staging fixtures. The
+comparison must be dedicated to this drill, the unauthorized property must be a
+real property the test user cannot access, and the recipient must be a reviewed
+non-delivering staging sink:
+
+```bash
+COVERAGE_MUTATION_BASE_URL=https://coverage.staging.example.com \
+COVERAGE_MUTATION_ALLOWED_HOST=coverage.staging.example.com \
+COVERAGE_MUTATION_TARGET_CLASS=STAGING \
+COVERAGE_MUTATION_ACCESS_TOKEN=<short-lived-test-user-token> \
+COVERAGE_MUTATION_PROPERTY_ID=<owned-disposable-property-id> \
+COVERAGE_MUTATION_UNAUTHORIZED_PROPERTY_ID=<foreign-property-id> \
+COVERAGE_MUTATION_COMPARISON_ID=<disposable-draft-comparison-id> \
+COVERAGE_MUTATION_HANDOFF_REQUEST_ID=<stable-random-uuid> \
+COVERAGE_MUTATION_RECIPIENT_ID=<non-delivering-staging-recipient-id> \
+COVERAGE_MUTATION_DISCLOSURE_VERSION=<current-staging-disclosure-version> \
+COVERAGE_MUTATION_CONTACT_EMAIL=<staging-sink-address> \
+COVERAGE_MUTATION_CONCURRENCY=5 \
+COVERAGE_MUTATION_TIMEOUT_MS=10000 \
+npm run preflight:coverage-mutations
+```
+
+The mutation report contains no token, property ID, contact value, or response
+body. It passes only when the foreign property is denied, concurrent decision
+retries return one decision and one Home Event, concurrent help-request retries
+return the caller-supplied request ID, and that staging request is withdrawn
+after the check. Never point this command at a real recipient or homeowner.
 
 Coverage decision persistence uses an atomic `DRAFT` → `DECIDED` claim.
 Identical retries return the recorded decision as an idempotent replay and do

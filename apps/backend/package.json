@@ -30,6 +30,7 @@
     "drill:capability-incident": "ts-node scripts/capability-incident-drill.ts",
     "drill:coverage-launch": "ts-node scripts/coverage-operational-drill.ts",
     "preflight:coverage-load": "ts-node scripts/coverage-load-preflight.ts",
+    "preflight:coverage-mutations": "ts-node scripts/coverage-mutation-preflight.ts",
     "acceptance:phase3": "node --test tests/integration/phase3VerifiedClosure.db.test.js",
     "acceptance:phase6": "node --test tests/integration/phase6NewHomeControlledPilot.db.test.js",
     "lint:ssrf": "node scripts/check-ssrf-guards.js",

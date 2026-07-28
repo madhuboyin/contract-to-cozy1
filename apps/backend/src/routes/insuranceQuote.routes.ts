@@ -52,6 +52,7 @@ const consentSchema = z.object({
 });
 
 const requestSchema = z.object({
+  requestId: z.string().uuid(),
   recipientId: z.string().uuid(),
   disclosureVersion: z.string().trim().min(1).max(120),
   source: z.enum(['COVERAGE_REVIEW', 'COVERAGE_COMPARISON', 'MANUAL']),
@@ -115,7 +116,10 @@ insuranceQuoteRouter.post(
       req.user!.userId,
       req.body
     );
-    res.status(201).json({ success: true, data: { request } });
+    res.status(request.idempotentReplay ? 200 : 201).json({
+      success: true,
+      data: { request },
+    });
   })
 );
 

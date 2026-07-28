@@ -505,7 +505,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                       <div className="mt-2 text-xs">
                         <Link
                           href={item.handoff.href}
-                          className="font-medium text-teal-700 underline-offset-2 hover:underline"
+                          className="no-brand-style font-medium text-teal-900 underline-offset-2 hover:underline"
                         >
                           {item.handoff.label}
                         </Link>
@@ -552,6 +552,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                         {item.priority}
                       </span>
                       <select
+                        aria-label={`Status for ${item.title || item.actionType.replaceAll('_', ' ')}`}
                         value={item.status}
                         disabled={updatingPlanItemId === item.id}
                         onChange={(e) =>

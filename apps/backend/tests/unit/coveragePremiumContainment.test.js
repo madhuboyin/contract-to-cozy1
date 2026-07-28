@@ -55,6 +55,26 @@ test('coverage record UI does not present a missing heuristic gap as proof of co
   assert.doesNotMatch(options, /proofType: 'coverage_gap_snapshot'/);
 });
 
+test('item protection UI keeps internal verdicts out of homeowner-facing directive copy', () => {
+  const itemCoverage = source(
+    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/items/[itemId]/coverage/ItemGetCoverageClient.tsx',
+  );
+
+  for (const unsupportedClaim of [
+    'Coverage is worth getting',
+    "Coverage isn't worth it",
+    'Coverage pays off',
+    'Annual savings',
+    'Why we recommend this',
+    'Self-insure:',
+  ]) {
+    assert.equal(itemCoverage.includes(unsupportedClaim), false, unsupportedClaim);
+  }
+  assert.match(itemCoverage, /scenario math, not guaranteed savings/);
+  assert.match(itemCoverage, /does not tell you whether to buy or decline a contract/);
+  assert.match(itemCoverage, /Inputs behind this comparison/);
+});
+
 test('quote lead capture is replaced by a governed, fail-closed handoff', () => {
   const route = source('../../src/routes/insuranceQuote.routes.ts');
   const service = source('../../src/services/insuranceHandoff.service.ts');
@@ -69,6 +89,8 @@ test('quote lead capture is replaced by a governed, fail-closed handoff', () => 
   assert.match(service, /supportedJurisdictions/);
   assert.doesNotMatch(route, /insuranceQuoteRequest\.create/);
   assert.doesNotMatch(inventory, /InsuranceQuoteModal|setQuoteOpen|>Quotes</);
+  const client = source('../../../frontend/src/lib/api/insuranceHandoffApi.ts');
+  assert.doesNotMatch(client, /response\.data\.data/);
 });
 
 test('coverage capability family has one beta, catalog-only definition and does not claim jurisdiction verification', () => {

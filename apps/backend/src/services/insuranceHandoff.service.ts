@@ -131,6 +131,7 @@ export async function getInsuranceHandoffReadiness(propertyId: string, userId: s
 }
 
 type CreateHandoffInput = {
+  requestId: string;
   recipientId: string;
   disclosureVersion: string;
   source: QuoteRequestSource;
@@ -201,64 +202,147 @@ export async function createInsuranceHandoffRequest(
     contact: selectedContact,
     coverageComparisonId: input.coverageComparisonId ?? null,
   };
-  const request = await prisma.$transaction(async (tx) => {
-    const created = await tx.insuranceQuoteRequest.create({
-      data: {
-        homeownerProfileId: property.homeownerProfileId,
-        propertyId,
-        recipientId: recipient.id,
-        coverageComparisonId: input.coverageComparisonId ?? null,
-        source: input.source,
-        purpose: input.purpose.trim(),
-        preferredContact: input.preferredContact,
-        contactEmail: input.preferredContact === 'EMAIL' ? selectedContact : null,
-        contactPhone: input.preferredContact !== 'EMAIL' ? selectedContact : null,
-        jurisdictionCode,
-        notes: input.notes?.trim() || null,
-        disclosureVersion,
-        disclosureSnapshotJson: disclosureSnapshot as unknown as Prisma.InputJsonValue,
-        consentSnapshotJson: input.consent as unknown as Prisma.InputJsonValue,
-        sharedPayloadJson: sharedPayload as Prisma.InputJsonValue,
-        consentedAt: now,
-        submittedAt: now,
-        status: 'SUBMITTED',
-      },
-      include: { recipient: true, events: true },
-    });
-    await tx.insuranceQuoteRequestEvent.createMany({
-      data: [
-        {
-          quoteRequestId: created.id,
-          eventType: 'CONSENT_RECORDED',
-          actorType: 'HOMEOWNER',
-          actorId: userId,
-          status: 'CONSENTED',
-          detailsJson: { disclosureVersion, preferredContact: input.preferredContact },
-          occurredAt: now,
-        },
-        {
-          quoteRequestId: created.id,
-          eventType: 'REQUEST_SUBMITTED',
-          actorType: 'SYSTEM',
-          actorId: userId,
-          status: 'SUBMITTED',
-          detailsJson: { recipientId: recipient.id, quoteReceived: false },
-          occurredAt: now,
-        },
-      ],
-    });
-    await tx.auditLog.create({
-      data: {
-        userId,
-        action: 'insurance_handoff_submitted',
-        entityType: 'InsuranceQuoteRequest',
-        entityId: created.id,
-        newValues: { recipientId: recipient.id, jurisdictionCode, disclosureVersion },
-      },
-    });
-    return created;
+  const matchesReplay = (existing: {
+    recipientId: string;
+    coverageComparisonId: string | null;
+    source: QuoteRequestSource;
+    purpose: string;
+    preferredContact: string;
+    contactEmail: string | null;
+    contactPhone: string | null;
+    notes: string | null;
+    disclosureVersion: string;
+    consentSnapshotJson: Prisma.JsonValue;
+  }) =>
+    existing.recipientId === recipient.id &&
+    existing.coverageComparisonId === (input.coverageComparisonId ?? null) &&
+    existing.source === input.source &&
+    existing.purpose === input.purpose.trim() &&
+    existing.preferredContact === input.preferredContact &&
+    existing.contactEmail === (input.preferredContact === 'EMAIL' ? selectedContact : null) &&
+    existing.contactPhone === (input.preferredContact !== 'EMAIL' ? selectedContact : null) &&
+    existing.notes === (input.notes?.trim() || null) &&
+    existing.disclosureVersion === disclosureVersion &&
+    typeof existing.consentSnapshotJson === 'object' &&
+    existing.consentSnapshotJson !== null &&
+    !Array.isArray(existing.consentSnapshotJson) &&
+    existing.consentSnapshotJson.dataSharing === input.consent.dataSharing &&
+    existing.consentSnapshotJson.disclosuresAccepted === input.consent.disclosuresAccepted &&
+    existing.consentSnapshotJson.email === input.consent.email &&
+    existing.consentSnapshotJson.sms === input.consent.sms &&
+    existing.consentSnapshotJson.phone === input.consent.phone;
+  const loadReplay = () => prisma.insuranceQuoteRequest.findFirst({
+    where: {
+      id: input.requestId,
+      propertyId,
+      homeownerProfileId: property.homeownerProfileId,
+    },
+    include: { recipient: true, events: { orderBy: { occurredAt: 'asc' as const } } },
   });
-  return { ...request, recipient: publicRecipient(recipient), quoteReceived: false };
+  const existing = await loadReplay();
+  if (existing) {
+    if (!matchesReplay(existing)) {
+      throw new APIError(
+        'The handoff request id was already used with different details',
+        409,
+        'INSURANCE_HANDOFF_IDEMPOTENCY_CONFLICT'
+      );
+    }
+    return {
+      ...existing,
+      recipient: publicRecipient(recipient),
+      quoteReceived: existing.status === 'QUOTE_RECEIVED',
+      idempotentReplay: true as const,
+    };
+  }
+
+  try {
+    const request = await prisma.$transaction(async (tx) => {
+      const created = await tx.insuranceQuoteRequest.create({
+        data: {
+          id: input.requestId,
+          homeownerProfileId: property.homeownerProfileId,
+          propertyId,
+          recipientId: recipient.id,
+          coverageComparisonId: input.coverageComparisonId ?? null,
+          source: input.source,
+          purpose: input.purpose.trim(),
+          preferredContact: input.preferredContact,
+          contactEmail: input.preferredContact === 'EMAIL' ? selectedContact : null,
+          contactPhone: input.preferredContact !== 'EMAIL' ? selectedContact : null,
+          jurisdictionCode,
+          notes: input.notes?.trim() || null,
+          disclosureVersion,
+          disclosureSnapshotJson: disclosureSnapshot as unknown as Prisma.InputJsonValue,
+          consentSnapshotJson: input.consent as unknown as Prisma.InputJsonValue,
+          sharedPayloadJson: sharedPayload as Prisma.InputJsonValue,
+          consentedAt: now,
+          submittedAt: now,
+          status: 'SUBMITTED',
+        },
+        include: { recipient: true, events: true },
+      });
+      await tx.insuranceQuoteRequestEvent.createMany({
+        data: [
+          {
+            quoteRequestId: created.id,
+            eventType: 'CONSENT_RECORDED',
+            actorType: 'HOMEOWNER',
+            actorId: userId,
+            status: 'CONSENTED',
+            detailsJson: { disclosureVersion, preferredContact: input.preferredContact },
+            occurredAt: now,
+          },
+          {
+            quoteRequestId: created.id,
+            eventType: 'REQUEST_SUBMITTED',
+            actorType: 'SYSTEM',
+            actorId: userId,
+            status: 'SUBMITTED',
+            detailsJson: { recipientId: recipient.id, quoteReceived: false },
+            occurredAt: now,
+          },
+        ],
+      });
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'insurance_handoff_submitted',
+          entityType: 'InsuranceQuoteRequest',
+          entityId: created.id,
+          newValues: { recipientId: recipient.id, jurisdictionCode, disclosureVersion },
+        },
+      });
+      return created;
+    });
+    return {
+      ...request,
+      recipient: publicRecipient(recipient),
+      quoteReceived: false,
+      idempotentReplay: false as const,
+    };
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      const replay = await loadReplay();
+      if (replay && matchesReplay(replay)) {
+        return {
+          ...replay,
+          recipient: publicRecipient(recipient),
+          quoteReceived: replay.status === 'QUOTE_RECEIVED',
+          idempotentReplay: true as const,
+        };
+      }
+      throw new APIError(
+        'The handoff request id was already used with different details',
+        409,
+        'INSURANCE_HANDOFF_IDEMPOTENCY_CONFLICT'
+      );
+    }
+    throw error;
+  }
 }
 
 export async function getInsuranceHandoffRequest(
