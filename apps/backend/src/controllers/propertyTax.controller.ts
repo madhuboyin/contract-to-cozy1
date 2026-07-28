@@ -13,6 +13,7 @@ import { propertyTaxDocumentIntakeService } from '../services/propertyTax/proper
 import { propertyTaxHomeownerActionService } from '../services/propertyTax/propertyTaxHomeownerAction.service';
 import { propertyTaxAppealReadinessService } from '../services/propertyTax/propertyTaxAppealReadiness.service';
 import { propertyTaxAppealCaseService } from '../services/propertyTax/propertyTaxAppealCase.service';
+import { propertyTaxOperationsService } from '../services/propertyTax/propertyTaxOperations.service';
 
 const service = new PropertyTaxService();
 
@@ -182,6 +183,76 @@ export async function disablePropertyTaxRule(req: CustomRequest, res: Response, 
 
 export async function rollbackPropertyTaxRule(req: CustomRequest, res: Response, next: NextFunction) {
   await controlRule(req, res, next, 'rollback');
+}
+
+export async function getPropertyTaxOperations(
+  _req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const operations = await propertyTaxOperationsService.getDashboard();
+    res.json({ success: true, data: operations });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const sourceControlSchema = z.object({
+  enabled: z.boolean(),
+  reason: z.string().trim().min(8).max(500),
+}).strict();
+
+export async function controlPropertyTaxSource(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = sourceControlSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Source status and a specific operator reason are required',
+      });
+      return;
+    }
+    const source = await propertyTaxOperationsService.setSourceEnabled({
+      sourceId: req.params.sourceId,
+      enabled: parsed.data.enabled,
+      reason: parsed.data.reason,
+      actorUserId: req.user!.userId,
+      req,
+    });
+    res.json({ success: true, data: { source } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function emergencyDisablePropertyTaxAi(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = ruleControlSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'A specific operator reason is required',
+      });
+      return;
+    }
+    const setting = await propertyTaxOperationsService.emergencyDisableAi({
+      actorUserId: req.user!.userId,
+      reason: parsed.data.reason,
+      req,
+    });
+    res.json({ success: true, data: { setting } });
+  } catch (error) {
+    next(error);
+  }
 }
 
 const taxDocumentKindSchema = z.enum([

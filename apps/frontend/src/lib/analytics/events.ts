@@ -52,6 +52,7 @@ export type CtcEventName =
   | 'workflow_step_reached'
   | 'workflow_completed'
   | 'workflow_abandoned'
+  | 'property_tax_outcome_recorded'
   // Recommendations
   | 'recommendation_shown'
   | 'action_taken'
@@ -204,6 +205,23 @@ export interface CtcEventProperties {
   workflow_step_reached: { tool: CtcTool; step: string; propertyId: string };
   workflow_completed: { tool: CtcTool; propertyId: string; durationSeconds?: number };
   workflow_abandoned: { tool: CtcTool; exitStep: string; propertyId: string };
+  property_tax_outcome_recorded: {
+    propertyId: string;
+    outcome:
+      | 'DOCUMENT_REVIEW_CONFIRMED'
+      | 'EXEMPTION_DECISION'
+      | 'CORRECTION_DECISION'
+      | 'INFORMAL_REVIEW_DECISION'
+      | 'EXTERNAL_FILING'
+      | 'DETERMINATION';
+    status?: string;
+    actionId?: string;
+    caseId?: string;
+    determination?: string;
+    assessedValueReduction?: number;
+    refundAmount?: number;
+    creditAmount?: number;
+  };
   // Recommendations
   recommendation_shown: { tool: CtcTool; confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH'; source: string };
   action_taken: { tool: CtcTool; actionType: string; propertyId: string };

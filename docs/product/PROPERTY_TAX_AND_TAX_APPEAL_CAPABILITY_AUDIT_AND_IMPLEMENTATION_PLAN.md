@@ -1453,6 +1453,18 @@ Record:
 
 **Goal:** Prove correctness and measure realized value.
 
+**Implementation status (July 28, 2026): Complete**
+
+- Added an admin Property Tax Operations workspace with official-source health and coverage counts, reviewed-rule status and expiry, case counts, AI fail-closed status, and queryable safety guardrails.
+- Added MFA-, role-, capability-, and rate-limited operations endpoints for dashboard reads, source enable/emergency disable, existing rule emergency disable, and property-tax AI emergency disable.
+- Added durable source and AI control state using existing source status and system settings, with specific operator reasons and standardized Admin Audit records; reviewed-rule controls retain their dedicated immutable control-event history.
+- Added false-match, overdue case-reminder, unsupported-claim, stale-rule case, and document-extraction-failure guardrails with explicit healthy, warning, and critical states.
+- Kept official source ingestion fail-closed by loading only active sources and retained existing suppression of ambiguous or low-confidence parcel matches.
+- Added outcome analytics for confirmed document review, exemption/correction/informal-review decisions, external filing, determination, assessed-value reduction, refund, credit, and verified realized savings.
+- Added service-level operations/control tests and cumulative Slice 8 contract coverage without adding a database migration.
+- Added an authenticated property-tax browser fixture and a Chromium, Firefox, WebKit, Pixel, and iPhone acceptance matrix covering seven-stage context preservation, keyboard focus, skip navigation, trust disclosures, mobile overflow, 44-pixel targets, and reduced motion.
+- The browser acceptance matrix passes in all five browser/device profiles; keyboard-only cases run in Chromium while semantic and disclosure coverage runs across all desktop engines.
+
 **Work**
 
 - Add unit, integration, browser, accessibility, and operational suites.

@@ -200,6 +200,21 @@ const propertyTaxRuleAdmin = [
   requireCapability('INTEGRATION_MANAGE'),
 ] as const;
 
+router.get(
+  '/admin/property-tax/operations',
+  ...propertyTaxRuleAdmin,
+  controller.getPropertyTaxOperations,
+);
+router.put(
+  '/admin/property-tax/sources/:sourceId',
+  ...propertyTaxRuleAdmin,
+  controller.controlPropertyTaxSource,
+);
+router.post(
+  '/admin/property-tax/ai/emergency-disable',
+  ...propertyTaxRuleAdmin,
+  controller.emergencyDisablePropertyTaxAi,
+);
 router.post(
   '/admin/property-tax/rules/:profileId/activate',
   ...propertyTaxRuleAdmin,

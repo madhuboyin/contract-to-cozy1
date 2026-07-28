@@ -257,6 +257,10 @@ export default function PropertyTaxClient() {
       setRules(nextRules);
       setIntakes(nextIntakes);
       setTaxActions(nextActions);
+      track('property_tax_outcome_recorded', {
+        propertyId,
+        outcome: 'DOCUMENT_REVIEW_CONFIRMED',
+      });
       setAppealCases(nextCases);
     } catch (cause: unknown) {
       setRecordError(cause instanceof Error ? cause.message : 'Failed to load property tax record');
@@ -386,6 +390,19 @@ export default function PropertyTaxClient() {
         externalReference: actionReferences[action.id]?.trim() || undefined,
       });
       setTaxActions(await getPropertyTaxActions(propertyId));
+      track('property_tax_outcome_recorded', {
+        propertyId,
+        outcome: action.type === 'EXEMPTION_REVIEW'
+          ? 'EXEMPTION_DECISION'
+          : action.type === 'FACTUAL_CORRECTION'
+            ? 'CORRECTION_DECISION'
+            : 'INFORMAL_REVIEW_DECISION',
+        actionId: action.id,
+        status,
+      });
+      if (['COMPLETED', 'NOT_APPLICABLE', 'DISMISSED'].includes(status)) {
+        track('workflow_completed', { tool: 'property-tax', propertyId });
+      }
     } catch (cause: unknown) {
       setRecordError(cause instanceof Error ? cause.message : 'Failed to update tax action');
     } finally {
@@ -590,15 +607,23 @@ export default function PropertyTaxClient() {
     setAppealCaseBusy(true);
     setRecordError(null);
     try {
-      replaceAppealCase(await confirmPropertyTaxAppealFiling(
+      const filedCase = await confirmPropertyTaxAppealFiling(
         propertyId,
         caseId,
         {
           filedAt: new Date().toISOString(),
           externalReference: filingReference.trim(),
         },
-      ));
+      );
+      replaceAppealCase(filedCase);
       setFilingReference('');
+      track('property_tax_outcome_recorded', {
+        propertyId,
+        outcome: 'EXTERNAL_FILING',
+        caseId,
+        status: filedCase.status,
+      });
+      track('workflow_completed', { tool: 'property-tax', propertyId });
     } catch (cause: unknown) {
       setRecordError(cause instanceof Error
         ? cause.message
@@ -708,7 +733,7 @@ export default function PropertyTaxClient() {
     setAppealCaseBusy(true);
     setRecordError(null);
     try {
-      replaceAppealCase(await determinePropertyTaxAppealCase(
+      const determinedCase = await determinePropertyTaxAppealCase(
         propertyId,
         caseId,
         {
@@ -721,7 +746,31 @@ export default function PropertyTaxClient() {
           creditAmount: optionalNumber(determinationCredit),
           closeCase: determinationClose,
         },
-      ));
+      );
+      replaceAppealCase(determinedCase);
+      const assessedValueReduction = determinedCase.originalAssessedValue !== null
+        && determinedCase.finalAssessedValue !== null
+        ? Math.max(0, determinedCase.originalAssessedValue - determinedCase.finalAssessedValue)
+        : undefined;
+      track('property_tax_outcome_recorded', {
+        propertyId,
+        outcome: 'DETERMINATION',
+        caseId,
+        status: determinedCase.status,
+        determination: determinedCase.determination ?? determination,
+        assessedValueReduction,
+        refundAmount: determinedCase.refundAmount ?? undefined,
+        creditAmount: determinedCase.creditAmount ?? undefined,
+      });
+      const realizedSavings = (determinedCase.refundAmount ?? 0) + (determinedCase.creditAmount ?? 0);
+      if (realizedSavings > 0) {
+        track('savings_verified', {
+          tool: 'property-tax',
+          amountUsd: realizedSavings,
+          propertyId,
+        });
+      }
+      track('workflow_completed', { tool: 'property-tax', propertyId });
     } catch (cause: unknown) {
       setRecordError(cause instanceof Error
         ? cause.message
@@ -896,6 +945,7 @@ export default function PropertyTaxClient() {
               key={stage.id}
               href={stageHref(stage.id)}
               aria-current={selected ? 'page' : undefined}
+              style={{ display: 'inline-flex', minHeight: 44 }}
               className={`inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 py-2 text-sm font-medium outline-none focus-visible:ring-4 focus-visible:ring-sky-400 ${
                 selected
                   ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'

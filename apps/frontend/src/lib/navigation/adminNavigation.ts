@@ -20,6 +20,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Radar,
+  Landmark,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -127,6 +128,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/admin/radar-sources',
     icon: Radar,
     description: 'Source coverage, health, runs, replay, and kill switches',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-property-tax',
+    name: 'Property Tax Operations',
+    href: '/dashboard/admin/property-tax',
+    icon: Landmark,
+    description: 'Tax-source health, rule freshness, guardrails, and kill switches',
     engines: [],
     globalHref: true,
   },

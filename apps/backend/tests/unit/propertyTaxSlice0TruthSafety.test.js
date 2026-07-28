@@ -10,7 +10,12 @@ test('property tax planning output does not manufacture history or peer comparis
   const client = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/property-tax/PropertyTaxClient.tsx');
 
   assert.doesNotMatch(service, /\bbuildHistory\b|\bbuildComparison\b|\bpercentileApprox\b/);
-  assert.doesNotMatch(client, /City median|County median|State median|workflow_completed/);
+  assert.doesNotMatch(client, /City median|County median|State median/);
+  const estimateRefresh = client.slice(
+    client.indexOf('async function refresh('),
+    client.indexOf('async function refreshRecord('),
+  );
+  assert.doesNotMatch(estimateRefresh, /workflow_completed/);
   assert.match(client, /not an observed tax record/i);
 });
 
