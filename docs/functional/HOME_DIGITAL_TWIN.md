@@ -251,18 +251,16 @@ project is linked), `POST /scenarios/:id/compute`,
 State is plain TanStack React Query (`useQuery`/`useMutation`) against the
 typed API wrapper — there are no bespoke `useHomeDigitalTwin()`-style hooks.
 
-Key sections on the page: status card (with stale / dependency-drift /
-degraded / returning-user banners), fact-readiness summary (shared with the
-property overview's Home Record card), modeled systems, suggested and
-recent scenarios — laid out as a single column on mobile and a two-column
-(systems / decisions) grid at desktop widths.
+The page is decision-only: it shows suggested scenarios, saved scenarios,
+and a name-only system selector for starting a comparison. It does not
+render system health, fact readiness, lifecycle state, cost, or provenance
+as a second home-state summary. Explicit links route homeowners to Home
+Record, Status Board, and Capital Timeline for those canonical concerns.
 
-Component and scenario detail open in a `Sheet`, including: age/lifespan,
-planning-attention (qualitative, not a "failure probability"), cost
-estimates with source/date per fact, safety boundary (electrical/roof/
-foundation), projected-impact ranges split from homeowner-entered estimates,
+Suggestion, scenario, and comparison detail open in a `Sheet`, including
+decision-specific readiness, safety boundaries, projected-impact ranges,
 sensitivity ("what drives this range"), decision controls (select/defer/
-reject/close with a required reason for defer/reject), compare, rename, and
+reject/close with a required reason for defer/reject), rename and
 archived-only delete, and the handoff panel (linked project or pre-filled
 create-project link, wayfinding links, expected-vs-actual cost once a linked
 project completes).

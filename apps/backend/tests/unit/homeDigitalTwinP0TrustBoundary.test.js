@@ -31,6 +31,21 @@ test('Home Record readiness UI only links to canonical correction destinations',
   assert.match(card, /item\.correctionDestination/);
 });
 
+test('upgrade planner does not render a competing home-state summary', () => {
+  const client = readRepoFile(
+    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-digital-twin/HomeDigitalTwinClient.tsx',
+  );
+
+  assert.doesNotMatch(client, /<TwinStatusCard/);
+  assert.doesNotMatch(client, /<HomeRecordReadinessCard/);
+  assert.doesNotMatch(client, /<ComponentDetailSheet/);
+  assert.doesNotMatch(client, /title="Home Systems"/);
+  assert.match(client, /Choose a system to compare/);
+  assert.match(client, /Open Home Record/);
+  assert.match(client, /Open Status Board/);
+  assert.match(client, /Open Capital Timeline/);
+});
+
 test('heuristic scenario UI has no Bottom line treatment', () => {
   const client = readRepoFile(
     'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-digital-twin/HomeDigitalTwinClient.tsx',

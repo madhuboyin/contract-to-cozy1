@@ -80,7 +80,6 @@ import {
   listDigitalTwinScenarioRuns,
 } from './homeDigitalTwinApi';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
-import HomeRecordReadinessCard from '../../components/HomeRecordReadinessCard';
 
 // ============================================================================
 // DISPLAY CONFIG
@@ -144,8 +143,6 @@ const FACT_FIELD_LABEL: Record<string, string> = {
   replacementCostEstimate: 'Replacement cost',
 };
 
-// Every derived fact carries its own provenance — this must never read more
-// confidently than the underlying source justifies.
 const FACT_STATE_LABEL: Record<string, string> = {
   VERIFIED: 'Verified',
   REPORTED: 'Reported by homeowner',
@@ -1722,9 +1719,6 @@ export default function HomeDigitalTwinClient({
     track('workflow_started', { tool: 'home-digital-twin', propertyId, entryPoint: 'direct' });
   }, [propertyId]);
 
-  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
-  const [componentSheetOpen, setComponentSheetOpen] = useState(false);
-
   const [selectedSuggestionKey, setSelectedSuggestionKey] = useState<string | null>(null);
   const [suggestionSheetOpen, setSuggestionSheetOpen] = useState(false);
 
@@ -1775,8 +1769,6 @@ export default function HomeDigitalTwinClient({
   });
 
   // Derive selected items from query data — always fresh
-  const selectedComponent =
-    twin?.components.find((c) => c.id === selectedComponentId) ?? null;
   const selectedSuggestion =
     recommendations?.find((s) => s.key === selectedSuggestionKey) ?? null;
   const selectedScenario =
@@ -1789,16 +1781,14 @@ export default function HomeDigitalTwinClient({
     );
     if (!component) return;
     consumedFocusRef.current = focusedEntityId;
-    setSelectedComponentId(component.id);
-    setComponentSheetOpen(true);
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById(`twin-component-${component.id}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
+    setCompareComponentId(component.id);
+    setCompareSheetOpen(true);
+    track('action_taken', {
+      tool: 'home-digital-twin',
+      propertyId,
+      actionType: 'scenario_compare_opened',
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [focusedEntityId, twin]);
+  }, [focusedEntityId, propertyId, twin]);
 
   // ── Init mutation ───────────────────────────────────────────────────────────
   const initMutation = useMutation({
@@ -1806,7 +1796,7 @@ export default function HomeDigitalTwinClient({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin-recommendations', propertyId] });
-      toast({ title: 'Home view ready', description: 'Your home model is ready to explore.' });
+      toast({ title: 'Planner ready', description: 'Your home data is ready for option comparisons.' });
     },
     onError: (error) =>
       toast({
@@ -1967,7 +1957,7 @@ export default function HomeDigitalTwinClient({
       <MobilePageIntro
         eyebrow="Home tool"
         title="Home Upgrade Planner"
-        subtitle="See what we know about your home's systems, correct what's uncertain, and compare the cost, timing, savings, and risk trade-offs of a repair or upgrade."
+        subtitle="Compare repair, replacement, upgrade, and wait options using facts maintained in your Home Record."
         showOnDesktop
       />
 
@@ -2005,8 +1995,8 @@ export default function HomeDigitalTwinClient({
       ) : twinNotFound || !twin ? (
         /* ── NOT YET BUILT ──────────────────────────────────────────────────── */
         <EmptyStateCard
-          title="Your home view isn't built yet"
-          description="Build your home model to see your systems' age and condition, correct anything that's wrong, and compare upgrade options. Takes just a moment."
+          title="Your planner isn't ready yet"
+          description="Prepare your existing Home Record facts for repair and upgrade comparisons. This takes just a moment."
           action={
             <Button
               onClick={() => initMutation.mutate()}
@@ -2024,53 +2014,86 @@ export default function HomeDigitalTwinClient({
           }
         />
       ) : (
-        <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start lg:gap-6 lg:space-y-0">
-        {/* ── Left column: current state of the home ─────────────────────────── */}
+        <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start lg:gap-6 lg:space-y-0">
+        {/* ── Left column: decision entry points, not a second home-state view ── */}
         <div className="space-y-4">
-          {/* ── STATUS CARD ──────────────────────────────────────────────────── */}
-          <TwinStatusCard
-            twin={twin}
-            onRefresh={() => refreshMutation.mutate()}
-            isRefreshing={isRefreshing}
-          />
+          <MobileCard variant="standard" className="space-y-3">
+            <div>
+              <p className="text-sm font-semibold">Home facts live in their canonical views</p>
+              <p className="mt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                Review or correct system facts in Home Record, current attention in Status Board,
+                and lifecycle timing in Capital Timeline. This planner only owns option comparisons and decisions.
+              </p>
+            </div>
+            {(twin.staleReason || twin.needsRecompute) && (
+              <div
+                role="status"
+                className="flex items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2.5"
+              >
+                <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                <p className="text-xs leading-snug text-amber-900">
+                  Decision inputs changed after this planner was last refreshed.
+                </p>
+              </div>
+            )}
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open Home Record</Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/dashboard/properties/${propertyId}/status-board`}>Open Status Board</Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/dashboard/properties/${propertyId}/tools/capital-timeline`}>Open Capital Timeline</Link>
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refreshMutation.mutate()}
+              disabled={isRefreshing}
+              className="w-full gap-1.5"
+              aria-label={isRefreshing ? 'Refreshing decision inputs' : 'Refresh decision inputs'}
+            >
+              {isRefreshing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {isRefreshing ? 'Refreshing…' : 'Refresh decision inputs'}
+            </Button>
+          </MobileCard>
 
-          {/* ── FACT READINESS — known / missing / conflicting, with why it matters ── */}
-          <HomeRecordReadinessCard propertyId={propertyId} />
-
-          {/* ── COMPONENTS ──────────────────────────────────────────────────── */}
+          {/* Names are shown only as decision targets; system state remains on canonical surfaces. */}
           {twin.components.length > 0 && (
             <MobileSection>
               <MobileSectionHeader
-                title="Home Systems"
-                subtitle={`${twin.components.length} system${twin.components.length !== 1 ? 's' : ''} modeled`}
+                title="Choose a system to compare"
+                subtitle="Start a repair, replace, upgrade, and wait comparison"
               />
-              <div className="space-y-2" role="list" aria-label="Modeled home systems">
+              <div className="space-y-2" role="list" aria-label="Systems available for option comparison">
                 {twin.components.map((c) => (
-                  <div
-                    id={`twin-component-${c.id}`}
+                  <Button
                     key={c.id}
                     role="listitem"
-                    className={cn(
-                      'scroll-mt-28 rounded-[22px]',
-                      focusedEntityId && (c.id === focusedEntityId || c.sourceReferenceId === focusedEntityId)
-                        ? 'ring-2 ring-teal-500 ring-offset-2'
-                        : '',
-                    )}
+                    variant="outline"
+                    className="h-auto w-full justify-between px-3 py-3 text-left"
+                    onClick={() => {
+                      setCompareComponentId(c.id);
+                      setCompareSheetOpen(true);
+                      track('action_taken', {
+                        tool: 'home-digital-twin',
+                        propertyId,
+                        actionType: 'scenario_compare_opened',
+                      });
+                    }}
+                    aria-label={`Compare options for ${c.label ?? COMPONENT_LABEL[c.componentType]}`}
                   >
-                    <ComponentCard
-                      component={c}
-                      onClick={() => {
-                        setSelectedComponentId(c.id);
-                        setComponentSheetOpen(true);
-                      }}
-                    />
-                  </div>
+                    <span>{c.label ?? COMPONENT_LABEL[c.componentType]}</span>
+                    <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  </Button>
                 ))}
               </div>
-              <p className="pt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-                Estimates are derived from your property profile and inventory. Add more home details
-                to improve accuracy.
-              </p>
             </MobileSection>
           )}
         </div>
@@ -2146,23 +2169,6 @@ export default function HomeDigitalTwinClient({
       </div>
 
       {/* Sheets */}
-      <ComponentDetailSheet
-        component={selectedComponent}
-        open={componentSheetOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setComponentSheetOpen(false);
-            setSelectedComponentId(null);
-          }
-        }}
-        onCompare={(componentId) => {
-          setComponentSheetOpen(false);
-          setCompareComponentId(componentId);
-          setCompareSheetOpen(true);
-          track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'scenario_compare_opened' });
-        }}
-      />
-
       <CompareScenariosSheet
         propertyId={propertyId}
         componentId={compareComponentId}

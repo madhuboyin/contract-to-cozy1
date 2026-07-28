@@ -839,6 +839,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** Product architecture  
+**Implementation status (July 28, 2026):** Resolved. The Home Upgrade Planner no longer renders twin status, Home Record readiness, system health, lifecycle, cost, or provenance as a competing home-state summary. It keeps only decision-oriented suggestions, saved scenarios, and a name-only system selector for starting comparisons, with explicit navigation to Home Record, Status Board, and Capital Timeline for canonical facts and state.
 
 **Recommendation**
 
