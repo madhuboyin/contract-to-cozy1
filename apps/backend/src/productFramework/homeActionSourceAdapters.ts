@@ -36,6 +36,7 @@ const SOURCE_DEFAULT_JOBS: Record<HomeActionSourceKind, HomeAction['job']> = {
   PERSONALIZATION: 'STAY_AHEAD',
   PROJECT: 'MAJOR_MOMENT',
   SYSTEM: 'STAY_AHEAD',
+  SAVINGS_BENEFITS: 'DECIDE',
 };
 
 const SOURCE_DESCRIPTIONS: Record<HomeActionSourceKind, string> = {
@@ -47,6 +48,7 @@ const SOURCE_DESCRIPTIONS: Record<HomeActionSourceKind, string> = {
   PERSONALIZATION: 'Reviewed property-scoped personalization recommendations.',
   PROJECT: 'Project, quote, permit, booking, and major-moment work.',
   SYSTEM: 'System-derived risk, lifecycle, and data-quality actions.',
+  SAVINGS_BENEFITS: 'Reviewed benefit, rebate, and credit matches with a material value or closing deadline.',
 };
 
 function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {

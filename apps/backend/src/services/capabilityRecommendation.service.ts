@@ -184,6 +184,7 @@ function actionEntityType(
     GUIDANCE: null,
     PERSONALIZATION: null,
     SYSTEM: null,
+    SAVINGS_BENEFITS: null,
   }[action.source.kind];
 }
 

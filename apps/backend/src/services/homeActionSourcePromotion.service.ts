@@ -10,6 +10,7 @@ import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplat
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { findPersonalizationDefinition } from '../modules/personalization/catalog/personalizationDefinitions';
 import type { EnvironmentInsight } from './environment/environmentInsights.service';
+import { getFreshnessNote } from './hiddenAssets/ruleEngine';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -18,7 +19,7 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1410,6 +1411,135 @@ async function loadPropertyTaxAppealCaseActions(
   })];
 }
 
+const SAVINGS_BENEFITS_DEADLINE_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
+
+/**
+ * Promotes only a reviewed, HIGH-confidence, not-yet-resolved benefit match
+ * with either a material estimated value or a closing application window —
+ * the audit's explicit Home-placement criteria (section 8.5): do not
+ * promote background scanning, an empty registry, or a generic "run a scan"
+ * state. A match with any Slice 7 outcome already recorded is excluded —
+ * it's been acted on, so it's no longer a pending decision for Home.
+ */
+async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
+  if (!db.propertyHiddenAssetMatch) return [];
+  const now = new Date();
+  const deadlineWindow = new Date(now.getTime() + SAVINGS_BENEFITS_DEADLINE_WINDOW_MS);
+
+  const matches = await db.propertyHiddenAssetMatch.findMany({
+    where: {
+      propertyId,
+      status: { in: ['DETECTED', 'VIEWED', 'PURSUING'] },
+      confidenceLevel: 'HIGH',
+      outcomes: { none: {} },
+      program: { isActive: true, reviewStatus: 'PUBLISHED' },
+      OR: [
+        { estimatedValueMax: { not: null } },
+        { estimatedValueMin: { not: null } },
+        { program: { applicationWindowClosesAt: { gte: now, lte: deadlineWindow } } },
+      ],
+    },
+    orderBy: { lastEvaluatedAt: 'desc' },
+    take: 10,
+    include: {
+      program: {
+        select: {
+          name: true, regionValue: true, sourceLabel: true, sourceUrl: true,
+          lastVerifiedAt: true, applicationWindowClosesAt: true, currency: true,
+        },
+      },
+    },
+  });
+
+  return matches.map((match) => {
+    const program = match.program;
+    const closesAt = program.applicationWindowClosesAt;
+    const closingSoon = Boolean(closesAt && closesAt.getTime() <= deadlineWindow.getTime());
+    const value = match.estimatedValueMax ?? match.estimatedValueMin;
+    const valueLabel = value != null ? `${program.currency} ${value.toNumber().toLocaleString('en-US')}` : null;
+    const stale = getFreshnessNote(program.lastVerifiedAt) !== null;
+    const matchReasons = Array.isArray(match.matchReasons) ? (match.matchReasons as unknown[]) : [];
+    const reasonLabel = typeof matchReasons[0] === 'string' ? matchReasons[0] : 'Property and location criteria match.';
+    const whyItMatters = valueLabel
+      ? `${reasonLabel} Program publishes an estimated value of up to ${valueLabel} — verify the remaining criteria before relying on this figure.`
+      : reasonLabel;
+
+    return adaptHomeActionSource('SAVINGS_BENEFITS', {
+      id: `savings-benefit-match:${match.id}`,
+      propertyId,
+      lineageId: `savings-benefit-match:${match.id}`,
+      sourceEntityId: match.id,
+      sourceVersion: `${match.confidenceLevel}:${match.lastEvaluatedAt.toISOString()}`,
+      state: 'OPEN',
+      priority: closingSoon ? 'NOW' : 'SOON',
+      signal: closingSoon
+        ? `The application window for "${program.name}" is closing soon.`
+        : `"${program.name}" may apply to this home.`,
+      whyItMatters,
+      recommendedAction: closingSoon
+        ? 'Review the eligibility checklist and apply before the window closes'
+        : 'Review the eligibility checklist and verify the remaining criteria',
+      expectedOutcome: 'A recorded decision to pursue, apply, or dismiss this benefit.',
+      timing: {
+        dueAt: closesAt?.toISOString() ?? null,
+        windowStart: match.firstDetectedAt.toISOString(),
+        windowEnd: closesAt?.toISOString() ?? null,
+        rationale: 'Only reviewed, HIGH-confidence benefit matches with a material value or closing window are promoted.',
+      },
+      evidence: [{
+        id: match.id,
+        type: 'SYSTEM_DERIVATION',
+        label: reasonLabel,
+        source: program.sourceLabel ?? program.sourceUrl ?? 'Reviewed program registry',
+        observedAt: match.lastEvaluatedAt.toISOString(),
+        freshness: stale ? 'STALE' : 'CURRENT',
+        confidence: 0.9,
+      }],
+      assumptions: [{
+        key: 'property-level-match-only',
+        label: 'Eligibility is a property-level match, not a final determination',
+        value: 'This reflects property and location criteria only — income, age, and other homeowner-specific criteria have not been verified.',
+        source: 'SYSTEM_DEFAULT',
+        editable: false,
+      }],
+      options: [
+        { id: 'review-checklist', label: 'Review eligibility checklist', summary: 'Verify the remaining criteria against the official source before applying.', recommended: true },
+        { id: 'dismiss', label: 'Not relevant', summary: 'Dismiss if this does not apply to this home or household.', recommended: false },
+      ],
+      tradeoffs: [
+        { optionId: 'review-checklist', dimension: 'EFFORT', summary: 'Requires verifying remaining criteria and preparing an application before any deadline.' },
+      ],
+      confidence: {
+        score: 0.9,
+        label: 'HIGH',
+        // A HIGH-confidence Slice 3 match already has zero unresolved
+        // mandatory criteria by construction (evaluateProgram would have
+        // capped it at LOW otherwise) — nothing left to list as missing.
+        missing: [],
+      },
+      governance: {
+        ...materialFinancialGovernance('savings-benefits-v1'),
+        jurisdictionCheck: {
+          status: stale ? 'UNKNOWN' : 'VERIFIED',
+          jurisdiction: program.regionValue,
+          checkedAt: program.lastVerifiedAt?.toISOString() ?? null,
+          source: program.sourceLabel ?? program.sourceUrl ?? 'Reviewed program registry',
+        },
+      },
+      primaryCta: {
+        kind: 'REVIEW',
+        label: 'Review benefit',
+        href: `/dashboard/properties/${propertyId}/tools/savings-benefits`,
+      },
+      secondaryCtas: [],
+      feedbackControls: DEFAULT_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: match.firstDetectedAt.toISOString(),
+      lastEvaluatedAt: match.lastEvaluatedAt.toISOString(),
+    });
+  });
+}
+
 export async function getPromotedHomeActions(
   propertyId: string,
   db: HomeActionSourceDb = prisma,
@@ -1441,6 +1571,7 @@ export async function getPromotedHomeActions(
     loadHomeDigitalTwinFactReviewActions(propertyId, db),
     loadHomeCapitalTimelineMaterialWindowActions(propertyId, db),
     loadPropertyTaxAppealCaseActions(propertyId, db),
+    loadSavingsBenefitsActions(propertyId, db),
     Promise.resolve(environmentActions),
   ]);
   const candidates = groups.flat();
