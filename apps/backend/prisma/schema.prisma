@@ -10778,6 +10778,18 @@ enum HiddenAssetBenefitType {
   OTHER
 }
 
+// How benefitEstimateMin/Max recur, if at all. UNKNOWN is the safe default —
+// it means the period hasn't been reviewed yet, not that the benefit
+// recurs. Distinguishing ONE_TIME from MONTHLY/ANNUAL matters once a real
+// dollar amount is recorded (HiddenAssetMatchOutcome, Slice 7): a one-time
+// rebate received this year should never be read as an ongoing annual value.
+enum HiddenAssetBenefitPeriod {
+  UNKNOWN
+  ONE_TIME
+  MONTHLY
+  ANNUAL
+}
+
 enum HiddenAssetRuleOperator {
   EQUALS
   NOT_EQUALS
@@ -10885,9 +10897,11 @@ model HiddenAssetProgram {
 
   // Benefit classification
   benefitType        HiddenAssetBenefitType
-  benefitEstimateMin Decimal?               @db.Decimal(12, 2)
-  benefitEstimateMax Decimal?               @db.Decimal(12, 2)
-  currency           String                 @default("USD")
+  benefitEstimateMin Decimal?                 @db.Decimal(12, 2)
+  benefitEstimateMax Decimal?                 @db.Decimal(12, 2)
+  // Whether the estimate above recurs — see HiddenAssetBenefitPeriod.
+  benefitPeriod      HiddenAssetBenefitPeriod @default(UNKNOWN)
+  currency           String                   @default("USD")
 
   // Official source (for "Last verified" UX and linking)
   sourceUrl   String?

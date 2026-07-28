@@ -62,6 +62,9 @@ const NJ_PROGRAMS: Omit<HiddenAssetProgramInput, 'sourceId'>[] = [
     benefitType: 'TAX_CREDIT',
     benefitEstimateMin: null,
     benefitEstimateMax: null,
+    // Reimburses that year's tax increase — a homeowner reapplies annually,
+    // not a one-time payment.
+    benefitPeriod: 'ANNUAL',
     sourceUrl: 'https://www.nj.gov/treasury/taxation/ptr/',
     sourceLabel: 'NJ Division of Taxation — Senior Freeze (Property Tax Reimbursement)',
     eligibilityNotes:
@@ -78,6 +81,9 @@ const NJ_PROGRAMS: Omit<HiddenAssetProgramInput, 'sourceId'>[] = [
     benefitType: 'REBATE',
     benefitEstimateMin: null,
     benefitEstimateMax: 1750,
+    // A yearly benefit tied to that year's income/age — a homeowner
+    // reapplies annually, not a one-time payment.
+    benefitPeriod: 'ANNUAL',
     sourceUrl: 'https://www.nj.gov/treasury/media/anchor/index.shtml',
     sourceLabel: 'NJ Division of Taxation — ANCHOR Program',
     eligibilityNotes:

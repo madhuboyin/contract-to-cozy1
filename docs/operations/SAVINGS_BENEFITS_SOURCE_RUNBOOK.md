@@ -64,7 +64,10 @@ from the backend image).
    for those until the console catches up. See
    `apps/backend/src/services/hiddenAssets/ruleEngine.ts` for exactly how a
    program's groups are combined into a match decision and confidence
-   level.
+   level. Also set `benefitPeriod` (ONE_TIME/MONTHLY/ANNUAL, default
+   UNKNOWN) — the admin console doesn't expose this yet either. Getting it
+   right matters once a homeowner records a RECEIVED outcome (section 3):
+   a one-time rebate must never be read as an ongoing annual value.
 4. Submit the program for review (`SUBMIT_FOR_REVIEW`), have a different
    admin approve it (`APPROVE`) after independently checking the official
    source, then publish (`PUBLISH`).

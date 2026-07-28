@@ -1,4 +1,5 @@
 import {
+  HiddenAssetBenefitPeriod,
   HiddenAssetBenefitType,
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
@@ -194,6 +195,8 @@ export interface HiddenAssetMatchDTO {
   estimatedValue: number | null;
   estimatedValueMin: number | null;
   estimatedValueMax: number | null;
+  /** UNKNOWN means the period hasn't been reviewed — never assume recurring. */
+  benefitPeriod: HiddenAssetBenefitPeriod;
   currency: string;
   confidenceLevel: HiddenAssetConfidenceLevel;
   /** Human-friendly confidence label. Never implies guaranteed approval. */
@@ -252,6 +255,7 @@ export interface HiddenAssetProgramDetailDTO {
   benefitType: HiddenAssetBenefitType;
   benefitEstimateMin: number | null;
   benefitEstimateMax: number | null;
+  benefitPeriod: HiddenAssetBenefitPeriod;
   currency: string;
   sourceUrl: string | null;
   sourceLabel: string | null;

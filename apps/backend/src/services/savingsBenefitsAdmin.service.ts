@@ -9,6 +9,7 @@
 // SAVINGS_BENEFITS_AUTHOR / _REVIEW / _PUBLISH capabilities.
 
 import {
+  HiddenAssetBenefitPeriod,
   HiddenAssetFundingStatus,
   HiddenAssetProgramReviewStatus,
   HiddenAssetRuleKind,
@@ -56,6 +57,8 @@ export interface HiddenAssetProgramInput {
   benefitType: Prisma.HiddenAssetProgramCreateInput['benefitType'];
   benefitEstimateMin?: number | null;
   benefitEstimateMax?: number | null;
+  /** Defaults to UNKNOWN — never assume the estimate recurs unless reviewed. */
+  benefitPeriod?: HiddenAssetBenefitPeriod;
   currency?: string;
   sourceUrl?: string | null;
   sourceLabel?: string | null;
@@ -205,6 +208,7 @@ export class SavingsBenefitsAdminService {
           benefitType: input.benefitType,
           benefitEstimateMin: input.benefitEstimateMin ?? null,
           benefitEstimateMax: input.benefitEstimateMax ?? null,
+          benefitPeriod: input.benefitPeriod ?? HiddenAssetBenefitPeriod.UNKNOWN,
           currency: input.currency ?? 'USD',
           sourceUrl: input.sourceUrl ?? null,
           sourceLabel: input.sourceLabel ?? null,
@@ -252,6 +256,7 @@ export class SavingsBenefitsAdminService {
           benefitType: input.benefitType,
           benefitEstimateMin: input.benefitEstimateMin ?? null,
           benefitEstimateMax: input.benefitEstimateMax ?? null,
+          benefitPeriod: input.benefitPeriod ?? existing.benefitPeriod,
           currency: input.currency ?? existing.currency,
           sourceUrl: input.sourceUrl ?? null,
           sourceLabel: input.sourceLabel ?? null,
