@@ -27,6 +27,10 @@ import { OwnershipCostAccessDeniedError } from '../services/ownershipCosts/owner
 import {
   OWNERSHIP_COST_CATEGORIES,
 } from '../services/ownershipCosts/ownershipCost.contract';
+import {
+  ownershipCostCalculationDurationSeconds,
+  ownershipCostCalculationsTotal,
+} from '../lib/metrics';
 function validationErrorResponse(error: z.ZodError) {
   return {
     success: false,
@@ -161,6 +165,10 @@ async function respondWithCurrentCost(
     return res.status(400).json(validationErrorResponse(parsed.error));
   }
 
+  const stopTimer = ownershipCostCalculationDurationSeconds.startTimer({
+    lens: parsed.data.lens,
+    refresh: refresh ? 'true' : 'false',
+  });
   try {
     const ownershipCosts = await ownershipCostReadModelService.getCurrent(
       req.params.propertyId,
@@ -195,12 +203,26 @@ async function respondWithCurrentCost(
         refresh,
       },
     });
+    ownershipCostCalculationsTotal.inc({
+      lens: parsed.data.lens,
+      outcome: ownershipCosts.snapshot.lastKnownGood
+        ? 'LAST_KNOWN_GOOD'
+        : 'SUCCEEDED',
+    });
     return res.json({
       success: true,
       data: { ownershipCosts },
     });
   } catch (error) {
+    ownershipCostCalculationsTotal.inc({
+      lens: parsed.data.lens,
+      outcome: error instanceof OwnershipCostAccessDeniedError
+        ? 'ACCESS_DENIED'
+        : 'FAILED',
+    });
     return ownershipCostError(error, res);
+  } finally {
+    stopTimer();
   }
 }
 

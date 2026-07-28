@@ -30,6 +30,7 @@
     "review:capability-copy": "ts-node scripts/capability-copy-review.ts",
     "drill:capability-incident": "ts-node scripts/capability-incident-drill.ts",
     "drill:coverage-launch": "ts-node scripts/coverage-operational-drill.ts",
+    "drill:ownership-costs": "ts-node scripts/ownership-cost-operational-drill.ts",
     "preflight:coverage-load": "ts-node scripts/coverage-load-preflight.ts",
     "preflight:coverage-mutations": "ts-node scripts/coverage-mutation-preflight.ts",
     "acceptance:phase3": "node --test tests/integration/phase3VerifiedClosure.db.test.js",

@@ -1,4 +1,4 @@
-import { Registry, collectDefaultMetrics, Counter, Histogram } from 'prom-client';
+import { Registry, collectDefaultMetrics, Counter, Gauge, Histogram } from 'prom-client';
 
 export const register = new Registry();
 
@@ -119,6 +119,39 @@ export const propertyContextFeatureCaptureDurationSeconds = new Histogram({
   help: 'Feature-scoped capture latency by registered operation and capture schema',
   labelNames: ['feature_key', 'operation_key', 'capture_key'] as const,
   buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [register],
+});
+
+// ─── Ownership Cost Intelligence operations metrics ────────────────────────
+// Labels are bounded contract values. Never attach property, user, snapshot,
+// source-entity, or fingerprint identifiers to Prometheus labels.
+
+export const ownershipCostCalculationsTotal = new Counter({
+  name: 'ownership_cost_calculations_total',
+  help: 'Canonical ownership-cost calculation reads by lens and outcome',
+  labelNames: ['lens', 'outcome'] as const,
+  registers: [register],
+});
+
+export const ownershipCostCalculationDurationSeconds = new Histogram({
+  name: 'ownership_cost_calculation_duration_seconds',
+  help: 'Canonical ownership-cost calculation latency by lens and refresh mode',
+  labelNames: ['lens', 'refresh'] as const,
+  buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  registers: [register],
+});
+
+export const ownershipCostReplayTotal = new Counter({
+  name: 'ownership_cost_replay_total',
+  help: 'Read-only ownership-cost replay attempts by bounded outcome',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
+export const ownershipCostAnomalies = new Gauge({
+  name: 'ownership_cost_anomalies',
+  help: 'Current ownership-cost operational anomalies by type and severity',
+  labelNames: ['type', 'severity'] as const,
   registers: [register],
 });
 

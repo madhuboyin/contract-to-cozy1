@@ -4,7 +4,7 @@
 **Contributing domains:** Property Tax, Coverage and Premium Review, Financing, Expenses, Utilities, Home Record, Capital Timeline, Reserve Fund, Budget Planner, Guidance, and Home Actions  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Implementation in progress — Slices 0–8 started July 28, 2026
+**Status:** Technical implementation complete through Slice 9; real-user launch remains fail-closed pending recorded approvals
 **Recommended disposition:** **Consolidate, rebuild the calculation and evidence contract, and contain unsupported historical and predictive claims immediately**  
 **Current safety classification:** Material financial  
 **Recommended safety classification:** Material financial  
@@ -265,6 +265,40 @@ Implemented:
   retired endpoints, deleted consumers, and dead navigation.
 
 Operational validation and launch governance remain Slice 9 work.
+
+### July 28, 2026 — Slice 9 operations and launch-governance increment
+
+Implemented:
+
+- added bounded Prometheus counters and latency metrics for canonical
+  calculations, immutable replay, and operational anomalies without
+  high-cardinality homeowner labels;
+- added an Admin + MFA + capability-protected operations report covering
+  canonical adapter coverage, source and observation counts, staleness,
+  persisted failures, definition mismatch, category jumps, and the action
+  funnel;
+- separated engagement, planning handoffs, resolved outcomes, and verified
+  outcomes in the value-measurement contract;
+- added read-only replay by property, input fingerprint, method version, and
+  category-definition version with explicit `mutationPerformed: false`;
+- added alerts for missing adapters, failed adapters, stale snapshots,
+  definition mismatch, and material category jumps;
+- added credible financed-home, partial condo, and estimate-only paid-off-home
+  fixtures;
+- added an executable operational drill covering deterministic replay, anomaly
+  controls, launch containment, and bounded performance;
+- added a fail-closed real-user launch gate requiring technical evidence,
+  operational drill evidence, accessibility, responsive, content/safety,
+  commercial-integrity, governance, incident, rollout, and high-risk-gap
+  clearance;
+- documented support, replay, containment, incident, and release procedures;
+  and
+- recorded technical launch evidence without self-approving outstanding human
+  or target-environment gates.
+
+The capability remains blocked for real-user launch until named owners record
+accessibility, responsive, content/safety, commercial-integrity, and governance
+approvals and the drill passes in the target environment.
 
 ---
 
