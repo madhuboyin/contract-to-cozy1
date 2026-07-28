@@ -1335,6 +1335,18 @@ Record:
 
 **Goal:** Deliver useful savings and correction value before formal appeal.
 
+**Implementation status (July 27, 2026): Complete**
+
+- Added consent-gated PDF/image tax document intake using the existing encrypted property Vault and magic-byte validation.
+- Added structured staged fields with extraction method/provider/model, schema version, per-field confidence, page/bounding-box/source-text provenance, and explicit proposed/confirmed/corrected/rejected states.
+- Shipped the initial intake in privacy-preserving manual-review mode; no tax document is sent to an AI provider, and the provider-ready schema retains a degraded manual fallback.
+- Added homeowner confirmation that atomically creates document-backed canonical parcel, assessment, bill, document-link, and field-evidence records.
+- Added parcel, classification, value, taxable-value, exemption, and bill conflict detection through the canonical reconciliation layer.
+- Added reviewed exemption, factual-correction, and informal-review checklists only when an active reviewed jurisdiction profile covers an official matched assessment.
+- Added durable action decisions for eligibility review, readiness, not-applicable outcomes, and externally confirmed completion.
+- Added Property Tax Center upload, manual verification, Vault history, conflict, and non-appeal workflow UI.
+- Kept schema changes direct and did not add a migration; the user must reconcile the database separately.
+
 **Work**
 
 - Store uploaded tax documents in the Vault or explicit transient mode.

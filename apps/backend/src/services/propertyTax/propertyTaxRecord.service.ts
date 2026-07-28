@@ -19,6 +19,7 @@ const ASSESSMENT_FIELDS = [
   'totalAssessedValue',
   'taxableValue',
   'assessmentRatio',
+  'exemptions',
 ] as const;
 const BILL_FIELDS = [
   'billNumber',

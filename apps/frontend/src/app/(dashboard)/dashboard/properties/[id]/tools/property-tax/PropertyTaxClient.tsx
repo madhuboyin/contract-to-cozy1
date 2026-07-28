@@ -7,12 +7,20 @@ import { useParams, useSearchParams } from 'next/navigation';
 import {
   getPropertyTaxCenterRecord,
   getPropertyTaxCoverage,
+  getPropertyTaxDocumentIntakes,
   getPropertyTaxEstimate,
   getPropertyTaxRules,
+  getPropertyTaxActions,
+  uploadPropertyTaxDocument,
+  stagePropertyTaxDocumentFields,
+  confirmPropertyTaxDocument,
+  decidePropertyTaxAction,
   saveHomeownerPropertyTaxRecord,
   type PropertyTaxCenterRecordDTO,
   type PropertyTaxCoverageDTO,
   type PropertyTaxRulesDTO,
+  type PropertyTaxDocumentIntakeDTO,
+  type PropertyTaxActionsDTO,
   type PropertyTaxEstimateDTO,
   type PropertyTaxFieldDTO,
 } from './taxApi';
@@ -99,9 +107,27 @@ export default function PropertyTaxClient() {
   const [record, setRecord] = useState<PropertyTaxCenterRecordDTO | null>(null);
   const [coverage, setCoverage] = useState<PropertyTaxCoverageDTO | null>(null);
   const [rules, setRules] = useState<PropertyTaxRulesDTO | null>(null);
+  const [intakes, setIntakes] = useState<PropertyTaxDocumentIntakeDTO[]>([]);
+  const [taxActions, setTaxActions] = useState<PropertyTaxActionsDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recordError, setRecordError] = useState<string | null>(null);
   const [recordSaved, setRecordSaved] = useState(false);
+  const [taxDocumentFile, setTaxDocumentFile] = useState<File | null>(null);
+  const [taxDocumentKind, setTaxDocumentKind] = useState<PropertyTaxDocumentIntakeDTO['kind']>('ASSESSMENT_NOTICE');
+  const [taxDocumentConsent, setTaxDocumentConsent] = useState(false);
+  const [taxDocumentBusy, setTaxDocumentBusy] = useState(false);
+  const [taxDocumentReviewConfirmed, setTaxDocumentReviewConfirmed] = useState(false);
+  const [activeTaxIntakeId, setActiveTaxIntakeId] = useState<string | null>(null);
+  const [documentTaxYear, setDocumentTaxYear] = useState(String(new Date().getFullYear()));
+  const [documentParcelId, setDocumentParcelId] = useState('');
+  const [documentAssessedValue, setDocumentAssessedValue] = useState('');
+  const [documentTaxableValue, setDocumentTaxableValue] = useState('');
+  const [documentBillAmount, setDocumentBillAmount] = useState('');
+  const [documentClassification, setDocumentClassification] = useState('');
+  const [documentExemptions, setDocumentExemptions] = useState('');
+  const [actionNotes, setActionNotes] = useState<Record<string, string>>({});
+  const [actionReferences, setActionReferences] = useState<Record<string, string>>({});
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null);
   const [assessedValue, setAssessedValue] = useState('');
   const [taxRate, setTaxRate] = useState('');
   const [billAmount, setBillAmount] = useState('');
@@ -140,14 +166,18 @@ export default function PropertyTaxClient() {
     setRecordLoading(true);
     setRecordError(null);
     try {
-      const [nextRecord, nextCoverage, nextRules] = await Promise.all([
+      const [nextRecord, nextCoverage, nextRules, nextIntakes, nextActions] = await Promise.all([
         getPropertyTaxCenterRecord(propertyId),
         getPropertyTaxCoverage(propertyId),
         getPropertyTaxRules(propertyId),
+        getPropertyTaxDocumentIntakes(propertyId),
+        getPropertyTaxActions(propertyId),
       ]);
       setRecord(nextRecord);
       setCoverage(nextCoverage);
       setRules(nextRules);
+      setIntakes(nextIntakes);
+      setTaxActions(nextActions);
     } catch (cause: unknown) {
       setRecordError(cause instanceof Error ? cause.message : 'Failed to load property tax record');
     } finally {
@@ -180,6 +210,106 @@ export default function PropertyTaxClient() {
       setRecordError(cause instanceof Error ? cause.message : 'Failed to save property tax record');
     } finally {
       setSavingRecord(false);
+    }
+  }
+
+  async function uploadTaxDocument() {
+    if (!taxDocumentFile || !taxDocumentConsent) return;
+    setTaxDocumentBusy(true);
+    setRecordError(null);
+    try {
+      const intake = await uploadPropertyTaxDocument(
+        propertyId,
+        taxDocumentFile,
+        taxDocumentKind,
+      );
+      setActiveTaxIntakeId(intake.id);
+      setIntakes((current) => [intake, ...current]);
+      setTaxDocumentFile(null);
+      setTaxDocumentReviewConfirmed(false);
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error ? cause.message : 'Failed to store tax document');
+    } finally {
+      setTaxDocumentBusy(false);
+    }
+  }
+
+  async function confirmTaxDocumentFacts() {
+    if (!activeTaxIntakeId || !taxDocumentReviewConfirmed) return;
+    const numeric = (value: string) => value.trim() ? Number(value) : undefined;
+    const fields: Array<{ fieldKey: string; value: unknown }> = [
+      { fieldKey: 'taxYear', value: Number(documentTaxYear) },
+      ...(documentParcelId.trim()
+        ? [{ fieldKey: 'parcelId', value: documentParcelId.trim() }]
+        : []),
+      ...(documentAssessedValue.trim()
+        ? [{ fieldKey: 'totalAssessedValue', value: numeric(documentAssessedValue) }]
+        : []),
+      ...(documentTaxableValue.trim()
+        ? [{ fieldKey: 'taxableValue', value: numeric(documentTaxableValue) }]
+        : []),
+      ...(documentBillAmount.trim()
+        ? [{ fieldKey: 'billAmount', value: numeric(documentBillAmount) }]
+        : []),
+      ...(documentClassification.trim()
+        ? [{ fieldKey: 'classification', value: documentClassification.trim() }]
+        : []),
+      ...(documentExemptions.trim()
+        ? [{
+            fieldKey: 'exemptions',
+            value: documentExemptions.split(',').map((value) => value.trim()).filter(Boolean),
+          }]
+        : []),
+    ];
+    setTaxDocumentBusy(true);
+    setRecordError(null);
+    try {
+      const staged = await stagePropertyTaxDocumentFields(
+        propertyId,
+        activeTaxIntakeId,
+        fields,
+      );
+      const confirmed = await confirmPropertyTaxDocument(
+        propertyId,
+        activeTaxIntakeId,
+        staged.fields.map((field) => ({
+          fieldKey: field.fieldKey,
+          status: 'CONFIRMED',
+        })),
+      );
+      setRecord(confirmed.record);
+      setActiveTaxIntakeId(null);
+      setTaxDocumentReviewConfirmed(false);
+      const [nextIntakes, nextActions] = await Promise.all([
+        getPropertyTaxDocumentIntakes(propertyId),
+        getPropertyTaxActions(propertyId),
+      ]);
+      setIntakes(nextIntakes);
+      setTaxActions(nextActions);
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error ? cause.message : 'Failed to confirm tax document facts');
+    } finally {
+      setTaxDocumentBusy(false);
+    }
+  }
+
+  async function updateTaxAction(
+    action: PropertyTaxActionsDTO['actions'][number],
+    status: PropertyTaxActionsDTO['actions'][number]['status'],
+  ) {
+    setActionBusyId(action.id);
+    setRecordError(null);
+    try {
+      await decidePropertyTaxAction(propertyId, action.id, {
+        status,
+        note: actionNotes[action.id] ?? '',
+        externalReference: actionReferences[action.id]?.trim() || undefined,
+      });
+      setTaxActions(await getPropertyTaxActions(propertyId));
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error ? cause.message : 'Failed to update tax action');
+    } finally {
+      setActionBusyId(null);
     }
   }
 
@@ -389,6 +519,202 @@ export default function PropertyTaxClient() {
         {recordError && (
           <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {recordError}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            Verify a tax notice or bill
+          </h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Store the document in your property Vault, enter the facts you can verify, and confirm them before they become part of the canonical record.
+          </p>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Document kind</span>
+            <select
+              value={taxDocumentKind}
+              onChange={(event) => setTaxDocumentKind(event.target.value as PropertyTaxDocumentIntakeDTO['kind'])}
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="ASSESSMENT_NOTICE">Assessment notice</option>
+              <option value="TAX_BILL">Tax bill</option>
+              <option value="EXEMPTION_NOTICE">Exemption notice</option>
+              <option value="CORRECTION_NOTICE">Correction notice</option>
+              <option value="OTHER">Other tax document</option>
+            </select>
+          </label>
+          <label className="text-sm md:col-span-2">
+            <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">PDF or image</span>
+            <input
+              type="file"
+              accept=".pdf,image/jpeg,image/png,image/webp"
+              onChange={(event) => setTaxDocumentFile(event.target.files?.[0] ?? null)}
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+            />
+          </label>
+        </div>
+        <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={taxDocumentConsent}
+            onChange={(event) => setTaxDocumentConsent(event.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            Store this document in my encrypted property Vault. This release uses manual review and does not send the document to an AI provider.
+          </span>
+        </label>
+        <button
+          type="button"
+          onClick={() => void uploadTaxDocument()}
+          disabled={!taxDocumentFile || !taxDocumentConsent || taxDocumentBusy}
+          className="mt-3 min-h-11 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-900"
+        >
+          {taxDocumentBusy ? 'Working…' : 'Store in Vault and review'}
+        </button>
+
+        {activeTaxIntakeId && (
+          <div className="mt-5 rounded-xl border border-teal-200 bg-teal-50/60 p-4 dark:border-teal-900 dark:bg-teal-950/20">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Confirm document facts
+            </h3>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              Enter only values visible on this document. Leave unknown fields blank.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ['Tax year', documentTaxYear, setDocumentTaxYear, 'number'],
+                ['Parcel ID', documentParcelId, setDocumentParcelId, 'text'],
+                ['Assessed value', documentAssessedValue, setDocumentAssessedValue, 'number'],
+                ['Taxable value', documentTaxableValue, setDocumentTaxableValue, 'number'],
+                ['Bill amount', documentBillAmount, setDocumentBillAmount, 'number'],
+                ['Classification', documentClassification, setDocumentClassification, 'text'],
+                ['Exemptions (comma-separated)', documentExemptions, setDocumentExemptions, 'text'],
+              ].map(([label, value, setter, type]) => (
+                <label key={String(label)} className="text-sm">
+                  <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">{String(label)}</span>
+                  <input
+                    type={String(type)}
+                    value={String(value)}
+                    onChange={(event) => (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value)}
+                    className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 dark:border-slate-700 dark:bg-slate-900"
+                  />
+                </label>
+              ))}
+            </div>
+            <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={taxDocumentReviewConfirmed}
+                onChange={(event) => setTaxDocumentReviewConfirmed(event.target.checked)}
+                className="mt-1"
+              />
+              <span>I reviewed these values against the uploaded document and confirm they are accurate.</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => void confirmTaxDocumentFacts()}
+              disabled={!taxDocumentReviewConfirmed || taxDocumentBusy}
+              className="mt-3 min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Confirm reviewed fields
+            </button>
+          </div>
+        )}
+
+        {intakes.length > 0 && (
+          <div className="mt-5">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Vault tax documents</h3>
+            <div className="mt-2 space-y-2">
+              {intakes.map((intake) => (
+                <div key={intake.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700">
+                  <div>
+                    <div className="font-medium text-slate-900 dark:text-slate-100">{intake.document.name}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      {intake.kind.replace(/_/g, ' ')} · {intake.storageMode} · {intake.extractionMethod}
+                    </div>
+                  </div>
+                  <span className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold dark:border-slate-700">
+                    {intake.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          Exemption and correction workflow
+        </h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          Eligibility is never assumed. These checklists are available only when an active reviewed jurisdiction profile covers the property.
+        </p>
+        {taxActions?.coverage !== 'REVIEWED' ? (
+          <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-300">
+            {taxActions?.reason ?? 'No reviewed exemption or correction workflow is available.'}
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            {taxActions.actions.map((action) => (
+              <div key={action.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{action.title}</h3>
+                  <span className="text-xs font-semibold text-slate-500">{action.status}</span>
+                </div>
+                <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{action.explanation}</p>
+                <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-slate-700 dark:text-slate-300">
+                  {action.checklist.map((item, index) => <li key={index}>{String(item)}</li>)}
+                </ol>
+                <a href={action.officialUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-teal-700 underline dark:text-teal-300">
+                  Open official instructions
+                </a>
+                <textarea
+                  value={actionNotes[action.id] ?? ''}
+                  onChange={(event) => setActionNotes((current) => ({ ...current, [action.id]: event.target.value }))}
+                  placeholder="Record your eligibility or correction decision"
+                  className="mt-2 min-h-20 w-full rounded-xl border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                />
+                <input
+                  value={actionReferences[action.id] ?? ''}
+                  onChange={(event) => setActionReferences((current) => ({ ...current, [action.id]: event.target.value }))}
+                  placeholder="External confirmation reference (required to complete)"
+                  className="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={actionBusyId === action.id || !(actionNotes[action.id] ?? '').trim()}
+                    onClick={() => void updateTaxAction(action, 'READY_FOR_EXTERNAL_ACTION')}
+                    className="min-h-11 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold disabled:opacity-50 dark:border-slate-700"
+                  >
+                    Ready for external action
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionBusyId === action.id || !(actionNotes[action.id] ?? '').trim() || !(actionReferences[action.id] ?? '').trim()}
+                    onClick={() => void updateTaxAction(action, 'COMPLETED')}
+                    className="min-h-11 rounded-xl bg-teal-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Record completed
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionBusyId === action.id || !(actionNotes[action.id] ?? '').trim()}
+                    onClick={() => void updateTaxAction(action, 'NOT_APPLICABLE')}
+                    className="min-h-11 rounded-xl px-3 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50 dark:text-slate-300"
+                  >
+                    Not applicable
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>

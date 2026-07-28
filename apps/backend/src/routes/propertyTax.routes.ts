@@ -1,14 +1,31 @@
 // apps/backend/src/routes/propertyTax.routes.ts
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticate, restrictToHomeowner } from '../middleware/auth.middleware';
 import { requireMfa, requireRole } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
-import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { requireCapability } from '../middleware/adminCapability.middleware';
 import { UserRole } from '../types/auth.types';
+import { validateDocumentUpload } from '../utils/documentValidator.util';
 import * as controller from '../controllers/propertyTax.controller';
 
 const router = Router();
+const taxDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    const allowed = new Set([
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+    ]);
+    if (allowed.has(file.mimetype)) callback(null, true);
+    else callback(new Error('Only PDF, JPEG, PNG, and WEBP tax documents are allowed'));
+  },
+});
 
 /**
  * Authenticated-only (v1):
@@ -25,6 +42,57 @@ router.get(
   apiRateLimiter,
   propertyAuthMiddleware,
   controller.getPropertyTaxRules
+);
+
+router.get(
+  '/properties/:propertyId/property-tax/intakes',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.listPropertyTaxDocuments,
+);
+router.post(
+  '/properties/:propertyId/property-tax/intakes',
+  authenticate,
+  restrictToHomeowner,
+  uploadRateLimiter,
+  propertyAuthMiddleware,
+  taxDocumentUpload.single('file'),
+  validateDocumentUpload,
+  controller.uploadPropertyTaxDocument,
+);
+router.put(
+  '/properties/:propertyId/property-tax/intakes/:intakeId/fields',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.stagePropertyTaxDocumentFields,
+);
+router.post(
+  '/properties/:propertyId/property-tax/intakes/:intakeId/confirm',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.confirmPropertyTaxDocument,
+);
+router.post(
+  '/properties/:propertyId/property-tax/actions/refresh',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.listPropertyTaxActions,
+);
+router.put(
+  '/properties/:propertyId/property-tax/actions/:actionId',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.decidePropertyTaxAction,
 );
 
 router.get(

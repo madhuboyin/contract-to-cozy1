@@ -83,6 +83,8 @@ export const NYC_DOF_BRONX_CLASS_1_RULE_V1 = {
         'https://www.nyc.gov/site/taxcommission/about/challenging-notice-of-property-value.page',
       forms:
         'https://www.nyc.gov/site/taxcommission/forms/application-forms.page',
+      exemptions:
+        'https://www.nyc.gov/site/finance/property/residential-properties-exemptions.page',
     },
     qualificationJson: {
       boroughCode: '2',

@@ -213,6 +213,62 @@ export type PropertyTaxRulesDTO = {
   }>;
 };
 
+export type PropertyTaxDocumentFieldDTO = {
+  id: string;
+  fieldKey: string;
+  proposedValueJson: unknown;
+  correctedValueJson: unknown | null;
+  confidence: number | string;
+  status: 'PROPOSED' | 'CONFIRMED' | 'CORRECTED' | 'REJECTED';
+  pageNumber: number | null;
+  boundingBoxJson: unknown | null;
+  sourceText: string | null;
+};
+
+export type PropertyTaxDocumentIntakeDTO = {
+  id: string;
+  propertyId: string;
+  documentId: string;
+  kind: 'ASSESSMENT_NOTICE' | 'TAX_BILL' | 'EXEMPTION_NOTICE' | 'CORRECTION_NOTICE' | 'OTHER';
+  status: 'UPLOADED' | 'NEEDS_REVIEW' | 'CONFIRMED' | 'REJECTED' | 'EXTRACTION_FAILED';
+  storageMode: 'VAULT';
+  extractionMethod: 'MANUAL' | 'OCR' | 'AI';
+  privacyConsentVersion: string;
+  confirmedAt: string | null;
+  createdAt: string;
+  document: {
+    id: string;
+    name: string;
+    mimeType: string;
+    fileSize: number;
+    verificationStatus: string;
+    createdAt: string;
+  };
+  fields: PropertyTaxDocumentFieldDTO[];
+};
+
+export type PropertyTaxActionsDTO = {
+  coverage: 'REVIEWED' | 'UNAVAILABLE' | 'DISABLED' | 'EXPIRED';
+  reason: string | null;
+  conflicts: PropertyTaxCenterRecordDTO['conflicts'];
+  actions: Array<{
+    id: string;
+    type: 'EXEMPTION_REVIEW' | 'FACTUAL_CORRECTION' | 'INFORMAL_REVIEW';
+    status:
+      | 'ELIGIBILITY_REVIEW'
+      | 'READY_FOR_EXTERNAL_ACTION'
+      | 'COMPLETED'
+      | 'NOT_APPLICABLE'
+      | 'DISMISSED';
+    title: string;
+    explanation: string;
+    officialUrl: string;
+    checklist: unknown[];
+    decidedAt: string | null;
+    completedAt: string | null;
+  }>;
+};
+
 export type HomeownerPropertyTaxRecordInput = {
   taxYear: number;
   parcelId?: string;
@@ -265,6 +321,87 @@ export async function getPropertyTaxRules(
 ): Promise<PropertyTaxRulesDTO> {
   const res = await api.get(`/api/properties/${propertyId}/property-tax/rules`);
   return res.data?.rules as PropertyTaxRulesDTO;
+}
+
+export async function getPropertyTaxDocumentIntakes(
+  propertyId: string,
+): Promise<PropertyTaxDocumentIntakeDTO[]> {
+  const res = await api.get(`/api/properties/${propertyId}/property-tax/intakes`);
+  return (res.data?.intakes ?? []) as PropertyTaxDocumentIntakeDTO[];
+}
+
+export async function uploadPropertyTaxDocument(
+  propertyId: string,
+  file: File,
+  kind: PropertyTaxDocumentIntakeDTO['kind'],
+): Promise<PropertyTaxDocumentIntakeDTO> {
+  const body = new FormData();
+  body.append('file', file);
+  body.append('kind', kind);
+  body.append('privacyConsent', 'true');
+  const res = await api.postFormData<{ intake: PropertyTaxDocumentIntakeDTO }>(
+    `/api/properties/${propertyId}/property-tax/intakes`,
+    body,
+  );
+  if (!res.success) throw new Error(res.message ?? 'Tax document upload failed');
+  return res.data.intake;
+}
+
+export async function stagePropertyTaxDocumentFields(
+  propertyId: string,
+  intakeId: string,
+  fields: Array<{ fieldKey: string; value: unknown }>,
+): Promise<PropertyTaxDocumentIntakeDTO> {
+  const res = await api.put(
+    `/api/properties/${propertyId}/property-tax/intakes/${intakeId}/fields`,
+    { fields },
+  );
+  return res.data?.intake as PropertyTaxDocumentIntakeDTO;
+}
+
+export async function confirmPropertyTaxDocument(
+  propertyId: string,
+  intakeId: string,
+  decisions: Array<{
+    fieldKey: string;
+    status: 'CONFIRMED' | 'CORRECTED' | 'REJECTED';
+    correctedValue?: unknown;
+  }>,
+): Promise<{
+  intake: PropertyTaxDocumentIntakeDTO;
+  record: PropertyTaxCenterRecordDTO;
+}> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/property-tax/intakes/${intakeId}/confirm`,
+    { decisions },
+  );
+  return res.data as {
+    intake: PropertyTaxDocumentIntakeDTO;
+    record: PropertyTaxCenterRecordDTO;
+  };
+}
+
+export async function getPropertyTaxActions(
+  propertyId: string,
+): Promise<PropertyTaxActionsDTO> {
+  const res = await api.post(`/api/properties/${propertyId}/property-tax/actions/refresh`);
+  return res.data as PropertyTaxActionsDTO;
+}
+
+export async function decidePropertyTaxAction(
+  propertyId: string,
+  actionId: string,
+  input: {
+    status: PropertyTaxActionsDTO['actions'][number]['status'];
+    note: string;
+    externalReference?: string;
+  },
+) {
+  const res = await api.put(
+    `/api/properties/${propertyId}/property-tax/actions/${actionId}`,
+    input,
+  );
+  return res.data?.action;
 }
 
 export async function saveHomeownerPropertyTaxRecord(

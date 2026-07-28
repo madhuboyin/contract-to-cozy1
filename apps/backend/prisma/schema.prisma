@@ -2856,6 +2856,8 @@ model Property {
   taxParcelMatches     PropertyTaxParcelMatch[]
   taxAssessmentRecords PropertyTaxAssessmentRecord[]
   taxBillRecords       PropertyTaxBillRecord[]
+  taxDocumentIntakes   PropertyTaxDocumentIntake[]
+  taxHomeownerActions  PropertyTaxHomeownerAction[]
 
   // HOA / Community Rules Compliance Tracker
   hoaAssociation     HoaAssociation?
@@ -3493,6 +3495,7 @@ model Document {
   propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
+  propertyTaxIntake          PropertyTaxDocumentIntake?
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
 
   homeSavingsAccountId     String?
@@ -15729,6 +15732,49 @@ enum PropertyTaxRuleControlAction {
   ROLLED_BACK
 }
 
+enum PropertyTaxDocumentKind {
+  ASSESSMENT_NOTICE
+  TAX_BILL
+  EXEMPTION_NOTICE
+  CORRECTION_NOTICE
+  OTHER
+}
+
+enum PropertyTaxDocumentIntakeStatus {
+  UPLOADED
+  NEEDS_REVIEW
+  CONFIRMED
+  REJECTED
+  EXTRACTION_FAILED
+}
+
+enum PropertyTaxExtractionMethod {
+  MANUAL
+  OCR
+  AI
+}
+
+enum PropertyTaxExtractedFieldStatus {
+  PROPOSED
+  CONFIRMED
+  CORRECTED
+  REJECTED
+}
+
+enum PropertyTaxHomeownerActionType {
+  EXEMPTION_REVIEW
+  FACTUAL_CORRECTION
+  INFORMAL_REVIEW
+}
+
+enum PropertyTaxHomeownerActionStatus {
+  ELIGIBILITY_REVIEW
+  READY_FOR_EXTERNAL_ACTION
+  COMPLETED
+  NOT_APPLICABLE
+  DISMISSED
+}
+
 // Reviewed rule releases are added in Slice 3. This record establishes stable
 // jurisdiction ownership for parcels, assessments, and bills now.
 model PropertyTaxJurisdiction {
@@ -15801,6 +15847,7 @@ model PropertyTaxRuleProfile {
   citations         PropertyTaxRuleCitation[]
   deadlineRules     PropertyTaxDeadlineRule[]
   controlEvents     PropertyTaxRuleControlEvent[]
+  homeownerActions  PropertyTaxHomeownerAction[]
 
   @@unique([jurisdictionId, slug, version])
   @@index([jurisdictionId, propertyClass, status])
@@ -15867,6 +15914,100 @@ model PropertyTaxRuleControlEvent {
   @@index([ruleProfileId, createdAt(sort: Desc)])
   @@index([action, createdAt(sort: Desc)])
   @@map("property_tax_rule_control_events")
+}
+
+// Tax documents are always linked to an owned Vault Document. Provider output
+// is staged as proposed fields and cannot become canonical until a homeowner
+// confirms or corrects it.
+model PropertyTaxDocumentIntake {
+  id                          String @id @default(uuid())
+  propertyId                  String
+  documentId                  String @unique
+  kind                        PropertyTaxDocumentKind
+  status                      PropertyTaxDocumentIntakeStatus @default(UPLOADED)
+  storageMode                 String @default("VAULT")
+  extractionMethod            PropertyTaxExtractionMethod @default(MANUAL)
+  extractionProvider          String?
+  extractionModel             String?
+  extractionSchemaVersion     Int @default(1)
+  privacyConsentVersion       String
+  privacyConsentedAt          DateTime
+  extractionStartedAt         DateTime?
+  extractionCompletedAt       DateTime?
+  extractionError             String?
+  confirmedAssessmentRecordId String? @unique
+  confirmedBillRecordId       String? @unique
+  confirmedAt                 DateTime?
+  confirmedByUserId           String?
+  rejectedAt                  DateTime?
+  rejectedByUserId            String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  confirmedAssessmentRecord PropertyTaxAssessmentRecord? @relation("PropertyTaxIntakeConfirmedAssessment", fields: [confirmedAssessmentRecordId], references: [id], onDelete: SetNull)
+  confirmedBillRecord       PropertyTaxBillRecord? @relation("PropertyTaxIntakeConfirmedBill", fields: [confirmedBillRecordId], references: [id], onDelete: SetNull)
+  fields                    PropertyTaxExtractedField[]
+  homeownerActions          PropertyTaxHomeownerAction[]
+
+  @@index([propertyId, status, createdAt(sort: Desc)])
+  @@index([kind, status])
+  @@map("property_tax_document_intakes")
+}
+
+model PropertyTaxExtractedField {
+  id                 String @id @default(uuid())
+  intakeId           String
+  fieldKey           String
+  proposedValueJson  Json
+  correctedValueJson Json?
+  confidence         Decimal @db.Decimal(5, 4)
+  status             PropertyTaxExtractedFieldStatus @default(PROPOSED)
+  pageNumber         Int?
+  boundingBoxJson    Json?
+  sourceText         String?
+  sourceTextHash     String?
+  confirmedAt        DateTime?
+  confirmedByUserId  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  intake PropertyTaxDocumentIntake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+
+  @@unique([intakeId, fieldKey])
+  @@index([intakeId, status])
+  @@map("property_tax_extracted_fields")
+}
+
+model PropertyTaxHomeownerAction {
+  id             String @id @default(uuid())
+  propertyId     String
+  ruleProfileId  String
+  intakeId       String?
+  actionKey      String
+  type           PropertyTaxHomeownerActionType
+  status         PropertyTaxHomeownerActionStatus @default(ELIGIBILITY_REVIEW)
+  title          String
+  explanation    String
+  checklistJson  Json
+  officialUrl    String
+  decisionJson   Json?
+  decidedAt      DateTime?
+  decidedByUserId String?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  property    Property                       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  ruleProfile PropertyTaxRuleProfile         @relation(fields: [ruleProfileId], references: [id], onDelete: Restrict)
+  intake      PropertyTaxDocumentIntake?     @relation(fields: [intakeId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, actionKey])
+  @@index([propertyId, status])
+  @@index([ruleProfileId, type])
+  @@index([intakeId])
+  @@map("property_tax_homeowner_actions")
 }
 
 model PropertyTaxParcelMatch {
@@ -15952,6 +16093,7 @@ model PropertyTaxAssessmentRecord {
   billRecords   PropertyTaxBillRecord[]
   fieldEvidence PropertyTaxFieldEvidence[]
   documents     PropertyTaxAssessmentDocument[]
+  confirmedFromIntake PropertyTaxDocumentIntake? @relation("PropertyTaxIntakeConfirmedAssessment")
 
   @@index([propertyId, taxYear, status])
   @@index([jurisdictionId, taxYear])
@@ -16001,6 +16143,7 @@ model PropertyTaxBillRecord {
 
   fieldEvidence PropertyTaxFieldEvidence[]
   documents     PropertyTaxBillDocument[]
+  confirmedFromIntake PropertyTaxDocumentIntake? @relation("PropertyTaxIntakeConfirmedBill")
 
   @@index([propertyId, taxYear, status])
   @@index([jurisdictionId, taxYear])
