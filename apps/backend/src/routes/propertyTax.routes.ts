@@ -118,6 +118,70 @@ router.put(
   propertyAuthMiddleware,
   controller.upsertPropertyTaxAppealComparable,
 );
+router.get(
+  '/properties/:propertyId/property-tax/appeal/cases',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.listPropertyTaxAppealCases,
+);
+router.post(
+  '/properties/:propertyId/property-tax/appeal/cases',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.createPropertyTaxAppealCase,
+);
+router.put(
+  '/properties/:propertyId/property-tax/appeal/cases/:caseId/packet',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.updatePropertyTaxAppealPacket,
+);
+router.post(
+  '/properties/:propertyId/property-tax/appeal/cases/:caseId/filing',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.confirmPropertyTaxAppealFiling,
+);
+router.post(
+  '/properties/:propertyId/property-tax/appeal/cases/:caseId/events',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.trackPropertyTaxAppealEvent,
+);
+router.put(
+  '/properties/:propertyId/property-tax/appeal/cases/:caseId/reminders',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.upsertPropertyTaxAppealReminder,
+);
+router.put(
+  '/properties/:propertyId/property-tax/appeal/cases/:caseId/reminders/:reminderId',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.decidePropertyTaxAppealReminder,
+);
+router.post(
+  '/properties/:propertyId/property-tax/appeal/cases/:caseId/determination',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.determinePropertyTaxAppealCase,
+);
 
 router.get(
   '/properties/:propertyId/property-tax/coverage',

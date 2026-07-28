@@ -60,6 +60,13 @@ function known(value) {
 
 function center(overrides = {}) {
   return {
+    latestTaxYear: 2027,
+    parcel: {
+      fields: {
+        parcelId: known('parcel-1'),
+        ...(overrides.parcel ?? {}),
+      },
+    },
     assessment: {
       fields: {
         valuationDate: known('2026-01-05T05:00:00.000Z'),

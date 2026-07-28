@@ -18,6 +18,14 @@ import {
   getPropertyTaxAppealReadiness,
   savePropertyTaxAppealComparable,
   savePropertyTaxAppealEvidence,
+  getPropertyTaxAppealCases,
+  createPropertyTaxAppealCase,
+  updatePropertyTaxAppealPacket,
+  confirmPropertyTaxAppealFiling,
+  trackPropertyTaxAppealEvent,
+  savePropertyTaxAppealReminder,
+  decidePropertyTaxAppealReminder,
+  determinePropertyTaxAppealCase,
   saveHomeownerPropertyTaxRecord,
   type PropertyTaxCenterRecordDTO,
   type PropertyTaxCoverageDTO,
@@ -26,6 +34,7 @@ import {
   type PropertyTaxActionsDTO,
   type PropertyTaxAppealGround,
   type PropertyTaxAppealReadinessDTO,
+  type PropertyTaxAppealCaseDTO,
   type PropertyTaxEstimateDTO,
   type PropertyTaxFieldDTO,
 } from './taxApi';
@@ -151,6 +160,27 @@ export default function PropertyTaxClient() {
   const [comparableSourceUrl, setComparableSourceUrl] = useState('');
   const [comparableAdjustment, setComparableAdjustment] = useState('');
   const [comparableRationale, setComparableRationale] = useState('');
+  const [appealCases, setAppealCases] = useState<PropertyTaxAppealCaseDTO[]>([]);
+  const [activeAppealCaseId, setActiveAppealCaseId] = useState<string | null>(null);
+  const [appealCaseBusy, setAppealCaseBusy] = useState(false);
+  const [packetNarrative, setPacketNarrative] = useState('');
+  const [packetChecklist, setPacketChecklist] = useState<string[]>([]);
+  const [packetPlaceholders, setPacketPlaceholders] = useState<Record<string, string>>({});
+  const [packetReviewed, setPacketReviewed] = useState(false);
+  const [filingReference, setFilingReference] = useState('');
+  const [trackingType, setTrackingType] = useState<'RESPONSE_RECEIVED' | 'HEARING_SCHEDULED'>('RESPONSE_RECEIVED');
+  const [trackingAt, setTrackingAt] = useState('');
+  const [trackingSummary, setTrackingSummary] = useState('');
+  const [hearingLocation, setHearingLocation] = useState('');
+  const [reminderTitle, setReminderTitle] = useState('');
+  const [reminderDueDate, setReminderDueDate] = useState('');
+  const [determination, setDetermination] = useState<'REDUCED' | 'UPHELD' | 'CLASS_CHANGED' | 'EXEMPTION_ADJUSTED' | 'PARTIAL' | 'WITHDRAWN' | 'OTHER'>('REDUCED');
+  const [determinationReference, setDeterminationReference] = useState('');
+  const [determinationSummary, setDeterminationSummary] = useState('');
+  const [determinationFinalValue, setDeterminationFinalValue] = useState('');
+  const [determinationRefund, setDeterminationRefund] = useState('');
+  const [determinationCredit, setDeterminationCredit] = useState('');
+  const [determinationClose, setDeterminationClose] = useState(true);
   const [assessedValue, setAssessedValue] = useState('');
   const [taxRate, setTaxRate] = useState('');
   const [billAmount, setBillAmount] = useState('');
@@ -189,18 +219,20 @@ export default function PropertyTaxClient() {
     setRecordLoading(true);
     setRecordError(null);
     try {
-      const [nextRecord, nextCoverage, nextRules, nextIntakes, nextActions] = await Promise.all([
+      const [nextRecord, nextCoverage, nextRules, nextIntakes, nextActions, nextCases] = await Promise.all([
         getPropertyTaxCenterRecord(propertyId),
         getPropertyTaxCoverage(propertyId),
         getPropertyTaxRules(propertyId),
         getPropertyTaxDocumentIntakes(propertyId),
         getPropertyTaxActions(propertyId),
+        getPropertyTaxAppealCases(propertyId),
       ]);
       setRecord(nextRecord);
       setCoverage(nextCoverage);
       setRules(nextRules);
       setIntakes(nextIntakes);
       setTaxActions(nextActions);
+      setAppealCases(nextCases);
     } catch (cause: unknown) {
       setRecordError(cause instanceof Error ? cause.message : 'Failed to load property tax record');
     } finally {
@@ -468,6 +500,212 @@ export default function PropertyTaxClient() {
     }
   }
 
+  function openAppealCase(appealCase: PropertyTaxAppealCaseDTO) {
+    setActiveAppealCaseId(appealCase.id);
+    setPacketNarrative(appealCase.packet?.narrative ?? '');
+    setPacketChecklist(appealCase.packet?.completedChecklistJson ?? []);
+    setPacketPlaceholders(appealCase.packet?.placeholderValuesJson ?? {});
+    setPacketReviewed(Boolean(appealCase.packet?.homeownerReviewedAt));
+  }
+
+  function replaceAppealCase(appealCase: PropertyTaxAppealCaseDTO) {
+    setAppealCases((current) => {
+      const found = current.some((item) => item.id === appealCase.id);
+      return found
+        ? current.map((item) => item.id === appealCase.id ? appealCase : item)
+        : [appealCase, ...current];
+    });
+    openAppealCase(appealCase);
+  }
+
+  async function startAppealCase() {
+    if (appealReadiness?.status !== 'READY') return;
+    setAppealCaseBusy(true);
+    setRecordError(null);
+    try {
+      replaceAppealCase(await createPropertyTaxAppealCase(propertyId, {
+        ground: appealGround,
+        revisedNoticeDate: appealRevisedNoticeDate || undefined,
+        revisedNoticeQualifies: appealRevisedNoticeQualifies,
+      }));
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to start appeal case');
+    } finally {
+      setAppealCaseBusy(false);
+    }
+  }
+
+  async function saveAppealPacket(caseId: string) {
+    setAppealCaseBusy(true);
+    setRecordError(null);
+    try {
+      replaceAppealCase(await updatePropertyTaxAppealPacket(
+        propertyId,
+        caseId,
+        {
+          narrative: packetNarrative,
+          completedChecklist: packetChecklist,
+          placeholderValues: packetPlaceholders,
+          homeownerReviewed: packetReviewed,
+        },
+      ));
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to save appeal packet');
+    } finally {
+      setAppealCaseBusy(false);
+    }
+  }
+
+  async function confirmAppealFiled(caseId: string) {
+    if (!filingReference.trim()) return;
+    setAppealCaseBusy(true);
+    setRecordError(null);
+    try {
+      replaceAppealCase(await confirmPropertyTaxAppealFiling(
+        propertyId,
+        caseId,
+        {
+          filedAt: new Date().toISOString(),
+          externalReference: filingReference.trim(),
+        },
+      ));
+      setFilingReference('');
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to confirm external filing');
+    } finally {
+      setAppealCaseBusy(false);
+    }
+  }
+
+  async function addAppealTrackingEvent(caseId: string) {
+    if (!trackingAt || !trackingSummary.trim()) return;
+    setAppealCaseBusy(true);
+    setRecordError(null);
+    try {
+      replaceAppealCase(await trackPropertyTaxAppealEvent(
+        propertyId,
+        caseId,
+        {
+          type: trackingType,
+          occurredAt: new Date(trackingAt).toISOString(),
+          summary: trackingSummary.trim(),
+          hearingLocation: trackingType === 'HEARING_SCHEDULED'
+            ? hearingLocation.trim() || undefined
+            : undefined,
+        },
+      ));
+      setTrackingAt('');
+      setTrackingSummary('');
+      setHearingLocation('');
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to record appeal event');
+    } finally {
+      setAppealCaseBusy(false);
+    }
+  }
+
+  async function addAppealReminder(caseId: string) {
+    if (!reminderTitle.trim() || !reminderDueDate) return;
+    setAppealCaseBusy(true);
+    setRecordError(null);
+    try {
+      await savePropertyTaxAppealReminder(propertyId, caseId, {
+        reminderKey: globalThis.crypto.randomUUID(),
+        title: reminderTitle.trim(),
+        dueAt: new Date(`${reminderDueDate}T12:00:00`).toISOString(),
+      });
+      const cases = await getPropertyTaxAppealCases(propertyId);
+      setAppealCases(cases);
+      const refreshed = cases.find((item) => item.id === caseId);
+      if (refreshed) openAppealCase(refreshed);
+      setReminderTitle('');
+      setReminderDueDate('');
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to save appeal reminder');
+    } finally {
+      setAppealCaseBusy(false);
+    }
+  }
+
+  async function finishAppealReminder(
+    caseId: string,
+    reminderId: string,
+    status: 'COMPLETED' | 'DISMISSED',
+  ) {
+    setAppealCaseBusy(true);
+    setRecordError(null);
+    try {
+      await decidePropertyTaxAppealReminder(
+        propertyId,
+        caseId,
+        reminderId,
+        status,
+      );
+      const cases = await getPropertyTaxAppealCases(propertyId);
+      setAppealCases(cases);
+      const refreshed = cases.find((item) => item.id === caseId);
+      if (refreshed) openAppealCase(refreshed);
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to update appeal reminder');
+    } finally {
+      setAppealCaseBusy(false);
+    }
+  }
+
+  async function saveAppealDetermination(caseId: string) {
+    if (!determinationReference.trim() || !determinationSummary.trim()) return;
+    const numericInputs = [
+      determinationFinalValue,
+      determinationRefund,
+      determinationCredit,
+    ].filter((value) => value.trim());
+    if (numericInputs.some((value) =>
+      !Number.isFinite(Number(value)) || Number(value) < 0
+    )) {
+      setRecordError('Determination amounts must be valid non-negative numbers');
+      return;
+    }
+    const optionalNumber = (value: string) => value.trim()
+      ? Number(value)
+      : undefined;
+    setAppealCaseBusy(true);
+    setRecordError(null);
+    try {
+      replaceAppealCase(await determinePropertyTaxAppealCase(
+        propertyId,
+        caseId,
+        {
+          determination,
+          determinationAt: new Date().toISOString(),
+          reference: determinationReference.trim(),
+          summary: determinationSummary.trim(),
+          finalAssessedValue: optionalNumber(determinationFinalValue),
+          refundAmount: optionalNumber(determinationRefund),
+          creditAmount: optionalNumber(determinationCredit),
+          closeCase: determinationClose,
+        },
+      ));
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to record appeal determination');
+    } finally {
+      setAppealCaseBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!propertyId) return;
     void Promise.all([refresh(), refreshRecord()]);
@@ -493,6 +731,9 @@ export default function PropertyTaxClient() {
     || Number(taxYear) < 1900
     || Number(taxYear) > new Date().getFullYear() + 2;
   const hasReportedValue = Boolean(parcelId.trim() || assessedValue || taxRate || billAmount);
+  const activeAppealCase = appealCases.find(
+    (appealCase) => appealCase.id === activeAppealCaseId,
+  ) ?? null;
 
   return (
     <ToolWorkspaceTemplate
@@ -1256,6 +1497,301 @@ export default function PropertyTaxClient() {
               <p className="mt-4 border-t border-amber-200 pt-3 text-xs dark:border-amber-800/70">
                 {appealReadiness.professionalBoundary}
               </p>
+            )}
+          </div>
+
+          <div className="mt-5 rounded-xl border border-sky-300 bg-sky-50/80 p-4 text-sky-950 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">Appeal case, packet, and tracking</h3>
+                <p className="mt-1 text-xs">
+                  Resume preparation here. Contract to Cozy does not submit the official form; filing is recorded only after you confirm the external submission.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void startAppealCase()}
+                disabled={appealCaseBusy || appealReadiness?.status !== 'READY'}
+                className="min-h-11 rounded-xl bg-sky-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-sky-200 dark:text-sky-950"
+              >
+                Start or resume ready case
+              </button>
+            </div>
+
+            {appealCases.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {appealCases.map((appealCase) => (
+                  <button
+                    key={appealCase.id}
+                    type="button"
+                    onClick={() => openAppealCase(appealCase)}
+                    className={`min-h-11 rounded-xl border px-3 py-2 text-left text-xs ${
+                      activeAppealCaseId === appealCase.id
+                        ? 'border-sky-900 bg-sky-900 text-white dark:border-sky-200 dark:bg-sky-200 dark:text-sky-950'
+                        : 'border-sky-300 bg-white/70 dark:border-sky-800 dark:bg-slate-950/30'
+                    }`}
+                  >
+                    <span className="block font-semibold">{appealCase.title}</span>
+                    <span>{appealCase.status} · {appealCase.taxYear ?? 'tax year pending'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activeAppealCase && activeAppealCase.packet && (
+              <div className="mt-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-white/70 p-3 dark:border-sky-800/70 dark:bg-slate-950/35">
+                  <div>
+                    <div className="font-semibold">{activeAppealCase.title}</div>
+                    <div className="mt-1 text-xs">
+                      Case {activeAppealCase.status} · packet {activeAppealCase.packet.status} · reviewed rule v{activeAppealCase.ruleProfile.version}
+                    </div>
+                  </div>
+                  <a
+                    href={activeAppealCase.officialFormUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-11 items-center font-semibold underline"
+                  >
+                    Open official {activeAppealCase.formCode ?? 'form'} instructions
+                  </a>
+                </div>
+
+                {!['FILED', 'AWAITING_RESPONSE', 'RESPONSE_RECEIVED', 'HEARING_SCHEDULED', 'DETERMINED', 'CLOSED', 'WITHDRAWN'].includes(activeAppealCase.status) && (
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-xl border border-sky-200 p-4 dark:border-sky-800/70">
+                      <h4 className="text-sm font-semibold">Evidence-grounded editable narrative</h4>
+                      <p className="mt-1 text-xs">
+                        Initial mode: deterministic manual draft. No tax evidence is sent to an AI provider.
+                      </p>
+                      <textarea
+                        value={packetNarrative}
+                        onChange={(event) => setPacketNarrative(event.target.value)}
+                        className="mt-3 min-h-52 w-full rounded-xl border border-sky-300 bg-white p-3 text-sm text-slate-900 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-100"
+                      />
+                      <div className="mt-3 text-xs">
+                        Evidence citations: {(activeAppealCase.packet.narrativeEvidenceJson.evidenceIds ?? []).length} record(s) · {(activeAppealCase.packet.narrativeEvidenceJson.comparableIds ?? []).length} comparable(s)
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-sky-200 p-4 dark:border-sky-800/70">
+                      <h4 className="text-sm font-semibold">Resolve packet placeholders</h4>
+                      <div className="mt-3 grid gap-2">
+                        {[...new Set([
+                          ...activeAppealCase.packet.unresolvedPlaceholdersJson,
+                          ...Object.keys(activeAppealCase.packet.placeholderValuesJson),
+                        ])].map((placeholder) => (
+                          <label key={placeholder} className="text-xs font-semibold">
+                            {placeholder.replaceAll('_', ' ').toLowerCase()}
+                            <input
+                              value={packetPlaceholders[placeholder] ?? ''}
+                              onChange={(event) => setPacketPlaceholders((current) => ({
+                                ...current,
+                                [placeholder]: event.target.value,
+                              }))}
+                              className="mt-1 min-h-11 w-full rounded-xl border border-sky-300 bg-white px-3 text-sm text-slate-900 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-100"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <h4 className="mt-4 text-sm font-semibold">Packet checklist</h4>
+                      <div className="mt-2 space-y-2">
+                        {activeAppealCase.packet.checklistJson.map((item) => (
+                          <label key={item.code} className="flex items-start gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={packetChecklist.includes(item.code)}
+                              onChange={(event) => setPacketChecklist((current) =>
+                                event.target.checked
+                                  ? [...new Set([...current, item.code])]
+                                  : current.filter((code) => code !== item.code)
+                              )}
+                              className="mt-0.5 h-4 w-4"
+                            />
+                            {item.label}
+                          </label>
+                        ))}
+                      </div>
+                      <label className="mt-4 flex items-start gap-2 text-sm font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={packetReviewed}
+                          onChange={(event) => setPacketReviewed(event.target.checked)}
+                          className="mt-0.5 h-4 w-4"
+                        />
+                        I reviewed the narrative, citations, current official form, and unresolved fields.
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void saveAppealPacket(activeAppealCase.id)}
+                        disabled={appealCaseBusy || packetNarrative.trim().length < 50}
+                        className="mt-4 min-h-11 rounded-xl bg-sky-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-sky-200 dark:text-sky-950"
+                      >
+                        Save packet progress
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeAppealCase.status === 'PACKET_READY' && (
+                  <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+                    <h4 className="font-semibold">Confirm external filing</h4>
+                    <p className="mt-1 text-xs">
+                      Submit through the official authority first. Then record the receipt, confirmation number, or other external reference here.
+                    </p>
+                    <input
+                      value={filingReference}
+                      onChange={(event) => setFilingReference(event.target.value)}
+                      placeholder="External filing confirmation reference"
+                      className="mt-3 min-h-11 w-full rounded-xl border border-emerald-300 bg-white px-3 text-sm text-slate-900 dark:border-emerald-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void confirmAppealFiled(activeAppealCase.id)}
+                      disabled={appealCaseBusy || !filingReference.trim()}
+                      className="mt-3 min-h-11 rounded-xl bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      Record externally filed now
+                    </button>
+                  </div>
+                )}
+
+                {activeAppealCase.filedAt && !['CLOSED', 'WITHDRAWN'].includes(activeAppealCase.status) && (
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-xl border border-sky-200 p-4 dark:border-sky-800/70">
+                      <h4 className="text-sm font-semibold">Response or hearing</h4>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <select
+                          value={trackingType}
+                          onChange={(event) => setTrackingType(event.target.value as typeof trackingType)}
+                          className="min-h-11 rounded-xl border border-sky-300 bg-white px-3 text-sm text-slate-900 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-100"
+                        >
+                          <option value="RESPONSE_RECEIVED">Response received</option>
+                          <option value="HEARING_SCHEDULED">Hearing scheduled</option>
+                        </select>
+                        <input
+                          type="datetime-local"
+                          value={trackingAt}
+                          onChange={(event) => setTrackingAt(event.target.value)}
+                          className="min-h-11 rounded-xl border border-sky-300 bg-white px-3 text-sm text-slate-900 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-100"
+                        />
+                        <textarea
+                          value={trackingSummary}
+                          onChange={(event) => setTrackingSummary(event.target.value)}
+                          placeholder="Response or hearing summary"
+                          className="min-h-24 rounded-xl border border-sky-300 bg-white p-3 text-sm text-slate-900 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-100 sm:col-span-2"
+                        />
+                        {trackingType === 'HEARING_SCHEDULED' && (
+                          <input
+                            value={hearingLocation}
+                            onChange={(event) => setHearingLocation(event.target.value)}
+                            placeholder="Hearing location or access instructions"
+                            className="min-h-11 rounded-xl border border-sky-300 bg-white px-3 text-sm text-slate-900 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-100 sm:col-span-2"
+                          />
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void addAppealTrackingEvent(activeAppealCase.id)}
+                        disabled={appealCaseBusy || !trackingAt || !trackingSummary.trim()}
+                        className="mt-3 min-h-11 rounded-xl border border-sky-400 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                      >
+                        Record case event
+                      </button>
+                    </div>
+
+                    <div className="rounded-xl border border-sky-200 p-4 dark:border-sky-800/70">
+                      <h4 className="text-sm font-semibold">Case reminders</h4>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <input
+                          value={reminderTitle}
+                          onChange={(event) => setReminderTitle(event.target.value)}
+                          placeholder="Reminder title"
+                          className="min-h-11 rounded-xl border border-sky-300 bg-white px-3 text-sm text-slate-900 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-100"
+                        />
+                        <input
+                          type="date"
+                          value={reminderDueDate}
+                          onChange={(event) => setReminderDueDate(event.target.value)}
+                          className="min-h-11 rounded-xl border border-sky-300 bg-white px-3 text-sm text-slate-900 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-100"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void addAppealReminder(activeAppealCase.id)}
+                        disabled={appealCaseBusy || !reminderTitle.trim() || !reminderDueDate}
+                        className="mt-3 min-h-11 rounded-xl border border-sky-400 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                      >
+                        Save reminder
+                      </button>
+                      <div className="mt-3 space-y-2">
+                        {activeAppealCase.reminders.map((reminder) => (
+                          <div key={reminder.id} className="rounded-lg border border-sky-200 p-2 text-xs dark:border-sky-800/70">
+                            <div className="font-semibold">{reminder.title}</div>
+                            <div>{new Date(reminder.dueAt).toLocaleDateString()} · {reminder.status}</div>
+                            {reminder.status === 'PENDING' && (
+                              <div className="mt-2 flex gap-2">
+                                <button type="button" onClick={() => void finishAppealReminder(activeAppealCase.id, reminder.id, 'COMPLETED')} className="underline">Complete</button>
+                                <button type="button" onClick={() => void finishAppealReminder(activeAppealCase.id, reminder.id, 'DISMISSED')} className="underline">Dismiss</button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeAppealCase.filedAt && !['CLOSED', 'WITHDRAWN'].includes(activeAppealCase.status) && (
+                  <div className="rounded-xl border border-violet-300 bg-violet-50 p-4 text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100">
+                    <h4 className="font-semibold">Record determination and realized outcome</h4>
+                    <div className="mt-3 grid gap-2 md:grid-cols-3">
+                      <select
+                        value={determination}
+                        onChange={(event) => setDetermination(event.target.value as typeof determination)}
+                        className="min-h-11 rounded-xl border border-violet-300 bg-white px-3 text-sm text-slate-900 dark:border-violet-800 dark:bg-slate-900 dark:text-slate-100"
+                      >
+                        <option value="REDUCED">Assessment reduced</option>
+                        <option value="UPHELD">Assessment upheld</option>
+                        <option value="CLASS_CHANGED">Tax class changed</option>
+                        <option value="EXEMPTION_ADJUSTED">Exemption adjusted</option>
+                        <option value="PARTIAL">Partial relief</option>
+                        <option value="WITHDRAWN">Withdrawn</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                      <input value={determinationReference} onChange={(event) => setDeterminationReference(event.target.value)} placeholder="Decision reference" className="min-h-11 rounded-xl border border-violet-300 bg-white px-3 text-sm text-slate-900 dark:border-violet-800 dark:bg-slate-900 dark:text-slate-100" />
+                      <input inputMode="decimal" value={determinationFinalValue} onChange={(event) => setDeterminationFinalValue(event.target.value)} placeholder="Final assessed value" className="min-h-11 rounded-xl border border-violet-300 bg-white px-3 text-sm text-slate-900 dark:border-violet-800 dark:bg-slate-900 dark:text-slate-100" />
+                      <input inputMode="decimal" value={determinationRefund} onChange={(event) => setDeterminationRefund(event.target.value)} placeholder="Refund amount" className="min-h-11 rounded-xl border border-violet-300 bg-white px-3 text-sm text-slate-900 dark:border-violet-800 dark:bg-slate-900 dark:text-slate-100" />
+                      <input inputMode="decimal" value={determinationCredit} onChange={(event) => setDeterminationCredit(event.target.value)} placeholder="Credit amount" className="min-h-11 rounded-xl border border-violet-300 bg-white px-3 text-sm text-slate-900 dark:border-violet-800 dark:bg-slate-900 dark:text-slate-100" />
+                      <textarea value={determinationSummary} onChange={(event) => setDeterminationSummary(event.target.value)} placeholder="Decision summary" className="min-h-24 rounded-xl border border-violet-300 bg-white p-3 text-sm text-slate-900 dark:border-violet-800 dark:bg-slate-900 dark:text-slate-100 md:col-span-3" />
+                    </div>
+                    <label className="mt-3 flex items-center gap-2 text-sm font-semibold">
+                      <input type="checkbox" checked={determinationClose} onChange={(event) => setDeterminationClose(event.target.checked)} />
+                      Close the case after recording this determination
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void saveAppealDetermination(activeAppealCase.id)}
+                      disabled={appealCaseBusy || !determinationReference.trim() || !determinationSummary.trim()}
+                      className="mt-3 min-h-11 rounded-xl bg-violet-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      Record determination
+                    </button>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-sky-200 p-4 dark:border-sky-800/70">
+                  <h4 className="text-sm font-semibold">Case history and Home Timeline</h4>
+                  <div className="mt-3 space-y-2">
+                    {activeAppealCase.events.map((event) => (
+                      <div key={event.id} className="border-l-2 border-sky-400 pl-3 text-sm">
+                        <div className="font-semibold">{event.summary}</div>
+                        <div className="text-xs">{new Date(event.occurredAt).toLocaleString()} · {event.type}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </section>

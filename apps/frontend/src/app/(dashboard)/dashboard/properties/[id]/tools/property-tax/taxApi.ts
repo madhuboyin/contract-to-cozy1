@@ -287,6 +287,7 @@ export type PropertyTaxAppealReadinessDTO = {
     code: PropertyTaxAppealGround;
     label: string;
     formCode: string | null;
+    officialFormUrl: string;
     requirements: Record<string, unknown>;
   };
   ruleProfile: {
@@ -298,6 +299,8 @@ export type PropertyTaxAppealReadinessDTO = {
   } | null;
   evaluatedAt?: string;
   canonical?: {
+    taxYear: number | null;
+    parcelId: unknown;
     valuationDate: string | null;
     classification: unknown;
     totalAssessedValue: number | null;
@@ -354,6 +357,97 @@ export type PropertyTaxAppealReadinessDTO = {
     indicatedAssessedValueRange: { low: number; high: number };
   } | null;
   professionalBoundary: string;
+};
+
+export type PropertyTaxAppealCaseDTO = {
+  id: string;
+  propertyId: string;
+  ground: PropertyTaxAppealGround;
+  status:
+    | 'PREPARING'
+    | 'PACKET_READY'
+    | 'FILED'
+    | 'AWAITING_RESPONSE'
+    | 'RESPONSE_RECEIVED'
+    | 'HEARING_SCHEDULED'
+    | 'DETERMINED'
+    | 'CLOSED'
+    | 'WITHDRAWN';
+  taxYear: number | null;
+  title: string;
+  officialFormUrl: string;
+  formCode: string | null;
+  externalFilingReference: string | null;
+  filedAt: string | null;
+  responseReceivedAt: string | null;
+  responseSummary: string | null;
+  hearingAt: string | null;
+  hearingLocation: string | null;
+  determination:
+    | 'REDUCED'
+    | 'UPHELD'
+    | 'CLASS_CHANGED'
+    | 'EXEMPTION_ADJUSTED'
+    | 'PARTIAL'
+    | 'WITHDRAWN'
+    | 'OTHER'
+    | null;
+  determinationAt: string | null;
+  determinationReference: string | null;
+  determinationSummary: string | null;
+  originalAssessedValue: number | null;
+  finalAssessedValue: number | null;
+  refundAmount: number | null;
+  creditAmount: number | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  packet: {
+    id: string;
+    status: 'DRAFT' | 'INCOMPLETE' | 'READY' | 'FILED' | 'SUPERSEDED';
+    checklistJson: Array<{
+      code: string;
+      label: string;
+      required: boolean;
+    }>;
+    completedChecklistJson: string[];
+    narrative: string;
+    narrativeMode: 'MANUAL' | 'AI';
+    narrativeProvider: string | null;
+    narrativeModel: string | null;
+    narrativeEvidenceJson: {
+      evidenceIds?: string[];
+      comparableIds?: string[];
+      readinessEvaluatedAt?: string;
+    };
+    unresolvedPlaceholdersJson: string[];
+    placeholderValuesJson: Record<string, string>;
+    homeownerReviewedAt: string | null;
+    updatedAt: string;
+  } | null;
+  events: Array<{
+    id: string;
+    type: string;
+    occurredAt: string;
+    summary: string;
+    detailsJson: unknown;
+    homeEventId: string | null;
+  }>;
+  reminders: Array<{
+    id: string;
+    reminderKey: string;
+    title: string;
+    dueAt: string;
+    status: 'PENDING' | 'COMPLETED' | 'DISMISSED';
+    completedAt: string | null;
+  }>;
+  ruleProfile: {
+    id: string;
+    title: string;
+    version: number;
+    reviewedAt: string;
+    expiresAt: string;
+  };
 };
 
 export type HomeownerPropertyTaxRecordInput = {
@@ -559,6 +653,137 @@ export async function savePropertyTaxAppealComparable(
     input,
   );
   return res.data?.comparable;
+}
+
+export async function getPropertyTaxAppealCases(
+  propertyId: string,
+): Promise<PropertyTaxAppealCaseDTO[]> {
+  const res = await api.get(
+    `/api/properties/${propertyId}/property-tax/appeal/cases`,
+  );
+  return (res.data?.cases ?? []) as PropertyTaxAppealCaseDTO[];
+}
+
+export async function createPropertyTaxAppealCase(
+  propertyId: string,
+  input: {
+    ground: PropertyTaxAppealGround;
+    revisedNoticeDate?: string;
+    revisedNoticeQualifies?: boolean;
+  },
+): Promise<PropertyTaxAppealCaseDTO> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/property-tax/appeal/cases`,
+    input,
+  );
+  return res.data?.case as PropertyTaxAppealCaseDTO;
+}
+
+export async function updatePropertyTaxAppealPacket(
+  propertyId: string,
+  caseId: string,
+  input: {
+    narrative: string;
+    completedChecklist: string[];
+    placeholderValues: Record<string, string>;
+    homeownerReviewed: boolean;
+  },
+): Promise<PropertyTaxAppealCaseDTO> {
+  const res = await api.put(
+    `/api/properties/${propertyId}/property-tax/appeal/cases/${caseId}/packet`,
+    input,
+  );
+  return res.data?.case as PropertyTaxAppealCaseDTO;
+}
+
+export async function confirmPropertyTaxAppealFiling(
+  propertyId: string,
+  caseId: string,
+  input: {
+    filedAt: string;
+    externalReference: string;
+    confirmationDocumentId?: string;
+  },
+): Promise<PropertyTaxAppealCaseDTO> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/property-tax/appeal/cases/${caseId}/filing`,
+    input,
+  );
+  return res.data?.case as PropertyTaxAppealCaseDTO;
+}
+
+export async function trackPropertyTaxAppealEvent(
+  propertyId: string,
+  caseId: string,
+  input: {
+    type: 'RESPONSE_RECEIVED' | 'HEARING_SCHEDULED';
+    occurredAt: string;
+    summary: string;
+    hearingLocation?: string;
+  },
+): Promise<PropertyTaxAppealCaseDTO> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/property-tax/appeal/cases/${caseId}/events`,
+    input,
+  );
+  return res.data?.case as PropertyTaxAppealCaseDTO;
+}
+
+export async function savePropertyTaxAppealReminder(
+  propertyId: string,
+  caseId: string,
+  input: {
+    reminderKey: string;
+    title: string;
+    dueAt: string;
+  },
+) {
+  const res = await api.put(
+    `/api/properties/${propertyId}/property-tax/appeal/cases/${caseId}/reminders`,
+    input,
+  );
+  return res.data?.reminder;
+}
+
+export async function decidePropertyTaxAppealReminder(
+  propertyId: string,
+  caseId: string,
+  reminderId: string,
+  status: 'COMPLETED' | 'DISMISSED',
+) {
+  const res = await api.put(
+    `/api/properties/${propertyId}/property-tax/appeal/cases/${caseId}/reminders/${reminderId}`,
+    { status },
+  );
+  return res.data?.reminder;
+}
+
+export async function determinePropertyTaxAppealCase(
+  propertyId: string,
+  caseId: string,
+  input: {
+    determination:
+      | 'REDUCED'
+      | 'UPHELD'
+      | 'CLASS_CHANGED'
+      | 'EXEMPTION_ADJUSTED'
+      | 'PARTIAL'
+      | 'WITHDRAWN'
+      | 'OTHER';
+    determinationAt: string;
+    reference: string;
+    summary: string;
+    finalAssessedValue?: number;
+    refundAmount?: number;
+    creditAmount?: number;
+    closeCase: boolean;
+  },
+): Promise<PropertyTaxAppealCaseDTO> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/property-tax/appeal/cases/${caseId}/determination`,
+    input,
+  );
+  return res.data?.case as PropertyTaxAppealCaseDTO;
 }
 
 export async function saveHomeownerPropertyTaxRecord(

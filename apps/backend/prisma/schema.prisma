@@ -2860,6 +2860,7 @@ model Property {
   taxHomeownerActions  PropertyTaxHomeownerAction[]
   taxAppealEvidence    PropertyTaxAppealEvidence[]
   taxAppealComparables PropertyTaxAppealComparable[]
+  taxAppealCases       PropertyTaxAppealCase[]
 
   // HOA / Community Rules Compliance Tracker
   hoaAssociation     HoaAssociation?
@@ -3500,6 +3501,7 @@ model Document {
   propertyTaxIntake          PropertyTaxDocumentIntake?
   propertyTaxAppealEvidence  PropertyTaxAppealEvidence[]   @relation("PropertyTaxAppealEvidenceDocument")
   propertyTaxAppealComparables PropertyTaxAppealComparable[] @relation("PropertyTaxAppealComparableDocument")
+  propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[] @relation("PropertyTaxAppealFilingConfirmation")
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
 
   homeSavingsAccountId     String?
@@ -15792,6 +15794,58 @@ enum PropertyTaxAppealEvidenceType {
   SUPPORTING_DOCUMENT
 }
 
+enum PropertyTaxAppealCaseStatus {
+  PREPARING
+  PACKET_READY
+  FILED
+  AWAITING_RESPONSE
+  RESPONSE_RECEIVED
+  HEARING_SCHEDULED
+  DETERMINED
+  CLOSED
+  WITHDRAWN
+}
+
+enum PropertyTaxAppealPacketStatus {
+  DRAFT
+  INCOMPLETE
+  READY
+  FILED
+  SUPERSEDED
+}
+
+enum PropertyTaxAppealNarrativeMode {
+  MANUAL
+  AI
+}
+
+enum PropertyTaxAppealCaseEventType {
+  CREATED
+  PACKET_UPDATED
+  FILED
+  RESPONSE_RECEIVED
+  HEARING_SCHEDULED
+  DETERMINATION_RECORDED
+  CLOSED
+  WITHDRAWN
+}
+
+enum PropertyTaxAppealReminderStatus {
+  PENDING
+  COMPLETED
+  DISMISSED
+}
+
+enum PropertyTaxAppealDetermination {
+  REDUCED
+  UPHELD
+  CLASS_CHANGED
+  EXEMPTION_ADJUSTED
+  PARTIAL
+  WITHDRAWN
+  OTHER
+}
+
 // Reviewed rule releases are added in Slice 3. This record establishes stable
 // jurisdiction ownership for parcels, assessments, and bills now.
 model PropertyTaxJurisdiction {
@@ -15867,6 +15921,7 @@ model PropertyTaxRuleProfile {
   homeownerActions  PropertyTaxHomeownerAction[]
   appealEvidence    PropertyTaxAppealEvidence[]
   appealComparables PropertyTaxAppealComparable[]
+  appealCases       PropertyTaxAppealCase[]
 
   @@unique([jurisdictionId, slug, version])
   @@index([jurisdictionId, propertyClass, status])
@@ -16098,6 +16153,124 @@ model PropertyTaxAppealComparable {
   @@map("property_tax_appeal_comparables")
 }
 
+// A case begins only from a READY evidence-qualified evaluation. Filing is
+// external: the app stores the homeowner's confirmation and never represents a
+// prepared packet as filed.
+model PropertyTaxAppealCase {
+  id                           String @id @default(uuid())
+  propertyId                   String
+  ruleProfileId                String
+  assessmentRecordId           String?
+  caseKey                      String
+  ground                       PropertyTaxAppealGround
+  status                       PropertyTaxAppealCaseStatus @default(PREPARING)
+  taxYear                      Int?
+  title                        String
+  readinessSnapshotJson        Json
+  officialFormUrl              String
+  formCode                     String?
+  externalFilingReference      String?
+  filingConfirmationDocumentId String?
+  filedAt                      DateTime?
+  filedByUserId                String?
+  responseReceivedAt           DateTime?
+  responseSummary              String?
+  hearingAt                    DateTime?
+  hearingLocation              String?
+  determination               PropertyTaxAppealDetermination?
+  determinationAt             DateTime?
+  determinationReference      String?
+  determinationSummary        String?
+  originalAssessedValue        Decimal? @db.Decimal(16, 2)
+  finalAssessedValue           Decimal? @db.Decimal(16, 2)
+  refundAmount                 Decimal? @db.Decimal(16, 2)
+  creditAmount                 Decimal? @db.Decimal(16, 2)
+  closedAt                     DateTime?
+  closedByUserId               String?
+  createdByUserId              String
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  property                   Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  ruleProfile                PropertyTaxRuleProfile      @relation(fields: [ruleProfileId], references: [id], onDelete: Restrict)
+  assessmentRecord           PropertyTaxAssessmentRecord? @relation(fields: [assessmentRecordId], references: [id], onDelete: SetNull)
+  filingConfirmationDocument Document?                   @relation("PropertyTaxAppealFilingConfirmation", fields: [filingConfirmationDocumentId], references: [id], onDelete: SetNull)
+  packet                     PropertyTaxAppealPacket?
+  events                     PropertyTaxAppealCaseEvent[]
+  reminders                  PropertyTaxAppealReminder[]
+
+  @@unique([propertyId, caseKey])
+  @@index([propertyId, status, updatedAt(sort: Desc)])
+  @@index([ruleProfileId, ground])
+  @@index([assessmentRecordId])
+  @@index([filingConfirmationDocumentId])
+  @@map("property_tax_appeal_cases")
+}
+
+model PropertyTaxAppealPacket {
+  id                         String @id @default(uuid())
+  caseId                     String @unique
+  status                     PropertyTaxAppealPacketStatus @default(INCOMPLETE)
+  checklistJson              Json
+  completedChecklistJson     Json
+  narrative                  String
+  narrativeMode              PropertyTaxAppealNarrativeMode @default(MANUAL)
+  narrativeProvider          String?
+  narrativeModel             String?
+  narrativeEvidenceJson      Json
+  unresolvedPlaceholdersJson Json
+  placeholderValuesJson      Json
+  generatedAt                DateTime @default(now())
+  homeownerReviewedAt        DateTime?
+  homeownerReviewedByUserId  String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  appealCase PropertyTaxAppealCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt(sort: Desc)])
+  @@map("property_tax_appeal_packets")
+}
+
+model PropertyTaxAppealCaseEvent {
+  id            String @id @default(uuid())
+  caseId        String
+  type          PropertyTaxAppealCaseEventType
+  occurredAt    DateTime
+  summary       String
+  detailsJson   Json?
+  homeEventId   String?
+  createdByUserId String
+  createdAt     DateTime @default(now())
+
+  appealCase PropertyTaxAppealCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, occurredAt(sort: Desc)])
+  @@index([type, occurredAt(sort: Desc)])
+  @@index([homeEventId])
+  @@map("property_tax_appeal_case_events")
+}
+
+model PropertyTaxAppealReminder {
+  id              String @id @default(uuid())
+  caseId          String
+  reminderKey     String
+  title           String
+  dueAt           DateTime
+  status          PropertyTaxAppealReminderStatus @default(PENDING)
+  completedAt     DateTime?
+  completedByUserId String?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  appealCase PropertyTaxAppealCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, reminderKey])
+  @@index([caseId, status, dueAt])
+  @@map("property_tax_appeal_reminders")
+}
+
 model PropertyTaxParcelMatch {
   id                           String @id @default(uuid())
   ingestKey                    String? @unique
@@ -16182,6 +16355,7 @@ model PropertyTaxAssessmentRecord {
   fieldEvidence PropertyTaxFieldEvidence[]
   documents     PropertyTaxAssessmentDocument[]
   confirmedFromIntake PropertyTaxDocumentIntake? @relation("PropertyTaxIntakeConfirmedAssessment")
+  appealCases         PropertyTaxAppealCase[]
 
   @@index([propertyId, taxYear, status])
   @@index([jurisdictionId, taxYear])

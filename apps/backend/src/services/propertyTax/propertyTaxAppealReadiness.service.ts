@@ -342,6 +342,7 @@ export class PropertyTaxAppealReadinessService {
     ]);
     const assessmentFields = center.assessment.fields as Record<string, CanonicalField>;
     const billFields = center.bill.fields as Record<string, CanonicalField>;
+    const parcelFields = center.parcel.fields as Record<string, CanonicalField>;
     const requirements = object(definition.requirements);
     const gaps: string[] = [];
     const canonicalFields = strings(requirements.canonicalFields);
@@ -608,6 +609,11 @@ export class PropertyTaxAppealReadinessService {
         formCode: typeof definition.formCode === 'string'
           ? definition.formCode
           : null,
+        officialFormUrl: typeof object(
+          ruleResult.profile.officialLinks,
+        ).forms === 'string'
+          ? String(object(ruleResult.profile.officialLinks).forms)
+          : '',
         requirements,
       },
       ruleProfile: {
@@ -619,6 +625,8 @@ export class PropertyTaxAppealReadinessService {
       },
       evaluatedAt: now.toISOString(),
       canonical: {
+        taxYear: center.latestTaxYear,
+        parcelId: canonicalValue(parcelFields, 'parcelId'),
         valuationDate: valuationDate?.toISOString() ?? null,
         classification: canonicalValue(assessmentFields, 'classification'),
         totalAssessedValue: currentAssessedValue,

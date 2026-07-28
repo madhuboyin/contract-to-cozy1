@@ -1393,6 +1393,18 @@ Record:
 
 **Goal:** Complete the homeowner workflow.
 
+**Implementation status (July 27, 2026): Complete**
+
+- Added readiness-gated, durable property tax appeal cases keyed to the active reviewed rule release, selected ground, and tax year.
+- Added resumable packet state with jurisdiction-specific checklist, official form link, evidence/comparable citations, editable narrative, homeowner review, and unresolved placeholder tracking.
+- Shipped the initial narrative path as deterministic and manual; no tax evidence is sent to an AI provider, while provider/model/evidence fields preserve a future evidence-grounded AI path.
+- Added explicit external filing confirmation with receipt/reference and optional property Vault confirmation document; a prepared packet is never represented as filed.
+- Added durable response and hearing tracking, case reminders, and case history.
+- Added determination outcomes, final assessed value, refund, credit, decision reference, and explicit case closure.
+- Added idempotent Home Timeline milestones for case creation, packet readiness, filing, responses, hearings, determinations, and closure.
+- Added Property Tax Center case selection, packet editing, checklist and placeholder completion, filing confirmation, tracking, reminders, outcome recording, and history UI.
+- Kept schema changes direct and did not add a migration; the user must reconcile the database separately.
+
 **Work**
 
 - Create durable tax action cases.

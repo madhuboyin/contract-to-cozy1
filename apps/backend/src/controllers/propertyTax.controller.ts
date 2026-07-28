@@ -12,6 +12,7 @@ import { propertyTaxRuleControlService } from '../services/propertyTax/propertyT
 import { propertyTaxDocumentIntakeService } from '../services/propertyTax/propertyTaxDocumentIntake.service';
 import { propertyTaxHomeownerActionService } from '../services/propertyTax/propertyTaxHomeownerAction.service';
 import { propertyTaxAppealReadinessService } from '../services/propertyTax/propertyTaxAppealReadiness.service';
+import { propertyTaxAppealCaseService } from '../services/propertyTax/propertyTaxAppealCase.service';
 
 const service = new PropertyTaxService();
 
@@ -511,6 +512,272 @@ export async function upsertPropertyTaxAppealComparable(
       ...parsed.data,
     });
     res.json({ success: true, data: { comparable } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listPropertyTaxAppealCases(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const cases = await propertyTaxAppealCaseService.list(
+      req.params.propertyId,
+      req.user!.userId,
+    );
+    res.json({ success: true, data: { cases } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const createAppealCaseSchema = z.object({
+  ground: appealGroundSchema,
+  revisedNoticeDate: z.iso.date().optional(),
+  revisedNoticeQualifies: z.boolean().optional(),
+}).strict();
+
+export async function createPropertyTaxAppealCase(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = createAppealCaseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid property tax appeal case request',
+        errors: parsed.error.issues,
+      });
+      return;
+    }
+    const appealCase = await propertyTaxAppealCaseService.createOrResume({
+      propertyId: req.params.propertyId,
+      userId: req.user!.userId,
+      ...parsed.data,
+    });
+    res.status(201).json({ success: true, data: { case: appealCase } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const appealPacketSchema = z.object({
+  narrative: z.string().trim().min(50).max(20_000),
+  completedChecklist: z.array(z.string().trim().min(1).max(120)).max(20),
+  placeholderValues: z.record(
+    z.string().trim().min(1).max(120),
+    z.string().trim().max(2_000),
+  ),
+  homeownerReviewed: z.boolean(),
+}).strict();
+
+export async function updatePropertyTaxAppealPacket(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = appealPacketSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid appeal packet update',
+        errors: parsed.error.issues,
+      });
+      return;
+    }
+    const appealCase = await propertyTaxAppealCaseService.updatePacket({
+      propertyId: req.params.propertyId,
+      caseId: req.params.caseId,
+      userId: req.user!.userId,
+      ...parsed.data,
+    });
+    res.json({ success: true, data: { case: appealCase } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const externalFilingSchema = z.object({
+  filedAt: z.iso.datetime({ offset: true }),
+  externalReference: z.string().trim().min(3).max(500),
+  confirmationDocumentId: z.string().uuid().optional(),
+}).strict();
+
+export async function confirmPropertyTaxAppealFiling(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = externalFilingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid external filing confirmation',
+        errors: parsed.error.issues,
+      });
+      return;
+    }
+    const appealCase = await propertyTaxAppealCaseService.confirmExternalFiling({
+      propertyId: req.params.propertyId,
+      caseId: req.params.caseId,
+      userId: req.user!.userId,
+      ...parsed.data,
+      filedAt: new Date(parsed.data.filedAt),
+    });
+    res.json({ success: true, data: { case: appealCase } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const appealTrackingEventSchema = z.object({
+  type: z.enum(['RESPONSE_RECEIVED', 'HEARING_SCHEDULED']),
+  occurredAt: z.iso.datetime({ offset: true }),
+  summary: z.string().trim().min(3).max(2_000),
+  hearingLocation: z.string().trim().max(500).optional(),
+}).strict();
+
+export async function trackPropertyTaxAppealEvent(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = appealTrackingEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid appeal tracking event',
+        errors: parsed.error.issues,
+      });
+      return;
+    }
+    const appealCase = await propertyTaxAppealCaseService.recordTrackingEvent({
+      propertyId: req.params.propertyId,
+      caseId: req.params.caseId,
+      userId: req.user!.userId,
+      ...parsed.data,
+      occurredAt: new Date(parsed.data.occurredAt),
+    });
+    res.json({ success: true, data: { case: appealCase } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const appealReminderSchema = z.object({
+  reminderKey: evidenceKeySchema,
+  title: z.string().trim().min(3).max(200),
+  dueAt: z.iso.datetime({ offset: true }),
+}).strict();
+
+export async function upsertPropertyTaxAppealReminder(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = appealReminderSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid appeal reminder',
+        errors: parsed.error.issues,
+      });
+      return;
+    }
+    const reminder = await propertyTaxAppealCaseService.upsertReminder({
+      propertyId: req.params.propertyId,
+      caseId: req.params.caseId,
+      userId: req.user!.userId,
+      ...parsed.data,
+      dueAt: new Date(parsed.data.dueAt),
+    });
+    res.json({ success: true, data: { reminder } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const appealReminderDecisionSchema = z.object({
+  status: z.enum(['COMPLETED', 'DISMISSED']),
+}).strict();
+
+export async function decidePropertyTaxAppealReminder(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = appealReminderDecisionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid appeal reminder decision',
+      });
+      return;
+    }
+    const reminder = await propertyTaxAppealCaseService.decideReminder({
+      propertyId: req.params.propertyId,
+      caseId: req.params.caseId,
+      reminderId: req.params.reminderId,
+      userId: req.user!.userId,
+      status: parsed.data.status,
+    });
+    res.json({ success: true, data: { reminder } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const appealDeterminationSchema = z.object({
+  determination: z.enum([
+    'REDUCED',
+    'UPHELD',
+    'CLASS_CHANGED',
+    'EXEMPTION_ADJUSTED',
+    'PARTIAL',
+    'WITHDRAWN',
+    'OTHER',
+  ]),
+  determinationAt: z.iso.datetime({ offset: true }),
+  reference: z.string().trim().min(3).max(500),
+  summary: z.string().trim().min(3).max(2_000),
+  finalAssessedValue: z.number().finite().min(0).max(1_000_000_000).optional(),
+  refundAmount: z.number().finite().min(0).max(1_000_000_000).optional(),
+  creditAmount: z.number().finite().min(0).max(1_000_000_000).optional(),
+  closeCase: z.boolean(),
+}).strict();
+
+export async function determinePropertyTaxAppealCase(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = appealDeterminationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid appeal determination',
+        errors: parsed.error.issues,
+      });
+      return;
+    }
+    const appealCase = await propertyTaxAppealCaseService.recordDetermination({
+      propertyId: req.params.propertyId,
+      caseId: req.params.caseId,
+      userId: req.user!.userId,
+      ...parsed.data,
+      determinationAt: new Date(parsed.data.determinationAt),
+    });
+    res.json({ success: true, data: { case: appealCase } });
   } catch (error) {
     next(error);
   }
