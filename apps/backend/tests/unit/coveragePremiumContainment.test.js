@@ -124,6 +124,7 @@ test('coverage guidance cannot complete from a generated review result', () => {
 
 test('ungrounded coverage advisor and legacy output contract are removed', () => {
   const service = source('../../src/services/coverageAnalysis.service.ts');
+  const schema = source('../../prisma/schema.prisma');
   const advisorPath = path.resolve(__dirname, '../../src/services/coverageAdvisor.service.ts');
 
   assert.equal(fs.existsSync(advisorPath), false);
@@ -134,6 +135,9 @@ test('ungrounded coverage advisor and legacy output contract are removed', () =>
   );
   assert.match(service, /scenarioState/);
   assert.match(service, /scenarioInputs/);
+  assert.match(schema, /analysisKind\s+String\s+@default\("UNCLASSIFIED_LEGACY_ANALYSIS"\)/);
+  assert.match(schema, /reviewState\s+String\s+@default\("POLICY_RECORD_INCOMPLETE"\)/);
+  assert.match(schema, /scenarioState\s+String\s+@default\("INSUFFICIENT_DATA"\)/);
 });
 
 test('synthetic insurance history service and downstream consumers are removed', () => {

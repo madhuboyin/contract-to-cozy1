@@ -25,7 +25,8 @@ All repository implementation slices in this plan are complete:
   and generated-review completion have been removed from homeowner output;
 - downstream cost tools use only confirmed observed policy-term premiums and
   explicitly exclude insurance history when it is unavailable;
-- mitigation-plan guidance is required at the schema and reader boundary; and
+- new mitigation-plan writes require governed guidance, while readers
+  fail closed and require a rebuild for pre-existing incomplete rows; and
 - retired routes are redirects or explicit `410 Gone` boundaries, while
   analytics aliases converge on the canonical capability.
 
