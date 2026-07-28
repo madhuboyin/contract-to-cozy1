@@ -17,6 +17,9 @@ import { getPhase1PilotMetrics } from '../services/adminAnalytics/phase1PilotSer
 import { getPhase5PilotMetrics } from '../services/adminAnalytics/phase5PilotService';
 import { decidePhase6PilotAdmission, getPhase6PilotMetrics } from '../services/adminAnalytics/phase6PilotService';
 import { getRefinanceRadarMetrics } from '../services/adminAnalytics/refinanceRadarMetricsService';
+import { HomeDigitalTwinService } from '../services/homeDigitalTwin.service';
+
+const homeDigitalTwinService = new HomeDigitalTwinService();
 
 // Helper: parse optional Date from express query (validate middleware already transforms)
 function qDate(val: unknown): Date | undefined {
@@ -212,6 +215,26 @@ export async function getRefinanceRadarMetricsHandler(
       qDate(req.query.from),
       qDate(req.query.to),
     );
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Home Digital Twin computation health — run counts by type/status, stale
+ * twin count, and recent failures. Operator-only; never surfaced to
+ * homeowners (see HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_
+ * PLAN.md Slice 7).
+ */
+export async function getHomeDigitalTwinDiagnosticsHandler(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const sinceHours = qNum(req.query.sinceHours, 24);
+    const data = await homeDigitalTwinService.getDiagnostics(sinceHours);
     res.json({ success: true, data });
   } catch (err) {
     next(err);

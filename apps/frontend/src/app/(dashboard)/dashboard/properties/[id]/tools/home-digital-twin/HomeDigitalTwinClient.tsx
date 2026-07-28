@@ -403,6 +403,22 @@ function TwinStatusCard({
         </div>
       )}
 
+      {/* Dependency drift — your data changed since this was last computed */}
+      {twin.needsRecompute && !twin.staleReason && (
+        <div
+          role="status"
+          className="flex items-start justify-between gap-2 rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] px-3 py-2.5"
+        >
+          <div className="flex items-start gap-2">
+            <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-brand-strong))]" aria-hidden="true" />
+            <p className="text-xs leading-snug text-[hsl(var(--mobile-text-primary))]">
+              Your home data has changed since this view was last computed. Refresh to see current
+              numbers.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Degraded — too little data to be much more than a placeholder */}
       {isDegraded && !twin.staleReason && (
         <div
@@ -1112,39 +1128,81 @@ function ScenarioDetailSheet({
           </div>
 
           {/* Handoff — act on the decision without re-entering what's already known */}
-          {handoff && scenario.decisionStatus === 'SELECTED' && (
+          {handoff && (scenario.decisionStatus === 'SELECTED' || handoff.actualOutcome) && (
             <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
               <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Next step
               </h3>
+              {handoff.actualOutcome && (
+                <div className="rounded-lg bg-[hsl(var(--mobile-bg-muted))] px-2.5 py-2 space-y-0.5">
+                  <p className="text-xs font-medium text-[hsl(var(--mobile-text-primary))]">How it turned out</p>
+                  <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                    Actual cost: {formatUSD(handoff.actualOutcome.actualCostCents / 100)}
+                    {handoff.actualOutcome.projectedCostLow != null && handoff.actualOutcome.projectedCostHigh != null && (
+                      <> — projected {formatUSD(handoff.actualOutcome.projectedCostLow)}–{formatUSD(handoff.actualOutcome.projectedCostHigh)}</>
+                    )}
+                  </p>
+                  {handoff.actualOutcome.varianceCents != null && (
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      {handoff.actualOutcome.varianceCents > 0 ? 'Over' : handoff.actualOutcome.varianceCents < 0 ? 'Under' : 'Matched'} estimate by{' '}
+                      {formatUSD(Math.abs(handoff.actualOutcome.varianceCents) / 100)}
+                    </p>
+                  )}
+                </div>
+              )}
               {handoff.linkedProject ? (
                 <Link
                   href={`/dashboard/properties/${propertyId}/projects/${handoff.linkedProject.id}`}
                   className="block text-sm font-medium text-[hsl(var(--mobile-brand-strong))] underline-offset-2 hover:underline"
+                  onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_view_linked_project' })}
                 >
                   View project: {handoff.linkedProject.name}
                 </Link>
               ) : (
-                <Link href={handoff.createProjectHref} className="block">
+                <Link
+                  href={handoff.createProjectHref}
+                  className="block"
+                  onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_create_project' })}
+                >
                   <Button variant="outline" size="sm" className="w-full">
                     Create project from this decision
                   </Button>
                 </Link>
               )}
               <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
-                <Link href={handoff.handoffLinks.servicePriceRadar} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                <Link
+                  href={handoff.handoffLinks.servicePriceRadar}
+                  className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline"
+                  onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_service_price_radar' })}
+                >
                   Review quotes
                 </Link>
-                <Link href={handoff.handoffLinks.inspection} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                <Link
+                  href={handoff.handoffLinks.inspection}
+                  className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline"
+                  onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_inspection' })}
+                >
                   Get an inspection
                 </Link>
-                <Link href={handoff.handoffLinks.renovationAdvisor} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                <Link
+                  href={handoff.handoffLinks.renovationAdvisor}
+                  className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline"
+                  onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_renovation_advisor' })}
+                >
                   Check renovation risk
                 </Link>
-                <Link href={handoff.handoffLinks.reserveFund} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                <Link
+                  href={handoff.handoffLinks.reserveFund}
+                  className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline"
+                  onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_reserve_fund' })}
+                >
                   Check reserve fund
                 </Link>
-                <Link href={handoff.handoffLinks.capitalTimeline} className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline">
+                <Link
+                  href={handoff.handoffLinks.capitalTimeline}
+                  className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline"
+                  onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_capital_timeline' })}
+                >
                   View capital timeline
                 </Link>
               </div>
@@ -1565,6 +1623,24 @@ export default function HomeDigitalTwinClient() {
     enabled: !!propertyId,
   });
 
+  // Data quality signals — measured separately from engagement (workflow_
+  // started above). One signal per twin load, not per render.
+  const dataQualitySignalRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!twin || !propertyId) return;
+    const signalKey = `${twin.id}:${twin.lastComputedAt}`;
+    if (dataQualitySignalRef.current === signalKey) return;
+    dataQualitySignalRef.current = signalKey;
+    if (twin.staleReason) {
+      track('data_quality_signal', { tool: 'home-digital-twin', propertyId, signalType: 'STALE' });
+    } else if (twin.needsRecompute) {
+      track('data_quality_signal', { tool: 'home-digital-twin', propertyId, signalType: 'NEEDS_RECOMPUTE' });
+    }
+    if (twin.completenessScore != null && twin.completenessScore < 0.35) {
+      track('data_quality_signal', { tool: 'home-digital-twin', propertyId, signalType: 'DEGRADED' });
+    }
+  }, [twin, propertyId]);
+
   // ── Recommendations query ───────────────────────────────────────────────────
   const {
     data: recommendations,
@@ -1723,6 +1799,11 @@ export default function HomeDigitalTwinClient() {
       toast({
         title: 'Decision recorded',
         description: `Marked as ${DECISION_STATUS_LABEL[scenario.decisionStatus].toLowerCase()}.`,
+      });
+      track('action_taken', {
+        tool: 'home-digital-twin',
+        propertyId,
+        actionType: `decision_${scenario.decisionStatus.toLowerCase()}`,
       });
     },
     onError: (error) =>
@@ -1943,6 +2024,7 @@ export default function HomeDigitalTwinClient() {
           setComponentSheetOpen(false);
           setCompareComponentId(componentId);
           setCompareSheetOpen(true);
+          track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'scenario_compare_opened' });
         }}
       />
 

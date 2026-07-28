@@ -29,6 +29,7 @@ import {
   getTopToolsHandler,
   getToolLifecycleFunnelHandler,
   getRefinanceRadarMetricsHandler,
+  getHomeDigitalTwinDiagnosticsHandler,
 } from '../controllers/adminAnalytics.controller';
 
 const router = Router();
@@ -255,6 +256,29 @@ router.get(
   '/admin/analytics/refinance-radar',
   validate(OverviewQuerySchema),
   getRefinanceRadarMetricsHandler,
+);
+
+/**
+ * @swagger
+ * /api/admin/analytics/home-digital-twin:
+ *   get:
+ *     summary: Home Digital Twin computation health — run counts by type/status, stale twin count, recent failures, and effective operational-control state
+ *     tags: [Admin Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: sinceHours
+ *         schema:
+ *           type: integer
+ *         description: Lookback window in hours (default 24)
+ *     responses:
+ *       200:
+ *         description: Home Digital Twin operational diagnostics
+ */
+router.get(
+  '/admin/analytics/home-digital-twin',
+  getHomeDigitalTwinDiagnosticsHandler,
 );
 
 export default router;

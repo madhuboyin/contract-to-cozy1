@@ -11,9 +11,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, ClipboardList, AlertTriangle } from 'lucide-react';
+import { track } from '@/lib/analytics/events';
 import { MobileCard, StatusChip } from '@/components/mobile/dashboard/MobilePrimitives';
 import {
   getHomeDigitalTwinFactReadiness,
@@ -38,11 +39,26 @@ export default function HomeRecordReadinessCard({ propertyId }: { propertyId: st
     mutationFn: (componentId: string) =>
       confirmHomeDigitalTwinComponent(propertyId, componentId, true),
     onMutate: (componentId: string) => setConfirmingId(componentId),
+    onSuccess: () => {
+      track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'fact_confirmed' });
+    },
     onSettled: () => {
       setConfirmingId(null);
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin-fact-readiness', propertyId] });
     },
   });
+
+  // Conflict signal — measured separately from engagement, once per load.
+  const conflictSignalRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!data?.hasTwin || !propertyId) return;
+    const hasConflict = data.items.some((item) => item.isConflict);
+    if (!hasConflict) return;
+    const signalKey = `${propertyId}:${data.items.length}`;
+    if (conflictSignalRef.current === signalKey) return;
+    conflictSignalRef.current = signalKey;
+    track('data_quality_signal', { tool: 'home-digital-twin', propertyId, signalType: 'FACT_CONFLICT' });
+  }, [data, propertyId]);
 
   if (isLoading) {
     return <div className="h-16 animate-pulse rounded-[22px] bg-slate-100" aria-hidden="true" />;

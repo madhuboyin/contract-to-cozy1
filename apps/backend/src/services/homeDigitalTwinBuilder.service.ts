@@ -37,6 +37,7 @@ import {
   PrismaClient,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { getDisabledComponentTypes } from '../config/homeDigitalTwinOperationalControls';
 
 type TxClient = Prisma.TransactionClient | PrismaClient;
 
@@ -513,7 +514,15 @@ export class HomeDigitalTwinBuilderService {
       }),
     ]);
 
-    const specs = this.deriveSpecs(property, inventoryItems, riskReport, propertyId);
+    const allSpecs = this.deriveSpecs(property, inventoryItems, riskReport, propertyId);
+    const disabledTypes = new Set(getDisabledComponentTypes());
+    const specs = disabledTypes.size > 0
+      ? allSpecs.filter((s) => !disabledTypes.has(s.componentType))
+      : allSpecs;
+    // The fingerprint is computed from raw dependency data, not from specs —
+    // a disabled category doesn't change whether the underlying data moved,
+    // so re-enabling it later still triggers a correct rebuild rather than
+    // being masked by a fingerprint that never changed while it was off.
     const dependencyFingerprint = this.computeDependencyFingerprint(property, inventoryItems, riskReport);
 
     await prisma.$transaction(async (tx) => {
@@ -524,10 +533,45 @@ export class HomeDigitalTwinBuilderService {
         upsertedIds.add(componentId);
       }
 
-      await this.retireOrphanedComponents(tx, digitalTwinId, specs, upsertedIds);
+      // Use allSpecs (not the disabled-filtered specs) so a disabled type's
+      // existing components are treated as "not touched this run," not
+      // "orphaned" — they must survive a disable/re-enable cycle untouched.
+      await this.retireOrphanedComponents(tx, digitalTwinId, allSpecs, upsertedIds);
     });
 
     return { dependencyFingerprint };
+  }
+
+  /**
+   * Cheap, read-only fingerprint recompute — the same hash `buildComponents`
+   * produces, but without deriving specs or writing anything. Lets a caller
+   * (see HomeDigitalTwinService.checkNeedsRecompute) detect "the property
+   * profile, inventory, or risk report changed since the last build" on
+   * every read, not just when a homeowner happens to click Refresh — this is
+   * the dependency-driven-recomputation signal from Slice 7 of the audit
+   * plan. Only the three timestamp-bearing fields each dependency needs are
+   * selected, so this stays cheap even on a hot read path.
+   */
+  async getCurrentDependencyFingerprint(propertyId: string): Promise<string> {
+    const [property, inventoryItems, riskReport] = await Promise.all([
+      prisma.property.findUniqueOrThrow({
+        where: { id: propertyId },
+        select: { updatedAt: true },
+      }),
+      prisma.inventoryItem.findMany({
+        where: { propertyId },
+        select: { id: true, updatedAt: true },
+      }),
+      prisma.riskAssessmentReport.findUnique({
+        where: { propertyId },
+        select: { lastCalculatedAt: true },
+      }),
+    ]);
+    return this.computeDependencyFingerprint(
+      property as PropertyRow,
+      inventoryItems as InventoryItemRow[],
+      riskReport as RiskReportRow,
+    );
   }
 
   // ============================================================================

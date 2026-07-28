@@ -3941,6 +3941,17 @@ export type HomeTwinScenarioDecisionStatus = 'OPEN' | 'SELECTED' | 'DEFERRED' | 
  */
 export interface HomeTwinScenarioHandoffDTO {
   linkedProject: { id: string; name: string; status: string; projectType: string } | null;
+  /**
+   * Expected-vs-actual cost — only present once the linked project's
+   * completion has been verified. Homeowner-scoped: this comes back only
+   * inside this scenario's own handoff response, never aggregated.
+   */
+  actualOutcome: {
+    projectedCostLow: number | null;
+    projectedCostHigh: number | null;
+    actualCostCents: number;
+    varianceCents: number | null;
+  } | null;
   projectPrefill: {
     projectType: string;
     category: string | null;
@@ -3979,6 +3990,13 @@ export interface HomeDigitalTwinDTO {
   lastGoodContextVersion: string | null;
   /** Why the most recent run failed, if it did. Null once a run succeeds. */
   staleReason: string | null;
+  /**
+   * True when your property profile, inventory, or risk report has changed
+   * since this projection was last built — a refresh would produce
+   * different numbers. Distinct from staleReason (which only reflects a
+   * failed run).
+   */
+  needsRecompute: boolean;
   /** Current-context decision envelope attached by the twin read API. */
   context?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope | null;
   components: HomeTwinComponentDTO[];

@@ -3,7 +3,7 @@
 **Capability:** 21.3 Home Digital Twin  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 27, 2026  
-**Status:** Recommended implementation plan  
+**Status:** Implemented (Slices 0–8 complete). See `docs/functional/HOME_DIGITAL_TWIN.md` for the current-state functional description this plan drove.  
 **Recommended disposition:** **Merge and reposition**  
 **Current safety classification:** Low consequence  
 **Recommended safety classification:** Mixed — low consequence for record projection; material financial for upgrade scenarios  

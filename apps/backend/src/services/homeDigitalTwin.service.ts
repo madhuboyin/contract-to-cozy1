@@ -13,6 +13,8 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { HomeDigitalTwinBuilderService } from './homeDigitalTwinBuilder.service';
 import { HomeDigitalTwinQualityService } from './homeDigitalTwinQuality.service';
 import { getPlanningContextDecisions } from './planningContext/context';
+import { findInFlightRun } from './homeDigitalTwinRunLock';
+import { getDisabledComponentTypes, isScenarioComputeDisabled } from '../config/homeDigitalTwinOperationalControls';
 import { logger } from '../lib/logger';
 
 const builder = new HomeDigitalTwinBuilderService();
@@ -45,6 +47,27 @@ async function resolveTwinContextVersion(propertyId: string): Promise<string | n
 function decimalToNumber(d: Prisma.Decimal | null | undefined): number | null {
   if (d == null) return null;
   return Number(d.toString());
+}
+
+/**
+ * Retries a transient failure once before giving up. buildComponents is
+ * transactional and idempotent (a failed attempt rolls back cleanly), so a
+ * second attempt is safe to make. This covers real transient failures
+ * (a momentary DB blip, a lock timeout) without masking a genuine bug —
+ * a deterministic failure just fails twice as fast and still reports the
+ * same error. See HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_
+ * PLAN.md Slice 7: "Add retry and last-good behavior."
+ */
+export async function withBoundedRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
 }
 
 function buildComponentConfidenceDisclosure(c: ComponentRow): string | null {
@@ -148,7 +171,7 @@ function buildTwinConfidenceDisclosure(twin: TwinWithRelations): string | null {
   return `Digital twin accuracy — ${parts.join(', ')}. Components without homeowner confirmation use heuristic estimates.`;
 }
 
-function serializeTwin(twin: TwinWithRelations) {
+function serializeTwin(twin: TwinWithRelations, needsRecompute: boolean = false) {
   return {
     id: twin.id,
     propertyId: twin.propertyId,
@@ -169,6 +192,12 @@ function serializeTwin(twin: TwinWithRelations) {
     lastGoodComputedAt: twin.lastGoodComputedAt ?? null,
     lastGoodContextVersion: twin.lastGoodContextVersion ?? null,
     staleReason: twin.staleReason ?? null,
+    // True when the property profile, inventory, or risk report has changed
+    // since this projection was last built — a cheap dependency-fingerprint
+    // comparison, not a full rebuild (see
+    // HomeDigitalTwinBuilderService.getCurrentDependencyFingerprint). Only
+    // computed on a plain read (getTwin); always false right after a build.
+    needsRecompute,
     components: twin.components.map(serializeComponent),
     dataQuality: twin.dataQuality,
     recentScenarios: twin.scenarios,
@@ -206,7 +235,19 @@ export class HomeDigitalTwinService {
       metadataJson: { twinId: twin.id, status: twin.status },
     });
 
-    return serializeTwin(twin);
+    // Dependency-driven recompute signal: cheap, read-only — never blocks
+    // the primary twin read if it fails.
+    let needsRecompute = false;
+    if (twin.dependencyFingerprint) {
+      try {
+        const currentFingerprint = await builder.getCurrentDependencyFingerprint(propertyId);
+        needsRecompute = currentFingerprint !== twin.dependencyFingerprint;
+      } catch (err) {
+        logger.warn({ err }, `[HomeDigitalTwin] needsRecompute check failed for property=${propertyId}`);
+      }
+    }
+
+    return serializeTwin(twin, needsRecompute);
   }
 
   // ── Init twin ────────────────────────────────────────────────────────────────
@@ -232,6 +273,17 @@ export class HomeDigitalTwinService {
         include: TWIN_INCLUDE,
       });
       return serializeTwin(twin);
+    }
+
+    if (existing) {
+      const inFlight = await findInFlightRun(existing.id, 'INITIAL_BUILD');
+      if (inFlight) {
+        throw new APIError(
+          'A build is already in progress for this home. Please wait for it to finish.',
+          409,
+          'COMPUTATION_IN_PROGRESS',
+        );
+      }
     }
 
     // Create a computation run for observability
@@ -265,8 +317,9 @@ export class HomeDigitalTwinService {
       // Build components from existing property data. buildComponents is
       // transactional — a failure here rolls back rather than leaving a
       // partially-rebuilt projection, so the twin update below never runs
-      // against a half-updated component set.
-      const { dependencyFingerprint } = await builder.buildComponents(propertyId, twin.id);
+      // against a half-updated component set. Retried once for transient
+      // failures (see withBoundedRetry).
+      const { dependencyFingerprint } = await withBoundedRetry(() => builder.buildComponents(propertyId, twin.id));
 
       // Evaluate data quality and update aggregate scores
       await quality.evaluate(twin.id, propertyId);
@@ -355,6 +408,15 @@ export class HomeDigitalTwinService {
       );
     }
 
+    const inFlight = await findInFlightRun(existing.id, 'REFRESH');
+    if (inFlight) {
+      throw new APIError(
+        'A refresh is already in progress for this home. Please wait for it to finish.',
+        409,
+        'COMPUTATION_IN_PROGRESS',
+      );
+    }
+
     const run = await prisma.homeTwinComputationRun.create({
       data: {
         digitalTwinId: existing.id,
@@ -367,8 +429,8 @@ export class HomeDigitalTwinService {
     try {
       logger.info(`[HomeDigitalTwin] refresh — property=${propertyId} twin=${existing.id}`);
       // Transactional — a failure rolls back rather than leaving a
-      // partially-rebuilt projection.
-      const { dependencyFingerprint } = await builder.buildComponents(propertyId, existing.id);
+      // partially-rebuilt projection. Retried once for transient failures.
+      const { dependencyFingerprint } = await withBoundedRetry(() => builder.buildComponents(propertyId, existing.id));
       await quality.evaluate(existing.id, propertyId);
 
       const refreshedContextVersion = await resolveTwinContextVersion(propertyId);
@@ -419,5 +481,60 @@ export class HomeDigitalTwinService {
 
     logger.info(`[HomeDigitalTwin] refresh complete — property=${propertyId}`);
     return serializeTwin(updated);
+  }
+
+  // ── Operator diagnostics ─────────────────────────────────────────────────────
+  /**
+   * Aggregate computation health for operators — never surfaced to
+   * homeowners (see HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_
+   * PLAN.md Slice 7: "operator diagnostics without exposing technical noise
+   * to homeowners"). No per-property drill-down here; a specific property's
+   * own state is already fully visible via GET twin (staleReason,
+   * needsRecompute) to whoever has access to that property.
+   */
+  async getDiagnostics(sinceHours: number = 24) {
+    const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
+
+    const [runsByTypeAndStatus, staleTwinCount, totalTwinCount, recentFailures] = await Promise.all([
+      // completedAt - startedAt isn't directly aggregatable in Prisma;
+      // duration is computed per-row below for failures only, where it's
+      // most useful for diagnosing a specific incident.
+      prisma.homeTwinComputationRun.groupBy({
+        by: ['runType', 'status'],
+        where: { startedAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      prisma.homeDigitalTwin.count({ where: { staleReason: { not: null } } }),
+      prisma.homeDigitalTwin.count(),
+      prisma.homeTwinComputationRun.findMany({
+        where: { startedAt: { gte: since }, status: 'FAILED' },
+        select: { id: true, digitalTwinId: true, runType: true, errorMessage: true, startedAt: true, completedAt: true },
+        orderBy: { startedAt: 'desc' },
+        take: 20,
+      }),
+    ]);
+
+    return {
+      windowHours: sinceHours,
+      runCounts: runsByTypeAndStatus.map((r) => ({
+        runType: r.runType,
+        status: r.status,
+        count: r._count._all,
+      })),
+      staleTwinCount,
+      totalTwinCount,
+      recentFailures: recentFailures.map((f) => ({
+        id: f.id,
+        digitalTwinId: f.digitalTwinId,
+        runType: f.runType,
+        errorMessage: f.errorMessage,
+        startedAt: f.startedAt,
+        durationMs: f.completedAt ? f.completedAt.getTime() - f.startedAt.getTime() : null,
+      })),
+      operationalControls: {
+        disabledComponentTypes: getDisabledComponentTypes(),
+        scenarioComputeDisabled: isScenarioComputeDisabled(),
+      },
+    };
   }
 }

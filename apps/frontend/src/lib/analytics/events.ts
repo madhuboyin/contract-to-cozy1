@@ -81,7 +81,12 @@ export type CtcEventName =
   | 'incident_auto_resolution_canceled'
   | 'incident_auto_resolution_notification_dismissed'
   | 'incident_resolved_manually_before_auto'
-  | 'incident_archive_view_opened';
+  | 'incident_archive_view_opened'
+  // Data quality — projection freshness and conflict signals, measured
+  // separately from engagement (see HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_
+  // IMPLEMENTATION_PLAN.md Slice 8: "measure projection freshness and
+  // conflict resolution separately from engagement").
+  | 'data_quality_signal';
 
 export type CtcTool =
   | 'service-price-radar'
@@ -203,6 +208,11 @@ export interface CtcEventProperties {
   recommendation_shown: { tool: CtcTool; confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH'; source: string };
   action_taken: { tool: CtcTool; actionType: string; propertyId: string };
   action_completed: { tool: CtcTool; actionType: string; propertyId: string };
+  data_quality_signal: {
+    tool: CtcTool;
+    propertyId: string;
+    signalType: 'STALE' | 'NEEDS_RECOMPUTE' | 'DEGRADED' | 'FACT_CONFLICT';
+  };
   tool_discovery_impression: {
     propertyId?: string | null;
     surface: 'unified_home' | 'property_detail' | 'explore_tools' | 'command_palette' | 'workflow' | 'completion';

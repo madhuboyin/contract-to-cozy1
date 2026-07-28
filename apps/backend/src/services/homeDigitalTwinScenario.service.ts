@@ -25,6 +25,8 @@ import {
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { logger } from '../lib/logger';
+import { isScenarioComputeDisabled } from '../config/homeDigitalTwinOperationalControls';
+import { findInFlightRun } from './homeDigitalTwinRunLock';
 
 // ============================================================================
 // TYPES
@@ -1124,6 +1126,14 @@ export class HomeDigitalTwinScenarioService {
 
   // ── Compute ─────────────────────────────────────────────────────────────────
   async computeScenario(scenarioId: string, digitalTwinId: string) {
+    if (isScenarioComputeDisabled()) {
+      throw new APIError(
+        'Scenario computation is temporarily unavailable. Your saved options and their prior results are unaffected.',
+        503,
+        'SCENARIO_COMPUTE_DISABLED',
+      );
+    }
+
     const scenario = await prisma.homeTwinScenario.findFirst({
       where: { id: scenarioId, digitalTwinId },
     });
@@ -1136,6 +1146,15 @@ export class HomeDigitalTwinScenarioService {
         'Archived scenarios cannot be recomputed. Restore the scenario first.',
         409,
         'SCENARIO_ARCHIVED',
+      );
+    }
+
+    const inFlight = await findInFlightRun(digitalTwinId, 'SCENARIO_COMPUTE', scenarioId);
+    if (inFlight) {
+      throw new APIError(
+        'This option is already being computed. Please wait for it to finish.',
+        409,
+        'COMPUTATION_IN_PROGRESS',
       );
     }
 
@@ -1379,11 +1398,42 @@ export class HomeDigitalTwinScenarioService {
       throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
     }
 
-    const linkedProject = await prisma.projectRecord.findFirst({
+    const linkedProjectRow = await prisma.projectRecord.findFirst({
       where: { propertyId, sourceEntityType: 'HomeTwinScenario', sourceEntityId: scenarioId },
-      select: { id: true, name: true, status: true, projectType: true },
+      select: { id: true, name: true, status: true, projectType: true, actualCostCents: true, outcomeStatus: true },
       orderBy: { createdAt: 'desc' },
     });
+    const linkedProject = linkedProjectRow
+      ? { id: linkedProjectRow.id, name: linkedProjectRow.name, status: linkedProjectRow.status, projectType: linkedProjectRow.projectType }
+      : null;
+
+    // Expected-vs-actual cost — only computed once real work is verified
+    // complete, and only ever returned inside this scenario's own detail
+    // response (homeowner-scoped by construction: this endpoint already
+    // requires access to the specific property and scenario). See HOME_
+    // DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md Slice 8:
+    // "Measure expected-versus-actual cost and outcome only with homeowner
+    // control" — nothing here is aggregated for platform-wide reporting.
+    let actualOutcome: {
+      projectedCostLow: number | null;
+      projectedCostHigh: number | null;
+      actualCostCents: number;
+      varianceCents: number | null;
+    } | null = null;
+    if (linkedProjectRow?.outcomeStatus === 'VERIFIED_SUCCESS' && linkedProjectRow.actualCostCents != null) {
+      const projectedCost = scenario.impacts.find((i) => i.impactType === 'UPFRONT_COST' && !i.isUserSupplied);
+      const projectedCostLow = projectedCost?.valueLow ?? projectedCost?.valueNumeric ?? null;
+      const projectedCostHigh = projectedCost?.valueHigh ?? projectedCost?.valueNumeric ?? null;
+      const projectedMidCents = projectedCostLow != null && projectedCostHigh != null
+        ? Math.round(((projectedCostLow + projectedCostHigh) / 2) * 100)
+        : null;
+      actualOutcome = {
+        projectedCostLow,
+        projectedCostHigh,
+        actualCostCents: linkedProjectRow.actualCostCents,
+        varianceCents: projectedMidCents != null ? linkedProjectRow.actualCostCents - projectedMidCents : null,
+      };
+    }
 
     const { projectPrefill } = withSafetyBoundary(scenario);
     const base = `/dashboard/properties/${propertyId}`;
@@ -1398,6 +1448,7 @@ export class HomeDigitalTwinScenarioService {
 
     return {
       linkedProject,
+      actualOutcome,
       projectPrefill,
       createProjectHref: `${base}/projects/new?${prefillParams.toString()}`,
       handoffLinks: {
