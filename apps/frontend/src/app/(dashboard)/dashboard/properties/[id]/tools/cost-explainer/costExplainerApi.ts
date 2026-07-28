@@ -19,8 +19,7 @@ export type CostExplainerDTO = {
     annualMaintenanceNow: number;
     annualTotalNow: number;
 
-    // ✅ ADD THIS
-    history: Array<{
+    modeledSeries: Array<{
       year: number;
       annualTax: number;
       annualInsurance: number;
@@ -29,10 +28,10 @@ export type CostExplainerDTO = {
     }>;
 
     deltaVsPriorYear: {
-      tax: number;
-      insurance: number;
-      maintenance: number;
-      total: number;
+      tax: number | null;
+      insurance: number | null;
+      maintenance: number | null;
+      total: number | null;
     };
   };
 

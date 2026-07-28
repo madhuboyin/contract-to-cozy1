@@ -208,6 +208,7 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   HOME_EVENT_RADAR: 'Radar',
   HOME_RENOVATION_RISK_ADVISOR: 'Hammer',
   PROPERTY_TAX: 'Receipt',
+  OWNERSHIP_COSTS: 'Receipt',
   COST_GROWTH: 'BarChart2',
   INSURANCE_TREND: 'Shield',
   NEGOTIATION_SHIELD: 'ShieldCheck',

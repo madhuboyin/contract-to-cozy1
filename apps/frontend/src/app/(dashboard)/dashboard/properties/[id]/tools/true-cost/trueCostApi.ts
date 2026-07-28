@@ -21,7 +21,7 @@ export type TrueCostOwnershipDTO = {
     annualUtilitiesNow: number;
     annualTotalNow: number;
   };
-  history: Array<{
+  projection: Array<{
     year: number;
     annualTax: number;
     annualInsurance: number;

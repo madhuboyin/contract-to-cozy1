@@ -9,6 +9,7 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 type PropertyScopedToolRedirectPageProps = {
   toolKey: string;
   navTarget: string;
+  destination?: 'tool' | 'ownership-costs';
 };
 
 function buildForwardQuery(serializedSearchParams: string): string {
@@ -18,8 +19,16 @@ function buildForwardQuery(serializedSearchParams: string): string {
   return next ? `?${next}` : '';
 }
 
-function buildToolHref(propertyId: string, toolKey: string, forwardQuery: string): string {
-  return `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/${toolKey}${forwardQuery}`;
+function buildToolHref(
+  propertyId: string,
+  toolKey: string,
+  forwardQuery: string,
+  destination: PropertyScopedToolRedirectPageProps['destination'],
+): string {
+  const suffix = destination === 'ownership-costs'
+    ? 'ownership-costs'
+    : `tools/${toolKey}`;
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}/${suffix}${forwardQuery}`;
 }
 
 function buildPropertiesFallbackHref(navTarget: string, forwardQuery: string): string {
@@ -34,6 +43,7 @@ function buildPropertiesFallbackHref(navTarget: string, forwardQuery: string): s
 export default function PropertyScopedToolRedirectPage({
   toolKey,
   navTarget,
+  destination = 'tool',
 }: PropertyScopedToolRedirectPageProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -57,7 +67,7 @@ export default function PropertyScopedToolRedirectPage({
         if (propertyIdFromQuery && propertyIdFromQuery !== selectedPropertyId) {
           setSelectedPropertyId(propertyIdFromQuery);
         }
-        const canonicalRoute = buildToolHref(directPropertyId, toolKey, forwardQuery);
+        const canonicalRoute = buildToolHref(directPropertyId, toolKey, forwardQuery, destination);
         void api
           .trackRouteRedirectEvent(directPropertyId, {
             oldRoute: pathname,
@@ -85,7 +95,7 @@ export default function PropertyScopedToolRedirectPage({
         if (properties.length > 0) {
           const fallbackPropertyId = properties[0].id;
           setSelectedPropertyId(fallbackPropertyId);
-          const canonicalRoute = buildToolHref(fallbackPropertyId, toolKey, forwardQuery);
+          const canonicalRoute = buildToolHref(fallbackPropertyId, toolKey, forwardQuery, destination);
           void api
             .trackRouteRedirectEvent(fallbackPropertyId, {
               oldRoute: pathname,
@@ -117,6 +127,7 @@ export default function PropertyScopedToolRedirectPage({
     };
   }, [
     forwardQuery,
+    destination,
     pathname,
     navTarget,
     propertyIdFromQuery,

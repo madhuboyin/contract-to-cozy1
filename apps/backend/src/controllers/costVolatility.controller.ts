@@ -4,19 +4,18 @@ import { CustomRequest } from '../types';
 import { CostVolatilityService } from '../services/costVolatility.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
+import { ownershipCostYearsQuerySchema, validationErrorResponse } from './ownershipCostContainment.schemas';
 
 const svc = new CostVolatilityService();
-
-function parseYears(q: any): 5 | 10 {
-  const v = String(q?.years ?? '').trim();
-  if (v === '10') return 10;
-  return 5;
-}
 
 export async function getCostVolatility(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
-    const years = parseYears(req.query);
+    const parsed = ownershipCostYearsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(validationErrorResponse(parsed.error));
+    }
+    const { years } = parsed.data;
 
     const costVolatility = await svc.compute(propertyId, { years });
     const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'COST_VOLATILITY');
@@ -27,7 +26,10 @@ export async function getCostVolatility(req: CustomRequest, res: Response, next:
       propertyId,
       moduleKey: AnalyticsModule.FINANCIAL,
       featureKey: AnalyticsFeature.COST_VOLATILITY,
-      metadataJson: { volatilityIndex: costVolatility.index.volatilityIndex, band: costVolatility.index.band },
+      metadataJson: {
+        volatilityEligible: costVolatility.eligibility.eligible,
+        comparableObservedPeriods: costVolatility.eligibility.comparableObservedPeriods,
+      },
     });
 
     return res.json({

@@ -110,6 +110,7 @@ export const ROUTE_DISPOSITION_RULES = [
       '/dashboard/home-savings',
       '/dashboard/inventory',
       '/dashboard/maintenance',
+      '/dashboard/ownership-costs',
       '/dashboard/risk-premium-optimizer',
       '/dashboard/savings-benefits',
       '/dashboard/vault',
@@ -140,7 +141,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'specialized-tools',
     disposition: 'CONTEXTUAL_ONLY',
     rationale: 'Specialized tools remain available from actions, journeys, records, Ask, or command search—not primary navigation.',
-    matches: matches(/^\/dashboard\/properties\/\[id\]\/tools(?:\/|$)|^\/dashboard\/(ai-tools|budget|diy|do-nothing-simulator|emergency|energy|home-lab|home-tools|oracle|tax-appeal|visual-inspector)(?:\/|$)/),
+    matches: matches(/^\/dashboard\/properties\/\[id\]\/(?:ownership-costs|tools)(?:\/|$)|^\/dashboard\/(ai-tools|budget|diy|do-nothing-simulator|emergency|energy|home-lab|home-tools|oracle|tax-appeal|visual-inspector)(?:\/|$)/),
   },
   {
     id: 'contextual-execution-and-marketplace',

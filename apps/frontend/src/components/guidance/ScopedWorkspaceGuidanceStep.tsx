@@ -101,6 +101,15 @@ const WORKSPACE_BRIDGE_CONFIG: Record<string, WorkspaceBridgeConfig> = {
       'Return here after reviewing the report to continue the guided path.',
     ],
   },
+  'ownership-costs': {
+    actionLabel: 'Open ownership costs',
+    summary: 'Review the current cost snapshot and record the next planning decision without losing journey context.',
+    bullets: [
+      'See current costs and the evidence status behind each category.',
+      'Keep observed history separate from forecasts and planning assumptions.',
+      'Return here when you are ready to continue the guided path.',
+    ],
+  },
   'true-cost': {
     actionLabel: 'Open true cost analysis',
     summary: 'Estimate the full out-of-pocket impact before deciding whether to act now, wait, or change course.',

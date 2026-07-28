@@ -2,7 +2,6 @@
 import { prisma } from '../lib/prisma';
 import { getObservedInsurancePremiumHistory } from './insurancePolicyHistory.service';
 import { PropertyTaxService } from './propertyTax.service';
-import { TrueCostOwnershipService } from './trueCostOwnership.service';
 
 export type CostVolatilityInput = {
   years?: 5 | 10; // default 5
@@ -29,16 +28,16 @@ export type CostVolatilityDTO = {
   };
 
   index: {
-    volatilityIndex: number; // 0..100
-    band: 'LOW' | 'MEDIUM' | 'HIGH';
+    volatilityIndex: number | null; // unavailable until eligibility is met
+    band: 'LOW' | 'MEDIUM' | 'HIGH' | null;
 
     // Phase-1 fields (kept)
-    insuranceVolatility: number; // 0..100
-    taxVolatility: number; // 0..100
-    zipVolatility: number; // 0..100
+    insuranceVolatility: number | null;
+    taxVolatility: number | null;
+    zipVolatility: number | null;
 
     // Phase-2 additive fields (non-breaking)
-    bandLabel?: string; // "Very stable volatility", "Moderate volatility", etc.
+    bandLabel?: string;
     dominantDriver?: 'INSURANCE' | 'TAX' | 'CLIMATE';
   };
 
@@ -67,6 +66,13 @@ export type CostVolatilityDTO = {
     detail: string;
     action?: { href: string; label: string; targetTool?: string };
   }>;
+
+  eligibility: {
+    eligible: boolean;
+    requiredComparablePeriods: number;
+    comparableObservedPeriods: number;
+    reason: string;
+  };
 
   meta: {
     generatedAt: string;
@@ -124,11 +130,11 @@ function impactForScore(s: number): 'LOW' | 'MEDIUM' | 'HIGH' {
  * Keep Phase-1 tier (LOW/MED/HIGH), add Phase-2 five-bucket label (non-breaking).
  */
 function bandLabelForPhase2(score: number) {
-  if (score <= 25) return { label: 'Very stable volatility', copy: 'Costs tend to move predictably', tier: 'LOW' as const };
-  if (score <= 45) return { label: 'Stable volatility', copy: 'Some variation, low surprise risk', tier: 'LOW' as const };
-  if (score <= 65) return { label: 'Moderate volatility', copy: 'Noticeable swings in certain years', tier: 'MEDIUM' as const };
-  if (score <= 80) return { label: 'High volatility', copy: 'Frequent cost surprises', tier: 'MEDIUM' as const };
-  return { label: 'Severe volatility', copy: 'Highly unpredictable cost environment', tier: 'HIGH' as const };
+  if (score <= 25) return { label: 'Low observed variability', tier: 'LOW' as const };
+  if (score <= 45) return { label: 'Lower observed variability', tier: 'LOW' as const };
+  if (score <= 65) return { label: 'Moderate observed variability', tier: 'MEDIUM' as const };
+  if (score <= 80) return { label: 'High observed variability', tier: 'MEDIUM' as const };
+  return { label: 'Very high observed variability', tier: 'HIGH' as const };
 }
 
 /**
@@ -198,16 +204,15 @@ function computeYoY<T extends Record<string, any>>(
 }
 
 /**
- * Build aligned annual history for N years.
- * NOTE: TrueCostOwnershipService is only 5y; we blend it when present and fall back otherwise.
+ * Build the legacy modeled series used only for containment diagnostics.
+ * True Cost's forward projection is intentionally excluded from past periods.
  */
 async function buildAnnualHistory(args: {
   propertyId: string;
   years: 5 | 10;
   taxSvc: PropertyTaxService;
-  trueCostSvc: TrueCostOwnershipService;
 }) {
-  const { propertyId, years, taxSvc, trueCostSvc } = args;
+  const { propertyId, years, taxSvc } = args;
   const observedInsurance = await getObservedInsurancePremiumHistory(propertyId);
   const insHist = observedInsurance.premiumSeries
     .filter((entry) => entry.year !== null)
@@ -216,18 +221,7 @@ async function buildAnnualHistory(args: {
   const tax = await taxSvc.estimate(propertyId, { historyYears: years } as any);
   const taxHist = (((tax as any)?.history || []) as Array<{ year: number; annualTax: number }>).slice(-years);
 
-  // True cost is only 5y; use it if available, otherwise fall back.
-  const trueCostHist =
-    years === 5
-      ? await (async () => {
-          try {
-            const tc = await trueCostSvc.estimate(propertyId, {});
-            return (tc?.history || []).map((h: any) => ({ year: h.year, annualTotal: h.annualTotal }));
-          } catch {
-            return [];
-          }
-        })()
-      : [];
+  const trueCostHist: Array<{ year: number; annualTotal: number }> = [];
 
   const byYearIns = new Map<number, number>();
   for (const r of insHist) {
@@ -284,10 +278,7 @@ async function buildAnnualHistory(args: {
 }
 
 export class CostVolatilityService {
-  constructor(
-    private propertyTax = new PropertyTaxService(),
-    private trueCost = new TrueCostOwnershipService()
-  ) {}
+  constructor(private propertyTax = new PropertyTaxService()) {}
 
   async compute(propertyId: string, input: CostVolatilityInput = {}): Promise<CostVolatilityDTO> {
     const years: 5 | 10 = input.years ?? 5;
@@ -307,7 +298,6 @@ export class CostVolatilityService {
     const dataSources: string[] = [
       'Confirmed insurance policy terms',
       'PropertyTaxService (modeled; Phase 2 cadence mapping + delta variance)',
-      'TrueCostOwnershipService (optional cross-check for 5y totals)',
       'State reassessment cadence mapping (Phase 2 static adapter)',
       'Regional sensitivity (climate) modifier (Phase 2 state-level mapping)',
     ];
@@ -322,7 +312,6 @@ export class CostVolatilityService {
       propertyId,
       years: MAX_EVENT_YEARS,
       taxSvc: this.propertyTax,
-      trueCostSvc: this.trueCost,
     });
 
     // 2) Slice requested window for scoring & chart
@@ -559,44 +548,59 @@ export class CostVolatilityService {
         title: 'Build a cost buffer into your budget',
         detail: `Volatility score of ${volatilityIndex}/100 means meaningful year-to-year swings are possible. A dedicated reserve of 1–3 months of annual costs reduces surprise risk.`,
         action: {
-          href: `/dashboard/properties/${propertyId}/tools/budget-planner`,
+          href: '/dashboard/budget',
           label: 'Open budget planner',
-          targetTool: 'budget-planner',
+          targetTool: 'budget',
         },
       });
     }
 
-    nextSteps.push({
-      title: 'Compare volatility against your full cost picture',
-      detail: 'Use the Cost Growth tool to see whether appreciation is keeping pace with your rising ownership costs.',
-      action: {
-        href: `/dashboard/properties/${propertyId}/tools/cost-growth`,
-        label: 'View cost growth forecast',
-        targetTool: 'cost-growth',
-      },
-    });
+    // Containment: canonical tax observations do not yet exist in this
+    // service, so no stable total-cost window can be considered observed.
+    const comparableObservedPeriods = 0;
+    const requiredComparablePeriods = 3;
+    const eligibility: CostVolatilityDTO['eligibility'] = {
+      eligible: false,
+      requiredComparablePeriods,
+      comparableObservedPeriods,
+      reason: 'At least three comparable observed annual periods with a stable category definition are required.',
+    };
 
     return {
       input: { propertyId, years, addressLabel, state, zipCode },
       index: {
-        volatilityIndex,
-        band: band2.tier,
-        insuranceVolatility,
-        taxVolatility,
-        zipVolatility,
-        bandLabel: band2.label,
-        dominantDriver,
+        volatilityIndex: null,
+        band: null,
+        insuranceVolatility: null,
+        taxVolatility: null,
+        zipVolatility: null,
       },
-      history: historyWindow,
-      drivers,
-      events,
-      nextSteps,
+      history: [],
+      drivers: [{
+        factor: 'Measured variability unavailable',
+        impact: 'LOW',
+        explanation: eligibility.reason,
+      }],
+      events: [],
+      nextSteps: [{
+        title: 'Plan with a budget instead of a measured volatility score',
+        detail: 'A planning buffer can be explored separately, but it is not measured historical volatility.',
+        action: {
+          href: '/dashboard/budget',
+          label: 'Open budget planner',
+          targetTool: 'budget',
+        },
+      }],
+      eligibility,
       meta: {
         generatedAt: new Date().toISOString(),
-        dataSources,
-        notes,
-        confidence,
-        aiSummary,
+        dataSources: ['Confirmed insurance policy terms, when available'],
+        notes: [
+          ...notes,
+          'Volatility scoring is disabled until at least three comparable observed annual periods exist.',
+          'Modeled tax cadence, regional sensitivity, and synthetic ownership-cost series are excluded from homeowner conclusions.',
+        ],
+        confidence: 'LOW',
       },
     };
   }

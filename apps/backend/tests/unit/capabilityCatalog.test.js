@@ -32,7 +32,7 @@ test('catalog projection is serializable, narrow, and excludes workflow-only cap
   });
 
   assert.doesNotThrow(() => CapabilityCatalogSchema.parse(result));
-  assert.equal(result.capabilities.length, 46);
+  assert.equal(result.capabilities.length, 43);
   assert.equal(result.capabilities.some((entry) => entry.id === 'quote-comparison'), false);
 
   const material = result.capabilities.find((entry) => entry.id === 'material-specs');
@@ -51,7 +51,7 @@ test('catalog can include workflow-only capabilities for an explicit workflow co
     includeWorkflowContext: true,
   });
 
-  assert.equal(result.capabilities.length, 47);
+  assert.equal(result.capabilities.length, 44);
   assert.equal(result.capabilities.find((entry) => entry.id === 'quote-comparison').workflowOnly, true);
 });
 
@@ -73,6 +73,10 @@ test('catalog preserves property selection through hrefs and provides property s
   assert.match(
     unselected.capabilities.find((entry) => entry.id === 'seller-prep').href,
     /^\/dashboard\/properties\?navTarget=tool%3Aseller-prep$/,
+  );
+  assert.equal(
+    unselected.capabilities.find((entry) => entry.id === 'ownership-costs').href,
+    '/dashboard/properties?navTarget=ownership-costs',
   );
 });
 

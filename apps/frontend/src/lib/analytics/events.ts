@@ -102,6 +102,7 @@ export type CtcTool =
   | 'home-event-radar'
   | 'insurance-trend'
   | 'property-tax'
+  | 'ownership-costs'
   | 'home-savings'
   | 'do-nothing'
   | 'risk-premium-optimizer'

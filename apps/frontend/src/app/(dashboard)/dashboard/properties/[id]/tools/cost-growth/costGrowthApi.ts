@@ -23,7 +23,7 @@ export type HomeCostGrowthDTO = {
     annualExpensesNow: number;
   };
 
-  history: Array<{
+  projection: Array<{
     year: number;
     homeValue: number;
     annualTax: number;

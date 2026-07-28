@@ -20,8 +20,8 @@ const inventory = JSON.parse(fs.readFileSync(
 ));
 
 test('canonical registry has exact catalog identity, route, release, and lifecycle parity', () => {
-  assert.equal(canonicalCapabilityRegistry.capabilities.length, 47);
-  assert.equal(inventory.summary.distinctCapabilities, 47);
+  assert.equal(canonicalCapabilityRegistry.capabilities.length, 44);
+  assert.equal(inventory.summary.distinctCapabilities, 44);
 
   const expectedIds = inventory.capabilities.map((entry) => entry.id).sort();
   const actualIds = canonicalCapabilityRegistry.capabilities.map((entry) => entry.id);
@@ -52,7 +52,7 @@ test('canonical explicit relationships retain the reviewed cutover baseline', ()
   const relationshipOwners = canonicalCapabilityRegistry.capabilities
     .filter((capability) =>
       capability.recommendation.explicitRelatedCapabilityIds.length > 0);
-  assert.equal(relationshipOwners.length, 30);
+  assert.equal(relationshipOwners.length, 27);
   assert.ok(relationshipOwners.every((capability) =>
     capability.recommendation.explicitRelatedCapabilityIds.length === 3));
 

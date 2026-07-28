@@ -20,7 +20,7 @@ export type CostExplainerDTO = {
     annualTotalNow: number;
 
     // ✅ ADD THIS (so the chart can render)
-    history: Array<{
+    modeledSeries: Array<{
       year: number;
       annualTax: number;
       annualInsurance: number;
@@ -29,10 +29,10 @@ export type CostExplainerDTO = {
     }>;
 
     deltaVsPriorYear: {
-      tax: number;
-      insurance: number;
-      maintenance: number;
-      total: number;
+      tax: number | null;
+      insurance: number | null;
+      maintenance: number | null;
+      total: number | null;
     };
   };
   explanations: Array<{
@@ -105,8 +105,7 @@ export class CostExplainerService {
     // 1) Taxes
     const tax = await this.propertyTax.estimate(propertyId);
     const taxNow = tax.current.annualTax;
-    const taxPrev = taxNow;
-    const taxDelta = 0;
+    const taxDelta = null;
 
     // 2) Insurance — confirmed policy terms only. Missing history stays missing.
     const observedInsurance = await getObservedInsurancePremiumHistory(propertyId);
@@ -114,8 +113,8 @@ export class CostExplainerService {
       .filter((entry) => entry.year !== null)
       .slice(-Math.max(2, years));
     const insNow = observedInsurance.currentAnnualPremium ?? 0;
-    const insPrev = observedInsurance.previousAnnualPremium ?? insNow;
-    const insDelta = insNow - insPrev;
+    const insPrev = observedInsurance.previousAnnualPremium;
+    const insDelta = insPrev === null ? null : insNow - insPrev;
     const hasObservedInsurance = observedInsurance.currentAnnualPremium !== null;
     const hasObservedInsuranceChange = observedInsurance.previousAnnualPremium !== null;
 
@@ -124,15 +123,14 @@ export class CostExplainerService {
       (tax?.current as any)?.homeValueNow ??
       clamp((property.propertySize || 1800) * (state === 'NJ' ? 310 : state === 'CA' ? 420 : 260), 150_000, 2_500_000);
 
-    // 4) Maintenance heuristic + inflation back-calc for prior year
+    // 4) Maintenance is a current planning benchmark. It cannot support a
+    // historical change statement without comparable observed expenses.
     const maintNow = estimateMaintenanceNow(homeValueNow, state);
     const inflation = 0.035;
-    const maintPrev = maintNow / (1 + inflation);
-    const maintDelta = maintNow - maintPrev;
+    const maintDelta = null;
 
     const totalNow = taxNow + insNow + maintNow;
-    const totalPrev = taxPrev + insPrev + maintPrev;
-    const totalDelta = totalNow - totalPrev;
+    const totalDelta = null;
 
     // Build the modeled cost series without inventing property-tax history.
     // Until observed tax-year records exist, the current planning estimate is
@@ -159,7 +157,7 @@ export class CostExplainerService {
       maintenanceByYear.set(y, v);
     }
 
-    const history = baseYears.map((y) => {
+    const modeledSeries = baseYears.map((y) => {
       const t = byYear.get(y)?.tax ?? (y === nowYear ? taxNow : taxNow); // fallback
       const i = byYear.get(y)?.ins ?? 0;
       const m = maintenanceByYear.get(y) ?? maintNow;
@@ -189,7 +187,7 @@ export class CostExplainerService {
       {
         category: 'INSURANCE',
         headline: hasObservedInsuranceChange
-          ? `Confirmed annual premium ${insDelta >= 0 ? 'increased' : 'decreased'} by ${fmtMoney(Math.abs(insDelta))}`
+          ? `Confirmed annual premium ${insDelta! >= 0 ? 'increased' : 'decreased'} by ${fmtMoney(Math.abs(insDelta!))}`
           : hasObservedInsurance
             ? 'One confirmed annual premium is available'
             : 'No confirmed annual premium is available',
@@ -204,25 +202,25 @@ export class CostExplainerService {
       },
       {
         category: 'MAINTENANCE',
-        headline: `Maintenance is trending up about ${fmtMoney(maintDelta)} (inflation + aging-home curve)`,
+        headline: 'A year-over-year maintenance change is not available',
         bullets: [
-          `We estimate maintenance as ~1% of home value/year (common rule of thumb), escalated by ~${Math.round(inflation * 100)}% inflation.`,
-          `As homes age, small repairs (sealants, HVAC tune-ups, minor leaks) become more frequent — even without major renovations.`,
-          `If your maintenance plan is sparse, the “unplanned” share tends to rise year-over-year.`,
+          'The maintenance amount is a current planning benchmark, not observed spending.',
+          `The benchmark uses about 1% of home value per year and a ${Math.round(inflation * 100)}% modeling assumption.`,
+          'Add comparable maintenance expenses before interpreting a historical change.',
         ],
         confidence: 'LOW',
       },
       {
         category: 'TOTAL',
-        headline: `Total ownership costs moved about ${fmtMoney(totalDelta)} vs last year`,
+        headline: 'We do not have enough comparable records to show the total change',
         bullets: [
-          `Taxes: ${fmtMoney(taxDelta)} · Insurance: ${fmtMoney(insDelta)} · Maintenance: ${fmtMoney(maintDelta)}`,
-          totalDelta >= 0
-            ? `Top driver is currently ${Math.abs(insDelta) >= Math.abs(taxDelta) ? 'insurance' : 'taxes'} for your area.`
-            : `Overall costs eased; the largest relief came from ${Math.abs(insDelta) >= Math.abs(taxDelta) ? 'insurance' : 'taxes'}.`,
-          `Next: use Cost Growth + Insurance Trend together to see whether appreciation is outpacing these increases.`,
+          'Property tax and maintenance do not have comparable observed prior periods in this result.',
+          hasObservedInsuranceChange
+            ? `Insurance changed by ${fmtMoney(insDelta!)} based on confirmed policy terms.`
+            : 'Insurance also needs at least two confirmed policy terms.',
+          'Current estimates remain available, but they are not evidence of a year-over-year change.',
         ],
-        confidence: 'MEDIUM',
+        confidence: 'LOW',
       },
     ];
 
@@ -256,7 +254,7 @@ export class CostExplainerService {
         annualInsuranceNow: insNow,
         annualMaintenanceNow: maintNow,
         annualTotalNow: totalNow,
-        history, // ✅ now valid
+        modeledSeries,
         deltaVsPriorYear: {
           tax: taxDelta,
           insurance: insDelta,

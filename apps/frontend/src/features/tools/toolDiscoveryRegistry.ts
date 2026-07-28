@@ -133,13 +133,10 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'home-risk-replay': 'HOME_RISK_REPLAY',
   'service-price-radar': 'SERVICE_PRICE_RADAR',
   'property-tax': 'PROPERTY_TAX',
-  'cost-growth': 'COST_GROWTH',
+  'ownership-costs': 'OWNERSHIP_COSTS',
   'negotiation-shield': 'NEGOTIATION_SHIELD',
   'price-finalization': 'PRICE_FINALIZATION',
-  'cost-explainer': 'COST_EXPLAINER',
-  'true-cost': 'TRUE_COST',
   'sell-hold-rent': 'SELL_HOLD_RENT',
-  'cost-volatility': 'COST_VOLATILITY',
   'break-even': 'BREAK_EVEN',
   'capital-timeline': 'HOME_CAPITAL_TIMELINE',
   'seller-prep': 'SELLER_PREP',
@@ -173,7 +170,7 @@ const BETA_TOOL_IDS = new Set([
 
 const MATERIAL_TOOL_IDS = new Set([
   'replace-repair', 'sell-hold-rent', 'break-even', 'do-nothing-simulator',
-  'property-tax', 'cost-growth', 'cost-explainer', 'true-cost', 'cost-volatility',
+  'property-tax', 'ownership-costs',
   'capital-timeline', 'reserve-fund', 'financing', 'mortgage-refinance-radar',
   'savings-benefits',
   // Mixed-consequence: the same route surfaces low-consequence record
@@ -221,6 +218,7 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'inspection-hub': 'ARTIFACT_CREATED',
   'project-tracker': 'ACTION_COMPLETED',
   'property-tax': 'DECISION_RECORDED',
+  'ownership-costs': 'DECISION_RECORDED',
   'savings-benefits': 'DECISION_RECORDED',
 };
 
@@ -305,7 +303,16 @@ const homeTools: DiscoverableToolDefinition[] = MOBILE_HOME_TOOL_LINKS.map((tool
   icon: tool.icon,
   workflowOnly: Boolean(tool.workflowOnly),
   baseHref: (propertyId) => buildHomeToolHref(propertyId, tool.hrefSuffix, tool.navTarget),
-  routeHints: [tool.hrefSuffix.split('?')[0], tool.navTarget],
+  routeHints: tool.key === 'ownership-costs'
+    ? [
+        tool.hrefSuffix.split('?')[0],
+        tool.navTarget,
+        'tools/true-cost',
+        'tools/cost-explainer',
+        'tools/cost-growth',
+        'tools/cost-volatility',
+      ]
+    : [tool.hrefSuffix.split('?')[0], tool.navTarget],
 }));
 
 const homeToolIds = new Set(homeTools.map((tool) => tool.id));
@@ -331,11 +338,16 @@ const TOOL_ID_ALIASES: Record<string, string> = {
   'climate-risk': 'climate',
   'coverage-analysis': 'coverage-intelligence',
   'coverage-options': 'coverage-intelligence',
+  'cost-explainer': 'ownership-costs',
+  'cost-growth': 'ownership-costs',
+  'cost-volatility': 'ownership-costs',
   'document-vault': 'documents',
   'do-nothing': 'do-nothing-simulator',
   'energy-audit': 'energy',
   'insurance-trend': 'coverage-intelligence',
   'risk-premium-optimizer': 'coverage-intelligence',
+  'true-cost': 'ownership-costs',
+  'true-cost-ownership': 'ownership-costs',
   hoa: 'hoa-compliance',
   'home-capital-timeline': 'capital-timeline',
   'home-upgrades': 'modifications',

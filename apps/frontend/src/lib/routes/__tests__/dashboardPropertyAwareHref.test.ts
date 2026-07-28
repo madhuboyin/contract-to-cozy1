@@ -38,6 +38,22 @@ describe('buildPropertyAwareDashboardHref', () => {
       .toBe('/dashboard/properties/property-123/maintenance?taskId=task-1');
   });
 
+  it('maps ownership costs to the canonical non-tools property route', () => {
+    expect(buildPropertyAwareDashboardHref(
+      'property-123',
+      '/dashboard/ownership-costs?view=forecast',
+    )).toBe('/dashboard/properties/property-123/ownership-costs?view=forecast');
+
+    const fallback = buildPropertyAwareDashboardHref(
+      undefined,
+      '/dashboard/ownership-costs?view=changes',
+    );
+    const { path, params } = parseHref(fallback);
+    expect(path).toBe('/dashboard/properties');
+    expect(params.get('navTarget')).toBe('ownership-costs');
+    expect(params.get('view')).toBe('changes');
+  });
+
   it('maps the legacy tax appeal route to the canonical appeal-readiness stage', () => {
     const href = buildPropertyAwareDashboardHref(
       'property-123',
@@ -123,6 +139,11 @@ describe('buildPropertyAwareDashboardHref', () => {
 });
 
 describe('resolvePropertyHrefFromNavTarget', () => {
+  it('maps ownership-costs navTarget to the canonical non-tools route', () => {
+    expect(resolvePropertyHrefFromNavTarget('property-123', 'ownership-costs'))
+      .toBe('/dashboard/properties/property-123/ownership-costs');
+  });
+
   it('maps replace-repair navTarget with itemId to item-scoped canonical route', () => {
     const href = resolvePropertyHrefFromNavTarget(
       'property-123',

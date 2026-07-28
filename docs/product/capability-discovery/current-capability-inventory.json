@@ -14,16 +14,16 @@
     "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
   ],
   "summary": {
-    "aiCatalogEntries": 35,
-    "homeCatalogEntries": 35,
-    "overlappingEntries": 23,
-    "distinctCapabilities": 47,
-    "routeVerified": 47,
-    "canonicalRelationshipCoverage": 30,
+    "aiCatalogEntries": 32,
+    "homeCatalogEntries": 32,
+    "overlappingEntries": 20,
+    "distinctCapabilities": 44,
+    "routeVerified": 44,
+    "canonicalRelationshipCoverage": 27,
     "contextualCapabilities": 22,
     "workflowOnly": 1,
-    "lifecycleCanonicalized": 47,
-    "catalogOnlyCapabilities": 24
+    "lifecycleCanonicalized": 44,
+    "catalogOnlyCapabilities": 21
   },
   "capabilities": [
     {
@@ -116,63 +116,6 @@
       "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
-      "recommendationDisposition": "CATALOG_ONLY"
-    },
-    {
-      "id": "cost-explainer",
-      "label": "Cost Explainer",
-      "sources": [
-        "home",
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/cost-explainer",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "COST_EXPLAINER",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "MATERIAL_FINANCIAL",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CATALOG_ONLY"
-    },
-    {
-      "id": "cost-growth",
-      "label": "Cost Growth",
-      "sources": [
-        "home",
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/cost-growth",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "COST_GROWTH",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "MATERIAL_FINANCIAL",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
-    },
-    {
-      "id": "cost-volatility",
-      "label": "Volatility",
-      "sources": [
-        "home",
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/cost-volatility",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "COST_VOLATILITY",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "MATERIAL_FINANCIAL",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -346,7 +289,7 @@
       ],
       "canonicalRoute": "/dashboard/properties/[id]/tools/home-digital-twin",
       "routeVerified": true,
-      "workflowOnly": false,
+      "workflowOnly": true,
       "outcomeCategory": "DECIDE_COMPARE",
       "rolloutKey": "HOME_DIGITAL_TWIN",
       "releaseStage": "ACTIVE",
@@ -618,6 +561,25 @@
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
+      "id": "ownership-costs",
+      "label": "Ownership Costs",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/ownership-costs",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "OWNERSHIP_COSTS",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "DECISION_RECORDED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": true,
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
+    },
+    {
       "id": "permits",
       "label": "Permit Tracker",
       "sources": [
@@ -857,25 +819,6 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
-    },
-    {
-      "id": "true-cost",
-      "label": "True Cost",
-      "sources": [
-        "home",
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/true-cost",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "TRUE_COST",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "MATERIAL_FINANCIAL",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "visual-inspector",

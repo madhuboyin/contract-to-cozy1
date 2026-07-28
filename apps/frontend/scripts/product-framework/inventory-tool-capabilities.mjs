@@ -220,6 +220,7 @@ function buildInventory() {
   const materialIds = parseStringSet(discoverySource, 'MATERIAL_TOOL_IDS');
   const coverageIds = parseStringSet(discoverySource, 'COVERAGE_TOOL_IDS');
   const homeOutcomeByGroup = parseStringMap(discoverySource, 'HOME_OUTCOME_BY_GROUP');
+  const homeOutcomeByTool = parseStringMap(discoverySource, 'HOME_OUTCOME_BY_TOOL');
   const aiOutcomeByGroup = parseStringMap(discoverySource, 'AI_OUTCOME_BY_GROUP');
   const completionByCategory = parseStringMap(discoverySource, 'COMPLETION_KIND_BY_CATEGORY');
   const completionOverrides = parseStringMap(discoverySource, 'COMPLETION_KIND_OVERRIDES');
@@ -251,7 +252,7 @@ function buildInventory() {
       ...(aiEntry ? ['ai'] : []),
     ];
     const outcomeCategory = homeEntry
-      ? homeOutcomeByGroup[homeEntry.group]
+      ? homeOutcomeByTool[id] ?? homeOutcomeByGroup[homeEntry.group]
       : aiOutcomeByGroup[aiEntry.group];
     const route = canonicalRouteTemplates.get(id) ?? canonicalRoute(entry);
     const canonicalMode = canonicalRecommendationModes.get(id);

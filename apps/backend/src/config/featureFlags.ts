@@ -78,6 +78,7 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   HOME_RISK_REPLAY:          { label: 'Home Risk Replay',            defaultPct: 100 },
   SERVICE_PRICE_RADAR:       { label: 'Service Price Radar',         defaultPct: 100 },
   PROPERTY_TAX:              { label: 'Property Tax',                defaultPct: 100 },
+  OWNERSHIP_COSTS:           { label: 'Ownership Costs',             defaultPct: 100 },
   COST_GROWTH:               { label: 'Cost Growth',                 defaultPct: 100 },
   INSURANCE_TREND:           { label: 'Insurance Trend',             defaultPct: 25  },
   NEGOTIATION_SHIELD:        { label: 'Negotiation Shield',          defaultPct: 100 },

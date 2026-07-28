@@ -12,7 +12,7 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
     contextualCapabilityIds: [
       'break-even',
       'capital-timeline',
-      'cost-growth',
+      'ownership-costs',
       'savings-benefits',
       'home-digital-twin',
       'home-event-radar',
@@ -143,11 +143,11 @@ readonly CapabilityGoldenRankingExpectation[] = [
     fixtureId: 'older-home',
     ineligibleCapabilityId: 'seller-prep',
     duplicateCapabilityId: 'break-even',
-    expectedTopCapabilityIds: ['break-even', 'capital-timeline', 'cost-growth'],
+    expectedTopCapabilityIds: ['ownership-costs', 'break-even', 'capital-timeline'],
     expectedReasonCodes: {
       'break-even': 'MATERIAL_DECISION_ACTIVE',
       'capital-timeline': 'TRACKED_SYSTEMS_AVAILABLE',
-      'cost-growth': 'FINANCIAL_PRESSURE_ACTIVE',
+      'ownership-costs': 'OWNERSHIP_COST_MATERIAL_CHANGE',
     },
   }),
   expectation({

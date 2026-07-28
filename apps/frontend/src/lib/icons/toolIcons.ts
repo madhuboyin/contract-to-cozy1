@@ -27,6 +27,7 @@ export const TOOL_ICON_MAP = {
   home: {
     'home-risk-replay': { concept: 'weather', icon: 'cloud', category: 'home' },
     'property-tax': { concept: 'taxes', icon: 'landmark', category: 'home' },
+    'ownership-costs': { concept: 'expenses', icon: 'dollar-sign', category: 'home' },
     'cost-growth': { concept: 'expenses', icon: 'dollar-sign', category: 'home' },
     'insurance-trend': { concept: 'insurance', icon: 'shield', category: 'home' },
     'service-price-radar': { concept: 'expenses', icon: 'dollar-sign', category: 'home' },

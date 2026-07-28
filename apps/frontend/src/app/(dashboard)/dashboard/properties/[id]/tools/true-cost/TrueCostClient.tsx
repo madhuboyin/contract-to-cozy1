@@ -28,13 +28,6 @@ export default function TrueCostClient() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TrueCostOwnershipDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const workflowCompletedTrackedRef = React.useRef(false);
-
-  useEffect(() => {
-    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
-    workflowCompletedTrackedRef.current = true;
-    track('workflow_completed', { tool: 'true-cost', propertyId });
-  }, [propertyId, data]);
   const [chartExpanded, setChartExpanded] = useState(false);
   const reqRef = React.useRef(0);
 
@@ -64,7 +57,7 @@ export default function TrueCostClient() {
   }, [propertyId]);
 
   const allSeries = useMemo(() => {
-    const h = data?.history ?? [];
+    const h = data?.projection ?? [];
     return [
       { key: 'total', label: 'Total', values: h.map((r) => r.annualTotal), strokeWidth: 2.75, color: '#475569' },
       { key: 'tax', label: 'Taxes', values: h.map((r) => r.annualTax), color: '#d97706', dash: '6 5' },
@@ -94,7 +87,7 @@ export default function TrueCostClient() {
   }, [data]);
 
   const chartModel = useMemo(() => {
-    const h = data?.history ?? [];
+    const h = data?.projection ?? [];
     const x = h.map((r) => String(r.year));
     const visibleSeries = chartExpanded
       ? allSeries
@@ -117,13 +110,21 @@ export default function TrueCostClient() {
     const topLabel = categoryLabels[topEntry[0]] ?? topEntry[0];
     const fmt = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
     return {
-      title: `Your ${years}-year ownership cost is projected at ${fmt(total)}`,
-      description: `Biggest driver: ${topLabel} at ${fmt(topEntry[1])} over ${years} years. Scroll down to see how each category compounds.`,
+      title: `The ${years}-year planning estimate is ${fmt(total)}`,
+      description: `Biggest modeled driver: ${topLabel} at ${fmt(topEntry[1])} over ${years} years. This partial estimate excludes financing, HOA, recurring services, and capital projects.`,
       impactLabel: `${years}-year total`,
       confidenceLabel: data.meta?.confidence ?? 'Medium',
       primaryAction: (
         <Button type="button" asChild className="w-full sm:w-auto">
-          <a href={`/dashboard/properties/${propertyId}/tools/home-savings`}>Find savings opportunities</a>
+          <a href={
+            topEntry[0] === 'taxes'
+              ? `/dashboard/properties/${propertyId}/tools/property-tax`
+              : topEntry[0] === 'insurance'
+                ? `/dashboard/properties/${propertyId}/tools/coverage-intelligence`
+                : topEntry[0] === 'maintenance'
+                  ? `/dashboard/properties/${propertyId}/tools/capital-timeline`
+                  : `/dashboard/budget`
+          }>Review this cost</a>
         </Button>
       ),
     };
@@ -134,8 +135,8 @@ export default function TrueCostClient() {
       backHref={backHref}
       backLabel="Back to property"
       eyebrow="Home tool"
-      title="True Cost of Home Ownership"
-      subtitle={`A ${years}-year reality check including taxes, insurance, maintenance, and utilities.`}
+      title="Ownership Cost Estimate"
+      subtitle={`A partial ${years}-year planning estimate for taxes, insurance, maintenance, and utilities.`}
       trust={{
         confidenceLabel: data?.meta?.confidence
           ? `${data.meta.confidence.charAt(0) + data.meta.confidence.slice(1).toLowerCase()} confidence — localized tax, insurance, and maintenance assumptions`
@@ -260,9 +261,9 @@ export default function TrueCostClient() {
               {chartExpanded ? 'Show less' : 'Show more'}
             </button>
           </div>
-          <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="True cost trend chart" />
+          <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="Modeled ownership cost projection chart" />
           <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-            Total is emphasized; other lines show the components that drive the &quot;true cost&quot;. <span className="text-teal-600 dark:text-teal-400 font-medium">Utilities (teal) are tracked here only</span> — not included in other home tools.
+            These are forward planning estimates, not observed history. Tax is held constant; insurance, maintenance, and utilities use disclosed assumptions. Financing, HOA, recurring services, and capital projects are not included.
           </div>
         </div>
       </div>
@@ -322,11 +323,11 @@ export default function TrueCostClient() {
               <div className="mt-3 space-y-2">
                 {largestLabel && (
                   <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
-                    Your largest {years}-year cost is <span className="font-semibold">{largestLabel}</span> at {money(largest![1])}. Focus here first for the biggest savings opportunity.
+                    The largest modeled category is <span className="font-semibold">{largestLabel}</span> at {money(largest![1])}. Review its source before making a financial decision.
                   </div>
                 )}
                 <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-                  Use the <span className="font-medium">Cost Volatility Index</span> to see how unpredictable these costs are likely to be, then build a buffer accordingly.
+                  This is a planning estimate, not a complete cash-outflow total or observed cost history.
                 </div>
               </div>
             );

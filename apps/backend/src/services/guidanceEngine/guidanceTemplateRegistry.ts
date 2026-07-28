@@ -729,8 +729,8 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
         decisionStage: 'DECISION',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: false,
-        toolKey: 'true-cost',
-        routePath: '/dashboard/properties/:propertyId/tools/true-cost',
+        toolKey: 'ownership-costs',
+        routePath: '/dashboard/properties/:propertyId/ownership-costs?view=current',
         skipPolicy: 'ALLOWED',
       },
       {
@@ -884,7 +884,7 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
         decisionStage: 'DIAGNOSIS',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
-        toolKey: 'true-cost',
+        toolKey: 'ownership-costs',
         // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISCOURAGED',
       },
@@ -988,7 +988,7 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
         decisionStage: 'DIAGNOSIS',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
-        toolKey: 'true-cost',
+        toolKey: 'ownership-costs',
         // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISCOURAGED',
       },
@@ -1993,7 +1993,7 @@ export const TOOL_DEFAULT_STEP_KEY: Record<string, string> = {
   'negotiation-shield': 'prepare_negotiation',
   'do-nothing-simulator': 'model_cost_of_delay',
   'home-savings': 'evaluate_savings_funding',
-  'true-cost': 'estimate_out_of_pocket_cost',
+  'ownership-costs': 'estimate_out_of_pocket_cost',
   documents: 'update_policy_or_documents',
   'coverage-options': 'compare_coverage_options',
   'guidance-overview': 'review_signal',
@@ -2017,11 +2017,11 @@ const JOURNEY_TOOL_STEP_KEY: Record<string, Record<string, string>> = {
     maintenance: 'protect_exposed_systems',
     booking: 'schedule_weather_followup',
   },
-  // 'incidents' and 'true-cost' are also used by other journeys with
+  // 'incidents' and 'ownership-costs' are also used by other journeys with
   // different step keys — this override disambiguates for this journey.
   tax_reassessment_resolution: {
     incidents: 'review_assessment',
-    'true-cost': 'prepare_appeal',
+    'ownership-costs': 'prepare_appeal',
     'guidance-overview': 'update_budget',
   },
   inspection_followup_resolution: {
@@ -2036,12 +2036,12 @@ const JOURNEY_TOOL_STEP_KEY: Record<string, Record<string, string>> = {
   financial_exposure_resolution: {
     booking: 'book_remediation_service',
     'do-nothing-simulator': 'compare_action_options',
-    'true-cost': 'estimate_out_of_pocket_cost',
+    'ownership-costs': 'estimate_out_of_pocket_cost',
     'coverage-intelligence': 'check_financial_coverage',
   },
   financial_inaction_resolution: {
     'do-nothing-simulator': 'model_cost_of_delay',
-    'true-cost': 'estimate_total_cost',
+    'ownership-costs': 'estimate_total_cost',
     'coverage-intelligence': 'check_inaction_coverage',
     'home-savings': 'find_offset_savings',
     booking: 'take_action',

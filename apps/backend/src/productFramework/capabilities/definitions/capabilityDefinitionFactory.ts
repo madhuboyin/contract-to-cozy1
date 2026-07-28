@@ -11,6 +11,8 @@ type CapabilitySeed = {
   label: string;
   description: string;
   routeTemplate: string;
+  routeAliases?: string[];
+  navTarget?: string;
   outcomeCategory: CapabilityOutcomeCategory;
   rolloutKey: string;
   releaseStage: 'ACTIVE' | 'BETA';
@@ -30,7 +32,9 @@ type CapabilitySeed = {
 type ContextualDefinition = {
   sourceKinds: ToolCapabilityDefinition['recommendation']['sourceKinds'];
   triggerFamily: string;
+  triggerFamilies?: string[];
   reason: string;
+  reasonTemplates?: Record<string, string>;
   safePartialValue?: boolean;
   requiresExplicitTrigger?: boolean;
   recommendationDefinitionCodes?: string[];
@@ -99,6 +103,7 @@ const DATA_SENSITIVITY_BY_CAPABILITY_ID: Record<
   'inspection-hub': 'SENSITIVE',
   'insurance-trend': 'SENSITIVE',
   'mortgage-refinance-radar': 'HIGHLY_SENSITIVE',
+  'ownership-costs': 'HIGHLY_SENSITIVE',
   permits: 'SENSITIVE',
   'project-tracker': 'HIGHLY_SENSITIVE',
   'property-tax': 'SENSITIVE',
@@ -203,10 +208,27 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
       { kind: 'TRACKED_SYSTEMS', minimum: 1, reason: 'Add at least one home system.' },
     ],
   },
-  'cost-growth': {
-    sourceKinds: ['GUIDANCE'],
-    triggerFamily: 'FINANCIAL_PRESSURE_ACTIVE',
-    reason: 'Current financial pressure may compound into longer-term ownership costs.',
+  'ownership-costs': {
+    sourceKinds: ['GUIDANCE', 'PROJECT', 'PERSONALIZATION'],
+    triggerFamily: 'OWNERSHIP_COST_REVIEW_DUE',
+    triggerFamilies: [
+      'OWNERSHIP_COST_MATERIAL_CHANGE',
+      'OWNERSHIP_COST_UPCOMING_EVENT',
+      'OWNERSHIP_COST_HIGH_IMPACT_FACT_MISSING',
+      'OWNERSHIP_COST_SCENARIO_STALE',
+      'OWNERSHIP_COST_BUFFER_GAP',
+      'OWNERSHIP_COST_REVIEW_DUE',
+    ],
+    reason: 'A material cost change, upcoming event, missing high-impact fact, stale scenario, or planning gap makes an ownership-cost review timely.',
+    reasonTemplates: {
+      OWNERSHIP_COST_MATERIAL_CHANGE: 'A verified material ownership-cost change needs review.',
+      OWNERSHIP_COST_UPCOMING_EVENT: 'An upcoming renewal, reassessment, payment, or project may change ownership costs.',
+      OWNERSHIP_COST_HIGH_IMPACT_FACT_MISSING: 'A missing high-impact cost fact is limiting the current plan.',
+      OWNERSHIP_COST_SCENARIO_STALE: 'A saved ownership-cost scenario uses inputs that have changed.',
+      OWNERSHIP_COST_BUFFER_GAP: 'The current budget or reserve plan may not cover a known ownership-cost need.',
+      OWNERSHIP_COST_REVIEW_DUE: 'The ownership-cost snapshot is due for review.',
+    },
+    acceptedContext: ['PROPERTY', 'HOME_ACTION', 'DOCUMENT', 'PROJECT', 'JOURNEY'],
   },
   diy: {
     sourceKinds: ['MAINTENANCE', 'PROJECT'],
@@ -372,11 +394,9 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
 };
 
 const RELATED_CAPABILITIES: Record<string, string[]> = {
-  'break-even': ['sell-hold-rent', 'true-cost', 'cost-growth'],
+  'break-even': ['sell-hold-rent', 'ownership-costs', 'capital-timeline'],
   'capital-timeline': ['reserve-fund', 'home-timeline', 'seller-prep'],
-  'cost-explainer': ['true-cost', 'break-even', 'cost-growth'],
-  'cost-growth': ['cost-volatility', 'break-even', 'true-cost'],
-  'cost-volatility': ['cost-growth', 'break-even', 'sell-hold-rent'],
+  'ownership-costs': ['property-tax', 'coverage-intelligence', 'budget'],
   financing: ['capital-timeline', 'mortgage-refinance-radar', 'break-even'],
   'guidance-overview': ['status-board', 'home-event-radar', 'home-risk-replay'],
   'home-digital-twin': ['capital-timeline', 'status-board', 'home-risk-replay'],
@@ -388,20 +408,19 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'home-risk-replay': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-timeline': ['home-risk-replay', 'home-event-radar', 'seller-prep'],
   'material-specs': ['project-tracker', 'inspection-hub', 'home-digital-twin'],
-  'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'true-cost'],
+  'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'ownership-costs'],
   'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
-  'negotiation-shield': ['service-price-radar', 'cost-explainer', 'true-cost'],
+  'negotiation-shield': ['service-price-radar', 'quote-comparison', 'ownership-costs'],
   'plant-advisor': ['home-habit-coach', 'status-board', 'home-event-radar'],
   'price-finalization': ['quote-comparison', 'negotiation-shield', 'service-price-radar'],
-  'property-tax': ['true-cost', 'cost-growth', 'capital-timeline'],
+  'property-tax': ['ownership-costs', 'capital-timeline', 'savings-benefits'],
   'quote-comparison': ['service-price-radar', 'negotiation-shield', 'price-finalization'],
-  'reserve-fund': ['capital-timeline', 'true-cost', 'break-even'],
+  'reserve-fund': ['capital-timeline', 'ownership-costs', 'break-even'],
   'savings-benefits': ['property-tax', 'coverage-intelligence', 'mortgage-refinance-radar'],
-  'sell-hold-rent': ['break-even', 'cost-volatility', 'capital-timeline'],
+  'sell-hold-rent': ['break-even', 'ownership-costs', 'capital-timeline'],
   'seller-prep': ['sell-hold-rent', 'home-timeline', 'capital-timeline'],
-  'service-price-radar': ['negotiation-shield', 'cost-explainer', 'true-cost'],
+  'service-price-radar': ['negotiation-shield', 'quote-comparison', 'ownership-costs'],
   'status-board': ['home-event-radar', 'home-risk-replay', 'home-timeline'],
-  'true-cost': ['cost-explainer', 'break-even', 'sell-hold-rent'],
 };
 
 function completionSignal(seed: CapabilitySeed): string {
@@ -460,8 +479,8 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
     },
     destination: {
       routeTemplate: seed.routeTemplate,
-      routeAliases: [],
-      navTarget: `tool:${seed.id}`,
+      routeAliases: seed.routeAliases ?? [],
+      navTarget: seed.navTarget ?? `tool:${seed.id}`,
       acceptedContext,
       workflowOnly: seed.mode === 'WORKFLOW_ONLY',
     },
@@ -469,11 +488,13 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       mode: seed.mode,
       sourceKinds: contextual?.sourceKinds ?? [],
       jobs: contextual ? [primaryJob] : [],
-      triggerFamilies: contextual ? [contextual.triggerFamily] : [],
+      triggerFamilies: contextual
+        ? contextual.triggerFamilies ?? [contextual.triggerFamily]
+        : [],
       recommendationDefinitionCodes:
         contextual?.recommendationDefinitionCodes ?? [],
       reasonTemplates: contextual
-        ? { [contextual.triggerFamily]: contextual.reason }
+        ? contextual.reasonTemplates ?? { [contextual.triggerFamily]: contextual.reason }
         : {},
       expectedOutcome: seed.homeownerOutcome ?? output,
       readinessRequirements: [
@@ -486,7 +507,9 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       requiresExplicitTrigger: contextual?.requiresExplicitTrigger ?? false,
       sourceCtaExclusionCapabilityIds:
         contextual?.sourceCtaExclusionCapabilityIds ?? [],
-      baseScore: contextual ? 60 : 0,
+      baseScore: contextual
+        ? seed.id === 'ownership-costs' ? 65 : 60
+        : 0,
       explicitRelatedCapabilityIds: RELATED_CAPABILITIES[seed.id] ?? [],
       maxImpressionsPer30Days: contextual ? 3 : 0,
       cooldownDaysAfterDismissal: contextual ? 30 : 0,

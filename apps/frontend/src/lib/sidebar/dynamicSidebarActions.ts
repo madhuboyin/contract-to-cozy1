@@ -355,13 +355,13 @@ function getSaveActions(ctx: SidebarContext): SidebarAction[] {
     });
   }
 
-  // Compare cost growth
+  // Review the consolidated ownership-cost workspace.
   actions.push({
-    id: 'compare-cost-growth',
-    title: 'Compare cost growth',
-    description: 'Track expense trends',
+    id: 'review-ownership-costs',
+    title: 'Review ownership costs',
+    description: 'See current costs, changes, forecasts, and buffers',
     icon: TrendingUp,
-    href: `${propPath}/tools/cost-growth`,
+    href: `${propPath}/ownership-costs`,
     priority: 'medium',
     group: 'contextual-actions',
   });
@@ -383,7 +383,7 @@ function getSaveActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Review recurring cost increases',
     description: 'Identify expense drivers',
     icon: TrendingUp,
-    href: `${propPath}/tools/cost-growth`,
+    href: `${propPath}/ownership-costs?view=changes`,
     priority: 'medium',
     group: 'contextual-actions',
   });

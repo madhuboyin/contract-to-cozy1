@@ -34,7 +34,7 @@ export type TrueCostOwnershipDTO = {
     annualTotalNow: number;
   };
 
-  history: Array<{
+  projection: Array<{
     year: number;
     annualTax: number;
     annualInsurance: number;
@@ -186,7 +186,7 @@ export class TrueCostOwnershipService {
     // exist. Do not manufacture historical observations.
     const tax = await this.propertyTax.estimate(propertyId);
     const annualTaxNow = tax.current.annualTax;
-    notes.push('Observed tax history is unavailable; the current planning estimate is held constant in the modeled series.');
+    notes.push('Property tax is a current planning estimate and is held constant in the forward projection.');
 
     const observedInsurance = await getObservedInsurancePremiumHistory(propertyId);
     const annualInsuranceNow =
@@ -238,29 +238,31 @@ export class TrueCostOwnershipService {
     }
     const nowYear = new Date().getFullYear();
 
-    // Build 5y series (historical-looking timeline ending now, for calm readability)
-    // Align on year labels with tax/insurance if present.
+    // Build a forward planning projection beginning with the current year.
+    // This series is never represented as observed history.
     const yearLabels: number[] = [];
-    for (let i = years - 1; i >= 0; i--) yearLabels.push(nowYear - i);
+    for (let i = 0; i < years; i++) yearLabels.push(nowYear + i);
 
-    // Insurance values are observed policy terms only. A user override applies
-    // to the current planning year and is never reverse-generated as history.
+    // The latest confirmed insurance premium or user override is the base
+    // amount. Future points are explicitly modeled using the disclosed rate.
     const insByYear = new Map<number, number>();
-    for (const premium of observedInsurance.premiumSeries) {
-      if (premium.year !== null) insByYear.set(premium.year, premium.annualPremium);
+    if (hasInsuranceInput) {
+      for (const y of yearLabels) {
+        const diff = y - nowYear;
+        insByYear.set(y, annualInsuranceNow * Math.pow(1 + inflationRate, diff));
+      }
     }
-    if (input.insuranceAnnualNow !== undefined) insByYear.set(nowYear, input.insuranceAnnualNow);
 
-    // Maintenance/utilities: roll backward from “now” using inflationRate
+    // Maintenance/utilities are forward planning estimates.
     const maintByYear = new Map<number, number>();
     const utilByYear = new Map<number, number>();
     for (const y of yearLabels) {
-      const diff = nowYear - y;
-      maintByYear.set(y, annualMaintenanceNow * Math.pow(1 + inflationRate, -diff));
-      utilByYear.set(y, annualUtilitiesNow * Math.pow(1 + inflationRate, -diff));
+      const diff = y - nowYear;
+      maintByYear.set(y, annualMaintenanceNow * Math.pow(1 + inflationRate, diff));
+      utilByYear.set(y, annualUtilitiesNow * Math.pow(1 + inflationRate, diff));
     }
 
-    const history = yearLabels.map((y) => {
+    const projection = yearLabels.map((y) => {
       const annualTax = annualTaxNow;
       const annualInsurance = insByYear.get(y) ?? 0;
       const annualMaintenance = maintByYear.get(y) ?? annualMaintenanceNow;
@@ -278,10 +280,10 @@ export class TrueCostOwnershipService {
     });
 
     const breakdown = {
-      taxes: toMoney(history.reduce((a, h) => a + h.annualTax, 0)),
-      insurance: toMoney(history.reduce((a, h) => a + h.annualInsurance, 0)),
-      maintenance: toMoney(history.reduce((a, h) => a + h.annualMaintenance, 0)),
-      utilities: toMoney(history.reduce((a, h) => a + h.annualUtilities, 0)),
+      taxes: toMoney(projection.reduce((a, h) => a + h.annualTax, 0)),
+      insurance: toMoney(projection.reduce((a, h) => a + h.annualInsurance, 0)),
+      maintenance: toMoney(projection.reduce((a, h) => a + h.annualMaintenance, 0)),
+      utilities: toMoney(projection.reduce((a, h) => a + h.annualUtilities, 0)),
     };
 
     const totalCost = toMoney(
@@ -390,7 +392,7 @@ export class TrueCostOwnershipService {
         annualUtilitiesNow: toMoney(annualUtilitiesNow),
         annualTotalNow: toMoney(annualTaxNow + annualInsuranceNow + annualMaintenanceNow + annualUtilitiesNow),
       },
-      history,
+      projection,
       rollup: { totalCost, breakdown },
       drivers,
       meta: {

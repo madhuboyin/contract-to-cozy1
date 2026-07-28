@@ -115,6 +115,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
   financialAccuracyContract('DO_NOTHING', 'RUN_SIMULATION', ['propertyUse', 'occupancy', 'inventory']),
   financialAccuracyContract('HOME_SAVINGS', 'RUN_ANALYSIS', ['propertyUse', 'occupancy', 'state', 'zip', 'installedSystems']),
   financialAccuracyContract('BUDGET_PLANNER', 'VIEW_FORECAST', ['propertyUse', 'occupancy', 'dwelling', 'yearBuilt', 'state', 'zip', 'inventory']),
+  financialAccuracyContract('OWNERSHIP_COSTS', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip']),
   financialAccuracyContract('TRUE_COST', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip']),
   financialAccuracyContract('COST_GROWTH', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'dwelling', 'state', 'zip']),
   financialAccuracyContract('COST_VOLATILITY', 'VIEW_ANALYSIS', ['propertyUse', 'occupancy', 'state', 'zip']),

@@ -51,6 +51,15 @@ export type ToolDiscoveryAvailability = {
   generatedAt: string;
 };
 
+// Retired peer capabilities keep their endpoint-specific flags during the
+// redirect window, but they are not canonical Product Framework rollout keys.
+const LEGACY_TOOL_ROLLOUT_KEYS = new Set([
+  'COST_EXPLAINER',
+  'COST_GROWTH',
+  'COST_VOLATILITY',
+  'TRUE_COST',
+]);
+
 function readReleaseMode(value: string | undefined): {
   mode: ToolDiscoveryReleaseMode;
   valid: boolean;
@@ -183,7 +192,8 @@ export function getToolDiscoveryAvailability(
     .filter((key) => !configuredRolloutKeys.has(key))
     .sort();
   const unknownKeys = [...configuredRolloutKeys]
-    .filter((key) => !registryRolloutKeys.has(key))
+    .filter((key) =>
+      !registryRolloutKeys.has(key) && !LEGACY_TOOL_ROLLOUT_KEYS.has(key))
     .sort();
 
   const rollouts = Object.fromEntries(

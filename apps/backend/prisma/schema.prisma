@@ -2867,6 +2867,15 @@ model Property {
   // Live Project Execution Tracker
   projectRecords ProjectRecord[]
 
+  // Ownership Cost Intelligence — derived, source-referenced records.
+  ownershipCostAdapterRuns   OwnershipCostAdapterRun[]
+  ownershipCostObservations  OwnershipCostObservation[]
+  ownershipCostSnapshots     OwnershipCostSnapshot[]
+  ownershipCostScenarios     OwnershipCostScenario[]
+  ownershipCostForecasts     OwnershipCostForecast[]
+  ownershipCostChanges       OwnershipCostChange[]
+  ownershipCostDecisions     OwnershipCostDecision[]
+
   // Neighbourhood Trust Network
   neighbourhoodEndorsements NeighbourhoodEndorsement[]
 
@@ -16730,4 +16739,380 @@ model PropertyTaxBillDocument {
   @@unique([billRecordId, documentId])
   @@index([documentId])
   @@map("property_tax_bill_documents")
+}
+
+// ============================================================================
+// OWNERSHIP COST INTELLIGENCE
+// Derived records reference canonical source-domain entities by type and id.
+// They never replace tax, policy, financing, expense, project, or reserve truth.
+// ============================================================================
+
+enum OwnershipCostLens {
+  OPERATING_EXPENSE
+  CASH_OUTFLOW
+  ECONOMIC_COST
+  CAPITAL_EXPENDITURE
+  RESERVE_PLAN
+}
+
+enum OwnershipCostCategory {
+  PROPERTY_TAX
+  INSURANCE
+  HOA
+  UTILITIES
+  MORTGAGE_PRINCIPAL
+  MORTGAGE_INTEREST
+  PMI
+  RECURRING_HOME_SERVICE
+  ROUTINE_MAINTENANCE
+  KNOWN_REPAIR
+  CAPITAL_PROJECT
+  RESERVE_CONTRIBUTION
+}
+
+enum OwnershipCostEvidenceStatus {
+  OBSERVED
+  CONFIRMED
+  HOMEOWNER_REPORTED
+  EXTRACTED
+  BENCHMARK
+  ESTIMATED
+  FORECAST
+}
+
+enum OwnershipCostVerificationStatus {
+  VERIFIED
+  PENDING_CONFIRMATION
+  UNVERIFIED
+}
+
+enum OwnershipCostFreshnessStatus {
+  CURRENT
+  AGING
+  STALE
+  UNKNOWN
+}
+
+enum OwnershipCostCoverageStatus {
+  CREDIBLE
+  PARTIAL
+  ESTIMATE_ONLY
+  NOT_READY
+}
+
+enum OwnershipCostTemporalKind {
+  CURRENT_PERIOD
+  OBSERVED_PAST_PERIOD
+  FORECAST_PERIOD
+  SCENARIO_PERIOD
+}
+
+enum OwnershipCostApplicability {
+  APPLICABLE
+  NOT_APPLICABLE
+  UNKNOWN
+}
+
+enum OwnershipCostRecurrence {
+  ONE_TIME
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+  IRREGULAR
+}
+
+enum OwnershipCostSourceDomain {
+  PROPERTY_TAX
+  COVERAGE
+  FINANCING
+  EXPENSE
+  UTILITY
+  HOA
+  MAINTENANCE
+  RECURRING_SERVICE
+  PROJECT
+  RESERVE
+  HOMEOWNER
+  SYSTEM_ESTIMATE
+}
+
+enum OwnershipCostAdapterRunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+enum OwnershipCostScenarioStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+  STALE
+}
+
+enum OwnershipCostDecisionStatus {
+  RECORDED
+  REVISED
+  SUPERSEDED
+}
+
+model OwnershipCostDefinition {
+  id                        String   @id @default(cuid())
+  definitionVersion         String   @unique
+  methodVersion             String
+  categoryDefinitionVersion String
+  lensesJson                Json
+  categoriesJson            Json
+  invariantsJson            Json
+  isActive                  Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  observations OwnershipCostObservation[]
+  snapshots    OwnershipCostSnapshot[]
+
+  @@index([isActive, createdAt(sort: Desc)])
+  @@map("ownership_cost_definitions")
+}
+
+model OwnershipCostAdapterRun {
+  id               String                        @id @default(cuid())
+  propertyId       String
+  adapterKey       String
+  adapterVersion   String
+  status           OwnershipCostAdapterRunStatus @default(RUNNING)
+  inputFingerprint String                        @db.VarChar(64)
+  sourceCount      Int                           @default(0)
+  observationCount Int                           @default(0)
+  warningsJson     Json?
+  startedAt        DateTime                      @default(now())
+  completedAt      DateTime?
+
+  property     Property                   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  observations OwnershipCostObservation[]
+
+  @@index([propertyId, startedAt(sort: Desc)])
+  @@index([adapterKey, adapterVersion])
+  @@index([inputFingerprint])
+  @@map("ownership_cost_adapter_runs")
+}
+
+model OwnershipCostObservation {
+  id                   String                          @id @default(cuid())
+  propertyId           String
+  definitionId         String
+  adapterRunId         String?
+  category             OwnershipCostCategory
+  subcategory          String?
+  applicability        OwnershipCostApplicability      @default(APPLICABLE)
+  amountCents          Int?
+  currency             String                          @default("USD") @db.VarChar(3)
+  recurrence           OwnershipCostRecurrence
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  temporalKind         OwnershipCostTemporalKind
+  evidenceStatus       OwnershipCostEvidenceStatus?
+  verificationStatus   OwnershipCostVerificationStatus @default(UNVERIFIED)
+  freshnessStatus      OwnershipCostFreshnessStatus    @default(UNKNOWN)
+  sourceDomain         OwnershipCostSourceDomain
+  sourceEntityType     String?
+  sourceEntityId       String?
+  sourceDocumentId     String?
+  sourceFingerprint    String                          @db.VarChar(64)
+  confidence           String?
+  assumptionsJson      Json?
+  missingDependencies  String[]                        @default([])
+  correctionOfId       String?
+  correctionReason     String?
+  observedAt           DateTime?
+  createdAt            DateTime                        @default(now())
+
+  property     Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  definition   OwnershipCostDefinition @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  adapterRun   OwnershipCostAdapterRun? @relation(fields: [adapterRunId], references: [id], onDelete: SetNull)
+  correctionOf OwnershipCostObservation?  @relation("OwnershipCostObservationCorrection", fields: [correctionOfId], references: [id], onDelete: SetNull)
+  corrections  OwnershipCostObservation[] @relation("OwnershipCostObservationCorrection")
+  snapshotLines OwnershipCostSnapshotLine[]
+
+  @@unique([propertyId, sourceFingerprint])
+  @@index([propertyId, category, periodEnd(sort: Desc)])
+  @@index([sourceEntityType, sourceEntityId])
+  @@index([sourceDocumentId])
+  @@index([correctionOfId])
+  @@map("ownership_cost_observations")
+}
+
+model OwnershipCostSnapshot {
+  id                        String                      @id @default(cuid())
+  propertyId                String
+  definitionId              String
+  methodVersion             String
+  categoryDefinitionVersion String
+  inputFingerprint          String                      @db.VarChar(64)
+  basePeriodStart           DateTime
+  basePeriodEnd             DateTime
+  coverageStatus            OwnershipCostCoverageStatus
+  applicableCategories      OwnershipCostCategory[]
+  missingCategories         OwnershipCostCategory[]
+  totalsByLensJson          Json
+  computedAt                DateTime                    @default(now())
+  supersededAt              DateTime?
+
+  property   Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  definition OwnershipCostDefinition @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  lines      OwnershipCostSnapshotLine[]
+  scenarios  OwnershipCostScenario[]
+  forecasts  OwnershipCostForecast[]
+  decisions  OwnershipCostDecision[]
+  changesFrom OwnershipCostChange[] @relation("OwnershipCostChangeFrom")
+  changesTo   OwnershipCostChange[] @relation("OwnershipCostChangeTo")
+
+  @@unique([propertyId, inputFingerprint])
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([coverageStatus])
+  @@map("ownership_cost_snapshots")
+}
+
+model OwnershipCostSnapshotLine {
+  id                    String                          @id @default(cuid())
+  snapshotId            String
+  sourceObservationId   String
+  category              OwnershipCostCategory
+  subcategory           String?
+  amountCents           Int?
+  annualizedAmountCents Int?
+  applicability         OwnershipCostApplicability
+  evidenceStatus        OwnershipCostEvidenceStatus?
+  verificationStatus    OwnershipCostVerificationStatus
+  freshnessStatus       OwnershipCostFreshnessStatus
+  includedLenses        OwnershipCostLens[]
+  createdAt             DateTime                        @default(now())
+
+  snapshot          OwnershipCostSnapshot    @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  sourceObservation OwnershipCostObservation @relation(fields: [sourceObservationId], references: [id], onDelete: Restrict)
+
+  @@unique([snapshotId, sourceObservationId])
+  @@index([snapshotId, category])
+  @@map("ownership_cost_snapshot_lines")
+}
+
+model OwnershipCostScenario {
+  id                   String                      @id @default(cuid())
+  propertyId           String
+  baseSnapshotId       String
+  createdByUserId      String
+  name                 String
+  status               OwnershipCostScenarioStatus @default(DRAFT)
+  methodVersion        String
+  baseInputFingerprint String                      @db.VarChar(64)
+  overrideFingerprint  String                      @db.VarChar(64)
+  overridesJson        Json
+  staleReason          String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  archivedAt           DateTime?
+
+  property     Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  baseSnapshot OwnershipCostSnapshot @relation(fields: [baseSnapshotId], references: [id], onDelete: Restrict)
+  forecasts    OwnershipCostForecast[]
+  decisions    OwnershipCostDecision[]
+
+  @@index([propertyId, status, updatedAt(sort: Desc)])
+  @@index([baseSnapshotId])
+  @@index([createdByUserId])
+  @@map("ownership_cost_scenarios")
+}
+
+model OwnershipCostForecast {
+  id               String   @id @default(cuid())
+  propertyId       String
+  baseSnapshotId   String
+  scenarioId       String?
+  methodVersion    String
+  inputFingerprint String   @db.VarChar(64)
+  forecastStart    DateTime
+  forecastEnd      DateTime
+  limitationsJson  Json?
+  computedAt       DateTime @default(now())
+
+  property     Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  baseSnapshot OwnershipCostSnapshot  @relation(fields: [baseSnapshotId], references: [id], onDelete: Restrict)
+  scenario     OwnershipCostScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+  lines        OwnershipCostForecastLine[]
+
+  @@unique([propertyId, inputFingerprint])
+  @@index([baseSnapshotId, computedAt(sort: Desc)])
+  @@index([scenarioId])
+  @@map("ownership_cost_forecasts")
+}
+
+model OwnershipCostForecastLine {
+  id            String                @id @default(cuid())
+  forecastId    String
+  category      OwnershipCostCategory
+  periodStart   DateTime
+  periodEnd     DateTime
+  lowCents      Int
+  baseCents     Int
+  highCents     Int
+  evidenceStatus OwnershipCostEvidenceStatus @default(FORECAST)
+  driverJson    Json?
+  createdAt     DateTime              @default(now())
+
+  forecast OwnershipCostForecast @relation(fields: [forecastId], references: [id], onDelete: Cascade)
+
+  @@unique([forecastId, category, periodStart, periodEnd])
+  @@index([forecastId, periodStart])
+  @@map("ownership_cost_forecast_lines")
+}
+
+model OwnershipCostChange {
+  id                  String                @id @default(cuid())
+  propertyId          String
+  fromSnapshotId      String
+  toSnapshotId        String
+  category            OwnershipCostCategory
+  amountDeltaCents    Int
+  recurringDeltaCents Int?
+  changeReason        String?
+  explanationStatus   String
+  evidenceJson        Json?
+  createdAt           DateTime              @default(now())
+
+  property     Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  fromSnapshot OwnershipCostSnapshot @relation("OwnershipCostChangeFrom", fields: [fromSnapshotId], references: [id], onDelete: Restrict)
+  toSnapshot   OwnershipCostSnapshot @relation("OwnershipCostChangeTo", fields: [toSnapshotId], references: [id], onDelete: Restrict)
+
+  @@unique([fromSnapshotId, toSnapshotId, category])
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@map("ownership_cost_changes")
+}
+
+model OwnershipCostDecision {
+  id               String                      @id @default(cuid())
+  propertyId       String
+  snapshotId       String?
+  scenarioId       String?
+  recordedByUserId String
+  decisionType     String
+  status           OwnershipCostDecisionStatus @default(RECORDED)
+  payloadJson      Json
+  sourceActionId   String?
+  recordedAt       DateTime                    @default(now())
+  supersededById   String?
+
+  property     Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  snapshot     OwnershipCostSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  scenario     OwnershipCostScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+  supersededBy OwnershipCostDecision?  @relation("OwnershipCostDecisionSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes   OwnershipCostDecision[] @relation("OwnershipCostDecisionSupersession")
+
+  @@index([propertyId, recordedAt(sort: Desc)])
+  @@index([snapshotId])
+  @@index([scenarioId])
+  @@index([recordedByUserId])
+  @@index([supersededById])
+  @@map("ownership_cost_decisions")
 }

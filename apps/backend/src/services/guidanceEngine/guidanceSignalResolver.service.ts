@@ -108,7 +108,7 @@ const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
   coverage_lapse_detected: 'coverage-intelligence',
   recall_detected: 'recalls',
   inspection_followup_needed: 'inspection-report',
-  financial_exposure: 'true-cost',
+  financial_exposure: 'ownership-costs',
   cost_of_inaction_risk: 'do-nothing-simulator',
   // Weather-family signals route to the Incidents tab, which is populated by
   // the real NWS severe-weather ingest (severeWeatherAlerts.job.ts). Home

@@ -14,11 +14,12 @@ import { getCostVolatility, type CostVolatilityDTO } from './costVolatilityApi';
 import { track } from '@/lib/analytics/events';
 import MiniLineChartPct from './MiniLineChartPct';
 
-function badgeForBand(b?: 'LOW' | 'MEDIUM' | 'HIGH') {
+function badgeForBand(b?: 'LOW' | 'MEDIUM' | 'HIGH' | null) {
   const base = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur';
   if (b === 'HIGH') return <span className={`${base} border-red-200/70 bg-red-50/85 text-red-700`}>High</span>;
   if (b === 'MEDIUM') return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-800`}>Medium</span>;
-  return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700`}>Low</span>;
+  if (b === 'LOW') return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700`}>Low</span>;
+  return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>Not measured</span>;
 }
 
 function confidenceBadge(c?: string) {
@@ -49,13 +50,6 @@ export default function CostVolatilityClient() {
   const [error, setError] = useState<string | null>(null);
 
   const reqRef = React.useRef(0);
-  const workflowCompletedTrackedRef = React.useRef(false);
-
-  useEffect(() => {
-    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
-    workflowCompletedTrackedRef.current = true;
-    track('workflow_completed', { tool: 'cost-volatility', propertyId });
-  }, [propertyId, data]);
 
   async function load(nextYears: 5 | 10) {
     if (!propertyId) return;
@@ -134,7 +128,21 @@ export default function CostVolatilityClient() {
   }, [recentEvents]);
 
   const volatilityPriorityAction = (() => {
-    if (!data || loading || !data?.index?.band) return undefined;
+    if (!data || loading) return undefined;
+    if (!data.eligibility.eligible) {
+      return {
+        title: 'Not enough cost history to measure variability',
+        description: data.eligibility.reason,
+        impactLabel: `${data.eligibility.comparableObservedPeriods} of ${data.eligibility.requiredComparablePeriods} periods`,
+        confidenceLabel: 'Insufficient evidence',
+        primaryAction: (
+          <Button type="button" asChild className="w-full sm:w-auto">
+            <a href="/dashboard/budget">Open budget planner</a>
+          </Button>
+        ),
+      };
+    }
+    if (!data.index.band) return undefined;
     const band = data.index.band;
     if (band === 'HIGH') {
       return {
@@ -145,8 +153,8 @@ export default function CostVolatilityClient() {
         impactLabel: 'High volatility risk',
         confidenceLabel: data.meta?.confidence ?? 'Medium',
         primaryAction: (
-          <Button type="button" className="w-full sm:w-auto">
-            Build a buffer plan
+          <Button type="button" asChild className="w-full sm:w-auto">
+            <a href="/dashboard/budget">Build a buffer plan</a>
           </Button>
         ),
       };
@@ -160,8 +168,8 @@ export default function CostVolatilityClient() {
       };
     }
     return {
-      title: 'Your cost volatility is LOW — ownership costs are stable and predictable',
-      description: 'Year-to-year swings are within normal ranges. No immediate buffer action is needed.',
+      title: 'Measured cost variability is low for the observed window',
+      description: 'The available comparable records show smaller year-to-year changes. This does not guarantee future costs.',
       impactLabel: 'Low volatility risk',
       confidenceLabel: data.meta?.confidence ?? 'Medium',
     };
@@ -211,15 +219,15 @@ export default function CostVolatilityClient() {
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || '—'}</span>
             </div>
-            {data ? (
+            {data?.eligibility.eligible ? (
               <div className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">
                 {data.index.band === 'HIGH' && `Your home scores ${data.index.volatilityIndex}/100 — high unpredictability. Build a buffer now.`}
-                {data.index.band === 'MEDIUM' && `Your home scores ${data.index.volatilityIndex}/100 — moderate unpredictability. A typical US home scores around 30.`}
-                {data.index.band === 'LOW' && `Your home scores ${data.index.volatilityIndex}/100 — costs are relatively stable. A typical US home scores around 30.`}
+                {data.index.band === 'MEDIUM' && `Your home scores ${data.index.volatilityIndex}/100 for the eligible observed window.`}
+                {data.index.band === 'LOW' && `Your home scores ${data.index.volatilityIndex}/100 for the eligible observed window.`}
               </div>
             ) : (
-              <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-                Your costs aren&apos;t just rising — they&apos;re unpredictable.
+              <div className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                {data?.eligibility.reason ?? 'Loading observed cost history…'}
               </div>
             )}
           </div>
@@ -277,7 +285,7 @@ export default function CostVolatilityClient() {
             </div>
 
             <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-              Typical US home ≈ 30
+              Score withheld until comparable observed history exists
             </div>
 
             {!!data?.index?.dominantDriver && (
@@ -341,7 +349,9 @@ export default function CostVolatilityClient() {
           />
 
           <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-            Higher swings = more surprise risk. 10y view is sampled for readability.
+              {data?.eligibility.eligible
+                ? 'Higher observed swings indicate more variability. 10y view is sampled for readability.'
+                : 'No chart is shown because modeled or synthetic points are not treated as observed history.'}
           </div>
         </div>
 
@@ -370,7 +380,7 @@ export default function CostVolatilityClient() {
         {/* ✅ Phase-2: why spikes (top 2 drivers) */}
         {!!(data?.drivers?.length ?? 0) && (
           <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Why volatility spikes here</div>
+            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Variability evidence status</div>
 
             {/* ✅ Patch: year anchor when events exist */}
             {!!spikeAnchor && (
@@ -414,8 +424,8 @@ export default function CostVolatilityClient() {
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What&apos;s driving unpredictability</div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Ranked by estimated impact.</div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What evidence is available</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">A score is shown only after the observed-history threshold is met.</div>
 
             {/* ✅ Patch: confidence clarification */}
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
@@ -457,23 +467,28 @@ export default function CostVolatilityClient() {
         <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
           <div className="mt-3 space-y-2">
-            {data.index?.band === 'HIGH' && (
+            {!data.eligibility.eligible && (
+              <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
+                Not enough comparable observed history to measure variability. Budget planning remains available, but it is not a measured volatility result.
+              </div>
+            )}
+            {data.eligibility.eligible && data.index?.band === 'HIGH' && (
               <div className="rounded-xl border border-red-200/70 bg-red-50/80 p-3 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300">
                 High volatility detected. Build a cash buffer of at least 3–6 months of your largest unpredictable cost ({data.index.dominantDriver ?? 'insurance or tax'}) before the next renewal window.
               </div>
             )}
-            {data.index?.band === 'MEDIUM' && (
+            {data.eligibility.eligible && data.index?.band === 'MEDIUM' && (
               <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
                 Moderate unpredictability. A 1–3 month buffer for your primary cost driver ({data.index.dominantDriver ?? 'insurance or tax'}) will help absorb unexpected spikes.
               </div>
             )}
-            {data.index?.band === 'LOW' && (
+            {data.eligibility.eligible && data.index?.band === 'LOW' && (
               <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
                 Your costs are relatively stable. Review annually — volatility can shift quickly after insurance repricing or a tax reassessment.
               </div>
             )}
             <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-              Cross-reference with the <span className="font-medium">True Cost of Ownership</span> tool to see the absolute dollar amounts behind the volatility scores.
+              Use <a className="font-medium underline" href="/dashboard/budget">Budget Planner</a> for a planning buffer. This does not convert estimates into observed volatility.
             </div>
           </div>
         </div>

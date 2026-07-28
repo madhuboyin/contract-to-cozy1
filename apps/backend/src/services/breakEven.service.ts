@@ -397,9 +397,10 @@ export class BreakEvenService {
       // ignore
     }
 
-    // Infer a default expense growth rate from last 2 years of insurance backfill
+    // Infer a default expense growth rate from the first two forward insurance
+    // projection points. These are assumptions, not observed history.
     let inferredExpenseGrowth = 0.04;
-    const h = baseCg.history;
+    const h = baseCg.projection;
     if (h.length >= 2) {
       const a = h[h.length - 2].annualInsurance;
       const b = h[h.length - 1].annualInsurance;

@@ -1,6 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-explainer/page.tsx
-import CostExplainerClient from './CostExplainerClient';
+import LegacyOwnershipCostsViewRedirect from '@/components/ownership-costs/LegacyOwnershipCostsViewRedirect';
 
 export default function CostExplainerPage() {
-  return <CostExplainerClient />;
+  return <LegacyOwnershipCostsViewRedirect view="changes" />;
 }

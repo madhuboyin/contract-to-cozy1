@@ -96,6 +96,11 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
     toPropertyHref: (propertyId, query) =>
       buildHref(`/dashboard/properties/${propertyId}/tools/home-savings`, query),
   },
+  '/dashboard/ownership-costs': {
+    navTarget: 'ownership-costs',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/ownership-costs`, query),
+  },
   '/dashboard/home-event-radar': {
     navTarget: 'home-event-radar',
     toPropertyHref: (propertyId, query) =>
@@ -275,6 +280,7 @@ const NAV_TARGET_SUFFIXES: Record<string, string> = {
   'risk-radar': 'risk-assessment',
   'inspection-report': 'reports?report=inspection',
   'property-tax': 'tools/property-tax',
+  'ownership-costs': 'ownership-costs',
   'insurance-trend': 'tools/insurance-trend',
   'cost-growth': 'tools/cost-growth',
   'sell-hold-rent': 'tools/sell-hold-rent',

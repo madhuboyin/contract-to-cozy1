@@ -30,7 +30,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   incidents: 'Incidents',
   timeline: 'Timeline',
   'status-board': 'Status Board',
-  'financial-efficiency': 'Financial Efficiency',
   'risk-assessment': 'Risk Assessment',
   'home-score': 'Home Score',
   'health-score': 'Health score',

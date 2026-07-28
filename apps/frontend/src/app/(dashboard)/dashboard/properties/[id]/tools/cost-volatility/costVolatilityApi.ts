@@ -13,11 +13,11 @@ export type CostVolatilityDTO = {
     zipCode: string;
   };
   index: {
-    volatilityIndex: number;
-    band: 'LOW' | 'MEDIUM' | 'HIGH';
-    insuranceVolatility: number;
-    taxVolatility: number;
-    zipVolatility: number;
+    volatilityIndex: number | null;
+    band: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+    insuranceVolatility: number | null;
+    taxVolatility: number | null;
+    zipVolatility: number | null;
     bandLabel?: string;
     dominantDriver?: 'INSURANCE' | 'TAX' | 'CLIMATE';
   };
@@ -40,6 +40,12 @@ export type CostVolatilityDTO = {
     type: 'INSURANCE_SHOCK' | 'TAX_RESET' | 'CLIMATE_EVENT';
     description: string;
   }>;
+  eligibility: {
+    eligible: boolean;
+    requiredComparablePeriods: number;
+    comparableObservedPeriods: number;
+    reason: string;
+  };
   meta: {
     generatedAt: string;
     dataSources: string[];

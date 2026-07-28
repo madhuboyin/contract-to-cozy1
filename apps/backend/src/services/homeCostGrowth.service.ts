@@ -35,7 +35,7 @@ export type HomeCostGrowthDTO = {
     annualExpensesNow: number;
   };
 
-  history: Array<{
+  projection: Array<{
     year: number;
     homeValue: number;
     annualTax: number;
@@ -219,7 +219,7 @@ function buildDrivers(args: {
       impact: appreciationImpact,
       explanation:
         `Your appreciation rate is modeled at ${(appreciationRate * 100).toFixed(1)}%/yr. ` +
-        `Higher appreciation can offset ownership costs more quickly.`,
+        'This market-rate assumption is scenario context, not a return or affordability conclusion.',
     },
     {
       factor: `Insurance volatility (${state})`,
@@ -231,8 +231,7 @@ function buildDrivers(args: {
       factor: `Maintenance inflation vs value growth`,
       impact: 'MEDIUM' as ImpactLevel,
       explanation:
-        `Maintenance is modeled as a % of home value and grows with inflation. If maintenance inflation outpaces appreciation, ` +
-        `net ownership cost can trend negative even in rising markets.`,
+        'Maintenance is modeled as a percentage of home value and grows with inflation. This partial expense model excludes utilities, financing, transaction costs, and capital expenditures.',
     },
   ];
 }
@@ -396,36 +395,37 @@ export class HomeCostGrowthService {
 
     const inflation = inflationRateForState(state);
 
-    // Build series (current year inclusive)
+    // Build a forward planning projection (current year inclusive). These
+    // modeled points must never be represented as observed history.
     const nowYear = new Date().getFullYear();
-    const history: HomeCostGrowthDTO['history'] = [];
+    const projection: HomeCostGrowthDTO['projection'] = [];
 
     // Home value series
     const homeValueByYear: { year: number; homeValue: number }[] = [];
-    for (let i = years - 1; i >= 0; i--) {
-      const year = nowYear - i;
-      const factor = Math.pow(1 + appreciationRate, -i);
+    for (let i = 0; i < years; i++) {
+      const year = nowYear + i;
+      const factor = Math.pow(1 + appreciationRate, i);
       homeValueByYear.push({ year, homeValue: toMoney(homeValueNow * factor) });
     }
 
-    // Insurance/maintenance backfill via inflation
-    for (let i = years - 1; i >= 0; i--) {
-      const year = nowYear - i;
+    // Insurance and maintenance are forward estimates using inflation.
+    for (let i = 0; i < years; i++) {
+      const year = nowYear + i;
 
       const homeValue = homeValueByYear.find((x) => x.year === year)?.homeValue ?? 0;
       // No observed tax-year history is available yet. Hold the current
       // planning estimate constant instead of fabricating a historical trend.
       const annualTax = toMoney(annualTaxNow);
-      const annualInsurance = toMoney(annualInsuranceNow * Math.pow(1 + inflation, -i));
-      const annualMaintenance = toMoney(annualMaintenanceNow * Math.pow(1 + inflation, -i));
+      const annualInsurance = toMoney(annualInsuranceNow * Math.pow(1 + inflation, i));
+      const annualMaintenance = toMoney(annualMaintenanceNow * Math.pow(1 + inflation, i));
 
       const annualExpenses = toMoney(annualTax + annualInsurance + annualMaintenance);
 
-      const prev = history.at(-1);
+      const prev = projection.at(-1);
       const appreciationGain = prev ? toMoney(homeValue - prev.homeValue) : 0;
       const netDelta = toMoney(appreciationGain - annualExpenses);
 
-      history.push({
+      projection.push({
         year,
         homeValue,
         annualTax,
@@ -437,7 +437,7 @@ export class HomeCostGrowthService {
       });
     }
 
-    const totals = history.reduce(
+    const totals = projection.reduce(
       (acc, y) => {
         acc.taxes += y.annualTax;
         acc.insurance += y.annualInsurance;
@@ -537,7 +537,7 @@ export class HomeCostGrowthService {
         annualExpensesNow: toMoney(annualTaxNow + annualInsuranceNow + annualMaintenanceNow),
       },
 
-      history,
+      projection,
 
       rollup: {
         totalAppreciationGain: toMoney(totals.appreciation),
@@ -558,6 +558,7 @@ export class HomeCostGrowthService {
         notes: [
           ...notes,
           `Insurance and maintenance projections use a ${(inflation * 100).toFixed(1)}%/yr inflation assumption.`,
+          'This comparison excludes utilities, mortgage cash flows, transaction costs, and capital expenditures and must not be interpreted as investment return, affordability, or a hold/sell recommendation.',
         ],
         confidence,
         assumptions,

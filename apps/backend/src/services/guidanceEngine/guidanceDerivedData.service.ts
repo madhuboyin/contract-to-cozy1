@@ -130,7 +130,7 @@ function normalizeToolOutput(toolKey: string, producedData: Record<string, unkno
     };
   }
 
-  if (key === 'true-cost') {
+  if (key === 'ownership-costs' || key === 'true-cost') {
     return {
       annualTotalNow: pickNumber(producedData.annualTotalNow),
       total5yCost: pickNumber(producedData.total5y),

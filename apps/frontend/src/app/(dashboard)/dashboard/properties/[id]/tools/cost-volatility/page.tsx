@@ -1,6 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-volatility/page.tsx
-import CostVolatilityClient from './CostVolatilityClient';
+import LegacyOwnershipCostsViewRedirect from '@/components/ownership-costs/LegacyOwnershipCostsViewRedirect';
 
 export default function CostVolatilityPage() {
-  return <CostVolatilityClient />;
+  return <LegacyOwnershipCostsViewRedirect view="variability" />;
 }

@@ -4,36 +4,27 @@ import { CustomRequest } from '../types';
 import { HomeCostGrowthService } from '../services/homeCostGrowth.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
+import { costGrowthQuerySchema, validationErrorResponse } from './ownershipCostContainment.schemas';
 
 const service = new HomeCostGrowthService();
-
-function parseNumber(v: any): number | undefined {
-  if (v === undefined || v === null || v === '') return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n)) return undefined;
-  return n;
-}
-
-function parseYears(v: any): 5 | 10 | undefined {
-  const n = parseNumber(v);
-  if (n === undefined) return undefined;
-  if (Math.round(n) === 10) return 10;
-  if (Math.round(n) === 5) return 5;
-  return undefined;
-}
 
 export async function getHomeCostGrowth(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
 
-    const years = parseYears(req.query.years) ?? 5;
-
-    const assessedValue = parseNumber(req.query.assessedValue);
-    const taxRate = parseNumber(req.query.taxRate);
-    const homeValueNow = parseNumber(req.query.homeValueNow);
-    const appreciationRate = parseNumber(req.query.appreciationRate);
-    const insuranceAnnualNow = parseNumber(req.query.insuranceAnnualNow);
-    const maintenanceAnnualNow = parseNumber(req.query.maintenanceAnnualNow);
+    const parsed = costGrowthQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(validationErrorResponse(parsed.error));
+    }
+    const {
+      years,
+      assessedValue,
+      taxRate,
+      homeValueNow,
+      appreciationRate,
+      insuranceAnnualNow,
+      maintenanceAnnualNow,
+    } = parsed.data;
 
     const costGrowth = await service.estimate(propertyId, {
       years,

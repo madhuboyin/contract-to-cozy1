@@ -1,6 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/true-cost/page.tsx
-import TrueCostClient from './TrueCostClient';
+import LegacyOwnershipCostsViewRedirect from '@/components/ownership-costs/LegacyOwnershipCostsViewRedirect';
 
 export default function Page() {
-  return <TrueCostClient />;
+  return <LegacyOwnershipCostsViewRedirect view="current" />;
 }

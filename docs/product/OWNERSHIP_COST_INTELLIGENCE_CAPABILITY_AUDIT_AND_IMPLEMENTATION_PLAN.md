@@ -4,11 +4,86 @@
 **Contributing domains:** Property Tax, Coverage and Premium Review, Financing, Expenses, Utilities, Home Record, Capital Timeline, Reserve Fund, Budget Planner, Guidance, and Home Actions  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Recommended implementation plan  
+**Status:** Implementation in progress — Slices 0–2 started July 28, 2026
 **Recommended disposition:** **Consolidate, rebuild the calculation and evidence contract, and contain unsupported historical and predictive claims immediately**  
 **Current safety classification:** Material financial  
 **Recommended safety classification:** Material financial  
 **Primary outcome family:** Ownership Cost Intelligence
+
+---
+
+## Implementation progress
+
+### July 28, 2026 — Slice 0 containment increment
+
+Implemented:
+
+- converted True Cost and Cost Growth backcasts into explicitly forward
+  projections;
+- withheld unsupported Cost Explainer tax, maintenance, and total prior-year
+  deltas;
+- disabled Cost Volatility scores and history until three comparable observed
+  annual periods with a stable category definition exist;
+- removed ownership-cost workflow completion on data load;
+- stopped True Cost GET requests from persisting Guidance completion;
+- added bounded, field-level validation for current scenario inputs;
+- repaired the Cost Volatility Budget Planner destination;
+- replaced generic primary category actions with canonical category owners;
+- updated the Break-Even consumer to treat Cost Growth points as forward
+  assumptions; and
+- added Slice 0 regression tests.
+
+Remaining Slice 0 work includes completing category-level evidence labels across
+all current result cards, auditing every secondary CTA and downstream consumer,
+and removing the contained legacy volatility calculation code after the
+canonical observed-history contract is available.
+
+### July 28, 2026 — Slice 1 canonical contract increment
+
+Implemented:
+
+- established the versioned ownership-cost lens, category, evidence,
+  verification, freshness, coverage, temporal, and line contracts;
+- registered one `ownership-costs` Product Framework capability with Material
+  Financial safety, Contextual recommendation mode, explicit trigger families,
+  relationships, Living Home Record effects, and decision-recorded completion;
+- created the canonical property route and four-view workspace shell;
+- converted the four legacy tool routes into query-preserving view redirects;
+- consolidated mobile and discovery surfaces and retained legacy IDs as
+  analytics/discovery aliases;
+- routed financial-exposure Guidance to the canonical capability;
+- added property-aware global resolution and route-disposition coverage; and
+- recorded the consolidation and source-ownership ADR.
+
+The canonical shell intentionally consumes the contained current True Cost API
+only as a partial transitional adapter. Canonical persisted observations,
+snapshots, and read models remain Slice 2 and Slice 3 work.
+
+### July 28, 2026 — Slice 2 canonical observation increment
+
+Implemented:
+
+- added Prisma contracts for definition, adapter run, observation, snapshot,
+  snapshot line, scenario, forecast, forecast line, change, and decision
+  records without adding a migration script;
+- added canonical tax, coverage, financing, expense, utility, HOA,
+  maintenance, recurring-service, project, and reserve adapter boundaries;
+- loaded current source records by canonical entity reference instead of
+  copying their domain truth;
+- normalized recurrence, periods, cents, evidence, verification, freshness,
+  applicability, and temporal kind;
+- made missing dependencies explicit and kept not-applicable distinct from
+  missing and zero;
+- added source-priority deduplication for linked domain/expense records;
+- added method, category, adapter, source, and aggregate fingerprints;
+- persisted correction lineage when a referenced canonical source changes;
+- made repeated identical calculation reuse the same snapshot; and
+- enforced property access before source reads or persistence.
+
+The recurring-service adapter intentionally remains empty when no source record
+explicitly establishes recurrence; one-time repair expenses are not relabeled
+as recurring services. Mortgage principal, interest, and PMI are likewise
+withheld when the financing source cannot support an allocation.
 
 ---
 

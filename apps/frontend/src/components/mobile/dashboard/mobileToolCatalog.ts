@@ -20,17 +20,14 @@ export type MobileAiToolKey =
   | 'visual-inspector'
   | 'property-tax'
   | 'insurance-trend'
-  | 'cost-growth'
+  | 'ownership-costs'
   | 'sell-hold-rent'
-  | 'true-cost'
-  | 'cost-explainer'
   | 'mortgage-refinance-radar'
   | 'neighborhood-change-radar'
   | 'home-digital-twin'
   | 'home-habit-coach'
   | 'break-even'
   | 'capital-timeline'
-  | 'cost-volatility'
   | 'guidance-overview'
   | 'plant-advisor'
   | 'home-event-radar'
@@ -279,44 +276,15 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     isActive: (pathname) => /^\/dashboard\/budget(\/|$)/.test(pathname),
   },
   {
-    key: 'cost-growth',
-    title: 'Cost Growth',
-    description: 'Model long-term ownership cost trends',
-    href: '/dashboard/cost-growth',
-    icon: resolveToolIcon('home', 'cost-growth'),
-    emoji: '📈',
-    group: 'planning',
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-growth(\/|$)/.test(pathname),
-  },
-  {
-    key: 'true-cost',
-    title: 'True Cost',
-    description: 'Total ownership cost visibility',
-    href: '/dashboard/true-cost',
-    icon: resolveToolIcon('home', 'true-cost'),
+    key: 'ownership-costs',
+    title: 'Ownership Costs',
+    description: 'Current cost, changes, forecasts, and buffer planning',
+    href: '/dashboard/ownership-costs',
+    icon: resolveToolIcon('home', 'ownership-costs'),
     emoji: '📊',
     group: 'planning',
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/true-cost(\/|$)/.test(pathname),
-  },
-  {
-    key: 'cost-explainer',
-    title: 'Cost Explainer',
-    description: 'Deep dive into your home expenses',
-    href: '/dashboard/cost-explainer',
-    icon: resolveToolIcon('home', 'cost-explainer'),
-    emoji: '🧐',
-    group: 'planning',
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-explainer(\/|$)/.test(pathname),
-  },
-  {
-    key: 'cost-volatility',
-    title: 'Volatility',
-    description: 'Measure and predict cost variability',
-    href: '/dashboard/cost-volatility',
-    icon: resolveToolIcon('home', 'cost-volatility'),
-    emoji: '📊',
-    group: 'planning',
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-volatility(\/|$)/.test(pathname),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/(?:ownership-costs|tools\/(?:true-cost|cost-explainer|cost-growth|cost-volatility))(\/|$)/.test(pathname),
   },
   {
     key: 'capital-timeline',
@@ -606,15 +574,16 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/property-tax(\/|$)/.test(pathname),
   },
   {
-    key: 'cost-growth',
+    key: 'ownership-costs',
     group: 'ownership',
-    name: 'Cost Growth',
-    description: "Model ownership cost trend",
-    desktopDescription: "Model how ownership costs may grow across taxes, insurance, utilities, and upkeep.",
-    hrefSuffix: 'tools/cost-growth',
-    navTarget: 'tool:cost-growth',
-    icon: resolveToolIcon('home', 'cost-growth'),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-growth(\/|$)/.test(pathname),
+    name: 'Ownership Costs',
+    description: "Understand what this home costs",
+    desktopDescription: "See current operating costs, evidence completeness, verified changes, planning scenarios, and buffer readiness.",
+    hrefSuffix: 'ownership-costs',
+    navTarget: 'ownership-costs',
+    icon: resolveToolIcon('home', 'ownership-costs'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/(?:ownership-costs|tools\/(?:true-cost|cost-explainer|cost-growth|cost-volatility))(\/|$)/.test(pathname),
   },
   {
     key: 'negotiation-shield',
@@ -651,28 +620,6 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/price-finalization(\/|$)/.test(pathname),
   },
   {
-    key: 'cost-explainer',
-    group: 'ownership',
-    name: 'Cost Explainer',
-    description: "Understand what drives costs",
-    desktopDescription: "Break down what is driving your home costs and where increases are coming from.",
-    hrefSuffix: 'tools/cost-explainer',
-    navTarget: 'tool:cost-explainer',
-    icon: resolveToolIcon('home', 'cost-explainer'),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-explainer(\/|$)/.test(pathname),
-  },
-  {
-    key: 'true-cost',
-    group: 'ownership',
-    name: 'True Cost',
-    description: "View full ownership cost",
-    desktopDescription: "See your all-in ownership cost, including recurring spend, risk, and long-term obligations.",
-    hrefSuffix: 'tools/true-cost',
-    navTarget: 'tool:true-cost',
-    icon: resolveToolIcon('home', 'true-cost'),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/true-cost(\/|$)/.test(pathname),
-  },
-  {
     key: 'sell-hold-rent',
     group: 'ownership',
     name: 'Sell / Hold / Rent',
@@ -682,17 +629,6 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     navTarget: 'tool:sell-hold-rent',
     icon: resolveToolIcon('home', 'sell-hold-rent'),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/sell-hold-rent(\/|$)/.test(pathname),
-  },
-  {
-    key: 'cost-volatility',
-    group: 'ownership',
-    name: 'Volatility',
-    description: "Measure cost variability",
-    desktopDescription: "Measure cost variability and identify where future expense swings are most likely.",
-    hrefSuffix: 'tools/cost-volatility',
-    navTarget: 'tool:cost-volatility',
-    icon: resolveToolIcon('home', 'cost-volatility'),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-volatility(\/|$)/.test(pathname),
   },
   {
     key: 'break-even',

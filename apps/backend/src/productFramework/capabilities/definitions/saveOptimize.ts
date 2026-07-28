@@ -2,16 +2,13 @@ import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 
 export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
   ['break-even', 'Break-Even', 'Estimate when the value of a decision offsets its cost.', '/dashboard/properties/[id]/tools/break-even', 'BREAK_EVEN', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
-  ['cost-explainer', 'Cost Explainer', 'Explain the components behind home expenses.', '/dashboard/properties/[id]/tools/cost-explainer', 'COST_EXPLAINER', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
-  ['cost-growth', 'Cost Growth', 'Model long-term ownership cost trends.', '/dashboard/properties/[id]/tools/cost-growth', 'COST_GROWTH', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
-  ['cost-volatility', 'Volatility', 'Review variability in ownership costs.', '/dashboard/properties/[id]/tools/cost-volatility', 'COST_VOLATILITY', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['coverage-intelligence', 'Coverage & Premium Review', 'Review protection records, compare equivalent choices, and record a coverage decision.', '/dashboard/properties/[id]/tools/coverage-intelligence', 'COVERAGE_INTELLIGENCE', 'BETA', 'REGULATED_COVERAGE', 'CATALOG_ONLY'],
   ['financing', 'Financing Center', 'Review equity position and project payment options.', '/dashboard/properties/[id]/tools/financing', 'FINANCING', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['mortgage-refinance-radar', 'Mortgage Refinance Radar', 'Track potential mortgage optimization windows.', '/dashboard/properties/[id]/tools/mortgage-refinance-radar', 'MORTGAGE_REFINANCE_RADAR', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
+  ['ownership-costs', 'Ownership Costs', 'Understand what this home costs, what changed, what may change, and what to do next.', '/dashboard/properties/[id]/ownership-costs', 'OWNERSHIP_COSTS', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['property-tax', 'Property Tax Center', 'Verify property-tax facts and prepare jurisdiction-qualified next steps.', '/dashboard/properties/[id]/tools/property-tax', 'PROPERTY_TAX', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['savings-benefits', 'Savings and Benefits', 'Find rebates, credits, and recurring-cost savings for this home, verify what remains, and record a decision.', '/dashboard/properties/[id]/tools/savings-benefits', 'SAVINGS_BENEFITS', 'BETA', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['sell-hold-rent', 'Sell / Hold / Rent', 'Compare ownership paths and their tradeoffs.', '/dashboard/properties/[id]/tools/sell-hold-rent', 'SELL_HOLD_RENT', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
-  ['true-cost', 'True Cost', 'Review the full cost of owning this home.', '/dashboard/properties/[id]/tools/true-cost', 'TRUE_COST', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
 ] as const).map(([
   id,
   label,
@@ -32,7 +29,7 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
   releaseStage,
   safetyTier,
   completionKind:
-    id === 'coverage-intelligence' || id === 'property-tax' || id === 'savings-benefits'
+    id === 'coverage-intelligence' || id === 'ownership-costs' || id === 'property-tax' || id === 'savings-benefits'
       ? 'DECISION_RECORDED' as const
       : 'OUTPUT_GENERATED' as const,
   ...(id === 'property-tax' ? {
@@ -49,6 +46,52 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
     expectedOutput:
       'A saved decision, application/switch state, or verified realized outcome tied to a reviewed source and current property context.',
     completionSignal: 'savings_benefit_decision_or_external_action_recorded',
+  } : {}),
+  ...(id === 'ownership-costs' ? {
+    version: 2,
+    iconName: 'receipt' as const,
+    intentAliases: [
+      'ownership costs',
+      'cost of owning my home',
+      'monthly home expenses',
+      'what changed in my home costs',
+      'future ownership cost',
+      'plan a home cost buffer',
+      'true cost',
+      'cost growth',
+      'cost explainer',
+      'cost volatility',
+    ],
+    routeAliases: [
+      '/dashboard/properties/[id]/tools/true-cost',
+      '/dashboard/properties/[id]/tools/cost-explainer',
+      '/dashboard/properties/[id]/tools/cost-growth',
+      '/dashboard/properties/[id]/tools/cost-volatility',
+    ],
+    navTarget: 'ownership-costs',
+    homeownerOutcome:
+      'Understand the current cost of owning this home, the evidence behind each category, verified changes, planning scenarios, and the next relevant action.',
+    livingHomeRecordReads: [
+      'property-context',
+      'property-tax-record',
+      'insurance-policy',
+      'financing-profile',
+      'expense',
+      'utility-record',
+      'hoa-record',
+      'maintenance-record',
+      'capital-timeline',
+      'reserve-plan',
+    ],
+    livingHomeRecordWrites: [
+      'ownership-cost-confirmation',
+      'ownership-cost-scenario',
+      'ownership-cost-decision',
+    ],
+    expectedOutput:
+      'A versioned ownership-cost snapshot or a recorded homeowner cost decision with category-level evidence.',
+    completionSignal: 'ownership_cost_decision_recorded',
+    outputEntityTypes: ['OWNERSHIP_COST_DECISION'] as const,
   } : {}),
   mode,
 })));

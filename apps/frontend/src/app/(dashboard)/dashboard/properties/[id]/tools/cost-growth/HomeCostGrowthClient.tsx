@@ -8,7 +8,6 @@ import MultiLineChart from './MultiLineChart';
 import { getHomeCostGrowth, HomeCostGrowthDTO } from './costGrowthApi';
 import { track } from '@/lib/analytics/events';
 import HomeToolsRail from '../../components/HomeToolsRail';
-import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
@@ -30,14 +29,6 @@ export default function HomeCostGrowthClient() {
   // null = use server estimated rate; number = user override (percentage, e.g. 3.5 = 3.5%)
   const [appreciationOverridePct, setAppreciationOverridePct] = useState<number | null>(null);
   const reqRef = React.useRef(0);
-  const workflowCompletedTrackedRef = React.useRef(false);
-
-  useEffect(() => {
-    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
-    workflowCompletedTrackedRef.current = true;
-    track('workflow_completed', { tool: 'cost-growth', propertyId });
-  }, [propertyId, data]);
-
   async function getAndSet(years: 5 | 10, overrideRatePct?: number | null) {
     if (!propertyId) return;
     setLoading(true);
@@ -73,7 +64,7 @@ export default function HomeCostGrowthClient() {
   const sliderPct = appreciationOverridePct ?? modelRatePct;
 
   const chartModel = useMemo(() => {
-    const hist = data?.history ?? [];
+    const hist = data?.projection ?? [];
     if (!hist.length) {
       return {
         x: ['—', '—'],
@@ -117,32 +108,13 @@ export default function HomeCostGrowthClient() {
     return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>Estimated</span>;
   };
 
-  const netTone =
-    (data?.rollup?.totalNet ?? 0) >= 0
-      ? 'border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 via-white/75 to-teal-50/70 text-emerald-800'
-      : 'border-rose-200/70 bg-gradient-to-br from-rose-50/85 via-white/75 to-amber-50/65 text-rose-800';
-
   const costGrowthPriorityAction = (() => {
     if (!data || loading || data?.rollup?.totalNet == null) return undefined;
-    const net = data.rollup.totalNet;
-    if (net >= 0) {
-      return {
-        title: `Appreciation is outpacing costs by ${money(net)} over ${trendYears} years`,
-        description: 'Your equity position is growing. Use the appreciation slider below to stress-test against slower-growth scenarios.',
-        impactLabel: `${trendYears}-year net gain`,
-        confidenceLabel: data.meta?.confidence ?? 'Medium',
-      };
-    }
     return {
-      title: `Costs are exceeding appreciation by ${money(Math.abs(net))} over ${trendYears} years`,
-      description: 'Ownership expenses are currently outpacing home value growth. Explore where you can reduce recurring costs.',
-      impactLabel: `${trendYears}-year net drag`,
+      title: `${trendYears}-year appreciation and partial cost scenario`,
+      description: 'Use this to inspect assumptions only. The expense side excludes utilities, financing, transaction costs, and capital projects, so the difference is not an investment return or affordability result.',
+      impactLabel: 'Planning scenario',
       confidenceLabel: data.meta?.confidence ?? 'Medium',
-      primaryAction: (
-        <Button type="button" asChild className="w-full sm:w-auto">
-          <a href={`/dashboard/properties/${propertyId}/tools/home-savings`}>Explore savings opportunities</a>
-        </Button>
-      ),
     };
   })();
 
@@ -152,15 +124,15 @@ export default function HomeCostGrowthClient() {
       backLabel="Back to property"
       eyebrow="Home tool"
       title="Home Cost Growth Analyzer"
-      subtitle="Compare appreciation vs ownership expense growth to understand net cost trend."
+      subtitle="Explore a forward home-value and partial ownership-cost scenario."
       introAction={
         <HomeToolsRail propertyId={propertyId} context="cost-growth" currentToolId="cost-growth" showDesktop={false} />
       }
       trust={{
         confidenceLabel: data?.meta?.confidence ?? 'Estimated confidence',
         freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest market and cost inputs' : 'Run analysis to refresh',
-        sourceLabel: 'Home value projection + ownership expense history + regional assumptions',
-        rationale: 'Highlights whether appreciation is outpacing total ownership costs over time.',
+        sourceLabel: 'Home value projection + partial ownership cost estimates + regional assumptions',
+        rationale: 'Shows how selected assumptions affect a planning scenario without making a return or affordability conclusion.',
       }}
       priorityAction={costGrowthPriorityAction}
     >
@@ -295,8 +267,8 @@ export default function HomeCostGrowthClient() {
               <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualExpensesNow)}</div>
             </div>
 
-            <div className={`rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur ${netTone}`}>
-              <div className="text-xs tracking-normal opacity-80">Net impact ({trendYears}y)</div>
+            <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50/85 via-white/75 to-teal-50/60 p-3 text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur">
+              <div className="text-xs tracking-normal opacity-80">Illustrative difference ({trendYears}y)</div>
               <div className="mt-1 text-2xl font-semibold leading-tight">{money(data?.rollup?.totalNet)}</div>
               <div className="mt-1 text-xs opacity-70">
                 Appreciation gain <span className="font-medium">{money(data?.rollup?.totalAppreciationGain)}</span> minus expenses{' '}
@@ -310,7 +282,7 @@ export default function HomeCostGrowthClient() {
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="rounded-full border border-slate-300/70 bg-white/85 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200">Home value</span>
               <span className="rounded-full border border-slate-300/70 bg-white/60 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">Total expenses</span>
-              <span className="rounded-full border border-slate-300/70 bg-white/60 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">Net Δ</span>
+              <span className="rounded-full border border-slate-300/70 bg-white/60 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">Illustrative difference</span>
               {appreciationOverridePct !== null && (
                 <span className="rounded-full border border-amber-300/70 bg-amber-50/85 px-2.5 py-1 text-xs font-medium text-amber-700 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300">
                   Custom rate: {sliderPct.toFixed(1)}%
@@ -320,11 +292,11 @@ export default function HomeCostGrowthClient() {
             </div>
 
             <div className="text-slate-700 dark:text-slate-200">
-              <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="Home value vs expenses trend" />
+              <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="Forward home value and partial expense scenario" />
             </div>
 
             <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-              Net Δ is year-over-year appreciation gain minus annual expenses (tax + insurance + maintenance).
+              Forward modeled scenario, not observed history. The illustrative difference subtracts only tax, insurance, and maintenance from modeled appreciation; it is not investment return.
             </div>
           </div>
         </div>
@@ -403,25 +375,12 @@ export default function HomeCostGrowthClient() {
         <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
           <div className="mt-3 space-y-2">
-            {(data.rollup?.totalNet ?? 0) < 0 ? (
-              <>
-                <div className="rounded-xl border border-rose-200/70 bg-rose-50/80 p-3 text-xs text-rose-800 dark:border-rose-800/50 dark:bg-rose-950/40 dark:text-rose-300">
-                  Your costs are outpacing appreciation over this period. Review the largest expense category and consider whether refinancing or reducing discretionary costs would improve the trend.
-                </div>
-                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-                  Check the <span className="font-medium">Break-Even Ownership Year</span> tool to see how many years it takes for appreciation to overtake cumulative costs.
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  Appreciation is currently outpacing ownership costs — a positive net trend. Continue monitoring annually, especially if insurance or tax rates shift.
-                </div>
-                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-                  Use the <span className="font-medium">True Cost of Ownership</span> tool to see a full {trendYears}-year expense breakdown including utilities.
-                </div>
-              </>
-            )}
+            <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
+              Do not use this partial comparison to decide whether to hold, sell, refinance, or judge affordability. Those decisions require financing, transaction, utility, and capital-cost inputs that are not included here.
+            </div>
+            <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+              Adjust the appreciation assumption only to explore a bounded planning scenario; it does not change canonical property facts.
+            </div>
           </div>
         </div>
       )}

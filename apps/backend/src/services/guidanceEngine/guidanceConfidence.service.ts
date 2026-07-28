@@ -35,6 +35,7 @@ const RELIABLE_SOURCE_TOOLS = new Set([
   'service-price-radar',
   'inspection-report',
   'recalls',
+  'ownership-costs',
   'true-cost',
   'do-nothing-simulator',
   'home-savings',

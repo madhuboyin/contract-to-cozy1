@@ -36,13 +36,6 @@ export default function CostExplainerClient() {
   const [error, setError] = useState<string | null>(null);
 
   const reqRef = React.useRef(0);
-  const workflowCompletedTrackedRef = React.useRef(false);
-
-  useEffect(() => {
-    if (!propertyId || !data || workflowCompletedTrackedRef.current) return;
-    workflowCompletedTrackedRef.current = true;
-    track('workflow_completed', { tool: 'cost-explainer', propertyId });
-  }, [propertyId, data]);
 
   async function load(nextYears: 5 | 10) {
     if (!propertyId) return;
@@ -77,9 +70,9 @@ export default function CostExplainerClient() {
     return () => clearTimeout(timer);
   }, [focusCategory, data]);
 
-  // ✅ Build chart model from snapshot.history
+  // This mixed-source series is a model aid, not observed history.
   const chartModel = useMemo(() => {
-    const hist = data?.snapshot?.history ?? [];
+    const hist = data?.snapshot?.modeledSeries ?? [];
     if (!hist.length) {
       return {
         x: ['—', '—'],
@@ -121,7 +114,7 @@ export default function CostExplainerClient() {
 
   const costExplainerPriorityAction = (() => {
     if (!data || loading) return undefined;
-    const lastYear = data?.snapshot?.history?.slice(-1)[0];
+    const lastYear = data?.snapshot?.modeledSeries?.slice(-1)[0];
     if (!lastYear) return undefined;
     const drivers: Record<string, number> = {
       taxes: lastYear.annualTax ?? 0,
@@ -139,12 +132,18 @@ export default function CostExplainerClient() {
     const fmt = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
     return {
       title: `${topLabel} is your largest cost driver at ${fmt(topEntry[1])}/year`,
-      description: 'Review the breakdown below to see whether this driver is accelerating, and decide if action is warranted before your next renewal or reassessment.',
-      impactLabel: `${years}-year driver lens`,
+      description: 'This is the largest current modeled category. Comparable observed records are still required before calling it a change.',
+      impactLabel: 'Current estimate',
       confidenceLabel: data.meta?.confidence ?? 'Medium',
       primaryAction: (
         <Button type="button" asChild className="w-full sm:w-auto">
-          <a href={`/dashboard/properties/${propertyId}/tools/home-savings`}>Find savings opportunities</a>
+          <a href={
+            topEntry[0] === 'taxes'
+              ? `/dashboard/properties/${propertyId}/tools/property-tax`
+              : topEntry[0] === 'insurance'
+                ? `/dashboard/properties/${propertyId}/tools/coverage-intelligence`
+                : `/dashboard/properties/${propertyId}/tools/capital-timeline`
+          }>Review source</a>
         </Button>
       ),
     };
@@ -156,7 +155,7 @@ export default function CostExplainerClient() {
       backLabel="Back to property"
       eyebrow="Home tool"
       title="Why Is My Home Cost Increasing?"
-      subtitle="Plain-English breakdown of higher taxes, insurance, and maintenance drivers."
+      subtitle="See current modeled cost drivers and verified changes when comparable records exist."
       introAction={
         <HomeToolsRail propertyId={propertyId} context="cost-explainer" currentToolId="cost-explainer" showDesktop={false} />
       }
@@ -232,25 +231,25 @@ export default function CostExplainerClient() {
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
             <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Total annual (now)</div>
             <div className="mt-1 text-[1.7rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.snapshot?.annualTotalNow)}</div>
-            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Δ vs last year</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Verified change</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.deltaVsPriorYear?.total)}</div>
           </div>
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
             <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Taxes (now)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.annualTaxNow)}</div>
-            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Δ</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Verified change</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.deltaVsPriorYear?.tax)}</div>
           </div>
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
             <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Insurance (now)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.annualInsuranceNow)}</div>
-            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Δ</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Verified change</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.deltaVsPriorYear?.insurance)}</div>
           </div>
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
             <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Maintenance (now)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.annualMaintenanceNow)}</div>
-            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Δ</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Verified change</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.deltaVsPriorYear?.maintenance)}</div>
           </div>
         </div>
@@ -269,12 +268,12 @@ export default function CostExplainerClient() {
             <MultiLineChart
               xLabels={chartModel.x}
               series={chartModel.series}
-              ariaLabel="Home cost trend chart"
+              ariaLabel="Mixed-source cost model chart"
             />
           </div>
 
           <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-            Total is emphasized; Taxes/Insurance/Maintenance are shown as comparison lines. 10y view is sampled for readability.
+            Modeled series for context only. Tax is held constant and maintenance is backcast from a benchmark; only confirmed insurance terms are observed. This chart is not historical evidence.
           </div>
         </div>
       </div>

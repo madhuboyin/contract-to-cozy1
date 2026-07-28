@@ -30,12 +30,9 @@ const EXISTING_STABLE_KEYS = {
   appreciation: 'VALUE_TRACKER',
   emergency: 'EMERGENCY_HELP',
   'property-tax': 'PROPERTY_TAX',
-  'cost-growth': 'COST_GROWTH',
   'insurance-trend': 'INSURANCE_TREND',
-  'cost-explainer': 'COST_EXPLAINER',
-  'true-cost': 'TRUE_COST',
+  'ownership-costs': 'OWNERSHIP_COSTS',
   'sell-hold-rent': 'SELL_HOLD_RENT',
-  'cost-volatility': 'COST_VOLATILITY',
   'break-even': 'BREAK_EVEN',
   'capital-timeline': 'CAPITAL_TIMELINE',
   'seller-prep': 'SELLER_PREP',
@@ -45,9 +42,9 @@ const EXISTING_STABLE_KEYS = {
 
 test('Knowledge Hub projection includes every canonical capability exactly once', () => {
   const seeds = buildCapabilityProductToolSeeds();
-  assert.equal(seeds.length, 47);
-  assert.equal(new Set(seeds.map((seed) => seed.key)).size, 47);
-  assert.equal(new Set(seeds.map((seed) => seed.slug)).size, 47);
+  assert.equal(seeds.length, 44);
+  assert.equal(new Set(seeds.map((seed) => seed.key)).size, 44);
+  assert.equal(new Set(seeds.map((seed) => seed.slug)).size, 44);
   assert.deepEqual(
     seeds.map((seed) => seed.slug).sort(),
     canonicalCapabilityRegistry.capabilities.map((capability) => capability.id),
@@ -83,7 +80,7 @@ test('registry-owned ProductTool fields match canonical capability metadata', ()
 });
 
 test('Knowledge Hub seed preserves three explicit platform entries without deleting capabilities', () => {
-  assert.equal(PRODUCT_TOOL_SEEDS.length, 50);
+  assert.equal(PRODUCT_TOOL_SEEDS.length, 47);
   const keys = new Set(PRODUCT_TOOL_SEEDS.map((seed) => seed.key));
   assert.equal(keys.size, PRODUCT_TOOL_SEEDS.length);
   assert.equal(keys.has('SEASONAL_MAINTENANCE'), true);

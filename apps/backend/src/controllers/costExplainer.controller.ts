@@ -4,12 +4,17 @@ import { CustomRequest } from '../types';
 import { CostExplainerService } from '../services/costExplainer.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
+import { ownershipCostYearsQuerySchema, validationErrorResponse } from './ownershipCostContainment.schemas';
 
 const service = new CostExplainerService();
 
 export async function getCostExplainer(req: CustomRequest, res: Response) {
   const propertyId = req.params.propertyId;
-  const years = (req.query.years ? Number(req.query.years) : 5) as 5 | 10;
+  const parsed = ownershipCostYearsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(validationErrorResponse(parsed.error));
+  }
+  const { years } = parsed.data;
 
   const data = await service.explain(propertyId, years);
   const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'COST_EXPLAINER');
