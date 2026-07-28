@@ -48,9 +48,7 @@ function normalizeToolOutput(toolKey: string, producedData: Record<string, unkno
     const warranty = asRecord(producedData.warranty);
 
     return {
-      coverageOverallVerdict: pickString(producedData.overallVerdict),
-      insuranceVerdict: pickString(producedData.insuranceVerdict),
-      warrantyVerdict: pickString(producedData.warrantyVerdict),
+      coverageReviewState: pickString(producedData.insuranceReviewState),
       coverageConfidence: pickString(producedData.confidence),
       deductibleUsd: pickNumber(insuranceInputs.deductibleUsd),
       expectedCoverageNetImpactUsd: pickNumber(warranty.expectedNetImpactUsd),

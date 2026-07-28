@@ -10,8 +10,6 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from './coverageGap.service';
-import { coverageAdvisorService } from './coverageAdvisor.service';
-import { ClaimsService } from './claims/claims.service';
 import {
   AssumptionSetService,
   extractAssumptionOverrides,
@@ -685,7 +683,7 @@ function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
     confidence: analysis.confidence,
     impactLevel: analysis.impactLevel ?? undefined,
     summary: analysis.summary ?? undefined,
-    strategicAdvice: analysis.strategicAdvice ?? null,
+    strategicAdvice: null,
     addOnRecommendations,
     nextSteps,
     insurance: {
@@ -773,7 +771,7 @@ function mapAnalysisToItemDto(
     confidence: analysis.confidence,
     impactLevel: analysis.impactLevel ?? undefined,
     summary: analysis.summary ?? undefined,
-    strategicAdvice: analysis.strategicAdvice ?? null,
+    strategicAdvice: null,
     nextSteps,
     item: itemMeta,
     warranty: {
@@ -1318,7 +1316,9 @@ export class CoverageIntelligenceService {
       coverageAnalysisId: analysis.id,
       gapCount,
       confidence: confidenceToScore(analysis.confidence),
-      verdict: analysis.overallVerdict,
+      // Legacy signal contract requires an enum; SITUATIONAL is the only
+      // neutral value and must not be interpreted as policy coverage.
+      verdict: CoverageVerdict.SITUATIONAL,
     });
   }
 
@@ -1957,29 +1957,12 @@ export class CoverageIntelligenceService {
       signalKeysUsed: ['COVERAGE_GAP'],
     });
 
-    // FRD-FR-15: AI-powered strategic advice for the coverage overview
-    const claimsSummary = await ClaimsService.getClaimsSummary(propertyId);
-    const gaps = await detectCoverageGaps(propertyId);
-    const topRiskItem = gaps.length > 0 ? gaps[0] : null;
-
-    const strategicAdvice = await coverageAdvisorService.generateStrategicAdvice({
-      propertyId,
-      userId,
-      overallVerdict: snapshot.overallVerdict,
-      insuranceVerdict: snapshot.insuranceVerdict,
-      warrantyVerdict: snapshot.warrantyVerdict,
-      gapCount: gaps.length,
-      totalExposedValue: gaps.reduce((sum, g) => sum + g.exposureCents / 100, 0),
-      openClaimsCount: claimsSummary.counts.open,
-      topRiskItemName: topRiskItem?.itemName,
-    });
-
     const analysis = await this.createAnalysisRecord(
       propertyId,
       homeownerProfileId,
       snapshot,
       resolved.assumptionSetId,
-      strategicAdvice
+      null
     );
 
     try {

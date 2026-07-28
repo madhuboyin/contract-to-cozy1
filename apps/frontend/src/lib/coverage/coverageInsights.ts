@@ -1,19 +1,19 @@
 import type { CoverageAnalysisDTO } from '@/lib/api/coverageAnalysisApi';
 import type { TrustMetadata, ConfidenceLevel } from '@/lib/types/trust';
 
-type CoverageAnalysisLike = Pick<CoverageAnalysisDTO, 'overallVerdict' | 'confidence' | 'computedAt'> | null | undefined;
+type CoverageAnalysisLike = Pick<CoverageAnalysisDTO, 'insuranceReviewState' | 'confidence' | 'computedAt'> | null | undefined;
 
-export function coverageVerdictMeta(verdict?: string) {
-  if (verdict === 'WORTH_IT') {
-    return { label: 'Coverage is in good shape', cls: 'bg-emerald-100 text-emerald-700' };
+export function coverageReviewMeta(state?: CoverageAnalysisDTO['insuranceReviewState']) {
+  if (state === 'QUESTIONS_PRESENT') {
+    return { label: 'Questions to review', cls: 'bg-amber-100 text-amber-800' };
   }
-  if (verdict === 'SITUATIONAL') {
-    return { label: 'Review coverage soon', cls: 'bg-amber-100 text-amber-700' };
+  if (state === 'NO_QUESTIONS_FROM_REVIEWED_FIELDS') {
+    return { label: 'Reviewed fields checked', cls: 'bg-slate-100 text-slate-700' };
   }
-  if (verdict === 'NOT_WORTH_IT') {
-    return { label: 'Coverage may be overpriced', cls: 'bg-red-100 text-red-700' };
+  if (state === 'POLICY_RECORD_INCOMPLETE') {
+    return { label: 'Policy record incomplete', cls: 'bg-slate-100 text-slate-700' };
   }
-  return { label: 'Coverage check not run', cls: 'bg-slate-100 text-slate-500' };
+  return { label: 'Record review not run', cls: 'bg-slate-100 text-slate-600' };
 }
 
 export function toConfidenceLevel(confidence?: string): ConfidenceLevel {
@@ -24,7 +24,7 @@ export function toConfidenceLevel(confidence?: string): ConfidenceLevel {
 
 export function buildCoverageTrustMetadata(
   analysis: CoverageAnalysisLike,
-  source = 'Coverage Analysis AI'
+  source = 'Coverage & Premium Review'
 ): TrustMetadata {
   return {
     confidence: toConfidenceLevel(analysis?.confidence),
@@ -34,8 +34,7 @@ export function buildCoverageTrustMetadata(
 }
 
 export function coverageGapSummaryText(gapCount: number): string {
-  if (gapCount <= 0) return 'No major coverage gaps found.';
-  if (gapCount === 1) return '1 coverage gap needs attention.';
-  return `${gapCount} coverage gaps need attention.`;
+  if (gapCount <= 0) return 'No questions were generated from the available reviewed fields.';
+  if (gapCount === 1) return '1 record question needs review.';
+  return `${gapCount} record questions need review.`;
 }
-

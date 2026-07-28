@@ -1557,7 +1557,6 @@ export class SharedDataBackfillService {
       select: {
         id: true,
         confidence: true,
-        overallVerdict: true,
       },
       orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
     });
@@ -1632,7 +1631,9 @@ export class SharedDataBackfillService {
               : latestCoverageAnalysis?.confidence === 'MEDIUM'
                 ? 0.7
                 : 0.5,
-          verdict: latestCoverageAnalysis?.overallVerdict ?? (gaps.length > 0 ? 'SITUATIONAL' : 'NOT_WORTH_IT'),
+          // Preserve a neutral legacy value; reviewed questions and durable
+          // decisions are the authoritative downstream contracts.
+          verdict: 'SITUATIONAL',
         });
         touch('COVERAGE_GAP');
         if (existingLatest.COVERAGE_GAP?.id === coverageSignal.id) result.refreshed += 1;

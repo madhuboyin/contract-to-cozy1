@@ -49,13 +49,7 @@ type CoverageAnalysisRecord = {
   homeownerProfileId: string;
   status: 'READY' | 'STALE' | 'ERROR';
   computedAt: Date;
-  overallVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
-  insuranceVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
-  warrantyVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
-  impactLevel: 'LOW' | 'MEDIUM' | 'HIGH' | null;
-  summary: string | null;
-  decisionTrace: unknown;
   inventoryItemId: string | null;
 };
 
@@ -425,14 +419,13 @@ function mapCoverageGapsToInsights(args: {
   return sortedGaps.map((gap) => {
     const savedAnalysis = args.coverageAnalysesByItemId.get(gap.inventoryItemId);
     const summary =
-      savedAnalysis?.summary ||
-      `${gap.reasons[0] || 'Coverage review recommended'}. ${replacementValueText(gap.exposureCents, gap.currency)}`;
+      `${gap.reasons[0] || 'Protection record review recommended'}. ${replacementValueText(gap.exposureCents, gap.currency)}`;
 
     return {
       id: savedAnalysis ? `coverage-analysis-${savedAnalysis.id}` : `coverage-gap-${gap.inventoryItemId}`,
       propertyId: gap.propertyId,
       kind: 'coverage_recommendation',
-      title: 'Coverage Recommendation',
+      title: 'Protection Cost Scenario',
       subject: gap.itemName,
       summary,
       href: `/dashboard/properties/${args.propertyId}/inventory/items/${gap.inventoryItemId}/coverage`,
@@ -442,7 +435,7 @@ function mapCoverageGapsToInsights(args: {
             confidenceLabel: `${savedAnalysis.confidence} Confidence`,
             freshnessLabel: `Calculated ${formatDistanceToNowStrict(savedAnalysis.computedAt)} ago`,
             sourceLabel: 'Coverage Intelligence',
-            rationale: `Verdict: ${savedAnalysis.warrantyVerdict.replace(/_/g, ' ')}`,
+            rationale: 'Modeled cost comparison only; verify controlling contract terms before deciding.',
           }
         : {
             confidenceLabel: 'Recommended',
@@ -455,8 +448,7 @@ function mapCoverageGapsToInsights(args: {
         exposureCents: gap.exposureCents,
         currency: gap.currency,
         hasSavedAnalysis: Boolean(savedAnalysis),
-        overallVerdict: savedAnalysis?.overallVerdict,
-        warrantyVerdict: savedAnalysis?.warrantyVerdict,
+        scenarioComputed: Boolean(savedAnalysis),
       },
     };
   });
@@ -856,13 +848,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
         homeownerProfileId: true,
         status: true,
         computedAt: true,
-        overallVerdict: true,
-        insuranceVerdict: true,
-        warrantyVerdict: true,
         confidence: true,
-        impactLevel: true,
-        summary: true,
-        decisionTrace: true,
         inventoryItemId: true,
       },
       orderBy: {

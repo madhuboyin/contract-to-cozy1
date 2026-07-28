@@ -36,13 +36,10 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function detectCoverageImpact(latest: Record<string, unknown>): CoverageImpact {
-  const verdictRaw = String(latest.coverageOverallVerdict ?? latest.insuranceVerdict ?? '').toLowerCase();
-  if (!verdictRaw) return 'UNKNOWN';
-  if (verdictRaw.includes('covered') && !verdictRaw.includes('not')) return 'COVERED';
-  if (verdictRaw.includes('partial')) return 'PARTIAL';
-  if (verdictRaw.includes('gap') || verdictRaw.includes('not') || verdictRaw.includes('none')) {
-    return 'NOT_COVERED';
-  }
+  const reviewState = String(latest.coverageReviewState ?? '').toUpperCase();
+  if (reviewState === 'QUESTIONS_PRESENT') return 'PARTIAL';
+  // Neither an incomplete record nor an absence of generated questions can
+  // establish whether a loss is covered.
   return 'UNKNOWN';
 }
 

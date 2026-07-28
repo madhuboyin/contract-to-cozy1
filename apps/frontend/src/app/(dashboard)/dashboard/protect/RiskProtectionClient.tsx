@@ -39,7 +39,7 @@ import { formatDistanceToNowStrict } from 'date-fns';
 import {
   buildCoverageTrustMetadata,
   coverageGapSummaryText,
-  coverageVerdictMeta,
+  coverageReviewMeta,
 } from '@/lib/coverage/coverageInsights';
 
 import { listPropertyRecalls } from '../properties/[id]/recalls/recallsApi';
@@ -136,7 +136,7 @@ export default function RiskProtectionClient() {
 
   const coverageAnalysis =
     coverageAnalysisQuery.data?.exists ? coverageAnalysisQuery.data.analysis : null;
-  const cvVerdict = coverageVerdictMeta(coverageAnalysis?.overallVerdict);
+  const coverageReview = coverageReviewMeta(coverageAnalysis?.insuranceReviewState);
   const coverageTrustMetadata = buildCoverageTrustMetadata(coverageAnalysis);
 
   if (!selectedPropertyId) {
@@ -171,22 +171,22 @@ export default function RiskProtectionClient() {
       <PageHero
         eyebrow="Protect"
         icon={<Shield className="h-5 w-5" />}
-        title="Protection that explains what is covered, exposed, and worth doing now."
-        description="A calm risk surface for maintenance, coverage, recalls, incidents, and local hazard signals. Every recommendation includes confidence and source context."
+        title="Protection records, risk signals, and next questions in one place."
+        description="Review maintenance, policy records, recalls, incidents, and local hazard signals without treating missing information as proof of protection."
         action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan policy</SmartCTA>}
         meta={
           <TrustMetaRow
             items={[
-              'Coverage checked against policy and home signals',
+              'Policy questions are limited to available reviewed fields',
               'Potential cost exposure, not scare language',
-              'Recommendations ranked by preventable loss',
+              'Missing records remain unknown',
             ]}
           />
         }
       >
         <div className="grid gap-3 md:grid-cols-4">
-          <MetricTile label="Coverage score" value={riskScore ?? 'Pending'} hint="Protection readiness" tone={riskScore && riskScore > 80 ? 'success' : 'warning'} />
-          <MetricTile label="Coverage gaps" value={coverageGaps.length} hint={coverageGaps.length ? 'Needs review' : 'No gap detected'} tone={coverageGaps.length ? 'warning' : 'success'} />
+          <MetricTile label="Home risk score" value={riskScore ?? 'Pending'} hint="Property risk signal" tone={riskScore && riskScore > 80 ? 'success' : 'warning'} />
+          <MetricTile label="Record questions" value={coverageGaps.length} hint={coverageGaps.length ? 'Needs review' : 'None generated'} tone={coverageGaps.length ? 'warning' : 'neutral'} />
           <MetricTile label="Open incidents" value={activeIncidents.length} hint="Live issue queue" tone={activeIncidents.length ? 'urgent' : 'success'} />
           <MetricTile label="Active recalls" value={openRecalls.length} hint="Inventory matched" tone={openRecalls.length ? 'urgent' : 'success'} />
         </div>
@@ -218,7 +218,7 @@ export default function RiskProtectionClient() {
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-3xl font-black text-slate-900 leading-none">{riskScore}</span>
                   <span className="text-[11px] font-bold text-slate-400 tracking-tighter">
-                    Protection
+                    Home risk
                   </span>
                 </div>
               </>
@@ -234,9 +234,9 @@ export default function RiskProtectionClient() {
               <h2 className="text-2xl font-bold text-slate-900">
                 {riskScore !== null
                   ? riskScore > 80
-                    ? 'Your home is well protected'
-                    : 'Some protections need attention'
-                  : 'Protection score pending'}
+                    ? 'Lower modeled property risk'
+                    : 'Property risk signals need review'
+                  : 'Home risk score pending'}
               </h2>
               <p className="text-sm text-slate-500 leading-relaxed">
                 {coverageGapSummaryText(coverageGaps.length)}{' '}
@@ -448,16 +448,9 @@ export default function RiskProtectionClient() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-4">
-              {/* Coverage Analysis verdict */}
+              {/* Coverage record review */}
               <div
-                className={cn(
-                  'p-5 rounded-2xl border-2 space-y-4',
-                  coverageAnalysis?.overallVerdict === 'WORTH_IT'
-                    ? 'border-emerald-100 bg-emerald-50/30'
-                    : coverageAnalysis?.overallVerdict === 'SITUATIONAL'
-                    ? 'border-amber-100 bg-amber-50/30'
-                    : 'border-slate-100 bg-white',
-                )}
+                className="space-y-4 rounded-2xl border-2 border-slate-100 bg-white p-5"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -466,17 +459,17 @@ export default function RiskProtectionClient() {
                     </p>
                     <h3 className="text-base font-bold text-slate-900">
                       {coverageAnalysis
-                        ? coverageAnalysis.summary || 'Analysis complete'
-                        : 'No analysis run yet'}
+                        ? 'Available policy fields and scenario inputs are ready to review.'
+                        : 'No record review run yet'}
                     </h3>
                   </div>
                   <span
                     className={cn(
                       'shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold tracking-normal',
-                      cvVerdict.cls,
+                      coverageReview.cls,
                     )}
                   >
-                    {cvVerdict.label}
+                    {coverageReview.label}
                   </span>
                 </div>
 
@@ -514,31 +507,30 @@ export default function RiskProtectionClient() {
                 coverageGaps.map((gap: any) => (
                   <WinCard
                     key={gap.id}
-                    title="Insurance Gap Detected"
+                    title="Insurance record question"
                     value={gap.title}
                     description={gap.description}
-                    actionLabel="Optimize Coverage"
+                    actionLabel="Review policy record"
                     onAction={() => router.push('/dashboard/vault?tab=coverage')}
                     trust={{
-                      confidenceLabel: 'Verified',
-                      freshnessLabel: 'Synced now',
-                      sourceLabel: 'Direct Carrier API',
-                      rationale:
-                        'Your current policy limits may be below rebuild cost for your ZIP code.',
+                      confidenceLabel: 'Needs review',
+                      freshnessLabel: 'Current record',
+                      sourceLabel: 'Available policy and property signals',
+                      rationale: 'Confirm the question against the controlling policy or a licensed professional.',
                     }}
                     className="border-purple-100"
                   />
                 ))
               ) : (
-                <div className="p-6 rounded-2xl border-2 border-emerald-50 bg-emerald-50/20 space-y-4">
+                <div className="space-y-4 rounded-2xl border-2 border-slate-100 bg-slate-50/40 p-6">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm">
                       <ShieldCheck className="h-6 w-6" />
                     </div>
                     <div>
-                      <p className="font-bold text-emerald-900">Coverage Fully Shielded</p>
-                      <p className="text-xs text-emerald-700/70">
-                        Your insurance matches local rebuild costs.
+                      <p className="font-bold text-slate-900">No record questions generated</p>
+                      <p className="text-xs text-slate-600">
+                        {coverageGapSummaryText(0)} This does not confirm claim coverage or reconstruction-cost alignment.
                       </p>
                     </div>
                   </div>
@@ -576,7 +568,7 @@ export default function RiskProtectionClient() {
                     Run Coverage Intelligence
                   </p>
                   <p className="text-[11px] text-purple-600">
-                    Get an AI verdict on whether your insurance and warranties are worth it.
+                    Review available policy facts and compare modeled warranty costs without a buy-or-skip verdict.
                   </p>
                   <Button
                     variant="outline"

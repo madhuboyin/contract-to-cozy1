@@ -76,6 +76,77 @@ test('property coverage comparison keeps legacy verdict enums out of directive h
   assert.doesNotMatch(service, /verdictWeight\(insuranceVerdict\)/);
 });
 
+test('secondary coverage surfaces use neutral record and scenario states', () => {
+  const secondarySurfaces = [
+    '../../../frontend/src/app/(dashboard)/dashboard/components/CoverageIntelligenceToolCard.tsx',
+    '../../../frontend/src/app/(dashboard)/dashboard/protect/RiskProtectionClient.tsx',
+    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/protect/CoverageOverviewClient.tsx',
+    '../../../frontend/src/components/guidance/CoverageCheckInline.tsx',
+    '../../../frontend/src/lib/coverage/coverageInsights.ts',
+  ].map(source).join('\n');
+
+  for (const unsupportedClaim of [
+    'Found savings',
+    'Not worth it',
+    'Coverage Fully Shielded',
+    'matches local rebuild costs',
+    'AI verdict',
+    'Projected Savings',
+    'Coverage is in good shape',
+    'Coverage may be overpriced',
+    'All systems protected',
+  ]) {
+    assert.equal(secondarySurfaces.includes(unsupportedClaim), false, unsupportedClaim);
+  }
+  assert.match(secondarySurfaces, /Policy record incomplete/);
+  assert.match(secondarySurfaces, /does not confirm what a policy covers/);
+});
+
+test('coverage guidance cannot complete from a generated review result', () => {
+  const inline = source('../../../frontend/src/components/guidance/CoverageCheckInline.tsx');
+  const controller = source('../../src/controllers/coverageAnalysis.controller.ts');
+  const propertyRun = controller.slice(
+    controller.indexOf('export async function runCoverageAnalysis'),
+    controller.indexOf('export async function simulateCoverageAnalysis'),
+  );
+  const itemRun = controller.slice(
+    controller.indexOf('export async function runItemCoverageAnalysis'),
+    controller.indexOf('export async function simulateItemCoverageAnalysis'),
+  );
+
+  assert.doesNotMatch(inline, /completeGuidanceStep|handleMarkReviewed|coverageVerdict:/);
+  assert.match(inline, /Open review and record decision/);
+  assert.match(inline, /durable decision/);
+  assert.doesNotMatch(propertyRun, /recordToolCompletion|status: 'COMPLETED'/);
+  assert.doesNotMatch(itemRun, /recordToolCompletion|status: 'COMPLETED'/);
+  assert.match(controller, /export async function recordCoverageComparisonDecision/);
+  assert.match(controller, /completionKind: 'DECISION_RECORDED'/);
+});
+
+test('ungrounded coverage advisor is removed and legacy output is suppressed', () => {
+  const service = source('../../src/services/coverageAnalysis.service.ts');
+  const advisorPath = path.resolve(__dirname, '../../src/services/coverageAdvisor.service.ts');
+
+  assert.equal(fs.existsSync(advisorPath), false);
+  assert.doesNotMatch(service, /coverageAdvisorService|generateStrategicAdvice/);
+  assert.match(service, /strategicAdvice: null/);
+});
+
+test('downstream coverage contracts do not interpret scenario verdicts as coverage truth', () => {
+  const derived = source('../../src/services/guidanceEngine/guidanceDerivedData.service.ts');
+  const financial = source('../../src/services/guidanceEngine/guidanceFinancialContext.service.ts');
+  const signal = source('../../src/services/signal.service.ts');
+  const backfill = source('../../src/services/sharedDataBackfill.service.ts');
+  const resolution = source('../../src/services/resolutionCenter.service.ts');
+
+  assert.match(derived, /coverageReviewState/);
+  assert.doesNotMatch(derived, /coverageOverallVerdict|insuranceVerdict|warrantyVerdict/);
+  assert.doesNotMatch(financial, /coverageOverallVerdict|insuranceVerdict/);
+  assert.doesNotMatch(signal, /gaps\.length > 0 \? 'SITUATIONAL' : 'NOT_WORTH_IT'/);
+  assert.doesNotMatch(backfill, /gaps\.length > 0 \? 'SITUATIONAL' : 'NOT_WORTH_IT'/);
+  assert.doesNotMatch(resolution, /savedAnalysis\.warrantyVerdict|savedAnalysis\.overallVerdict/);
+});
+
 test('item protection UI keeps internal verdicts out of homeowner-facing directive copy', () => {
   const itemCoverage = source(
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/items/[itemId]/coverage/ItemGetCoverageClient.tsx',

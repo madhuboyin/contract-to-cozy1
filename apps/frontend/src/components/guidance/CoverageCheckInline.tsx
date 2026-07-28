@@ -8,7 +8,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowRight, CheckCircle, ClipboardCheck, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ClipboardCheck, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   getCoverageAnalysis,
@@ -16,35 +16,12 @@ import {
   runCoverageAnalysis,
   runItemCoverageAnalysis,
   type CoverageAnalysisDTO,
-  type CoverageVerdict,
   type ItemCoverageAnalysisDTO,
 } from '@/lib/api/coverageAnalysisApi';
-import { completeGuidanceStep } from '@/lib/api/guidanceApi';
 
 // ---------------------------------------------------------------------------
-// Verdict display config
+// Neutral scenario presentation
 // ---------------------------------------------------------------------------
-
-const VERDICT_CONFIG: Record<
-  CoverageVerdict,
-  { label: string; tone: string; icon: React.ReactNode }
-> = {
-  WORTH_IT: {
-    label: 'Coverage looks solid',
-    tone: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-    icon: <ShieldCheck className="h-4 w-4 text-emerald-600" />,
-  },
-  SITUATIONAL: {
-    label: 'Coverage needs review',
-    tone: 'text-amber-700 bg-amber-50 border-amber-200',
-    icon: <AlertTriangle className="h-4 w-4 text-amber-600" />,
-  },
-  NOT_WORTH_IT: {
-    label: 'Coverage gap identified',
-    tone: 'text-rose-700 bg-rose-50 border-rose-200',
-    icon: <ShieldAlert className="h-4 w-4 text-rose-600" />,
-  },
-};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,25 +41,15 @@ type CoverageCheckInlineProps = {
 
 // Normalised shape we render from — covers both analysis types
 type NormalisedResult = {
-  overallVerdict: CoverageVerdict;
-  summary: string | null;
-  nextStepTitle: string | null;
+  computedAt: string;
 };
 
 function normaliseItem(a: ItemCoverageAnalysisDTO): NormalisedResult {
-  return {
-    overallVerdict: a.overallVerdict,
-    summary: a.summary ?? null,
-    nextStepTitle: a.nextSteps?.[0]?.title ?? null,
-  };
+  return { computedAt: a.computedAt };
 }
 
 function normaliseProperty(a: CoverageAnalysisDTO): NormalisedResult {
-  return {
-    overallVerdict: a.overallVerdict,
-    summary: a.summary ?? null,
-    nextStepTitle: a.nextSteps?.[0]?.title ?? null,
-  };
+  return { computedAt: a.computedAt };
 }
 
 // ---------------------------------------------------------------------------
@@ -92,17 +59,13 @@ function normaliseProperty(a: CoverageAnalysisDTO): NormalisedResult {
 export function CoverageCheckInline({
   propertyId,
   journeyId,
-  stepId,
   stepKey,
   inventoryItemId,
   assetName = 'this item',
   presentation = 'default',
   journeyTypeKey,
-  onComplete,
 }: CoverageCheckInlineProps) {
   const queryClient = useQueryClient();
-  const [completing, setCompleting] = React.useState(false);
-  const [completeDone, setCompleteDone] = React.useState(false);
   const isGuided = presentation === 'guided';
   const isReplacementJourney = journeyTypeKey === 'replacement_purchase_now';
 
@@ -180,53 +143,24 @@ export function CoverageCheckInline({
 
   const displayResult: NormalisedResult | null = mutationResult ?? existingResult;
 
-  // ---- Complete step ----
-  async function handleMarkReviewed() {
-    setCompleting(true);
-    try {
-      await completeGuidanceStep(propertyId, stepId, {
-        coverageVerdict: displayResult?.overallVerdict ?? 'SITUATIONAL',
-        sourceToolKey: 'coverage-intelligence',
-      });
-      queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
-      queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
-      setCompleteDone(true);
-      onComplete();
-    } catch (err) {
-      console.error('[CoverageCheckInline] complete failed', err);
-    } finally {
-      setCompleting(false);
-    }
-  }
-
   // Build the full-tool link with guidance context pre-attached
   const fullToolHref = isItemScoped
     ? `/dashboard/properties/${propertyId}/inventory/items/${inventoryItemId}/coverage?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}&itemId=${inventoryItemId}&inventoryItemId=${inventoryItemId}`
     : `/dashboard/properties/${propertyId}/tools/coverage-intelligence?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}`;
 
-  // ---- Completed state ----
-  if (completeDone) {
-    return (
-      <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-        <CheckCircle className="h-4 w-4 shrink-0" />
-        Coverage reviewed. Moving to next step.
-      </div>
-    );
-  }
-
   // ---- Replacement journey — show replacement-specific coverage checklist ----
   if (isReplacementJourney) {
     const checklist = [
-      'Check if your home warranty covers appliance replacement costs',
+      'Check the controlling warranty or service-contract terms',
       'Look for manufacturer or utility rebates on energy-efficient models',
-      'Consider adding a warranty when you purchase the new item',
+      'Record material exclusions, service fees, and replacement limits',
     ];
     return (
       <div className="space-y-3">
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5">
           <div className="flex items-center gap-2 mb-2">
             <ClipboardCheck className="h-4 w-4 text-sky-600 shrink-0" />
-            <p className="text-sm font-semibold text-sky-800">Before you buy — check for coverage and savings</p>
+            <p className="text-sm font-semibold text-sky-800">Before you buy — verify protection terms</p>
           </div>
           <ul className="space-y-1.5">
             {checklist.map((item, i) => (
@@ -237,12 +171,8 @@ export function CoverageCheckInline({
             ))}
           </ul>
         </div>
-        <Button
-          className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
-          disabled={completing}
-          onClick={handleMarkReviewed}
-        >
-          {completing ? 'Saving…' : 'Confirmed — continue to set priorities'}
+        <Button asChild className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md">
+          <Link href={fullToolHref}>Open coverage review</Link>
         </Button>
       </div>
     );
@@ -257,38 +187,23 @@ export function CoverageCheckInline({
     );
   }
 
-  // ---- Analysis available — show verdict ----
+  // ---- Analysis available — require the durable decision workflow ----
   if (displayResult) {
-    const cfg = VERDICT_CONFIG[displayResult.overallVerdict];
     return (
       <div className="space-y-3">
-        {/* Verdict badge */}
-        <div className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 ${cfg.tone}`}>
-          {cfg.icon}
+        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-800">
+          <ShieldCheck className="h-4 w-4 text-slate-600" />
           <div className="flex-1">
-            <p className="text-sm font-semibold">{cfg.label}</p>
-            {displayResult.summary && (
-              <p className="mt-0.5 text-xs opacity-90">{displayResult.summary}</p>
-            )}
+            <p className="text-sm font-semibold">Scenario comparison ready</p>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Open the full review to verify controlling terms and record a durable decision.
+            </p>
           </div>
         </div>
 
-        {/* Suggested next action from analysis */}
-        {displayResult.nextStepTitle && (
-          <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-            <span className="font-medium">Suggested: </span>
-            {displayResult.nextStepTitle}
-          </p>
-        )}
-
-        {/* Actions */}
         <div className="flex flex-col gap-2">
-          <Button
-            className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
-            disabled={completing}
-            onClick={handleMarkReviewed}
-          >
-            {completing ? 'Saving…' : 'Use this result & continue'}
+          <Button asChild className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md">
+            <Link href={fullToolHref}>Open review and record decision</Link>
           </Button>
           {!isGuided && (
             <Link
@@ -310,12 +225,12 @@ export function CoverageCheckInline({
         <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
           <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
             {isItemScoped
-              ? `Check coverage status for ${assetName}`
-              : 'Check property coverage status'}
+              ? `Review protection records for ${assetName}`
+              : 'Review property protection records'}
           </p>
           <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
-            Run a quick analysis to see whether insurance and warranty coverage is adequate before
-            proceeding.
+            Compare available records and modeled costs without treating missing information as a
+            coverage determination.
           </p>
         </div>
       )}

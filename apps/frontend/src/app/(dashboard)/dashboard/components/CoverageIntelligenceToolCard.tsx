@@ -23,13 +23,6 @@ const VALUE_ZONE = 'mt-1 rounded-lg border border-gray-200/70 bg-gray-50/70 px-2
 const CTA_CLASS =
   'group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50';
 
-function normalizeVerdict(verdict: string): string {
-  return verdict
-    .split('_')
-    .map((chunk) => chunk.charAt(0) + chunk.slice(1).toLowerCase())
-    .join(' ');
-}
-
 function statusMeta(loading: boolean, analysis: CoverageAnalysisDTO | null, hasAnalysis: boolean) {
   if (loading) {
     return { status: 'watch' as BadgeStatus, customLabel: 'Checking' };
@@ -43,13 +36,10 @@ function statusMeta(loading: boolean, analysis: CoverageAnalysisDTO | null, hasA
   if (analysis.status === 'ERROR') {
     return { status: 'action' as BadgeStatus, customLabel: 'Review recommended' };
   }
-  if (analysis.overallVerdict === 'WORTH_IT') {
-    return { status: 'excellent' as BadgeStatus, customLabel: 'Found savings' };
+  if (analysis.insuranceReviewState === 'QUESTIONS_PRESENT') {
+    return { status: 'action' as BadgeStatus, customLabel: 'Questions ready' };
   }
-  if (analysis.overallVerdict === 'SITUATIONAL') {
-    return { status: 'watch' as BadgeStatus, customLabel: 'Watch' };
-  }
-  return { status: 'watch' as BadgeStatus, customLabel: 'Not worth it' };
+  return { status: 'watch' as BadgeStatus, customLabel: 'Scenario ready' };
 }
 
 function primaryInsight(analysis: CoverageAnalysisDTO | null, hasAnalysis: boolean) {
@@ -62,20 +52,23 @@ function primaryInsight(analysis: CoverageAnalysisDTO | null, hasAnalysis: boole
   if (analysis.status === 'STALE') {
     return {
       headline: 'Refresh coverage assumptions',
-      detail: 'Inputs are stale. Re-run to validate today\'s recommendation.',
+      detail: 'Inputs are stale. Re-run to refresh the record questions and scenario math.',
     };
   }
   if (analysis.status === 'ERROR') {
     return {
       headline: 'Assessment needs refresh',
-      detail: 'Re-run to restore an up-to-date coverage decision.',
+      detail: 'Re-run to restore an up-to-date record review.',
     };
   }
   return {
-    headline: normalizeVerdict(analysis.overallVerdict),
-    detail:
-      analysis.summary?.trim() ||
-      'Coverage guidance is ready with insurance, warranty, and risk tradeoff context.',
+    headline:
+      analysis.insuranceReviewState === 'QUESTIONS_PRESENT'
+        ? 'Questions ready to review'
+        : analysis.insuranceReviewState === 'POLICY_RECORD_INCOMPLETE'
+          ? 'Policy record incomplete'
+          : 'Scenario comparison ready',
+    detail: 'Review available policy facts and modeled warranty cost tradeoffs before recording a decision.',
   };
 }
 
@@ -138,7 +131,7 @@ export default function CoverageIntelligenceToolCard({
         const latest = await runCoverageAnalysis(propertyId);
         setHasAnalysis(true);
         setAnalysis(latest);
-        router.push(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?source=dashboard-card&action=run&verdict=${latest.overallVerdict}`);
+        router.push(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?source=dashboard-card&action=run`);
       } finally {
         setRunning(false);
       }

@@ -1564,7 +1564,6 @@ export class SignalService {
         select: {
           id: true,
           confidence: true,
-          overallVerdict: true,
         },
         orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
       }),
@@ -1595,7 +1594,9 @@ export class SignalService {
           : latestCoverageAnalysis?.confidence === 'MEDIUM'
             ? 0.74
             : 0.58,
-      verdict: latestCoverageAnalysis?.overallVerdict ?? (gaps.length > 0 ? 'SITUATIONAL' : 'NOT_WORTH_IT'),
+      // The signal contract still carries a legacy enum. Never infer a
+      // coverage or value conclusion from an empty heuristic gap list.
+      verdict: 'SITUATIONAL',
     });
     if (coverageSignal) refreshedSignals.push('COVERAGE_GAP');
 

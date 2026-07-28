@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,21 +9,14 @@ import {
   ShieldCheck,
   ShieldAlert,
   AlertTriangle,
-  Zap,
   ChevronRight,
-  Wand2,
   Sparkles,
-  FileText,
-  Clock,
   RefreshCw,
   Loader2,
   Info,
   ArrowRight,
   Activity,
-  History,
   TrendingUp,
-  CheckCircle2,
-  XCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
@@ -90,64 +83,26 @@ export default function CoverageOverviewClient() {
 
   const [activeGap, setActiveGap] = useState<{ label: string; code: string } | null>(null);
 
-  // Auto-run analysis on first load if none exists yet
-  useEffect(() => {
-    if (analysisData && !analysisData.exists && !runMutation.isPending) {
-      runMutation.mutate();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysisData?.exists]);
-
   const analysis = analysisData?.exists ? analysisData.analysis : null;
   const activeClaims = (claimsData ?? []).filter((c: ClaimDTO) => c.status !== 'CLOSED');
 
-  const shieldScore = useMemo(() => {
-    if (!analysis) return 0;
-    let score = analysis.overallVerdict === 'WORTH_IT' ? 85
-      : analysis.overallVerdict === 'SITUATIONAL' ? 60
-      : 35;
-    // Missing insurance is the highest-impact gap
-    if (analysis.insurance.flags.some(f => f.code === 'NO_PROPERTY_POLICY')) score -= 25;
-    // No active warranty plan
-    if (!((analysis.warranty.inputsUsed.warrantyAnnualCostUsd ?? 0) > 0)) score -= 10;
-    // Remaining flags weighted by severity
-    analysis.insurance.flags.forEach(f => {
-      if (f.code === 'NO_PROPERTY_POLICY') return;
-      score -= f.severity === 'HIGH' ? 8 : f.severity === 'MEDIUM' ? 4 : 2;
-    });
-    if (analysis.confidence === 'HIGH') score += 5;
-    if (analysis.confidence === 'LOW') score -= 10;
-    return Math.max(10, Math.min(100, score));
-  }, [analysis]);
-
-  const shieldTone = shieldScore >= 75 ? 'emerald' : shieldScore >= 45 ? 'amber' : 'rose';
-
-  // Deterministic fallback when Gemini can't produce strategicAdvice
-  function getStaticAdvice(a: NonNullable<typeof analysis>): string {
-    const hasInsurance = !a.insurance.flags.some(f => f.code === 'NO_PROPERTY_POLICY');
-    const hasWarranty = (a.warranty.inputsUsed.warrantyAnnualCostUsd ?? 0) > 0;
-    const highGaps = a.insurance.flags.filter(f => f.severity === 'HIGH' && f.code !== 'NO_PROPERTY_POLICY').length;
-
-    if (!hasInsurance && !hasWarranty) {
-      return 'No insurance policy or warranty plan is on record — you have full exposure to repair and liability costs. Adding at least one layer of protection is the single highest-impact action right now.';
-    }
-    if (!hasInsurance) {
-      return 'No insurance policy is linked to this property. Even with a warranty in place, you\'re exposed to major liability and structural risks. Upload your policy to Vault to close this gap.';
-    }
-    if (a.overallVerdict === 'WORTH_IT') {
-      if (highGaps > 0) {
-        return `Your coverage is strong, but ${highGaps} high-priority gap${highGaps > 1 ? 's' : ''} need${highGaps === 1 ? 's' : ''} attention. Closing ${highGaps > 1 ? 'these' : 'it'} now will lock in the full value of your current protection profile.`;
-      }
-      return 'Your coverage profile looks healthy — insurance and warranty are aligned with your risk level. Run this check again after any major appliance purchase or new claim.';
-    }
-    if (a.overallVerdict === 'SITUATIONAL') {
-      return 'Your coverage is adequate but has room to improve. Review your priority gaps and consider whether a home warranty closes your remaining exposure at a cost that makes sense.';
-    }
-    return 'Your coverage profile needs attention. Start with the highest-severity items in Priority Gaps to meaningfully reduce your out-of-pocket exposure.';
-  }
-
-  const displayAdvice = analysis?.strategicAdvice ?? (analysis ? getStaticAdvice(analysis) : null);
-  const adviceIsAI = !!analysis?.strategicAdvice;
+  const recordReviewProgress =
+    analysis?.insuranceReviewState === 'NO_QUESTIONS_FROM_REVIEWED_FIELDS'
+      ? 100
+      : analysis?.insuranceReviewState === 'QUESTIONS_PRESENT'
+        ? 60
+        : analysis
+          ? 25
+          : 0;
+  const recordReviewTone =
+    analysis?.insuranceReviewState === 'QUESTIONS_PRESENT' ? 'amber' : 'slate';
+  const reviewSummary = !analysis
+    ? null
+    : analysis.insuranceReviewState === 'QUESTIONS_PRESENT'
+      ? `${analysis.insurance.flags.length} question(s) were generated from available fields. Confirm them against the controlling policy or a licensed professional.`
+      : analysis.insuranceReviewState === 'NO_QUESTIONS_FROM_REVIEWED_FIELDS'
+        ? 'No questions were generated from the reviewed fields. This does not confirm claim coverage.'
+        : 'The policy record is incomplete. Add or confirm source-backed facts before drawing conclusions.';
 
   // Maps each flag code to its most relevant remediation route and CTA label
   const GAP_ACTIONS: Record<string, { href: string; label: string }> = {
@@ -188,7 +143,7 @@ export default function CoverageOverviewClient() {
               disabled={runMutation.isPending}
             >
               {runMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Refresh Intelligence
+              Refresh record review
             </Button>
             {analysis?.computedAt && (
               <p className="text-xs text-slate-400 font-medium">
@@ -201,21 +156,21 @@ export default function CoverageOverviewClient() {
         {/* TOP TIER: Bento Grid */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           
-          {/* Shield Score */}
+          {/* Record review progress */}
           <Card className="lg:col-span-3 rounded-[32px] border-none bg-white shadow-sm flex flex-col items-center justify-center p-8 text-center border border-slate-100">
              <div className="relative mb-4">
                 <div className={cn(
                   "flex h-32 w-32 items-center justify-center rounded-full border-[12px] bg-slate-50",
-                  shieldTone === 'emerald' ? "border-emerald-500" : shieldTone === 'amber' ? "border-amber-500" : "border-rose-500"
+                  recordReviewTone === 'amber' ? "border-amber-500" : "border-slate-400"
                 )}>
-                  <span className="text-4xl font-black text-slate-900 font-poppins">{shieldScore}%</span>
+                  <span className="text-4xl font-black text-slate-900 font-poppins">{recordReviewProgress}%</span>
                 </div>
                 <ShieldCheck className={cn(
                   "absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-white p-1.5 shadow-md",
-                  shieldTone === 'emerald' ? "text-emerald-500" : "text-rose-500"
+                  recordReviewTone === 'amber' ? "text-amber-600" : "text-slate-600"
                 )} />
              </div>
-             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Shield Score</p>
+             <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Record review progress</p>
           </Card>
 
           {/* AI Insights */}
@@ -233,15 +188,15 @@ export default function CoverageOverviewClient() {
                       <Loader2 className="h-6 w-6 text-white animate-spin" />
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-100">Coverage Take</span>
+                      <span className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-100">Record review</span>
                       <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic text-brand-100">
-                        Analyzing your protection profile…
+                        Reviewing available policy fields and scenario inputs…
                       </p>
                     </div>
                   </div>
                   <Sparkles className="absolute -bottom-8 -right-8 h-40 w-48 text-white/10 pointer-events-none" />
                 </motion.div>
-              ) : displayAdvice ? (
+              ) : reviewSummary ? (
                 <motion.div
                   key="advice-ready"
                   initial={{ opacity: 0, y: 10 }}
@@ -250,14 +205,14 @@ export default function CoverageOverviewClient() {
                 >
                   <div className="flex items-start gap-6 relative z-10">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-xl border border-white/10 shadow-inner">
-                      {adviceIsAI ? <Wand2 className="h-6 w-6 text-white" /> : <ShieldCheck className="h-6 w-6 text-white" />}
+                      <ShieldCheck className="h-6 w-6 text-white" />
                     </div>
                     <div className="space-y-1">
                       <span className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-100">
-                        {adviceIsAI ? 'AI Intelligence Take' : 'Coverage Summary'}
+                        Coverage record summary
                       </span>
                       <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic">
-                        &ldquo;{displayAdvice}&rdquo;
+                        {reviewSummary}
                       </p>
                     </div>
                   </div>
@@ -265,7 +220,7 @@ export default function CoverageOverviewClient() {
                 </motion.div>
               ) : (
                 <div className="flex-1 rounded-[32px] border-2 border-dashed border-slate-200 bg-white p-8 flex items-center justify-center text-center">
-                  <p className="text-sm font-bold text-slate-400 font-poppins italic">Refresh intelligence to generate a coverage summary.</p>
+                  <p className="text-sm font-bold text-slate-500 font-poppins">Run the record review to organize available facts and questions.</p>
                 </div>
               )}
             </AnimatePresence>
@@ -281,8 +236,8 @@ export default function CoverageOverviewClient() {
                 <TrendingUp className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Warranty Economics</h2>
-                <p className="text-sm text-slate-500">Based on your home's appliance ages and repair history.</p>
+                <h2 className="text-lg font-bold text-slate-900">Warranty cost scenario</h2>
+                <p className="text-sm text-slate-500">Modeled cost comparison based on recorded assumptions, not guaranteed savings.</p>
               </div>
             </div>
 
@@ -315,19 +270,17 @@ export default function CoverageOverviewClient() {
               <Popover>
                 <PopoverTrigger className="text-left space-y-1">
                   <p className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">
-                    {(analysis?.warranty.expectedNetImpactUsd || 0) >= 0 ? 'Projected Savings' : 'Net Cost'} <Info className="h-3 w-3" />
+                    Modeled difference <Info className="h-3 w-3" />
                   </p>
                   <p className={cn(
                     "text-2xl font-bold tabular-nums",
-                    (analysis?.warranty.expectedNetImpactUsd || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
+                    "text-slate-900"
                   )}>
                     {formatCurrency(Math.abs(analysis?.warranty.expectedNetImpactUsd || 0))}
                   </p>
                 </PopoverTrigger>
                 <PopoverContent className="max-w-[240px] text-xs p-3">
-                  {(analysis?.warranty.expectedNetImpactUsd || 0) >= 0
-                    ? 'How much a warranty is expected to save you compared to paying for repairs out-of-pocket.'
-                    : 'The estimated extra cost of having a warranty vs. expected out-of-pocket repairs — consider whether the coverage risk is worth it.'}
+                  Difference between modeled repair exposure and modeled warranty cost. This does not determine whether to buy or decline a contract.
                 </PopoverContent>
               </Popover>
 
@@ -342,7 +295,7 @@ export default function CoverageOverviewClient() {
                   </p>
                 </PopoverTrigger>
                 <PopoverContent className="max-w-[240px] text-xs p-3">
-                  Estimated months before probability-adjusted repair costs exceed the warranty premium — the sooner, the stronger the case for coverage.
+                  Modeled time at which cumulative probability-adjusted repair exposure reaches the entered warranty cost.
                 </PopoverContent>
               </Popover>
             </div>
@@ -350,7 +303,7 @@ export default function CoverageOverviewClient() {
             {/* Footer */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-brand-50 border border-brand-100 px-5 py-4">
               <p className="text-sm text-slate-600">
-                Analysis indicates a <span className="font-bold text-slate-900">{analysis?.warrantyVerdict ?? '—'}</span> value outcome.
+                Review exclusions, service fees, and controlling contract terms before recording a decision.
               </p>
               <Button className="h-10 px-6 rounded-xl bg-brand-600 font-semibold text-white hover:bg-brand-700 transition-all active:scale-95 shrink-0" asChild>
                 <Link href={`/dashboard/properties/${propertyId}/tools/coverage-intelligence?from=protect`}>
@@ -361,37 +314,37 @@ export default function CoverageOverviewClient() {
           </div>
         </Card>
 
-        {/* SECTION 3: What's Covered */}
+        {/* SECTION 3: Recorded scenario inputs */}
         {analysis && (
           <div className="space-y-4">
             <h3 className="text-xl font-bold font-poppins flex items-center gap-3">
-              <ShieldCheck className="h-5 w-5 text-teal-600" /> What&apos;s Covered
+              <ShieldCheck className="h-5 w-5 text-teal-600" /> Protection records
             </h3>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Insurance */}
               {(() => {
                 const premium = analysis.insurance.inputsUsed.annualPremiumUsd ?? 0;
-                const active = premium > 0;
+                const recorded = premium > 0;
                 return (
                   <Card className="p-6 rounded-[28px] border-none bg-white shadow-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0",
-                        active ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"
+                        recorded ? "bg-slate-100 text-slate-700" : "bg-slate-100 text-slate-500"
                       )}>
                         <Shield className="h-6 w-6" />
                       </div>
                       <div>
-                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Homeowners Insurance</p>
-                        {active ? (
+                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Insurance premium input</p>
+                        {recorded ? (
                           <p className="text-base font-bold text-slate-900">{formatCurrency(premium)} / yr</p>
                         ) : (
-                          <p className="text-base font-bold text-rose-500">Not Added</p>
+                          <p className="text-base font-bold text-slate-600">Not recorded</p>
                         )}
                       </div>
                     </div>
-                    {active
-                      ? <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
+                    {recorded
+                      ? <Info className="h-5 w-5 shrink-0 text-slate-500" />
                       : (
                         <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-brand-600 hover:text-white transition-all shrink-0" asChild>
                           <Link href={`/dashboard/properties/${propertyId}/vault`}>Add <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
@@ -405,27 +358,27 @@ export default function CoverageOverviewClient() {
               {/* Home Warranty */}
               {(() => {
                 const cost = analysis.warranty.inputsUsed.warrantyAnnualCostUsd ?? 0;
-                const active = cost > 0;
+                const recorded = cost > 0;
                 return (
                   <Card className="p-6 rounded-[28px] border-none bg-white shadow-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0",
-                        active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                        recorded ? "bg-slate-100 text-slate-700" : "bg-slate-100 text-slate-500"
                       )}>
                         <TrendingUp className="h-6 w-6" />
                       </div>
                       <div>
-                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Home Warranty</p>
-                        {active ? (
+                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Warranty cost input</p>
+                        {recorded ? (
                           <p className="text-base font-bold text-slate-900">{formatCurrency(cost)} / yr</p>
                         ) : (
-                          <p className="text-base font-bold text-slate-400">Not Added</p>
+                          <p className="text-base font-bold text-slate-600">Not recorded</p>
                         )}
                       </div>
                     </div>
-                    {active
-                      ? <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
+                    {recorded
+                      ? <Info className="h-5 w-5 shrink-0 text-slate-500" />
                       : (
                         <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-brand-600 hover:text-white transition-all shrink-0" asChild>
                           <Link href={`/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=questions`}>Review <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
@@ -469,10 +422,10 @@ export default function CoverageOverviewClient() {
             )}
           </div>
 
-          {/* Gaps */}
+          {/* Review questions */}
           <div className="space-y-6">
             <h3 className="text-xl font-bold font-poppins flex items-center gap-3">
-              <ShieldAlert className="h-5 w-5 text-amber-600" /> Priority Gaps
+              <ShieldAlert className="h-5 w-5 text-amber-600" /> Policy questions
             </h3>
             <div className="space-y-4">
                {(analysis?.insurance.flags.length || 0) > 0 ? (
@@ -497,8 +450,9 @@ export default function CoverageOverviewClient() {
                  ))
                ) : (
                 <div className="rounded-[32px] bg-white border border-slate-100 py-12 flex flex-col items-center text-center">
-                   <ShieldCheck className="h-10 w-10 text-emerald-100 mb-2" />
-                   <p className="text-sm font-bold text-slate-400">All systems protected.</p>
+                   <ShieldCheck className="h-10 w-10 text-slate-300 mb-2" />
+                   <p className="text-sm font-bold text-slate-600">No questions were generated from the reviewed fields.</p>
+                   <p className="mt-1 max-w-sm text-xs text-slate-500">This does not confirm what a policy covers.</p>
                 </div>
                )}
             </div>
@@ -512,7 +466,7 @@ export default function CoverageOverviewClient() {
                       <AlertTriangle className="h-5 w-5" />
                     </div>
                     <SheetTitle className="text-base font-bold text-slate-900 font-poppins leading-snug">
-                      Priority Gap
+                      Policy question
                     </SheetTitle>
                   </div>
                   <p className="text-sm text-slate-700 font-medium leading-relaxed">
