@@ -146,8 +146,8 @@ export class SavingsBenefitsAdminService {
     return programs;
   }
 
-  async getProgram(programId: string) {
-    const program = await prisma.hiddenAssetProgram.findUnique({
+  async getProgram(programId: string, client: Prisma.TransactionClient | typeof prisma = prisma) {
+    const program = await client.hiddenAssetProgram.findUnique({
       where: { id: programId },
       include: { source: true, rules: { orderBy: { sortOrder: 'asc' } } },
     });
@@ -189,7 +189,7 @@ export class SavingsBenefitsAdminService {
           groupKey: rule.groupKey ?? null,
         })),
       });
-      return this.getProgram(program.id);
+      return this.getProgram(program.id, tx);
     });
   }
 
@@ -231,7 +231,7 @@ export class SavingsBenefitsAdminService {
           groupKey: rule.groupKey ?? null,
         })),
       });
-      return this.getProgram(programId);
+      return this.getProgram(programId, tx);
     });
   }
 }
