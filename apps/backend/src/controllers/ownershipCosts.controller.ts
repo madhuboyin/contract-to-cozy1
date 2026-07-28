@@ -11,6 +11,7 @@ import {
   OWNERSHIP_COST_CURRENT_LENSES,
   ownershipCostReadModelService,
 } from '../services/ownershipCosts/ownershipCostReadModel.service';
+import { ownershipCostChangeService } from '../services/ownershipCosts/ownershipCostChange.service';
 import { OwnershipCostAccessDeniedError } from '../services/ownershipCosts/ownershipCostObservation.service';
 import { validationErrorResponse } from './ownershipCostContainment.schemas';
 
@@ -53,6 +54,13 @@ async function respondWithCurrentCost(
       parsed.data.lens,
       { refresh },
     );
+    if (refresh) {
+      await ownershipCostChangeService.refreshObservedChanges(
+        req.params.propertyId,
+        req.user!.userId,
+        parsed.data.lens,
+      );
+    }
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,
       userId: req.user?.userId,
@@ -94,4 +102,28 @@ export async function recalculateOwnershipCosts(
   res: Response,
 ) {
   return respondWithCurrentCost(req, res, true);
+}
+
+export async function getOwnershipCostChanges(
+  req: CustomRequest,
+  res: Response,
+) {
+  const parsed = ownershipCostReadQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(validationErrorResponse(parsed.error));
+  }
+  try {
+    const ownershipCostChanges =
+      await ownershipCostChangeService.getObservedChanges(
+        req.params.propertyId,
+        req.user!.userId,
+        parsed.data.lens,
+      );
+    return res.json({
+      success: true,
+      data: { ownershipCostChanges },
+    });
+  } catch (error) {
+    return ownershipCostError(error, res);
+  }
 }

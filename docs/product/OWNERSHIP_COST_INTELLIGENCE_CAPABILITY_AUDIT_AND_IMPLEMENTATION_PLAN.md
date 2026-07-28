@@ -4,7 +4,7 @@
 **Contributing domains:** Property Tax, Coverage and Premium Review, Financing, Expenses, Utilities, Home Record, Capital Timeline, Reserve Fund, Budget Planner, Guidance, and Home Actions  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Implementation in progress — Slices 0–3 started July 28, 2026
+**Status:** Implementation in progress — Slices 0–4 started July 28, 2026
 **Recommended disposition:** **Consolidate, rebuild the calculation and evidence contract, and contain unsupported historical and predictive claims immediately**  
 **Current safety classification:** Material financial  
 **Recommended safety classification:** Material financial  
@@ -112,6 +112,37 @@ Implemented:
 
 Observed change explanations, forecasts, scenarios, and measured variability
 remain intentionally gated for Slices 4–6.
+
+### July 28, 2026 — Slice 4 observed-change increment
+
+Implemented:
+
+- added comparable-period logic over persisted snapshots with stable method and
+  category-definition versions;
+- required non-overlapping source periods with consistent category scope;
+- excluded missing, estimated, benchmark, forecast, and unverified values from
+  change conclusions;
+- persisted category change records with prior/current evidence references,
+  annual delta, percent delta, recurring impact, materiality, confidence, and
+  ranking;
+- separated recurring changes from one-time repair and capital-project events;
+- added explicit price, usage, scope, assessment, rate, coverage, financing,
+  one-time-event, and unexplained reason types;
+- accepted a reason only when source evidence carries a supported attribution
+  marker and otherwise preserved the residual as unexplained;
+- added a read-only observed-changes endpoint and recalculation-time change
+  persistence;
+- added a ranked “What changed” experience with period comparison, source
+  evidence, materiality, confidence, and category correction paths;
+- promoted only material changes attached to the latest snapshot into
+  canonical Home Actions;
+- reused Home Action dismissal, snooze, completion, supersession, and
+  re-evaluation behavior so resolved or replaced snapshot changes no longer
+  remain current; and
+- added observed-history fixtures for comparable, partial, missing, estimated,
+  unverified, overlapping, corrected-definition, recurring, and one-time data.
+
+Forward forecasts and user-adjustable scenarios remain gated for Slice 5.
 
 ---
 

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  getOwnershipCostChanges,
   getOwnershipCosts,
   recalculateOwnershipCosts,
 } from '../controllers/ownershipCosts.controller';
@@ -11,6 +12,14 @@ import {
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 const router = Router();
+
+router.get(
+  '/properties/:propertyId/ownership-costs/changes',
+  authenticate,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  getOwnershipCostChanges,
+);
 
 router.get(
   '/properties/:propertyId/ownership-costs',

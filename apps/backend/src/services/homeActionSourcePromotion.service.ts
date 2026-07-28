@@ -19,7 +19,7 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'ownershipCostChange' | 'ownershipCostSnapshot'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1083,6 +1083,166 @@ async function loadRefinanceDataRequiredActions(
   })];
 }
 
+function ownershipChangeEvidence(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+}
+
+export async function loadOwnershipCostChangeActions(
+  propertyId: string,
+  db: HomeActionSourceDb,
+): Promise<HomeAction[]> {
+  if (!db.ownershipCostChange || !db.ownershipCostSnapshot) return [];
+  const latestSnapshot = await db.ownershipCostSnapshot.findFirst({
+    where: { propertyId },
+    orderBy: [{ basePeriodEnd: 'desc' }, { computedAt: 'desc' }],
+    select: { id: true },
+  });
+  if (!latestSnapshot) return [];
+  const changes = await db.ownershipCostChange.findMany({
+    where: { propertyId, toSnapshotId: latestSnapshot.id },
+    orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+    take: 12,
+    select: {
+      id: true,
+      category: true,
+      amountDeltaCents: true,
+      recurringDeltaCents: true,
+      changeReason: true,
+      explanationStatus: true,
+      evidenceJson: true,
+      createdAt: true,
+      toSnapshotId: true,
+    },
+  });
+
+  return changes.flatMap((change) => {
+    const detail = ownershipChangeEvidence(change.evidenceJson);
+    if (detail.materiality?.material !== true) return [];
+    const evidence = Array.isArray(detail.evidence) ? detail.evidence : [];
+    const confidence = detail.confidence === 'HIGH'
+      ? 0.9
+      : detail.confidence === 'MEDIUM'
+        ? 0.7
+        : 0.45;
+    const delta = change.amountDeltaCents / 100;
+    const direction = delta >= 0 ? 'increased' : 'decreased';
+    const amount = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(Math.abs(delta));
+    const categoryLabel = String(change.category)
+      .toLowerCase()
+      .replace(/_/g, ' ');
+    const correction = detail.action && typeof detail.action === 'object'
+      ? detail.action as { href?: unknown; label?: unknown }
+      : {};
+    const correctionHref = typeof correction.href === 'string'
+      ? correction.href
+      : `/dashboard/properties/${propertyId}/ownership-costs?view=changes`;
+    const correctionLabel = typeof correction.label === 'string'
+      ? correction.label
+      : 'Review source evidence';
+    const explanation = typeof detail.explanation === 'string'
+      ? detail.explanation
+      : `${categoryLabel} ${direction} by ${amount}.`;
+    const observedAt = evidence[0]?.periodEnd;
+    const sourceLabel = evidence[0]?.sourceDomain
+      ? String(evidence[0].sourceDomain).toLowerCase().replace(/_/g, ' ')
+      : 'Ownership Cost Intelligence';
+
+    return [adaptHomeActionSource('SYSTEM', {
+      id: `ownership-cost-change:${change.id}`,
+      propertyId,
+      lineageId: `ownership-cost-change:${propertyId}:${change.category}`,
+      sourceEntityId: change.id,
+      sourceVersion: change.toSnapshotId,
+      job: 'STAY_AHEAD',
+      state: 'OPEN',
+      priority: Math.abs(change.amountDeltaCents) >= 100_000 ? 'SOON' : 'PLAN',
+      signal: `${categoryLabel} ${direction} by ${amount} per year.`,
+      whyItMatters: explanation,
+      recommendedAction: 'Review the observed change and its source evidence',
+      expectedOutcome:
+        'Confirm whether the current household plan should change or whether the source record needs correction.',
+      timing: {
+        dueAt: null,
+        windowStart: detail.currentPeriod?.start ?? null,
+        windowEnd: detail.currentPeriod?.end ?? null,
+        rationale:
+          'This action remains current while the latest comparable snapshot contains a material observed change.',
+      },
+      evidence: [{
+        id: evidence[0]?.observationId ?? change.id,
+        type: evidence[0]?.sourceDocumentId ? 'DOCUMENT' : 'SYSTEM_DERIVATION',
+        label: `${categoryLabel} comparable-period evidence`,
+        source: sourceLabel,
+        observedAt: typeof observedAt === 'string' ? observedAt : change.createdAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence,
+      }],
+      assumptions: [{
+        key: 'observed_change_attribution',
+        label: 'Reason attribution is evidence-limited',
+        value: change.explanationStatus === 'UNEXPLAINED'
+          ? 'The amount changed, but the available records do not establish why.'
+          : `The recorded reason is ${String(change.changeReason).toLowerCase().replace(/_/g, ' ')}.`,
+        source: change.explanationStatus === 'UNEXPLAINED'
+          ? 'UNKNOWN'
+          : 'PROPERTY_FACT',
+        editable: false,
+      }],
+      options: [
+        {
+          id: 'review-change',
+          label: 'Review the change',
+          summary: 'Inspect the two observed periods and correct a source record if needed.',
+          recommended: true,
+        },
+        {
+          id: 'keep-current-plan',
+          label: 'Keep the current plan',
+          summary: 'Dismiss or defer this action if the observed change does not require a household response.',
+          recommended: false,
+        },
+      ],
+      tradeoffs: [{
+        optionId: 'review-change',
+        dimension: 'EFFORT',
+        summary: 'Reviewing evidence takes time but reduces the risk of acting on an incorrect or incomplete source record.',
+      }],
+      confidence: {
+        score: confidence,
+        label: detail.confidence === 'HIGH'
+          ? 'HIGH'
+          : detail.confidence === 'MEDIUM'
+            ? 'MEDIUM'
+            : 'LOW',
+        missing: change.explanationStatus === 'UNEXPLAINED'
+          ? ['Supported change reason']
+          : [],
+      },
+      governance: materialFinancialGovernance('ownership-cost-change-v1'),
+      primaryCta: {
+        kind: 'REVIEW',
+        label: 'Review ownership-cost change',
+        href: `/dashboard/properties/${propertyId}/ownership-costs?view=changes`,
+      },
+      secondaryCtas: [{
+        kind: 'CORRECT_FACT',
+        label: correctionLabel,
+        href: correctionHref,
+      }],
+      feedbackControls: DEFAULT_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: change.createdAt.toISOString(),
+      lastEvaluatedAt: change.createdAt.toISOString(),
+    })];
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Home Digital Twin (Slice 3: contextual Home Actions for missing facts and
 // material planning windows). Both loaders only surface what the twin and
@@ -1572,6 +1732,7 @@ export async function getPromotedHomeActions(
     loadHomeCapitalTimelineMaterialWindowActions(propertyId, db),
     loadPropertyTaxAppealCaseActions(propertyId, db),
     loadSavingsBenefitsActions(propertyId, db),
+    loadOwnershipCostChangeActions(propertyId, db),
     Promise.resolve(environmentActions),
   ]);
   const candidates = groups.flat();

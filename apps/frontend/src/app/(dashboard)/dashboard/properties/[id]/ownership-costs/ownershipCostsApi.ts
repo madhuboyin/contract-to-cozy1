@@ -95,6 +95,72 @@ export type OwnershipCostReadModel = {
   limitations: string[];
 };
 
+export type OwnershipCostObservedChange = {
+  id: string | null;
+  category: OwnershipCostCategory;
+  label: string;
+  fromSnapshotId: string;
+  toSnapshotId: string;
+  priorPeriod: { start: string; end: string };
+  currentPeriod: { start: string; end: string };
+  priorAnnualCents: number;
+  currentAnnualCents: number;
+  deltaCents: number;
+  deltaPercent: number | null;
+  impact: 'RECURRING' | 'ONE_TIME';
+  recurringDeltaCents: number | null;
+  reason:
+    | 'PRICE'
+    | 'USAGE'
+    | 'SCOPE'
+    | 'ASSESSMENT'
+    | 'RATE'
+    | 'COVERAGE'
+    | 'FINANCING'
+    | 'ONE_TIME_EVENT'
+    | 'UNEXPLAINED';
+  explanationStatus: 'SUPPORTED' | 'UNEXPLAINED';
+  explanation: string;
+  evidence: Array<{
+    observationId: string;
+    sourceDomain: string;
+    sourceEntityType: string | null;
+    sourceEntityId: string | null;
+    sourceDocumentId: string | null;
+    periodStart: string;
+    periodEnd: string;
+    evidenceStatus: string;
+    verificationStatus: string;
+  }>;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  materiality: {
+    material: boolean;
+    absoluteThresholdCents: number;
+    percentageThreshold: number;
+  };
+  rankScore: number;
+  action: { href: string; label: string; actionable: boolean };
+};
+
+export type OwnershipCostChangeReadModel = {
+  propertyId: string;
+  selectedLens: OwnershipCostCurrentLens;
+  comparable: boolean;
+  reason: string | null;
+  comparison: {
+    fromSnapshotId: string;
+    toSnapshotId: string;
+    priorPeriodStart: string;
+    priorPeriodEnd: string;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+  } | null;
+  totalRecurringDeltaCents: number;
+  totalOneTimeDeltaCents: number;
+  changes: OwnershipCostObservedChange[];
+  limitations: string[];
+};
+
 type OwnershipCostResponse = {
   ownershipCosts: OwnershipCostReadModel;
 };
@@ -127,4 +193,17 @@ export async function recalculateOwnershipCosts(
     {},
   );
   return response.data.ownershipCosts;
+}
+
+export async function getOwnershipCostChanges(
+  propertyId: string,
+  lens: OwnershipCostCurrentLens,
+) {
+  const query = new URLSearchParams({ lens });
+  const response = await api.get<{
+    ownershipCostChanges: OwnershipCostChangeReadModel;
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/changes?${query}`,
+  );
+  return response.data.ownershipCostChanges;
 }

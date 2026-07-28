@@ -16,8 +16,10 @@ import {
 } from 'lucide-react';
 import { track } from '@/lib/analytics/events';
 import {
+  getOwnershipCostChanges,
   getOwnershipCosts,
   recalculateOwnershipCosts,
+  type OwnershipCostChangeReadModel,
   type OwnershipCostCurrentLens,
   type OwnershipCostReadModel,
   type OwnershipCostReadModelCategory,
@@ -67,6 +69,15 @@ function dateLabel(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+function percentLabel(value: number | null) {
+  if (value == null) return 'Percent unavailable';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${new Intl.NumberFormat(undefined, {
+    style: 'percent',
+    maximumFractionDigits: 1,
+  }).format(value)}`;
+}
+
 function coverageCopy(model: OwnershipCostReadModel) {
   switch (model.snapshot.coverageStatus) {
     case 'CREDIBLE':
@@ -113,6 +124,9 @@ export default function OwnershipCostsClient() {
     ? 'CASH_OUTFLOW'
     : 'OPERATING_EXPENSE';
   const [data, setData] = useState<OwnershipCostReadModel | null>(null);
+  const [changeData, setChangeData] =
+    useState<OwnershipCostChangeReadModel | null>(null);
+  const [changeError, setChangeError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -120,12 +134,23 @@ export default function OwnershipCostsClient() {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
+    setChangeError(null);
     try {
       const result = forceRefresh
         ? await recalculateOwnershipCosts(propertyId, lens)
           .catch(() => getOwnershipCosts(propertyId, lens))
         : await getOwnershipCosts(propertyId, lens);
       setData(result);
+      try {
+        setChangeData(await getOwnershipCostChanges(propertyId, lens));
+      } catch (changeCause) {
+        setChangeData(null);
+        setChangeError(
+          changeCause instanceof Error
+            ? changeCause.message
+            : 'Observed changes are temporarily unavailable.',
+        );
+      }
     } catch (cause: unknown) {
       setError(
         cause instanceof Error
@@ -177,7 +202,7 @@ export default function OwnershipCostsClient() {
     },
     changes: {
       title: 'What changed',
-      description: 'We do not have enough comparable observed bills to show a complete change yet. Modeled backcasts are not treated as history.',
+      description: 'Only non-overlapping periods with comparable observed evidence appear here. Unsupported reasons remain unexplained.',
     },
     forecast: {
       title: 'What may change',
@@ -496,6 +521,212 @@ export default function OwnershipCostsClient() {
                   ))}
                 </ul>
               </details>
+            )}
+          </div>
+        ) : view === 'changes' ? (
+          <div className="mt-6 space-y-6">
+            {changeError && (
+              <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                {changeError}
+              </div>
+            )}
+
+            {!changeData?.comparable ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5">
+                <div className="flex gap-3">
+                  <FileSearch className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+                  <div>
+                    <h3 className="font-semibold text-slate-900">
+                      Not enough comparable observed history
+                    </h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      {changeData?.reason ??
+                        'Add a second comparable bill period to explain a real change.'}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Estimates, modeled backcasts, overlapping periods, and
+                      unverified records are excluded.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <section aria-labelledby="change-summary-heading" className="grid gap-3 sm:grid-cols-2">
+                  <article className="rounded-2xl border border-slate-200 p-5">
+                    <h3 id="change-summary-heading" className="text-sm font-semibold text-slate-600">
+                      Recurring annual change
+                    </h3>
+                    <div className={`mt-2 text-2xl font-semibold ${
+                      changeData.totalRecurringDeltaCents > 0
+                        ? 'text-rose-700'
+                        : changeData.totalRecurringDeltaCents < 0
+                          ? 'text-emerald-700'
+                          : 'text-slate-900'
+                    }`}>
+                      {changeData.totalRecurringDeltaCents > 0 ? '+' : ''}
+                      {moneyFromCents(changeData.totalRecurringDeltaCents)}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Repeats annually if the supported current amount continues.
+                    </p>
+                  </article>
+                  <article className="rounded-2xl border border-slate-200 p-5">
+                    <h3 className="text-sm font-semibold text-slate-600">
+                      One-time change
+                    </h3>
+                    <div className={`mt-2 text-2xl font-semibold ${
+                      changeData.totalOneTimeDeltaCents > 0
+                        ? 'text-rose-700'
+                        : changeData.totalOneTimeDeltaCents < 0
+                          ? 'text-emerald-700'
+                          : 'text-slate-900'
+                    }`}>
+                      {changeData.totalOneTimeDeltaCents > 0 ? '+' : ''}
+                      {moneyFromCents(changeData.totalOneTimeDeltaCents)}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Recorded project or repair impact; not treated as recurring.
+                    </p>
+                  </article>
+                </section>
+
+                <section aria-labelledby="ranked-changes-heading">
+                  <h3 id="ranked-changes-heading" className="text-base font-semibold text-slate-950">
+                    Ranked observed changes
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Ranked by annual impact, confidence, materiality, and whether
+                    there is an executable next step.
+                  </p>
+                  <div className="mt-4 space-y-4">
+                    {changeData.changes.map((change) => (
+                      <article key={`${change.category}:${change.toSnapshotId}`} className="rounded-2xl border border-slate-200 p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-lg font-semibold text-slate-950">{change.label}</h4>
+                              <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${
+                                change.impact === 'RECURRING'
+                                  ? 'border-violet-200 bg-violet-50 text-violet-800'
+                                  : 'border-blue-200 bg-blue-50 text-blue-800'
+                              }`}>
+                                {change.impact === 'RECURRING' ? 'Recurring impact' : 'One-time impact'}
+                              </span>
+                              {change.materiality.material && (
+                                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-900">
+                                  Material
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-slate-700">{change.explanation}</p>
+                            {change.explanationStatus === 'UNEXPLAINED' && (
+                              <p className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-amber-800">
+                                <TriangleAlert className="h-4 w-4" />
+                                Reason unknown — no cause was inferred.
+                              </p>
+                            )}
+                          </div>
+                          <div className="shrink-0 text-left sm:text-right">
+                            <div className={`text-2xl font-semibold ${
+                              change.deltaCents > 0 ? 'text-rose-700' : 'text-emerald-700'
+                            }`}>
+                              {change.deltaCents > 0 ? '+' : ''}
+                              {moneyFromCents(change.deltaCents)}
+                            </div>
+                            <div className="mt-1 text-sm text-slate-500">
+                              {percentLabel(change.deltaPercent)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <dl className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
+                          <div>
+                            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prior period</dt>
+                            <dd className="mt-1 text-slate-800">
+                              {moneyFromCents(change.priorAnnualCents)} · through {dateLabel(change.priorPeriod.end)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current period</dt>
+                            <dd className="mt-1 text-slate-800">
+                              {moneyFromCents(change.currentAnnualCents)} · through {dateLabel(change.currentPeriod.end)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Confidence</dt>
+                            <dd className="mt-1 text-slate-800">{change.confidence.toLowerCase()}</dd>
+                          </div>
+                        </dl>
+
+                        <details className="mt-4 rounded-xl border border-slate-200 p-3">
+                          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                            View source evidence ({change.evidence.length})
+                          </summary>
+                          <div className="mt-3 overflow-x-auto">
+                            <table className="min-w-[640px] w-full text-left text-sm">
+                              <caption className="sr-only">
+                                Evidence used for the {change.label} observed change
+                              </caption>
+                              <thead className="text-xs uppercase tracking-wide text-slate-500">
+                                <tr>
+                                  <th scope="col" className="pb-2 pr-4">Source</th>
+                                  <th scope="col" className="pb-2 pr-4">Period</th>
+                                  <th scope="col" className="pb-2 pr-4">Evidence</th>
+                                  <th scope="col" className="pb-2">Verification</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                {change.evidence.map((item) => (
+                                  <tr key={item.observationId}>
+                                    <td className="py-2 pr-4">{item.sourceDomain.toLowerCase().replace(/_/g, ' ')}</td>
+                                    <td className="py-2 pr-4">
+                                      {dateLabel(item.periodStart)} – {dateLabel(item.periodEnd)}
+                                    </td>
+                                    <td className="py-2 pr-4">{item.evidenceStatus.toLowerCase().replace(/_/g, ' ')}</td>
+                                    <td className="py-2">{item.verificationStatus.toLowerCase().replace(/_/g, ' ')}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </details>
+
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <Link
+                            href={change.action.href}
+                            onClick={() => track('action_taken', {
+                              tool: 'ownership-costs',
+                              actionType: `review_change_${change.category.toLowerCase()}`,
+                              propertyId,
+                            })}
+                            className="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                          >
+                            {change.action.label}
+                          </Link>
+                          <span className="text-xs text-slate-500">
+                            Dismissal, deferral, and resolution are available when this material change appears in Home Actions.
+                          </span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <details className="rounded-2xl border border-slate-200 p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+                    Change calculation limits
+                  </summary>
+                  <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                    {changeData.limitations.map((limitation) => (
+                      <li key={limitation} className="flex gap-2">
+                        <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-teal-600" />
+                        {limitation}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </>
             )}
           </div>
         ) : (
