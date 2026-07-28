@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { track } from '@/lib/analytics/events';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   Building2,
   CalendarClock,
+  ChevronDown,
   ChevronRight,
   CheckCircle2,
   CircleDollarSign,
@@ -1007,10 +1008,73 @@ function SuggestionDetailSheet({
 }
 
 // ============================================================================
-// SCENARIO CARD
+// GROUPED SCENARIO COMPARISONS
 // ============================================================================
 
-function ScenarioCard({
+type ScenarioFilter = 'ALL' | 'NEEDS_RESULTS' | 'CALCULATED' | 'SELECTED';
+
+type ScenarioComparisonGroup = {
+  key: string;
+  label: string;
+  componentType: HomeTwinComponentType | null;
+  scenarios: HomeTwinScenarioDTO[];
+  updatedAt: string;
+  computedCount: number;
+  selectedCount: number;
+  pendingCount: number;
+};
+
+const SCENARIO_FILTER_LABEL: Record<ScenarioFilter, string> = {
+  ALL: 'All',
+  NEEDS_RESULTS: 'Needs results',
+  CALCULATED: 'Calculated',
+  SELECTED: 'Selected',
+};
+
+function scenarioMatchesFilter(scenario: HomeTwinScenarioDTO, filter: ScenarioFilter): boolean {
+  if (filter === 'NEEDS_RESULTS') {
+    return scenario.status !== 'COMPUTED' || !!scenario.staleAt || isActiveScenarioRun(scenario.latestRun);
+  }
+  if (filter === 'CALCULATED') return scenario.status === 'COMPUTED' && !scenario.staleAt;
+  if (filter === 'SELECTED') return scenario.decisionStatus === 'SELECTED';
+  return true;
+}
+
+function buildScenarioComparisonGroups(scenarios: HomeTwinScenarioDTO[]): ScenarioComparisonGroup[] {
+  const groups = new Map<string, HomeTwinScenarioDTO[]>();
+  for (const scenario of scenarios) {
+    const key = scenario.componentId ?? 'WHOLE_HOME';
+    groups.set(key, [...(groups.get(key) ?? []), scenario]);
+  }
+
+  return Array.from(groups.entries())
+    .map(([key, groupedScenarios]) => {
+      const sorted = [...groupedScenarios].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+      const component = sorted.find((scenario) => scenario.component)?.component ?? null;
+      return {
+        key,
+        label: component?.label ?? (component ? COMPONENT_LABEL[component.componentType] : 'Whole-home plans'),
+        componentType: component?.componentType ?? null,
+        scenarios: sorted,
+        updatedAt: sorted[0]?.updatedAt ?? '',
+        computedCount: sorted.filter((scenario) => scenario.status === 'COMPUTED' && !scenario.staleAt).length,
+        selectedCount: sorted.filter((scenario) => scenario.decisionStatus === 'SELECTED').length,
+        pendingCount: sorted.filter((scenario) => isActiveScenarioRun(scenario.latestRun)).length,
+      };
+    })
+    .sort((a, b) => {
+      const aPriority = (a.selectedCount > 0 ? 4 : 0) + (a.pendingCount > 0 ? 2 : 0) +
+        (a.scenarios.some((scenario) => scenario.isPinned) ? 1 : 0);
+      const bPriority = (b.selectedCount > 0 ? 4 : 0) + (b.pendingCount > 0 ? 2 : 0) +
+        (b.scenarios.some((scenario) => scenario.isPinned) ? 1 : 0);
+      if (aPriority !== bPriority) return bPriority - aPriority;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+}
+
+function ScenarioOptionRow({
   scenario,
   onClick,
 }: {
@@ -1040,56 +1104,138 @@ function ScenarioCard({
       type="button"
       onClick={onClick}
       aria-label={`View scenario: ${scenario.name}`}
-      className="group block w-full rounded-2xl text-left premium-focus"
+      className="group block w-full rounded-xl text-left premium-focus"
     >
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-[0_14px_38px_-30px_rgba(15,23,42,0.75)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-teal-300 group-hover:shadow-[0_22px_44px_-28px_rgba(15,118,110,0.3)] motion-reduce:transform-none">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="mb-2 flex flex-wrap items-center gap-1.5">
-              <StatusChip tone={statusTone}>
-                {activeRun
-                  ? scenario.latestRun?.status === 'RUNNING' ? 'Calculating' : 'Queued'
-                  : SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
-              </StatusChip>
-              {scenario.decisionStatus !== 'OPEN' && (
-                <StatusChip tone={DECISION_STATUS_TONE[scenario.decisionStatus]}>
-                  {DECISION_STATUS_LABEL[scenario.decisionStatus]}
+      <div
+        className={cn(
+          'rounded-xl border bg-white px-3 py-3 transition-colors group-hover:border-teal-300 group-hover:bg-teal-50/30',
+          scenario.decisionStatus === 'SELECTED'
+            ? 'border-teal-300 bg-teal-50/40'
+            : 'border-slate-200',
+        )}
+      >
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_repeat(3,minmax(76px,0.55fr))_32px] sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <ScenarioIcon className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-950">{scenario.name}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <StatusChip tone={statusTone} className="px-2 py-0.5">
+                  {activeRun
+                    ? scenario.latestRun?.status === 'RUNNING' ? 'Calculating' : 'Queued'
+                    : SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
                 </StatusChip>
-              )}
-              {scenario.isPinned && (
-                <span className="text-[11px] font-medium text-teal-700">Pinned</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                <ScenarioIcon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold leading-tight text-slate-950">{scenario.name}</p>
-                <p className="mt-0.5 text-xs font-medium text-slate-500">
-                  {SCENARIO_TYPE_LABEL[scenario.scenarioType]}
-                </p>
+                {scenario.decisionStatus !== 'OPEN' && (
+                  <StatusChip tone={DECISION_STATUS_TONE[scenario.decisionStatus]} className="px-2 py-0.5">
+                    {DECISION_STATUS_LABEL[scenario.decisionStatus]}
+                  </StatusChip>
+                )}
+                {scenario.isPinned && <span className="text-[11px] font-medium text-teal-700">Pinned</span>}
               </div>
             </div>
           </div>
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700">
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-xs">
           {[
             { label: 'Upfront', value: formatImpactDisplay(cost) },
             { label: 'Savings / yr', value: formatImpactDisplay(savings) },
             { label: 'Payback', value: formatImpactDisplay(payback) },
           ].map((metric) => (
-            <div key={metric.label}>
-              <p className="text-slate-500">{metric.label}</p>
-              <p className="mt-0.5 truncate font-semibold text-slate-900">{metric.value}</p>
+            <div key={metric.label} className="min-w-0 border-t border-slate-100 pt-2 sm:border-0 sm:pt-0">
+              <p className="text-[11px] text-slate-500">{metric.label}</p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-slate-900">{metric.value}</p>
             </div>
           ))}
+          <span className="hidden h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-500 group-hover:bg-teal-100 group-hover:text-teal-700 sm:flex">
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </span>
         </div>
       </div>
     </button>
+  );
+}
+
+function ScenarioComparisonGroupCard({
+  group,
+  filter,
+  expanded,
+  onToggle,
+  onOpenScenario,
+}: {
+  group: ScenarioComparisonGroup;
+  filter: ScenarioFilter;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenScenario: (scenarioId: string) => void;
+}) {
+  const visibleScenarios = group.scenarios.filter((scenario) => scenarioMatchesFilter(scenario, filter));
+  const GroupIcon = group.componentType ? COMPONENT_ICON[group.componentType] : Home;
+  const needsResultsCount = group.scenarios.filter((scenario) => scenarioMatchesFilter(scenario, 'NEEDS_RESULTS')).length;
+
+  return (
+    <article
+      role="listitem"
+      className={cn(
+        'overflow-hidden rounded-2xl border bg-white shadow-[0_16px_38px_-32px_rgba(15,23,42,0.75)]',
+        expanded ? 'border-teal-300 ring-2 ring-teal-500/10' : 'border-slate-200',
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} comparisons for ${group.label}`}
+        className="flex w-full items-center gap-3 px-4 py-4 text-left premium-focus"
+      >
+        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+          <GroupIcon className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold text-slate-950">{group.label}</h3>
+            {group.selectedCount > 0 && <StatusChip tone="good">Selected</StatusChip>}
+            {group.pendingCount > 0 && <StatusChip tone="info">Updating</StatusChip>}
+          </div>
+          <p className="mt-1 text-xs text-slate-600">
+            {group.scenarios.length} {group.scenarios.length === 1 ? 'option' : 'options'} ·{' '}
+            {group.computedCount} calculated
+            {needsResultsCount > 0 ? ` · ${needsResultsCount} need results` : ''}
+          </p>
+        </div>
+        <span className="text-right">
+          <span className="block text-[11px] font-medium text-slate-500">Updated</span>
+          <span className="block text-xs font-semibold text-slate-700">{formatDate(group.updatedAt)}</span>
+        </span>
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-600">
+          {expanded ? (
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          )}
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-slate-200 bg-slate-50/60 p-3">
+          {visibleScenarios.length > 0 ? (
+            <div className="space-y-2" role="list" aria-label={`${group.label} comparison options`}>
+              {visibleScenarios.map((scenario) => (
+                <div key={scenario.id} role="listitem">
+                  <ScenarioOptionRow
+                    scenario={scenario}
+                    onClick={() => onOpenScenario(scenario.id)}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-xs text-slate-600">
+              No options in this group match the selected filter.
+            </p>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -2048,6 +2194,9 @@ export default function HomeDigitalTwinClient({
 
   const [compareComponentId, setCompareComponentId] = useState<string | null>(null);
   const [compareSheetOpen, setCompareSheetOpen] = useState(false);
+  const [expandedScenarioGroupKey, setExpandedScenarioGroupKey] = useState<string | null>(null);
+  const [scenarioFilter, setScenarioFilter] = useState<ScenarioFilter>('ALL');
+  const [showAllScenarioGroups, setShowAllScenarioGroups] = useState(false);
 
   // ── Twin query ──────────────────────────────────────────────────────────────
   const {
@@ -2100,6 +2249,30 @@ export default function HomeDigitalTwinClient({
     recommendations?.find((s) => s.key === selectedSuggestionKey) ?? null;
   const selectedScenario =
     twin?.recentScenarios.find((s) => s.id === selectedScenarioId) ?? null;
+  const scenarioGroups = useMemo(
+    () => buildScenarioComparisonGroups(twin?.recentScenarios ?? []),
+    [twin?.recentScenarios],
+  );
+  const filteredScenarioGroups = useMemo(
+    () =>
+      scenarioGroups.filter((group) =>
+        group.scenarios.some((scenario) => scenarioMatchesFilter(scenario, scenarioFilter)),
+      ),
+    [scenarioFilter, scenarioGroups],
+  );
+  const visibleScenarioGroups = showAllScenarioGroups
+    ? filteredScenarioGroups
+    : filteredScenarioGroups.slice(0, 3);
+
+  useEffect(() => {
+    if (filteredScenarioGroups.length === 0) {
+      setExpandedScenarioGroupKey(null);
+      return;
+    }
+    if (!filteredScenarioGroups.some((group) => group.key === expandedScenarioGroupKey)) {
+      setExpandedScenarioGroupKey(filteredScenarioGroups[0].key);
+    }
+  }, [expandedScenarioGroupKey, filteredScenarioGroups]);
 
   useEffect(() => {
     if (!focusedEntityId || !twin || consumedFocusRef.current === focusedEntityId) return;
@@ -2422,26 +2595,92 @@ export default function HomeDigitalTwinClient({
             </MobileSection>
           )}
 
-          {/* ── RECENT SCENARIOS ────────────────────────────────────────────── */}
-          {twin.recentScenarios.length > 0 && (
-            <MobileSection>
+          {/* ── GROUPED COMPARISONS ────────────────────────────────────────── */}
+          {scenarioGroups.length > 0 && (
+            <MobileSection className="space-y-4">
               <MobileSectionHeader
-                title="Your saved options"
-                subtitle="Open a scenario to review impacts, assumptions, and your decision"
+                title="Your comparisons"
+                subtitle={`${scenarioGroups.length} ${scenarioGroups.length === 1 ? 'system' : 'systems'} · ${twin.recentScenarios.length} saved options`}
               />
-              <div className="space-y-2" role="list" aria-label="Recent saved scenarios">
-                {twin.recentScenarios.map((s) => (
-                  <div key={s.id} role="listitem">
-                    <ScenarioCard
-                      scenario={s}
+              <div
+                className="flex gap-2 overflow-x-auto pb-1 no-scrollbar"
+                role="group"
+                aria-label="Filter saved comparisons"
+              >
+                {(Object.keys(SCENARIO_FILTER_LABEL) as ScenarioFilter[]).map((filter) => {
+                  const count = twin.recentScenarios.filter((scenario) =>
+                    scenarioMatchesFilter(scenario, filter),
+                  ).length;
+                  return (
+                    <Button
+                      key={filter}
+                      type="button"
+                      size="sm"
+                      variant={scenarioFilter === filter ? 'default' : 'outline'}
+                      className={cn(
+                        'shrink-0 rounded-full',
+                        scenarioFilter === filter && 'bg-teal-700 hover:bg-teal-800',
+                      )}
                       onClick={() => {
-                        setSelectedScenarioId(s.id);
-                        setScenarioSheetOpen(true);
+                        setScenarioFilter(filter);
+                        setShowAllScenarioGroups(false);
                       }}
-                    />
-                  </div>
-                ))}
+                      aria-pressed={scenarioFilter === filter}
+                    >
+                      {SCENARIO_FILTER_LABEL[filter]}
+                      <span className="ml-1 text-[11px] opacity-75">{count}</span>
+                    </Button>
+                  );
+                })}
               </div>
+
+              {filteredScenarioGroups.length > 0 ? (
+                <>
+                  <div className="space-y-3" role="list" aria-label="Saved comparisons grouped by home system">
+                    {visibleScenarioGroups.map((group) => (
+                      <ScenarioComparisonGroupCard
+                        key={group.key}
+                        group={group}
+                        filter={scenarioFilter}
+                        expanded={expandedScenarioGroupKey === group.key}
+                        onToggle={() =>
+                          setExpandedScenarioGroupKey((current) =>
+                            current === group.key ? null : group.key,
+                          )
+                        }
+                        onOpenScenario={(scenarioId) => {
+                          setSelectedScenarioId(scenarioId);
+                          setScenarioSheetOpen(true);
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {filteredScenarioGroups.length > 3 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full rounded-xl"
+                      onClick={() => setShowAllScenarioGroups((current) => !current)}
+                    >
+                      {showAllScenarioGroups
+                        ? 'Show recent systems only'
+                        : `View ${filteredScenarioGroups.length - 3} more ${
+                            filteredScenarioGroups.length - 3 === 1 ? 'system' : 'systems'
+                          }`}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-center">
+                  <p className="text-sm font-semibold text-slate-900">
+                    No {SCENARIO_FILTER_LABEL[scenarioFilter].toLowerCase()} options
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Choose another filter to review the rest of your comparisons.
+                  </p>
+                </div>
+              )}
             </MobileSection>
           )}
 

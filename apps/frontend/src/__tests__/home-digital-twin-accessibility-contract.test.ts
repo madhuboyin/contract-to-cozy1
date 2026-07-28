@@ -48,6 +48,17 @@ describe('Home Upgrade Planner accessibility and outcome contract', () => {
     expect(source).toContain('Build the full decision set');
   });
 
+  it('groups saved options by system instead of rendering one unbounded card stream', () => {
+    expect(source).toContain('Your comparisons');
+    expect(source).toContain('buildScenarioComparisonGroups');
+    expect(source).toContain('expandedScenarioGroupKey');
+    expect(source).toContain('filteredScenarioGroups.slice(0, 3)');
+    expect(source).toContain('View ${filteredScenarioGroups.length - 3} more');
+    expect(source).toContain('Filter saved comparisons');
+    expect(source).toContain('Saved comparisons grouped by home system');
+    expect(source).not.toContain('title="Your saved options"');
+  });
+
   it('makes preserved evidence and recomputation changes inspectable', () => {
     expect(source).toContain('Changed since the previous run');
     expect(source).toContain("['Inputs and assumptions', computationRuns[0].inputSnapshot]");

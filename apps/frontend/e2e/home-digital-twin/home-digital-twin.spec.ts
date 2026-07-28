@@ -60,6 +60,26 @@ test('initialized planner exercises comparison, typed assumptions, and run evide
     latestRun: { status: 'SUCCEEDED', startedAt: '2026-07-28T12:00:00.000Z', completedAt: '2026-07-28T12:00:01.000Z', errorMessage: null },
     projectPrefill: { projectType: 'HVAC_REPLACEMENT', category: 'HVAC', inventoryItemId: 'inventory-1' },
   };
+  const extraScenarios = [
+    { id: 'roof-option', label: 'Roof', componentType: 'ROOF', updatedAt: '2026-07-27T12:00:00.000Z' },
+    { id: 'water-option', label: 'Water Heater', componentType: 'WATER_HEATER', updatedAt: '2026-07-26T12:00:00.000Z' },
+    { id: 'foundation-option', label: 'Foundation', componentType: 'FOUNDATION', updatedAt: '2026-07-25T12:00:00.000Z' },
+  ].map((item) => ({
+    ...scenario,
+    id: item.id,
+    componentId: `${item.id}-component`,
+    component: {
+      id: `${item.id}-component`,
+      componentType: item.componentType,
+      label: item.label,
+    },
+    name: `Wait and monitor ${item.label}`,
+    scenarioType: 'WAIT_MONITOR',
+    status: 'DRAFT',
+    impacts: [],
+    updatedAt: item.updatedAt,
+    latestRun: null,
+  }));
 
   await page.unroute(`**/api/properties/${propertyId}/home-digital-twin`);
   await page.route(`**/api/properties/${propertyId}/home-digital-twin`, (route) =>
@@ -76,7 +96,7 @@ test('initialized planner exercises comparison, typed assumptions, and run evide
             needsRecompute: false,
             lastComputedAt: '2026-07-28T12:00:00.000Z',
             components: [component],
-            recentScenarios: [scenario],
+            recentScenarios: [scenario, ...extraScenarios],
           },
           context: null,
         },
@@ -148,6 +168,12 @@ test('initialized planner exercises comparison, typed assumptions, and run evide
   await expect(page.getByText('Your home upgrade plan')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Upstairs HVAC is the next system worth reviewing' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Your home systems' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your comparisons' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse comparisons for Upstairs HVAC' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'View 1 more system' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Expand comparisons for Foundation' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'View 1 more system' }).click();
+  await expect(page.getByRole('button', { name: 'Expand comparisons for Foundation' })).toBeVisible();
   await page.getByRole('listitem', { name: 'Compare options for Upstairs HVAC' }).click();
   await expect(page.getByRole('heading', { name: 'Compare options: Upstairs HVAC' })).toBeVisible();
   await expect(page.getByText('Maintain Upstairs HVAC')).toBeVisible();
