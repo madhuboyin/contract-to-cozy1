@@ -19,6 +19,14 @@ function BudgetContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
+  const ownershipCostDecisionId =
+    searchParams.get('ownershipCostDecisionId');
+  const ownershipCostMonthlyBufferCents = Number(
+    searchParams.get('ownershipCostMonthlyBufferCents'),
+  );
+  const hasOwnershipCostBuffer = Boolean(ownershipCostDecisionId)
+    && Number.isSafeInteger(ownershipCostMonthlyBufferCents)
+    && ownershipCostMonthlyBufferCents > 0;
   
   const [properties, setProperties] = useState<Property[]>([]);
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
@@ -26,6 +34,8 @@ function BudgetContent() {
 
   useEffect(() => {
     loadProperties();
+    // The initial property selection is intentionally loaded once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const loadProperties = async () => {
     try {
@@ -74,6 +84,26 @@ function BudgetContent() {
           </div>
         }
       />
+      {hasOwnershipCostBuffer && (
+        <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+          <h2 className="font-semibold">Ownership Cost planning handoff</h2>
+          <p className="mt-1">
+            Recommended recurring cash buffer:{' '}
+            <strong>
+              {new Intl.NumberFormat(undefined, {
+                style: 'currency',
+                currency: 'USD',
+                maximumFractionDigits: 0,
+              }).format(ownershipCostMonthlyBufferCents / 100)} per month
+            </strong>.
+            This excludes known one-time capital needs, which belong in Reserve
+            Fund.
+          </p>
+          <p className="mt-1 text-xs text-blue-800">
+            Recorded planning decision {ownershipCostDecisionId}.
+          </p>
+        </section>
+      )}
       {/* Property Selector */}
       {properties.length > 0 && (
         <MobileFilterSurface className="border border-slate-200/80 bg-white">

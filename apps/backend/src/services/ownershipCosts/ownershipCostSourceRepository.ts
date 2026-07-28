@@ -17,7 +17,9 @@ type DbClient = Pick<
   | 'hoaAssociation'
   | 'projectRecord'
   | 'homeReserveFund'
->;
+> & {
+  homeCapitalTimelineAnalysis?: typeof prisma.homeCapitalTimelineAnalysis;
+};
 
 function cents(value: Prisma.Decimal | number | string | null | undefined): number | null {
   if (value == null) return null;
@@ -112,6 +114,7 @@ export async function loadOwnershipCostSourceBundle(
     hoa,
     projects,
     reserve,
+    capitalTimeline,
   ] = await Promise.all([
     db.propertyTaxBillRecord.findMany({
       where: { propertyId, status: 'ACTIVE', supersededById: null },
@@ -207,6 +210,9 @@ export async function loadOwnershipCostSourceBundle(
       select: {
         id: true,
         status: true,
+        inventoryItemId: true,
+        sourceEntityType: true,
+        sourceEntityId: true,
         actualCostCents: true,
         currentContractAmountCents: true,
         startDate: true,
@@ -224,6 +230,31 @@ export async function loadOwnershipCostSourceBundle(
         updatedAt: true,
       },
     }),
+    db.homeCapitalTimelineAnalysis?.findFirst
+      ? db.homeCapitalTimelineAnalysis.findFirst({
+        where: { propertyId, status: 'READY' },
+        orderBy: { computedAt: 'desc' },
+        select: {
+          id: true,
+          computedAt: true,
+          items: {
+            orderBy: { windowStart: 'asc' },
+            select: {
+              id: true,
+              inventoryItemId: true,
+              category: true,
+              eventType: true,
+              windowStart: true,
+              windowEnd: true,
+              estimatedCostMinCents: true,
+              estimatedCostMaxCents: true,
+              confidence: true,
+              updatedAt: true,
+            },
+          },
+        },
+      })
+      : Promise.resolve(null),
   ]);
 
   const bundle = emptyOwnershipCostSourceBundle();
@@ -526,6 +557,68 @@ export async function loadOwnershipCostSourceBundle(
       ],
       missingDependencies: amount == null ? ['project cost'] : [],
       dedupeKey: `CAPITAL_PROJECT:${project.id}`,
+    });
+  }
+
+  const projectInventoryIds = new Set(
+    projects
+      .map((project) => project.inventoryItemId)
+      .filter((value): value is string => value != null),
+  );
+  const linkedCapitalTimelineItemIds = new Set(
+    projects
+      .filter((project) =>
+        project.sourceEntityType === 'HomeCapitalTimelineItem'
+        && project.sourceEntityId != null)
+      .map((project) => project.sourceEntityId!),
+  );
+  const capitalTimelineComputedAt = capitalTimeline?.computedAt ?? asOf;
+  const capitalTimelineItems = capitalTimeline?.items ?? [];
+  for (const item of capitalTimelineItems) {
+    if (
+      linkedCapitalTimelineItemIds.has(item.id)
+      || (
+        item.inventoryItemId != null
+        && projectInventoryIds.has(item.inventoryItemId)
+      )
+    ) {
+      continue;
+    }
+    const amount = item.estimatedCostMaxCents
+      ?? item.estimatedCostMinCents;
+    const temporalKind = periodTemporalKind(
+      item.windowStart,
+      item.windowEnd,
+      asOf,
+    );
+    bundle.project.push({
+      sourceDomain: 'PROJECT',
+      sourceEntityType: 'HomeCapitalTimelineItem',
+      sourceEntityId: item.id,
+      sourceUpdatedAt: item.updatedAt ?? capitalTimelineComputedAt,
+      category: 'CAPITAL_PROJECT',
+      subcategory: item.category,
+      amountCents: amount,
+      recurrence: 'ONE_TIME',
+      periodStart: item.windowStart,
+      periodEnd: item.windowEnd,
+      temporalKind,
+      evidenceStatus: 'ESTIMATED',
+      verificationStatus: 'UNVERIFIED',
+      freshnessStatus: freshness(capitalTimelineComputedAt, asOf),
+      confidence: item.confidence,
+      assumptions: [
+        'Capital Timeline range is planning evidence, not observed spend.',
+        ...(temporalKind === 'FORECAST_PERIOD' && amount != null
+          ? [
+              `FORECAST_EVENT:${item.windowStart.getUTCFullYear()}:${amount}:ONE_TIME:Capital Timeline ${item.category.toLowerCase().replace(/_/g, ' ')} ${item.eventType.toLowerCase().replace(/_/g, ' ')}`,
+            ]
+          : []),
+      ],
+      missingDependencies: amount == null
+        ? ['Capital Timeline cost range']
+        : [],
+      dedupeKey: `CAPITAL_TIMELINE:${item.id}`,
     });
   }
 

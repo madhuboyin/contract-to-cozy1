@@ -247,6 +247,93 @@ export type OwnershipCostScenarioReadModel = {
   forecast: OwnershipCostForecastReadModel;
 };
 
+export type OwnershipCostVariabilityReadModel = {
+  propertyId: string;
+  selectedLens: OwnershipCostCurrentLens;
+  eligibility: {
+    eligible: boolean;
+    requiredComparablePeriods: number;
+    comparableObservedPeriods: number;
+    reason: string;
+    stableMethodVersion: string | null;
+    stableCategoryDefinitionVersion: string | null;
+    measuredCategories: OwnershipCostCategory[];
+    excludedCategories: Array<{
+      category: OwnershipCostCategory;
+      reason: string;
+    }>;
+  };
+  measured: {
+    status: 'MEASURED_OBSERVED' | 'INSUFFICIENT_HISTORY';
+    currency: 'USD';
+    periods: Array<{
+      snapshotId: string;
+      year: number;
+      periodStart: string;
+      periodEnd: string;
+      recurringCents: number;
+      oneTimeCents: number;
+    }>;
+    recurring: {
+      averageAnnualCents: number;
+      observedLowCents: number;
+      observedHighCents: number;
+      standardDeviationCents: number;
+      maxYearOverYearSwingCents: number;
+      variabilityRatio: number | null;
+      formula: string;
+    } | null;
+    categoryBreakdown: Array<{
+      category: OwnershipCostCategory;
+      label: string;
+      annualAmountsCents: number[];
+      observedLowCents: number;
+      observedHighCents: number;
+      standardDeviationCents: number;
+    }>;
+    oneTimeCapital: {
+      excludedFromRecurringVariability: true;
+      observedByPeriod: Array<{
+        snapshotId: string;
+        year: number;
+        amountCents: number;
+      }>;
+    };
+  };
+  planningBuffer: {
+    basis: 'SCENARIO_NOT_MEASURED_VOLATILITY';
+    forecastId: string | null;
+    horizonYears: number;
+    monthlyCashBufferCents: number;
+    capitalReserveCents: number;
+    monthlyMethod: string;
+    capitalMethod: string;
+    nonDuplicationRule: string;
+    monthlyHandoff: {
+      target: 'BUDGET_PLANNER';
+      enabled: boolean;
+      label: string;
+    };
+    capitalHandoff: {
+      target: 'RESERVE_FUND';
+      enabled: boolean;
+      label: string;
+    };
+  };
+  limitations: string[];
+};
+
+export type OwnershipCostPlanningDecision = {
+  id: string;
+  decisionType: 'MONTHLY_CASH_BUFFER' | 'CAPITAL_RESERVE';
+  amountCents: number;
+  recordedAt: string;
+  handoff: {
+    target: 'BUDGET_PLANNER' | 'RESERVE_FUND';
+    href: string;
+  };
+};
+
 type OwnershipCostResponse = {
   ownershipCosts: OwnershipCostReadModel;
 };
@@ -389,4 +476,31 @@ export async function deleteOwnershipCostScenario(
   await api.delete(
     `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/scenarios/${encodeURIComponent(scenarioId)}`,
   );
+}
+
+export async function getOwnershipCostVariability(
+  propertyId: string,
+  lens: OwnershipCostCurrentLens,
+) {
+  const query = new URLSearchParams({ lens });
+  const response = await api.get<{
+    ownershipCostVariability: OwnershipCostVariabilityReadModel;
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/variability?${query}`,
+  );
+  return response.data.ownershipCostVariability;
+}
+
+export async function recordOwnershipCostPlanningDecision(
+  propertyId: string,
+  lens: OwnershipCostCurrentLens,
+  decisionType: 'MONTHLY_CASH_BUFFER' | 'CAPITAL_RESERVE',
+) {
+  const response = await api.post<{
+    ownershipCostPlanningDecision: OwnershipCostPlanningDecision;
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/variability/decisions`,
+    { lens, decisionType },
+  );
+  return response.data.ownershipCostPlanningDecision;
 }

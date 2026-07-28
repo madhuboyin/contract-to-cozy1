@@ -15,6 +15,9 @@ import { ownershipCostChangeService } from '../services/ownershipCosts/ownership
 import {
   ownershipCostForecastService,
 } from '../services/ownershipCosts/ownershipCostForecast.service';
+import {
+  ownershipCostVariabilityService,
+} from '../services/ownershipCosts/ownershipCostVariability.service';
 import { OwnershipCostAccessDeniedError } from '../services/ownershipCosts/ownershipCostObservation.service';
 import {
   OWNERSHIP_COST_CATEGORIES,
@@ -64,6 +67,15 @@ const ownershipCostScenarioListQuerySchema = z.object({
   includeArchived: z.enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
+}).strict();
+
+const ownershipCostPlanningDecisionSchema = z.object({
+  lens: z.enum(OWNERSHIP_COST_CURRENT_LENSES)
+    .default('OPERATING_EXPENSE'),
+  decisionType: z.enum([
+    'MONTHLY_CASH_BUFFER',
+    'CAPITAL_RESERVE',
+  ]),
 }).strict();
 
 function ownershipCostError(error: unknown, res: Response) {
@@ -308,6 +320,55 @@ export async function deleteOwnershipCostScenario(
       req.user!.userId,
     );
     return res.status(204).send();
+  } catch (error) {
+    return ownershipCostError(error, res);
+  }
+}
+
+export async function getOwnershipCostVariability(
+  req: CustomRequest,
+  res: Response,
+) {
+  const parsed = ownershipCostReadQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json(validationErrorResponse(parsed.error));
+  }
+  try {
+    const ownershipCostVariability =
+      await ownershipCostVariabilityService.getVariability(
+        req.params.propertyId,
+        req.user!.userId,
+        parsed.data.lens,
+      );
+    return res.json({
+      success: true,
+      data: { ownershipCostVariability },
+    });
+  } catch (error) {
+    return ownershipCostError(error, res);
+  }
+}
+
+export async function recordOwnershipCostPlanningDecision(
+  req: CustomRequest,
+  res: Response,
+) {
+  const parsed = ownershipCostPlanningDecisionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(validationErrorResponse(parsed.error));
+  }
+  try {
+    const ownershipCostPlanningDecision =
+      await ownershipCostVariabilityService.recordPlanningDecision(
+        req.params.propertyId,
+        req.user!.userId,
+        parsed.data.lens,
+        parsed.data.decisionType,
+      );
+    return res.status(201).json({
+      success: true,
+      data: { ownershipCostPlanningDecision },
+    });
   } catch (error) {
     return ownershipCostError(error, res);
   }

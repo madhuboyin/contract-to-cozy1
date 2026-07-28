@@ -4,7 +4,7 @@
 **Contributing domains:** Property Tax, Coverage and Premium Review, Financing, Expenses, Utilities, Home Record, Capital Timeline, Reserve Fund, Budget Planner, Guidance, and Home Actions  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Implementation in progress — Slices 0–5 started July 28, 2026
+**Status:** Implementation in progress — Slices 0–6 started July 28, 2026
 **Recommended disposition:** **Consolidate, rebuild the calculation and evidence contract, and contain unsupported historical and predictive claims immediately**  
 **Current safety classification:** Material financial  
 **Recommended safety classification:** Material financial  
@@ -171,7 +171,43 @@ Implemented:
   repeated calculations, source-backed events, one-time capital treatment,
   bounded overrides, explicit persistence, and stale scenarios.
 
-Measured variability and buffer planning remain gated for Slice 6.
+Measured variability and buffer planning were intentionally gated until this
+Slice 6 increment.
+
+### July 28, 2026 — Slice 6 variability and buffer increment
+
+Implemented:
+
+- added strict annual-history eligibility requiring three non-overlapping
+  observed or confirmed periods with stable method, category definition,
+  category scope, and complete source periods;
+- excluded estimates, benchmarks, forecasts, synthetic backcasts, unverified
+  evidence, partial periods, and unstable category scope from measured
+  variability;
+- expressed recurring variability first as observed low, average, high,
+  standard deviation, and largest year-over-year dollar swing;
+- measured eligible recurring categories independently and disclosed the exact
+  sample-standard-deviation formula;
+- separated observed one-time repair and capital spend from recurring
+  variability;
+- replaced unsupported benchmark and climate modifiers with an explicit
+  insufficient-history state;
+- added a separately labeled scenario-planning buffer based on forecast
+  sensitivity rather than presenting it as measured volatility;
+- integrated supported one-time Capital Timeline events into a distinct capital
+  reserve amount;
+- enforced a non-duplication rule between recurring monthly cash buffer and
+  one-time capital reserve;
+- added contributor-gated planning-decision persistence with the source
+  snapshot, forecast, lens, amount, basis, and handoff target;
+- added executable Budget Planner and Reserve Fund handoffs that receive and
+  display the recorded, target-specific amount; and
+- added fixtures covering eligible observations, synthetic and partial
+  exclusions, definition instability, one-time separation, buffer math, and
+  persisted handoffs.
+
+Broader action, decision, notification, and revisit lifecycle work remains
+gated for Slice 7.
 
 ---
 

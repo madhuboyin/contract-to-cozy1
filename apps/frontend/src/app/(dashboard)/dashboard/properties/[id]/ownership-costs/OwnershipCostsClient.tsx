@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   Activity,
   Archive,
@@ -24,9 +24,11 @@ import {
   getOwnershipCostChanges,
   getOwnershipCostForecast,
   getOwnershipCosts,
+  getOwnershipCostVariability,
   listOwnershipCostScenarios,
   recalculateOwnershipCostForecast,
   recalculateOwnershipCosts,
+  recordOwnershipCostPlanningDecision,
   updateOwnershipCostScenario,
   type OwnershipCostChangeReadModel,
   type OwnershipCostCategory,
@@ -35,6 +37,7 @@ import {
   type OwnershipCostReadModel,
   type OwnershipCostReadModelCategory,
   type OwnershipCostScenarioReadModel,
+  type OwnershipCostVariabilityReadModel,
 } from './ownershipCostsApi';
 
 const VIEWS = [
@@ -665,6 +668,339 @@ function ForecastPlanningView({
   );
 }
 
+function BufferPlanningView({
+  propertyId,
+  lens,
+}: {
+  propertyId: string;
+  lens: OwnershipCostCurrentLens;
+}) {
+  const router = useRouter();
+  const [variability, setVariability] =
+    useState<OwnershipCostVariabilityReadModel | null>(null);
+  const [bufferError, setBufferError] = useState<string | null>(null);
+  const [loadingBuffer, setLoadingBuffer] = useState(true);
+  const [recording, setRecording] = useState<
+    'MONTHLY_CASH_BUFFER' | 'CAPITAL_RESERVE' | null
+  >(null);
+
+  const loadVariability = useCallback(async () => {
+    setLoadingBuffer(true);
+    setBufferError(null);
+    try {
+      setVariability(await getOwnershipCostVariability(propertyId, lens));
+    } catch (cause) {
+      setBufferError(
+        cause instanceof Error
+          ? cause.message
+          : 'Variability planning is temporarily unavailable.',
+      );
+    } finally {
+      setLoadingBuffer(false);
+    }
+  }, [lens, propertyId]);
+
+  useEffect(() => {
+    void loadVariability();
+  }, [loadVariability]);
+
+  async function handoff(
+    decisionType: 'MONTHLY_CASH_BUFFER' | 'CAPITAL_RESERVE',
+  ) {
+    setRecording(decisionType);
+    setBufferError(null);
+    try {
+      const decision = await recordOwnershipCostPlanningDecision(
+        propertyId,
+        lens,
+        decisionType,
+      );
+      track('action_taken', {
+        tool: 'ownership-costs',
+        propertyId,
+        actionType: decisionType === 'MONTHLY_CASH_BUFFER'
+          ? 'send_monthly_buffer_to_budget'
+          : 'send_capital_need_to_reserve',
+      });
+      router.push(decision.handoff.href);
+    } catch (cause) {
+      setBufferError(
+        cause instanceof Error
+          ? cause.message
+          : 'The planning handoff could not be recorded.',
+      );
+      setRecording(null);
+    }
+  }
+
+  if (loadingBuffer && !variability) {
+    return (
+      <div className="mt-6 flex items-center gap-2 text-sm text-slate-600">
+        <RefreshCw className="h-4 w-4 animate-spin" />
+        Checking observed cost history…
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 space-y-6">
+      {bufferError && (
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          {bufferError}
+        </div>
+      )}
+
+      {variability && !variability.eligibility.eligible && (
+        <section className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5">
+          <div className="flex gap-3">
+            <FileSearch className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+            <div>
+              <h3 className="font-semibold text-slate-950">
+                Not enough cost history to measure variability
+              </h3>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                {variability.eligibility.comparableObservedPeriods} of{' '}
+                {variability.eligibility.requiredComparablePeriods} required
+                comparable annual periods are available. Estimates, benchmarks,
+                forecasts, synthetic history, partial periods, and unstable
+                category definitions do not qualify.
+              </p>
+              {variability.eligibility.excludedCategories.length > 0 && (
+                <details className="mt-3 text-sm text-slate-700">
+                  <summary className="cursor-pointer font-semibold">
+                    Why categories were excluded
+                  </summary>
+                  <ul className="mt-2 space-y-1">
+                    {variability.eligibility.excludedCategories.map((item) => (
+                      <li key={item.category}>
+                        {item.category.toLowerCase().replace(/_/g, ' ')}: {item.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {variability?.eligibility.eligible && variability.measured.recurring && (
+        <>
+          <section aria-labelledby="measured-range-heading">
+            <div>
+              <h3 id="measured-range-heading" className="text-base font-semibold text-slate-950">
+                Measured observed dollar range
+              </h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Uses only the stable recurring categories supported across all
+                three comparable annual periods.
+              </p>
+            </div>
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Observed low
+                </dt>
+                <dd className="mt-1 text-xl font-semibold text-slate-950">
+                  {moneyFromCents(
+                    variability.measured.recurring.observedLowCents,
+                  )}
+                </dd>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Observed average
+                </dt>
+                <dd className="mt-1 text-xl font-semibold text-slate-950">
+                  {moneyFromCents(
+                    variability.measured.recurring.averageAnnualCents,
+                  )}
+                </dd>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Observed high
+                </dt>
+                <dd className="mt-1 text-xl font-semibold text-slate-950">
+                  {moneyFromCents(
+                    variability.measured.recurring.observedHighCents,
+                  )}
+                </dd>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Largest annual swing
+                </dt>
+                <dd className="mt-1 text-xl font-semibold text-slate-950">
+                  {moneyFromCents(
+                    variability.measured.recurring.maxYearOverYearSwingCents,
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section aria-labelledby="observed-periods-heading">
+            <h3 id="observed-periods-heading" className="text-base font-semibold text-slate-950">
+              Comparable observed periods
+            </h3>
+            <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="min-w-[640px] w-full text-left text-sm">
+                <caption className="sr-only">
+                  Recurring and one-time ownership cost by observed annual period
+                </caption>
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">Observed year</th>
+                    <th scope="col" className="px-4 py-3">Recurring cost</th>
+                    <th scope="col" className="px-4 py-3">One-time capital</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {variability.measured.periods.map((period) => (
+                    <tr key={period.snapshotId}>
+                      <th scope="row" className="px-4 py-3 font-medium text-slate-900">
+                        {period.year}
+                      </th>
+                      <td className="px-4 py-3">
+                        {moneyFromCents(period.recurringCents)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {moneyFromCents(period.oneTimeCents)}
+                        <span className="ml-2 text-xs text-slate-500">
+                          excluded from recurring variability
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section aria-labelledby="category-variability-heading">
+            <h3 id="category-variability-heading" className="text-base font-semibold text-slate-950">
+              Recurring categories measured
+            </h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {variability.measured.categoryBreakdown.map((category) => (
+                <article key={category.category} className="rounded-2xl border border-slate-200 p-4">
+                  <h4 className="font-semibold text-slate-950">
+                    {category.label}
+                  </h4>
+                  <p className="mt-2 text-sm text-slate-700">
+                    Observed range {moneyFromCents(category.observedLowCents)} –{' '}
+                    {moneyFromCents(category.observedHighCents)}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Standard deviation {moneyFromCents(
+                      category.standardDeviationCents,
+                    )}
+                  </p>
+                </article>
+              ))}
+            </div>
+            <details className="mt-4 rounded-xl border border-slate-200 p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+                Variability formula
+              </summary>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {variability.measured.recurring.formula}
+              </p>
+            </details>
+          </section>
+        </>
+      )}
+
+      {variability && (
+        <>
+          <section aria-labelledby="scenario-buffer-heading" className="rounded-2xl border border-blue-200 bg-blue-50/60 p-5">
+            <h3 id="scenario-buffer-heading" className="text-base font-semibold text-slate-950">
+              Scenario planning buffer
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-slate-700">
+              This is planning support derived from the forward scenario range,
+              not measured volatility. Recurring cash and one-time capital are
+              kept separate so the same amount is not sent twice.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <article className="rounded-2xl bg-white p-4">
+                <h4 className="text-sm font-semibold text-slate-700">
+                  Monthly recurring cash buffer
+                </h4>
+                <div className="mt-2 text-2xl font-semibold text-slate-950">
+                  {moneyFromCents(
+                    variability.planningBuffer.monthlyCashBufferCents,
+                  )} / month
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  {variability.planningBuffer.monthlyMethod}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handoff('MONTHLY_CASH_BUFFER')}
+                  disabled={
+                    !variability.planningBuffer.monthlyHandoff.enabled
+                    || recording != null
+                  }
+                  className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {recording === 'MONTHLY_CASH_BUFFER'
+                    ? 'Recording…'
+                    : 'Send monthly buffer to Budget Planner'}
+                </button>
+              </article>
+              <article className="rounded-2xl bg-white p-4">
+                <h4 className="text-sm font-semibold text-slate-700">
+                  Known one-time capital reserve
+                </h4>
+                <div className="mt-2 text-2xl font-semibold text-slate-950">
+                  {moneyFromCents(
+                    variability.planningBuffer.capitalReserveCents,
+                  )}
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  {variability.planningBuffer.capitalMethod}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handoff('CAPITAL_RESERVE')}
+                  disabled={
+                    !variability.planningBuffer.capitalHandoff.enabled
+                    || recording != null
+                  }
+                  className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {recording === 'CAPITAL_RESERVE'
+                    ? 'Recording…'
+                    : 'Send capital need to Reserve Fund'}
+                </button>
+              </article>
+            </div>
+            <p className="mt-4 text-xs font-medium text-blue-900">
+              {variability.planningBuffer.nonDuplicationRule}
+            </p>
+          </section>
+
+          <details className="rounded-2xl border border-slate-200 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+              Variability and buffer limitations
+            </summary>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+              {variability.limitations.map((limitation) => (
+                <li key={limitation} className="flex gap-2">
+                  <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-teal-600" />
+                  {limitation}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function OwnershipCostsClient() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -1285,6 +1621,8 @@ export default function OwnershipCostsClient() {
           </div>
         ) : view === 'forecast' ? (
           <ForecastPlanningView propertyId={propertyId} lens={lens} />
+        ) : view === 'variability' ? (
+          <BufferPlanningView propertyId={propertyId} lens={lens} />
         ) : (
           <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-700">
             This canonical view is intentionally gated until its evidence contract is delivered in the corresponding implementation slice.

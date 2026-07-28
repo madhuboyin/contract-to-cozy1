@@ -5,7 +5,9 @@ import {
   getOwnershipCostForecast,
   getOwnershipCostChanges,
   getOwnershipCosts,
+  getOwnershipCostVariability,
   listOwnershipCostScenarios,
+  recordOwnershipCostPlanningDecision,
   recalculateOwnershipCostForecast,
   recalculateOwnershipCosts,
   updateOwnershipCostScenario,
@@ -18,6 +20,23 @@ import {
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 const router = Router();
+
+router.get(
+  '/properties/:propertyId/ownership-costs/variability',
+  authenticate,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  getOwnershipCostVariability,
+);
+
+router.post(
+  '/properties/:propertyId/ownership-costs/variability/decisions',
+  authenticate,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  recordOwnershipCostPlanningDecision,
+);
 
 router.get(
   '/properties/:propertyId/ownership-costs/forecast',

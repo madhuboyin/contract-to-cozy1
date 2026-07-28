@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   PiggyBank,
   RefreshCw,
@@ -247,7 +247,16 @@ function AddContributionForm({
 // ─── Main Component ──────────────────────────────────────────────────
 export default function ReserveFundClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const ownershipCostDecisionId =
+    searchParams.get('ownershipCostDecisionId');
+  const ownershipCostCapitalReserveCents = Number(
+    searchParams.get('ownershipCostCapitalReserveCents'),
+  );
+  const hasOwnershipCostCapitalNeed = Boolean(ownershipCostDecisionId)
+    && Number.isSafeInteger(ownershipCostCapitalReserveCents)
+    && ownershipCostCapitalReserveCents > 0;
   const backHref = `/dashboard/properties/${propertyId}`;
 
   const [fund, setFund] = useState<ReserveFundDTO | null>(null);
@@ -508,6 +517,21 @@ export default function ReserveFundClient() {
         </div>
       )}
     >
+      {hasOwnershipCostCapitalNeed && (
+        <section className="rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-950">
+          <h2 className="font-semibold">Ownership Cost capital handoff</h2>
+          <p className="mt-1">
+            Known one-time capital need:{' '}
+            <strong>{money(ownershipCostCapitalReserveCents)}</strong>. This
+            excludes the recurring monthly cash buffer sent to Budget Planner.
+          </p>
+          <p className="mt-1 text-xs text-teal-800">
+            Recorded planning decision {ownershipCostDecisionId}. Recalculate
+            the Capital Timeline to incorporate the latest source events into
+            the full reserve plan.
+          </p>
+        </section>
+      )}
       <PropertyContextCapturePanel
         propertyId={propertyId}
         featureKey="RESERVE_FUND"
