@@ -444,6 +444,7 @@ export class InventoryService {
     JobQueueService.enqueueHomeDigitalTwinRefresh(
       propertyId,
       'Inventory changed; the home projection is being refreshed.',
+      { sourceReferenceIds: [created.id] },
     ).catch((err) => logger.error({ err }, '[INVENTORY_CREATE] Twin refresh enqueue failed'));
   
     return created;
@@ -583,6 +584,7 @@ export class InventoryService {
     JobQueueService.enqueueHomeDigitalTwinRefresh(
       propertyId,
       'Inventory changed; the home projection is being refreshed.',
+      { sourceReferenceIds: [itemId] },
     ).catch((err) => logger.error({ err }, '[INVENTORY_UPDATE] Twin refresh enqueue failed'));
 
     return updated;
@@ -636,6 +638,7 @@ export class InventoryService {
     JobQueueService.enqueueHomeDigitalTwinRefresh(
       propertyId,
       'Inventory changed; the home projection is being refreshed.',
+      { sourceReferenceIds: [itemId] },
     ).catch((err) => logger.error({ err }, '[INVENTORY_DELETE] Twin refresh enqueue failed'));
   }
 
@@ -661,13 +664,19 @@ export class InventoryService {
       throw new APIError('Document does not belong to this property', 400, 'DOC_PROPERTY_MISMATCH');
     }
 
-    return prisma.document.update({
+    const updated = await prisma.document.update({
       where: { id: documentId },
       data: {
         propertyId, // ensure it is set for inventory docs
         inventoryItemId: itemId,
       },
     });
+    JobQueueService.enqueueHomeDigitalTwinRefresh(
+      propertyId,
+      'Document evidence was linked to a home system.',
+      { sourceReferenceIds: [itemId] },
+    ).catch((err) => logger.error({ err }, '[INVENTORY_DOCUMENT_LINK] Twin refresh enqueue failed'));
+    return updated;
   }
 
   async unlinkDocument(propertyId: string, itemId: string, documentId: string) {
@@ -687,6 +696,11 @@ export class InventoryService {
       where: { id: documentId },
       data: { inventoryItemId: null },
     });
+    JobQueueService.enqueueHomeDigitalTwinRefresh(
+      propertyId,
+      'Document evidence was removed from a home system.',
+      { sourceReferenceIds: [itemId] },
+    ).catch((err) => logger.error({ err }, '[INVENTORY_DOCUMENT_UNLINK] Twin refresh enqueue failed'));
   }
 
   // ---------------- Import Batches ----------------

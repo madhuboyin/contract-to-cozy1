@@ -61,6 +61,20 @@ test('REPAIR_COMPONENT respects a homeowner-supplied repair cost with a narrower
   assert.equal(cost.isUserSupplied, true);
 });
 
+test('MAINTAIN_COMPONENT remains distinct from repair and exposes service cadence', () => {
+  const { impacts } = computeImpacts(
+    'MAINTAIN_COMPONENT',
+    { componentType: 'HVAC', assumptions: { maintenanceCost: 325, serviceIntervalMonths: 6 } },
+    component(),
+  );
+  const cost = impactOf(impacts, 'UPFRONT_COST');
+  const note = impactOf(impacts, 'CUSTOM');
+
+  assert.equal(cost.valueNumeric, 325);
+  assert.equal(cost.isUserSupplied, true);
+  assert.match(note.valueText, /every 6 months/i);
+});
+
 test('age-derived component state never produces repair or replacement risk-reduction claims', () => {
   const repair = computeImpacts('REPAIR_COMPONENT', { componentType: 'HVAC', assumptions: {} }, component());
   const replace = computeImpacts('REPLACE_COMPONENT', { componentType: 'HVAC', assumptions: {} }, component());
@@ -125,6 +139,29 @@ test('homeowner-entered savings and their derived payback remain input assumptio
     false,
     'heuristic scenarios must not emit a system-generated bottom-line summary',
   );
+});
+
+test('incentive and financing assumptions change net cost and expose cash-flow terms', () => {
+  const { impacts } = computeImpacts(
+    'UPGRADE_COMPONENT',
+    {
+      componentType: 'HVAC',
+      assumptions: {
+        replacementCost: 12000,
+        incentiveAmount: 2000,
+        financingAprPercent: 6,
+        financingTermMonths: 60,
+        downPayment: 1000,
+        decisionDate: '2026-10-01',
+        energyPriceEscalationPercent: 3,
+      },
+    },
+    component(),
+  );
+
+  assert.equal(impactOf(impacts, 'UPFRONT_COST').valueNumeric, 10000);
+  assert.ok(impacts.some((impact) => /month for 60 months/i.test(impact.valueText ?? '')));
+  assert.ok(impacts.some((impact) => /Decision timing: 2026-10-01/.test(impact.valueText ?? '')));
 });
 
 test('explicit risk reduction is preserved only as a homeowner assumption', () => {

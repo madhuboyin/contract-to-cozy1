@@ -143,6 +143,7 @@ export class JobQueueService {
   public async enqueueHomeDigitalTwinRefresh(
     propertyId: string,
     reason = 'Canonical home facts changed.',
+    dependency?: { sourceReferenceIds?: string[] },
   ): Promise<void> {
     const twin = await prisma.homeDigitalTwin.findUnique({
       where: { propertyId },
@@ -157,7 +158,13 @@ export class JobQueueService {
         data: { status: 'STALE', staleReason: reason },
       }),
       prisma.homeTwinScenario.updateMany({
-        where: { digitalTwinId: twin.id, status: 'COMPUTED' },
+        where: {
+          digitalTwinId: twin.id,
+          status: 'COMPUTED',
+          ...(dependency?.sourceReferenceIds?.length
+            ? { component: { sourceReferenceId: { in: dependency.sourceReferenceIds } } }
+            : {}),
+        },
         data: { staleAt, staleReason: reason },
       }),
     ]);
@@ -180,21 +187,78 @@ export class JobQueueService {
     digitalTwinId: string,
     scenarioId: string,
   ): Promise<void> {
-    await getPropertyIntelligenceQueue().add(
-      PropertyIntelligenceJobType.COMPUTE_HOME_DIGITAL_TWIN_SCENARIO,
-      {
-        propertyId,
+    const existingRun = await prisma.homeTwinComputationRun.findFirst({
+      where: {
         digitalTwinId,
         scenarioId,
-        jobType: PropertyIntelligenceJobType.COMPUTE_HOME_DIGITAL_TWIN_SCENARIO,
+        runType: 'SCENARIO_COMPUTE',
+        status: { in: ['QUEUED', 'RUNNING'] },
+        startedAt: { gte: new Date(Date.now() - 5 * 60 * 1000) },
       },
-      {
-        jobId: `${scenarioId}-HOME-DIGITAL-TWIN-SCENARIO`,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-        removeOnComplete: true,
-      },
-    );
+      select: { id: true },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (existingRun) return;
+
+    const queuedAt = new Date();
+    const run = await prisma.$transaction(async (tx) => {
+      const createdRun = await tx.homeTwinComputationRun.create({
+        data: {
+          digitalTwinId,
+          scenarioId,
+          runType: 'SCENARIO_COMPUTE',
+          status: 'QUEUED',
+          startedAt: queuedAt,
+          modelVersion: 'hdt-scenario-v2',
+        },
+        select: { id: true },
+      });
+      await tx.homeTwinScenario.update({
+        where: { id: scenarioId },
+        data: {
+          status: 'READY',
+          staleAt: queuedAt,
+          staleReason: 'A refreshed calculation is queued.',
+        },
+      });
+      return createdRun;
+    });
+
+    try {
+      await getPropertyIntelligenceQueue().add(
+        PropertyIntelligenceJobType.COMPUTE_HOME_DIGITAL_TWIN_SCENARIO,
+        {
+          propertyId,
+          digitalTwinId,
+          scenarioId,
+          computationRunId: run.id,
+          jobType: PropertyIntelligenceJobType.COMPUTE_HOME_DIGITAL_TWIN_SCENARIO,
+        },
+        {
+          jobId: `${scenarioId}-HOME-DIGITAL-TWIN-SCENARIO`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: true,
+        },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to enqueue calculation.';
+      await prisma.$transaction([
+        prisma.homeTwinComputationRun.update({
+          where: { id: run.id },
+          data: { status: 'FAILED', completedAt: new Date(), errorMessage: message },
+        }),
+        prisma.homeTwinScenario.update({
+          where: { id: scenarioId },
+          data: {
+            status: 'FAILED',
+            staleAt: new Date(),
+            staleReason: 'The calculation could not be queued. Try again.',
+          },
+        }),
+      ]);
+      throw err;
+    }
   }
 
   /**

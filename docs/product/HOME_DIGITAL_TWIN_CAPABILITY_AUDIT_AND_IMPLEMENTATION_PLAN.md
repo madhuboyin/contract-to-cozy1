@@ -873,7 +873,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Trust / UX  
-**Implementation status (July 28, 2026):** Implemented. Scenario readiness is component- and scenario-type-specific and reports known inputs, missing inputs, why each matters, and the applicable professional boundary.
+**Implementation status (July 28, 2026):** Implemented. Readiness now uses separate evidence requirements for maintain, repair, replace, upgrade, wait, energy, resilience, and whole-property work; it reports known inputs, missing inputs, why each matters, and the applicable professional boundary.
 
 **Recommendation**
 
@@ -923,7 +923,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Best-in-class functionality  
-**Implementation status (July 28, 2026):** Implemented. A component comparison can materialize repair, replace, upgrade, and wait options, exposes low/base/high ranges and payback sensitivity, and allows assumptions to be revised and recomputed.
+**Implementation status (July 28, 2026):** Implemented. A component comparison materializes distinct maintain, repair, replace, upgrade, and wait options, exposes low/base/high ranges and payback sensitivity, and provides typed controls for timing, cost, lifespan, energy-price, incentive, and financing assumptions.
 
 **Recommendation**
 
@@ -939,7 +939,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Closed loop  
-**Implementation status (July 28, 2026):** Implemented. Options support select, defer, reject, close, revise, archive, and delete controls; selected decisions hand off with prefilled context to projects, quote review, inspection, renovation risk, reserve planning, and capital planning, and completed project outcomes are reconciled against the projected range.
+**Implementation status (July 28, 2026):** Implemented. Options support select, defer, reject, close, revise, archive, and delete controls; selected decisions hand off common scenario and inventory context to projects, quote review, inspection, renovation risk, reserve planning, and capital planning. Verified project completion writes canonical inventory/timeline facts, triggers a targeted projection refresh, and reconciles actual cost against the projected range.
 
 **Recommendation**
 
@@ -955,7 +955,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Reliability / trust  
-**Implementation status (July 28, 2026):** Implemented. Every run persists immutable input, component, source, assumption, model-version, and output snapshots; impact rows identify their source class, source date, qualification, and assumptions; run evidence is available through an authorized API and the scenario detail UI.
+**Implementation status (July 28, 2026):** Implemented. Every run persists immutable input, component, source, assumption, model-version, and output snapshots; the scenario detail UI exposes each snapshot and identifies input, source-fact, and output changes from the previous run.
 
 **Recommendation**
 
@@ -970,7 +970,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Operations  
-**Implementation status (July 28, 2026):** Implemented for canonical property and inventory dependencies. Updates immediately mark projections and computed scenarios stale, enqueue one delayed property-keyed BullMQ refresh with retries, deduplicate concurrent work, and preserve the last good projection on failure. Scenario calculations are also queued and deduplicated.
+**Implementation status (July 28, 2026):** Implemented for canonical property, inventory, linked-document, warranty/policy, and completed-work dependencies. Updates expose source-specific stale reasons, target affected component scenarios when an inventory identity is known, enqueue one delayed property-keyed BullMQ refresh with retries, and preserve the last good projection. Scenario calculations persist QUEUED state, deduplicate work, and mark failed results non-current.
 
 **Recommendation**
 
@@ -1019,7 +1019,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Quality  
-**Implementation status (July 28, 2026):** Implemented for the P1 contracts. Builder truth tables cover multi-component identity and complete field lineage; service contracts cover provenance, queueing, staleness, controls, scenario calculations, and decisions; frontend contract tests cover accessible state; and Playwright exercises the production planner client at desktop and mobile breakpoints with an axe scan.
+**Implementation status (July 28, 2026):** Implemented for the P1 contracts. Builder truth tables cover multi-component identity and field lineage; a service-level comparison regression test executes draft option materialization; calculation tests cover maintain/incentive/financing behavior; queue contracts cover durable queued/failed state; frontend tests cover typed controls and evidence inspection; and Playwright exercises desktop/mobile production builds with an axe scan.
 
 **Recommendation**
 
@@ -1051,6 +1051,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Documentation  
+**Implementation status (July 28, 2026):** Resolved. Functional documentation now matches the decision-only product boundary, five-option comparison, durable BullMQ computation state, typed assumption controls, evidence inspection, canonical handoff/write-back, and the remaining external-data limitations.
 
 **Recommendation**
 

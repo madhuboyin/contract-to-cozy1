@@ -1,15 +1,15 @@
 /**
  * Concurrent-run deduplication for Home Digital Twin computation.
  *
- * There is no job queue in front of twin/scenario computation (build and
- * compute run synchronously in the request), so nothing stops a homeowner
- * double-clicking Refresh, or a retried request, from starting two
- * concurrent builds for the same twin. buildComponents is transactional and
- * idempotent, so concurrent runs wouldn't corrupt data, but they would race
- * to write conflicting HomeTwinComputationRun rows and waste work. This
- * checks for an already-RUNNING run of the same kind and refuses to start
- * a second one — see HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_
- * PLAN.md Slice 7: "Deduplicate concurrent runs."
+ * Twin builds still run in the request, while scenario computation is queued.
+ * A homeowner double-clicking Refresh, a retried request, or a queue retry
+ * must not start two concurrent runs for the same twin or scenario.
+ * buildComponents is transactional and idempotent, so concurrent runs
+ * wouldn't corrupt data, but they could race to write conflicting
+ * HomeTwinComputationRun rows and waste work. This checks for an already
+ * RUNNING run of the same kind and refuses to start a second one — see
+ * HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md Slice 7:
+ * "Deduplicate concurrent runs."
  *
  * A RUNNING row is only honored as "in progress" for a bounded window. If
  * the process died mid-run (crash, OOM kill) before reaching its catch

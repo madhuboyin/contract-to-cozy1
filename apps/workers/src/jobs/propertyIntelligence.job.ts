@@ -30,6 +30,7 @@ export interface PropertyIntelligenceJobPayload {
   jobType: PropertyIntelligenceJobType;
   scenarioId?: string;
   digitalTwinId?: string;
+  computationRunId?: string;
 }
 
 const hiddenAssetService = new HiddenAssetService();
@@ -255,8 +256,30 @@ export async function processHomeDigitalTwinScenarioCompute(
   if (!jobData.scenarioId || !jobData.digitalTwinId) {
     throw new Error('Scenario compute job is missing scenarioId or digitalTwinId.');
   }
-  await new HomeDigitalTwinScenarioService().computeScenario(
-    jobData.scenarioId,
-    jobData.digitalTwinId,
-  );
+  try {
+    await new HomeDigitalTwinScenarioService().computeScenario(
+      jobData.scenarioId,
+      jobData.digitalTwinId,
+      jobData.computationRunId,
+    );
+  } catch (err) {
+    if (jobData.computationRunId) {
+      const message = err instanceof Error ? err.message : 'Scenario calculation failed.';
+      await prisma.$transaction([
+        prisma.homeTwinComputationRun.updateMany({
+          where: { id: jobData.computationRunId, status: { in: ['QUEUED', 'RUNNING'] } },
+          data: { status: 'FAILED', completedAt: new Date(), errorMessage: message },
+        }),
+        prisma.homeTwinScenario.updateMany({
+          where: { id: jobData.scenarioId, digitalTwinId: jobData.digitalTwinId, isArchived: false },
+          data: {
+            status: 'FAILED',
+            staleAt: new Date(),
+            staleReason: 'The latest calculation failed. Previous results are not current.',
+          },
+        }),
+      ]);
+    }
+    throw err;
+  }
 }

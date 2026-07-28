@@ -26,9 +26,19 @@ describe('Home Upgrade Planner accessibility and outcome contract', () => {
   });
 
   it('provides named controls for editing assumptions and recording decisions', () => {
-    expect(source).toContain('aria-label="Scenario assumptions as JSON"');
+    expect(source).toContain("label: 'Project estimate ($)'");
+    expect(source).toContain("label: 'Expected incentive ($)'");
+    expect(source).toContain("label: 'Financing APR (%)'");
+    expect(source).not.toContain('Scenario assumptions as JSON');
     expect(source).toContain('aria-label={`Mark this option as');
     expect(source).toContain('aria-label="Decision reason"');
+  });
+
+  it('makes preserved evidence and recomputation changes inspectable', () => {
+    expect(source).toContain('Changed since the previous run');
+    expect(source).toContain("['Inputs and assumptions', computationRuns[0].inputSnapshot]");
+    expect(source).toContain("['Source facts', computationRuns[0].sourceSnapshot]");
+    expect(source).toContain("['Outputs', computationRuns[0].outputSnapshot]");
   });
 
   it('does not expose technology-first compute-engine copy', () => {

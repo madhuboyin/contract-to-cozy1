@@ -118,6 +118,7 @@ const COMPONENT_ICON: Record<HomeTwinComponentType, LucideIcon> = {
 };
 
 const SCENARIO_TYPE_LABEL: Record<HomeTwinScenarioType, string> = {
+  MAINTAIN_COMPONENT: 'Maintain',
   REPAIR_COMPONENT: 'Repair',
   REPLACE_COMPONENT: 'Replace Component',
   UPGRADE_COMPONENT: 'Upgrade Component',
@@ -992,6 +993,69 @@ function ScenarioCard({
 // SCENARIO DETAIL SHEET
 // ============================================================================
 
+type ScenarioAssumptionField = {
+  key: string;
+  label: string;
+  type?: 'number' | 'date';
+  scope?: 'root' | 'assumptions';
+  step?: string;
+  min?: string;
+};
+
+function scenarioAssumptionFields(type: HomeTwinScenarioType): ScenarioAssumptionField[] {
+  if (type === 'MAINTAIN_COMPONENT') {
+    return [
+      { key: 'maintenanceCost', label: 'Maintenance estimate ($)' },
+      { key: 'serviceIntervalMonths', label: 'Service interval (months)', step: '1' },
+    ];
+  }
+  if (type === 'REPAIR_COMPONENT') {
+    return [
+      { key: 'repairCost', label: 'Repair estimate ($)' },
+      { key: 'extendedLifeYears', label: 'Expected planning extension (years)', step: '0.5' },
+    ];
+  }
+  if (type === 'REPLACE_COMPONENT' || type === 'UPGRADE_COMPONENT') {
+    return [
+      { key: 'replacementCost', label: 'Project estimate ($)' },
+      { key: 'newUsefulLifeYears', label: 'Expected lifespan (years)', step: '1' },
+      { key: 'annualSavings', label: 'Expected annual savings ($)' },
+      { key: 'efficiencyGainPercent', label: 'Efficiency improvement (%)' },
+      { key: 'decisionDate', label: 'Planned decision date', type: 'date' },
+      { key: 'energyPriceEscalationPercent', label: 'Energy-price change per year (%)', min: '-20' },
+      { key: 'incentiveAmount', label: 'Expected incentive ($)' },
+      { key: 'financingAprPercent', label: 'Financing APR (%)' },
+      { key: 'financingTermMonths', label: 'Financing term (months)', step: '1' },
+      { key: 'downPayment', label: 'Down payment ($)' },
+    ];
+  }
+  if (type === 'WAIT_MONITOR') {
+    return [{ key: 'reviewMonths', label: 'Review again in (months)', scope: 'root', step: '1' }];
+  }
+  if (type === 'ENERGY_IMPROVEMENT') {
+    return [
+      { key: 'upfrontCost', label: 'Project estimate ($)', scope: 'root' },
+      { key: 'energySavingsPerYear', label: 'Expected annual energy savings ($)', scope: 'root' },
+      { key: 'carbonOffsetTonsCO2PerYear', label: 'Annual carbon reduction (tons)', scope: 'root', step: '0.1' },
+    ];
+  }
+  if (type === 'RESILIENCE_IMPROVEMENT') {
+    return [
+      { key: 'upfrontCost', label: 'Project estimate ($)', scope: 'root' },
+      { key: 'riskReductionPercent', label: 'Expected risk reduction (%)', scope: 'root' },
+      { key: 'estimatedInsuranceSavingsPerYear', label: 'Expected insurance savings ($/year)', scope: 'root' },
+    ];
+  }
+  return [
+    { key: 'upfrontCost', label: 'Project estimate ($)', scope: 'root' },
+    { key: 'annualSavings', label: 'Expected annual savings ($)', scope: 'root' },
+  ];
+}
+
+function snapshotChanged(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
+}
+
 function ScenarioDetailSheet({
   scenario,
   propertyId,
@@ -1028,7 +1092,7 @@ function ScenarioDetailSheet({
   const [decisionReason, setDecisionReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
-  const [assumptionsDraft, setAssumptionsDraft] = useState('');
+  const [assumptionsDraft, setAssumptionsDraft] = useState<Record<string, unknown>>({});
   const [assumptionsError, setAssumptionsError] = useState<string | null>(null);
 
   const { data: handoff } = useQuery({
@@ -1046,7 +1110,7 @@ function ScenarioDetailSheet({
     setDecisionReason(scenario?.decisionReason ?? '');
     setReasonError(null);
     setNameDraft(scenario?.name ?? '');
-    setAssumptionsDraft(JSON.stringify(scenario?.inputPayload ?? {}, null, 2));
+    setAssumptionsDraft({ ...(scenario?.inputPayload ?? {}) });
     setAssumptionsError(null);
   }, [scenario?.decisionReason, scenario?.id, scenario?.inputPayload, scenario?.name, scenario?.updatedAt]);
 
@@ -1068,6 +1132,33 @@ function ScenarioDetailSheet({
   };
 
   const canCompute = scenario.status === 'DRAFT' || scenario.status === 'READY';
+  const assumptionFields = scenarioAssumptionFields(scenario.scenarioType);
+  const updateAssumptionField = (field: ScenarioAssumptionField, rawValue: string) => {
+    setAssumptionsDraft((current) => {
+      const next = { ...current };
+      const parsedValue =
+        rawValue === '' ? undefined : field.type === 'date' ? rawValue : Number(rawValue);
+      if (field.scope === 'root') {
+        if (parsedValue === undefined) delete next[field.key];
+        else next[field.key] = parsedValue;
+      } else {
+        const assumptions = {
+          ...((next.assumptions as Record<string, unknown> | undefined) ?? {}),
+        };
+        if (parsedValue === undefined) delete assumptions[field.key];
+        else assumptions[field.key] = parsedValue;
+        next.assumptions = assumptions;
+      }
+      return next;
+    });
+    setAssumptionsError(null);
+  };
+  const assumptionValue = (field: ScenarioAssumptionField) => {
+    const value = field.scope === 'root'
+      ? assumptionsDraft[field.key]
+      : ((assumptionsDraft.assumptions as Record<string, unknown> | undefined) ?? {})[field.key];
+    return value == null ? '' : String(value);
+  };
   const statusTone =
     scenario.status === 'COMPUTED'
       ? 'good'
@@ -1111,12 +1202,33 @@ function ScenarioDetailSheet({
               <summary className="cursor-pointer text-xs font-semibold text-[hsl(var(--mobile-text-secondary))]">
                 Evidence used for latest calculation
               </summary>
-              <div className="mt-2 space-y-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
+              <div className="mt-2 space-y-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
                 <p>Model: {computationRuns[0].modelVersion}</p>
                 <p>Started: {formatDate(computationRuns[0].startedAt)}</p>
-                <p>
-                  Inputs, source facts, assumptions, and outputs were preserved with this run.
-                </p>
+                {computationRuns[1] && (
+                  <p className="font-medium text-[hsl(var(--foreground))]">
+                    Changed since the previous run:{' '}
+                    {[
+                      snapshotChanged(computationRuns[0].inputSnapshot, computationRuns[1].inputSnapshot) ? 'inputs' : null,
+                      snapshotChanged(computationRuns[0].sourceSnapshot, computationRuns[1].sourceSnapshot) ? 'source facts' : null,
+                      snapshotChanged(computationRuns[0].outputSnapshot, computationRuns[1].outputSnapshot) ? 'outputs' : null,
+                    ].filter(Boolean).join(', ') || 'no preserved values'}
+                  </p>
+                )}
+                {[
+                  ['Inputs and assumptions', computationRuns[0].inputSnapshot],
+                  ['Source facts', computationRuns[0].sourceSnapshot],
+                  ['Outputs', computationRuns[0].outputSnapshot],
+                ].map(([label, snapshot]) => (
+                  <details key={String(label)} className="rounded-lg bg-[hsl(var(--mobile-bg-muted))] px-2.5 py-2">
+                    <summary className="cursor-pointer font-medium text-[hsl(var(--foreground))]">
+                      {String(label)}
+                    </summary>
+                    <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px]">
+                      {JSON.stringify(snapshot ?? null, null, 2)}
+                    </pre>
+                  </details>
+                ))}
               </div>
             </details>
           )}
@@ -1168,16 +1280,22 @@ function ScenarioDetailSheet({
             <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
               Adjust the values used for this option, save, then recompute.
             </p>
-            <textarea
-              className="min-h-32 w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-transparent px-2.5 py-2 font-mono text-xs"
-              value={assumptionsDraft}
-              onChange={(event) => {
-                setAssumptionsDraft(event.target.value);
-                setAssumptionsError(null);
-              }}
-              aria-label="Scenario assumptions as JSON"
-              aria-describedby={assumptionsError ? 'scenario-assumptions-error' : undefined}
-            />
+            <div className="grid gap-2 sm:grid-cols-2">
+              {assumptionFields.map((field) => (
+                <label key={`${field.scope ?? 'assumptions'}:${field.key}`} className="space-y-1 text-xs">
+                  <span className="text-[hsl(var(--mobile-text-secondary))]">{field.label}</span>
+                  <input
+                    type={field.type ?? 'number'}
+                    min={field.type === 'number' ? (field.min ?? '0') : undefined}
+                    step={field.step ?? (field.type === 'number' ? '0.01' : undefined)}
+                    className="w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-transparent px-2.5 py-1.5 text-sm"
+                    value={assumptionValue(field)}
+                    onChange={(event) => updateAssumptionField(field, event.target.value)}
+                    aria-label={field.label}
+                  />
+                </label>
+              ))}
+            </div>
             {assumptionsError && (
               <p id="scenario-assumptions-error" role="alert" className="text-xs text-red-600">
                 {assumptionsError}
@@ -1187,17 +1305,7 @@ function ScenarioDetailSheet({
               variant="outline"
               size="sm"
               disabled={isUpdating}
-              onClick={() => {
-                try {
-                  const parsed = JSON.parse(assumptionsDraft);
-                  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-                    throw new Error('Assumptions must be an object.');
-                  }
-                  onUpdateAssumptions(scenario.id, parsed as Record<string, unknown>);
-                } catch (error) {
-                  setAssumptionsError(error instanceof Error ? error.message : 'Enter valid assumptions.');
-                }
-              }}
+              onClick={() => onUpdateAssumptions(scenario.id, assumptionsDraft)}
             >
               Save assumptions
             </Button>
@@ -1595,7 +1703,7 @@ function CompareScenariosSheet({
             {comparison ? `Compare options: ${comparison.component.label ?? COMPONENT_LABEL[comparison.component.componentType]}` : 'Compare options'}
           </SheetTitle>
           <SheetDescription className="sr-only">
-            Side-by-side comparison of computed repair, replace, upgrade, and wait options.
+            Side-by-side comparison of maintain, repair, replace, upgrade, and wait options.
           </SheetDescription>
         </SheetHeader>
 
@@ -1607,25 +1715,10 @@ function CompareScenariosSheet({
             </div>
           )}
 
-          {!isLoading && comparison && comparison.options.length === 0 && (
+          {!isLoading && comparison && comparison.options.length < 5 && (
             <div className="space-y-3">
               <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                Create a complete repair, replace, upgrade, and wait comparison for this system.
-              </p>
-              <Button
-                onClick={() => ensureOptions.mutate()}
-                disabled={ensureOptions.isPending}
-                className="w-full"
-              >
-                {ensureOptions.isPending ? 'Building options…' : 'Build four-option comparison'}
-              </Button>
-            </div>
-          )}
-
-          {!isLoading && comparison && comparison.options.length === 1 && (
-            <div className="space-y-3">
-              <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                Complete this comparison with repair, replace, upgrade, and wait options.
+                Complete this comparison with maintain, repair, replace, upgrade, and wait options.
               </p>
               <Button
                 onClick={() => ensureOptions.mutate()}
@@ -2069,7 +2162,7 @@ export default function HomeDigitalTwinClient({
             <MobileSection>
               <MobileSectionHeader
                 title="Choose a system to compare"
-                subtitle="Start a repair, replace, upgrade, and wait comparison"
+                subtitle="Start a maintain, repair, replace, upgrade, and wait comparison"
               />
               <div className="space-y-2" role="list" aria-label="Systems available for option comparison">
                 {twin.components.map((c) => (

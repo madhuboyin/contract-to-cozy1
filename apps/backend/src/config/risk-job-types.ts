@@ -17,4 +17,5 @@ export interface PropertyIntelligenceJobPayload {
   jobType: PropertyIntelligenceJobType;
   scenarioId?: string;
   digitalTwinId?: string;
+  computationRunId?: string;
 }

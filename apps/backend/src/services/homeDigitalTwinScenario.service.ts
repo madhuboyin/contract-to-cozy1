@@ -202,7 +202,7 @@ export function projectContextForScenario(
   scenarioType: HomeTwinScenarioType,
 ): { projectType: ProjectType; category: InventoryItemCategory | null } {
   const category = componentType ? CATEGORY_BY_COMPONENT[componentType] : null;
-  if (scenarioType === 'REPAIR_COMPONENT') {
+  if (scenarioType === 'MAINTAIN_COMPONENT' || scenarioType === 'REPAIR_COMPONENT') {
     return { projectType: componentType === 'HVAC' ? 'HVAC_REPAIR' : 'GENERAL_REPAIR', category };
   }
   return { projectType: (componentType && PROJECT_TYPE_BY_COMPONENT[componentType]) || 'CUSTOM', category };
@@ -362,8 +362,45 @@ export function computeImpacts(
   const impacts: ImpactSpec[] = [];
   let sensitivity: SensitivityFactor[] = [];
 
+  // ── MAINTAIN_COMPONENT ───────────────────────────────────────────────────
+  if (scenarioType === 'MAINTAIN_COMPONENT') {
+    const assumptions = (inputPayload.assumptions as Record<string, unknown>) ?? {};
+    const compType = (inputPayload.componentType as HomeTwinComponentType) ?? component?.componentType ?? 'OTHER';
+    const suppliedCost = toNum(assumptions.maintenanceCost);
+    const maintenanceCost =
+      suppliedCost ??
+      decimalToNumber(component?.annualMaintenanceCostEstimate) ??
+      DEFAULT_ANNUAL_MAINTENANCE[compType] ??
+      DEFAULT_ANNUAL_MAINTENANCE.OTHER;
+    const costRange = rangeFromPoint(maintenanceCost, suppliedCost != null ? 0.15 : 0.35);
+    const intervalMonths = toNum(assumptions.serviceIntervalMonths) ?? 12;
+    impacts.push(
+      {
+        impactType: 'UPFRONT_COST',
+        valueNumeric: costRange.base,
+        valueLow: costRange.low,
+        valueHigh: costRange.high,
+        valueText: null,
+        unit: 'USD',
+        direction: 'NEGATIVE',
+        confidenceScore: suppliedCost != null ? 0.65 : component ? 0.5 : 0.3,
+        sortOrder: 0,
+        isUserSupplied: suppliedCost != null,
+      },
+      {
+        impactType: 'CUSTOM',
+        valueNumeric: null,
+        valueText: `Schedule preventive service about every ${intervalMonths} months. Maintenance supports performance but does not guarantee remaining life or prevent failure.`,
+        unit: null,
+        direction: 'NEUTRAL',
+        confidenceScore: 0.6,
+        sortOrder: 9,
+        isUserSupplied: toNum(assumptions.serviceIntervalMonths) != null,
+      },
+    );
+
   // ── REPAIR_COMPONENT ─────────────────────────────────────────────────────
-  if (scenarioType === 'REPAIR_COMPONENT') {
+  } else if (scenarioType === 'REPAIR_COMPONENT') {
     const assumptions = (inputPayload.assumptions as Record<string, unknown>) ?? {};
     const compType = (inputPayload.componentType as HomeTwinComponentType) ?? component?.componentType ?? 'OTHER';
 
@@ -444,11 +481,13 @@ export function computeImpacts(
 
     // Accept projectCost as alias for replacementCost
     const userProvidedCost = toNum(assumptions.replacementCost) ?? toNum(assumptions.projectCost);
-    const upfrontCost =
+    const grossUpfrontCost =
       userProvidedCost ??
       decimalToNumber(component?.replacementCostEstimate) ??
       DEFAULT_REPLACEMENT_COST[compType] ??
       DEFAULT_REPLACEMENT_COST.OTHER;
+    const incentiveAmount = toNum(assumptions.incentiveAmount) ?? 0;
+    const upfrontCost = Math.max(0, grossUpfrontCost - incentiveAmount);
     const upfrontCostUncertainty = userProvidedCost != null ? 0.1 : component?.replacementCostEstimate != null ? 0.15 : 0.35;
     const upfrontCostRange = rangeFromPoint(upfrontCost, upfrontCostUncertainty);
 
@@ -510,7 +549,7 @@ export function computeImpacts(
         direction: 'NEGATIVE',
         confidenceScore: hasComponent ? 0.80 : 0.55,
         sortOrder: 0,
-        isUserSupplied: userProvidedCost != null,
+        isUserSupplied: userProvidedCost != null || incentiveAmount > 0,
       },
       {
         impactType: 'ANNUAL_SAVINGS',
@@ -584,6 +623,51 @@ export function computeImpacts(
         direction: 'POSITIVE',
         confidenceScore: null,
         sortOrder: 6,
+        isUserSupplied: true,
+      });
+    }
+
+    const financingApr = toNum(assumptions.financingAprPercent);
+    const financingTermMonths = toNum(assumptions.financingTermMonths);
+    const downPayment = Math.min(upfrontCost, toNum(assumptions.downPayment) ?? 0);
+    if (financingApr != null && financingTermMonths != null) {
+      const principal = Math.max(0, upfrontCost - downPayment);
+      const monthlyRate = financingApr / 100 / 12;
+      const monthlyPayment = principal === 0
+        ? 0
+        : monthlyRate === 0
+          ? principal / financingTermMonths
+          : principal * monthlyRate * ((1 + monthlyRate) ** financingTermMonths)
+            / (((1 + monthlyRate) ** financingTermMonths) - 1);
+      const totalFinancedCost = downPayment + monthlyPayment * financingTermMonths;
+      impacts.push({
+        impactType: 'CUSTOM',
+        valueNumeric: Math.round(monthlyPayment),
+        valueText: `About $${Math.round(monthlyPayment)}/month for ${financingTermMonths} months; approximately $${Math.round(totalFinancedCost)} total including the entered down payment.`,
+        unit: 'USD',
+        direction: 'NEUTRAL',
+        confidenceScore: null,
+        sortOrder: 7,
+        isUserSupplied: true,
+      });
+    }
+
+    const decisionDate = typeof assumptions.decisionDate === 'string' ? assumptions.decisionDate : null;
+    const energyEscalation = toNum(assumptions.energyPriceEscalationPercent);
+    if (decisionDate || energyEscalation != null || incentiveAmount > 0) {
+      const notes = [
+        decisionDate ? `Decision timing: ${decisionDate}` : null,
+        incentiveAmount > 0 ? `Entered incentive: $${Math.round(incentiveAmount)}` : null,
+        energyEscalation != null ? `Energy-price change assumption: ${energyEscalation}% per year` : null,
+      ].filter(Boolean);
+      impacts.push({
+        impactType: 'CUSTOM',
+        valueNumeric: null,
+        valueText: notes.join(' · '),
+        unit: null,
+        direction: 'NEUTRAL',
+        confidenceScore: null,
+        sortOrder: 8,
         isUserSupplied: true,
       });
     }
@@ -1202,7 +1286,11 @@ export class HomeDigitalTwinScenarioService {
   }
 
   // ── Compute ─────────────────────────────────────────────────────────────────
-  async computeScenario(scenarioId: string, digitalTwinId: string) {
+  async computeScenario(
+    scenarioId: string,
+    digitalTwinId: string,
+    computationRunId?: string,
+  ) {
     if (isScenarioComputeDisabled()) {
       throw new APIError(
         'Scenario computation is temporarily unavailable. Your saved options and their prior results are unaffected.',
@@ -1226,13 +1314,15 @@ export class HomeDigitalTwinScenarioService {
       );
     }
 
-    const inFlight = await findInFlightRun(digitalTwinId, 'SCENARIO_COMPUTE', scenarioId);
-    if (inFlight) {
-      throw new APIError(
-        'This option is already being computed. Please wait for it to finish.',
-        409,
-        'COMPUTATION_IN_PROGRESS',
-      );
+    if (!computationRunId) {
+      const inFlight = await findInFlightRun(digitalTwinId, 'SCENARIO_COMPUTE', scenarioId);
+      if (inFlight) {
+        throw new APIError(
+          'This option is already being computed. Please wait for it to finish.',
+          409,
+          'COMPUTATION_IN_PROGRESS',
+        );
+      }
     }
 
     const inputPayload = scenario.inputPayload as Record<string, unknown>;
@@ -1241,7 +1331,11 @@ export class HomeDigitalTwinScenarioService {
     // (set at creation) is authoritative; inputPayload.componentType is a
     // fallback for scenarios created before componentId existed.
     let component: ComponentRecord | null = null;
-    const needsComponent = ['REPAIR_COMPONENT', 'REPLACE_COMPONENT', 'UPGRADE_COMPONENT'].includes(scenario.scenarioType);
+    const needsComponent =
+      scenario.componentId != null ||
+      ['MAINTAIN_COMPONENT', 'REPAIR_COMPONENT', 'REPLACE_COMPONENT', 'UPGRADE_COMPONENT', 'WAIT_MONITOR'].includes(
+        scenario.scenarioType,
+      );
     if (needsComponent) {
       if (scenario.componentId) {
         component = await prisma.homeTwinComponent.findFirst({
@@ -1269,32 +1363,42 @@ export class HomeDigitalTwinScenarioService {
         lastGoodComputedAt: true,
       },
     });
-    const run = await prisma.homeTwinComputationRun.create({
-      data: {
-        digitalTwinId,
-        scenarioId,
-        runType: 'SCENARIO_COMPUTE',
-        status: 'RUNNING',
-        startedAt: new Date(),
-        inputSnapshot: {
-          inputPayload,
-          component: component ? {
-            ...component,
-            replacementCostEstimate: decimalToNumber(component.replacementCostEstimate),
-            annualMaintenanceCostEstimate: decimalToNumber(component.annualMaintenanceCostEstimate),
-            annualOperatingCostEstimate: decimalToNumber(component.annualOperatingCostEstimate),
-          } : null,
-        } as Prisma.InputJsonValue,
-        sourceSnapshot: {
-          twinVersion: twin.version,
-          dependencyFingerprint: twin.dependencyFingerprint,
-          contextVersion: twin.contextVersion,
-          lastGoodComputedAt: twin.lastGoodComputedAt,
-          componentFacts: component?.projectedFacts ?? [],
-        } as Prisma.InputJsonValue,
-        modelVersion: 'hdt-scenario-v2',
-      },
-    });
+    const runData = {
+      status: 'RUNNING' as const,
+      startedAt: new Date(),
+      completedAt: null,
+      errorMessage: null,
+      inputSnapshot: {
+        inputPayload,
+        component: component ? {
+          ...component,
+          replacementCostEstimate: decimalToNumber(component.replacementCostEstimate),
+          annualMaintenanceCostEstimate: decimalToNumber(component.annualMaintenanceCostEstimate),
+          annualOperatingCostEstimate: decimalToNumber(component.annualOperatingCostEstimate),
+        } : null,
+      } as Prisma.InputJsonValue,
+      sourceSnapshot: {
+        twinVersion: twin.version,
+        dependencyFingerprint: twin.dependencyFingerprint,
+        contextVersion: twin.contextVersion,
+        lastGoodComputedAt: twin.lastGoodComputedAt,
+        componentFacts: component?.projectedFacts ?? [],
+      } as Prisma.InputJsonValue,
+      modelVersion: 'hdt-scenario-v2',
+    };
+    const run = computationRunId
+      ? await prisma.homeTwinComputationRun.update({
+          where: { id: computationRunId },
+          data: runData,
+        })
+      : await prisma.homeTwinComputationRun.create({
+          data: {
+            digitalTwinId,
+            scenarioId,
+            runType: 'SCENARIO_COMPUTE',
+            ...runData,
+          },
+        });
 
     let impactSpecs: ImpactSpec[];
     let sensitivity: SensitivityFactor[];
@@ -1391,29 +1495,102 @@ export class HomeDigitalTwinScenarioService {
 
     const known: string[] = [];
     const missing: { field: string; whyItMatters: string }[] = [];
+    const trustedStates = new Set(['REPORTED', 'VERIFIED', 'DOCUMENT_DERIVED']);
+    const fact = (fieldName: string) =>
+      component?.projectedFacts.find((candidate) => candidate.fieldName === fieldName);
+    const addFactRequirement = (
+      fieldName: string,
+      knownLabel: string,
+      missingReason: string,
+      conflictedReason = missingReason,
+    ) => {
+      const candidate = fact(fieldName);
+      if (candidate && trustedStates.has(candidate.factState)) {
+        known.push(knownLabel);
+      } else {
+        missing.push({
+          field: fieldName,
+          whyItMatters: candidate?.factState === 'CONFLICTED' ? conflictedReason : missingReason,
+        });
+      }
+    };
 
-    const installFact = component?.projectedFacts.find((f) => f.fieldName === 'installYear');
-    if (installFact && (installFact.factState === 'REPORTED' || installFact.factState === 'VERIFIED' || installFact.factState === 'DOCUMENT_DERIVED')) {
-      known.push('Install year and age');
-    } else if (installFact?.factState === 'CONFLICTED') {
-      missing.push({ field: 'installYear', whyItMatters: 'Your Home Record has two different install dates on file — resolve this before trusting an age-based estimate.' });
+    const componentScoped = [
+      'MAINTAIN_COMPONENT',
+      'REPAIR_COMPONENT',
+      'REPLACE_COMPONENT',
+      'UPGRADE_COMPONENT',
+      'WAIT_MONITOR',
+    ].includes(params.scenarioType);
+    if (componentScoped && !component) {
+      missing.push({
+        field: 'component',
+        whyItMatters: 'Choose the specific home system this decision applies to.',
+      });
+    } else if (params.scenarioType === 'WAIT_MONITOR') {
+      known.push('Specific system to monitor');
+    } else if (params.scenarioType === 'MAINTAIN_COMPONENT') {
+      addFactRequirement(
+        'conditionScore',
+        'Recorded condition',
+        'Current condition helps determine whether routine maintenance is still appropriate.',
+      );
+      addFactRequirement(
+        'annualMaintenanceCostEstimate',
+        'Recorded maintenance-cost basis',
+        'Add a service estimate before treating maintenance cost as decision-grade.',
+      );
+    } else if (params.scenarioType === 'REPAIR_COMPONENT') {
+      addFactRequirement(
+        'conditionScore',
+        'Recorded condition',
+        'A repair decision needs a current inspection or homeowner-observed condition.',
+        'Resolve the conflicting condition evidence before deciding whether repair is appropriate.',
+      );
+      missing.push({
+        field: 'repairQuote',
+        whyItMatters: 'A contractor quote is needed before treating repair cost as decision-grade.',
+      });
+    } else if (
+      params.scenarioType === 'REPLACE_COMPONENT' ||
+      params.scenarioType === 'UPGRADE_COMPONENT'
+    ) {
+      addFactRequirement(
+        'replacementCostEstimate',
+        'Recorded replacement cost basis',
+        'The current cost is a category default, not a quote.',
+      );
+      if (params.scenarioType === 'UPGRADE_COMPONENT') {
+        addFactRequirement(
+          'annualOperatingCostEstimate',
+          'Recorded operating-cost baseline',
+          'Without a current operating-cost baseline, upgrade savings cannot be measured.',
+        );
+      }
+    } else if (params.scenarioType === 'ENERGY_IMPROVEMENT') {
+      missing.push({
+        field: 'energyUsageBaseline',
+        whyItMatters: 'Add recent utility usage before treating annual savings as measured.',
+      });
+      missing.push({
+        field: 'incentiveEligibility',
+        whyItMatters: 'Confirm current incentive eligibility before using rebates in net cost.',
+      });
+    } else if (params.scenarioType === 'RESILIENCE_IMPROVEMENT') {
+      missing.push({
+        field: 'riskEvidence',
+        whyItMatters: 'Use a current inspection or property-specific risk assessment to define the resilience need.',
+      });
     } else {
-      missing.push({ field: 'installYear', whyItMatters: 'Without a confirmed install date, age and remaining useful life are rough guesses.' });
-    }
-
-    const costFact = component?.projectedFacts.find((f) => f.fieldName === 'replacementCostEstimate');
-    if (costFact && (costFact.factState === 'REPORTED' || costFact.factState === 'VERIFIED')) {
-      known.push('Replacement cost basis');
-    } else {
-      missing.push({ field: 'replacementCost', whyItMatters: 'Cost is a category default, not a quote — get a real quote for a decision-grade number.' });
-    }
-
-    if (['ENERGY_IMPROVEMENT'].includes(params.scenarioType)) {
-      missing.push({ field: 'energyUsageBaseline', whyItMatters: 'Without a current energy bill baseline, annual savings can only be estimated from a homeowner-entered number, not measured.' });
+      known.push('Scenario scope supplied by homeowner');
+      missing.push({
+        field: 'projectQuote',
+        whyItMatters: 'A scoped quote is needed before treating project cost as decision-grade.',
+      });
     }
 
     const readiness: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT' =
-      !component ? 'INSUFFICIENT' : missing.length === 0 ? 'SUFFICIENT' : known.length > 0 ? 'PARTIAL' : 'INSUFFICIENT';
+      missing.length === 0 ? 'SUFFICIENT' : known.length > 0 ? 'PARTIAL' : 'INSUFFICIENT';
 
     return {
       readiness,
@@ -1474,6 +1651,12 @@ export class HomeDigitalTwinScenarioService {
       inputPayload: Record<string, unknown>;
     }> = [
       {
+        scenarioType: 'MAINTAIN_COMPONENT',
+        name: `Maintain ${component.label ?? component.componentType}`,
+        description: 'Continue preventive service while monitoring current performance.',
+        inputPayload: { componentType: component.componentType, assumptions: {} },
+      },
+      {
         scenarioType: 'REPAIR_COMPONENT',
         name: `Repair ${component.label ?? component.componentType}`,
         description: 'Address the immediate issue while retaining the existing system.',
@@ -1521,7 +1704,21 @@ export class HomeDigitalTwinScenarioService {
       }
     }
 
-    return this.compareScenarios(digitalTwinId, componentId);
+    const options = await prisma.homeTwinScenario.findMany({
+      where: {
+        digitalTwinId,
+        componentId,
+        isArchived: false,
+        scenarioType: { in: optionTemplates.map((option) => option.scenarioType) },
+      },
+      orderBy: { createdAt: 'asc' },
+      include: SCENARIO_INCLUDE,
+    });
+
+    return {
+      component,
+      options: options.map(withSafetyBoundary),
+    };
   }
 
   // ── Decision (select / defer / reject / close) ─────────────────────────────
@@ -1628,6 +1825,20 @@ export class HomeDigitalTwinScenarioService {
     });
     if (projectPrefill.category) prefillParams.set('category', projectPrefill.category);
     if (projectPrefill.inventoryItemId) prefillParams.set('itemId', projectPrefill.inventoryItemId);
+    const handoffParams = new URLSearchParams({
+      sourceEntityType: 'HOME_TWIN_SCENARIO',
+      sourceEntityId: scenarioId,
+      entityType: 'HOME_TWIN_SCENARIO',
+      entityId: scenarioId,
+      scenarioId,
+      scenarioName: scenario.name,
+    });
+    if (projectPrefill.category) handoffParams.set('category', projectPrefill.category);
+    if (projectPrefill.inventoryItemId) {
+      handoffParams.set('itemId', projectPrefill.inventoryItemId);
+      handoffParams.set('inventoryItemId', projectPrefill.inventoryItemId);
+    }
+    const handoffQuery = handoffParams.toString();
 
     return {
       linkedProject,
@@ -1635,11 +1846,11 @@ export class HomeDigitalTwinScenarioService {
       projectPrefill,
       createProjectHref: `${base}/projects/new?${prefillParams.toString()}`,
       handoffLinks: {
-        inspection: `${base}/tools/inspection-hub?fromScenarioId=${scenarioId}`,
-        servicePriceRadar: `${base}/tools/service-price-radar?fromScenarioId=${scenarioId}`,
-        renovationAdvisor: `${base}/tools/home-renovation-risk-advisor?fromScenarioId=${scenarioId}`,
-        reserveFund: `${base}/tools/reserve-fund?fromScenarioId=${scenarioId}`,
-        capitalTimeline: `${base}/tools/capital-timeline?fromScenarioId=${scenarioId}`,
+        inspection: `${base}/tools/inspection-hub?${handoffQuery}`,
+        servicePriceRadar: `${base}/tools/service-price-radar?${handoffQuery}`,
+        renovationAdvisor: `${base}/tools/home-renovation-risk-advisor?${handoffQuery}`,
+        reserveFund: `${base}/tools/reserve-fund?${handoffQuery}`,
+        capitalTimeline: `${base}/tools/capital-timeline?${handoffQuery}`,
       },
     };
   }

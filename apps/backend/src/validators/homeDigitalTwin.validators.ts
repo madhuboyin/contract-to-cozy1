@@ -49,6 +49,23 @@ const replaceOrUpgradePayloadSchema = z.object({
       efficiencyGainPercent: z.number().min(0).max(100).optional(),
       riskReductionPercent:  z.number().min(0).max(100).optional(),
       annualSavings:         z.number().nonnegative().optional(),   // direct override
+      decisionDate:          z.string().date().optional(),
+      energyPriceEscalationPercent: z.number().min(-20).max(50).optional(),
+      incentiveAmount:       z.number().nonnegative().optional(),
+      financingAprPercent:   z.number().min(0).max(100).optional(),
+      financingTermMonths:   z.number().int().min(1).max(360).optional(),
+      downPayment:           z.number().nonnegative().optional(),
+    })
+    .optional()
+    .default({}),
+});
+
+const maintainPayloadSchema = z.object({
+  componentType: z.nativeEnum(HomeTwinComponentType),
+  assumptions: z
+    .object({
+      maintenanceCost: z.number().nonnegative().optional(),
+      serviceIntervalMonths: z.number().int().min(1).max(60).optional(),
     })
     .optional()
     .default({}),
@@ -158,6 +175,8 @@ export function payloadSchemaFor(
   scenarioType: HomeTwinScenarioType,
 ): z.ZodTypeAny {
   switch (scenarioType) {
+    case 'MAINTAIN_COMPONENT':
+      return maintainPayloadSchema;
     case 'REPLACE_COMPONENT':
     case 'UPGRADE_COMPONENT':
       return replaceOrUpgradePayloadSchema;

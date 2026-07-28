@@ -305,11 +305,9 @@ router.delete(
 /**
  * POST /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/compute
  *
- * Runs the impact compute engine for a saved scenario and persists
- * normalized HomeTwinScenarioImpact rows. Updates scenario status to COMPUTED.
- *
- * Safe to call multiple times — old impact rows are deleted and replaced
- * on each run (idempotent).
+ * Persists a QUEUED computation run, marks prior results non-current, and
+ * enqueues an idempotent BullMQ calculation. The worker atomically replaces
+ * impacts on success or marks the scenario FAILED after an unsuccessful run.
  */
 router.post(
   '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/compute',
@@ -322,7 +320,7 @@ router.post(
  * GET /api/properties/:propertyId/home-digital-twin/components/:componentId/scenarios/compare
  *
  * All non-archived, computed scenarios targeting one specific component,
- * side by side (repair / replace / upgrade / wait). Assembles what the
+ * side by side (maintain / repair / replace / upgrade / wait). Assembles what the
  * homeowner already created and computed via the normal CRUD — does not
  * compute anything new.
  */

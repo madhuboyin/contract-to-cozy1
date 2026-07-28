@@ -11,8 +11,10 @@ import {
   ServiceCategory,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
+import JobQueueService from './JobQueue.service';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -1092,7 +1094,7 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
 
 export async function completeMinorWork(propertyId: string, userId: string, data: any) {
   const occurredAt = data.actualEndDate ? new Date(data.actualEndDate) : new Date();
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const [journey, item] = await Promise.all([
       tx.guidanceJourney.findFirst({ where: { id: data.guidanceJourneyId, propertyId }, select: { id: true, inventoryItemId: true } }),
       tx.inventoryItem.findFirst({ where: { id: data.inventoryItemId, propertyId }, select: { id: true } }),
@@ -1243,6 +1245,12 @@ export async function completeMinorWork(propertyId: string, userId: string, data
 
     return { homeEventId: event.id, documentIds, futureCareTaskIds: taskIds, guidanceJourneyId: journey.id, inventoryItemId: item.id };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  await JobQueueService.enqueueHomeDigitalTwinRefresh(
+    propertyId,
+    'Completed work updated a home system; decision inputs are being refreshed.',
+    { sourceReferenceIds: [result.inventoryItemId] },
+  ).catch((err) => logger.error({ err }, '[MINOR_WORK_COMPLETION] Twin refresh enqueue failed'));
+  return result;
 }
 
 export async function confirmCompletion(projectId: string, propertyId: string, userId: string, data: any) {
@@ -1272,7 +1280,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
     UNSAFE: 'PAUSED',
   };
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const existing = await tx.projectRecord.findFirst({
       where: { id: projectId, propertyId },
       include: {
@@ -1650,4 +1658,13 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       idempotentReplay: false,
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  if (verifiedSuccess) {
+    const inventoryItemId = result.project.inventoryItemId;
+    await JobQueueService.enqueueHomeDigitalTwinRefresh(
+      propertyId,
+      'Verified project completion updated canonical home facts.',
+      inventoryItemId ? { sourceReferenceIds: [inventoryItemId] } : undefined,
+    ).catch((err) => logger.error({ err }, '[PROJECT_COMPLETION] Twin refresh enqueue failed'));
+  }
+  return result;
 }

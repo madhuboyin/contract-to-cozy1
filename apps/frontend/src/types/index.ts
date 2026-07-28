@@ -3766,6 +3766,7 @@ export type HomeTwinComponentType =
 export type HomeTwinComponentStatus = 'KNOWN' | 'ESTIMATED' | 'NEEDS_REVIEW' | 'RETIRED';
 
 export type HomeTwinScenarioType =
+  | 'MAINTAIN_COMPONENT'
   | 'REPAIR_COMPONENT'
   | 'REPLACE_COMPONENT'
   | 'UPGRADE_COMPONENT'

@@ -56,16 +56,17 @@ The homeowner promise:
 
 # 2. The decision loop
 
-The Home Upgrade Planner is built around one loop, not a dashboard:
+The Home Upgrade Planner is built around one decision loop, not a second
+home-state dashboard:
 
-1. **See** — modeled home systems with age, condition, and cost, each
-   showing whether it's known, estimated, or conflicting, and why.
-2. **Correct** — every inferred, default, unknown, or conflicting fact links
-   to the real owning surface (property edit / a specific inventory item),
-   never a twin-owned edit or confirmation action.
-3. **Compare** — repair / replace / upgrade / wait scenarios for one system,
+1. **Choose** — select a named system as the target of a decision. Home
+   Record, Status Board, and Capital Timeline remain the owners of facts,
+   current state, and lifecycle planning.
+2. **Compare** — maintain / repair / replace / upgrade / wait scenarios for one system,
    with ranges (not point values), sensitivity, and a safety boundary for
    safety-sensitive systems (electrical, roof, foundation).
+3. **Adjust** — revise timing, cost, lifespan, energy-price, incentive, and
+   financing assumptions through typed controls, then recompute.
 4. **Decide** — select, defer, reject, or close, with a reason recorded for
    defer/reject.
 5. **Act** — from a selected decision: create or link a Project Tracker
@@ -137,9 +138,9 @@ call sites.
 ## HomeTwinScenario (N per twin)
 
 A saved "what if" for one component. `componentId` (added once a property
-could have multiple systems of the same type — required for repair/replace/
-upgrade/wait so componentType alone can't be ambiguous), `scenarioType
-(REPAIR_COMPONENT|REPLACE_COMPONENT|UPGRADE_COMPONENT|WAIT_MONITOR|
+could have multiple systems of the same type — required for maintain/repair/
+replace/upgrade/wait so componentType alone can't be ambiguous), `scenarioType
+(MAINTAIN_COMPONENT|REPAIR_COMPONENT|REPLACE_COMPONENT|UPGRADE_COMPONENT|WAIT_MONITOR|
 ADD_FEATURE|REMOVE_FEATURE|ENERGY_IMPROVEMENT|RESILIENCE_IMPROVEMENT|
 RENOVATION|CUSTOM)`, `status (DRAFT|READY|COMPUTED|FAILED|ARCHIVED)`,
 `inputPayload`, `baselineSnapshot`, `isPinned`, `isArchived`,
@@ -197,8 +198,9 @@ APPLIANCES, DOCUMENTATION, COST_BASIS, ENERGY_BASIS, RISK_BASIS`).
 
 ## Reliability and operational controls
 
-- **Concurrent-run dedup** — `findInFlightRun` refuses to start a second
-  init/refresh/scenario-compute while one is already `RUNNING` for the same
+- **Concurrent-run dedup** — enqueueing refuses to create a second recent
+  `QUEUED`/`RUNNING` scenario run, and `findInFlightRun` refuses to start a
+  second direct init/refresh/scenario-compute while one is already `RUNNING` for the same
   twin/scenario (409 `COMPUTATION_IN_PROGRESS`). A `RUNNING` row older than
   5 minutes is treated as abandoned (crashed process) rather than a
   permanent lock, so this is self-healing without a cleanup job.
@@ -314,22 +316,9 @@ opt-in per the plan's "only with homeowner control" requirement.
   corrections stay on the existing
   owning surfaces (property edit, inventory item, room, document, policy,
   warranty, project detail).
-- Real external pricing/utility/incentive-provider integrations are not yet
-  implemented — cost/
-  utility/risk defaults are internal, reviewed category defaults, not live
-  third-party data feeds. No "incentive discovery" handoff exists because no
-  such capability exists elsewhere in the platform yet.
-- A BullMQ-backed async job queue for computation is not yet implemented —
-  init/refresh/scenario-
-  compute run synchronously in the request; the reliability controls above
-  (dedup, bounded retry, last-good) were built to make that safe without
-  one. If genuine long-running/background computation becomes necessary,
-  this would be revisited as new, explicitly-scoped work.
-- Editing a scenario's assumptions after creation remains incomplete — only name/description
-  are editable; there is no reusable assumption-editing form to extend (the
-  only creation path today is from a suggested scenario's pre-built
-  payload). A full manual "new scenario" form is future work.
-- Automated browser/end-to-end and formal accessibility test suites remain
-  incomplete — this
-  session's environment does not run one; only backend unit tests exist for
-  this capability today.
+- A full free-form manual scenario builder remains future work. Current
+  homeowner flows start from contextual suggestions or the five-option
+  component comparison, then expose typed assumption controls.
+- External pricing, utility, incentive, and financing integrations remain
+  future work. Values entered for those fields remain visibly classified as
+  homeowner assumptions rather than verified system evidence.
