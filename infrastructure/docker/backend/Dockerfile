@@ -67,7 +67,10 @@ COPY --from=prisma-gen /app/node_modules/@prisma ./node_modules/@prisma
 COPY src ./src
 COPY prisma ./prisma
 
-RUN npm run build
+# The backend's strict TypeScript graph includes the generated Prisma surface
+# and now exceeds V8's container-default ~2 GB old-space limit. Increase the
+# heap only for compilation; the runner keeps its normal production limits.
+RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 # Stage 4: Runner
 FROM ${NODE_IMAGE} AS runner
