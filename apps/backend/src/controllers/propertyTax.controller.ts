@@ -6,6 +6,9 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 import { z } from 'zod';
 import { propertyTaxRecordService } from '../services/propertyTax/propertyTaxRecord.service';
+import { propertyTaxCoverageService } from '../services/propertyTax/propertyTaxCoverage.service';
+import { propertyTaxRuleService } from '../services/propertyTax/propertyTaxRule.service';
+import { propertyTaxRuleControlService } from '../services/propertyTax/propertyTaxRuleControl.service';
 
 const service = new PropertyTaxService();
 
@@ -86,6 +89,95 @@ export async function getPropertyTaxCenter(req: CustomRequest, res: Response, ne
   } catch (error) {
     next(error);
   }
+}
+
+export async function getPropertyTaxCoverage(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const coverage = await propertyTaxCoverageService.getForProperty(
+      req.params.propertyId,
+      req.user!.userId,
+    );
+    res.json({ success: true, data: { coverage } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPropertyTaxRules(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const revisedNoticeDate = typeof req.query.revisedNoticeDate === 'string'
+      ? req.query.revisedNoticeDate
+      : undefined;
+    if (
+      revisedNoticeDate
+      && !/^\d{4}-\d{2}-\d{2}$/.test(revisedNoticeDate)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'revisedNoticeDate must use YYYY-MM-DD',
+      });
+      return;
+    }
+    const rules = await propertyTaxRuleService.getForProperty(
+      req.params.propertyId,
+      req.user!.userId,
+      {
+        revisedNoticeDate,
+        revisedNoticeQualifies:
+          req.query.revisedNoticeQualifies === 'true',
+      },
+    );
+    res.json({ success: true, data: { rules } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const ruleControlSchema = z.object({
+  reason: z.string().trim().min(8).max(500),
+}).strict();
+
+async function controlRule(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+  action: 'activate' | 'disable' | 'rollback',
+) {
+  try {
+    const parsed = ruleControlSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'A specific operator reason is required',
+      });
+      return;
+    }
+    const serviceAction = action === 'activate'
+      ? propertyTaxRuleControlService.activate.bind(propertyTaxRuleControlService)
+      : action === 'disable'
+        ? propertyTaxRuleControlService.emergencyDisable.bind(propertyTaxRuleControlService)
+        : propertyTaxRuleControlService.rollback.bind(propertyTaxRuleControlService);
+    const profile = await serviceAction(
+      req.params.profileId,
+      req.user!.userId,
+      parsed.data.reason,
+    );
+    res.json({ success: true, data: { profile } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function activatePropertyTaxRule(req: CustomRequest, res: Response, next: NextFunction) {
+  await controlRule(req, res, next, 'activate');
+}
+
+export async function disablePropertyTaxRule(req: CustomRequest, res: Response, next: NextFunction) {
+  await controlRule(req, res, next, 'disable');
+}
+
+export async function rollbackPropertyTaxRule(req: CustomRequest, res: Response, next: NextFunction) {
+  await controlRule(req, res, next, 'rollback');
 }
 
 export async function recordHomeownerPropertyTaxValues(

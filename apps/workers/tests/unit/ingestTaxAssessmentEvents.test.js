@@ -67,6 +67,7 @@ function fakeDeps(overrides = {}) {
     begin: [],
     complete: [],
     enqueue: [],
+    persist: [],
     fetch: [],
   };
   const source = sourceFixture();
@@ -109,6 +110,17 @@ function fakeDeps(overrides = {}) {
           revisionIdentity: 'revision-1',
           payloadFingerprint: 'fingerprint-1',
           lifecycleStatus: input.observation.lifecycleStatus,
+        };
+      },
+    },
+    canonicalRecords: {
+      async persist(record, dataSource, property, context) {
+        calls.persist.push({ record, dataSource, property, context });
+        return {
+          assessmentRecordId: 'canonical-assessment-1',
+          parcelMatchId: 'parcel-match-1',
+          jurisdictionId: 'jurisdiction-1',
+          sourceUrl: 'https://data.example.gov/resource/abcd-1234',
         };
       },
     },
@@ -165,6 +177,7 @@ test('tax ingest registers reviewed coverage and queues durable canonical observ
     fetchFailed: 0,
     rawRecords: 1,
     queued: 1,
+    persisted: 1,
     rejected: 0,
     dryRun: false,
   });
@@ -179,6 +192,11 @@ test('tax ingest registers reviewed coverage and queues durable canonical observ
   assert.equal(calls.enqueue.length, 1);
   assert.equal(calls.enqueue[0].observation.sourceFamily, 'tax');
   assert.equal(calls.enqueue[0].observation.geography.propertyId, 'property-1');
+  assert.equal(
+    calls.enqueue[0].observation.rawPayload.canonicalAssessmentRecordId,
+    'canonical-assessment-1',
+  );
+  assert.equal(calls.persist.length, 1);
   assert.equal(calls.enqueue[0].observation.expiresAt, '2026-10-29T00:00:00.000Z');
   assert.equal(calls.complete[0].input.status, 'success');
   assert.equal(calls.complete[0].input.observationsReceived, 1);
@@ -210,6 +228,7 @@ test('dry run fetches and validates without canonical or bookkeeping writes', as
   assert.equal(calls.begin.length, 0);
   assert.equal(calls.complete.length, 0);
   assert.equal(calls.enqueue.length, 0);
+  assert.equal(calls.persist.length, 0);
   assert.equal(calls.fetch[0].options.recordBookkeeping, false);
 });
 

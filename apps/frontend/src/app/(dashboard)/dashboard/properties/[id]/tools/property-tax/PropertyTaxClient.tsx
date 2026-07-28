@@ -6,9 +6,13 @@ import { useParams, useSearchParams } from 'next/navigation';
 
 import {
   getPropertyTaxCenterRecord,
+  getPropertyTaxCoverage,
   getPropertyTaxEstimate,
+  getPropertyTaxRules,
   saveHomeownerPropertyTaxRecord,
   type PropertyTaxCenterRecordDTO,
+  type PropertyTaxCoverageDTO,
+  type PropertyTaxRulesDTO,
   type PropertyTaxEstimateDTO,
   type PropertyTaxFieldDTO,
 } from './taxApi';
@@ -93,6 +97,8 @@ export default function PropertyTaxClient() {
   const [savingRecord, setSavingRecord] = useState(false);
   const [estimate, setEstimate] = useState<PropertyTaxEstimateDTO | null>(null);
   const [record, setRecord] = useState<PropertyTaxCenterRecordDTO | null>(null);
+  const [coverage, setCoverage] = useState<PropertyTaxCoverageDTO | null>(null);
+  const [rules, setRules] = useState<PropertyTaxRulesDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recordError, setRecordError] = useState<string | null>(null);
   const [recordSaved, setRecordSaved] = useState(false);
@@ -134,7 +140,14 @@ export default function PropertyTaxClient() {
     setRecordLoading(true);
     setRecordError(null);
     try {
-      setRecord(await getPropertyTaxCenterRecord(propertyId));
+      const [nextRecord, nextCoverage, nextRules] = await Promise.all([
+        getPropertyTaxCenterRecord(propertyId),
+        getPropertyTaxCoverage(propertyId),
+        getPropertyTaxRules(propertyId),
+      ]);
+      setRecord(nextRecord);
+      setCoverage(nextCoverage);
+      setRules(nextRules);
     } catch (cause: unknown) {
       setRecordError(cause instanceof Error ? cause.message : 'Failed to load property tax record');
     } finally {
@@ -249,6 +262,74 @@ export default function PropertyTaxClient() {
         </Link>
       </nav>
 
+      <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Official assessment source
+            </h2>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              Coverage and freshness are reported independently from the last verified record.
+            </p>
+          </div>
+          <span className="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+            {recordLoading
+              ? 'Checking source…'
+              : `${coverage?.status ?? 'UNCONFIGURED'} · ${coverage?.freshness ?? 'NEVER_FETCHED'}`}
+          </span>
+        </div>
+
+        {coverage?.source ? (
+          <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto]">
+            <div className="text-sm text-slate-700 dark:text-slate-300">
+              <div className="font-semibold text-slate-900 dark:text-slate-100">
+                {coverage.source.name}
+              </div>
+              <div className="mt-1">
+                {coverage.source.normalizedCoverageKey}
+                {coverage.source.pilotConstraints.taxClass
+                  ? ` · Pilot tax class ${coverage.source.pilotConstraints.taxClass}`
+                  : ''}
+                {coverage.source.pilotConstraints.borough
+                  ? ` · Borough ${coverage.source.pilotConstraints.borough}`
+                  : ''}
+              </div>
+              <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                Last source check: {coverage.source.lastFetchAt
+                  ? new Date(coverage.source.lastFetchAt).toLocaleString()
+                  : 'Not fetched yet'}
+              </div>
+              {coverage.source.lastFetchError && (
+                <div role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-100">
+                  The latest source check degraded. The last verified assessment remains available.
+                </div>
+              )}
+            </div>
+            <a
+              href={coverage.source.officialUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 dark:border-slate-700 dark:text-slate-100"
+            >
+              View official source
+            </a>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-700 dark:text-slate-300">
+            No reviewed assessor source is configured for this property.
+          </p>
+        )}
+
+        {coverage?.lastGoodAssessment && (
+          <div className="mt-4 grid gap-2 rounded-xl border border-slate-200 p-3 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300 sm:grid-cols-4">
+            <div>Tax year <span className="font-semibold text-slate-900 dark:text-slate-100">{coverage.lastGoodAssessment.taxYear}</span></div>
+            <div>Stage <span className="font-semibold text-slate-900 dark:text-slate-100">{coverage.lastGoodAssessment.stage}</span></div>
+            <div>Match <span className="font-semibold text-slate-900 dark:text-slate-100">{coverage.lastGoodAssessment.matchMethod ?? 'Unknown'}</span></div>
+            <div>Observed <span className="font-semibold text-slate-900 dark:text-slate-100">{new Date(coverage.lastGoodAssessment.observedAt).toLocaleDateString()}</span></div>
+          </div>
+        )}
+      </section>
+
       <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" aria-busy={recordLoading}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -314,11 +395,74 @@ export default function PropertyTaxClient() {
 
       {appealMode && (
         <section className="rounded-2xl border border-amber-200/80 bg-amber-50/85 p-5 text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
-          <h2 className="text-base font-semibold">Appeal readiness requires verified local rules</h2>
-          <p className="mt-2 text-sm">
-            This center does not currently determine your chance of success, filing deadline, required form, or expected savings.
-            Confirm those details with the official assessor or appeals authority before filing.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Reviewed jurisdiction rules</h2>
+              <p className="mt-2 text-sm">
+                This center does not predict appeal success or promised savings. Filing information appears only from an active reviewed rule release.
+              </p>
+            </div>
+            <span className="rounded-full border border-amber-300 bg-white/70 px-3 py-1 text-xs font-semibold dark:border-amber-800 dark:bg-slate-950/35">
+              {rules?.coverage ?? 'UNAVAILABLE'}
+            </span>
+          </div>
+
+          {rules?.coverage === 'REVIEWED' && rules.profile ? (
+            <>
+              <div className="mt-4 rounded-xl border border-amber-200/70 bg-white/70 p-4 dark:border-amber-800/50 dark:bg-slate-950/35">
+                <div className="font-semibold">{rules.profile.title}</div>
+                <div className="mt-1 text-xs">
+                  Tax class {rules.profile.propertyClass ?? 'Unknown'} · {rules.profile.taxYearLabel ?? 'Tax year not labeled'} · {rules.profile.timezone}
+                </div>
+                <div className="mt-1 text-xs">
+                  Reviewed {new Date(rules.profile.reviewedAt).toLocaleDateString()} · expires {new Date(rules.profile.expiresAt).toLocaleDateString()}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {rules.deadlines.map((deadline) => (
+                  <div key={deadline.id} className="rounded-xl border border-amber-200/70 bg-white/70 p-4 dark:border-amber-800/50 dark:bg-slate-950/35">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-sm font-semibold">{deadline.label}</h3>
+                      <span className="text-xs font-semibold">{deadline.status}</span>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      {deadline.dueLocalDate
+                        ? `${deadline.dueLocalDate} at ${deadline.cutoffLocalTime} (${deadline.timezone})`
+                        : deadline.availability === 'NEEDS_NOTICE_DATE'
+                          ? 'A qualifying revised-notice date is required.'
+                          : 'Homeowner qualification confirmation is required.'}
+                    </div>
+                    {deadline.submissionRequirement && (
+                      <p className="mt-2 text-xs">{deadline.submissionRequirement}</p>
+                    )}
+                    <a
+                      href={deadline.officialUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold underline"
+                    >
+                      Verify with official instructions
+                    </a>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 text-xs">
+                Sources: {rules.profile.citations.map((citation, index) => (
+                  <React.Fragment key={citation.officialUrl}>
+                    {index > 0 ? ' · ' : ''}
+                    <a className="underline" href={citation.officialUrl} target="_blank" rel="noreferrer">
+                      {citation.publisher}
+                    </a>
+                  </React.Fragment>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div role="status" className="mt-4 rounded-xl border border-amber-300 bg-white/70 p-4 text-sm dark:border-amber-800 dark:bg-slate-950/35">
+              {rules?.reason ?? 'No active reviewed rule covers this property. Confirm all deadlines and forms directly with the official authority.'}
+            </div>
+          )}
+
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-amber-200/70 bg-white/70 p-4 dark:border-amber-800/50 dark:bg-slate-950/35">
               <h3 className="text-sm font-semibold">Verify first</h3>

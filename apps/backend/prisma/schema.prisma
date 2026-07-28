@@ -15702,6 +15702,33 @@ enum PropertyTaxDocumentRole {
   SUPPORTING_RECORD
 }
 
+enum PropertyTaxRuleProfileStatus {
+  DRAFT
+  ACTIVE
+  DISABLED
+  SUPERSEDED
+  EXPIRED
+}
+
+enum PropertyTaxDeadlineType {
+  ASSESSMENT_APPEAL
+  MARKET_VALUE_REVIEW
+  FACTUAL_CORRECTION
+  EXEMPTION_APPLICATION
+  EXEMPTION_APPEAL
+}
+
+enum PropertyTaxDeadlineTrigger {
+  FIXED_INSTANT
+  DAYS_AFTER_NOTICE
+}
+
+enum PropertyTaxRuleControlAction {
+  ACTIVATED
+  EMERGENCY_DISABLED
+  ROLLED_BACK
+}
+
 // Reviewed rule releases are added in Slice 3. This record establishes stable
 // jurisdiction ownership for parcels, assessments, and bills now.
 model PropertyTaxJurisdiction {
@@ -15721,14 +15748,130 @@ model PropertyTaxJurisdiction {
   parcelMatches     PropertyTaxParcelMatch[]
   assessmentRecords PropertyTaxAssessmentRecord[]
   billRecords       PropertyTaxBillRecord[]
+  ruleProfiles      PropertyTaxRuleProfile[]
 
   @@index([stateCode, countyFips])
   @@index([stateCode, countyName, municipality])
   @@map("property_tax_jurisdictions")
 }
 
+// A rule profile is an immutable reviewed release. Operators activate one
+// release at a time per jurisdiction/property class and supersede or disable
+// prior releases rather than editing legal guidance in place.
+model PropertyTaxRuleProfile {
+  id                    String @id @default(uuid())
+  jurisdictionId        String
+  slug                  String
+  version               Int
+  status                PropertyTaxRuleProfileStatus @default(DRAFT)
+  propertyClass         String?
+  taxYearLabel          String?
+  title                 String
+  summary               String?
+  timezone              String
+  assessmentRatio       Decimal? @db.Decimal(12, 8)
+  valuationRulesJson    Json?
+  classificationsJson   Json?
+  capsJson              Json?
+  exemptionsJson        Json?
+  correctionGroundsJson Json?
+  appealGroundsJson     Json?
+  stagesJson            Json?
+  formsJson             Json?
+  feesJson              Json?
+  officialLinksJson     Json?
+  qualificationJson     Json?
+  effectiveFrom         DateTime
+  effectiveTo           DateTime?
+  reviewedAt            DateTime
+  reviewerName          String
+  reviewerUserId        String?
+  expiresAt             DateTime
+  activatedAt           DateTime?
+  disabledAt            DateTime?
+  disabledByUserId      String?
+  disabledReason        String?
+  supersedesProfileId   String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  jurisdiction PropertyTaxJurisdiction @relation(fields: [jurisdictionId], references: [id], onDelete: Cascade)
+  supersedesProfile PropertyTaxRuleProfile? @relation("PropertyTaxRuleSupersession", fields: [supersedesProfileId], references: [id], onDelete: SetNull)
+  supersededBy      PropertyTaxRuleProfile[] @relation("PropertyTaxRuleSupersession")
+  citations         PropertyTaxRuleCitation[]
+  deadlineRules     PropertyTaxDeadlineRule[]
+  controlEvents     PropertyTaxRuleControlEvent[]
+
+  @@unique([jurisdictionId, slug, version])
+  @@index([jurisdictionId, propertyClass, status])
+  @@index([status, effectiveFrom, effectiveTo, expiresAt])
+  @@index([supersedesProfileId])
+  @@map("property_tax_rule_profiles")
+}
+
+model PropertyTaxRuleCitation {
+  id            String @id @default(uuid())
+  ruleProfileId String
+  title         String
+  publisher     String
+  officialUrl   String
+  retrievedAt   DateTime
+  effectiveAt   DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  ruleProfile PropertyTaxRuleProfile @relation(fields: [ruleProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleProfileId, officialUrl])
+  @@index([ruleProfileId])
+  @@map("property_tax_rule_citations")
+}
+
+model PropertyTaxDeadlineRule {
+  id                    String @id @default(uuid())
+  ruleProfileId         String
+  code                  String
+  type                  PropertyTaxDeadlineType
+  label                 String
+  trigger               PropertyTaxDeadlineTrigger
+  fixedDeadlineAt       DateTime?
+  daysAfterNotice       Int?
+  cutoffLocalTime       String
+  timezone              String
+  submissionRequirement String?
+  officialUrl           String
+  formCode              String?
+  qualificationJson     Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  ruleProfile PropertyTaxRuleProfile @relation(fields: [ruleProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleProfileId, code])
+  @@index([ruleProfileId, type])
+  @@map("property_tax_deadline_rules")
+}
+
+model PropertyTaxRuleControlEvent {
+  id            String @id @default(uuid())
+  idempotencyKey String? @unique
+  ruleProfileId String
+  action        PropertyTaxRuleControlAction
+  actorUserId   String
+  reason        String
+  metadataJson  Json?
+  createdAt     DateTime @default(now())
+
+  ruleProfile PropertyTaxRuleProfile @relation(fields: [ruleProfileId], references: [id], onDelete: Cascade)
+
+  @@index([ruleProfileId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("property_tax_rule_control_events")
+}
+
 model PropertyTaxParcelMatch {
   id                           String @id @default(uuid())
+  ingestKey                    String? @unique
   propertyId                   String
   jurisdictionId               String
   dataSourceId                 String?
@@ -15767,6 +15910,8 @@ model PropertyTaxParcelMatch {
 
 model PropertyTaxAssessmentRecord {
   id                   String @id @default(uuid())
+  ingestKey            String? @unique
+  radarProviderEventId String?
   propertyId           String
   jurisdictionId       String
   parcelMatchId        String?
@@ -15812,6 +15957,7 @@ model PropertyTaxAssessmentRecord {
   @@index([jurisdictionId, taxYear])
   @@index([parcelMatchId, taxYear])
   @@index([dataSourceId, sourceExternalId])
+  @@index([radarProviderEventId])
   @@index([supersededById])
   @@map("property_tax_assessment_records")
 }
@@ -15870,6 +16016,7 @@ model PropertyTaxBillRecord {
 // promoted over another.
 model PropertyTaxFieldEvidence {
   id                   String @id @default(uuid())
+  ingestKey            String? @unique
   parcelMatchId        String?
   assessmentRecordId   String?
   billRecordId         String?

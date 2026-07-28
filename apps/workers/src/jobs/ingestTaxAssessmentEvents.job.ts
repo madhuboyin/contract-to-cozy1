@@ -20,6 +20,9 @@ import {
   type PropertyForTaxFetch,
   type TaxAssessmentFetchBatch,
 } from '@worker-shared/services/taxAssessmentFetch.service';
+import {
+  propertyTaxSourceIngestionService,
+} from '@worker-shared/services/propertyTax/propertyTaxSourceIngestion.service';
 import { iterateAllProperties } from '../lib/paginateProperties';
 import type { WorkerRunResult } from '../lib/workerRunResult';
 import { logger, type AppLogger } from '../lib/logger';
@@ -47,6 +50,7 @@ export type TaxAssessmentIngestResult = WorkerRunResult & {
   fetchFailed: number;
   rawRecords: number;
   queued: number;
+  persisted: number;
   rejected: number;
   dryRun: boolean;
 };
@@ -59,6 +63,7 @@ type TaxAssessmentIngestDeps = {
     typeof taxAssessmentFetchService,
     'prepareSources' | 'fetchForProperties'
   >;
+  canonicalRecords: Pick<typeof propertyTaxSourceIngestionService, 'persist'>;
   iterateAllProperties: typeof iterateAllProperties;
   logger: AppLogger;
   now(): Date;
@@ -71,6 +76,7 @@ const defaultDeps: TaxAssessmentIngestDeps = {
   runs: radarSourceRunService,
   ingestQueue: radarIngestQueueService,
   fetchService: taxAssessmentFetchService,
+  canonicalRecords: propertyTaxSourceIngestionService,
   iterateAllProperties,
   logger,
   now: () => new Date(),
@@ -245,6 +251,7 @@ export async function ingestTaxAssessmentEventsJob(
       fetchFailed: 0,
       rawRecords: 0,
       queued: 0,
+      persisted: 0,
       rejected: 0,
       dryRun,
     };
@@ -259,12 +266,13 @@ export async function ingestTaxAssessmentEventsJob(
     : emptyFetchBatch(prepared.invalidSources, 0);
   let rawRecords = 0;
   let queued = 0;
+  let persisted = 0;
   let rejected = 0;
   for (const { property, dataSource, records } of fetch.results) {
     rawRecords += records.length;
     for (const record of records) {
       try {
-        const observation = normalizeTaxAssessmentRecord(
+        const initialObservation = normalizeTaxAssessmentRecord(
           record,
           dataSource,
           property,
@@ -273,6 +281,31 @@ export async function ingestTaxAssessmentEventsJob(
             observedAt: startedAt.toISOString(),
           },
         );
+        const canonicalRecord = dryRun
+          ? null
+          : await deps.canonicalRecords.persist(
+              record,
+              dataSource,
+              property,
+              {
+                observedAt: startedAt,
+                radarProviderEventId: initialObservation.providerEventId,
+              },
+            );
+        if (canonicalRecord) persisted += 1;
+        const observation = canonicalRecord
+          ? normalizeTaxAssessmentRecord(
+              record,
+              dataSource,
+              property,
+              {
+                sourceDefinitionId: source.id,
+                observedAt: startedAt.toISOString(),
+                canonicalAssessmentRecordId:
+                  canonicalRecord.assessmentRecordId,
+              },
+            )
+          : initialObservation;
         if (!dryRun) {
           await deps.ingestQueue.enqueue({
             observation,
@@ -332,6 +365,7 @@ export async function ingestTaxAssessmentEventsJob(
         fetchSucceeded: fetch.fetchSucceeded,
         fetchFailed: fetch.fetchFailed,
         queued,
+        persisted,
       },
     });
   }
@@ -353,6 +387,7 @@ export async function ingestTaxAssessmentEventsJob(
     fetchFailed: fetch.fetchFailed,
     rawRecords,
     queued: dryRun ? 0 : queued,
+    persisted: dryRun ? 0 : persisted,
     rejected,
     dryRun,
   };

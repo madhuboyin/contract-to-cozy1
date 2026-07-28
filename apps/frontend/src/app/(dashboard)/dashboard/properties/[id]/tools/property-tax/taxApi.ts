@@ -103,6 +103,9 @@ export type PropertyTaxSourceRecordDTO = {
   confidence: string;
   status: string;
   observedAt: string;
+  stage: string | null;
+  effectiveDate: string | null;
+  radarProviderEventId: string | null;
   sourceExternalId: string | null;
   sourceUrl: string | null;
   dataSource: { id: string; name: string } | null;
@@ -111,6 +114,102 @@ export type PropertyTaxSourceRecordDTO = {
     id: string;
     name: string;
     verificationStatus: string;
+  }>;
+};
+
+export type PropertyTaxCoverageDTO = {
+  status: 'COVERED' | 'DEGRADED' | 'UNAVAILABLE' | 'UNCONFIGURED';
+  freshness: 'FRESH' | 'STALE' | 'NEVER_FETCHED' | 'DEGRADED';
+  coverageKeys: string[];
+  source: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+    coverageType: string;
+    normalizedCoverageKey: string;
+    officialUrl: string;
+    lastFetchAt: string | null;
+    lastFetchError: string | null;
+    totalAssessmentsFetched: number;
+    assessmentStage: string | null;
+    pilotConstraints: {
+      borough: string | null;
+      recordType: string | null;
+      taxClass: string | null;
+    };
+    appealInformation: {
+      officialUrl: string | null;
+      disclaimer: string | null;
+    };
+  } | null;
+  lastGoodAssessment: {
+    id: string;
+    taxYear: number;
+    stage: string;
+    observedAt: string;
+    effectiveDate: string | null;
+    sourceExternalId: string | null;
+    sourceUrl: string | null;
+    radarProviderEventId: string | null;
+    parcelId: string | null;
+    matchMethod: string | null;
+    matchConfidence: number | null;
+  } | null;
+};
+
+export type PropertyTaxRulesDTO = {
+  coverage: 'REVIEWED' | 'UNAVAILABLE' | 'DISABLED' | 'EXPIRED';
+  reason: string | null;
+  profile: {
+    id: string;
+    slug: string;
+    version: number;
+    title: string;
+    summary: string | null;
+    propertyClass: string | null;
+    taxYearLabel: string | null;
+    timezone: string;
+    assessmentRatio: number | null;
+    caps: unknown;
+    exemptions: unknown;
+    correctionGrounds: unknown;
+    appealGrounds: unknown;
+    forms: unknown;
+    fees: unknown;
+    officialLinks: unknown;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    reviewedAt: string;
+    reviewerName: string;
+    expiresAt: string;
+    citations: Array<{
+      title: string;
+      publisher: string;
+      officialUrl: string;
+      retrievedAt: string;
+      effectiveAt: string | null;
+      notes: string | null;
+    }>;
+  } | null;
+  deadlines: Array<{
+    id: string;
+    code: string;
+    type: string;
+    label: string;
+    availability:
+      | 'AVAILABLE'
+      | 'NEEDS_NOTICE_DATE'
+      | 'NEEDS_QUALIFICATION_CONFIRMATION';
+    status: 'PAST_DUE' | 'DUE_SOON' | 'OPEN' | 'INPUT_REQUIRED';
+    dueAt: string | null;
+    dueLocalDate: string | null;
+    remainingDays: number | null;
+    timezone: string;
+    cutoffLocalTime: string;
+    submissionRequirement: string | null;
+    officialUrl: string;
+    formCode: string | null;
   }>;
 };
 
@@ -152,6 +251,20 @@ export async function getPropertyTaxCenterRecord(
 ): Promise<PropertyTaxCenterRecordDTO> {
   const res = await api.get(`/api/properties/${propertyId}/property-tax/record`);
   return res.data?.record as PropertyTaxCenterRecordDTO;
+}
+
+export async function getPropertyTaxCoverage(
+  propertyId: string,
+): Promise<PropertyTaxCoverageDTO> {
+  const res = await api.get(`/api/properties/${propertyId}/property-tax/coverage`);
+  return res.data?.coverage as PropertyTaxCoverageDTO;
+}
+
+export async function getPropertyTaxRules(
+  propertyId: string,
+): Promise<PropertyTaxRulesDTO> {
+  const res = await api.get(`/api/properties/${propertyId}/property-tax/rules`);
+  return res.data?.rules as PropertyTaxRulesDTO;
 }
 
 export async function saveHomeownerPropertyTaxRecord(

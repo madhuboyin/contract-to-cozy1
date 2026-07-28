@@ -110,6 +110,9 @@ function serializeRecord(record: {
   confidence: string;
   status: string;
   observedAt: Date;
+  stage?: string;
+  effectiveDate?: Date | null;
+  radarProviderEventId?: string | null;
   sourceExternalId: string | null;
   sourceUrl: string | null;
   dataSource: { id: string; name: string } | null;
@@ -125,6 +128,9 @@ function serializeRecord(record: {
     confidence: record.confidence,
     status: record.status,
     observedAt: record.observedAt.toISOString(),
+    stage: record.stage ?? null,
+    effectiveDate: record.effectiveDate?.toISOString() ?? null,
+    radarProviderEventId: record.radarProviderEventId ?? null,
     sourceExternalId: record.sourceExternalId,
     sourceUrl: record.sourceUrl,
     dataSource: record.dataSource,

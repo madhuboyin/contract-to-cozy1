@@ -1282,6 +1282,16 @@ Record:
 
 **Goal:** Turn the existing source foundation into homeowner value.
 
+**Implementation status (July 27, 2026): Complete**
+
+- Persisted accepted official-source matches as idempotent jurisdiction, parcel, assessment, and field-evidence records before Radar enqueue.
+- Added a durable Radar provider-event link on each canonical assessment and included the canonical assessment ID in Radar revision evidence.
+- Preserved adapter-level ambiguous-row suppression and added a second write-boundary confidence guard.
+- Added property-scoped coverage and source-health output with source identity, official URL, tax year, assessment stage, match method, match confidence, last checked time, and freshness.
+- Preserved the last-good official assessment when a later source check degrades or fails.
+- Exposed the Bronx borough, record-type, and Tax Class 1 constraints in the API and Property Tax Center.
+- Kept schema changes direct and did not add a migration; the user must reconcile the database separately.
+
 **Work**
 
 - Persist normalized assessment records, not only Radar events.
@@ -1298,6 +1308,17 @@ Record:
 ### Slice 3 — Jurisdiction rule and deadline foundation
 
 **Goal:** Make every tax action jurisdiction-correct.
+
+**Implementation status (July 27, 2026): Complete**
+
+- Added immutable, versioned jurisdiction rule profiles with property-class qualification, effective windows, review metadata, expiry, structured assessment/cap/exemption/correction/appeal/form/fee rules, and official citations.
+- Added fixed and notice-relative deadline rules with explicit IANA timezone and local cutoff handling; relative exceptions fail closed until the notice date and homeowner qualification are supplied.
+- Added a reviewed FY2027 Bronx Tax Class 1 release sourced from current NYC Department of Finance and Tax Commission guidance.
+- Required a source-backed official assessment match before homeowner rule or deadline output is available.
+- Added homeowner rule coverage output for reviewed, unavailable, disabled, and expired states.
+- Added Admin + MFA + `INTEGRATION_MANAGE` activation, emergency-disable, and rollback controls with durable operator audit events.
+- Added reviewed rule provenance and deadline status to the Property Tax Center without predicting appeal success.
+- Kept schema changes direct and did not add a migration; the user must reconcile the database separately.
 
 **Work**
 

@@ -24,6 +24,7 @@ type PropertyForNormalize = {
 type TaxNormalizeContext = {
   sourceDefinitionId: string;
   observedAt: string;
+  canonicalAssessmentRecordId?: string;
 };
 
 function parseAssessedValue(raw?: string): number | null {
@@ -163,6 +164,8 @@ export function normalizeTaxAssessmentRecord(
       taxYear: record.taxYear ?? null,
       dataSourceId: dataSource.id,
       dataSourceSlug: dataSource.slug,
+      canonicalAssessmentRecordId:
+        context.canonicalAssessmentRecordId ?? null,
       matchConfidence: record.matchConfidence,
       matchMethod: record.matchMethod,
       situsAddress: record.situsAddress ?? null,

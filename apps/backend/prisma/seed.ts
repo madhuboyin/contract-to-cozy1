@@ -5,6 +5,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { seedKnowledgeHub } from './knowledgeHub.seed';
 import {
+  upsertReviewedPropertyTaxRuleProfiles,
   upsertReviewedTaxPilotSources,
 } from '../src/scripts/seedReviewedTaxPilots';
 
@@ -40,6 +41,7 @@ async function seedOptionalProfileQuestions() {
 
 async function seedReviewedTaxPilotSources() {
   await upsertReviewedTaxPilotSources(prisma);
+  await upsertReviewedPropertyTaxRuleProfiles(prisma);
 }
 
 async function seedPlantCatalog() {

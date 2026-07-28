@@ -107,7 +107,8 @@ export async function coverageLapseIncidentsJob(deps: CoverageLapseIncidentsDeps
   let createdOrUpdated = 0;
 
   for (const p of policies) {
-    if (!p.propertyId) continue;
+    // Prisma does not infer result nullability from the date-range filter.
+    if (!p.propertyId || !p.expiryDate) continue;
 
     const replacementPolicy = await prisma.insurancePolicy.findFirst({
       where: {
