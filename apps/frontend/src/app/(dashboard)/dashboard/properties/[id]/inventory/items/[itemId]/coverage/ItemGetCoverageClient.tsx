@@ -143,8 +143,8 @@ function mergeOverridesWithPrefill(
   };
 }
 
-function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], recommendation?: string) {
-  if (recommendation === 'REPLACE_SOON') {
+function scenarioConfig(state?: ItemCoverageAnalysisDTO['scenarioState'], planningState?: string) {
+  if (planningState === 'REPLACEMENT_HORIZON_SHORT') {
     return {
       headline: 'Review replacement timing and protection choices',
       bg: 'bg-amber-50',
@@ -152,7 +152,7 @@ function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], reco
       iconColor: 'text-amber-500',
     };
   }
-  if (verdict === 'WORTH_IT') {
+  if (state === 'COST_EXPOSURE_EXCEEDS_PLAN_COST') {
     return {
       headline: 'Protection cost is below modeled repair exposure',
       bg: 'bg-teal-50',
@@ -160,7 +160,7 @@ function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], reco
       iconColor: 'text-teal-600',
     };
   }
-  if (verdict === 'NOT_WORTH_IT') {
+  if (state === 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE') {
     return {
       headline: 'Protection cost is above modeled repair exposure',
       bg: 'bg-amber-50',
@@ -176,34 +176,34 @@ function verdictConfig(verdict?: ItemCoverageAnalysisDTO['overallVerdict'], reco
   };
 }
 
-function strongVerdictRationale(
-  verdict: ItemCoverageAnalysisDTO['overallVerdict'],
-  recommendation: string | undefined,
+function scenarioRationale(
+  state: ItemCoverageAnalysisDTO['scenarioState'],
+  planningState: string | undefined,
   remainingMonths: number | null | undefined,
   netImpact: number | null | undefined,
   repairRisk: number | null | undefined,
   coverageCost: number | null | undefined,
 ): string {
-  if (recommendation === 'REPLACE_SOON') {
+  if (planningState === 'REPLACEMENT_HORIZON_SHORT') {
     const mo = remainingMonths ?? 0;
     return `The record estimates about ${mo} ${mo === 1 ? 'month' : 'months'} of useful life remaining. Compare replacement timing, contract terms, exclusions, service fees, and your cash buffer before choosing a protection or replacement path.`;
   }
-  if (verdict === 'WORTH_IT') {
+  if (state === 'COST_EXPOSURE_EXCEEDS_PLAN_COST') {
     if (repairRisk != null && coverageCost != null && netImpact != null) {
       return `The model compares ${money(coverageCost)}/yr in protection cost with ${money(repairRisk)}/yr in estimated repair exposure, a difference of ${money(Math.abs(netImpact))}/yr. This is scenario math, not guaranteed savings or a determination that a contract is suitable.`;
     }
     return 'The modeled protection cost is below estimated repair exposure. Review the actual contract, exclusions, service fees, provider terms, and your ability to absorb a repair before deciding.';
   }
-  if (verdict === 'NOT_WORTH_IT') {
+  if (state === 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE') {
     if (repairRisk != null && coverageCost != null && netImpact != null) {
       return `The model compares ${money(coverageCost)}/yr in protection cost with ${money(repairRisk)}/yr in estimated repair exposure, a difference of ${money(Math.abs(netImpact))}/yr. This does not account for every contract term or determine that you should decline protection.`;
     }
     return 'The modeled protection cost is above estimated repair exposure. Review the actual contract, exclusions, service fees, provider terms, and your cash buffer before deciding.';
   }
   if (repairRisk != null && coverageCost != null) {
-    return `At ${money(coverageCost)}/yr for coverage vs ${money(repairRisk)}/yr expected repair risk, the numbers are nearly equal. Your risk tolerance is the deciding factor — if an unexpected repair would strain your budget, lean toward coverage.`;
+    return `At ${money(coverageCost)}/yr for protection cost versus ${money(repairRisk)}/yr in modeled repair exposure, the values are close. Review contract terms and your cash buffer before recording a decision.`;
   }
-  return 'The numbers are close. Your risk tolerance is the deciding factor — if an unexpected repair would strain your budget, lean toward coverage.';
+  return 'The modeled values are close. Review contract terms, exclusions, service fees, and your cash buffer before recording a decision.';
 }
 
 function TraceIcon({ impact }: { impact: string }) {
@@ -321,7 +321,7 @@ export default function ItemGetCoverageClient() {
         setHasAnalysis(true);
         setAnalysis(result.analysis);
         setItemName((prev) => result.analysis.item?.name || prev || 'Inventory Item');
-        if (result.analysis.warranty.recommendation === 'REPLACE_SOON') {
+        if (result.analysis.warranty.planningState === 'REPLACEMENT_HORIZON_SHORT') {
           setShowInputs(true);
         }
       } else {
@@ -421,7 +421,7 @@ export default function ItemGetCoverageClient() {
   };
 
   const config = analysis
-    ? verdictConfig(analysis.overallVerdict, analysis.warranty.recommendation)
+    ? scenarioConfig(analysis.scenarioState, analysis.warranty.planningState)
     : null;
   const coverageState = item?.coverageState ?? 'INCOMPLETE';
   const needsCoverageContext = coverageState === 'INCOMPLETE';
@@ -434,7 +434,8 @@ export default function ItemGetCoverageClient() {
     hasDisclosedEstimate: item?.replacementValueSource === 'ESTIMATED',
   }), [item?.replacementValueSource, item?.responsibilityScope, itemId]);
 
-  const recommendScenarioTesting = analysis?.warranty.recommendation === 'REPLACE_SOON';
+  const recommendScenarioTesting =
+    analysis?.warranty.planningState === 'REPLACEMENT_HORIZON_SHORT';
 
   const hasFinancialData =
     analysis &&
@@ -748,7 +749,7 @@ export default function ItemGetCoverageClient() {
                     </div>
                   </div>
                 </>
-              ) : analysis.overallVerdict === 'WORTH_IT' ? (
+              ) : analysis.scenarioState === 'COST_EXPOSURE_EXCEEDS_PLAN_COST' ? (
                 <>
                   {/* Internal model classification; homeowner copy remains neutral. */}
                   <div className="pr-4">
@@ -762,7 +763,7 @@ export default function ItemGetCoverageClient() {
                       <p className="text-xs text-gray-400">Run a scenario to see</p>
                     )}
                   </div>
-                  {/* WORTH_IT right — repair risk */}
+                  {/* Modeled repair exposure */}
                   <div className="pl-4">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
                     {repairRisk != null ? (
@@ -780,7 +781,7 @@ export default function ItemGetCoverageClient() {
                     </div>
                   </div>
                 </>
-              ) : analysis.overallVerdict === 'NOT_WORTH_IT' ? (
+              ) : analysis.scenarioState === 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE' ? (
                 <>
                   {/* Internal model classification; homeowner copy remains neutral. */}
                   <div className="pr-4">
@@ -794,7 +795,7 @@ export default function ItemGetCoverageClient() {
                       <p className="text-xs text-gray-400">Run a scenario to see</p>
                     )}
                   </div>
-                  {/* NOT_WORTH_IT right — repair risk */}
+                  {/* Modeled repair exposure */}
                   <div className="pl-4">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Repair risk</p>
                     {repairRisk != null ? (
@@ -845,7 +846,7 @@ export default function ItemGetCoverageClient() {
             </div>
 
             <p className="text-sm text-gray-700 leading-relaxed">
-              {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact, repairRisk, coverageCost)}
+              {scenarioRationale(analysis.scenarioState, analysis.warranty.planningState, remainingMonths, netImpact, repairRisk, coverageCost)}
             </p>
 
             <div className="flex flex-wrap gap-2">
@@ -861,7 +862,7 @@ export default function ItemGetCoverageClient() {
                     <Link href={addWarrantyHref}>Record a protection option</Link>
                   </Button>
                 </>
-              ) : analysis.overallVerdict === 'WORTH_IT' ? (
+              ) : analysis.scenarioState === 'COST_EXPOSURE_EXCEEDS_PLAN_COST' ? (
                 <>
                   <Button asChild>
                     <Link href={addWarrantyHref}>Review contract details</Link>
@@ -870,7 +871,7 @@ export default function ItemGetCoverageClient() {
                     Try scenario testing
                   </Button>
                 </>
-              ) : analysis.overallVerdict === 'NOT_WORTH_IT' ? (
+              ) : analysis.scenarioState === 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE' ? (
                 <>
                   <Button
                     variant="outline"
@@ -1117,7 +1118,7 @@ export default function ItemGetCoverageClient() {
                 <div className={cn('rounded-xl border p-3 space-y-1.5', config.bg, config.border)}>
                   <p className="text-sm font-bold text-gray-900">{config.headline}</p>
                   <p className="text-xs font-medium text-gray-700 leading-relaxed">
-                    {strongVerdictRationale(analysis.overallVerdict, analysis.warranty.recommendation, remainingMonths, netImpact, repairRisk, coverageCost)}
+                    {scenarioRationale(analysis.scenarioState, analysis.warranty.planningState, remainingMonths, netImpact, repairRisk, coverageCost)}
                   </p>
                 </div>
 
@@ -1165,8 +1166,8 @@ export default function ItemGetCoverageClient() {
               <div className="pt-1 border-t border-gray-100 space-y-3">
                 <p className="text-xs text-gray-500">
                   {recommendScenarioTesting
-                    ? 'Try different cost assumptions to see how the recommendation changes. For example, lower the annual cost to find a price point where coverage becomes worthwhile.'
-                    : 'Change these values to model a different scenario, then re-run to see how the recommendation changes.'}
+                    ? 'Try different cost assumptions to see how the modeled comparison changes.'
+                    : 'Change these values to model a different scenario, then re-run the comparison.'}
                 </p>
                 {inputsForm}
               </div>

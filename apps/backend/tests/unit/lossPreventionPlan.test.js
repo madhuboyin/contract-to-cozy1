@@ -57,9 +57,9 @@ test('canonical schema links the plan to a coverage review and removes savings c
   assert.match(planItem, /carrierReviewQuestion/);
   assert.match(planItem, /professionalHelpLevel/);
   assert.match(planItem, /handoffJson/);
-  assert.match(planItem, /carrierReviewQuestion\s+String\?/);
-  assert.match(planItem, /professionalHelpLevel\s+String\?/);
-  assert.match(planItem, /handoffJson\s+Json\?/);
+  assert.match(planItem, /carrierReviewQuestion\s+String\b/);
+  assert.match(planItem, /professionalHelpLevel\s+String\b/);
+  assert.match(planItem, /handoffJson\s+Json\b/);
   assert.doesNotMatch(planItem, /estimatedSavings/);
 
   const statuses = schema.match(/enum MitigationPlanStatus \{([\s\S]*?)\n\}/)[1];
@@ -69,12 +69,13 @@ test('canonical schema links the plan to a coverage review and removes savings c
   assert.doesNotMatch(statuses, /\bDONE\b/);
 });
 
-test('incomplete plan rows are suppressed and require a governed plan rebuild', () => {
+test('every persisted plan row requires governed guidance', () => {
   const service = read('apps/backend/src/services/riskPremiumOptimizer.service.ts');
 
   assert.match(service, /hasGovernedPlanGuidance/);
-  assert.match(service, /planRebuildRequired: suppressedPlanItemCount > 0/);
-  assert.match(service, /status: suppressedPlanItemCount > 0 \? 'STALE'/);
+  assert.match(service, /planRebuildRequired: false/);
+  assert.match(service, /planItems: planItems\.map\(mapPlanItemToDto\)/);
+  assert.doesNotMatch(service, /governedPlanItems|suppressedPlanItemCount > 0/);
   assert.doesNotMatch(service, /const legacyHelp = mitigationHandoff/);
   assert.doesNotMatch(service, /item\.carrierReviewQuestion \?\?/);
 });

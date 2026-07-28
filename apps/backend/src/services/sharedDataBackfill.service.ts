@@ -363,22 +363,22 @@ function extractEvidenceFromCoverageSnapshot(
   if (Object.keys(root).length === 0) return null;
 
   const overrides = safeObject(root.overrides as Prisma.JsonValue);
-  const insuranceInputs = safeObject(valueFromPath(root, ['insuranceResult', 'inputsUsed']) as Prisma.JsonValue);
+  const scenarioInputs = safeObject(valueFromPath(root, ['scenarioInputs', 'inputsUsed']) as Prisma.JsonValue);
   const sharedContext = safeObject(root.sharedContext as Prisma.JsonValue);
 
   const riskTolerance =
     normalizeRiskTolerance(overrides.riskTolerance) ??
-    normalizeRiskTolerance(insuranceInputs.riskTolerance) ??
+    normalizeRiskTolerance(scenarioInputs.riskTolerance) ??
     normalizeRiskTolerance(sharedContext.riskTolerance);
 
   const deductibleUsd =
     asFinite(overrides.deductibleUsd) ??
-    asFinite(insuranceInputs.deductibleUsd) ??
+    asFinite(scenarioInputs.deductibleUsd) ??
     asFinite(valueFromPath(root, ['inputs', 'deductibleAmount']));
 
   const cashBufferUsd =
     asFinite(overrides.cashBufferUsd) ??
-    asFinite(insuranceInputs.cashBufferUsd) ??
+    asFinite(scenarioInputs.cashBufferUsd) ??
     asFinite(valueFromPath(root, ['inputs', 'cashBuffer']));
 
   const deductiblePreferenceStyle =

@@ -1,7 +1,7 @@
 // apps/backend/src/services/costExplainer.service.ts
 import { prisma } from '../lib/prisma';
 import { PropertyTaxService } from './propertyTax.service';
-import { InsuranceCostTrendService } from './insuranceCostTrend.service';
+import { getObservedInsurancePremiumHistory } from './insurancePolicyHistory.service';
 
 type Years = 5 | 10;
 
@@ -49,7 +49,7 @@ export type CostExplainerDTO = {
     // Phase-3: transparency array
     assumptions: Array<{
       field: string;
-      source: 'DATA_BACKED' | 'HEURISTIC' | 'USER_OVERRIDE';
+      source: 'DATA_BACKED' | 'HEURISTIC' | 'USER_OVERRIDE' | 'UNKNOWN';
       value: unknown;
       note: string;
     }>;
@@ -80,10 +80,7 @@ function estimateMaintenanceNow(homeValueNow: number, state: string) {
 }
 
 export class CostExplainerService {
-  constructor(
-    private propertyTax = new PropertyTaxService(),
-    private insuranceTrend = new InsuranceCostTrendService()
-  ) {}
+  constructor(private propertyTax = new PropertyTaxService()) {}
 
   async explain(propertyId: string, years: Years = 5): Promise<CostExplainerDTO> {
     const property = await prisma.property.findUnique({
@@ -111,13 +108,16 @@ export class CostExplainerService {
     const taxPrev = taxNow;
     const taxDelta = 0;
 
-    // 2) Insurance (your service exposes estimate(), not getTrend())
-    const ins = await this.insuranceTrend.estimate(propertyId, { years });
-    const insHist = (ins?.history || []).slice(-Math.max(2, years));
-    const insNow = ins?.current?.insuranceAnnualNow ?? insHist.at(-1)?.annualPremium ?? 0;
-    const insPrev = insHist.length >= 2 ? insHist.at(-2)!.annualPremium : insNow;
+    // 2) Insurance — confirmed policy terms only. Missing history stays missing.
+    const observedInsurance = await getObservedInsurancePremiumHistory(propertyId);
+    const insHist = observedInsurance.premiumSeries
+      .filter((entry) => entry.year !== null)
+      .slice(-Math.max(2, years));
+    const insNow = observedInsurance.currentAnnualPremium ?? 0;
+    const insPrev = observedInsurance.previousAnnualPremium ?? insNow;
     const insDelta = insNow - insPrev;
-    const insuranceIsEducational = (ins as any)?.meta?.classification === 'EDUCATIONAL_ESTIMATE';
+    const hasObservedInsurance = observedInsurance.currentAnnualPremium !== null;
+    const hasObservedInsuranceChange = observedInsurance.previousAnnualPremium !== null;
 
     // 3) Home value proxy (prefer tax service if it provides it; else heuristic)
     const homeValueNow =
@@ -137,20 +137,18 @@ export class CostExplainerService {
     // Build the modeled cost series without inventing property-tax history.
     // Until observed tax-year records exist, the current planning estimate is
     // held constant and must not be interpreted as a historical observation.
-    const yearsBack = years;
-    const insSeries = (ins?.history || []).slice(-yearsBack);
-
     const byYear = new Map<number, { tax?: number; ins?: number }>();
-    for (const h of insSeries) byYear.set(h.year, { ...(byYear.get(h.year) || {}), ins: h.annualPremium });
+    for (const h of insHist) {
+      if (h.year !== null) {
+        byYear.set(h.year, { ...(byYear.get(h.year) || {}), ins: h.annualPremium });
+      }
+    }
 
     const yearKeys = Array.from(byYear.keys()).sort((a, b) => a - b);
     const baseYears =
-      yearKeys.length >= 2
+      yearKeys.length > 0
         ? yearKeys
-        : (() => {
-            const nowYear = new Date().getFullYear();
-            return Array.from({ length: yearsBack }, (_, i) => nowYear - (yearsBack - 1 - i));
-          })();
+        : [new Date().getFullYear()];
 
     // Maintenance series: roll backward from maintNow using inflation
     const nowYear = new Date().getFullYear();
@@ -163,7 +161,7 @@ export class CostExplainerService {
 
     const history = baseYears.map((y) => {
       const t = byYear.get(y)?.tax ?? (y === nowYear ? taxNow : taxNow); // fallback
-      const i = byYear.get(y)?.ins ?? (y === nowYear ? insNow : insNow); // fallback
+      const i = byYear.get(y)?.ins ?? 0;
       const m = maintenanceByYear.get(y) ?? maintNow;
       return {
         year: y,
@@ -174,12 +172,8 @@ export class CostExplainerService {
       };
     });
 
-    const zipPrefix = String(zip).slice(0, 3);
-    const coastal = ['FL', 'TX', 'LA', 'NC', 'SC', 'NJ', 'NY', 'MA'].includes(state);
-
-    const insConfidence: 'HIGH' | 'MEDIUM' | 'LOW' = insuranceIsEducational
-      ? 'LOW'
-      : (((ins as any)?.meta?.confidence as any) ?? 'LOW');
+    const insConfidence: 'HIGH' | 'MEDIUM' | 'LOW' =
+      hasObservedInsuranceChange ? 'HIGH' : hasObservedInsurance ? 'MEDIUM' : 'LOW';
 
     const explanations: CostExplainerDTO['explanations'] = [
       {
@@ -194,13 +188,17 @@ export class CostExplainerService {
       },
       {
         category: 'INSURANCE',
-        headline: `Insurance ${insDelta >= 0 ? 'increased' : 'decreased'} about ${fmtMoney(insDelta)} vs last year`,
+        headline: hasObservedInsuranceChange
+          ? `Confirmed annual premium ${insDelta >= 0 ? 'increased' : 'decreased'} by ${fmtMoney(Math.abs(insDelta))}`
+          : hasObservedInsurance
+            ? 'One confirmed annual premium is available'
+            : 'No confirmed annual premium is available',
         bullets: [
-          coastal
-            ? `Coastal/hurricane-adjacent states like ${state} tend to see more volatility tied to catastrophe losses and reinsurance pricing.`
-            : `Inland states like ${state} still see premium drift from claims inflation and rebuild-cost increases.`,
-          `ZIP prefix ${zipPrefix} is treated as a risk proxy by carriers (claims frequency + rebuild costs).`,
-          `Current estimates are modeled; future updates will incorporate DOI filings + FEMA/NOAA correlations.`,
+          hasObservedInsuranceChange
+            ? 'The change compares confirmed terms for the same recorded policy.'
+            : 'At least two confirmed terms are required for a premium-change statement.',
+          'No state, ZIP, climate, or synthetic growth heuristic is used.',
+          'Review the source policy document before making a financial decision.',
         ],
         confidence: insConfidence,
       },
@@ -237,11 +235,11 @@ export class CostExplainerService {
       },
       {
         field: 'annualInsurance',
-        source: insuranceIsEducational ? 'HEURISTIC' : 'DATA_BACKED',
-        value: insNow,
-        note: insuranceIsEducational
-          ? 'InsuranceCostTrendService EDUCATIONAL_ESTIMATE — modeled, not sourced from DOI filings.'
-          : 'InsuranceCostTrendService modeled estimate.',
+        source: hasObservedInsurance ? 'DATA_BACKED' : 'UNKNOWN',
+        value: hasObservedInsurance ? insNow : null,
+        note: hasObservedInsurance
+          ? 'Latest homeowner-confirmed annual premium from a verified policy term.'
+          : 'No confirmed policy-term premium is available; insurance is excluded from totals.',
       },
       {
         field: 'annualMaintenance',
@@ -269,14 +267,14 @@ export class CostExplainerService {
       explanations,
       meta: {
         generatedAt: new Date().toISOString(),
-        dataSources: ['PropertyTaxService (modeled)', 'InsuranceTrend (modeled)', 'Maintenance heuristic'],
+        dataSources: ['PropertyTaxService (modeled)', 'Confirmed insurance policy terms', 'Maintenance heuristic'],
         assumptions,
         notes: [
           'Uses modeled estimates (no external datasets) and does not store snapshots.',
           'Maintenance is a heuristic (~1% of value/year) adjusted lightly by state and inflation.',
-          ...(insuranceIsEducational
-            ? ['Insurance component is an educational estimate and should not be treated as decision-grade financial input.']
-            : []),
+          ...(hasObservedInsurance
+            ? ['Insurance values include confirmed policy terms only.']
+            : ['Insurance is excluded because no confirmed premium is available.']),
         ],
       },
     };

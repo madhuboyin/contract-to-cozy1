@@ -1,6 +1,6 @@
 // apps/backend/src/services/costVolatility.service.ts
 import { prisma } from '../lib/prisma';
-import { InsuranceCostTrendService } from './insuranceCostTrend.service';
+import { getObservedInsurancePremiumHistory } from './insurancePolicyHistory.service';
 import { PropertyTaxService } from './propertyTax.service';
 import { TrueCostOwnershipService } from './trueCostOwnership.service';
 
@@ -183,16 +183,6 @@ function regionalSensitivityByState(state: string): { score: number; label: stri
   return { score: 52, label: 'Broad inflation + claims severity', impact: 'LOW' };
 }
 
-function insuranceStateBaseline(state: string) {
-  const s = String(state || '').toUpperCase().trim();
-  if (['FL', 'LA'].includes(s)) return 10;
-  if (s === 'TX') return 8;
-  if (s === 'CA') return 9;
-  if (['CO', 'AZ'].includes(s)) return 6;
-  if (['NJ', 'NY', 'MA'].includes(s)) return 5;
-  return 3;
-}
-
 function computeYoY<T extends Record<string, any>>(
   series: T[],
   field: keyof T
@@ -214,15 +204,14 @@ function computeYoY<T extends Record<string, any>>(
 async function buildAnnualHistory(args: {
   propertyId: string;
   years: 5 | 10;
-  insuranceSvc: InsuranceCostTrendService;
   taxSvc: PropertyTaxService;
   trueCostSvc: TrueCostOwnershipService;
 }) {
-  const { propertyId, years, insuranceSvc, taxSvc, trueCostSvc } = args;
-
-  const ins = await insuranceSvc.estimate(propertyId, { years });
-  const insuranceIsEducational = (ins as any)?.meta?.classification === 'EDUCATIONAL_ESTIMATE';
-  const insHist = (ins?.history || []).slice(-years);
+  const { propertyId, years, taxSvc, trueCostSvc } = args;
+  const observedInsurance = await getObservedInsurancePremiumHistory(propertyId);
+  const insHist = observedInsurance.premiumSeries
+    .filter((entry) => entry.year !== null)
+    .slice(-years);
 
   const tax = await taxSvc.estimate(propertyId, { historyYears: years } as any);
   const taxHist = (((tax as any)?.history || []) as Array<{ year: number; annualTax: number }>).slice(-years);
@@ -241,7 +230,9 @@ async function buildAnnualHistory(args: {
       : [];
 
   const byYearIns = new Map<number, number>();
-  for (const r of insHist) byYearIns.set(r.year, Number(r.annualPremium) || 0);
+  for (const r of insHist) {
+    if (r.year !== null) byYearIns.set(r.year, Number(r.annualPremium) || 0);
+  }
 
   const byYearTax = new Map<number, number>();
   for (const r of taxHist) byYearTax.set(r.year, Number((r as any).annualTax) || 0);
@@ -250,7 +241,9 @@ async function buildAnnualHistory(args: {
   for (const r of trueCostHist) byYearTrue.set(r.year, Number(r.annualTotal) || 0);
 
   const yearSet = new Set<number>();
-  for (const r of insHist) yearSet.add(r.year);
+  for (const r of insHist) {
+    if (r.year !== null) yearSet.add(r.year);
+  }
   for (const r of taxHist) yearSet.add(r.year);
 
   const yearsSorted = Array.from(yearSet).sort((a, b) => a - b).slice(-years);
@@ -284,12 +277,14 @@ async function buildAnnualHistory(args: {
     };
   });
 
-  return { history, insuranceIsEducational };
+  return {
+    history,
+    insuranceDataSufficient: observedInsurance.premiumSeries.length >= 2,
+  };
 }
 
 export class CostVolatilityService {
   constructor(
-    private insuranceTrend = new InsuranceCostTrendService(),
     private propertyTax = new PropertyTaxService(),
     private trueCost = new TrueCostOwnershipService()
   ) {}
@@ -310,7 +305,7 @@ export class CostVolatilityService {
 
     const notes: string[] = [];
     const dataSources: string[] = [
-      'InsuranceCostTrendService (modeled; Phase 2 step-event detection anchored on series)',
+      'Confirmed insurance policy terms',
       'PropertyTaxService (modeled; Phase 2 cadence mapping + delta variance)',
       'TrueCostOwnershipService (optional cross-check for 5y totals)',
       'State reassessment cadence mapping (Phase 2 static adapter)',
@@ -323,10 +318,9 @@ export class CostVolatilityService {
 
     // 1) Build full history once (10y) for stable event detection
     const MAX_EVENT_YEARS: 10 = 10;
-    const { history: fullHistory, insuranceIsEducational } = await buildAnnualHistory({
+    const { history: fullHistory, insuranceDataSufficient } = await buildAnnualHistory({
       propertyId,
       years: MAX_EVENT_YEARS,
-      insuranceSvc: this.insuranceTrend,
       taxSvc: this.propertyTax,
       trueCostSvc: this.trueCost,
     });
@@ -368,7 +362,9 @@ export class CostVolatilityService {
     }
 
     // --- INSURANCE STEP CHANGES (window-invariant)
-    const insuranceDeltas = computeYoY(fullHistory, 'annualInsurance');
+    const insuranceDeltas = insuranceDataSufficient
+      ? computeYoY(fullHistory.filter((entry) => entry.annualInsurance > 0), 'annualInsurance')
+      : [];
     const insuranceStd = stddev(insuranceDeltas.map((d) => d.delta));
     const insuranceShockThreshold = Math.max(insuranceStd * 2.0, 0.15); // >=15% jump baseline
     for (const d of insuranceDeltas) {
@@ -414,7 +410,9 @@ export class CostVolatilityService {
     // Scoring (Phase 2 index; backward compatible fields)
     // ============================
 
-    const deltasInsWin = historyWindow.map((h) => (h.yoyInsurancePct == null ? null : h.yoyInsurancePct / 100));
+    const deltasInsWin = insuranceDataSufficient
+      ? historyWindow.map((h) => (h.yoyInsurancePct == null ? null : h.yoyInsurancePct / 100))
+      : [];
     const deltasTaxWin = historyWindow.map((h) => (h.yoyTaxPct == null ? null : h.yoyTaxPct / 100));
     const deltasTotWin = historyWindow.map((h) => (h.yoyTotalPct == null ? null : h.yoyTotalPct / 100));
 
@@ -422,7 +420,9 @@ export class CostVolatilityService {
     const taxStdWin2 = stddev(deltasTaxWin);
 
     // insurance variance score (0..100)
-    const insuranceVolatility = deltaStdToScore(insStdWin, 0.25, insuranceStateBaseline(state));
+    const insuranceVolatility = insuranceDataSufficient
+      ? deltaStdToScore(insStdWin, 0.25, 0)
+      : 0;
 
     // tax cadence score: blend variance + cadence pressure (kept conceptually from Phase 1)
     const taxVarianceScore = deltaStdToScore(taxStdWin2, 0.20, 0);
@@ -454,9 +454,9 @@ export class CostVolatilityService {
       confidence = 'LOW';
       notes.push('ZIP missing/invalid; localized messaging reduced.');
     }
-    if (insuranceIsEducational) {
+    if (!insuranceDataSufficient) {
       if (confidence !== 'LOW') confidence = 'LOW';
-      notes.push('Insurance data is a modeled estimate (EDUCATIONAL_ESTIMATE); volatility confidence reduced to LOW.');
+      notes.push('At least two confirmed policy-term premiums are required to calculate insurance volatility.');
     }
 
     // Totals note (preserve Phase-1 behavior)
@@ -468,7 +468,9 @@ export class CostVolatilityService {
 
     // Dominant driver (Phase 2)
     const contribution = [
-      { k: 'INSURANCE' as const, w: 0.45, s: insuranceVolatility },
+      ...(insuranceDataSufficient
+        ? [{ k: 'INSURANCE' as const, w: 0.45, s: insuranceVolatility }]
+        : []),
       { k: 'TAX' as const, w: 0.30, s: taxVolatility },
       { k: 'CLIMATE' as const, w: 0.10, s: zipVolatility + climateShockScore * 0.5 }, // rolled climate pressure
     ].sort((a, b) => b.w * b.s - a.w * a.s);
@@ -477,13 +479,17 @@ export class CostVolatilityService {
 
     // Drivers list (Phase 2 wording)
     const drivers: CostVolatilityDTO['drivers'] = [
-      {
+      ...(insuranceDataSufficient ? [{
         factor: 'Insurance repricing volatility',
         impact: impactForScore(insuranceVolatility),
         explanation:
-          `Your insurance variability in ${state || 'your state'} is driven mostly by year-to-year premium changes (variance). ` +
+          'Insurance variability uses confirmed year-to-year policy-term premium changes. ' +
           `${events.some((e) => e.type === 'INSURANCE_SHOCK') ? 'We detected at least one repricing spike year.' : 'No major spike years were detected.'}`,
-      },
+      }] : [{
+        factor: 'Insurance history unavailable',
+        impact: 'LOW' as const,
+        explanation: 'Insurance volatility is excluded until at least two confirmed policy-term premiums are available.',
+      }]),
       {
         factor: 'Tax reassessment cadence',
         impact: impactForScore(taxVolatility),

@@ -1,7 +1,7 @@
 // apps/backend/src/services/trueCostOwnership.service.ts
 import { prisma } from '../lib/prisma';
 import { PropertyTaxService } from './propertyTax.service';
-import { InsuranceCostTrendService } from './insuranceCostTrend.service';
+import { getObservedInsurancePremiumHistory } from './insurancePolicyHistory.service';
 
 type Impact = 'LOW' | 'MEDIUM' | 'HIGH';
 type Confidence = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -68,7 +68,7 @@ export type TrueCostOwnershipDTO = {
     // Phase-3: transparency array
     assumptions: Array<{
       field: string;
-      source: 'DATA_BACKED' | 'HEURISTIC' | 'USER_OVERRIDE';
+      source: 'DATA_BACKED' | 'HEURISTIC' | 'USER_OVERRIDE' | 'UNKNOWN';
       value: unknown;
       note: string;
     }>;
@@ -81,11 +81,6 @@ function clamp(n: number, min: number, max: number) {
 function toMoney(n: number) {
   return Math.round(n * 100) / 100;
 }
-function zipPrefix(zip: string) {
-  const z = String(zip || '').replace(/\D/g, '');
-  return z.length >= 3 ? z.slice(0, 3) : z;
-}
-
 // Keep consistent with your other tools: lightweight ppsf heuristic
 const VALUE_PER_SQFT_BY_STATE: Record<string, number> = {
   NJ: 300, NY: 320, CA: 380, TX: 180, FL: 220, WA: 260, MA: 320, CO: 240, AZ: 210,
@@ -131,10 +126,7 @@ function estimateUtilitiesNow(state: string) {
 }
 
 export class TrueCostOwnershipService {
-  constructor(
-    private propertyTax = new PropertyTaxService(),
-    private insuranceTrend = new InsuranceCostTrendService()
-  ) {}
+  constructor(private propertyTax = new PropertyTaxService()) {}
 
   async estimate(propertyId: string, input: TrueCostOwnershipInput = {}): Promise<TrueCostOwnershipDTO> {
     const property = await prisma.property.findUnique({
@@ -161,7 +153,7 @@ export class TrueCostOwnershipService {
     const dataSources: string[] = [
       'Property profile (address, state, ZIP, size)',
       'Property tax estimate (state and county benchmarks)',
-      'Insurance cost model (state-adjusted premium benchmarks)',
+      'Confirmed insurance policy terms, when available',
       'Maintenance estimate (1% of home value/year, state-adjusted)',
       'Utilities estimate (state-level regional averages)',
     ];
@@ -196,25 +188,21 @@ export class TrueCostOwnershipService {
     const annualTaxNow = tax.current.annualTax;
     notes.push('Observed tax history is unavailable; the current planning estimate is held constant in the modeled series.');
 
-    // Insurance: reuse insurance trend estimate() for a modeled now and growth rate; take its history if available
-    const ins = await this.insuranceTrend.estimate(propertyId, {
-      years,
-      homeValueNow: input.homeValueNow,
-      insuranceAnnualNow: input.insuranceAnnualNow,
-      inflationRate: input.inflationRate,
-    });
-    const insuranceIsEducational = (ins as any)?.meta?.classification === 'EDUCATIONAL_ESTIMATE';
-
-    const annualInsuranceNow = ins?.current?.insuranceAnnualNow ?? 0;
-    const insHist = (ins?.history || []).slice(-years);
+    const observedInsurance = await getObservedInsurancePremiumHistory(propertyId);
+    const annualInsuranceNow =
+      input.insuranceAnnualNow ?? observedInsurance.currentAnnualPremium ?? 0;
+    const hasInsuranceInput =
+      input.insuranceAnnualNow !== undefined || observedInsurance.currentAnnualPremium !== null;
 
     if (input.insuranceAnnualNow !== undefined) {
       notes.push('Insurance override applied.');
       confidence = 'HIGH';
+    } else if (observedInsurance.currentAnnualPremium !== null) {
+      notes.push('Insurance uses the latest homeowner-confirmed policy-term premium.');
+      confidence = confidence === 'HIGH' ? 'HIGH' : 'MEDIUM';
     } else {
-      confidence = insuranceIsEducational
-        ? (confidence === 'HIGH' ? 'HIGH' : 'LOW')
-        : (confidence === 'HIGH' ? 'HIGH' : 'MEDIUM');
+      notes.push('Insurance is excluded because no confirmed policy-term premium is available.');
+      confidence = 'LOW';
     }
 
     // Maintenance (override or heuristic)
@@ -248,10 +236,6 @@ export class TrueCostOwnershipService {
     } else {
       notes.push(`Utilities and maintenance projected with a ${(inflationRate * 100).toFixed(1)}%/yr inflation assumption.`);
     }
-    if (insuranceIsEducational) {
-      notes.push('Insurance component is an educational estimate and should not be used as a sole financial planning input.');
-    }
-
     const nowYear = new Date().getFullYear();
 
     // Build 5y series (historical-looking timeline ending now, for calm readability)
@@ -259,19 +243,13 @@ export class TrueCostOwnershipService {
     const yearLabels: number[] = [];
     for (let i = years - 1; i >= 0; i--) yearLabels.push(nowYear - i);
 
-    // Insurance: from insurance trend history if present; else backfill by its growth rate
+    // Insurance values are observed policy terms only. A user override applies
+    // to the current planning year and is never reverse-generated as history.
     const insByYear = new Map<number, number>();
-    if (insHist.length) {
-      for (const h of insHist) insByYear.set(h.year, h.annualPremium);
-    } else {
-      // backfill using modeled growth in insurance trend current insuranceGrowthRate
-      const g = ins?.current?.insuranceGrowthRate ?? 0.06;
-      for (const y of yearLabels) {
-        const diff = nowYear - y;
-        insByYear.set(y, annualInsuranceNow * Math.pow(1 + g, -diff));
-      }
-      notes.push('Insurance series derived from modeled growth rate (no explicit history).');
+    for (const premium of observedInsurance.premiumSeries) {
+      if (premium.year !== null) insByYear.set(premium.year, premium.annualPremium);
     }
+    if (input.insuranceAnnualNow !== undefined) insByYear.set(nowYear, input.insuranceAnnualNow);
 
     // Maintenance/utilities: roll backward from “now” using inflationRate
     const maintByYear = new Map<number, number>();
@@ -284,7 +262,7 @@ export class TrueCostOwnershipService {
 
     const history = yearLabels.map((y) => {
       const annualTax = annualTaxNow;
-      const annualInsurance = insByYear.get(y) ?? annualInsuranceNow;
+      const annualInsurance = insByYear.get(y) ?? 0;
       const annualMaintenance = maintByYear.get(y) ?? annualMaintenanceNow;
       const annualUtilities = utilByYear.get(y) ?? annualUtilitiesNow;
       const annualTotal = annualTax + annualInsurance + annualMaintenance + annualUtilities;
@@ -310,15 +288,13 @@ export class TrueCostOwnershipService {
       breakdown.taxes + breakdown.insurance + breakdown.maintenance + breakdown.utilities
     );
 
-    const zp = zipPrefix(zipCode);
-
     const drivers = [
       {
-        factor: `Insurance volatility (${state}, ZIP ${zp})`,
-        impact: (['FL', 'TX', 'CA', 'LA'].includes(state) ? 'HIGH' : 'MEDIUM') as Impact,
-        explanation: (['FL', 'TX', 'LA'].includes(state)
-          ? `${state} has elevated weather and peril exposure, which can drive above-average premium growth. Your insurance estimate is adjusted for this state risk profile.`
-          : `Insurance is modeled using state-level claims and climate benchmarks. Premiums can spike due to insurer repricing or regional claims activity.`),
+        factor: 'Insurance record completeness',
+        impact: (hasInsuranceInput ? 'LOW' : 'HIGH') as Impact,
+        explanation: hasInsuranceInput
+          ? 'Insurance cost uses a confirmed policy-term premium or an explicit planning override.'
+          : 'No confirmed premium is available, so insurance is excluded from the modeled ownership total.',
       },
       {
         factor: `Utilities (${state} regional average)`,
@@ -353,13 +329,17 @@ export class TrueCostOwnershipService {
       },
       {
         field: 'annualInsurance',
-        source: input.insuranceAnnualNow !== undefined ? 'USER_OVERRIDE' : (insuranceIsEducational ? 'HEURISTIC' : 'DATA_BACKED'),
-        value: toMoney(annualInsuranceNow),
+        source: input.insuranceAnnualNow !== undefined
+          ? 'USER_OVERRIDE'
+          : observedInsurance.currentAnnualPremium !== null
+            ? 'DATA_BACKED'
+            : 'UNKNOWN',
+        value: hasInsuranceInput ? toMoney(annualInsuranceNow) : null,
         note: input.insuranceAnnualNow !== undefined
           ? 'Client-provided override.'
-          : insuranceIsEducational
-            ? 'InsuranceCostTrendService EDUCATIONAL_ESTIMATE — modeled, not DOI-filed data.'
-            : 'InsuranceCostTrendService modeled estimate.',
+          : observedInsurance.currentAnnualPremium !== null
+            ? 'Latest homeowner-confirmed annual premium from a verified policy term.'
+            : 'No confirmed premium is available; insurance is excluded.',
       },
       {
         field: 'annualMaintenance',

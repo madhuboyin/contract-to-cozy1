@@ -10,13 +10,13 @@ const {
 } = require('../../src/productFramework/capabilities/index.ts');
 
 const registryVersion = canonicalCapabilityRegistry.version;
-const capability = canonicalCapabilityRegistry.getById('coverage-options');
+const capability = canonicalCapabilityRegistry.getById('coverage-intelligence');
 
 function scenario(name, propertyId) {
   return {
     name,
     propertyId,
-    expectedCapabilityIds: ['coverage-options'],
+    expectedCapabilityIds: ['coverage-intelligence'],
     forbiddenCapabilityIds: ['financing'],
     minimumHomeSuggestions: 1,
     minimumPropertySuggestions: 1,
@@ -74,8 +74,8 @@ function suggestions(propertyId, surface) {
     generatedAt: '2026-07-25T12:00:00.000Z',
     surface,
     suggestions: [{
-      suggestionId: `coverage-options:HOME_ACTION:action-${propertyId}:context-${propertyId}`,
-      capabilityId: 'coverage-options',
+      suggestionId: `coverage-intelligence:HOME_ACTION:action-${propertyId}:context-${propertyId}`,
+      capabilityId: 'coverage-intelligence',
       manifestVersion: capability.version,
       recommendationVersion: 'capability-recommendation-v1',
       contextVersion: `context-${propertyId}`,
@@ -210,9 +210,9 @@ test('CAP-904 validates authenticated representative-property contracts read-onl
   assert.deepEqual(
     report.scenarios.map((item) => item.observedCapabilityIds),
     [
-      ['coverage-options'],
-      ['coverage-options'],
-      ['coverage-options'],
+      ['coverage-intelligence'],
+      ['coverage-intelligence'],
+      ['coverage-intelligence'],
     ],
   );
   assert.equal(

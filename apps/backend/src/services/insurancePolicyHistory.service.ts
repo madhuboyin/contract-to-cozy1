@@ -59,6 +59,62 @@ export function buildRenewalAction(termEnd: Date | null, now: Date) {
   };
 }
 
+export async function getObservedInsurancePremiumHistory(propertyId: string) {
+  const terms = await prisma.insurancePolicyTerm.findMany({
+    where: {
+      propertyId,
+      verificationStatus: 'VERIFIED',
+      facts: {
+        some: {
+          factKey: 'ANNUAL_PREMIUM',
+          confirmationStatus: 'CONFIRMED',
+          amountValue: { not: null },
+        },
+      },
+    },
+    orderBy: [{ termStart: 'asc' }, { createdAt: 'asc' }],
+    include: {
+      facts: {
+        where: {
+          factKey: 'ANNUAL_PREMIUM',
+          confirmationStatus: 'CONFIRMED',
+          amountValue: { not: null },
+        },
+        take: 1,
+      },
+    },
+  });
+  const latestPolicyId = terms.at(-1)?.insurancePolicyId ?? null;
+  const premiumSeries = terms.flatMap((term) => {
+    if (!latestPolicyId || term.insurancePolicyId !== latestPolicyId) return [];
+    const fact = term.facts[0];
+    const annualPremium = asNumber(fact?.amountValue);
+    if (!fact || annualPremium == null) return [];
+    return [{
+      policyTermId: term.id,
+      termStart: term.termStart,
+      termEnd: term.termEnd,
+      year: term.termStart?.getUTCFullYear() ?? null,
+      annualPremium,
+      currency: fact.currency ?? 'USD',
+      sourceDocumentId: fact.sourceDocumentId ?? term.sourceDocumentId,
+      sourcePage: fact.sourcePage,
+    }];
+  });
+  return {
+    state:
+      premiumSeries.length === 0
+        ? 'NO_CONFIRMED_PREMIUM'
+        : premiumSeries.length === 1
+          ? 'ONE_CONFIRMED_PREMIUM'
+          : 'OBSERVED_PREMIUM_HISTORY',
+    premiumSeries,
+    currentAnnualPremium: premiumSeries.at(-1)?.annualPremium ?? null,
+    previousAnnualPremium: premiumSeries.at(-2)?.annualPremium ?? null,
+    classification: 'OBSERVED_CONFIRMED_HISTORY' as const,
+  };
+}
+
 export async function getInsurancePolicyHistory(
   propertyId: string,
   userId: string,

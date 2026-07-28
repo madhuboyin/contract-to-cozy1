@@ -4,9 +4,6 @@ import type { TrustMetadata, ConfidenceLevel } from '@/lib/types/trust';
 type CoverageAnalysisLike = Pick<CoverageAnalysisDTO, 'insuranceReviewState' | 'confidence' | 'computedAt'> | null | undefined;
 
 export function coverageReviewMeta(state?: CoverageAnalysisDTO['insuranceReviewState']) {
-  if (state === 'QUESTIONS_PRESENT') {
-    return { label: 'Questions to review', cls: 'bg-amber-100 text-amber-800' };
-  }
   if (state === 'NO_QUESTIONS_FROM_REVIEWED_FIELDS') {
     return { label: 'Reviewed fields checked', cls: 'bg-slate-100 text-slate-700' };
   }

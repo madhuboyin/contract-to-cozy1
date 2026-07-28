@@ -940,7 +940,7 @@ test('CAP-403 promotes only candidates passing release, permission, safety, and 
   assert.deepEqual(result.diagnostics, {
     promotableCount: 1,
     withheldCount: 0,
-    blockedCount: 1,
+    blockedCount: 0,
   });
 });
 
@@ -1683,12 +1683,12 @@ test('CAP-405 does not pad a surface with candidates below the useful threshold'
   );
 });
 
-test('CAP-405 caps Home at three and prefers an alternative outcome', () => {
+test('CAP-405 caps Home at three with deterministic score ordering', () => {
   const { context, baseCandidate } = rankingFixture();
   const candidates = [
     rankingCandidate(baseCandidate, 'coverage-intelligence', { baseScore: 100 }),
     rankingCandidate(baseCandidate, 'cost-growth', { baseScore: 90 }),
-    rankingCandidate(baseCandidate, 'insurance-trend', { baseScore: 80 }),
+    rankingCandidate(baseCandidate, 'break-even', { baseScore: 80 }),
     rankingCandidate(baseCandidate, 'inspection-hub', { baseScore: 60 }),
   ];
   const result = rankCapabilityCandidates({
@@ -1706,11 +1706,11 @@ test('CAP-405 caps Home at three and prefers an alternative outcome', () => {
   assert.deepEqual(selectedIds, [
     'coverage-intelligence',
     'cost-growth',
-    'inspection-hub',
+    'break-even',
   ]);
   assert.equal(
-    candidateById(result, 'insurance-trend').ranking.selectionDecision,
-    'OUTCOME_DIVERSITY_DEFERRED',
+    candidateById(result, 'inspection-hub').ranking.selectionDecision,
+    'SURFACE_LIMIT_REACHED',
   );
 });
 
@@ -1744,11 +1744,11 @@ test('CAP-405 avoids repeated source actions and breaks ties deterministically',
 
   assert.deepEqual(first, second);
   assert.equal(
-    candidateById(first, 'inspection-hub').ranking.selectionDecision,
+    candidateById(first, 'coverage-intelligence').ranking.selectionDecision,
     'SOURCE_DIVERSITY_DEFERRED',
   );
   assert.equal(
-    candidateById(first, 'coverage-intelligence').ranking.selected,
+    candidateById(first, 'inspection-hub').ranking.selected,
     true,
   );
   assert.equal(candidateById(first, 'plant-advisor').ranking.selected, true);
@@ -2222,7 +2222,7 @@ test('CAP-407 scopes source-bound requests and fails optional sources closed', a
   assert.deepEqual(unrelated.suggestions, []);
 });
 
-test('CAP-407 derives duplicate CTA and trigger metadata from canonical routes', () => {
+test('CAP-407 derives canonical CTA metadata without reviving retired coverage triggers', () => {
   const sourceAction = action({
     primaryCta: {
       kind: 'REVIEW',
@@ -2239,7 +2239,7 @@ test('CAP-407 derives duplicate CTA and trigger metadata from canonical routes',
   assert.deepEqual(metadata.ctaCapabilityIds, ['coverage-intelligence']);
   assert.equal(
     metadata.signalIntentFamilies.includes('COVERAGE_GAPS_PRESENT'),
-    true,
+    false,
   );
 });
 

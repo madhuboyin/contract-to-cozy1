@@ -1,6 +1,10 @@
 import { api } from './client';
 
-export type CoverageVerdict = 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
+export type CoverageScenarioState =
+  | 'COST_EXPOSURE_EXCEEDS_PLAN_COST'
+  | 'COSTS_ARE_CLOSE'
+  | 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE'
+  | 'INSUFFICIENT_DATA';
 export type CoverageConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 export type CoverageImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 export type CoverageAnalysisStatus = 'READY' | 'STALE' | 'ERROR';
@@ -239,13 +243,9 @@ export type CoverageAnalysisDTO = {
   status: CoverageAnalysisStatus;
   computedAt: string;
 
-  overallVerdict: CoverageVerdict;
-  /** @deprecated Property-level clients must use insuranceReviewState and scenario facts. */
-  insuranceVerdict: CoverageVerdict;
-  warrantyVerdict: CoverageVerdict;
+  scenarioState: CoverageScenarioState;
   insuranceReviewState:
     | 'POLICY_RECORD_INCOMPLETE'
-    | 'QUESTIONS_PRESENT'
     | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
 
   confidence: CoverageConfidence;
@@ -254,8 +254,6 @@ export type CoverageAnalysisDTO = {
   preferenceProfileId?: string | null;
 
   summary?: string;
-  strategicAdvice?: string | null;
-  addOnRecommendations?: Array<{ code: string; label: string; why: string }>;
   nextSteps?: Array<{
     title: string;
     detail?: string;
@@ -266,12 +264,6 @@ export type CoverageAnalysisDTO = {
       targetTool: 'providers' | 'insurance' | 'coverage-intelligence';
     };
   }>;
-
-  insurance: {
-    inputsUsed: { annualPremiumUsd?: number; deductibleUsd?: number; cashBufferUsd?: number };
-    flags: Array<{ code: string; label: string; severity: CoverageImpactLevel }>;
-    recommendedAddOns: Array<{ code: string; label: string; why: string }>;
-  };
 
   warranty: {
     inputsUsed: { warrantyAnnualCostUsd?: number; warrantyServiceFeeUsd?: number };
@@ -302,16 +294,12 @@ export type ItemCoverageAnalysisDTO = {
   status: CoverageAnalysisStatus;
   computedAt: string;
 
-  overallVerdict: CoverageVerdict;
-  insuranceVerdict: CoverageVerdict;
-  warrantyVerdict: CoverageVerdict;
+  scenarioState: CoverageScenarioState;
 
   confidence: CoverageConfidence;
   impactLevel?: CoverageImpactLevel;
 
   summary?: string;
-  strategicAdvice?: string | null;
-  addOnRecommendations?: Array<{ code: string; label: string; why: string }>;
   nextSteps?: Array<{
     title: string;
     detail?: string;
@@ -341,7 +329,10 @@ export type ItemCoverageAnalysisDTO = {
     expectedCoverageCostUsd?: number;
     expectedNetImpactUsd?: number;
     breakEvenMonths?: number | null;
-    recommendation?: 'BUY_NOW' | 'WAIT' | 'REPLACE_SOON';
+    planningState?:
+      | 'ACTIVE_PROTECTION_RECORDED'
+      | 'REPLACEMENT_HORIZON_SHORT'
+      | 'COMPARE_COST_INPUTS';
   };
 
   decisionTrace: Array<{

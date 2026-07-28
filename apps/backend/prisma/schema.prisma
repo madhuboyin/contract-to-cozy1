@@ -1335,23 +1335,21 @@ model CoverageAnalysis {
   confidence  CoverageConfidence
   impactLevel CoverageImpactLevel?
 
-  // High-level decisions (easy to render / filter)
-  overallVerdict   CoverageVerdict
-  insuranceVerdict CoverageVerdict
-  warrantyVerdict  CoverageVerdict
+  // Neutral analysis states. Policy coverage and purchase decisions are never
+  // inferred from modeled repair-cost scenarios.
+  analysisKind  String
+  reviewState   String
+  scenarioState String
 
   // Human-readable summary for the tool card
   summary   String?
   nextSteps Json? // array of recommended actions (structured)
 
-  // Full structured outputs (kept flexible)
-  insuranceResult      Json?
-  warrantyResult       Json?
-  addOnRecommendations Json?
-  decisionTrace        Json? // factors: label/detail/impact
-  inputsSnapshot       Json? // premium, deductible, warranty cost, overrides used
-
-  strategicAdvice String?
+  // Neutral cost-scenario inputs and outputs.
+  scenarioInputs Json?
+  warrantyResult Json?
+  decisionTrace  Json? // factors: label/detail/impact
+  inputsSnapshot Json? // scenario overrides and shared context
 
   computedAt DateTime @default(now())
 
@@ -7004,12 +7002,9 @@ model RiskMitigationPlanItem {
   estimatedCost              Decimal? @db.Decimal(12, 2)
   carrierBenefitStatus       String   @default("UNKNOWN")
   carrierBenefitEvidenceJson Json?
-  // Nullable only for plan items created before the governed loss-prevention
-  // fields existed. New writes always populate these fields; readers suppress
-  // incomplete rows and require a governed plan rebuild.
-  carrierReviewQuestion      String?
-  professionalHelpLevel      String?
-  handoffJson                Json?
+  carrierReviewQuestion      String
+  professionalHelpLevel      String
+  handoffJson                Json
 
   // Optional proof links (you already have Document + HomeEvent)
   evidenceDocumentId String?

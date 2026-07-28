@@ -280,29 +280,12 @@ function coverageAnalysisFixture() {
     homeownerProfileId: 'profile-acceptance',
     status: 'READY',
     computedAt: '2026-07-27T00:00:00.000Z',
-    overallVerdict: 'WORTH_IT',
-    insuranceVerdict: 'SITUATIONAL',
-    warrantyVerdict: 'WORTH_IT',
-    insuranceReviewState: 'QUESTIONS_PRESENT',
+    scenarioState: 'COSTS_ARE_CLOSE',
+    insuranceReviewState: 'NO_QUESTIONS_FROM_REVIEWED_FIELDS',
     confidence: 'MEDIUM',
     impactLevel: 'MEDIUM',
-    summary: 'Unsafe legacy summary must not be rendered.',
-    strategicAdvice: null,
-    addOnRecommendations: [],
+    summary: 'Neutral fixture scenario.',
     nextSteps: [],
-    insurance: {
-      inputsUsed: {
-        annualPremiumUsd: 2400,
-        deductibleUsd: 2500,
-        cashBufferUsd: 5000,
-      },
-      flags: [{
-        code: 'POLICY_RECORD_QUESTION',
-        label: 'Confirm the controlling deductible and exclusions.',
-        severity: 'MEDIUM',
-      }],
-      recommendedAddOns: [],
-    },
     warranty: {
       inputsUsed: {
         warrantyAnnualCostUsd: 700,

@@ -69,14 +69,14 @@ Classification values:
 | CTA-010 | Property health insight list | Schedule inspection/book repair | J1/J5 | providers + booking + context | existing but needs updates | High |
 | CTA-011 | Property health insight list | Check quote | J1/J5/J9 | service-price-radar | existing + fully functional | - |
 | CTA-012 | Property health insight list | Manage appliance warranties | J2 | warranties | existing + fully functional | - |
-| CTA-013 | Coverage Intelligence tool | Run analysis | J2/J6/J7 | coverage-analysis + guidance completion hook | existing + fully functional | - |
-| CTA-014 | Coverage Intelligence tool | Get coverage for selected item | J2 | item coverage analysis + warranties | existing + fully functional | - |
-| CTA-015 | Coverage Options tool | Get coverage | J2 | inventory item coverage | existing + fully functional | - |
+| CTA-013 | Coverage and Premium Review | Review verified record and record decision | J2/J6/J7 | coverage-review + durable coverage decision | consolidated + fully functional | - |
+| CTA-014 | Coverage and Premium Review | Continue item protection comparison | J2 | neutral item cost scenario + warranties | consolidated + fully functional | - |
+| CTA-015 | Legacy Coverage Options route | Continue to canonical review questions | J2 | redirect preserving property and source context | retired + redirected | - |
 | CTA-016 | Coverage Options tool | Repair/Replace | J1/J2 | replace-repair tool | existing + fully functional | - |
-| CTA-017 | Coverage Options tool | Mark coverage options reviewed | J2 | recordGuidanceToolCompletion | existing + fully functional | - |
-| CTA-018 | Item coverage tool | Run item-level worth-it analysis | J2 | item coverage analysis | existing + fully functional | - |
+| CTA-017 | Coverage and Premium Review | Record a durable coverage decision | J2 | decision persistence + verified lineage | consolidated + fully functional | - |
+| CTA-018 | Item coverage tool | Compare recorded cost inputs | J2 | neutral item cost scenario | existing + fully functional | - |
 | CTA-019 | Item coverage tool | Add warranty coverage | J2 | warranties create flow | existing + fully functional | - |
-| CTA-020 | Property inventory coverage | Get coverage / Quotes / Info / Replace-Repair | J2 | item coverage, quote modal, replace-repair | existing + fully functional | - |
+| CTA-020 | Property inventory coverage | Review record / governed help / Info / Replace-Repair | J2 | item coverage, governed handoff, replace-repair | existing + fully functional | - |
 | CTA-021 | Replace-Repair tool | Run analysis | J1/J5 | replaceRepairAnalysis + guidance completion hook | existing + fully functional | - |
 | CTA-022 | Service Price Radar tool | Check quote | J1/J2/J5/J9 | servicePriceRadar + guidance completion hook | existing + fully functional | - |
 | CTA-023 | Service Price Radar tool | Need help responding? | J1/J5/J9 | negotiation-shield handoff | existing + fully functional | - |

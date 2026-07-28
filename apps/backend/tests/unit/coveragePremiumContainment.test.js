@@ -40,7 +40,9 @@ test('risk optimizer UI contains loss-prevention actions without fixed savings r
 });
 
 test('coverage record UI does not present a missing heuristic gap as proof of coverage', () => {
-  const intelligence = source('../../../frontend/src/components/ai/CoverageIntelligencePanel.tsx');
+  const workspace = source(
+    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/coverage-intelligence/CoverageIntelligenceToolClient.tsx',
+  );
   const options = source(
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/coverage-options/CoverageOptionsClient.tsx',
   );
@@ -48,15 +50,16 @@ test('coverage record UI does not present a missing heuristic gap as proof of co
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/coverage/CoverageClient.tsx',
   );
 
-  assert.match(intelligence, /This does not confirm coverage/);
-  assert.match(intelligence, /controlling policy language or a licensed insurance professional/);
+  assert.doesNotMatch(workspace, /CoverageIntelligencePanel|runCoverageAnalysis/);
   assert.match(options, /This does not confirm what an insurance policy covers/);
   assert.match(inventory, /This does not confirm what a policy covers/);
   assert.doesNotMatch(options, /proofType: 'coverage_gap_snapshot'/);
 });
 
 test('property coverage comparison keeps legacy verdict enums out of directive homeowner copy', () => {
-  const intelligence = source('../../../frontend/src/components/ai/CoverageIntelligencePanel.tsx');
+  const intelligence = source(
+    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/coverage-intelligence/CoverageIntelligenceToolClient.tsx',
+  );
   const service = source('../../src/services/coverageAnalysis.service.ts');
 
   for (const unsupportedClaim of [
@@ -69,18 +72,13 @@ test('property coverage comparison keeps legacy verdict enums out of directive h
   ]) {
     assert.equal(intelligence.includes(unsupportedClaim), false, unsupportedClaim);
   }
-  assert.match(intelligence, /Scenario estimate/);
-  assert.match(intelligence, /does not tell you whether to buy or decline protection/);
-  assert.match(service, /const insuranceVerdict = CoverageVerdict\.SITUATIONAL/);
-  assert.doesNotMatch(service, /insurancePolicies\.length === 0\s*\?\s*CoverageVerdict\.WORTH_IT/);
-  assert.doesNotMatch(service, /verdictWeight\(insuranceVerdict\)/);
+  assert.doesNotMatch(service, /CoverageVerdict|overallVerdict|insuranceVerdict|warrantyVerdict/);
+  assert.match(service, /scenarioState/);
 });
 
 test('secondary coverage surfaces use neutral record and scenario states', () => {
   const secondarySurfaces = [
-    '../../../frontend/src/app/(dashboard)/dashboard/components/CoverageIntelligenceToolCard.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/protect/RiskProtectionClient.tsx',
-    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/protect/CoverageOverviewClient.tsx',
     '../../../frontend/src/components/guidance/CoverageCheckInline.tsx',
     '../../../frontend/src/lib/coverage/coverageInsights.ts',
   ].map(source).join('\n');
@@ -99,7 +97,8 @@ test('secondary coverage surfaces use neutral record and scenario states', () =>
     assert.equal(secondarySurfaces.includes(unsupportedClaim), false, unsupportedClaim);
   }
   assert.match(secondarySurfaces, /Policy record incomplete/);
-  assert.match(secondarySurfaces, /does not confirm what a policy covers/);
+  assert.match(secondarySurfaces, /without treating missing information as proof of protection/);
+  assert.doesNotMatch(secondarySurfaces, /QUESTIONS_PRESENT/);
 });
 
 test('coverage guidance cannot complete from a generated review result', () => {
@@ -123,13 +122,31 @@ test('coverage guidance cannot complete from a generated review result', () => {
   assert.match(controller, /completionKind: 'DECISION_RECORDED'/);
 });
 
-test('ungrounded coverage advisor is removed and legacy output is suppressed', () => {
+test('ungrounded coverage advisor and legacy output contract are removed', () => {
   const service = source('../../src/services/coverageAnalysis.service.ts');
   const advisorPath = path.resolve(__dirname, '../../src/services/coverageAdvisor.service.ts');
 
   assert.equal(fs.existsSync(advisorPath), false);
   assert.doesNotMatch(service, /coverageAdvisorService|generateStrategicAdvice/);
-  assert.match(service, /strategicAdvice: null/);
+  assert.doesNotMatch(
+    service,
+    /strategicAdvice|overallVerdict|insuranceVerdict|warrantyVerdict|insuranceResult|addOnRecommendations/,
+  );
+  assert.match(service, /scenarioState/);
+  assert.match(service, /scenarioInputs/);
+});
+
+test('synthetic insurance history service and downstream consumers are removed', () => {
+  const syntheticPath = path.resolve(__dirname, '../../src/services/insuranceCostTrend.service.ts');
+  const consumers = [
+    '../../src/services/costExplainer.service.ts',
+    '../../src/services/trueCostOwnership.service.ts',
+    '../../src/services/costVolatility.service.ts',
+  ].map(source).join('\n');
+
+  assert.equal(fs.existsSync(syntheticPath), false);
+  assert.doesNotMatch(consumers, /InsuranceCostTrendService|insuranceCostTrend\.service/);
+  assert.match(consumers, /getObservedInsurancePremiumHistory/);
 });
 
 test('downstream coverage contracts do not interpret scenario verdicts as coverage truth', () => {

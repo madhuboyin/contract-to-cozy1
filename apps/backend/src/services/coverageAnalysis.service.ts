@@ -4,7 +4,6 @@ import {
   CoverageConfidence,
   CoverageImpactLevel,
   CoverageScenario,
-  CoverageVerdict,
   InventoryItemCondition,
   Prisma,
 } from '@prisma/client';
@@ -16,14 +15,16 @@ import {
   hasAssumptionOverrides,
 } from './assumptionSet.service';
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
-import { signalService } from './signal.service';
-import { logger } from '../lib/logger';
 import { isCoverageActive } from './coverage/contextPolicy';
 
 type Impact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
-type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
+type ScenarioState =
+  | 'COST_EXPOSURE_EXCEEDS_PLAN_COST'
+  | 'COSTS_ARE_CLOSE'
+  | 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE'
+  | 'INSUFFICIENT_DATA';
 
 export type CoverageAnalysisOverrides = {
   annualPremiumUsd?: number;
@@ -70,21 +71,15 @@ export type CoverageAnalysisDTO = {
   status: 'READY' | 'STALE' | 'ERROR';
   computedAt: string;
 
-  overallVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
-  /** @deprecated Property-level clients must use insuranceReviewState and scenario facts. */
-  insuranceVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
-  warrantyVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
+  scenarioState: ScenarioState;
   insuranceReviewState:
     | 'POLICY_RECORD_INCOMPLETE'
-    | 'QUESTIONS_PRESENT'
     | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
 
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   impactLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
 
   summary?: string;
-  strategicAdvice?: string | null;
-  addOnRecommendations?: any[];
   nextSteps?: Array<{
     title: string;
     detail?: string;
@@ -95,12 +90,6 @@ export type CoverageAnalysisDTO = {
       targetTool: 'providers' | 'insurance' | 'coverage-intelligence';
     };
   }>;
-
-  insurance: {
-    inputsUsed: { annualPremiumUsd?: number; deductibleUsd?: number; cashBufferUsd?: number };
-    flags: Array<{ code: string; label: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' }>;
-    recommendedAddOns: Array<{ code: string; label: string; why: string }>;
-  };
 
   warranty: {
     inputsUsed: { warrantyAnnualCostUsd?: number; warrantyServiceFeeUsd?: number };
@@ -131,15 +120,12 @@ export type ItemCoverageAnalysisDTO = {
   status: 'READY' | 'STALE' | 'ERROR';
   computedAt: string;
 
-  overallVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
-  insuranceVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
-  warrantyVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
+  scenarioState: ScenarioState;
 
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   impactLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
 
   summary?: string;
-  strategicAdvice?: string | null;
 
   nextSteps?: Array<{
     title: string;
@@ -170,7 +156,7 @@ export type ItemCoverageAnalysisDTO = {
     expectedCoverageCostUsd?: number;
     expectedNetImpactUsd?: number;
     breakEvenMonths?: number | null;
-    recommendation?: 'BUY_NOW' | 'WAIT' | 'REPLACE_SOON';
+    planningState?: 'ACTIVE_PROTECTION_RECORDED' | 'REPLACEMENT_HORIZON_SHORT' | 'COMPARE_COST_INPUTS';
   };
 
   decisionTrace: Array<{
@@ -178,18 +164,6 @@ export type ItemCoverageAnalysisDTO = {
     detail?: string;
     impact: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
   }>;
-};
-
-type InsuranceFlag = {
-  code: string;
-  label: string;
-  severity: Severity;
-};
-
-type AddOnSuggestion = {
-  code: string;
-  label: string;
-  why: string;
 };
 
 type DecisionTraceItem = {
@@ -213,27 +187,19 @@ type ComputedSnapshot = {
   status: CoverageAnalysisStatus;
   confidence: CoverageConfidence;
   impactLevel?: CoverageImpactLevel;
-  overallVerdict: CoverageVerdict;
-  insuranceVerdict: CoverageVerdict;
-  warrantyVerdict: CoverageVerdict;
+  scenarioState: ScenarioState;
   insuranceReviewState:
     | 'POLICY_RECORD_INCOMPLETE'
-    | 'QUESTIONS_PRESENT'
     | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
   summary?: string;
   nextSteps: NextStep[];
-  insuranceResult: {
-    reviewState:
-      | 'POLICY_RECORD_INCOMPLETE'
-      | 'QUESTIONS_PRESENT'
-      | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
+  scenarioInputs: {
     inputsUsed: {
       annualPremiumUsd?: number;
       deductibleUsd?: number;
       cashBufferUsd?: number;
       riskTolerance: RiskTolerance;
     };
-    flags: InsuranceFlag[];
   };
   warrantyResult: {
     inputsUsed: {
@@ -244,7 +210,6 @@ type ComputedSnapshot = {
     expectedNetImpactUsd?: number;
     breakEvenMonths?: number | null;
   };
-  addOnRecommendations: AddOnSuggestion[];
   decisionTrace: DecisionTraceItem[];
   inputsSnapshot: Record<string, unknown>;
 };
@@ -253,18 +218,15 @@ type ItemComputedSnapshot = {
   status: CoverageAnalysisStatus;
   confidence: CoverageConfidence;
   impactLevel?: CoverageImpactLevel;
-  overallVerdict: CoverageVerdict;
-  insuranceVerdict: CoverageVerdict;
-  warrantyVerdict: CoverageVerdict;
+  scenarioState: ScenarioState;
   summary?: string;
   nextSteps: NextStep[];
-  insuranceResult: {
+  scenarioInputs: {
     inputsUsed: {
       cashBufferUsd?: number;
       riskTolerance: RiskTolerance;
       coverageType: ItemCoverageType;
     };
-    flags: InsuranceFlag[];
   };
   warrantyResult: {
     inputsUsed: {
@@ -277,7 +239,7 @@ type ItemComputedSnapshot = {
     expectedCoverageCostUsd?: number;
     expectedNetImpactUsd?: number;
     breakEvenMonths?: number | null;
-    recommendation?: 'BUY_NOW' | 'WAIT' | 'REPLACE_SOON';
+    planningState?: 'ACTIVE_PROTECTION_RECORDED' | 'REPLACEMENT_HORIZON_SHORT' | 'COMPARE_COST_INPUTS';
   };
   decisionTrace: DecisionTraceItem[];
   inputsSnapshot: Record<string, unknown>;
@@ -357,23 +319,6 @@ function safeArray<T>(value: Prisma.JsonValue | null | undefined): T[] {
 function safeObject<T extends object>(value: Prisma.JsonValue | null | undefined, fallback: T): T {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
   return value as T;
-}
-
-function severityWeight(severity: Severity): number {
-  if (severity === 'HIGH') return 3;
-  if (severity === 'MEDIUM') return 2;
-  return 1;
-}
-
-function dedupeByCode<T extends { code: string }>(items: T[]): T[] {
-  const seen = new Set<string>();
-  const deduped: T[] = [];
-  for (const item of items) {
-    if (seen.has(item.code)) continue;
-    seen.add(item.code);
-    deduped.push(item);
-  }
-  return deduped;
 }
 
 function dedupeSteps(items: NextStep[]): NextStep[] {
@@ -458,22 +403,6 @@ function parseCoverageOverrides(value: Record<string, unknown>): CoverageAnalysi
     cashBufferUsd: asFinite(value.cashBufferUsd),
     riskTolerance,
   };
-}
-
-function countCoverageGapsFromInputsSnapshot(snapshot: Prisma.JsonValue | null | undefined): number {
-  const root = safeObject<Record<string, unknown>>(snapshot, {});
-  const counts =
-    root.counts && typeof root.counts === 'object' && !Array.isArray(root.counts)
-      ? (root.counts as Record<string, unknown>)
-      : {};
-  const count = Number(counts.coverageGaps ?? 0);
-  return Number.isFinite(count) ? Math.max(0, Math.round(count)) : 0;
-}
-
-function confidenceToScore(confidence: CoverageConfidence): number {
-  if (confidence === CoverageConfidence.HIGH) return 0.9;
-  if (confidence === CoverageConfidence.MEDIUM) return 0.7;
-  return 0.45;
 }
 
 function attachSharedContextToSnapshot(
@@ -613,21 +542,6 @@ async function assertPropertyForUser(propertyId: string, userId: string) {
 }
 
 function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
-  const insuranceResult = safeObject(
-    analysis.insuranceResult,
-    {
-      reviewState: 'POLICY_RECORD_INCOMPLETE',
-      inputsUsed: {},
-      flags: [],
-    } as {
-      reviewState:
-        | 'POLICY_RECORD_INCOMPLETE'
-        | 'QUESTIONS_PRESENT'
-        | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
-      inputsUsed: { annualPremiumUsd?: number; deductibleUsd?: number; cashBufferUsd?: number };
-      flags: InsuranceFlag[];
-    }
-  );
   const warrantyResult = safeObject(
     analysis.warrantyResult,
     {
@@ -643,7 +557,6 @@ function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
     }
   );
 
-  const addOnRecommendations = safeArray<AddOnSuggestion>(analysis.addOnRecommendations);
   const decisionTrace = safeArray<DecisionTraceItem>(analysis.decisionTrace);
   const nextSteps = safeArray<NextStep>(analysis.nextSteps);
   const snapshot = safeObject<Record<string, unknown>>(analysis.inputsSnapshot, {});
@@ -666,31 +579,15 @@ function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
     preferenceProfileId,
     status: analysis.status,
     computedAt: analysis.computedAt.toISOString(),
-    overallVerdict: analysis.overallVerdict,
-    insuranceVerdict: analysis.insuranceVerdict,
-    warrantyVerdict: analysis.warrantyVerdict,
+    scenarioState: analysis.scenarioState as ScenarioState,
     insuranceReviewState:
-      insuranceResult.reviewState === 'POLICY_RECORD_INCOMPLETE'
-      || insuranceResult.reviewState === 'QUESTIONS_PRESENT'
-      || insuranceResult.reviewState === 'NO_QUESTIONS_FROM_REVIEWED_FIELDS'
-        ? insuranceResult.reviewState
-        : insuranceResult.flags?.length
-          ? 'QUESTIONS_PRESENT'
-          : insuranceResult.inputsUsed?.annualPremiumUsd !== undefined
-            || insuranceResult.inputsUsed?.deductibleUsd !== undefined
-            ? 'NO_QUESTIONS_FROM_REVIEWED_FIELDS'
-            : 'POLICY_RECORD_INCOMPLETE',
+      analysis.reviewState === 'NO_QUESTIONS_FROM_REVIEWED_FIELDS'
+        ? 'NO_QUESTIONS_FROM_REVIEWED_FIELDS'
+        : 'POLICY_RECORD_INCOMPLETE',
     confidence: analysis.confidence,
     impactLevel: analysis.impactLevel ?? undefined,
     summary: analysis.summary ?? undefined,
-    strategicAdvice: null,
-    addOnRecommendations,
     nextSteps,
-    insurance: {
-      inputsUsed: insuranceResult.inputsUsed ?? {},
-      flags: insuranceResult.flags ?? [],
-      recommendedAddOns: addOnRecommendations,
-    },
     warranty: {
       inputsUsed: warrantyResult.inputsUsed ?? {},
       expectedAnnualRepairRiskUsd: toMoney(warrantyResult.expectedAnnualRepairRiskUsd),
@@ -728,7 +625,7 @@ function mapAnalysisToItemDto(
       expectedCoverageCostUsd: undefined,
       expectedNetImpactUsd: undefined,
       breakEvenMonths: null,
-      recommendation: undefined,
+      planningState: undefined,
     } as {
       inputsUsed: {
         annualCostUsd?: number;
@@ -740,7 +637,7 @@ function mapAnalysisToItemDto(
       expectedCoverageCostUsd?: number;
       expectedNetImpactUsd?: number;
       breakEvenMonths?: number | null;
-      recommendation?: 'BUY_NOW' | 'WAIT' | 'REPLACE_SOON';
+      planningState?: 'ACTIVE_PROTECTION_RECORDED' | 'REPLACEMENT_HORIZON_SHORT' | 'COMPARE_COST_INPUTS';
     }
   );
 
@@ -765,13 +662,10 @@ function mapAnalysisToItemDto(
     homeownerProfileId: analysis.homeownerProfileId,
     status: analysis.status,
     computedAt: analysis.computedAt.toISOString(),
-    overallVerdict: analysis.overallVerdict,
-    insuranceVerdict: analysis.insuranceVerdict,
-    warrantyVerdict: analysis.warrantyVerdict,
+    scenarioState: analysis.scenarioState as ScenarioState,
     confidence: analysis.confidence,
     impactLevel: analysis.impactLevel ?? undefined,
     summary: analysis.summary ?? undefined,
-    strategicAdvice: null,
     nextSteps,
     item: itemMeta,
     warranty: {
@@ -780,7 +674,7 @@ function mapAnalysisToItemDto(
       expectedCoverageCostUsd: toMoney(warrantyResult.expectedCoverageCostUsd),
       expectedNetImpactUsd: toMoney(warrantyResult.expectedNetImpactUsd),
       breakEvenMonths: warrantyResult.breakEvenMonths ?? null,
-      recommendation: warrantyResult.recommendation,
+      planningState: warrantyResult.planningState,
     },
     decisionTrace: trace,
   };
@@ -805,7 +699,7 @@ export class CoverageIntelligenceService {
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 24);
 
-    const [inventoryItems, maintenanceTasks, claims, insurancePolicies, warranties, coverageGaps] =
+    const [inventoryItems, maintenanceTasks, claims, insurancePolicies, warranties] =
       await Promise.all([
         prisma.inventoryItem.findMany({
           where: { propertyId },
@@ -867,7 +761,6 @@ export class CoverageIntelligenceService {
             cost: true,
           },
         }),
-        detectCoverageGaps(propertyId),
       ]);
 
     const riskTolerance: RiskTolerance = overrides?.riskTolerance ?? 'MEDIUM';
@@ -936,115 +829,17 @@ export class CoverageIntelligenceService {
         ? Math.round((((warrantyAnnualCostUsd + warrantyServiceFeeUsd) / expectedAnnualRepairRiskUsd) * 12) * 10) / 10
         : null;
 
-    const warrantyVerdict: CoverageVerdict =
+    const scenarioState: ScenarioState =
       expectedNetImpactUsd > 150
-        ? CoverageVerdict.WORTH_IT
+        ? 'COST_EXPOSURE_EXCEEDS_PLAN_COST'
         : expectedNetImpactUsd < -150
-          ? CoverageVerdict.NOT_WORTH_IT
-          : CoverageVerdict.SITUATIONAL;
+          ? 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE'
+          : 'COSTS_ARE_CLOSE';
 
-    const insuranceFlags: InsuranceFlag[] = [];
-    if (insurancePolicies.length === 0) {
-      insuranceFlags.push({
-        code: 'NO_PROPERTY_POLICY',
-        label: 'No property-linked insurance policy is saved for this home.',
-        severity: 'HIGH',
-      });
-    }
-
-    if (deductibleUsd !== undefined && cashBufferUsd !== undefined && cashBufferUsd > 0) {
-      const ratio = deductibleUsd / cashBufferUsd;
-      if (ratio >= 0.4) {
-        insuranceFlags.push({
-          code: 'DEDUCTIBLE_VS_BUFFER_HIGH',
-          label: 'Deductible is high compared with your cash buffer.',
-          severity: 'HIGH',
-        });
-      } else if (ratio >= 0.25) {
-        insuranceFlags.push({
-          code: 'DEDUCTIBLE_VS_BUFFER_MEDIUM',
-          label: 'Deductible may be difficult to absorb from current cash buffer.',
-          severity: 'MEDIUM',
-        });
-      }
-    }
-
-    if ((property.riskReport?.riskScore ?? 100) < 45) {
-      insuranceFlags.push({
-        code: 'PROPERTY_RISK_HIGH',
-        label: 'Property risk profile is elevated; review protection limits and riders.',
-        severity: 'HIGH',
-      });
-    }
-
-    if (claims.length >= 2) {
-      insuranceFlags.push({
-        code: 'CLAIMS_FREQUENCY',
-        label: 'Multiple claims in the last 24 months suggest higher claim probability.',
-        severity: 'MEDIUM',
-      });
-    }
-
-    if (coverageGaps.length > 0) {
-      insuranceFlags.push({
-        code: 'INVENTORY_COVERAGE_GAPS',
-        label: `${coverageGaps.length} inventory item(s) have coverage gaps or expirations.`,
-        severity: coverageGaps.length >= 3 ? 'HIGH' : 'MEDIUM',
-      });
-    }
-
-    if (
-      maintenanceTasks.some((task) => task.status === 'PENDING' || task.status === 'NEEDS_REVIEW')
-    ) {
-      insuranceFlags.push({
-        code: 'MAINTENANCE_BACKLOG',
-        label: 'Pending maintenance tasks may increase preventable claim exposure.',
-        severity: 'LOW',
-      });
-    }
-
-    if (annualPremiumUsd > 0 && annualPremiumUsd >= 6500) {
-      insuranceFlags.push({
-        code: 'PREMIUM_PRESSURE',
-        label: 'Annual premium is high; run periodic coverage value checks.',
-        severity: 'MEDIUM',
-      });
-    }
-
-    const recommendedAddOns: AddOnSuggestion[] = [];
-    const hadWaterClaim = claims.some((claim) => claim.type === 'WATER_DAMAGE' || claim.type === 'PLUMBING');
-
-    if (hadWaterClaim || property.hasDrainageIssues) {
-      recommendedAddOns.push({
-        code: 'WATER_BACKUP',
-        label: 'Water backup / sump overflow rider',
-        why: 'Water-related risk signals detected from claims or property attributes.',
-      });
-    }
-
-    if (
-      inventoryItems.some((item) => item.category === 'HVAC' || item.category === 'APPLIANCE')
-    ) {
-      recommendedAddOns.push({
-        code: 'EQUIPMENT_BREAKDOWN',
-        label: 'Equipment breakdown endorsement',
-        why: 'Multiple major systems/appliances can make mechanical failures expensive.',
-      });
-    }
-
-    // The persisted enum remains for schema compatibility, but property insurance
-    // records never receive a buy/skip or "worth it" conclusion.
-    const insuranceVerdict = CoverageVerdict.SITUATIONAL;
     const insuranceReviewState: ComputedSnapshot['insuranceReviewState'] =
       insurancePolicies.length === 0
         ? 'POLICY_RECORD_INCOMPLETE'
-        : insuranceFlags.length > 0
-          ? 'QUESTIONS_PRESENT'
-          : 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
-    // Warranty math remains a scenario classification for existing consumers. It
-    // is not combined with insurance facts into a property protection verdict.
-    const overallVerdict = warrantyVerdict;
-
+        : 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
     const confidenceSignals = [
       inventoryItems.length > 0,
       insurancePolicies.length > 0,
@@ -1060,10 +855,8 @@ export class CoverageIntelligenceService {
           ? CoverageConfidence.MEDIUM
           : CoverageConfidence.LOW;
 
-    const maxSeverityScore = Math.max(
-      insuranceFlags.length ? Math.max(...insuranceFlags.map((flag) => severityWeight(flag.severity))) : 1,
-      Math.abs(expectedNetImpactUsd) >= 900 ? 3 : Math.abs(expectedNetImpactUsd) >= 400 ? 2 : 1
-    );
+    const maxSeverityScore =
+      Math.abs(expectedNetImpactUsd) >= 900 ? 3 : Math.abs(expectedNetImpactUsd) >= 400 ? 2 : 1;
     const impactLevel: CoverageImpactLevel =
       maxSeverityScore >= 3
         ? CoverageImpactLevel.HIGH
@@ -1122,14 +915,6 @@ export class CoverageIntelligenceService {
           expectedNetImpactUsd > 150 ? 'POSITIVE' : expectedNetImpactUsd < -150 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {
-        label: 'Current coverage applicability',
-        detail:
-          coverageGaps.length > 0
-            ? `${coverageGaps.length} gap(s) remain after excluding future, expired, and property-mismatched coverage.`
-            : 'No high-value gaps remain after checking current policy and warranty dates.',
-        impact: coverageGaps.length > 0 ? 'NEGATIVE' : 'POSITIVE',
-      },
-      {
         label: 'Risk tolerance adjustment',
         detail: `User preference set to ${riskTolerance}, affecting expected-loss assumptions.`,
         impact: 'NEUTRAL',
@@ -1149,82 +934,24 @@ export class CoverageIntelligenceService {
         },
       });
     }
-    if (coverageGaps.length > 0) {
-      nextSteps.push({
-        title: 'Close inventory coverage gaps',
-        detail: `${coverageGaps.length} high-value item(s) are missing active warranty or insurance mapping.`,
-        priority: coverageGaps.length >= 3 ? 'HIGH' : 'MEDIUM',
-        action: {
-          label: 'Review coverage options',
-          href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?tab=options`,
-          targetTool: 'coverage-intelligence',
-        },
-      });
-    }
-    if (
-      deductibleUsd !== undefined &&
-      cashBufferUsd !== undefined &&
-      cashBufferUsd > 0 &&
-      deductibleUsd / cashBufferUsd > 0.25
-    ) {
-      nextSteps.push({
-        title: 'Review deductible vs emergency cash buffer',
-        detail: 'A lower deductible may reduce short-term out-of-pocket strain.',
-        priority: deductibleUsd / cashBufferUsd > 0.4 ? 'HIGH' : 'MEDIUM',
-        action: {
-          label: 'Run deductible scenario',
-          href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence#scenario-simulator`,
-          targetTool: 'coverage-intelligence',
-        },
-      });
-    }
-    if (warrantyVerdict === CoverageVerdict.NOT_WORTH_IT) {
-      nextSteps.push({
-        title: 'Re-evaluate warranty spend for low-risk systems',
-        detail: 'Current expected repair risk appears lower than annual warranty costs.',
-        priority: 'LOW',
-        action: {
-          label: 'Compare warranty paths',
-          href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?tab=options&focus=warranty`,
-          targetTool: 'coverage-intelligence',
-        },
-      });
-    }
-    if (recommendedAddOns.length > 0) {
-      nextSteps.push({
-        title: 'Review optional protection add-ons at next renewal',
-        detail: 'Use the add-on list as questions for your current carrier/warranty provider.',
-        priority: 'MEDIUM',
-        action: {
-          label: 'Find insurance services',
-          href: `/dashboard/providers?propertyId=${propertyId}&category=insurance&returnTo=${encodeURIComponent(`/dashboard/properties/${propertyId}/tools/coverage-intelligence`)}`,
-          targetTool: 'providers',
-        },
-      });
-    }
-
     const summary =
-      'This comparison shows modeled warranty cost and repair exposure. Insurance findings are questions from the available record, not a coverage or purchase conclusion.';
+      'This scenario compares modeled repair exposure with recorded warranty cost. Policy questions and insurance decisions remain in the verified Coverage Review workflow.';
 
     const snapshot: ComputedSnapshot = {
       status: CoverageAnalysisStatus.READY,
       confidence,
       impactLevel,
-      overallVerdict,
-      insuranceVerdict,
-      warrantyVerdict,
+      scenarioState,
       insuranceReviewState,
       summary,
       nextSteps: dedupeSteps(nextSteps).slice(0, 5),
-      insuranceResult: {
-        reviewState: insuranceReviewState,
+      scenarioInputs: {
         inputsUsed: {
           annualPremiumUsd: toMoney(annualPremiumUsd),
           deductibleUsd: toMoney(deductibleUsd),
           cashBufferUsd: toMoney(cashBufferUsd),
           riskTolerance,
         },
-        flags: dedupeByCode(insuranceFlags),
       },
       warrantyResult: {
         inputsUsed: {
@@ -1235,7 +962,6 @@ export class CoverageIntelligenceService {
         expectedNetImpactUsd: toMoney(expectedNetImpactUsd),
         breakEvenMonths,
       },
-      addOnRecommendations: dedupeByCode(recommendedAddOns),
       decisionTrace: decisionTrace.slice(0, 12),
       inputsSnapshot: {
         overrides: overrides ?? {},
@@ -1245,7 +971,6 @@ export class CoverageIntelligenceService {
           claimsLast24Months: claims.length,
           insurancePolicies: insurancePolicies.length,
           warranties: warranties.length,
-          coverageGaps: coverageGaps.length,
         },
       },
     };
@@ -1309,25 +1034,11 @@ export class CoverageIntelligenceService {
     };
   }
 
-  private async publishCoverageGapSignal(analysis: LatestAnalysisRecord): Promise<void> {
-    const gapCount = countCoverageGapsFromInputsSnapshot(analysis.inputsSnapshot);
-    await signalService.publishCoverageGapSignal({
-      propertyId: analysis.propertyId,
-      coverageAnalysisId: analysis.id,
-      gapCount,
-      confidence: confidenceToScore(analysis.confidence),
-      // Legacy signal contract requires an enum; SITUATIONAL is the only
-      // neutral value and must not be interpreted as policy coverage.
-      verdict: CoverageVerdict.SITUATIONAL,
-    });
-  }
-
   private async createAnalysisRecord(
     propertyId: string,
     homeownerProfileId: string,
     snapshot: ComputedSnapshot,
-    assumptionSetId?: string | null,
-    strategicAdvice?: string | null
+    assumptionSetId?: string | null
   ): Promise<LatestAnalysisRecord> {
     const analysis = await prisma.coverageAnalysis.create({
       data: {
@@ -1337,15 +1048,13 @@ export class CoverageIntelligenceService {
         status: snapshot.status,
         confidence: snapshot.confidence,
         impactLevel: snapshot.impactLevel,
-        overallVerdict: snapshot.overallVerdict,
-        insuranceVerdict: snapshot.insuranceVerdict,
-        warrantyVerdict: snapshot.warrantyVerdict,
+        analysisKind: 'PROPERTY_COST_SCENARIO',
+        reviewState: snapshot.insuranceReviewState,
+        scenarioState: snapshot.scenarioState,
         summary: snapshot.summary,
-        strategicAdvice,
         nextSteps: snapshot.nextSteps as unknown as Prisma.InputJsonValue,
-        insuranceResult: snapshot.insuranceResult as unknown as Prisma.InputJsonValue,
+        scenarioInputs: snapshot.scenarioInputs as unknown as Prisma.InputJsonValue,
         warrantyResult: snapshot.warrantyResult as unknown as Prisma.InputJsonValue,
-        addOnRecommendations: snapshot.addOnRecommendations as unknown as Prisma.InputJsonValue,
         decisionTrace: snapshot.decisionTrace as unknown as Prisma.InputJsonValue,
         inputsSnapshot: snapshot.inputsSnapshot as unknown as Prisma.InputJsonValue,
       },
@@ -1600,29 +1309,30 @@ export class CoverageIntelligenceService {
         ? Math.round((expectedCoverageCostUsd / expectedAnnualRepairRiskUsd) * 12 * 10) / 10
         : null;
 
-    let warrantyVerdict: CoverageVerdict;
-    let recommendation: 'BUY_NOW' | 'WAIT' | 'REPLACE_SOON';
+    let planningState:
+      | 'ACTIVE_PROTECTION_RECORDED'
+      | 'REPLACEMENT_HORIZON_SHORT'
+      | 'COMPARE_COST_INPUTS';
+    let scenarioState: ScenarioState;
     if (hasActiveWarranty) {
-      recommendation = 'WAIT';
-      warrantyVerdict = CoverageVerdict.SITUATIONAL;
+      planningState = 'ACTIVE_PROTECTION_RECORDED';
+      scenarioState = 'COSTS_ARE_CLOSE';
     } else if (expectedRemainingYears <= 2.5) {
-      recommendation = 'REPLACE_SOON';
-      if (expectedNetImpactUsd >= 650) warrantyVerdict = CoverageVerdict.WORTH_IT;
-      else if (expectedNetImpactUsd >= 250) warrantyVerdict = CoverageVerdict.SITUATIONAL;
-      else warrantyVerdict = CoverageVerdict.NOT_WORTH_IT;
+      planningState = 'REPLACEMENT_HORIZON_SHORT';
+      if (expectedNetImpactUsd >= 650) scenarioState = 'COST_EXPOSURE_EXCEEDS_PLAN_COST';
+      else if (expectedNetImpactUsd >= 250) scenarioState = 'COSTS_ARE_CLOSE';
+      else scenarioState = 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE';
     } else if (expectedNetImpactUsd > 150) {
-      warrantyVerdict = CoverageVerdict.WORTH_IT;
-      recommendation = 'BUY_NOW';
+      scenarioState = 'COST_EXPOSURE_EXCEEDS_PLAN_COST';
+      planningState = 'COMPARE_COST_INPUTS';
     } else if (expectedNetImpactUsd < -150) {
-      warrantyVerdict = CoverageVerdict.NOT_WORTH_IT;
-      recommendation = expectedRemainingYears <= 4 ? 'REPLACE_SOON' : 'WAIT';
+      scenarioState = 'PLAN_COST_EXCEEDS_MODELED_EXPOSURE';
+      planningState =
+        expectedRemainingYears <= 4 ? 'REPLACEMENT_HORIZON_SHORT' : 'COMPARE_COST_INPUTS';
     } else {
-      warrantyVerdict = CoverageVerdict.SITUATIONAL;
-      recommendation = 'WAIT';
+      scenarioState = 'COSTS_ARE_CLOSE';
+      planningState = 'COMPARE_COST_INPUTS';
     }
-
-    const insuranceVerdict = CoverageVerdict.SITUATIONAL;
-    const overallVerdict = warrantyVerdict;
 
     const confidenceSignals = [
       ageYears !== undefined,
@@ -1708,7 +1418,7 @@ export class CoverageIntelligenceService {
     ];
 
     const nextSteps: NextStep[] = [];
-    if (!hasActiveWarranty && warrantyVerdict === CoverageVerdict.WORTH_IT) {
+    if (!hasActiveWarranty && scenarioState === 'COST_EXPOSURE_EXCEEDS_PLAN_COST') {
       nextSteps.push({
         title: `Request ${coverageType === 'SERVICE_PLAN' ? 'service plan' : 'warranty'} quotes for this item`,
         detail: 'Compare annual cost and service fee terms against this estimate.',
@@ -1720,7 +1430,7 @@ export class CoverageIntelligenceService {
         },
       });
     }
-    if (!hasActiveWarranty && warrantyVerdict === CoverageVerdict.SITUATIONAL) {
+    if (!hasActiveWarranty && scenarioState === 'COSTS_ARE_CLOSE') {
       nextSteps.push({
         title: 'Run 2-3 pricing scenarios before buying coverage',
         detail: 'Try lower annual cost or service fee assumptions to see break-even shifts.',
@@ -1732,7 +1442,7 @@ export class CoverageIntelligenceService {
         },
       });
     }
-    if (recommendation === 'REPLACE_SOON') {
+    if (planningState === 'REPLACEMENT_HORIZON_SHORT') {
       nextSteps.push({
         title: 'Plan replacement budget',
         detail: `Remaining life is limited; compare coverage spend with replacement planning.`,
@@ -1770,28 +1480,21 @@ export class CoverageIntelligenceService {
     }
 
     const summary =
-      warrantyVerdict === CoverageVerdict.WORTH_IT
-        ? 'Educational estimate suggests this item is a strong candidate for coverage now.'
-        : warrantyVerdict === CoverageVerdict.SITUATIONAL
-          ? 'Coverage value is mixed for this item. Scenario testing is recommended before purchase.'
-          : 'Educational estimate suggests coverage may not be cost-effective right now; replacement planning may be better.';
+      'This is a modeled repair-exposure and plan-cost comparison, not a recommendation to buy or decline a contract.';
 
     const snapshot: ItemComputedSnapshot = {
       status: CoverageAnalysisStatus.READY,
       confidence,
       impactLevel,
-      overallVerdict,
-      insuranceVerdict,
-      warrantyVerdict,
+      scenarioState,
       summary,
       nextSteps: dedupeSteps(nextSteps).slice(0, 5),
-      insuranceResult: {
+      scenarioInputs: {
         inputsUsed: {
           cashBufferUsd: toMoney(cashBufferUsd),
           riskTolerance,
           coverageType,
         },
-        flags: [],
       },
       warrantyResult: {
         inputsUsed: {
@@ -1804,7 +1507,7 @@ export class CoverageIntelligenceService {
         expectedCoverageCostUsd: toMoney(expectedCoverageCostUsd),
         expectedNetImpactUsd: toMoney(expectedNetImpactUsd),
         breakEvenMonths,
-        recommendation,
+        planningState,
       },
       decisionTrace: decisionTrace.slice(0, 12),
       inputsSnapshot: {
@@ -1864,14 +1567,13 @@ export class CoverageIntelligenceService {
         status: snapshot.status,
         confidence: snapshot.confidence,
         impactLevel: snapshot.impactLevel,
-        overallVerdict: snapshot.overallVerdict,
-        insuranceVerdict: snapshot.insuranceVerdict,
-        warrantyVerdict: snapshot.warrantyVerdict,
+        analysisKind: 'ITEM_COST_SCENARIO',
+        reviewState: 'NOT_APPLICABLE',
+        scenarioState: snapshot.scenarioState,
         summary: snapshot.summary,
         nextSteps: snapshot.nextSteps as unknown as Prisma.InputJsonValue,
-        insuranceResult: snapshot.insuranceResult as unknown as Prisma.InputJsonValue,
+        scenarioInputs: snapshot.scenarioInputs as unknown as Prisma.InputJsonValue,
         warrantyResult: snapshot.warrantyResult as unknown as Prisma.InputJsonValue,
-        addOnRecommendations: [] as unknown as Prisma.InputJsonValue,
         decisionTrace: snapshot.decisionTrace as unknown as Prisma.InputJsonValue,
         inputsSnapshot: snapshot.inputsSnapshot as unknown as Prisma.InputJsonValue,
       },
@@ -1954,22 +1656,15 @@ export class CoverageIntelligenceService {
     const snapshot = attachSharedContextToSnapshot(computedSnapshot, {
       preferenceProfileId: resolved.preferenceProfileId,
       assumptionSetId: resolved.assumptionSetId,
-      signalKeysUsed: ['COVERAGE_GAP'],
+      signalKeysUsed: [],
     });
 
     const analysis = await this.createAnalysisRecord(
       propertyId,
       homeownerProfileId,
       snapshot,
-      resolved.assumptionSetId,
-      null
+      resolved.assumptionSetId
     );
-
-    try {
-      await this.publishCoverageGapSignal(analysis);
-    } catch (error) {
-      logger.warn({ err: error }, 'Coverage gap signal publish failed');
-    }
 
     return mapAnalysisToDto(analysis);
   }
@@ -2011,7 +1706,7 @@ export class CoverageIntelligenceService {
     const snapshot = attachSharedContextToSnapshot(computedSnapshot, {
       preferenceProfileId: resolved.preferenceProfileId,
       assumptionSetId: resolved.assumptionSetId,
-      signalKeysUsed: ['COVERAGE_GAP'],
+      signalKeysUsed: [],
     });
 
     if (!input.saveScenario) {
@@ -2023,23 +1718,12 @@ export class CoverageIntelligenceService {
         preferenceProfileId: resolved.preferenceProfileId,
         status: snapshot.status,
         computedAt: new Date().toISOString(),
-        overallVerdict: snapshot.overallVerdict,
-        insuranceVerdict: snapshot.insuranceVerdict,
-        warrantyVerdict: snapshot.warrantyVerdict,
+        scenarioState: snapshot.scenarioState,
         insuranceReviewState: snapshot.insuranceReviewState,
         confidence: snapshot.confidence,
         impactLevel: snapshot.impactLevel,
         summary: snapshot.summary,
         nextSteps: snapshot.nextSteps,
-        insurance: {
-          inputsUsed: {
-            annualPremiumUsd: snapshot.insuranceResult.inputsUsed.annualPremiumUsd,
-            deductibleUsd: snapshot.insuranceResult.inputsUsed.deductibleUsd,
-            cashBufferUsd: snapshot.insuranceResult.inputsUsed.cashBufferUsd,
-          },
-          flags: snapshot.insuranceResult.flags,
-          recommendedAddOns: snapshot.addOnRecommendations,
-        },
         warranty: {
           inputsUsed: snapshot.warrantyResult.inputsUsed,
           expectedAnnualRepairRiskUsd: snapshot.warrantyResult.expectedAnnualRepairRiskUsd,
@@ -2067,8 +1751,7 @@ export class CoverageIntelligenceService {
         propertyId,
         homeownerProfileId,
         snapshot,
-        resolved.assumptionSetId,
-        null
+        resolved.assumptionSetId
       );
     }
 
@@ -2079,13 +1762,11 @@ export class CoverageIntelligenceService {
         name: input.name ?? undefined,
         inputOverrides: (input.overrides ?? {}) as Prisma.InputJsonValue,
         outputSnapshot: {
-          overallVerdict: snapshot.overallVerdict,
-          insuranceVerdict: snapshot.insuranceVerdict,
-          warrantyVerdict: snapshot.warrantyVerdict,
+          scenarioState: snapshot.scenarioState,
           confidence: snapshot.confidence,
           impactLevel: snapshot.impactLevel,
           warrantyResult: snapshot.warrantyResult,
-          insuranceResult: snapshot.insuranceResult,
+          scenarioInputs: snapshot.scenarioInputs,
         } as Prisma.InputJsonValue,
       },
     });

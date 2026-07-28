@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { track } from '@/lib/analytics/events';
-import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
 import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
 import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
@@ -171,7 +170,6 @@ export default function CoverageIntelligenceToolClient() {
       {activeStage === 'current' && (
         <div id="coverage-stage-current" role="tabpanel" className="space-y-4">
           <PolicyRecordReadinessPanel propertyId={propertyId} />
-          <CoverageIntelligencePanel propertyId={propertyId} />
           <PropertyContextCapturePanel
             propertyId={propertyId}
             featureKey="COVERAGE_INTELLIGENCE"

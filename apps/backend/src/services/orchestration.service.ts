@@ -1180,15 +1180,6 @@ type FeatureDecisionInputs = {
 
 function buildFeatureDecisionCandidates(params: {
   base: FeatureDecisionInputs;
-  coverageAnalysis: {
-    id: string;
-    summary: string | null;
-    confidence: string;
-    computedAt: Date;
-    nextSteps: Prisma.JsonValue | null;
-    decisionTrace: Prisma.JsonValue | null;
-    assumptionSetId: string | null;
-  } | null;
   riskPremiumAnalysis: {
     id: string;
     summary: string | null;
@@ -1208,59 +1199,6 @@ function buildFeatureDecisionCandidates(params: {
 }): DecisionCandidate[] {
   const output: DecisionCandidate[] = [];
   const signalReasons = recommendationReasonFromSignals(params.base.signalHighlights);
-
-  if (params.coverageAnalysis) {
-    const step = parseJsonArray(params.coverageAnalysis.nextSteps)[0] ?? null;
-    const detail = typeof step?.detail === 'string'
-      ? step.detail
-      : params.coverageAnalysis.summary ??
-        'Coverage analysis indicates an unresolved protection recommendation.';
-    const stepPriority = priorityToUrgency(step?.priority);
-    output.push({
-      id: `feature:coverage:${params.coverageAnalysis.id}`,
-      source: 'COVERAGE_ANALYSIS',
-      title:
-        typeof step?.title === 'string' && step.title.trim().length > 0
-          ? step.title
-          : 'Review unresolved coverage recommendation',
-      detail,
-      targetTool: 'coverage-intelligence',
-      targetPath: buildToolPath({
-        propertyId: params.base.propertyId,
-        tool: 'coverage-intelligence',
-        assumptionSetId: params.coverageAnalysis.assumptionSetId ?? params.base.assumptionSetId,
-        fromTool: 'orchestration-summary',
-        launchSurface: 'orchestration-summary',
-      }),
-      signalKey: 'COVERAGE_GAP',
-      dedupeKey: `coverage:${typeof step?.title === 'string' ? step.title.toLowerCase() : 'default'}`,
-      conflictScope: 'coverage',
-      intent: 'REVIEW_COVERAGE',
-      urgency: Math.max(stepPriority, 68),
-      financialImpact: 70,
-      riskReduction: 88,
-      userEffort: 32,
-      confidence: normalizeDecisionConfidence(params.coverageAnalysis.confidence),
-      freshness: freshnessFromDate(params.coverageAnalysis.computedAt),
-      reversibility: 78,
-      whyNow: [
-        ...signalReasons,
-        'Coverage Intelligence has a current recommendation that has not yet been actioned.',
-      ],
-      signalDrivers: ['COVERAGE_GAP'],
-      postureInputs: params.base.postureLabels,
-      assumptionInputs: params.coverageAnalysis.assumptionSetId
-        ? [`assumptionSetId:${params.coverageAnalysis.assumptionSetId}`]
-        : [],
-      category: 'COVERAGE',
-      suppressionHints: {
-        completedRecently: false,
-        dismissedOrSnoozed: false,
-        staleInput: freshnessFromDate(params.coverageAnalysis.computedAt) < 0.35,
-        criticalSafety: false,
-      },
-    });
-  }
 
   if (params.riskPremiumAnalysis) {
     const recommendation = parseJsonArray(params.riskPremiumAnalysis.recommendations)[0] ?? null;
@@ -2449,23 +2387,10 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
   let decisionEngineResult: DecisionEngineResult | null = null;
 
   try {
-    const [profile, assumptionSets, latestSignals, coverageAnalysis, riskPremiumAnalysis, doNothingRun] = await Promise.all([
+    const [profile, assumptionSets, latestSignals, riskPremiumAnalysis, doNothingRun] = await Promise.all([
       preferenceProfileService.getCurrentProfile(propertyId),
       assumptionSetService.listRecent(propertyId, { limit: 12 }),
       signalService.getLatestSignalsByKey(propertyId, ORCHESTRATION_SIGNAL_KEYS, { freshOnly: false }),
-      prisma.coverageAnalysis.findFirst({
-        where: { propertyId, inventoryItemId: null },
-        orderBy: { computedAt: 'desc' },
-        select: {
-          id: true,
-          summary: true,
-          confidence: true,
-          computedAt: true,
-          nextSteps: true,
-          decisionTrace: true,
-          assumptionSetId: true,
-        },
-      }),
       prisma.riskPremiumOptimizationAnalysis.findFirst({
         where: { propertyId },
         orderBy: { computedAt: 'desc' },
@@ -2550,7 +2475,6 @@ export async function getOrchestrationSummary(propertyId: string, userId?: strin
         postureLabels,
         signalHighlights,
       },
-      coverageAnalysis,
       riskPremiumAnalysis,
       doNothingRun,
     });

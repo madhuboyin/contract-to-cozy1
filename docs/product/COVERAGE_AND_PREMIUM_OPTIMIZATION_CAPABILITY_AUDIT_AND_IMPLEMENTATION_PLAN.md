@@ -3,13 +3,43 @@
 **Capabilities:** Coverage Intelligence, Coverage Options, Insurance Trend, and Risk-to-Premium Optimizer
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`
 **Audit date:** July 27, 2026
-**Status:** Recommended implementation plan
-**Recommended disposition:** **Consolidate, rebuild, and temporarily contain unsupported claims**
+**Status:** Implementation complete; real-user launch remains gated
+**Implemented disposition:** **Consolidated, rebuilt, and fail-closed for unsupported claims**
 **Current safety classification:** Regulated coverage
 **Recommended safety classification:** Regulated coverage for the complete outcome family
 **Primary outcome family:** Coverage and Premium Review
 
 ---
+
+## 0. Implementation Closure — July 28, 2026
+
+All repository implementation slices in this plan are complete:
+
+- one canonical, property-scoped Coverage and Premium Review capability and
+  four-stage workspace replace the separate homeowner tools;
+- verified policy terms, field-level evidence, deterministic review questions,
+  equivalent-choice comparison, durable decisions, renewal history,
+  loss-prevention plans, and governed professional handoffs are implemented;
+- legacy property-insurance verdicts, generated strategic advice, heuristic
+  add-on recommendations, fixed/additive savings, synthetic premium history,
+  and generated-review completion have been removed from homeowner output;
+- downstream cost tools use only confirmed observed policy-term premiums and
+  explicitly exclude insurance history when it is unavailable;
+- mitigation-plan guidance is required at the schema and reader boundary; and
+- retired routes are redirects or explicit `410 Gone` boundaries, while
+  analytics aliases converge on the canonical capability.
+
+The capability intentionally remains `BETA`, `REGULATED_COVERAGE`, and
+`CATALOG_ONLY`. Licensing, legal/compliance approval, commercial recipient
+approval, production source-rights approval, and real-user launch authorization
+are external release gates, not pending repository implementation. The launch
+gate remains fail-closed until those approvals and their current evidence are
+recorded.
+
+The remaining `CoverageAnalysis` API supports neutral property/item cost
+scenarios only. It does not produce policy verdicts, coverage-gap signals,
+policy add-on suggestions, or homeowner recommendations. Canonical policy
+questions and decisions are owned by Coverage Review.
 
 ## 1. Executive Decision
 
@@ -2373,18 +2403,18 @@ complete the right coverage decision with appropriate restraint.
 | Capability inventory | `docs/product/capability-discovery/current-capability-inventory.md` | Current IDs, routes, release stages, safety tiers, completion kinds, and recommendation modes |
 | Strategic disposition | `docs/audit/contracttocozy-strategic-audit-v2-2026-04-18.md` | Existing merge/rework findings |
 | Route consolidation | `docs/audit/contracttocozy-route-merge-map-2026-04-18.md` | Existing global/property and options/trend merge intent |
-| Coverage engine | `apps/backend/src/services/coverageAnalysis.service.ts` | Inputs, repair-risk heuristic, flags, add-ons, verdicts, confidence, scenarios, and AI advice |
-| Coverage advice | `apps/backend/src/services/coverageAdvisor.service.ts` | Generated strategic copy and lack of fact-level policy citation |
+| Neutral scenario engine | `apps/backend/src/services/coverageAnalysis.service.ts` | Property/item cost scenarios without policy verdicts, add-ons, gap signals, or generated advice |
+| Retired coverage advice | `apps/backend/src/services/coverageAdvisor.service.ts` (removed) | Generated strategic advice was removed |
 | Gap detector | `apps/backend/src/services/coverageGap.service.ts` | Item thresholds and warranty/policy linkage classification |
 | Coverage applicability | `apps/backend/src/services/coverage/contextPolicy.ts` | Active/future/expired/unknown coverage-record behavior |
 | Coverage API | `apps/backend/src/controllers/coverageAnalysis.controller.ts` and `apps/backend/src/routes/coverageAnalysis.routes.ts` | Authorization, validation, generated-output completion, and scenario APIs |
 | Coverage page | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/coverage-intelligence/CoverageIntelligenceToolClient.tsx` | Current tabs, trust contract, item redirect, trend handoff, and capture panel |
-| Coverage panel | `apps/frontend/src/components/ai/CoverageIntelligencePanel.tsx` | Current scenario-first/result experience |
+| Retired coverage panel | `apps/frontend/src/components/ai/CoverageIntelligencePanel.tsx` (removed) | Legacy verdict/scenario panel was removed from homeowner output |
 | Options page | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/coverage-options/page.tsx` | Standalone route already redirects into Coverage Intelligence |
 | Options experience | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/coverage-options/CoverageOptionsClient.tsx` | Gap listing, item actions, review completion, and no actual option comparison |
 | Item coverage experience | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/items/[itemId]/coverage/ItemGetCoverageClient.tsx` | Warranty scenarios, item context, and current buy/do-not-buy language |
 | Inventory coverage | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/coverage/CoverageClient.tsx` | Gap list, waiver, quote modal, and related actions |
-| Trend engine | `apps/backend/src/services/insuranceCostTrend.service.ts` | Hard-coded state baselines, ZIP heuristics, reverse-generated history, and disclaimer |
+| Retired trend engine | `apps/backend/src/services/insuranceCostTrend.service.ts` (removed) | Synthetic history was removed; consumers use confirmed policy-term premiums |
 | Trend page | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/insurance-trend/InsuranceTrendClient.tsx` | Personal-history labels, hard-coded savings copy, dead CTAs, and buried methodology |
 | Risk engine | `apps/backend/src/services/riskPremiumOptimizer.service.ts` | Drivers, fixed recommendation ranges, additive savings, bundle boost, plan persistence, and observed delta |
 | Risk API | `apps/backend/src/controllers/riskPremiumOptimizer.controller.ts` and `apps/backend/src/routes/riskPremiumOptimizer.routes.ts` | Authorization, validation, run event, and plan mutation |
@@ -2423,7 +2453,7 @@ those files. The failure should not be treated as coverage-domain acceptance,
 and it should be resolved independently before using the complete cleanup guard
 as a launch gate.
 
-No direct golden-output suite currently validates:
+The implemented golden-output and launch-gate suites now validate:
 
 - property coverage review questions;
 - synthetic versus actual insurance history;
@@ -2432,5 +2462,6 @@ No direct golden-output suite currently validates:
 - quote consent and disclosure;
 - coverage decision completion.
 
-Those tests are therefore explicit implementation requirements rather than
-evidence that the current family is launch-ready.
+These repository tests establish implementation containment and contract
+correctness. They do not substitute for the external regulated-coverage,
+commercial, operational, or real-user launch approvals described above.
