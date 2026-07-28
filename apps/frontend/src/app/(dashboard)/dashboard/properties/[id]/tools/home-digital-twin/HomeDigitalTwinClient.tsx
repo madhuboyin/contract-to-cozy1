@@ -60,6 +60,7 @@ import type {
   HomeTwinScenarioDTO,
   HomeTwinScenarioDecisionStatus,
   HomeTwinScenarioImpactDTO,
+  HomeTwinScenarioRunDTO,
   HomeTwinScenarioType,
   ScenarioSuggestionDTO,
 } from '@/types';
@@ -212,6 +213,16 @@ const DECISION_STATUS_TONE: Record<HomeTwinScenarioDecisionStatus, 'good' | 'ele
   REJECTED: 'danger',
   CLOSED: 'good',
 };
+
+const ACTIVE_COMPUTATION_WINDOW_MS = 5 * 60 * 1000;
+
+function isActiveScenarioRun(
+  run: HomeTwinScenarioDTO['latestRun'] | HomeTwinScenarioRunDTO | null | undefined,
+): boolean {
+  if (!run || (run.status !== 'QUEUED' && run.status !== 'RUNNING')) return false;
+  const startedAt = new Date(run.startedAt).getTime();
+  return Number.isFinite(startedAt) && startedAt >= Date.now() - ACTIVE_COMPUTATION_WINDOW_MS;
+}
 
 type UrgencyTone = 'danger' | 'elevated' | 'info';
 
@@ -1104,6 +1115,12 @@ function ScenarioDetailSheet({
     queryKey: ['home-digital-twin-scenario-runs', propertyId, scenario?.id],
     queryFn: () => listDigitalTwinScenarioRuns(propertyId, scenario?.id ?? ''),
     enabled: open && !!scenario,
+    refetchInterval: (query) => {
+      const runs = query.state.data;
+      return isActiveScenarioRun(runs?.[0])
+        ? 2000
+        : false;
+    },
   });
 
   useEffect(() => {
@@ -1131,7 +1148,8 @@ function ScenarioDetailSheet({
     onDecide(scenario.id, decisionStatus, decisionReason.trim() || null);
   };
 
-  const canCompute = scenario.status === 'DRAFT' || scenario.status === 'READY';
+  const computationPending = isActiveScenarioRun(scenario.latestRun);
+  const canCompute = !computationPending && (scenario.status === 'DRAFT' || scenario.status === 'READY');
   const assumptionFields = scenarioAssumptionFields(scenario.scenarioType);
   const updateAssumptionField = (field: ScenarioAssumptionField, rawValue: string) => {
     setAssumptionsDraft((current) => {
@@ -1180,7 +1198,9 @@ function ScenarioDetailSheet({
           {/* Status chips */}
           <div className="flex flex-wrap gap-2">
             <StatusChip tone={statusTone}>
-              {SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
+              {computationPending
+                ? scenario.latestRun?.status === 'RUNNING' ? 'Calculating' : 'Queued'
+                : SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
             </StatusChip>
             <StatusChip tone="info">{SCENARIO_TYPE_LABEL[scenario.scenarioType]}</StatusChip>
             <StatusChip tone={DECISION_STATUS_TONE[scenario.decisionStatus]}>
@@ -1188,7 +1208,18 @@ function ScenarioDetailSheet({
             </StatusChip>
           </div>
 
-          {scenario.staleAt && (
+          {computationPending && (
+            <div role="status" aria-live="polite" className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+              <p className="text-xs font-semibold text-blue-900">
+                {scenario.latestRun?.status === 'RUNNING' ? 'Calculating this option' : 'Calculation queued'}
+              </p>
+              <p className="text-xs text-blue-800">
+                This view will refresh automatically when the calculation finishes.
+              </p>
+            </div>
+          )}
+
+          {scenario.staleAt && !computationPending && (
             <div role="status" aria-live="polite" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
               <p className="text-xs font-semibold text-amber-900">Results need refreshing</p>
               <p className="text-xs text-amber-800">
@@ -1326,6 +1357,11 @@ function ScenarioDetailSheet({
                       <> — projected {formatUSD(handoff.actualOutcome.projectedCostLow)}–{formatUSD(handoff.actualOutcome.projectedCostHigh)}</>
                     )}
                   </p>
+                  {handoff.actualOutcome.projectedCostSourceClass === 'HOMEOWNER_ASSUMPTION' && (
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      The projected range came from your planning estimate.
+                    </p>
+                  )}
                   {handoff.actualOutcome.varianceCents != null && (
                     <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
                       {handoff.actualOutcome.varianceCents > 0 ? 'Over' : handoff.actualOutcome.varianceCents < 0 ? 'Under' : 'Matched'} estimate by{' '}
@@ -1374,6 +1410,13 @@ function ScenarioDetailSheet({
                   onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_renovation_advisor' })}
                 >
                   Check renovation risk
+                </Link>
+                <Link
+                  href={handoff.handoffLinks.incentives}
+                  className="text-xs text-[hsl(var(--mobile-brand-strong))] hover:underline"
+                  onClick={() => track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'handoff_incentives' })}
+                >
+                  Find incentives
                 </Link>
                 <Link
                   href={handoff.handoffLinks.reserveFund}
@@ -1672,6 +1715,12 @@ function CompareScenariosSheet({
     queryKey: ['home-digital-twin-scenario-comparison', propertyId, componentId],
     queryFn: () => compareDigitalTwinScenarios(propertyId, componentId ?? ''),
     enabled: open && !!componentId,
+    refetchInterval: (query) => {
+      const current = query.state.data;
+      return current?.options.some((option) => isActiveScenarioRun(option.latestRun))
+        ? 2000
+        : false;
+    },
   });
   const ensureOptions = useMutation({
     mutationFn: () => ensureDigitalTwinComparisonOptions(propertyId, componentId ?? ''),
@@ -1680,14 +1729,9 @@ function CompareScenariosSheet({
         ['home-digital-twin-scenario-comparison', propertyId, componentId],
         result,
       );
-      for (const delay of [2500, 7000]) {
-        window.setTimeout(
-          () => queryClient.invalidateQueries({
-            queryKey: ['home-digital-twin-scenario-comparison', propertyId, componentId],
-          }),
-          delay,
-        );
-      }
+      queryClient.invalidateQueries({
+        queryKey: ['home-digital-twin-scenario-comparison', propertyId, componentId],
+      });
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
     },
   });
@@ -1741,6 +1785,7 @@ function CompareScenariosSheet({
               const cost = keyImpact(option, 'UPFRONT_COST');
               const savings = keyImpact(option, 'ANNUAL_SAVINGS');
               const payback = keyImpact(option, 'PAYBACK_PERIOD');
+              const activeRun = isActiveScenarioRun(option.latestRun) ? option.latestRun : null;
               return (
                 <div
                   key={option.id}
@@ -1753,6 +1798,11 @@ function CompareScenariosSheet({
                     </StatusChip>
                   </div>
                   <StatusChip tone="info">{SCENARIO_TYPE_LABEL[option.scenarioType]}</StatusChip>
+                  {activeRun && (
+                    <p role="status" className="text-xs text-blue-700">
+                      {activeRun.status === 'RUNNING' ? 'Calculating…' : 'Queued…'}
+                    </p>
+                  )}
                   <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
                     <div>
                       <p className="mb-0.5 text-[hsl(var(--mobile-text-secondary))]">Cost</p>
@@ -1831,6 +1881,12 @@ export default function HomeDigitalTwinClient({
     queryKey: ['home-digital-twin', propertyId],
     queryFn: () => getHomeDigitalTwin(propertyId),
     enabled: !!propertyId,
+    refetchInterval: (query) => {
+      const current = query.state.data;
+      return current?.recentScenarios.some((scenario) => isActiveScenarioRun(scenario.latestRun))
+        ? 2000
+        : false;
+    },
   });
 
   // Data quality signals — measured separately from engagement (workflow_
@@ -1931,10 +1987,10 @@ export default function HomeDigitalTwinClient({
       setSuggestionSheetOpen(false);
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
       toast({
-        title: 'Scenario computed',
-        description: `"${scenario.name}" is ready to review.`,
+        title: 'Calculation queued',
+        description: `"${scenario.name}" will refresh automatically when it is ready.`,
       });
-      track('action_completed', { tool: 'home-digital-twin', actionType: 'run_scenario', propertyId });
+      track('action_taken', { tool: 'home-digital-twin', actionType: 'queue_scenario', propertyId });
     },
     onError: (error) =>
       toast({
@@ -1949,14 +2005,6 @@ export default function HomeDigitalTwinClient({
     mutationFn: (scenarioId: string) => computeDigitalTwinScenario(propertyId, scenarioId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
-      window.setTimeout(
-        () => queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] }),
-        2500,
-      );
-      window.setTimeout(
-        () => queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] }),
-        7000,
-      );
       toast({ title: 'Comparison queued', description: 'Results will refresh automatically.' });
     },
     onError: () =>

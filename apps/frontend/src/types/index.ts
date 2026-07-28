@@ -3993,6 +3993,7 @@ export interface HomeTwinScenarioHandoffDTO {
   actualOutcome: {
     projectedCostLow: number | null;
     projectedCostHigh: number | null;
+    projectedCostSourceClass: 'HOMEOWNER_ASSUMPTION' | 'CANONICAL_RECORD' | 'SYSTEM_CALCULATION' | 'CATEGORY_DEFAULT' | null;
     actualCostCents: number;
     varianceCents: number | null;
   } | null;
@@ -4006,6 +4007,7 @@ export interface HomeTwinScenarioHandoffDTO {
     inspection: string;
     servicePriceRadar: string;
     renovationAdvisor: string;
+    incentives: string;
     reserveFund: string;
     capitalTimeline: string;
   };

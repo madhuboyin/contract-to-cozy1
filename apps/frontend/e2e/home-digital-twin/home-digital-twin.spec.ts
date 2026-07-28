@@ -145,7 +145,7 @@ test('initialized planner exercises comparison, typed assumptions, and run evide
   );
 
   await page.goto('/acceptance/home-digital-twin');
-  await page.getByRole('button', { name: 'Compare options for Upstairs HVAC' }).click();
+  await page.getByRole('listitem', { name: 'Compare options for Upstairs HVAC' }).click();
   await expect(page.getByRole('heading', { name: 'Compare options: Upstairs HVAC' })).toBeVisible();
   await expect(page.getByText('Maintain Upstairs HVAC')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -156,4 +156,89 @@ test('initialized planner exercises comparison, typed assumptions, and run evide
   await expect(page.getByText(/Changed since the previous run: inputs, source facts/)).toBeVisible();
   await page.getByText('Inputs and assumptions').click();
   await expect(page.getByText(/replacementCost/)).toBeVisible();
+});
+
+test('queued calculations remain visibly pending until the worker finishes', async ({ page }) => {
+  const propertyId = 'home-digital-twin-acceptance-property';
+  const component = {
+    id: 'component-queued',
+    componentType: 'HVAC',
+    label: 'Main HVAC',
+    sourceReferenceId: 'inventory-queued',
+  };
+  const queuedAt = new Date().toISOString();
+  const queuedScenario = {
+    id: 'scenario-queued',
+    componentId: component.id,
+    component,
+    name: 'Replace Main HVAC',
+    scenarioType: 'REPLACE_COMPONENT',
+    status: 'READY',
+    description: null,
+    inputPayload: { componentType: 'HVAC', assumptions: {} },
+    baselineSnapshot: null,
+    baselineDependencyFingerprint: null,
+    decisionStatus: 'OPEN',
+    decisionReason: null,
+    decidedAt: null,
+    staleAt: queuedAt,
+    staleReason: 'A refreshed calculation is queued.',
+    isPinned: false,
+    isArchived: false,
+    lastComputedAt: null,
+    createdAt: '2026-07-28T12:00:00.000Z',
+    updatedAt: queuedAt,
+    impacts: [],
+    safetyBoundary: null,
+    sensitivity: [],
+    latestRun: {
+      status: 'QUEUED',
+      startedAt: queuedAt,
+      completedAt: null,
+      errorMessage: null,
+    },
+    projectPrefill: {
+      projectType: 'HVAC_REPLACEMENT',
+      category: 'HVAC',
+      inventoryItemId: 'inventory-queued',
+    },
+  };
+
+  await page.unroute(`**/api/properties/${propertyId}/home-digital-twin`);
+  await page.route(`**/api/properties/${propertyId}/home-digital-twin`, (route) =>
+    route.fulfill({
+      json: {
+        success: true,
+        data: {
+          twin: {
+            id: 'twin-queued',
+            propertyId,
+            status: 'ACTIVE',
+            completenessScore: 0.7,
+            staleReason: null,
+            needsRecompute: false,
+            lastComputedAt: '2026-07-28T12:00:00.000Z',
+            components: [component],
+            recentScenarios: [queuedScenario],
+          },
+          context: null,
+        },
+      },
+    }),
+  );
+  await page.route(`**/api/properties/${propertyId}/home-digital-twin/recommended-scenarios`, (route) =>
+    route.fulfill({ json: { success: true, data: { recommendations: [] } } }),
+  );
+  await page.route(`**/api/properties/${propertyId}/home-digital-twin/scenarios/${queuedScenario.id}/runs`, (route) =>
+    route.fulfill({ json: { success: true, data: { runs: [] } } }),
+  );
+  await page.route(`**/api/properties/${propertyId}/home-digital-twin/scenarios/${queuedScenario.id}/handoff`, (route) =>
+    route.fulfill({ json: { success: true, data: { handoff: null } } }),
+  );
+
+  await page.goto('/acceptance/home-digital-twin');
+  await page.getByRole('button', { name: 'View scenario: Replace Main HVAC' }).click();
+  await expect(page.getByText('Calculation queued', { exact: true })).toBeVisible();
+  await expect(page.getByText(/refresh automatically when the calculation finishes/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run analysis for this scenario' })).toHaveCount(0);
 });

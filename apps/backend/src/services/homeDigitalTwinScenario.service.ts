@@ -305,7 +305,7 @@ type PersistedImpactSpec = ImpactSpec & {
   qualificationText: string;
 };
 
-function qualifyImpact(
+export function qualifyImpact(
   impact: ImpactSpec,
   inputPayload: Record<string, unknown>,
   component: ComponentRecord | null,
@@ -347,6 +347,31 @@ function qualifyImpact(
       : categoryDefault
         ? 'Broad category planning default, not a quote.'
         : 'Deterministic planning calculation from the disclosed model inputs.',
+  };
+}
+
+export function reconcileActualCost(
+  impacts: Array<{
+    impactType: HomeTwinImpactType;
+    valueLow: number | null;
+    valueHigh: number | null;
+    valueNumeric: number | null;
+    sourceClass: HomeTwinImpactSourceClass;
+  }>,
+  actualCostCents: number,
+) {
+  const projectedCost = impacts.find((impact) => impact.impactType === 'UPFRONT_COST');
+  const projectedCostLow = projectedCost?.valueLow ?? projectedCost?.valueNumeric ?? null;
+  const projectedCostHigh = projectedCost?.valueHigh ?? projectedCost?.valueNumeric ?? null;
+  const projectedMidCents = projectedCostLow != null && projectedCostHigh != null
+    ? Math.round(((projectedCostLow + projectedCostHigh) / 2) * 100)
+    : null;
+  return {
+    projectedCostLow,
+    projectedCostHigh,
+    projectedCostSourceClass: projectedCost?.sourceClass ?? null,
+    actualCostCents,
+    varianceCents: projectedMidCents != null ? actualCostCents - projectedMidCents : null,
   };
 }
 
@@ -1797,22 +1822,15 @@ export class HomeDigitalTwinScenarioService {
     let actualOutcome: {
       projectedCostLow: number | null;
       projectedCostHigh: number | null;
+      projectedCostSourceClass: HomeTwinImpactSourceClass | null;
       actualCostCents: number;
       varianceCents: number | null;
     } | null = null;
     if (linkedProjectRow?.outcomeStatus === 'VERIFIED_SUCCESS' && linkedProjectRow.actualCostCents != null) {
-      const projectedCost = scenario.impacts.find((i) => i.impactType === 'UPFRONT_COST' && !i.isUserSupplied);
-      const projectedCostLow = projectedCost?.valueLow ?? projectedCost?.valueNumeric ?? null;
-      const projectedCostHigh = projectedCost?.valueHigh ?? projectedCost?.valueNumeric ?? null;
-      const projectedMidCents = projectedCostLow != null && projectedCostHigh != null
-        ? Math.round(((projectedCostLow + projectedCostHigh) / 2) * 100)
-        : null;
-      actualOutcome = {
-        projectedCostLow,
-        projectedCostHigh,
-        actualCostCents: linkedProjectRow.actualCostCents,
-        varianceCents: projectedMidCents != null ? linkedProjectRow.actualCostCents - projectedMidCents : null,
-      };
+      // A homeowner-entered quote/estimate is still the decision's expected
+      // baseline. Keep its HOMEOWNER_ASSUMPTION provenance visible instead
+      // of dropping the comparison entirely.
+      actualOutcome = reconcileActualCost(scenario.impacts, linkedProjectRow.actualCostCents);
     }
 
     const { projectPrefill } = withSafetyBoundary(scenario);
@@ -1849,6 +1867,7 @@ export class HomeDigitalTwinScenarioService {
         inspection: `${base}/tools/inspection-hub?${handoffQuery}`,
         servicePriceRadar: `${base}/tools/service-price-radar?${handoffQuery}`,
         renovationAdvisor: `${base}/tools/home-renovation-risk-advisor?${handoffQuery}`,
+        incentives: `${base}/tools/savings-benefits?${handoffQuery}`,
         reserveFund: `${base}/tools/reserve-fund?${handoffQuery}`,
         capitalTimeline: `${base}/tools/capital-timeline?${handoffQuery}`,
       },

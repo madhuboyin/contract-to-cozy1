@@ -178,6 +178,45 @@ type ProjectedFactSpec = {
   correctionDestination?: string | null;
 };
 
+type ProjectedFactSnapshotInput = Pick<
+  ProjectedFactSpec,
+  | 'valueNumeric'
+  | 'valueText'
+  | 'unit'
+  | 'factState'
+  | 'sourceType'
+  | 'sourceRecordType'
+  | 'sourceRecordId'
+  | 'sourceField'
+  | 'observedAt'
+  | 'derivationMethod'
+  | 'modelVersion'
+  | 'sourceVerified'
+  | 'confidenceScore'
+  | 'conflictGroupId'
+  | 'correctionDestination'
+>;
+
+function projectedFactSnapshot(fact: ProjectedFactSnapshotInput) {
+  return {
+    valueNumeric: fact.valueNumeric ?? null,
+    valueText: fact.valueText ?? null,
+    unit: fact.unit ?? null,
+    factState: fact.factState,
+    sourceType: fact.sourceType,
+    sourceRecordType: fact.sourceRecordType ?? null,
+    sourceRecordId: fact.sourceRecordId ?? null,
+    sourceField: fact.sourceField ?? null,
+    observedAt: fact.observedAt?.toISOString() ?? null,
+    derivationMethod: fact.derivationMethod ?? null,
+    modelVersion: fact.modelVersion ?? PROJECTION_MODEL_VERSION,
+    sourceVerified: fact.sourceVerified ?? null,
+    confidenceScore: fact.confidenceScore ?? null,
+    conflictGroupId: fact.conflictGroupId ?? null,
+    correctionDestination: fact.correctionDestination ?? null,
+  };
+}
+
 /** A conflicted fact always needs homeowner review, regardless of source type. */
 function statusFromResolution(resolved: { isKnownSource: boolean; fact: ProjectedFactSpec }): HomeTwinComponentStatus {
   if (resolved.fact.factState === 'CONFLICTED') return 'NEEDS_REVIEW';
@@ -231,6 +270,7 @@ function resolveInstallYear(params: {
         factState: 'CONFLICTED',
         sourceType: 'PROPERTY_PROFILE',
         sourceRecordType: 'Property',
+        sourceRecordId: params.inventoryItem!.id,
         sourceField: params.reportedSourceField,
         derivationMethod: 'conflict_property_vs_inventory',
         confidenceScore: 0.2,
@@ -320,6 +360,7 @@ function resolveInstallYear(params: {
 
 function replacementCostFact(params: {
   reportedCents: number | null | undefined;
+  inventoryItemId?: string | null;
   scaledValue: number;
   scaledMethod: string;
 }): { value: number; fact: ProjectedFactSpec } {
@@ -334,6 +375,7 @@ function replacementCostFact(params: {
         factState: 'REPORTED',
         sourceType: 'INVENTORY',
         sourceRecordType: 'InventoryItem',
+        sourceRecordId: params.inventoryItemId ?? null,
         sourceField: 'replacementCostCents',
         derivationMethod: 'direct',
         confidenceScore: 0.75,
@@ -360,6 +402,20 @@ function replacementCostFact(params: {
 // dedicated field yet (ELECTRICAL, PLUMBING, FOUNDATION) or live elsewhere
 // (EXTERIOR — "exterior" section).
 const STRUCTURE_SECTION_TYPES = new Set<HomeTwinComponentType>(['HVAC', 'WATER_HEATER', 'ROOF']);
+const INVENTORY_CORRECTION_CATEGORY: Partial<Record<HomeTwinComponentType, string>> = {
+  HVAC: 'HVAC',
+  WATER_HEATER: 'PLUMBING',
+  ROOF: 'ROOF_EXTERIOR',
+  ELECTRICAL: 'ELECTRICAL',
+  PLUMBING: 'PLUMBING',
+  FOUNDATION: 'STRUCTURAL',
+  INSULATION: 'STRUCTURAL',
+  WINDOWS: 'STRUCTURAL',
+  SOLAR: 'ELECTRICAL',
+  FLOORING: 'INTERIOR',
+  APPLIANCE: 'APPLIANCE',
+  OTHER: 'OTHER',
+};
 
 /**
  * Where a homeowner would go to correct this fact at its canonical source.
@@ -378,9 +434,8 @@ function correctionDestinationFor(
     return `/dashboard/properties/${propertyId}/inventory/items/${fact.sourceRecordId}`;
   }
   if (fact.fieldName === 'replacementCostEstimate' && fact.factState === 'DEFAULT') {
-    // No inventory record backs this estimate — the fix is adding the item,
-    // not editing a field that doesn't exist yet.
-    return `/dashboard/properties/${propertyId}/inventory`;
+    const category = INVENTORY_CORRECTION_CATEGORY[componentType] ?? 'OTHER';
+    return `/dashboard/properties/${propertyId}/inventory?action=add-item&category=${encodeURIComponent(category)}&from=home-digital-twin`;
   }
   if (STRUCTURE_SECTION_TYPES.has(componentType)) {
     return `/dashboard/properties/${propertyId}/edit#structure`;
@@ -388,10 +443,12 @@ function correctionDestinationFor(
   if (componentType === 'EXTERIOR') {
     return `/dashboard/properties/${propertyId}/edit#exterior`;
   }
-  // ELECTRICAL, PLUMBING, FOUNDATION: no dedicated field exists in the edit
-  // form yet. Point at the general edit page rather than fabricate an
-  // anchor that goes nowhere.
-  return `/dashboard/properties/${propertyId}/edit`;
+  // When the property profile has no field for this system, open the
+  // canonical inventory add form with the correct system category selected.
+  // This is a specific, authorized write destination rather than a generic
+  // edit page that cannot change the flagged fact.
+  const category = INVENTORY_CORRECTION_CATEGORY[componentType] ?? 'OTHER';
+  return `/dashboard/properties/${propertyId}/inventory?action=add-item&category=${encodeURIComponent(category)}&from=home-digital-twin`;
 }
 
 // ============================================================================
@@ -746,6 +803,29 @@ export class HomeDigitalTwinBuilderService {
     facts: ProjectedFactSpec[],
   ): Promise<void> {
     for (const fact of facts) {
+      const existing = await tx.homeTwinProjectedFact.findUnique({
+        where: { componentId_fieldName: { componentId, fieldName: fact.fieldName } },
+        select: {
+          valueNumeric: true,
+          valueText: true,
+          unit: true,
+          factState: true,
+          sourceType: true,
+          sourceRecordType: true,
+          sourceRecordId: true,
+          sourceField: true,
+          observedAt: true,
+          derivationMethod: true,
+          modelVersion: true,
+          sourceVerified: true,
+          confidenceScore: true,
+          conflictGroupId: true,
+          correctionDestination: true,
+        },
+      });
+      const previousSnapshot = existing ? projectedFactSnapshot(existing) : null;
+      const nextSnapshot = projectedFactSnapshot(fact);
+
       await tx.homeTwinProjectedFact.upsert({
         where: { componentId_fieldName: { componentId, fieldName: fact.fieldName } },
         create: {
@@ -786,6 +866,23 @@ export class HomeDigitalTwinBuilderService {
           correctionDestination: fact.correctionDestination ?? null,
         },
       });
+
+      if (!previousSnapshot || JSON.stringify(previousSnapshot) !== JSON.stringify(nextSnapshot)) {
+        await tx.homeTwinProjectedFactRevision.create({
+          data: {
+            digitalTwinId,
+            componentId,
+            fieldName: fact.fieldName,
+            previousFactState: existing?.factState ?? null,
+            nextFactState: fact.factState,
+            ...(previousSnapshot
+              ? { previousSnapshot: previousSnapshot as Prisma.InputJsonValue }
+              : {}),
+            nextSnapshot: nextSnapshot as Prisma.InputJsonValue,
+            changeReason: existing ? 'SOURCE_REFRESH' : 'INITIAL_PROJECTION',
+          },
+        });
+      }
     }
   }
 
@@ -877,6 +974,7 @@ export class HomeDigitalTwinBuilderService {
         const condition = age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null;
         const cost = replacementCostFact({
           reportedCents: item?.replacementCostCents,
+          inventoryItemId: item?.id,
           scaledValue: scaledHvacCost(property.propertySize),
           scaledMethod: 'sqft_scaled',
         });
@@ -964,6 +1062,7 @@ export class HomeDigitalTwinBuilderService {
         const condition = age != null ? conditionFromAgeRatio(age, whConfig.usefulLifeYears) : null;
         const cost = replacementCostFact({
           reportedCents: item?.replacementCostCents,
+          inventoryItemId: item?.id,
           scaledValue: whConfig.replacementCost,
           scaledMethod: 'type_default',
         });
@@ -1040,6 +1139,7 @@ export class HomeDigitalTwinBuilderService {
         const age = ageFromInstallYear(resolved.installYear);
         const cost = replacementCostFact({
           reportedCents: item?.replacementCostCents,
+          inventoryItemId: item?.id,
           scaledValue: scaledRoofCost(property.propertySize, property.roofType),
           scaledMethod: 'sqft_and_material_scaled',
         });
@@ -1109,6 +1209,7 @@ export class HomeDigitalTwinBuilderService {
         const age = ageFromInstallYear(resolved.installYear);
         const cost = replacementCostFact({
           reportedCents: item?.replacementCostCents,
+          inventoryItemId: item?.id,
           scaledValue: defaults.replacementCost,
           scaledMethod: 'category_default',
         });
@@ -1173,6 +1274,7 @@ export class HomeDigitalTwinBuilderService {
         const age = ageFromInstallYear(resolved.installYear);
         const cost = replacementCostFact({
           reportedCents: item?.replacementCostCents,
+          inventoryItemId: item?.id,
           scaledValue: defaults.replacementCost,
           scaledMethod: 'category_default',
         });
@@ -1346,6 +1448,7 @@ export class HomeDigitalTwinBuilderService {
         const condition = age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null;
         const cost = replacementCostFact({
           reportedCents: item.replacementCostCents,
+          inventoryItemId: item.id,
           scaledValue: defaults.replacementCost,
           scaledMethod: 'category_default',
         });

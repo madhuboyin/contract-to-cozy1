@@ -71,3 +71,25 @@ test('every Home Digital Twin mutation requires property access and contributor 
     assert.match(declaration[1], /requireHouseholdRole\('CONTRIBUTOR'\)/);
   }
 });
+
+test('decision handoff includes incentives and preserves homeowner estimates for reconciliation', () => {
+  const service = read('src/services/homeDigitalTwinScenario.service.ts');
+  assert.match(service, /incentives: `\$\{base\}\/tools\/savings-benefits/);
+  assert.match(service, /reconcileActualCost\(scenario\.impacts/);
+  assert.doesNotMatch(service, /impactType === 'UPFRONT_COST' && !i\.isUserSupplied/);
+});
+
+test('Home Digital Twin browser and accessibility acceptance are enforced in CI', () => {
+  const workflow = read('../../.github/workflows/frontend-quality-gates.yml');
+  assert.match(workflow, /home-digital-twin-accessibility-contract\.test\.ts/);
+  assert.match(workflow, /npm run test:home-digital-twin:e2e/);
+});
+
+test('operator reporting separates projection health from homeowner outcomes', () => {
+  const service = read('src/services/homeDigitalTwin.service.ts');
+  assert.match(service, /homeownerOutcomes:/);
+  assert.match(service, /decisionCounts:/);
+  assert.match(service, /acceptedHandoffCount:/);
+  assert.match(service, /verifiedCompletedWorkCount:/);
+  assert.match(service, /factsImprovedFromWeakToRecordedCount:/);
+});

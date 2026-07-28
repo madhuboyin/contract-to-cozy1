@@ -43,6 +43,7 @@ import {
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { useToast } from '@/components/ui/use-toast';
+import { track } from '@/lib/analytics/events';
 import TrustStrip from '../components/route-templates/TrustStrip';
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' | 'waived' {
@@ -815,7 +816,16 @@ export default function InventoryClient() {
         highlightRecallMatchId={highlightRecallMatchId}
         onSaved={async (result) => {
           setDrawerOpen(false);
-          if (result?.created) setIngestedItemId(result.itemId);
+          if (result?.created) {
+            setIngestedItemId(result.itemId);
+            if (from === 'home-digital-twin') {
+              track('action_completed', {
+                tool: 'home-digital-twin',
+                propertyId,
+                actionType: 'canonical_fact_inventory_item_created',
+              });
+            }
+          }
           await refreshAll();
         }}
         existingItems={items}

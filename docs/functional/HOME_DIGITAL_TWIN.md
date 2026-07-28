@@ -2,12 +2,9 @@
 # Home Digital Twin / Home Upgrade Planner
 Functional Documentation
 
-> **Status:** Implementation in progress. The July 28, 2026 P0 trust pass
-> removed age-derived failure/risk claims, separated input assumptions from
-> system-derived impacts, removed heuristic “Bottom line” treatment, and
-> removed projection-owned confirmation. Remaining slice gaps are listed in
-> section 7; this document must not be read as evidence that Slices 0–8 are
-> complete.
+> **Status:** P0–P2 implementation complete as of July 28, 2026. Section 7
+> lists deliberately deferred integrations and optional scope, not unresolved
+> trust or lifecycle defects.
 
 ---
 
@@ -71,7 +68,8 @@ home-state dashboard:
    defer/reject.
 5. **Act** — from a selected decision: create or link a Project Tracker
    project (pre-filled, no duplicate entry), or jump to inspection, Service
-   Price Radar, Renovation Advisor, reserve fund, or capital timeline.
+   Price Radar, Savings and Benefits, Renovation Advisor, reserve fund, or
+   capital timeline.
 6. **Reconcile** — once a linked project is verified complete, Project
    Tracker's own write-back (already existed before this capability) updates
    the inventory item, Home Timeline, expense, and warranty records. The
@@ -135,6 +133,11 @@ the underlying source justifies — this is enforced in one place
 (`resolveInstallYear` in the builder service), not scattered across
 call sites.
 
+Every changed projected fact also appends a
+`HomeTwinProjectedFactRevision` containing the prior and next fact states and
+immutable before/after snapshots. The projection remains read-only; this
+ledger records how canonical corrections and refreshes changed it.
+
 ## HomeTwinScenario (N per twin)
 
 A saved "what if" for one component. `componentId` (added once a property
@@ -156,6 +159,7 @@ Normalized computed outputs. `impactType, valueNumeric` (base/midpoint, kept
 for backward-compat display), `valueLow, valueHigh` (the range — a
 homeowner quote and a category default carry very different uncertainty,
 so the spread reflects that, not a fixed percentage), `unit, direction,
+sourceClass, sourceAsOf, assumptionsJson, qualificationText,
 confidenceScore, isUserSupplied` (must never be presented as
 system-computed evidence).
 
@@ -187,7 +191,9 @@ APPLIANCES, DOCUMENTATION, COST_BASIS, ENERGY_BASIS, RISK_BASIS`).
 - **`homeDigitalTwinQuality.service.ts`** — completeness/confidence scoring.
 - **`homeDigitalTwinFactReadiness.service.ts`** — the Home Record hub
   summary: known/missing/conflicting facts with a homeowner-readable reason
-  and a link to the owning correction surface.
+  and a link to the owning correction surface. Systems without a dedicated
+  property field open the canonical inventory add form with the appropriate
+  category preselected.
 - **`homeDigitalTwinScenario.service.ts`** — scenario CRUD, compute engine,
   readiness (what's known/missing for *this* decision), comparison, decision
   recording, and handoff assembly (linked project lookup, project
@@ -204,6 +210,10 @@ APPLIANCES, DOCUMENTATION, COST_BASIS, ENERGY_BASIS, RISK_BASIS`).
   twin/scenario (409 `COMPUTATION_IN_PROGRESS`). A `RUNNING` row older than
   5 minutes is treated as abandoned (crashed process) rather than a
   permanent lock, so this is self-healing without a cleanup job.
+- **Queue-aware homeowner state** — scenario DTOs expose the latest durable
+  run. The planner renders queued/running state, disables duplicate compute
+  actions, and polls while work is active instead of claiming completion
+  from the `202 Accepted` response.
 - **Bounded retry** — `withBoundedRetry` retries `buildComponents` once on a
   transient failure before falling through to the existing failure path.
   `buildComponents` is transactional and idempotent, so a retry is safe.
@@ -222,10 +232,12 @@ APPLIANCES, DOCUMENTATION, COST_BASIS, ENERGY_BASIS, RISK_BASIS`).
   to revert the offending code change through git and redeploy.
 - **Operator diagnostics** — `GET /api/admin/analytics/home-digital-twin`
   (capability `ANALYTICS_VIEW`, admin + MFA required) returns run counts by
-  type/status over a lookback window, stale-twin count, recent failures, and
-  effective operational-control state. Aggregate only — no per-property
-  drill-down; a specific property's own state is already visible via its
-  own `GET twin` response to whoever has access to that property.
+  type/status over a lookback window, stale-twin count, recent failures,
+  scenario/decision counts, accepted handoffs, verified completed work,
+  projected-fact improvements, and effective operational-control state.
+  Aggregate only — no per-property drill-down; a specific property's own
+  state is already visible via its own `GET twin` response to whoever has
+  access to that property.
 
 ## APIs (all under `/api/properties/:propertyId/home-digital-twin`)
 
@@ -264,8 +276,12 @@ decision-specific readiness, safety boundaries, projected-impact ranges,
 sensitivity ("what drives this range"), decision controls (select/defer/
 reject/close with a required reason for defer/reject), rename and
 archived-only delete, and the handoff panel (linked project or pre-filled
-create-project link, wayfinding links, expected-vs-actual cost once a linked
-project completes).
+create-project link, quote/inspection/incentive/planning links, and
+expected-vs-actual cost once a linked project completes).
+
+Queued and running calculations remain visibly pending and trigger
+active-state React Query polling until the durable run succeeds or fails; a `202 Accepted`
+response is never presented as a completed scenario.
 
 Caller-provided values and calculations that depend on them render under
 **Input assumptions**. Heuristic scenarios do not receive a “Bottom line”
@@ -290,7 +306,8 @@ Frontend `track()` events (see `src/lib/analytics/events.ts`), tool key
 - `action_taken` with `actionType`: `scenario_compare_opened`,
   `decision_selected` / `decision_deferred` /
   `decision_rejected` / `decision_closed`, `handoff_service_price_radar`,
-  `handoff_inspection`, `handoff_renovation_advisor`, `handoff_reserve_fund`,
+  `handoff_inspection`, `handoff_renovation_advisor`, `handoff_incentives`,
+  `handoff_reserve_fund`,
   `handoff_capital_timeline`, `handoff_create_project`,
   `handoff_view_linked_project`.
 - `data_quality_signal` with `signalType`: `STALE`, `NEEDS_RECOMPUTE`,
@@ -298,15 +315,26 @@ Frontend `track()` events (see `src/lib/analytics/events.ts`), tool key
   interaction events above, so projection freshness and conflict resolution
   can be measured independently of engagement, per design.
 
-Backend `analyticsEmitter` events: `DIGITAL_TWIN_VIEWED` (`getTwin`),
-`featureOpened` (twin init — a projection build is exposure, not homeowner
-value, and must not count as property activation).
+Backend `analyticsEmitter` events retain exposure tracking separately from
+outcome reporting: `DIGITAL_TWIN_VIEWED` (`getTwin`) and `featureOpened`
+(twin init — a projection build is exposure, not homeowner value).
 
 Expected-vs-actual cost comparison is returned only inside a scenario's own
 `GET .../handoff` response, once its linked project is verified complete —
-never aggregated across properties or homeowners. There is currently no
-platform-wide rollup of this data; if one is built later, it must remain
-opt-in per the plan's "only with homeowner control" requirement.
+including when the expected range came from a homeowner planning estimate,
+whose provenance remains explicit.
+
+The operator-only Home Digital Twin analytics response separates computation
+health from aggregate homeowner outcomes: scenario types, decision
+dispositions, accepted project handoffs, verified completed work, fact
+revision volume, and weak-to-recorded fact improvements. It exposes counts,
+not per-property homeowner details.
+
+Frontend accessibility/outcome contracts and desktop/mobile Playwright
+acceptance are explicit frontend CI quality gates. Backend and worker unit
+suites enforce builder lineage, correction/revision behavior, persisted
+impact provenance, authorization, queue success/failure, decision handoff,
+and actual-cost reconciliation.
 
 ---
 

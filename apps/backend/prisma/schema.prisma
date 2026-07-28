@@ -11241,6 +11241,7 @@ model HomeDigitalTwin {
   property        Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   components      HomeTwinComponent[]
   projectedFacts  HomeTwinProjectedFact[]
+  factRevisions   HomeTwinProjectedFactRevision[]
   scenarios       HomeTwinScenario[]
   dataQuality     HomeTwinDataQuality[]
   computationRuns HomeTwinComputationRun[]
@@ -11304,6 +11305,7 @@ model HomeTwinComponent {
   digitalTwin        HomeDigitalTwin         @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
   property            Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   projectedFacts      HomeTwinProjectedFact[]
+  factRevisions       HomeTwinProjectedFactRevision[]
   supersededBy        HomeTwinComponent?      @relation("ComponentSupersession", fields: [supersededByComponentId], references: [id], onDelete: SetNull)
   supersededComponents HomeTwinComponent[]    @relation("ComponentSupersession")
   scenarios            HomeTwinScenario[]
@@ -11367,6 +11369,32 @@ model HomeTwinProjectedFact {
   @@index([componentId, factState])
   @@index([conflictGroupId])
   @@map("home_twin_projected_facts")
+}
+
+// Append-only history of projection fact changes. Canonical records remain
+// the source of truth; this ledger explains how a correction or source
+// refresh changed the projection without turning the projection into an
+// editable fact store.
+model HomeTwinProjectedFactRevision {
+  id            String @id @default(uuid())
+  digitalTwinId String
+  componentId   String
+  fieldName     String
+
+  previousFactState HomeTwinFactState?
+  nextFactState     HomeTwinFactState
+  previousSnapshot Json?
+  nextSnapshot     Json
+  changeReason     String @default("SOURCE_REFRESH")
+  createdAt        DateTime @default(now())
+
+  digitalTwin HomeDigitalTwin  @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+  component   HomeTwinComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@index([digitalTwinId, createdAt])
+  @@index([componentId, fieldName, createdAt])
+  @@index([previousFactState, nextFactState])
+  @@map("home_twin_projected_fact_revisions")
 }
 
 // A saved "what if" scenario against a property's digital twin.

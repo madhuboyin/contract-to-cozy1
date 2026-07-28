@@ -20,6 +20,8 @@ const {
   processRiskCalculation,
   processFESCalculation,
   processHiddenAssetScan,
+  processHomeDigitalTwinRefresh,
+  processHomeDigitalTwinScenarioCompute,
 } = require('../../src/jobs/propertyIntelligence.job.ts');
 
 const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
@@ -188,4 +190,102 @@ test('processHiddenAssetScan rethrows on failure (so BullMQ retries/reports it a
     () => processHiddenAssetScan({ propertyId: 'property-1', jobType: 'CALCULATE_HIDDEN_ASSETS' }, deps),
     /hidden asset scan failed/,
   );
+});
+
+function fakeHomeTwinDeps({ hasTwin = true, computeShouldThrow = false } = {}) {
+  const calls = {
+    refresh: [],
+    compute: [],
+    runUpdates: [],
+    scenarioUpdates: [],
+    transactions: 0,
+  };
+  const deps = {
+    prisma: {
+      homeDigitalTwin: {
+        findUnique: async () => (hasTwin ? { id: 'twin-1' } : null),
+      },
+      homeTwinComputationRun: {
+        updateMany: async (args) => {
+          calls.runUpdates.push(args);
+          return { count: 1 };
+        },
+      },
+      homeTwinScenario: {
+        updateMany: async (args) => {
+          calls.scenarioUpdates.push(args);
+          return { count: 1 };
+        },
+      },
+      $transaction: async (operations) => {
+        calls.transactions += 1;
+        return Promise.all(operations);
+      },
+    },
+    logger: noopLogger,
+    createTwinService: () => ({
+      refreshTwin: async (propertyId) => {
+        calls.refresh.push(propertyId);
+      },
+    }),
+    createScenarioService: () => ({
+      computeScenario: async (...args) => {
+        calls.compute.push(args);
+        if (computeShouldThrow) throw new Error('scenario compute failed');
+      },
+    }),
+  };
+  return { deps, calls };
+}
+
+test('Home Digital Twin refresh is a no-op when the property has no projection', async () => {
+  const { deps, calls } = fakeHomeTwinDeps({ hasTwin: false });
+
+  await processHomeDigitalTwinRefresh(
+    { propertyId: 'property-1', jobType: 'REFRESH_HOME_DIGITAL_TWIN' },
+    deps,
+  );
+
+  assert.deepEqual(calls.refresh, []);
+});
+
+test('Home Digital Twin scenario worker reuses the durable queued run', async () => {
+  const { deps, calls } = fakeHomeTwinDeps();
+
+  await processHomeDigitalTwinScenarioCompute(
+    {
+      propertyId: 'property-1',
+      digitalTwinId: 'twin-1',
+      scenarioId: 'scenario-1',
+      computationRunId: 'run-1',
+      jobType: 'COMPUTE_HOME_DIGITAL_TWIN_SCENARIO',
+    },
+    deps,
+  );
+
+  assert.deepEqual(calls.compute, [['scenario-1', 'twin-1', 'run-1']]);
+  assert.equal(calls.transactions, 0);
+});
+
+test('Home Digital Twin scenario worker records terminal failure state before retrying', async () => {
+  const { deps, calls } = fakeHomeTwinDeps({ computeShouldThrow: true });
+
+  await assert.rejects(
+    () => processHomeDigitalTwinScenarioCompute(
+      {
+        propertyId: 'property-1',
+        digitalTwinId: 'twin-1',
+        scenarioId: 'scenario-1',
+        computationRunId: 'run-1',
+        jobType: 'COMPUTE_HOME_DIGITAL_TWIN_SCENARIO',
+      },
+      deps,
+    ),
+    /scenario compute failed/,
+  );
+
+  assert.equal(calls.transactions, 1);
+  assert.equal(calls.runUpdates[0].data.status, 'FAILED');
+  assert.equal(calls.scenarioUpdates[0].data.status, 'FAILED');
+  assert.match(calls.scenarioUpdates[0].data.staleReason, /Previous results are not current/);
 });

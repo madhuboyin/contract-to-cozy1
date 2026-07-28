@@ -519,7 +519,18 @@ export class HomeDigitalTwinService {
   async getDiagnostics(sinceHours: number = 24) {
     const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
 
-    const [runsByTypeAndStatus, staleTwinCount, totalTwinCount, recentFailures] = await Promise.all([
+    const [
+      runsByTypeAndStatus,
+      staleTwinCount,
+      totalTwinCount,
+      recentFailures,
+      scenariosByType,
+      decisionsByStatus,
+      handoffProjectCount,
+      verifiedOutcomeCount,
+      factRevisionCount,
+      factImprovementCount,
+    ] = await Promise.all([
       // completedAt - startedAt isn't directly aggregatable in Prisma;
       // duration is computed per-row below for failures only, where it's
       // most useful for diagnosing a specific incident.
@@ -535,6 +546,41 @@ export class HomeDigitalTwinService {
         select: { id: true, digitalTwinId: true, runType: true, errorMessage: true, startedAt: true, completedAt: true },
         orderBy: { startedAt: 'desc' },
         take: 20,
+      }),
+      prisma.homeTwinScenario.groupBy({
+        by: ['scenarioType'],
+        where: { createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      prisma.homeTwinScenario.groupBy({
+        by: ['decisionStatus'],
+        where: { decidedAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      prisma.projectRecord.count({
+        where: {
+          sourceEntityType: 'HomeTwinScenario',
+          sourceEntityId: { not: null },
+          createdAt: { gte: since },
+        },
+      }),
+      prisma.projectRecord.count({
+        where: {
+          sourceEntityType: 'HomeTwinScenario',
+          sourceEntityId: { not: null },
+          outcomeStatus: 'VERIFIED_SUCCESS',
+          verifiedAt: { gte: since },
+        },
+      }),
+      prisma.homeTwinProjectedFactRevision.count({
+        where: { createdAt: { gte: since } },
+      }),
+      prisma.homeTwinProjectedFactRevision.count({
+        where: {
+          createdAt: { gte: since },
+          previousFactState: { in: ['INFERRED', 'DEFAULT', 'CONFLICTED', 'UNKNOWN'] },
+          nextFactState: { in: ['VERIFIED', 'REPORTED', 'DOCUMENT_DERIVED'] },
+        },
       }),
     ]);
 
@@ -555,6 +601,20 @@ export class HomeDigitalTwinService {
         startedAt: f.startedAt,
         durationMs: f.completedAt ? f.completedAt.getTime() - f.startedAt.getTime() : null,
       })),
+      homeownerOutcomes: {
+        scenarioCountsByType: scenariosByType.map((row) => ({
+          scenarioType: row.scenarioType,
+          count: row._count._all,
+        })),
+        decisionCounts: decisionsByStatus.map((row) => ({
+          decisionStatus: row.decisionStatus,
+          count: row._count._all,
+        })),
+        acceptedHandoffCount: handoffProjectCount,
+        verifiedCompletedWorkCount: verifiedOutcomeCount,
+        factRevisionCount,
+        factsImprovedFromWeakToRecordedCount: factImprovementCount,
+      },
       operationalControls: {
         disabledComponentTypes: getDisabledComponentTypes(),
         scenarioComputeDisabled: isScenarioComputeDisabled(),

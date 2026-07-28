@@ -32,8 +32,14 @@ jobs:
       - name: QA + Governance Gates
         run: npm run qa:gates
 
+      - name: Home Digital Twin frontend contract
+        run: npx jest src/__tests__/home-digital-twin-accessibility-contract.test.ts --runInBand
+
       - name: Install capability acceptance browsers
         run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Capability discovery browser and PWA acceptance
         run: npm run test:tool-discovery:e2e
+
+      - name: Home Digital Twin desktop and mobile acceptance
+        run: npm run test:home-digital-twin:e2e

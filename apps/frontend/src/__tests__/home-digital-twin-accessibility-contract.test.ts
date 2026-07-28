@@ -45,4 +45,13 @@ describe('Home Upgrade Planner accessibility and outcome contract', () => {
     expect(source).not.toMatch(/compute engine/i);
     expect(source).not.toMatch(/model initialization/i);
   });
+
+  it('treats asynchronous scenario work as queued until the durable run finishes', () => {
+    expect(source).toMatch(/Calculation queued/);
+    expect(source).toMatch(/Calculating this option/);
+    expect(source).toMatch(/refetchInterval/);
+    expect(source).toMatch(/isActiveScenarioRun/);
+    expect(source).toMatch(/ACTIVE_COMPUTATION_WINDOW_MS/);
+    expect(source).not.toMatch(/title: 'Scenario computed'/);
+  });
 });

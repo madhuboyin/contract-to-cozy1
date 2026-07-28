@@ -3,7 +3,7 @@
 **Capability:** 21.3 Home Digital Twin  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 27, 2026  
-**Status:** In progress. P0 trust containment for age-derived failure claims, input-assumption provenance, and projection-owned confirmation was completed July 28, 2026. Slice 0 still has placement/framework work, and Slices 1–8 retain gaps documented in `docs/functional/HOME_DIGITAL_TWIN.md`.
+**Status:** P0–P2 gap register implemented July 28, 2026. Remaining future work is limited to the explicitly deferred external-data integrations and optional free-form scenario builder documented in `docs/functional/HOME_DIGITAL_TWIN.md`.
 **Recommended disposition:** **Merge and reposition**  
 **Current safety classification:** Low consequence  
 **Recommended safety classification:** Mixed — low consequence for record projection; material financial for upgrade scenarios  
@@ -544,7 +544,12 @@ Do not show:
 
 ---
 
-## 9. Functional and Trust Assessment
+## 9. Historical Functional and Trust Assessment
+
+> **Audit baseline (July 27, 2026):** Sections 9.1–9.12 preserve the
+> pre-implementation findings that produced the gap register. They do not
+> describe the current product. Current disposition and acceptance evidence
+> are recorded in Section 10 and the functional documentation.
 
 ### 9.1 Canonical versus derived facts
 
@@ -762,6 +767,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** Product truth  
+**Implementation status (July 28, 2026):** Resolved. Fact state is derived from field-level provenance, construction-year dates remain `INFERRED`/`ESTIMATED`, conflicting source dates remain `CONFLICTED`, and append-only fact revisions preserve before/after state.
 
 **Recommendation**
 
@@ -793,6 +799,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** UI correctness  
+**Implementation status (July 28, 2026):** Resolved. The permanent property preview was removed; unresolved Home Record facts now appear only as contextual correction actions and cannot fall through to a green health state.
 
 **Recommendation**
 
@@ -807,7 +814,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** Material financial trust  
-**Implementation status (July 28, 2026):** Partially contained. Unsupported system-generated property-value and insurance claims remain suppressed; heuristic “Bottom line” treatment was removed; caller-provided costs, savings, payback dependencies, and risk expectations are separated as input assumptions. Full per-impact source class, freshness, and assumption-dependency persistence remains open.
+**Implementation status (July 28, 2026):** Resolved. Unsupported system-generated property-value and insurance claims are suppressed; every persisted impact carries a range where defensible, source class, source-as-of date, assumption snapshot, qualification text, and homeowner-assumption classification; the UI exposes those qualifications without heuristic “Bottom line” treatment.
 
 **Recommendation**
 
@@ -857,7 +864,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** Functional completeness  
-**Implementation status (July 28, 2026):** Projection-owned confirmation was removed. Inferred, default, unknown, and conflicting facts remain visible and link to canonical correction destinations; rebuilds no longer freeze components based on `isUserConfirmed`. Richer field-specific canonical editing and audit history remain part of later slice work.
+**Implementation status (July 28, 2026):** Resolved. Projection-owned confirmation was removed. Every weak or conflicting fact links to a specific existing canonical edit field, inventory item, or category-prefilled inventory add form; rebuilds append immutable before/after fact revisions and automatically refresh after canonical changes.
 
 **Recommendation**
 
@@ -939,7 +946,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Closed loop  
-**Implementation status (July 28, 2026):** Implemented. Options support select, defer, reject, close, revise, archive, and delete controls; selected decisions hand off common scenario and inventory context to projects, quote review, inspection, renovation risk, reserve planning, and capital planning. Verified project completion writes canonical inventory/timeline facts, triggers a targeted projection refresh, and reconciles actual cost against the projected range.
+**Implementation status (July 28, 2026):** Implemented. Options support select, defer, reject, close, revise, archive, and delete controls; selected decisions hand off common scenario and inventory context to projects, quote review, inspection, incentives, renovation risk, reserve planning, and capital planning. Verified project completion writes canonical inventory/timeline facts, triggers a targeted projection refresh, and reconciles actual cost against the projected range while retaining homeowner-assumption provenance.
 
 **Recommendation**
 
@@ -1019,7 +1026,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Quality  
-**Implementation status (July 28, 2026):** Implemented for the P1 contracts. Builder truth tables cover multi-component identity and field lineage; a service-level comparison regression test executes draft option materialization; calculation tests cover maintain/incentive/financing behavior; queue contracts cover durable queued/failed state; frontend tests cover typed controls and evidence inspection; and Playwright exercises desktop/mobile production builds with an axe scan.
+**Implementation status (July 28, 2026):** Implemented. Builder truth tables cover multi-component identity, field lineage, correction routing, and revision history; service tests cover comparison materialization, impact provenance, maintain/incentive/financing calculations, and actual-cost reconciliation; worker tests execute durable success/failure state; frontend contracts and desktop/mobile Playwright acceptance are explicit CI gates.
 
 **Recommendation**
 
@@ -1037,6 +1044,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P2  
 **Type:** Measurement  
+**Implementation status (July 28, 2026):** Implemented. Operator reporting separates computation health from scenario types, recorded decisions, accepted project handoffs, verified completed work, projection fact revisions, and weak-to-recorded fact improvements.
 
 **Recommendation**
 
@@ -1051,7 +1059,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Documentation  
-**Implementation status (July 28, 2026):** Resolved. Functional documentation now matches the decision-only product boundary, five-option comparison, durable BullMQ computation state, typed assumption controls, evidence inspection, canonical handoff/write-back, and the remaining external-data limitations.
+**Implementation status (July 28, 2026):** Resolved. Historical findings are explicitly labeled as the audit baseline; current functional documentation matches the decision-only product boundary, five-option comparison, durable BullMQ computation and UI polling state, typed assumption controls, evidence inspection, canonical correction/handoff/write-back, outcome reporting, CI coverage, and remaining external-data limitations.
 
 **Recommendation**
 
@@ -1618,7 +1626,7 @@ Cover:
 
 ### 15.5 Current verification baseline
 
-At audit time:
+Historical audit baseline:
 
 - no dedicated Digital Twin builder, quality, recommendation, scenario-calculation, route-integration, or frontend browser tests were found;
 - available Phase 6 tests verify projection policy, mutation role floors, and staleness-envelope wiring;
@@ -1626,6 +1634,16 @@ At audit time:
 - existing source-inspection tests do not validate the homeowner-facing calculations or status semantics.
 
 This is not sufficient evidence for an active, material-decision capability.
+
+Current verification:
+
+- dedicated builder, provenance, quality/readiness, calculation, lifecycle,
+  queue/worker, authorization, and analytics contracts run in backend and
+  worker unit suites;
+- frontend accessibility/outcome contracts and desktop/mobile production-build
+  Playwright acceptance are required by the frontend quality-gate workflow;
+- schema migrations cover component identity, scenario evidence, maintain
+  options, and append-only projected-fact revision history.
 
 ---
 
@@ -1725,24 +1743,17 @@ The Home Digital Twin exercise is complete when:
 - contextual placement follows the framework;
 - accessibility and responsive acceptance pass;
 - full unit, integration, browser, and operational suites pass;
-- schema changes are direct, with no migration scripts;
+- every schema change has a reviewed, deployable migration script;
 - functional, framework, support, and operational documentation agree.
 
 ---
 
 ## 19. Recommended Immediate Next Step
 
-Begin with **Slice 0 — Product truth and immediate containment**.
-
-The first change should not be a larger scenario engine or a visual redesign. It should:
-
-- correct the property preview;
-- stop inferred facts from appearing known;
-- remove failure-probability wording;
-- contain unsupported financial and risk impacts;
-- correct framework safety and completion;
-- remove permanent Digital Twin prominence.
-
-Then implement the projection lineage and Home Record correction contract before rebuilding scenario planning.
-
-This sequence prevents a polished experience from amplifying unreliable conclusions and ensures later planning features are built on a trustworthy Living Home Record.
+Deploy the append-only projected-fact revision migration, allow the frontend,
+backend, and worker quality gates to complete, then monitor the existing Home
+Digital Twin diagnostics endpoint for queue failures, stale projections,
+decision/handoff conversion, verified outcomes, and weak-to-recorded fact
+improvements. External pricing, utility, incentive, and financing data
+providers remain optional future integrations and must preserve the same
+provenance contract when added.

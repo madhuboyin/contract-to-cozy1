@@ -6,6 +6,8 @@ const {
   computeImpacts,
   rangeFromPoint,
   computePaybackSensitivity,
+  qualifyImpact,
+  reconcileActualCost,
 } = require('../../src/services/homeDigitalTwinScenario.service.ts');
 
 function component(overrides = {}) {
@@ -30,6 +32,51 @@ function impactOf(impacts, type) {
 test('rangeFromPoint spreads symmetrically around the base value', () => {
   const r = rangeFromPoint(1000, 0.2);
   assert.deepEqual(r, { low: 800, base: 1000, high: 1200 });
+});
+
+test('persisted impacts carry source, freshness, assumptions, and qualification metadata', () => {
+  const computedAt = new Date('2026-07-28T12:00:00.000Z');
+  const assumptions = { componentType: 'HVAC', assumptions: { replacementCost: 10000 } };
+  const qualified = qualifyImpact(
+    {
+      impactType: 'UPFRONT_COST',
+      valueNumeric: 10000,
+      valueLow: 9500,
+      valueHigh: 10500,
+      valueText: null,
+      valueJson: null,
+      unit: 'USD',
+      direction: 'NEGATIVE',
+      confidenceScore: 0.8,
+      sortOrder: 0,
+      isUserSupplied: true,
+    },
+    assumptions,
+    null,
+    computedAt,
+  );
+
+  assert.equal(qualified.sourceClass, 'HOMEOWNER_ASSUMPTION');
+  assert.equal(qualified.sourceAsOf.toISOString(), computedAt.toISOString());
+  assert.deepEqual(qualified.assumptionsJson, assumptions);
+  assert.match(qualified.qualificationText, /not independently verified/i);
+});
+
+test('verified actual cost reconciles against a homeowner planning estimate', () => {
+  const outcome = reconcileActualCost([
+    {
+      impactType: 'UPFRONT_COST',
+      valueLow: 9500,
+      valueHigh: 10500,
+      valueNumeric: 10000,
+      sourceClass: 'HOMEOWNER_ASSUMPTION',
+    },
+  ], 1100000);
+
+  assert.equal(outcome.projectedCostSourceClass, 'HOMEOWNER_ASSUMPTION');
+  assert.equal(outcome.projectedCostLow, 9500);
+  assert.equal(outcome.projectedCostHigh, 10500);
+  assert.equal(outcome.varianceCents, 100000);
 });
 
 // ── REPAIR_COMPONENT ────────────────────────────────────────────────────────

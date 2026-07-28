@@ -262,7 +262,7 @@ router.get(
  * @swagger
  * /api/admin/analytics/home-digital-twin:
  *   get:
- *     summary: Home Digital Twin computation health — run counts by type/status, stale twin count, recent failures, and effective operational-control state
+ *     summary: Home Digital Twin computation health and aggregate homeowner outcomes — runs, staleness, decisions, handoffs, verified work, and fact improvements
  *     tags: [Admin Analytics]
  *     security:
  *       - bearerAuth: []
@@ -274,7 +274,7 @@ router.get(
  *         description: Lookback window in hours (default 24)
  *     responses:
  *       200:
- *         description: Home Digital Twin operational diagnostics
+ *         description: Home Digital Twin operational diagnostics and aggregate homeowner outcomes
  */
 router.get(
   '/admin/analytics/home-digital-twin',

@@ -234,12 +234,76 @@ test('correction destinations point at real existing surfaces', () => {
 
   const electrical = specFor(specs, 'ELECTRICAL:PRIMARY');
   const electricalInstallFact = electrical.facts.find((f) => f.fieldName === 'installYear');
-  assert.equal(electricalInstallFact.correctionDestination, '/dashboard/properties/property-77/edit');
+  assert.equal(
+    electricalInstallFact.correctionDestination,
+    '/dashboard/properties/property-77/inventory?action=add-item&category=ELECTRICAL&from=home-digital-twin',
+  );
 
   const roof = specFor(specs, 'ROOF:PRIMARY');
   const roofInstallFact = roof.facts.find((f) => f.fieldName === 'installYear');
   assert.equal(roofInstallFact.correctionDestination, '/dashboard/properties/property-77/edit#structure');
 
   const roofCostFact = roof.facts.find((f) => f.fieldName === 'replacementCostEstimate');
-  assert.equal(roofCostFact.correctionDestination, '/dashboard/properties/property-77/inventory');
+  assert.equal(
+    roofCostFact.correctionDestination,
+    '/dashboard/properties/property-77/inventory?action=add-item&category=ROOF_EXTERIOR&from=home-digital-twin',
+  );
+
+  const waterHeater = specFor(specs, 'WATER_HEATER:PRIMARY');
+  const waterHeaterCostFact = waterHeater.facts.find((f) => f.fieldName === 'replacementCostEstimate');
+  assert.equal(
+    waterHeaterCostFact.correctionDestination,
+    '/dashboard/properties/property-77/inventory?action=add-item&category=PLUMBING&from=home-digital-twin',
+  );
+});
+
+test('projection fact changes append immutable before/after revision history', async () => {
+  const revisions = [];
+  const existing = {
+    valueNumeric: 2000,
+    valueText: null,
+    unit: null,
+    factState: 'INFERRED',
+    sourceType: 'SYSTEM_DERIVED',
+    sourceRecordType: 'Property',
+    sourceRecordId: null,
+    sourceField: 'yearBuilt',
+    observedAt: null,
+    derivationMethod: 'year_built_direct',
+    modelVersion: 'home-projection-v2',
+    sourceVerified: null,
+    confidenceScore: 0.3,
+    conflictGroupId: null,
+    correctionDestination: '/dashboard/properties/property-1/edit#structure',
+  };
+  const tx = {
+    homeTwinProjectedFact: {
+      findUnique: async () => existing,
+      upsert: async () => ({ id: 'fact-1' }),
+    },
+    homeTwinProjectedFactRevision: {
+      create: async (args) => {
+        revisions.push(args.data);
+        return { id: 'revision-1' };
+      },
+    },
+  };
+
+  await builder.upsertFacts(tx, 'twin-1', 'component-1', [{
+    fieldName: 'installYear',
+    valueNumeric: 2018,
+    factState: 'REPORTED',
+    sourceType: 'PROPERTY_PROFILE',
+    sourceRecordType: 'Property',
+    sourceField: 'hvacInstallYear',
+    derivationMethod: 'direct',
+    confidenceScore: 0.7,
+    correctionDestination: '/dashboard/properties/property-1/edit#structure',
+  }]);
+
+  assert.equal(revisions.length, 1);
+  assert.equal(revisions[0].previousFactState, 'INFERRED');
+  assert.equal(revisions[0].nextFactState, 'REPORTED');
+  assert.equal(revisions[0].previousSnapshot.valueNumeric, 2000);
+  assert.equal(revisions[0].nextSnapshot.valueNumeric, 2018);
 });

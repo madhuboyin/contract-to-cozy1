@@ -57,6 +57,23 @@ const defaultDeps: PropertyIntelligenceDeps = {
   capturePropertyScoreSnapshots,
 };
 
+export interface HomeDigitalTwinJobDeps {
+  prisma: Pick<
+    typeof prisma,
+    'homeDigitalTwin' | 'homeTwinComputationRun' | 'homeTwinScenario' | '$transaction'
+  >;
+  logger: AppLogger;
+  createTwinService: () => Pick<HomeDigitalTwinService, 'refreshTwin'>;
+  createScenarioService: () => Pick<HomeDigitalTwinScenarioService, 'computeScenario'>;
+}
+
+const defaultHomeDigitalTwinDeps: HomeDigitalTwinJobDeps = {
+  prisma,
+  logger,
+  createTwinService: () => new HomeDigitalTwinService(),
+  createScenarioService: () => new HomeDigitalTwinScenarioService(),
+};
+
 /**
  * Process risk assessment calculation.
  * Delegates to RiskAssessmentService.calculateAndSaveReport which fetches
@@ -237,27 +254,29 @@ export async function processHiddenAssetScan(
  */
 export async function processHomeDigitalTwinRefresh(
   jobData: PropertyIntelligenceJobPayload,
+  deps: HomeDigitalTwinJobDeps = defaultHomeDigitalTwinDeps,
 ) {
-  const twin = await prisma.homeDigitalTwin.findUnique({
+  const twin = await deps.prisma.homeDigitalTwin.findUnique({
     where: { propertyId: jobData.propertyId },
     select: { id: true },
   });
   if (!twin) {
-    logger.info(`[HomeDigitalTwin] No projection exists for ${jobData.propertyId}; refresh skipped.`);
+    deps.logger.info(`[HomeDigitalTwin] No projection exists for ${jobData.propertyId}; refresh skipped.`);
     return;
   }
-  await new HomeDigitalTwinService().refreshTwin(jobData.propertyId);
-  logger.info(`[HomeDigitalTwin] Projection refreshed for ${jobData.propertyId}.`);
+  await deps.createTwinService().refreshTwin(jobData.propertyId);
+  deps.logger.info(`[HomeDigitalTwin] Projection refreshed for ${jobData.propertyId}.`);
 }
 
 export async function processHomeDigitalTwinScenarioCompute(
   jobData: PropertyIntelligenceJobPayload,
+  deps: HomeDigitalTwinJobDeps = defaultHomeDigitalTwinDeps,
 ) {
   if (!jobData.scenarioId || !jobData.digitalTwinId) {
     throw new Error('Scenario compute job is missing scenarioId or digitalTwinId.');
   }
   try {
-    await new HomeDigitalTwinScenarioService().computeScenario(
+    await deps.createScenarioService().computeScenario(
       jobData.scenarioId,
       jobData.digitalTwinId,
       jobData.computationRunId,
@@ -265,12 +284,12 @@ export async function processHomeDigitalTwinScenarioCompute(
   } catch (err) {
     if (jobData.computationRunId) {
       const message = err instanceof Error ? err.message : 'Scenario calculation failed.';
-      await prisma.$transaction([
-        prisma.homeTwinComputationRun.updateMany({
+      await deps.prisma.$transaction([
+        deps.prisma.homeTwinComputationRun.updateMany({
           where: { id: jobData.computationRunId, status: { in: ['QUEUED', 'RUNNING'] } },
           data: { status: 'FAILED', completedAt: new Date(), errorMessage: message },
         }),
-        prisma.homeTwinScenario.updateMany({
+        deps.prisma.homeTwinScenario.updateMany({
           where: { id: jobData.scenarioId, digitalTwinId: jobData.digitalTwinId, isArchived: false },
           data: {
             status: 'FAILED',
