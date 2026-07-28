@@ -42,12 +42,37 @@ function freshness(
 function observedTemporalKind(
   value: Date | null | undefined,
   asOf: Date,
-): 'CURRENT_PERIOD' | 'OBSERVED_PAST_PERIOD' {
+): 'CURRENT_PERIOD' | 'OBSERVED_PAST_PERIOD' | 'FORECAST_PERIOD' {
   if (!value) return 'CURRENT_PERIOD';
   const currentPeriodStart = Date.UTC(asOf.getUTCFullYear(), 0, 1);
-  return value.getTime() < currentPeriodStart
-    ? 'OBSERVED_PAST_PERIOD'
-    : 'CURRENT_PERIOD';
+  const currentPeriodEnd = Date.UTC(
+    asOf.getUTCFullYear(),
+    11,
+    31,
+    23,
+    59,
+    59,
+    999,
+  );
+  if (value.getTime() < currentPeriodStart) return 'OBSERVED_PAST_PERIOD';
+  if (value.getTime() > currentPeriodEnd) return 'FORECAST_PERIOD';
+  return 'CURRENT_PERIOD';
+}
+
+function periodTemporalKind(
+  start: Date | null | undefined,
+  end: Date | null | undefined,
+  asOf: Date,
+) {
+  const currentPeriodStart = new Date(
+    Date.UTC(asOf.getUTCFullYear(), 0, 1),
+  );
+  const currentPeriodEnd = new Date(
+    Date.UTC(asOf.getUTCFullYear(), 11, 31, 23, 59, 59, 999),
+  );
+  if (end && end < currentPeriodStart) return 'OBSERVED_PAST_PERIOD' as const;
+  if (start && start > currentPeriodEnd) return 'FORECAST_PERIOD' as const;
+  return 'CURRENT_PERIOD' as const;
 }
 
 function recurrenceFromMaintenance(
@@ -202,24 +227,39 @@ export async function loadOwnershipCostSourceBundle(
   ]);
 
   const bundle = emptyOwnershipCostSourceBundle();
+  const currentYear = asOf.getUTCFullYear();
+  const currentTaxAmount = taxBills
+    .find((candidate) =>
+      candidate.taxYear <= currentYear && candidate.billAmount != null);
+  const currentInsurancePremium = insuranceTerms
+    .find((candidate) =>
+      candidate.termStart != null
+      && candidate.termStart <= asOf
+      && (candidate.termEnd == null || candidate.termEnd >= asOf)
+      && candidate.annualPremium != null);
 
   for (const bill of taxBills) {
+    const billAmountCents = cents(bill.billAmount);
+    const currentTaxAmountCents = cents(currentTaxAmount?.billAmount);
+    const isFutureBill = bill.taxYear > currentYear;
     bundle.tax.push({
       sourceDomain: 'PROPERTY_TAX',
       sourceEntityType: 'PropertyTaxBillRecord',
       sourceEntityId: bill.id,
       sourceUpdatedAt: bill.updatedAt,
       category: 'PROPERTY_TAX',
-      amountCents: cents(bill.billAmount),
+      amountCents: billAmountCents,
       currency: bill.currency,
       recurrence: 'ANNUAL',
       periodStart: bill.periodStartDate
         ?? new Date(Date.UTC(bill.taxYear, 0, 1)),
       periodEnd: bill.periodEndDate
         ?? new Date(Date.UTC(bill.taxYear, 11, 31, 23, 59, 59, 999)),
-      temporalKind: bill.taxYear < asOf.getUTCFullYear()
+      temporalKind: bill.taxYear < currentYear
         ? 'OBSERVED_PAST_PERIOD'
-        : 'CURRENT_PERIOD',
+        : isFutureBill
+          ? 'FORECAST_PERIOD'
+          : 'CURRENT_PERIOD',
       evidenceStatus: bill.sourceType === 'DOCUMENT'
         ? 'CONFIRMED'
         : 'OBSERVED',
@@ -228,12 +268,29 @@ export async function loadOwnershipCostSourceBundle(
         : 'PENDING_CONFIRMATION',
       freshnessStatus: freshness(bill.observedAt, asOf),
       confidence: bill.confidence === 'VERIFIED' ? 'HIGH' : 'MEDIUM',
+      assumptions: isFutureBill && billAmountCents != null
+        ? [
+            `FORECAST_EVENT:${bill.taxYear}:${
+              billAmountCents - (currentTaxAmountCents ?? billAmountCents)
+            }:RECURRING:Filed property-tax bill`,
+          ]
+        : [],
       missingDependencies: bill.billAmount == null ? ['property-tax bill amount'] : [],
       dedupeKey: `PROPERTY_TAX:${bill.taxYear}`,
     });
   }
 
   for (const term of insuranceTerms) {
+    const termTemporalKind = periodTemporalKind(
+      term.termStart,
+      term.termEnd,
+      asOf,
+    );
+    const termPremiumCents = cents(term.annualPremium);
+    const currentPremiumCents = cents(
+      currentInsurancePremium?.annualPremium,
+    );
+    const eventDate = term.termStart ?? term.termEnd;
     bundle.insurance.push({
       sourceDomain: 'COVERAGE',
       sourceEntityType: 'InsurancePolicyTerm',
@@ -241,11 +298,11 @@ export async function loadOwnershipCostSourceBundle(
       sourceDocumentId: term.sourceDocumentId,
       sourceUpdatedAt: term.updatedAt,
       category: 'INSURANCE',
-      amountCents: cents(term.annualPremium),
+      amountCents: termPremiumCents,
       recurrence: 'ANNUAL',
       periodStart: term.termStart,
       periodEnd: term.termEnd,
-      temporalKind: observedTemporalKind(term.termEnd ?? term.termStart, asOf),
+      temporalKind: termTemporalKind,
       evidenceStatus: term.sourceDocumentId ? 'EXTRACTED' : 'HOMEOWNER_REPORTED',
       verificationStatus: term.verificationStatus === 'VERIFIED'
         ? 'VERIFIED'
@@ -253,6 +310,15 @@ export async function loadOwnershipCostSourceBundle(
           ? 'PENDING_CONFIRMATION'
           : 'UNVERIFIED',
       freshnessStatus: freshness(term.termEnd ?? term.updatedAt, asOf),
+      assumptions: termTemporalKind === 'FORECAST_PERIOD'
+        && eventDate
+        && termPremiumCents != null
+        ? [
+            `FORECAST_EVENT:${eventDate.getUTCFullYear()}:${
+              termPremiumCents - (currentPremiumCents ?? termPremiumCents)
+            }:RECURRING:Scheduled insurance policy term`,
+          ]
+        : [],
       missingDependencies: term.annualPremium == null ? ['annual insurance premium'] : [],
     });
   }
@@ -361,27 +427,40 @@ export async function loadOwnershipCostSourceBundle(
   for (const task of maintenanceTasks) {
     const actual = cents(task.actualCost);
     const estimated = cents(task.estimatedCost);
+    const taskDate = task.lastCompletedDate ?? task.nextDueDate;
+    const taskTemporalKind = observedTemporalKind(taskDate, asOf);
+    const taskAmount = actual ?? estimated;
     bundle.maintenance.push({
       sourceDomain: 'MAINTENANCE',
       sourceEntityType: 'PropertyMaintenanceTask',
       sourceEntityId: task.id,
       sourceUpdatedAt: task.updatedAt,
       category: task.isRecurring ? 'ROUTINE_MAINTENANCE' : 'KNOWN_REPAIR',
-      amountCents: actual ?? estimated,
+      amountCents: taskAmount,
       recurrence: task.isRecurring
         ? recurrenceFromMaintenance(task.frequency)
         : 'ONE_TIME',
       periodStart: task.lastCompletedDate ?? task.nextDueDate,
       periodEnd: task.lastCompletedDate ?? task.nextDueDate,
-      temporalKind: observedTemporalKind(task.lastCompletedDate, asOf),
+      temporalKind: taskTemporalKind,
       evidenceStatus: actual != null ? 'OBSERVED' : estimated != null ? 'ESTIMATED' : null,
       verificationStatus: actual != null && task.status === 'COMPLETED'
         ? 'VERIFIED'
         : 'UNVERIFIED',
       freshnessStatus: freshness(task.updatedAt, asOf),
-      assumptions: actual == null && estimated != null
-        ? ['Maintenance task amount is an estimate, not observed spend.']
-        : [],
+      assumptions: [
+        ...(actual == null && estimated != null
+          ? ['Maintenance task amount is an estimate, not observed spend.']
+          : []),
+        ...(taskTemporalKind === 'FORECAST_PERIOD'
+          && !task.isRecurring
+          && taskDate
+          && taskAmount != null
+          ? [
+              `FORECAST_EVENT:${taskDate.getUTCFullYear()}:${taskAmount}:ONE_TIME:Planned maintenance or repair`,
+            ]
+          : []),
+      ],
       missingDependencies: actual == null && estimated == null
         ? ['maintenance cost']
         : [],
@@ -411,6 +490,12 @@ export async function loadOwnershipCostSourceBundle(
       ?? (project.currentContractAmountCents > 0
         ? project.currentContractAmountCents
         : null);
+    const projectDate = project.actualEndDate ?? project.startDate;
+    const projectTemporalKind = periodTemporalKind(
+      project.startDate,
+      project.actualEndDate ?? project.startDate,
+      asOf,
+    );
     bundle.project.push({
       sourceDomain: 'PROJECT',
       sourceEntityType: 'ProjectRecord',
@@ -421,18 +506,24 @@ export async function loadOwnershipCostSourceBundle(
       recurrence: 'ONE_TIME',
       periodStart: project.startDate,
       periodEnd: project.actualEndDate ?? project.startDate,
-      temporalKind: observedTemporalKind(
-        project.actualEndDate ?? project.startDate,
-        asOf,
-      ),
+      temporalKind: projectTemporalKind,
       evidenceStatus: project.actualCostCents != null ? 'OBSERVED' : amount != null ? 'ESTIMATED' : null,
       verificationStatus: project.actualCostCents != null && project.status === 'COMPLETED'
         ? 'VERIFIED'
         : 'UNVERIFIED',
       freshnessStatus: freshness(project.updatedAt, asOf),
-      assumptions: project.actualCostCents == null && amount != null
-        ? ['Current contract amount is a project estimate until actual cost is recorded.']
-        : [],
+      assumptions: [
+        ...(project.actualCostCents == null && amount != null
+          ? ['Current contract amount is a project estimate until actual cost is recorded.']
+          : []),
+        ...(projectTemporalKind === 'FORECAST_PERIOD'
+          && projectDate
+          && amount != null
+          ? [
+              `FORECAST_EVENT:${projectDate.getUTCFullYear()}:${amount}:ONE_TIME:Planned capital project`,
+            ]
+          : []),
+      ],
       missingDependencies: amount == null ? ['project cost'] : [],
       dedupeKey: `CAPITAL_PROJECT:${project.id}`,
     });

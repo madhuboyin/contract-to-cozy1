@@ -161,6 +161,92 @@ export type OwnershipCostChangeReadModel = {
   limitations: string[];
 };
 
+export type OwnershipCostScenarioOverrides = {
+  categoryGrowthRates?: Partial<Record<OwnershipCostCategory, number>>;
+  categoryAnnualAdjustmentsCents?: Partial<
+    Record<OwnershipCostCategory, number>
+  >;
+};
+
+export type OwnershipCostForecastRange = {
+  lowCents: number;
+  baseCents: number;
+  highCents: number;
+};
+
+export type OwnershipCostForecastReadModel = {
+  propertyId: string;
+  forecastId: string | null;
+  scenario: {
+    id: string;
+    name: string;
+    status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED' | 'STALE';
+  } | null;
+  selectedLens: OwnershipCostCurrentLens;
+  forecastKind: 'FORWARD_PLANNING_RANGE';
+  nominalDollars: true;
+  methodVersion: string;
+  categoryDefinitionVersion: string;
+  baseSnapshot: {
+    id: string;
+    inputFingerprint: string;
+    periodStart: string;
+    periodEnd: string;
+    annualCents: number;
+  };
+  forecastStart: string;
+  forecastEnd: string;
+  horizonYears: number;
+  stale: { isStale: boolean; reason: string | null };
+  summary: {
+    firstYear: OwnershipCostForecastRange;
+    endYear: OwnershipCostForecastRange;
+  };
+  periods: Array<OwnershipCostForecastRange & {
+    year: number;
+    periodStart: string;
+    periodEnd: string;
+  }>;
+  drivers: Array<{
+    category: OwnershipCostCategory;
+    label: string;
+    baseAnnualCents: number;
+    lowRate: number;
+    baseRate: number;
+    highRate: number;
+    rateSource:
+      | 'SOURCE_BACKED'
+      | 'SCENARIO_OVERRIDE'
+      | 'DEFAULT_ASSUMPTION';
+    rateSourceLabel: string;
+    annualAdjustmentCents: number;
+    knownEvents: Array<{
+      year: number;
+      deltaCents: number;
+      label: string;
+      recurring: boolean;
+    }>;
+    endRangeCents: OwnershipCostForecastRange;
+    sensitivityCents: number;
+  }>;
+  overrides: OwnershipCostScenarioOverrides;
+  limitations: string[];
+  disclaimer: string;
+  calculationFingerprint: string;
+};
+
+export type OwnershipCostScenarioReadModel = {
+  id: string;
+  name: string;
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED' | 'STALE';
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+  isStale: boolean;
+  staleReason: string | null;
+  forecast: OwnershipCostForecastReadModel;
+};
+
 type OwnershipCostResponse = {
   ownershipCosts: OwnershipCostReadModel;
 };
@@ -206,4 +292,101 @@ export async function getOwnershipCostChanges(
     `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/changes?${query}`,
   );
   return response.data.ownershipCostChanges;
+}
+
+function forecastEndpoint(
+  propertyId: string,
+  lens: OwnershipCostCurrentLens,
+  horizonYears: number,
+  suffix = '',
+) {
+  const query = new URLSearchParams({
+    lens,
+    horizonYears: String(horizonYears),
+  });
+  return `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/forecast${suffix}?${query}`;
+}
+
+export async function getOwnershipCostForecast(
+  propertyId: string,
+  lens: OwnershipCostCurrentLens,
+  horizonYears: number,
+) {
+  const response = await api.get<{
+    ownershipCostForecast: OwnershipCostForecastReadModel;
+  }>(forecastEndpoint(propertyId, lens, horizonYears));
+  return response.data.ownershipCostForecast;
+}
+
+export async function recalculateOwnershipCostForecast(
+  propertyId: string,
+  lens: OwnershipCostCurrentLens,
+  horizonYears: number,
+) {
+  const response = await api.post<{
+    ownershipCostForecast: OwnershipCostForecastReadModel;
+  }>(forecastEndpoint(propertyId, lens, horizonYears, '/recalculate'), {});
+  return response.data.ownershipCostForecast;
+}
+
+export async function listOwnershipCostScenarios(
+  propertyId: string,
+  includeArchived = false,
+) {
+  const query = new URLSearchParams({
+    includeArchived: String(includeArchived),
+  });
+  const response = await api.get<{
+    ownershipCostScenarios: OwnershipCostScenarioReadModel[];
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/scenarios?${query}`,
+  );
+  return response.data.ownershipCostScenarios;
+}
+
+export async function createOwnershipCostScenario(
+  propertyId: string,
+  input: {
+    name: string;
+    lens: OwnershipCostCurrentLens;
+    horizonYears: number;
+    overrides: OwnershipCostScenarioOverrides;
+  },
+) {
+  const response = await api.post<{
+    ownershipCostScenario: OwnershipCostScenarioReadModel;
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/scenarios`,
+    input,
+  );
+  return response.data.ownershipCostScenario;
+}
+
+export async function updateOwnershipCostScenario(
+  propertyId: string,
+  scenarioId: string,
+  patch: {
+    name?: string;
+    status?: 'ACTIVE' | 'ARCHIVED';
+    lens?: OwnershipCostCurrentLens;
+    horizonYears?: number;
+    overrides?: OwnershipCostScenarioOverrides;
+  },
+) {
+  const response = await api.patch<{
+    ownershipCostScenario: OwnershipCostScenarioReadModel;
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/scenarios/${encodeURIComponent(scenarioId)}`,
+    patch,
+  );
+  return response.data.ownershipCostScenario;
+}
+
+export async function deleteOwnershipCostScenario(
+  propertyId: string,
+  scenarioId: string,
+) {
+  await api.delete(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/scenarios/${encodeURIComponent(scenarioId)}`,
+  );
 }

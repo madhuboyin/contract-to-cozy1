@@ -4,7 +4,7 @@
 **Contributing domains:** Property Tax, Coverage and Premium Review, Financing, Expenses, Utilities, Home Record, Capital Timeline, Reserve Fund, Budget Planner, Guidance, and Home Actions  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Implementation in progress — Slices 0–4 started July 28, 2026
+**Status:** Implementation in progress — Slices 0–5 started July 28, 2026
 **Recommended disposition:** **Consolidate, rebuild the calculation and evidence contract, and contain unsupported historical and predictive claims immediately**  
 **Current safety classification:** Material financial  
 **Recommended safety classification:** Material financial  
@@ -142,7 +142,36 @@ Implemented:
 - added observed-history fixtures for comparable, partial, missing, estimated,
   unverified, overlapping, corrected-definition, recurring, and one-time data.
 
-Forward forecasts and user-adjustable scenarios remain gated for Slice 5.
+Forward forecasts and user-adjustable scenarios were intentionally gated until
+this Slice 5 increment.
+
+### July 28, 2026 — Slice 5 forward-planning increment
+
+Implemented:
+
+- added deterministic one-, three-, five-, and ten-year forward calculations
+  that begin after the latest canonical snapshot period;
+- persisted forecast headers and category-period lines with the base snapshot,
+  method version, input fingerprint, low/base/high amounts, driver metadata,
+  and forecast evidence status;
+- added bounded category-specific growth and annual-dollar overrides while
+  keeping scenario inputs separate from canonical observations and snapshots;
+- supported explicit source-backed rate and dated-event markers for renewals,
+  reassessments, financing changes, utilities, and planned capital events;
+- used clearly labeled default assumptions when no source-backed rate exists;
+- added nominal-dollar disclosure, driver sensitivity, known-event labels,
+  limitations, and a planning-not-guarantee statement;
+- added create, compare, rename, archive, and delete flows for saved scenarios;
+- retained the base snapshot and method version used by every saved scenario;
+- detected and visibly labeled scenarios whose canonical input fingerprint or
+  forecast method has changed;
+- added contributor-gated forecast persistence and scenario mutation routes;
+  and
+- added deterministic golden fixtures covering forward boundaries, stable
+  repeated calculations, source-backed events, one-time capital treatment,
+  bounded overrides, explicit persistence, and stale scenarios.
+
+Measured variability and buffer planning remain gated for Slice 6.
 
 ---
 

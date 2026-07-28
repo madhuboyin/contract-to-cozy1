@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
   Activity,
+  Archive,
   ArrowLeft,
   CalendarRange,
   CheckCircle2,
@@ -12,17 +13,28 @@ import {
   FileSearch,
   RefreshCw,
   Receipt,
+  Save,
+  Trash2,
   TriangleAlert,
 } from 'lucide-react';
 import { track } from '@/lib/analytics/events';
 import {
+  createOwnershipCostScenario,
+  deleteOwnershipCostScenario,
   getOwnershipCostChanges,
+  getOwnershipCostForecast,
   getOwnershipCosts,
+  listOwnershipCostScenarios,
+  recalculateOwnershipCostForecast,
   recalculateOwnershipCosts,
+  updateOwnershipCostScenario,
   type OwnershipCostChangeReadModel,
+  type OwnershipCostCategory,
   type OwnershipCostCurrentLens,
+  type OwnershipCostForecastReadModel,
   type OwnershipCostReadModel,
   type OwnershipCostReadModelCategory,
+  type OwnershipCostScenarioReadModel,
 } from './ownershipCostsApi';
 
 const VIEWS = [
@@ -109,6 +121,548 @@ function statusLabel(category: OwnershipCostReadModelCategory) {
   if (category.amountKind === 'MISSING') return 'Missing';
   if (category.amountKind === 'CONFIRMED') return 'Confirmed';
   return category.evidenceStatus === 'BENCHMARK' ? 'Benchmark estimate' : 'Estimated';
+}
+
+const FORECAST_HORIZONS = [1, 3, 5, 10] as const;
+
+function rateLabel(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'percent',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function ForecastPlanningView({
+  propertyId,
+  lens,
+}: {
+  propertyId: string;
+  lens: OwnershipCostCurrentLens;
+}) {
+  const [horizonYears, setHorizonYears] = useState(5);
+  const [forecast, setForecast] =
+    useState<OwnershipCostForecastReadModel | null>(null);
+  const [scenarios, setScenarios] =
+    useState<OwnershipCostScenarioReadModel[]>([]);
+  const [scenarioName, setScenarioName] = useState('');
+  const [overrideCategory, setOverrideCategory] =
+    useState<OwnershipCostCategory>('PROPERTY_TAX');
+  const [growthPercent, setGrowthPercent] = useState('');
+  const [annualAdjustmentDollars, setAnnualAdjustmentDollars] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+
+  const loadForecast = useCallback(async () => {
+    setBusy(true);
+    setForecastError(null);
+    try {
+      const [nextForecast, nextScenarios] = await Promise.all([
+        getOwnershipCostForecast(propertyId, lens, horizonYears),
+        listOwnershipCostScenarios(propertyId),
+      ]);
+      setForecast(nextForecast);
+      setScenarios(nextScenarios);
+      if (
+        !nextForecast.drivers.some(
+          (driver) => driver.category === overrideCategory,
+        )
+        && nextForecast.drivers[0]
+      ) {
+        setOverrideCategory(nextForecast.drivers[0].category);
+      }
+    } catch (cause) {
+      setForecastError(
+        cause instanceof Error
+          ? cause.message
+          : 'The forward planning range is temporarily unavailable.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [horizonYears, lens, overrideCategory, propertyId]);
+
+  useEffect(() => {
+    void loadForecast();
+  }, [loadForecast]);
+
+  async function persistBaseForecast() {
+    setBusy(true);
+    setForecastError(null);
+    try {
+      setForecast(
+        await recalculateOwnershipCostForecast(
+          propertyId,
+          lens,
+          horizonYears,
+        ),
+      );
+      track('workflow_step_reached', {
+        tool: 'ownership-costs',
+        propertyId,
+        step: 'forecast_saved',
+      });
+    } catch (cause) {
+      setForecastError(
+        cause instanceof Error
+          ? cause.message
+          : 'The forecast could not be saved.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveScenario() {
+    const growth = growthPercent.trim() === ''
+      ? null
+      : Number(growthPercent) / 100;
+    const adjustment = annualAdjustmentDollars.trim() === ''
+      ? null
+      : Math.round(Number(annualAdjustmentDollars) * 100);
+    if (!scenarioName.trim()) {
+      setForecastError('Enter a scenario name.');
+      return;
+    }
+    if (growth != null && (!Number.isFinite(growth) || growth < -0.25 || growth > 0.5)) {
+      setForecastError('Annual growth must be between -25% and 50%.');
+      return;
+    }
+    if (
+      adjustment != null
+      && (!Number.isSafeInteger(adjustment)
+        || Math.abs(adjustment) > 100_000_000)
+    ) {
+      setForecastError('Annual adjustment must be between -$1,000,000 and $1,000,000.');
+      return;
+    }
+    setBusy(true);
+    setForecastError(null);
+    try {
+      await createOwnershipCostScenario(propertyId, {
+        name: scenarioName,
+        lens,
+        horizonYears,
+        overrides: {
+          ...(growth == null ? {} : {
+            categoryGrowthRates: { [overrideCategory]: growth },
+          }),
+          ...(adjustment == null ? {} : {
+            categoryAnnualAdjustmentsCents: {
+              [overrideCategory]: adjustment,
+            },
+          }),
+        },
+      });
+      setScenarioName('');
+      setGrowthPercent('');
+      setAnnualAdjustmentDollars('');
+      setScenarios(await listOwnershipCostScenarios(propertyId));
+      track('workflow_step_reached', {
+        tool: 'ownership-costs',
+        propertyId,
+        step: 'scenario_saved',
+      });
+    } catch (cause) {
+      setForecastError(
+        cause instanceof Error
+          ? cause.message
+          : 'The scenario could not be saved.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function renameScenario(scenario: OwnershipCostScenarioReadModel) {
+    const name = window.prompt('Rename scenario', scenario.name)?.trim();
+    if (!name || name === scenario.name) return;
+    setBusy(true);
+    try {
+      await updateOwnershipCostScenario(
+        propertyId,
+        scenario.id,
+        { name },
+      );
+      setScenarios(await listOwnershipCostScenarios(propertyId));
+    } catch (cause) {
+      setForecastError(
+        cause instanceof Error ? cause.message : 'Rename failed.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function archiveScenario(scenario: OwnershipCostScenarioReadModel) {
+    setBusy(true);
+    try {
+      await updateOwnershipCostScenario(
+        propertyId,
+        scenario.id,
+        { status: 'ARCHIVED' },
+      );
+      setScenarios(await listOwnershipCostScenarios(propertyId));
+    } catch (cause) {
+      setForecastError(
+        cause instanceof Error ? cause.message : 'Archive failed.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeScenario(scenario: OwnershipCostScenarioReadModel) {
+    if (!window.confirm(`Delete “${scenario.name}”? This cannot be undone.`)) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await deleteOwnershipCostScenario(propertyId, scenario.id);
+      setScenarios(await listOwnershipCostScenarios(propertyId));
+    } catch (cause) {
+      setForecastError(
+        cause instanceof Error ? cause.message : 'Delete failed.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!forecast && busy) {
+    return (
+      <div className="mt-6 flex items-center gap-2 text-sm text-slate-600">
+        <RefreshCw className="h-4 w-4 animate-spin" />
+        Building the forward planning range…
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 space-y-6">
+      {forecastError && (
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          {forecastError}
+        </div>
+      )}
+
+      <section className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-950">
+              Forward planning range
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-700">
+              Starts after the latest ownership-cost period. Values are nominal
+              dollars and are never presented as observed history.
+            </p>
+          </div>
+          <label className="text-sm font-medium text-slate-800">
+            Forecast horizon
+            <select
+              value={horizonYears}
+              onChange={(event) => setHorizonYears(Number(event.target.value))}
+              className="mt-1 block min-h-11 rounded-xl border border-slate-300 bg-white px-3"
+            >
+              {FORECAST_HORIZONS.map((years) => (
+                <option key={years} value={years}>
+                  {years} {years === 1 ? 'year' : 'years'}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {forecast && (
+          <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-white p-4">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Current base
+              </dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-950">
+                {moneyFromCents(forecast.baseSnapshot.annualCents)}
+              </dd>
+            </div>
+            <div className="rounded-xl bg-white p-4">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Base case at horizon
+              </dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-950">
+                {moneyFromCents(forecast.summary.endYear.baseCents)}
+              </dd>
+            </div>
+            <div className="rounded-xl bg-white p-4">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Low–high range
+              </dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-950">
+                {moneyFromCents(forecast.summary.endYear.lowCents)} –{' '}
+                {moneyFromCents(forecast.summary.endYear.highCents)}
+              </dd>
+            </div>
+          </dl>
+        )}
+        <button
+          type="button"
+          onClick={() => void persistBaseForecast()}
+          disabled={busy || !forecast}
+          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          <Save className="h-4 w-4" />
+          {forecast?.forecastId ? 'Forecast saved' : 'Save this forecast'}
+        </button>
+      </section>
+
+      {forecast && (
+        <>
+          <section aria-labelledby="forecast-periods-heading">
+            <h3 id="forecast-periods-heading" className="text-base font-semibold text-slate-950">
+              Annual planning range
+            </h3>
+            <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="min-w-[640px] w-full text-left text-sm">
+                <caption className="sr-only">
+                  Forward low, base, and high ownership-cost planning ranges
+                </caption>
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">Forward year</th>
+                    <th scope="col" className="px-4 py-3">Low</th>
+                    <th scope="col" className="px-4 py-3">Base</th>
+                    <th scope="col" className="px-4 py-3">High</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {forecast.periods.map((period) => (
+                    <tr key={period.year}>
+                      <th scope="row" className="px-4 py-3 font-medium text-slate-900">
+                        {period.year}
+                      </th>
+                      <td className="px-4 py-3">{moneyFromCents(period.lowCents)}</td>
+                      <td className="px-4 py-3 font-semibold">{moneyFromCents(period.baseCents)}</td>
+                      <td className="px-4 py-3">{moneyFromCents(period.highCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section aria-labelledby="forecast-drivers-heading">
+            <h3 id="forecast-drivers-heading" className="text-base font-semibold text-slate-950">
+              What drives the range
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Ranked by the category’s low-to-high sensitivity at the selected horizon.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {forecast.drivers.map((driver) => (
+                <article key={driver.category} className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <h4 className="font-semibold text-slate-950">{driver.label}</h4>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                      {driver.rateSource.toLowerCase().replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">{driver.rateSourceLabel}</p>
+                  <div className="mt-3 text-sm text-slate-700">
+                    Annual rate: {rateLabel(driver.lowRate)} /{' '}
+                    <strong>{rateLabel(driver.baseRate)}</strong> /{' '}
+                    {rateLabel(driver.highRate)}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-700">
+                    Horizon sensitivity: {moneyFromCents(driver.sensitivityCents)}
+                  </div>
+                  {driver.knownEvents.map((event) => (
+                    <div key={`${event.year}:${event.label}`} className="mt-2 rounded-lg bg-blue-50 p-2 text-xs text-blue-900">
+                      {event.year}: {event.label} ({moneyFromCents(event.deltaCents)})
+                    </div>
+                  ))}
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section aria-labelledby="scenario-builder-heading" className="rounded-2xl border border-slate-200 p-5">
+            <h3 id="scenario-builder-heading" className="text-base font-semibold text-slate-950">
+              Save a planning scenario
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Scenario overrides do not change canonical facts. Growth is
+              bounded from -25% to 50% annually and adjustments are limited to
+              ±$1,000,000.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <label className="text-sm font-medium text-slate-800">
+                Scenario name
+                <input
+                  value={scenarioName}
+                  onChange={(event) => setScenarioName(event.target.value)}
+                  maxLength={80}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3"
+                  placeholder="Higher tax case"
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-800">
+                Category
+                <select
+                  value={overrideCategory}
+                  onChange={(event) => setOverrideCategory(
+                    event.target.value as OwnershipCostCategory,
+                  )}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3"
+                >
+                  {forecast.drivers.map((driver) => (
+                    <option key={driver.category} value={driver.category}>
+                      {driver.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-slate-800">
+                Annual growth %
+                <input
+                  type="number"
+                  min="-25"
+                  max="50"
+                  step="0.1"
+                  value={growthPercent}
+                  onChange={(event) => setGrowthPercent(event.target.value)}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3"
+                  placeholder="Optional"
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-800">
+                Annual adjustment $
+                <input
+                  type="number"
+                  min="-1000000"
+                  max="1000000"
+                  step="1"
+                  value={annualAdjustmentDollars}
+                  onChange={(event) => setAnnualAdjustmentDollars(event.target.value)}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3"
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => void saveScenario()}
+              disabled={busy}
+              className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              <Save className="h-4 w-4" />
+              Save scenario
+            </button>
+          </section>
+
+          <section aria-labelledby="saved-scenarios-heading">
+            <h3 id="saved-scenarios-heading" className="text-base font-semibold text-slate-950">
+              Saved scenarios
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Compare horizon results side by side. A stale badge means canonical inputs changed after the scenario was saved.
+            </p>
+            {scenarios.length === 0 ? (
+              <div className="mt-3 rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">
+                No saved scenarios yet.
+              </div>
+            ) : (
+              <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-[760px] w-full text-left text-sm">
+                  <caption className="sr-only">Saved scenario comparison</caption>
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">Scenario</th>
+                      <th scope="col" className="px-4 py-3">Base snapshot</th>
+                      <th scope="col" className="px-4 py-3">Horizon base</th>
+                      <th scope="col" className="px-4 py-3">Range</th>
+                      <th scope="col" className="px-4 py-3">Controls</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {scenarios.map((scenario) => (
+                      <tr key={scenario.id}>
+                        <th scope="row" className="px-4 py-3 font-medium text-slate-900">
+                          {scenario.name}
+                          {scenario.isStale && (
+                            <span className="ml-2 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900">
+                              Stale
+                            </span>
+                          )}
+                          {scenario.staleReason && (
+                            <div className="mt-1 max-w-xs text-xs font-normal text-amber-800">
+                              {scenario.staleReason}
+                            </div>
+                          )}
+                        </th>
+                        <td className="px-4 py-3">
+                          Through {dateLabel(scenario.forecast.baseSnapshot.periodEnd)}
+                        </td>
+                        <td className="px-4 py-3 font-semibold">
+                          {moneyFromCents(scenario.forecast.summary.endYear.baseCents)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {moneyFromCents(scenario.forecast.summary.endYear.lowCents)} –{' '}
+                          {moneyFromCents(scenario.forecast.summary.endYear.highCents)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void renameScenario(scenario)}
+                              disabled={busy}
+                              className="min-h-10 rounded-lg border border-slate-300 px-3 font-medium"
+                            >
+                              Rename
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void archiveScenario(scenario)}
+                              disabled={busy}
+                              className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-slate-300 px-3 font-medium"
+                            >
+                              <Archive className="h-4 w-4" />
+                              Archive
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void removeScenario(scenario)}
+                              disabled={busy}
+                              className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-rose-300 px-3 font-medium text-rose-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <details className="rounded-2xl border border-slate-200 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+              Forecast limitations
+            </summary>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+              {forecast.limitations.map((limitation) => (
+                <li key={limitation} className="flex gap-2">
+                  <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-teal-600" />
+                  {limitation}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-sm font-medium text-slate-800">
+              {forecast.disclaimer}
+            </p>
+          </details>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function OwnershipCostsClient() {
@@ -729,6 +1283,8 @@ export default function OwnershipCostsClient() {
               </>
             )}
           </div>
+        ) : view === 'forecast' ? (
+          <ForecastPlanningView propertyId={propertyId} lens={lens} />
         ) : (
           <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-700">
             This canonical view is intentionally gated until its evidence contract is delivered in the corresponding implementation slice.
