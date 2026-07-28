@@ -72,6 +72,26 @@ from the backend image).
    the coverage banner on the Savings and Benefits workspace lists the new
    source.
 
+### Funding and application-window state
+
+Every program has a `fundingStatus` (`UNKNOWN` / `OPEN` / `CLOSED`, default
+`UNKNOWN`) and optional `applicationWindowOpensAt` / `applicationWindowClosesAt`
+dates — separate from `expiresAt`, which governs whether the program still
+exists at all. A program can remain generally in effect while a specific
+year's application cycle hasn't opened yet or has already closed.
+
+This is fail-closed in one direction only: an admin setting `fundingStatus:
+CLOSED`, or an application window that has passed or not yet started,
+immediately excludes the program from matching (`fetchCandidatePrograms` in
+`hiddenAssets.service.ts`; the underlying rule lives in
+`hiddenAssets/fundingWindow.ts`). Leaving `fundingStatus` at `UNKNOWN` or the
+window fields unset never excludes a program by itself — there is no
+requirement to track funding for every program, only a requirement not to
+keep recommending one once you know its funding is exhausted or its
+application window has closed. The admin console does not expose these
+fields yet — set them via `savingsBenefitsAdminService.createProgram`/
+`updateProgram` directly until it does.
+
 ### Handling a stale or failed source
 
 A source is `DEGRADED` once its `lastReviewedAt` passes its own

@@ -2,6 +2,7 @@ import {
   HiddenAssetBenefitType,
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
+  HiddenAssetFundingStatus,
   HiddenAssetRegionType,
   HiddenAssetRuleKind,
   HiddenAssetRuleOperator,
@@ -258,6 +259,10 @@ export interface HiddenAssetProgramDetailDTO {
   isActive: boolean;
   expiresAt: string | null;
   lastVerifiedAt: string | null;
+  /** UNKNOWN never implies funding is available — only OPEN does. */
+  fundingStatus: HiddenAssetFundingStatus;
+  applicationWindowOpensAt: string | null;
+  applicationWindowClosesAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

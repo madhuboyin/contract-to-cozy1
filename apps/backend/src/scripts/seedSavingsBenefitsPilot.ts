@@ -32,7 +32,13 @@ import { transitionSavingsBenefitProgram } from '../services/savingsBenefitsGove
  * attributes in the rule engine (Slice 0 finding) — only region (state=NJ)
  * is machine-evaluated here. The real criteria are recorded in
  * eligibilityNotes for the homeowner to verify, which is the correctly
- * scoped behavior until Slice 3 builds full eligibility-criteria modeling.
+ * scoped behavior until a dedicated consented eligibility-fact store exists.
+ *
+ * Neither program sets fundingStatus or an application window here (both
+ * left at their safe defaults — UNKNOWN / unset, see Slice 6) since this
+ * pilot seed hasn't independently verified either program's current-cycle
+ * funding or application-window state against nj.gov; an admin should set
+ * those once that verification happens, not this seed.
  */
 
 const SEED_ACTOR = 'SYSTEM_REVIEWED_SEED';

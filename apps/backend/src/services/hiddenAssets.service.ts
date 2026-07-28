@@ -15,6 +15,7 @@ import {
   getEligibilityLabel,
   getFreshnessNote,
 } from './hiddenAssets/ruleEngine';
+import { fundingAvailableWhereConditions } from './hiddenAssets/fundingWindow';
 import {
   CoverageDTO,
   HiddenAssetMatchDTO,
@@ -125,6 +126,9 @@ function serializeProgramDetail(
     isActive: p.isActive,
     expiresAt: p.expiresAt ? p.expiresAt.toISOString() : null,
     lastVerifiedAt: p.lastVerifiedAt ? p.lastVerifiedAt.toISOString() : null,
+    fundingStatus: p.fundingStatus,
+    applicationWindowOpensAt: p.applicationWindowOpensAt ? p.applicationWindowOpensAt.toISOString() : null,
+    applicationWindowClosesAt: p.applicationWindowClosesAt ? p.applicationWindowClosesAt.toISOString() : null,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   };
@@ -265,6 +269,10 @@ async function fetchCandidatePrograms(regionPairs: RegionPair[]) {
             regionValue,
           })),
         },
+        // Fail closed on funding: never evaluate a program with confirmed-
+        // closed funding, or outside its own application window — see
+        // hiddenAssets/fundingWindow.ts for the unit-tested spec this mirrors.
+        ...fundingAvailableWhereConditions(now),
       ],
     },
     include: {

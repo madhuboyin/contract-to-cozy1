@@ -9,6 +9,7 @@
 // SAVINGS_BENEFITS_AUTHOR / _REVIEW / _PUBLISH capabilities.
 
 import {
+  HiddenAssetFundingStatus,
   HiddenAssetProgramReviewStatus,
   HiddenAssetRuleKind,
   HiddenAssetRuleOperator,
@@ -60,6 +61,10 @@ export interface HiddenAssetProgramInput {
   sourceLabel?: string | null;
   eligibilityNotes?: string | null;
   expiresAt?: Date | null;
+  /** Defaults to UNKNOWN — never blocks matching by itself; only CLOSED does. */
+  fundingStatus?: HiddenAssetFundingStatus;
+  applicationWindowOpensAt?: Date | null;
+  applicationWindowClosesAt?: Date | null;
   rules: HiddenAssetProgramRuleInput[];
 }
 
@@ -205,6 +210,9 @@ export class SavingsBenefitsAdminService {
           sourceLabel: input.sourceLabel ?? null,
           eligibilityNotes: input.eligibilityNotes ?? null,
           expiresAt: input.expiresAt ?? null,
+          fundingStatus: input.fundingStatus ?? HiddenAssetFundingStatus.UNKNOWN,
+          applicationWindowOpensAt: input.applicationWindowOpensAt ?? null,
+          applicationWindowClosesAt: input.applicationWindowClosesAt ?? null,
           // "Saving must not publish it" — new programs always start DRAFT;
           // lifecycle moves only through savingsBenefitsGovernance.service.ts.
           reviewStatus: 'DRAFT',
@@ -249,6 +257,9 @@ export class SavingsBenefitsAdminService {
           sourceLabel: input.sourceLabel ?? null,
           eligibilityNotes: input.eligibilityNotes ?? null,
           expiresAt: input.expiresAt ?? null,
+          fundingStatus: input.fundingStatus ?? existing.fundingStatus,
+          applicationWindowOpensAt: input.applicationWindowOpensAt ?? null,
+          applicationWindowClosesAt: input.applicationWindowClosesAt ?? null,
           // Saving content must not change lifecycle state — reviewStatus,
           // reviewedAt/By, and publishedAt/By are preserved as-is.
           reviewStatus: existing.reviewStatus,

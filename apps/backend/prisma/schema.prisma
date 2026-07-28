@@ -10787,6 +10787,14 @@ enum HiddenAssetProgramReviewStatus {
   ARCHIVED
 }
 
+// UNKNOWN is the safe default: it never excludes a program from matching.
+// Only an affirmative CLOSED does (see HiddenAssetProgram.fundingStatus).
+enum HiddenAssetFundingStatus {
+  UNKNOWN
+  OPEN
+  CLOSED
+}
+
 enum PropertyHiddenAssetScanRunStatus {
   PENDING
   RUNNING
@@ -10868,6 +10876,17 @@ model HiddenAssetProgram {
   lastVerifiedAt DateTime?
   isActive       Boolean   @default(true)
 
+  // Funding / application-window state (fail-closed per the audit's section
+  // 9.2: never recommend a program with KNOWN-closed funding). UNKNOWN is
+  // the safe default and never excludes a program by itself — only an
+  // affirmative CLOSED does. applicationWindow*At are independent of
+  // expiresAt: a program can remain generally in effect while a specific
+  // year's application cycle hasn't opened yet or has already closed. Both
+  // null means the window isn't tracked and never excludes the program.
+  fundingStatus             HiddenAssetFundingStatus @default(UNKNOWN)
+  applicationWindowOpensAt  DateTime?
+  applicationWindowClosesAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -10883,6 +10902,7 @@ model HiddenAssetProgram {
   @@index([sourceId])
   @@index([reviewStatus])
   @@index([reviewStatus, regionType, regionValue, isActive])
+  @@index([fundingStatus])
   @@map("hidden_asset_programs")
 }
 
