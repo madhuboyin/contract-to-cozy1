@@ -222,7 +222,7 @@ function buildPropertyTaxNextSteps(args: {
     title: 'Verify the official record',
     detail: 'Confirm the parcel, assessment year, classification, exemptions, assessed value, taxable value, bill, and current filing information with the official assessor or collector.',
     action: {
-      href: `/dashboard/properties/${propertyId}/tools/property-tax?mode=appeal`,
+      href: `/dashboard/properties/${propertyId}/tools/property-tax?stage=appeal`,
       label: 'Review appeal readiness',
       targetTool: 'property-tax',
     },

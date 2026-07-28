@@ -36,8 +36,8 @@ test('tax appeal entry and Radar handoff resolve to the canonical property-scope
   const saveOptimize = read('../../src/productFramework/capabilities/definitions/saveOptimize.ts');
 
   assert.match(page, /tools\/property-tax/);
-  assert.match(page, /set\('mode', 'appeal'\)/);
-  assert.match(radar, /property-tax\?mode=appeal/);
+  assert.match(page, /set\('stage', 'appeal'\)/);
+  assert.match(radar, /property-tax\?stage=appeal/);
   assert.doesNotMatch(planBudget, /\['tax-appeal'/);
   assert.match(saveOptimize, /property_tax_decision_or_external_action_recorded/);
 });

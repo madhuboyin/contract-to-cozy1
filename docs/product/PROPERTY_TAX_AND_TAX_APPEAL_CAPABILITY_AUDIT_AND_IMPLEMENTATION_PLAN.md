@@ -1424,6 +1424,18 @@ Record:
 
 **Goal:** Make the combined experience clear, useful, and controllable.
 
+**Implementation status (July 28, 2026): Complete**
+
+- Added overview, bill, changes, exemptions, review, appeal, and history stages with progressive disclosure instead of rendering every workflow at once.
+- Added an outcome-first “What matters now” summary that prioritizes source conflicts, active appeal cases, reviewed deadlines, exact missing facts, or bill review and links to the relevant stage.
+- Added explicit Official, Confirmed, and Estimated trust labels and retained source health, last-checked, observation, match, reviewed-rule, expiry, deadline, and official-instruction disclosures.
+- Added a conflict and observed-change view that exposes dated source observations without manufacturing history from estimates or unmatched records.
+- Added an audit-history view for Vault documents, exemption/correction decisions, appeal events, determinations, refunds, and credits while intentionally excluding planning estimates.
+- Added event- and case-state-specific Home actions for active appeal cases and made Radar assessment and appeal actions stage-specific.
+- Preserved property, Radar event, match, action, and appeal case query context across stage navigation and canonicalized legacy appeal entry points to the appeal stage.
+- Added horizontally scrollable mobile stage navigation, 44-pixel targets, skip navigation, visible keyboard focus, focused stage headings, live status, semantic labels, dark-mode contrast, and reduced-motion-safe scrolling.
+- Kept schema changes direct and did not add a migration; the user must reconcile the database separately.
+
 **Work**
 
 - Implement overview, bill, changes, exemptions, review, appeal, and history stages.

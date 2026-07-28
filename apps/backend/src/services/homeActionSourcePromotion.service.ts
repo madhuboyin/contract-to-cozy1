@@ -18,7 +18,7 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1254,6 +1254,162 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
   });
 }
 
+async function loadPropertyTaxAppealCaseActions(
+  propertyId: string,
+  db: HomeActionSourceDb,
+): Promise<HomeAction[]> {
+  if (!db.propertyTaxAppealCase) return [];
+  const appealCase = await db.propertyTaxAppealCase.findFirst({
+    where: {
+      propertyId,
+      status: {
+        in: [
+          'PREPARING',
+          'PACKET_READY',
+          'FILED',
+          'AWAITING_RESPONSE',
+          'RESPONSE_RECEIVED',
+          'HEARING_SCHEDULED',
+          'DETERMINED',
+        ],
+      },
+    },
+    orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      formCode: true,
+      updatedAt: true,
+      hearingAt: true,
+      packet: {
+        select: {
+          unresolvedPlaceholdersJson: true,
+        },
+      },
+      reminders: {
+        where: { status: 'PENDING' },
+        orderBy: { dueAt: 'asc' },
+        take: 1,
+        select: { title: true, dueAt: true },
+      },
+    },
+  });
+  if (!appealCase) return [];
+
+  const unresolved = Array.isArray(
+    appealCase.packet?.unresolvedPlaceholdersJson,
+  )
+    ? appealCase.packet.unresolvedPlaceholdersJson.length
+    : 0;
+  const reminder = appealCase.reminders[0] ?? null;
+  const stateCopyByStatus = {
+    PREPARING: {
+      signal: unresolved > 0
+        ? `${unresolved} appeal packet field${unresolved === 1 ? '' : 's'} still need completion.`
+        : 'The appeal packet still needs homeowner review.',
+      action: 'Complete the appeal packet',
+      outcome: 'A reviewed packet with no unresolved placeholders.',
+    },
+    PACKET_READY: {
+      signal: `The ${appealCase.formCode ?? 'appeal'} packet is ready but has not been recorded as filed.`,
+      action: 'File through the official authority and record the receipt',
+      outcome: 'External filing is confirmed without implying that ContractToCozy submitted it.',
+    },
+    FILED: {
+      signal: 'The property-tax appeal was recorded as filed externally.',
+      action: reminder?.title ?? 'Track the authority response',
+      outcome: 'The next response or deadline is preserved in the case.',
+    },
+    AWAITING_RESPONSE: {
+      signal: reminder
+        ? `${reminder.title} is the next appeal case reminder.`
+        : 'The filed property-tax appeal is awaiting an authority response.',
+      action: reminder?.title ?? 'Track the authority response',
+      outcome: 'The next response or deadline is preserved in the case.',
+    },
+    RESPONSE_RECEIVED: {
+      signal: 'A response was recorded for the property-tax appeal.',
+      action: 'Review the response and record the next step',
+      outcome: 'The case reflects the response, hearing, or determination.',
+    },
+    HEARING_SCHEDULED: {
+      signal: appealCase.hearingAt
+        ? `The property-tax appeal hearing is scheduled for ${appealCase.hearingAt.toLocaleDateString()}.`
+        : 'A hearing is scheduled for the property-tax appeal.',
+      action: 'Prepare for the recorded appeal hearing',
+      outcome: 'Hearing preparation and evidence remain tied to the case.',
+    },
+    DETERMINED: {
+      signal: 'A determination is recorded, but the appeal case is still open.',
+      action: 'Record the final refund or credit and close the case',
+      outcome: 'The realized assessment and financial outcome are preserved.',
+    },
+  };
+  const stateCopy = stateCopyByStatus[
+    appealCase.status as keyof typeof stateCopyByStatus
+  ];
+  if (!stateCopy) return [];
+
+  const dueAt = appealCase.status === 'HEARING_SCHEDULED'
+    ? appealCase.hearingAt
+    : reminder?.dueAt ?? null;
+  const urgent = appealCase.status === 'PACKET_READY'
+    || appealCase.status === 'HEARING_SCHEDULED'
+    || appealCase.status === 'DETERMINED'
+    || Boolean(dueAt && dueAt.getTime() - Date.now() <= 30 * 86_400_000);
+  const governance = materialFinancialGovernance(
+    'property-tax-appeal-case-v1',
+  );
+  return [adaptHomeActionSource('SYSTEM', {
+    id: `property-tax-appeal-case:${appealCase.id}:${appealCase.status}`,
+    propertyId,
+    lineageId: `property-tax-appeal-case:${appealCase.id}`,
+    sourceEntityId: appealCase.id,
+    sourceVersion: appealCase.updatedAt.toISOString(),
+    job: 'MAJOR_MOMENT',
+    state: 'OPEN',
+    priority: urgent ? 'NOW' : 'SOON',
+    signal: stateCopy.signal,
+    whyItMatters:
+      'Property-tax appeal rights and outcomes depend on completing the current official step and retaining evidence.',
+    recommendedAction: stateCopy.action,
+    expectedOutcome: stateCopy.outcome,
+    timing: {
+      dueAt: dueAt?.toISOString() ?? null,
+      windowStart: null,
+      windowEnd: dueAt?.toISOString() ?? null,
+      rationale: dueAt
+        ? 'Uses the next homeowner-recorded case date.'
+        : 'Uses the current durable appeal case status; no deadline is inferred.',
+    },
+    evidence: [{
+      id: appealCase.id,
+      type: 'SYSTEM_DERIVATION',
+      label: appealCase.title,
+      source: 'Property Tax Center appeal case',
+      observedAt: appealCase.updatedAt.toISOString(),
+      freshness: 'CURRENT',
+      confidence: 1,
+    }],
+    assumptions: [],
+    options: [],
+    tradeoffs: [],
+    confidence: { score: 1, label: 'HIGH', missing: [] },
+    governance,
+    primaryCta: {
+      kind: 'REVIEW',
+      label: stateCopy.action,
+      href: `/dashboard/properties/${propertyId}/tools/property-tax?stage=appeal&caseId=${appealCase.id}`,
+    },
+    secondaryCtas: [],
+    feedbackControls: ['SNOOZE', 'DISMISS', 'NOT_RELEVANT'],
+    relatedJourneyId: null,
+    createdAt: appealCase.updatedAt.toISOString(),
+    lastEvaluatedAt: appealCase.updatedAt.toISOString(),
+  })];
+}
+
 export async function getPromotedHomeActions(
   propertyId: string,
   db: HomeActionSourceDb = prisma,
@@ -1284,6 +1440,7 @@ export async function getPromotedHomeActions(
     loadRefinanceDataRequiredActions(propertyId, db),
     loadHomeDigitalTwinFactReviewActions(propertyId, db),
     loadHomeCapitalTimelineMaterialWindowActions(propertyId, db),
+    loadPropertyTaxAppealCaseActions(propertyId, db),
     Promise.resolve(environmentActions),
   ]);
   const candidates = groups.flat();

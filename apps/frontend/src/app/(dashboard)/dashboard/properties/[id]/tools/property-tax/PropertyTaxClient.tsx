@@ -60,6 +60,22 @@ function sourceLabel(source?: PropertyTaxEstimateDTO['current']['source']) {
     : 'Rough planning estimate';
 }
 
+const PROPERTY_TAX_STAGES = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'bill', label: 'Bill' },
+  { id: 'changes', label: 'Changes' },
+  { id: 'exemptions', label: 'Exemptions' },
+  { id: 'review', label: 'Review' },
+  { id: 'appeal', label: 'Appeal' },
+  { id: 'history', label: 'History' },
+] as const;
+
+type PropertyTaxStage = (typeof PROPERTY_TAX_STAGES)[number]['id'];
+
+function isPropertyTaxStage(value: string | null): value is PropertyTaxStage {
+  return PROPERTY_TAX_STAGES.some((stage) => stage.id === value);
+}
+
 function canonicalStateLabel(state?: PropertyTaxCenterRecordDTO['state']) {
   return {
     UNKNOWN: 'No canonical record',
@@ -112,7 +128,16 @@ export default function PropertyTaxClient() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const propertyId = params.id;
-  const appealMode = searchParams.get('mode') === 'appeal';
+  const requestedStage = searchParams.get('stage');
+  const activeStage: PropertyTaxStage = isPropertyTaxStage(requestedStage)
+    ? requestedStage
+    : searchParams.get('mode') === 'appeal'
+      ? 'appeal'
+      : 'overview';
+  const appealMode = activeStage === 'appeal';
+  const requestedCaseId = searchParams.get('caseId');
+  const stageHeadingRef = useRef<HTMLHeadingElement>(null);
+  const previousStageRef = useRef<PropertyTaxStage>(activeStage);
 
   const [loading, setLoading] = useState(false);
   const [recordLoading, setRecordLoading] = useState(false);
@@ -724,6 +749,21 @@ export default function PropertyTaxClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appealMode, propertyId, appealGround]);
 
+  useEffect(() => {
+    if (previousStageRef.current !== activeStage) {
+      stageHeadingRef.current?.focus();
+      previousStageRef.current = activeStage;
+    }
+  }, [activeStage]);
+
+  useEffect(() => {
+    if (!requestedCaseId) return;
+    const requestedCase = appealCases.find((appealCase) => appealCase.id === requestedCaseId);
+    if (!requestedCase || requestedCase.id === activeAppealCaseId) return;
+    openAppealCase(requestedCase);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appealCases, requestedCaseId]);
+
   const invalidAssessedValue = Boolean(assessedValue) && !Number.isFinite(Number(assessedValue));
   const invalidTaxRate = Boolean(taxRate) && !Number.isFinite(Number(taxRate));
   const invalidBillAmount = Boolean(billAmount) && !Number.isFinite(Number(billAmount));
@@ -734,6 +774,72 @@ export default function PropertyTaxClient() {
   const activeAppealCase = appealCases.find(
     (appealCase) => appealCase.id === activeAppealCaseId,
   ) ?? null;
+  const missingFacts = [
+    record?.parcel.fields.parcelId?.state !== 'KNOWN' && 'parcel ID',
+    record?.assessment.fields.totalAssessedValue?.state !== 'KNOWN' && 'assessed value',
+    record?.assessment.fields.taxableValue?.state !== 'KNOWN' && 'taxable value',
+    record?.assessment.fields.classification?.state !== 'KNOWN' && 'classification',
+    record?.bill.fields.billAmount?.state !== 'KNOWN' && 'bill amount',
+    record?.bill.fields.dueDates?.state !== 'KNOWN' && 'bill due dates',
+  ].filter((value): value is string => Boolean(value));
+  const datedSourceRecords = Array.from(new Map(
+    [...(record?.assessment.sourceRecords ?? []), ...(record?.bill.sourceRecords ?? [])]
+      .map((sourceRecord) => [sourceRecord.id, sourceRecord]),
+  ).values());
+  const activeMaterialAppeal = appealCases.find((appealCase) => !['CLOSED', 'WITHDRAWN'].includes(appealCase.status));
+  const dueDeadline = rules?.deadlines.find((deadline) => ['DUE_SOON', 'OPEN'].includes(deadline.status));
+  const nextAction = recordLoading
+    ? {
+        title: 'Checking your property-tax record',
+        why: 'The next action will appear after sources, deadlines, and active cases load.',
+        stage: 'overview' as PropertyTaxStage,
+        cta: 'Stay on overview',
+      }
+    : record?.conflicts.length
+      ? {
+          title: `Resolve ${record.conflicts.length} conflicting ${record.conflicts.length === 1 ? 'fact' : 'facts'}`,
+          why: 'Sources disagree, so calculations and filing preparation should wait until the conflicting values are reviewed.',
+          stage: 'changes' as PropertyTaxStage,
+          cta: 'Review conflicts',
+        }
+      : activeMaterialAppeal
+        ? {
+            title: `Continue ${activeMaterialAppeal.title}`,
+            why: `This case is ${activeMaterialAppeal.status.toLowerCase().replaceAll('_', ' ')} and has an unfinished external outcome.`,
+            stage: 'appeal' as PropertyTaxStage,
+            cta: 'Continue appeal case',
+          }
+        : dueDeadline
+          ? {
+              title: `Verify ${dueDeadline.label}`,
+              why: dueDeadline.dueLocalDate
+                ? `The reviewed rule lists ${dueDeadline.dueLocalDate} at ${dueDeadline.cutoffLocalTime} ${dueDeadline.timezone}; confirm it with the authority before relying on it.`
+                : 'The reviewed rule needs an exact notice date or eligibility fact before a deadline can be calculated.',
+              stage: 'appeal' as PropertyTaxStage,
+              cta: 'Review deadline',
+            }
+          : missingFacts.length
+            ? {
+                title: `Confirm ${missingFacts.slice(0, 2).join(' and ')}`,
+                why: `These facts are missing from the sourced record${missingFacts.length > 2 ? `, along with ${missingFacts.length - 2} more` : ''}. They are needed to understand the bill and assess the right path.`,
+                stage: 'review' as PropertyTaxStage,
+                cta: 'Verify a document',
+              }
+            : {
+                title: 'Review the current bill and assessment',
+                why: 'No urgent conflict, reviewed deadline, or active appeal case is currently surfaced.',
+                stage: 'bill' as PropertyTaxStage,
+                cta: 'Review bill',
+              };
+
+  function stageHref(stage: PropertyTaxStage, caseId?: string) {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('mode');
+    nextParams.set('stage', stage);
+    if (caseId) nextParams.set('caseId', caseId);
+    const query = nextParams.toString();
+    return `/dashboard/properties/${propertyId}/tools/property-tax${query ? `?${query}` : ''}`;
+  }
 
   return (
     <ToolWorkspaceTemplate
@@ -772,27 +878,93 @@ export default function PropertyTaxClient() {
         onCaptured={() => void Promise.all([refresh(), refreshRecord()])}
       />
 
-      <nav aria-label="Property Tax Center stages" className="flex flex-wrap gap-2">
-        <Link
-          href={`/dashboard/properties/${propertyId}/tools/property-tax`}
-          aria-current={!appealMode ? 'page' : undefined}
-          className={`rounded-full border px-4 py-2 text-sm font-medium ${
-            !appealMode ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
-          }`}
-        >
-          Overview
-        </Link>
-        <Link
-          href={`/dashboard/properties/${propertyId}/tools/property-tax?mode=appeal`}
-          aria-current={appealMode ? 'page' : undefined}
-          className={`rounded-full border px-4 py-2 text-sm font-medium ${
-            appealMode ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
-          }`}
-        >
-          Appeal readiness
-        </Link>
+      <a
+        href="#property-tax-stage-content"
+        className="sr-only rounded-lg bg-slate-950 px-3 py-2 text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:outline-none focus:ring-4 focus:ring-sky-400"
+      >
+        Skip to property-tax stage content
+      </a>
+
+      <nav
+        aria-label="Property Tax Center stages"
+        className="flex snap-x gap-2 overflow-x-auto pb-2 motion-reduce:scroll-auto"
+      >
+        {PROPERTY_TAX_STAGES.map((stage) => {
+          const selected = stage.id === activeStage;
+          return (
+            <Link
+              key={stage.id}
+              href={stageHref(stage.id)}
+              aria-current={selected ? 'page' : undefined}
+              className={`inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 py-2 text-sm font-medium outline-none focus-visible:ring-4 focus-visible:ring-sky-400 ${
+                selected
+                  ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                  : 'border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+              }`}
+            >
+              {stage.label}
+            </Link>
+          );
+        })}
       </nav>
 
+      <div id="property-tax-stage-content">
+        <h2
+          ref={stageHeadingRef}
+          tabIndex={-1}
+          className="text-xl font-semibold capitalize text-slate-950 outline-none focus-visible:ring-4 focus-visible:ring-sky-400 dark:text-white"
+        >
+          {activeStage} stage
+        </h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          One focused step at a time. Your property, Radar event, match, action, and case context stay attached as you move between stages.
+        </p>
+      </div>
+
+      <section
+        aria-labelledby="property-tax-next-action"
+        aria-live="polite"
+        className="rounded-2xl border border-sky-200 bg-sky-50/85 p-5 shadow-sm dark:border-sky-800 dark:bg-sky-950/30"
+      >
+        <div className="text-xs font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-200">
+          What matters now
+        </div>
+        <h2 id="property-tax-next-action" className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+          {nextAction.title}
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm text-slate-700 dark:text-slate-200">{nextAction.why}</p>
+        <Link
+          href={stageHref(nextAction.stage, activeMaterialAppeal?.id)}
+          className="mt-4 inline-flex min-h-11 items-center rounded-full bg-sky-900 px-4 py-2 text-sm font-semibold text-white outline-none focus-visible:ring-4 focus-visible:ring-sky-400 dark:bg-sky-200 dark:text-sky-950"
+        >
+          {nextAction.cta}
+        </Link>
+      </section>
+
+      <section
+        aria-labelledby="property-tax-source-legend"
+        className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60"
+      >
+        <h2 id="property-tax-source-legend" className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          How to read these values
+        </h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+            <strong className="block">Official</strong>
+            Fetched from a reviewed assessor or collector source with its observed date and match method.
+          </div>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
+            <strong className="block">Confirmed</strong>
+            Verified from a Vault document or explicitly saved by the homeowner; it is not relabeled as official.
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+            <strong className="block">Estimated</strong>
+            A planning calculation only. It cannot establish history, appeal merit, a deadline, or expected savings.
+          </div>
+        </div>
+      </section>
+
+      {(activeStage === 'overview' || activeStage === 'changes') && (
       <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -860,7 +1032,9 @@ export default function PropertyTaxClient() {
           </div>
         )}
       </section>
+      )}
 
+      {(activeStage === 'overview' || activeStage === 'bill' || activeStage === 'changes') && (
       <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" aria-busy={recordLoading}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -923,7 +1097,9 @@ export default function PropertyTaxClient() {
           </div>
         )}
       </section>
+      )}
 
+      {activeStage === 'review' && (
       <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
         <div>
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -1049,7 +1225,9 @@ export default function PropertyTaxClient() {
           </div>
         )}
       </section>
+      )}
 
+      {(activeStage === 'exemptions' || activeStage === 'review') && (
       <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
         <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
           Exemption and correction workflow
@@ -1119,6 +1297,77 @@ export default function PropertyTaxClient() {
           </div>
         )}
       </section>
+      )}
+
+      {activeStage === 'changes' && (
+        <section
+          aria-labelledby="property-tax-changes-heading"
+          className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60"
+        >
+          <h2 id="property-tax-changes-heading" className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            Observed changes and conflicts
+          </h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            These are dated source records and field observations. The center does not infer a historical change from an estimate or from two unmatched records.
+          </p>
+
+          {record?.conflicts.length ? (
+            <div className="mt-4 space-y-4">
+              {record.conflicts.map((conflict) => (
+                <article key={conflict.fieldKey} className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+                  <h3 className="font-semibold text-amber-950 dark:text-amber-100">{conflict.fieldKey}</h3>
+                  <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
+                    No value was selected automatically because these active observations disagree.
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {conflict.observations.map((observation) => (
+                      <li key={observation.id} className="rounded-lg border border-amber-200 bg-white/70 p-3 text-sm dark:border-amber-800 dark:bg-slate-950/30">
+                        <div className="font-medium">{String(observation.value)}</div>
+                        <div className="mt-1 text-xs">
+                          {observation.sourceType.replaceAll('_', ' ')} · {observation.reviewStatus.replaceAll('_', ' ')} · observed {new Date(observation.observedAt).toLocaleDateString()}
+                        </div>
+                        {observation.sourceUrl && (
+                          <a href={observation.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-11 items-center font-semibold underline outline-none focus-visible:ring-4 focus-visible:ring-sky-400">
+                            Open source record
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+              No unresolved source conflicts are currently stored.
+            </div>
+          )}
+
+          <div className="mt-5">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Dated source records</h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {datedSourceRecords.map((sourceRecord) => (
+                <article key={sourceRecord.id} className="rounded-xl border border-slate-200 p-4 text-sm dark:border-slate-700">
+                  <div className="font-semibold text-slate-900 dark:text-slate-100">
+                    {sourceRecord.sourceType.replaceAll('_', ' ')} · tax year {sourceRecord.taxYear}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                    {sourceRecord.stage ?? 'Stage unknown'} · observed {new Date(sourceRecord.observedAt).toLocaleDateString()} · {sourceRecord.confidence.toLowerCase()} confidence
+                  </div>
+                  <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                    Match context: {sourceRecord.sourceExternalId ?? sourceRecord.radarProviderEventId ?? 'No external match identifier'}
+                  </div>
+                  {sourceRecord.sourceUrl && (
+                    <a href={sourceRecord.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-11 items-center font-semibold underline outline-none focus-visible:ring-4 focus-visible:ring-sky-400">
+                      Verify source
+                    </a>
+                  )}
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {appealMode && (
         <section className="rounded-2xl border border-amber-200/80 bg-amber-50/85 p-5 text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
@@ -1797,6 +2046,101 @@ export default function PropertyTaxClient() {
         </section>
       )}
 
+      {activeStage === 'history' && (
+        <section
+          aria-labelledby="property-tax-history-heading"
+          className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60"
+        >
+          <h2 id="property-tax-history-heading" className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            Property-tax history
+          </h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            A dated audit trail of documents, homeowner decisions, appeal events, and recorded outcomes. Planning estimates are intentionally excluded.
+          </p>
+
+          <div className="mt-5 space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Vault documents</h3>
+              <div className="mt-2 space-y-2">
+                {intakes.length ? intakes.map((intake) => (
+                  <div key={intake.id} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700">
+                    <div className="font-semibold">{intake.document.name}</div>
+                    <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                      {intake.kind.replaceAll('_', ' ')} · {intake.status.replaceAll('_', ' ')} · added {new Date(intake.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-sm text-slate-600 dark:text-slate-300">No property-tax documents have been added.</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Exemption and correction decisions</h3>
+              <div className="mt-2 space-y-2">
+                {taxActions?.actions.some((action) => action.decidedAt || action.completedAt)
+                  ? taxActions.actions.filter((action) => action.decidedAt || action.completedAt).map((action) => (
+                    <div key={action.id} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700">
+                      <div className="font-semibold">{action.title}</div>
+                      <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                        {action.status.replaceAll('_', ' ')} · {new Date(action.completedAt ?? action.decidedAt ?? '').toLocaleString()}
+                      </div>
+                    </div>
+                  ))
+                  : <p className="text-sm text-slate-600 dark:text-slate-300">No homeowner decisions have been recorded.</p>}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Appeal cases and outcomes</h3>
+              <div className="mt-2 space-y-3">
+                {appealCases.length ? appealCases.map((appealCase) => (
+                  <article key={appealCase.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-semibold text-slate-900 dark:text-slate-100">{appealCase.title}</h4>
+                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                          {appealCase.status.replaceAll('_', ' ')} · created {new Date(appealCase.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <Link
+                        href={stageHref('appeal', appealCase.id)}
+                        className="inline-flex min-h-11 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold outline-none focus-visible:ring-4 focus-visible:ring-sky-400 dark:border-slate-700"
+                      >
+                        Open case
+                      </Link>
+                    </div>
+                    {appealCase.determination && (
+                      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+                        {appealCase.determination.replaceAll('_', ' ')} · {appealCase.determinationSummary ?? 'No determination summary'}
+                        {(appealCase.refundAmount || appealCase.creditAmount) && (
+                          <div className="mt-1 text-xs">
+                            Realized refund {money(appealCase.refundAmount)} · credit {money(appealCase.creditAmount)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <ol className="mt-3 space-y-2">
+                      {appealCase.events.map((event) => (
+                        <li key={event.id} className="border-l-2 border-sky-400 pl-3 text-sm">
+                          <div className="font-medium">{event.summary}</div>
+                          <div className="text-xs text-slate-600 dark:text-slate-300">
+                            {new Date(event.occurredAt).toLocaleString()} · {event.type.replaceAll('_', ' ')}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </article>
+                )) : (
+                  <p className="text-sm text-slate-600 dark:text-slate-300">No appeal cases have been started.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {activeStage === 'overview' && (
       <section className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Planning and homeowner-reported inputs</h2>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
@@ -1904,7 +2248,10 @@ export default function PropertyTaxClient() {
           </div>
         )}
       </section>
+      )}
 
+      {activeStage === 'bill' && (
+      <>
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/55 lg:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1966,12 +2313,14 @@ export default function PropertyTaxClient() {
           Verify the current parcel, classification, exemptions, assessed and taxable values, bill amount, and local process with the official assessor or collector.
         </p>
         <Link
-          href={`/dashboard/properties/${propertyId}/tools/property-tax?mode=appeal`}
-          className="mt-4 inline-flex min-h-11 items-center rounded-full bg-slate-900 px-4 font-medium text-white dark:bg-white dark:text-slate-900"
+          href={stageHref('appeal')}
+          className="mt-4 inline-flex min-h-11 items-center rounded-full bg-slate-900 px-4 font-medium text-white outline-none focus-visible:ring-4 focus-visible:ring-sky-400 dark:bg-white dark:text-slate-900"
         >
           Review appeal readiness
         </Link>
       </section>
+      </>
+      )}
     </ToolWorkspaceTemplate>
   );
 }

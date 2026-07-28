@@ -46,7 +46,8 @@ describe('buildPropertyAwareDashboardHref', () => {
     const { path, params } = parseHref(href);
 
     expect(path).toBe('/dashboard/properties/property-123/tools/property-tax');
-    expect(params.get('mode')).toBe('appeal');
+    expect(params.get('stage')).toBe('appeal');
+    expect(params.get('mode')).toBeNull();
     expect(params.get('source')).toBe('radar');
     expect(params.get('propertyId')).toBeNull();
   });

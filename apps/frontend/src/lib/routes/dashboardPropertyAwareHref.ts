@@ -152,7 +152,7 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
     navTarget: 'property-tax',
     toPropertyHref: (propertyId, query) => {
       const nextQuery = new URLSearchParams(query);
-      nextQuery.set('mode', 'appeal');
+      nextQuery.set('stage', 'appeal');
       return buildHref(`/dashboard/properties/${propertyId}/tools/property-tax`, nextQuery);
     },
   },

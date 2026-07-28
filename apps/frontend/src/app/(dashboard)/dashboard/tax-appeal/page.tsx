@@ -41,7 +41,8 @@ function TaxAppealRedirect() {
     if (!selectedPropertyId) return;
     const next = new URLSearchParams(searchParams.toString());
     next.delete('propertyId');
-    next.set('mode', 'appeal');
+    next.delete('mode');
+    next.set('stage', 'appeal');
     router.replace(
       `/dashboard/properties/${encodeURIComponent(selectedPropertyId)}/tools/property-tax?${next.toString()}`,
     );
