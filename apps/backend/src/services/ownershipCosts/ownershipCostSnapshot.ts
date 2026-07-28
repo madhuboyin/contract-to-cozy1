@@ -10,7 +10,10 @@ import {
   type CanonicalOwnershipCostObservation,
 } from './ownershipCostAdapters';
 
-const LENS_CATEGORIES: Record<OwnershipCostLens, readonly OwnershipCostCategory[]> = {
+export const OWNERSHIP_COST_LENS_CATEGORIES: Record<
+  OwnershipCostLens,
+  readonly OwnershipCostCategory[]
+> = {
   OPERATING_EXPENSE: [
     'PROPERTY_TAX',
     'INSURANCE',
@@ -76,8 +79,8 @@ export type OwnershipCostSnapshotDraft = {
 };
 
 function includedLenses(category: OwnershipCostCategory): OwnershipCostLens[] {
-  return (Object.keys(LENS_CATEGORIES) as OwnershipCostLens[])
-    .filter((lens) => LENS_CATEGORIES[lens].includes(category));
+  return (Object.keys(OWNERSHIP_COST_LENS_CATEGORIES) as OwnershipCostLens[])
+    .filter((lens) => OWNERSHIP_COST_LENS_CATEGORIES[lens].includes(category));
 }
 
 function coverageStatus(
@@ -132,13 +135,13 @@ export function buildOwnershipCostSnapshotDraft(
     .sort();
 
   const totalsByLens = Object.fromEntries(
-    (Object.keys(LENS_CATEGORIES) as OwnershipCostLens[]).map((lens) => [
+    (Object.keys(OWNERSHIP_COST_LENS_CATEGORIES) as OwnershipCostLens[]).map((lens) => [
       lens,
       currentObservations.reduce((total, observation) => {
         if (
           observation.applicability !== 'APPLICABLE'
           || observation.annualizedAmountCents == null
-          || !LENS_CATEGORIES[lens].includes(observation.category)
+          || !OWNERSHIP_COST_LENS_CATEGORIES[lens].includes(observation.category)
         ) {
           return total;
         }

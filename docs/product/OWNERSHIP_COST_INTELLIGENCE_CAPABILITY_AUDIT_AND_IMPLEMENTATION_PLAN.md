@@ -4,7 +4,7 @@
 **Contributing domains:** Property Tax, Coverage and Premium Review, Financing, Expenses, Utilities, Home Record, Capital Timeline, Reserve Fund, Budget Planner, Guidance, and Home Actions  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Implementation in progress — Slices 0–2 started July 28, 2026
+**Status:** Implementation in progress — Slices 0–3 started July 28, 2026
 **Recommended disposition:** **Consolidate, rebuild the calculation and evidence contract, and contain unsupported historical and predictive claims immediately**  
 **Current safety classification:** Material financial  
 **Recommended safety classification:** Material financial  
@@ -84,6 +84,34 @@ The recurring-service adapter intentionally remains empty when no source record
 explicitly establishes recurrence; one-time repair expenses are not relabeled
 as recurring services. Mortgage principal, interest, and PMI are likewise
 withheld when the financing source cannot support an allocation.
+
+### July 28, 2026 — Slice 3 current-cost increment
+
+Implemented:
+
+- added a canonical `OwnershipCostReadModelService` over persisted snapshots;
+- exposed read-only current-cost and explicit contributor-scoped recalculation
+  endpoints;
+- limited the current experience to operating-expense and cash-outflow lenses;
+- kept mortgage principal, interest, PMI, capital spend, and reserve
+  contributions as separate categories;
+- aggregated confirmed and estimated amounts independently while preserving
+  missing and not-applicable states;
+- added category-level evidence, source period, verification, freshness, and
+  canonical correction destinations;
+- ranked the highest-impact missing, stale, or unconfirmed category action;
+- returned the latest persisted snapshot when a source refresh fails and
+  labeled it as last-known-good;
+- replaced the canonical page's transitional True Cost dependency with the
+  persisted read model;
+- added responsive category composition, an accessible evidence table, lens
+  definitions, limitations, readiness telemetry, and correction-funnel
+  telemetry; and
+- added Slice 3 aggregation, lens, authorization, fallback, endpoint, and UI
+  contract tests.
+
+Observed change explanations, forecasts, scenarios, and measured variability
+remain intentionally gated for Slices 4–6.
 
 ---
 
