@@ -253,13 +253,16 @@ const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 const TWO_YEARS_MS = 2 * ONE_YEAR_MS;
 
 /**
- * Applies a staleness penalty to confidence when lastVerifiedAt is old.
+ * Applies a staleness penalty to confidence when lastVerifiedAt is old or
+ * unknown.
  *
- * Rationale: incentive programs change frequently. Treating stale registry
- * data as high-confidence could mislead homeowners.
+ * Rationale: incentive programs change frequently. Treating stale or
+ * never-reviewed registry data as high-confidence could mislead homeowners.
+ * A null lastVerifiedAt means the program's review state is unknown, not
+ * that it was just added — it must fail closed, not be treated as fresh.
  *
  * Penalty schedule:
- *   null                  → no penalty (newly added program, assume fresh)
+ *   null (unreviewed)     → all levels capped at LOW
  *   ≤ 12 months old       → no penalty
  *   12–24 months old      → HIGH capped at MEDIUM
  *   > 24 months old       → all levels capped at LOW
@@ -268,7 +271,9 @@ export function applyFreshnessPenalty(
   level: HiddenAssetConfidenceLevel,
   lastVerifiedAt: Date | null,
 ): HiddenAssetConfidenceLevel {
-  if (lastVerifiedAt === null) return level;
+  if (lastVerifiedAt === null) {
+    return HiddenAssetConfidenceLevel.LOW;
+  }
 
   const ageMs = Date.now() - lastVerifiedAt.getTime();
 
@@ -283,11 +288,13 @@ export function applyFreshnessPenalty(
 }
 
 /**
- * Returns a UI-safe freshness note when program data is stale.
+ * Returns a UI-safe freshness note when program data is stale or unreviewed.
  * Returns null when data is acceptably fresh.
  */
 export function getFreshnessNote(lastVerifiedAt: Date | null): string | null {
-  if (lastVerifiedAt === null) return null;
+  if (lastVerifiedAt === null) {
+    return 'Source review date is unknown — verify current availability with the official source.';
+  }
 
   const ageMs = Date.now() - lastVerifiedAt.getTime();
 
@@ -306,19 +313,20 @@ export function getFreshnessNote(lastVerifiedAt: Date | null): string | null {
 // ============================================================================
 
 /**
- * Returns a cautious, frontend-safe eligibility label for a confidence level.
- * Language intentionally avoids certainty to align with the product rule that
- * all detections are potential benefits, not guaranteed approvals.
+ * Returns a cautious, frontend-safe match-stage label for a confidence level.
+ * This is rule-match completeness, not approval likelihood — it must never
+ * imply eligibility or a funding/approval outcome. All detections are
+ * potential matches, not guaranteed approvals.
  */
 export function getEligibilityLabel(level: HiddenAssetConfidenceLevel): string {
   switch (level) {
     case HiddenAssetConfidenceLevel.HIGH:
-      return 'Likely eligible';
+      return 'Strong property match';
     case HiddenAssetConfidenceLevel.MEDIUM:
-      return 'Possibly eligible';
+      return 'Some property details match';
     case HiddenAssetConfidenceLevel.LOW:
-      return 'Worth verifying';
+      return 'Location match only';
     default:
-      return 'Worth verifying';
+      return 'Location match only';
   }
 }

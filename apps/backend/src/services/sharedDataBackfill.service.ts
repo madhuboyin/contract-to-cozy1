@@ -1658,9 +1658,13 @@ export class SharedDataBackfillService {
             estimatedAnnualSavings: asFinite(latestAppliedSavings.estimatedAnnualSavings) ?? null,
             currency: latestAppliedSavings.currency,
           });
-          touch('SAVINGS_REALIZATION');
-          if (existingLatest.SAVINGS_REALIZATION?.id === savingsSignal.id) result.refreshed += 1;
-          else result.published += 1;
+          if (savingsSignal) {
+            touch('SAVINGS_REALIZATION');
+            if (existingLatest.SAVINGS_REALIZATION?.id === savingsSignal.id) result.refreshed += 1;
+            else result.published += 1;
+          } else {
+            result.skipped += 1;
+          }
         } catch (error) {
           result.skipped += 1;
           logSharedDataEvent({

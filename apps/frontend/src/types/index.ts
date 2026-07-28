@@ -2178,7 +2178,7 @@ export type HiddenAssetMatchStatus =
   | 'DETECTED'
   | 'VIEWED'
   | 'DISMISSED'
-  | 'CLAIMED'
+  | 'PURSUING'
   | 'EXPIRED'
   | 'INACTIVE';
 
@@ -2195,7 +2195,7 @@ export interface HiddenAssetMatchDTO {
   estimatedValueMax: number | null;
   currency: string;
   confidenceLevel: HiddenAssetConfidenceLevel;
-  /** Human-friendly confidence label from backend ("Likely eligible", etc.) */
+  /** Human-friendly match-stage label from backend ("Strong property match", etc.) — never implies approval. */
   eligibilityLabel: string;
   status: HiddenAssetMatchStatus;
   matchedRuleCount: number | null;
@@ -2212,7 +2212,7 @@ export interface HiddenAssetMatchDTO {
   lastEvaluatedAt: string;
   firstDetectedAt: string;
   dismissedAt: string | null;
-  claimedAt: string | null;
+  pursuedAt: string | null;
   propertyContextVersion: string | null;
 }
 
@@ -2223,6 +2223,8 @@ export interface HiddenAssetMatchSummaryDTO {
   lowConfidenceCount: number;
   categoryCounts: Partial<Record<HiddenAssetCategory, number>>;
   lastScanAt: string | null;
+  /** Null = never scanned. 0 = scanned, but no reviewed programs cover this region. */
+  programsEvaluated: number | null;
 }
 
 export interface HiddenAssetMatchListDTO {

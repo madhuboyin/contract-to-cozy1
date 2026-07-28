@@ -152,6 +152,17 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
     );
 
     try {
+      const categoriesWithSavings = result.summary.categories.filter(
+        (entry) => entry.status === 'FOUND_SAVINGS',
+      ).length;
+      const categoriesReviewed = result.summary.categories.filter(
+        (entry) => entry.account !== null,
+      ).length;
+      // A run that only produced missing-input prompts (no connected
+      // accounts, no savings found) hasn't reviewed anything real yet — it
+      // should not silently complete the guidance step.
+      const hasMeaningfulReview = categoriesWithSavings > 0 || categoriesReviewed > 0;
+
       await guidanceJourneyService.recordToolCompletion({
         propertyId: req.params.propertyId,
         actorUserId: userId,
@@ -163,14 +174,19 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
         sourceEntityType: 'HOME_SAVINGS_RUN',
         sourceEntityId: result.runId,
         stepKey: guidanceStepKey ?? 'evaluate_savings_funding',
-        status: 'COMPLETED',
+        status: hasMeaningfulReview ? 'COMPLETED' : 'IN_PROGRESS',
+        reasonCode: hasMeaningfulReview ? null : 'no_accounts_connected',
+        reasonMessage: hasMeaningfulReview
+          ? null
+          : 'No recurring-cost accounts were connected yet — add a bill or policy to complete this step.',
         producedData: {
           proofType: 'savings_analysis',
           proofId: result.runId,
           runId: result.runId,
           potentialMonthlySavings: result.summary.potentialMonthlySavings,
           potentialAnnualSavings: result.summary.potentialAnnualSavings,
-          categoriesWithSavings: result.summary.categories.filter((entry) => entry.status === 'FOUND_SAVINGS').length,
+          categoriesWithSavings,
+          categoriesReviewed,
         },
       });
     } catch (guidanceError) {

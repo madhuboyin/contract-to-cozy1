@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
-import { track } from '@/lib/analytics/events';
 import {
   getHomeSavingsCategory,
   getHomeSavingsSummary,
@@ -306,17 +305,10 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
     setUpdatingOpportunityId(opportunityId);
     setError(null);
     try {
+      // Marking an opportunity APPLIED reflects application intent, not
+      // confirmed savings — do not emit savings_verified here. Verified
+      // savings require an observed/received outcome with evidence.
       await setHomeSavingsOpportunityStatus(opportunityId, status);
-      if (status === 'APPLIED') {
-        const opportunity = detail?.opportunities.find((o) => o.id === opportunityId);
-        if (opportunity?.estimatedAnnualSavings != null) {
-          track('savings_verified', {
-            tool: 'home-savings',
-            amountUsd: opportunity.estimatedAnnualSavings,
-            propertyId,
-          });
-        }
-      }
       await loadSummary();
       await loadDetail(selectedCategory);
     } catch (err: any) {

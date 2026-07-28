@@ -17,7 +17,7 @@ import { resolveGuidanceStepGovernance } from './guidanceGovernance.catalog';
 
 const VALID_STEP_TRANSITIONS: Record<GuidanceStepStatus, GuidanceStepStatus[]> = {
   PENDING: ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'],
-  IN_PROGRESS: ['COMPLETED', 'SKIPPED', 'BLOCKED', 'PENDING'],
+  IN_PROGRESS: ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED', 'PENDING'],
   COMPLETED: ['COMPLETED'],
   SKIPPED: ['SKIPPED', 'PENDING', 'IN_PROGRESS'],
   BLOCKED: ['BLOCKED', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED'],

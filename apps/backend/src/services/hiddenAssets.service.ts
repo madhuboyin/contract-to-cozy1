@@ -61,8 +61,8 @@ function buildConfidenceCalibrationSummary(row: MatchWithProgram): HiddenAssetCo
     calibrationNote = `Confidence level: ${level}. Detailed rule match data unavailable.`;
   }
 
-  const outcomeNote = row.claimedAt
-    ? `Claimed on ${new Date(row.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`
+  const outcomeNote = row.pursuedAt
+    ? `Marked as pursuing on ${new Date(row.pursuedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`
     : null;
 
   return { matchedRuleCount: matched, totalRuleCount: total, calibrationNote, outcomeNote };
@@ -98,7 +98,7 @@ function serializeMatch(row: MatchWithProgram): HiddenAssetMatchDTO {
     lastEvaluatedAt: row.lastEvaluatedAt.toISOString(),
     firstDetectedAt: row.firstDetectedAt.toISOString(),
     dismissedAt: row.dismissedAt ? row.dismissedAt.toISOString() : null,
-    claimedAt: row.claimedAt ? row.claimedAt.toISOString() : null,
+    pursuedAt: row.pursuedAt ? row.pursuedAt.toISOString() : null,
     confidenceCalibrationSummary: buildConfidenceCalibrationSummary(row),
     propertyContextVersion: row.propertyContextVersion ?? null,
   };
@@ -132,6 +132,7 @@ function serializeProgramDetail(
 function buildSummary(
   matches: HiddenAssetMatchDTO[],
   lastScanAt: Date | null,
+  programsEvaluated: number | null,
 ): HiddenAssetMatchSummaryDTO {
   const categoryCounts: Partial<Record<HiddenAssetCategory, number>> = {};
   let high = 0;
@@ -153,6 +154,9 @@ function buildSummary(
     lowConfidenceCount: low,
     categoryCounts,
     lastScanAt: lastScanAt ? lastScanAt.toISOString() : null,
+    // Null = never scanned. 0 = scanned, but the registry had no reviewed
+    // programs for this property's region (coverage gap, not "no benefits").
+    programsEvaluated,
   };
 }
 
@@ -309,11 +313,12 @@ async function getLastCompletedScan(propertyId: string) {
       status: PropertyHiddenAssetScanRunStatus.COMPLETED,
     },
     orderBy: { completedAt: 'desc' },
-    select: { completedAt: true, propertyContextVersion: true },
+    select: { completedAt: true, propertyContextVersion: true, programsEvaluated: true },
   });
   return {
     completedAt: run?.completedAt ?? null,
     propertyContextVersion: run?.propertyContextVersion ?? null,
+    programsEvaluated: run?.programsEvaluated ?? null,
   };
 }
 
@@ -432,7 +437,7 @@ async function executePropertyScan(
       const existing = existingByProgramId.get(result.programId);
       const preserveStatus =
         existing?.status === PropertyHiddenAssetMatchStatus.DISMISSED ||
-        existing?.status === PropertyHiddenAssetMatchStatus.CLAIMED;
+        existing?.status === PropertyHiddenAssetMatchStatus.PURSUING;
 
       await prisma.propertyHiddenAssetMatch.upsert({
         where: {
@@ -479,7 +484,7 @@ async function executePropertyScan(
     for (const existing of existingMatches) {
       if (
         existing.status === PropertyHiddenAssetMatchStatus.DISMISSED ||
-        existing.status === PropertyHiddenAssetMatchStatus.CLAIMED
+        existing.status === PropertyHiddenAssetMatchStatus.PURSUING
       ) {
         continue; // Never auto-change user-set terminal statuses
       }
@@ -596,7 +601,7 @@ export class HiddenAssetService {
     return {
       propertyId,
       matches,
-      summary: buildSummary(matches, lastScan.completedAt),
+      summary: buildSummary(matches, lastScan.completedAt, lastScan.programsEvaluated),
       propertyContextVersion: lastScan.propertyContextVersion,
     };
   }
@@ -658,7 +663,7 @@ export class HiddenAssetService {
   }
 
   /**
-   * Updates the user-facing status of a specific match (VIEWED, DISMISSED, CLAIMED).
+   * Updates the user-facing status of a specific match (VIEWED, DISMISSED, PURSUING).
    * Verifies the match belongs to a property the requesting user owns.
    */
   async updateMatchStatus(
@@ -686,8 +691,8 @@ export class HiddenAssetService {
         status: input.status,
         dismissedAt:
           input.status === PropertyHiddenAssetMatchStatus.DISMISSED ? now : existing.dismissedAt,
-        claimedAt:
-          input.status === PropertyHiddenAssetMatchStatus.CLAIMED ? now : existing.claimedAt,
+        pursuedAt:
+          input.status === PropertyHiddenAssetMatchStatus.PURSUING ? now : existing.pursuedAt,
       },
       include: { program: true },
     });

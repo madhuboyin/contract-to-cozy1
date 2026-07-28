@@ -90,7 +90,7 @@ async function generateOpportunities({
       headline: 'Your warranty cost looks above typical plans',
       detail: `Current estimate is ${round2(monthlyCost)}/month. Similar plans are often around ${round2(
         baselineAnnual / 12
-      )}/month.`,
+      )}/month. Broad estimate — not a live quote for your address.`,
       rationaleJson: {
         reason: 'warranty_above_baseline',
         annualCost,
@@ -108,7 +108,7 @@ async function generateOpportunities({
     drafts.push({
       confidence: HomeSavingsConfidence.MEDIUM,
       headline: `Warranty renewal is in ${renewalInDays} day${renewalInDays === 1 ? '' : 's'}`,
-      detail: 'Compare plan limits and service fees now before auto-renewal pricing kicks in.',
+      detail: 'Compare plan limits and service fees now before auto-renewal pricing kicks in. Amount shown is a broad estimate, not a quote.',
       rationaleJson: {
         reason: 'warranty_renewal_window',
         renewalInDays,

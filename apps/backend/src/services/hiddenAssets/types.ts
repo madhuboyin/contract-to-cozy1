@@ -158,7 +158,7 @@ export interface HiddenAssetConfidenceCalibrationSummary {
   totalRuleCount: number | null;
   /** Human-readable explanation of how confidence was scored for this match. */
   calibrationNote: string;
-  /** Non-null when the homeowner has already claimed this program. */
+  /** Non-null when the homeowner has marked this program as pursuing. */
   outcomeNote: string | null;
 }
 
@@ -192,7 +192,7 @@ export interface HiddenAssetMatchDTO {
   lastEvaluatedAt: string;
   firstDetectedAt: string;
   dismissedAt: string | null;
-  claimedAt: string | null;
+  pursuedAt: string | null;
   // Phase-3: confidence calibration transparency
   confidenceCalibrationSummary: HiddenAssetConfidenceCalibrationSummary;
   propertyContextVersion: string | null;
@@ -205,6 +205,13 @@ export interface HiddenAssetMatchSummaryDTO {
   lowConfidenceCount: number;
   categoryCounts: Partial<Record<HiddenAssetCategory, number>>;
   lastScanAt: string | null;
+  /**
+   * Number of reviewed programs evaluated during the last scan.
+   * Null = never scanned. 0 = scanned, but the registry has no reviewed
+   * programs for this property's region — a coverage gap, distinct from
+   * "programs existed but none matched" (totalMatches === 0 with this > 0).
+   */
+  programsEvaluated: number | null;
 }
 
 export interface HiddenAssetMatchListDTO {

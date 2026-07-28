@@ -4238,7 +4238,7 @@ class APIClient {
 
   async updateHiddenAssetMatchStatus(
     matchId: string,
-    status: 'VIEWED' | 'DISMISSED' | 'CLAIMED'
+    status: 'VIEWED' | 'DISMISSED' | 'PURSUING'
   ): Promise<import('@/types').HiddenAssetMatchDTO | null> {
     const res = await this.patch<{ match: import('@/types').HiddenAssetMatchDTO }>(
       `/api/property-hidden-asset-matches/${matchId}`,

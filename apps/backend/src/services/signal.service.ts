@@ -1016,6 +1016,15 @@ export class SignalService {
     });
   }
 
+  /**
+   * Publishes a SAVINGS_REALIZATION signal — but only from actually observed
+   * or received value, never from an unverified estimate. Marking an
+   * opportunity APPLIED/SWITCHED reflects application/switching intent, not
+   * confirmed savings, so until a real realized-value ledger with evidence
+   * exists (see the Savings and Benefits capability audit, Slice 7), this
+   * publishes nothing and returns null. All callers already treat a null/
+   * falsy result as "skipped," not an error.
+   */
   async publishSavingsRealizationSignal(params: {
     propertyId: string;
     opportunityId: string;
@@ -1023,88 +1032,20 @@ export class SignalService {
     estimatedAnnualSavings: number | null;
     estimatedMonthlySavings: number | null;
     currency: string;
-  }): Promise<SignalDTO> {
-    const now = new Date();
-    const opportunity = await prisma.homeSavingsOpportunity.findUnique({
-      where: { id: params.opportunityId },
-      select: {
-        updatedAt: true,
-        generatedAt: true,
-        confidence: true,
-      },
-    });
-
-    const updatedAt = opportunity?.updatedAt ?? now;
-    const ageDays = daysSince(updatedAt, now);
-    const hasAnnual = asFinite(params.estimatedAnnualSavings) !== null;
-    const hasMonthly = asFinite(params.estimatedMonthlySavings) !== null;
-
-    const sourceQuality = clamp01(
-      params.status === 'SWITCHED'
-        ? 0.94
-        : params.status === 'APPLIED'
-          ? 0.88
-          : 0.68
-    );
-    const recencyQuality = recencyScore(ageDays, 14, 120);
-    const completenessQuality = clamp01((Number(hasAnnual) + Number(hasMonthly) + Number(Boolean(params.currency))) / 3);
-    const agreementQuality = clamp01(params.status === 'APPLIED' || params.status === 'SWITCHED' ? 0.92 : 0.7);
-    const verificationQuality = clamp01(
-      opportunity?.confidence === 'HIGH'
-        ? 0.9
-        : opportunity?.confidence === 'MEDIUM'
-          ? 0.78
-          : 0.64
-    );
-
-    const confidenceBreakdown = normalizeConfidenceBreakdown(
-      {
-        sourceQuality,
-        recencyQuality,
-        completenessQuality,
-        agreementQuality,
-        verificationQuality,
-      },
-      0.82
-    );
-
-    const validUntil = new Date(now);
-    validUntil.setDate(validUntil.getDate() + (params.status === 'SWITCHED' ? 180 : 120));
-
-    const signal = await this.publishSignal({
-      propertyId: params.propertyId,
-      signalKey: 'SAVINGS_REALIZATION',
-      sourceModel: SIGNAL_OWNER_BY_KEY.SAVINGS_REALIZATION,
-      sourceId: params.opportunityId,
-      valueNumber: params.estimatedAnnualSavings ?? params.estimatedMonthlySavings ?? 0,
-      valueText: params.status,
-      unit: params.currency,
-      confidence: confidenceBreakdown?.score ?? 0.82,
-      confidenceBreakdown,
-      reasons: [
-        `Savings lifecycle status is ${params.status}.`,
-        hasAnnual || hasMonthly
-          ? 'Estimated realized savings values are available for this opportunity.'
-          : 'Savings amount is missing, reducing confidence in realized value.',
-      ],
-      evidenceCount: Number(hasAnnual) + Number(hasMonthly),
-      valueJson: {
-        status: params.status,
-        estimatedMonthlySavings: params.estimatedMonthlySavings,
-        estimatedAnnualSavings: params.estimatedAnnualSavings,
-        currency: params.currency,
-        opportunityAgeDays: Number(ageDays.toFixed(1)),
-      },
-      capturedAt: now,
-      validUntil,
-    });
-
+  }): Promise<SignalDTO | null> {
+    // Marking an opportunity APPLIED/SWITCHED reflects application/switching
+    // intent, not confirmed savings. Publishing the original estimate as a
+    // "realized" signal here would overstate evidence. Until a real
+    // realized-value ledger with observed/received evidence exists (see the
+    // Savings and Benefits capability audit, Slice 7), do not publish a
+    // SAVINGS_REALIZATION signal. Callers already treat a null result as
+    // "skipped," not an error.
     await this.publishFinancialDisciplinePatternSignal({
       propertyId: params.propertyId,
-      capturedAt: now,
+      capturedAt: new Date(),
     });
 
-    return signal;
+    return null;
   }
 
   private async publishMaintenancePatternSignals(params: {

@@ -74,7 +74,7 @@ async function generateOpportunities({
       headline: 'You may be paying above typical internet rates',
       detail: `Current estimate is ${round2(monthlyCost)}/month vs local typical ${round2(
         monthlyBaseline
-      )}/month.`,
+      )}/month. Broad estimate — not an address-qualified offer.`,
       rationaleJson: {
         reason: 'internet_above_baseline',
         monthlyCost,
@@ -99,7 +99,7 @@ async function generateOpportunities({
     drafts.push({
       confidence: HomeSavingsConfidence.MEDIUM,
       headline: `Contract ends in ${contractInDays} day${contractInDays === 1 ? '' : 's'}`,
-      detail: 'This is usually the easiest time to switch or negotiate a lower promo rate.',
+      detail: 'This is usually the easiest time to switch or negotiate a lower promo rate. Amount shown is a broad estimate, not a quote.',
       rationaleJson: {
         reason: 'internet_contract_window',
         contractInDays,

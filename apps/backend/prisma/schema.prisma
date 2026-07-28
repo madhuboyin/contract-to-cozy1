@@ -10744,7 +10744,7 @@ enum PropertyHiddenAssetMatchStatus {
   DETECTED
   VIEWED
   DISMISSED
-  CLAIMED
+  PURSUING
   EXPIRED
   INACTIVE
 }
@@ -10850,7 +10850,7 @@ model PropertyHiddenAssetMatch {
   lastEvaluatedAt DateTime  @default(now())
   firstDetectedAt DateTime  @default(now())
   dismissedAt     DateTime?
-  claimedAt       DateTime?
+  pursuedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

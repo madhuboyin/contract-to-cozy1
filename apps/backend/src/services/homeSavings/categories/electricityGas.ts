@@ -57,7 +57,7 @@ async function generateOpportunities({
       headline: 'Your monthly utility cost looks above typical',
       detail: `You pay about ${round2(monthlyCost)}/month. Similar homes often pay near ${round2(
         monthlyBaseline
-      )}/month.`,
+      )}/month. Broad state-level estimate — not an address-qualified rate comparison.`,
       rationaleJson: {
         reason: 'utility_above_baseline',
         monthlyCost,
@@ -75,7 +75,7 @@ async function generateOpportunities({
     drafts.push({
       confidence: HomeSavingsConfidence.MEDIUM,
       headline: 'A fixed-rate plan could reduce bill swings',
-      detail: 'Variable rates can spike seasonally. Compare fixed-rate options to stabilize monthly cost.',
+      detail: 'Variable rates can spike seasonally. Compare fixed-rate options to stabilize monthly cost. Amount shown is a broad estimate, not an available offer.',
       rationaleJson: {
         reason: 'variable_rate_flag',
       },
@@ -92,7 +92,7 @@ async function generateOpportunities({
       confidence: HomeSavingsConfidence.MEDIUM,
       headline: 'High usage suggests quick efficiency wins',
       detail:
-        'Simple upgrades like thermostat scheduling and weather sealing can lower bills without changing comfort.',
+        'Simple upgrades like thermostat scheduling and weather sealing can lower bills without changing comfort. Amount shown is a broad estimate, not a measured result.',
       rationaleJson: {
         reason: 'high_usage_efficiency',
         monthlyKwh,

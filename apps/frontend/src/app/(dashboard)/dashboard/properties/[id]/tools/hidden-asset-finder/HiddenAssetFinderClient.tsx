@@ -357,7 +357,7 @@ function HiddenAssetDetailSheet({
   );
 
   const canAct =
-    match.status !== 'DISMISSED' && match.status !== 'CLAIMED' && !isUpdating;
+    match.status !== 'DISMISSED' && match.status !== 'PURSUING' && !isUpdating;
 
   const categoryCaveat = CATEGORY_CAVEAT[match.category] ?? null;
 
@@ -541,10 +541,10 @@ function HiddenAssetDetailSheet({
             </p>
           </div>
         )}
-        {match.status === 'CLAIMED' && (
+        {match.status === 'PURSUING' && (
           <div className="border-t px-5 py-4 space-y-3">
             <p className="text-xs font-semibold text-green-700">
-              Pursuing{match.claimedAt ? ` — started ${formatDate(match.claimedAt)}` : ''}.
+              Pursuing{match.pursuedAt ? ` — started ${formatDate(match.pursuedAt)}` : ''}.
             </p>
             <p className="text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
               Steps to apply
@@ -689,7 +689,9 @@ export default function HiddenAssetFinderClient() {
         description:
           result.matchesFound > 0
             ? `Found ${result.matchesFound} potential benefit${result.matchesFound !== 1 ? 's' : ''} for this property.`
-            : 'No new programs matched this property.',
+            : result.programsEvaluated === 0
+              ? "No reviewed programs cover this property's area yet — this is a coverage gap, not confirmation that no benefits exist."
+              : `Checked ${result.programsEvaluated} reviewed program${result.programsEvaluated === 1 ? '' : 's'} — none matched this property.`,
       });
     },
     onError: (error) =>
@@ -710,11 +712,11 @@ export default function HiddenAssetFinderClient() {
       status,
     }: {
       matchId: string;
-      status: 'VIEWED' | 'DISMISSED' | 'CLAIMED';
+      status: 'VIEWED' | 'DISMISSED' | 'PURSUING';
     }) => updateHiddenAssetMatchStatus(matchId, status),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['hidden-assets', propertyId] });
-      if (variables.status === 'CLAIMED') {
+      if (variables.status === 'PURSUING') {
         track('outcome_action_taken', { type: 'SAVINGS', sourceEngine: 'hidden-asset-finder', propertyId });
       }
     },
@@ -742,7 +744,7 @@ export default function HiddenAssetFinderClient() {
   function handleClaim() {
     if (!selectedMatch) return;
     statusMutation.mutate(
-      { matchId: selectedMatch.id, status: 'CLAIMED' },
+      { matchId: selectedMatch.id, status: 'PURSUING' },
       {
         onSuccess: () => {
           toast({
@@ -812,10 +814,10 @@ export default function HiddenAssetFinderClient() {
               key={level}
               label={
                 level === 'HIGH'
-                  ? 'Likely eligible'
+                  ? 'Strong property match'
                   : level === 'MEDIUM'
-                    ? 'Possibly eligible'
-                    : 'Worth verifying'
+                    ? 'Some property details match'
+                    : 'Location match only'
               }
               active={confidenceFilter === level}
               onClick={() =>
@@ -875,11 +877,19 @@ export default function HiddenAssetFinderClient() {
         </div>
       ) : matches.length === 0 ? (
         <EmptyStateCard
-          title={hasBeenScanned ? 'No programs found' : 'No benefits detected yet'}
+          title={
+            !hasBeenScanned
+              ? 'No benefits detected yet'
+              : summary?.programsEvaluated === 0
+                ? 'No reviewed programs cover this area yet'
+                : 'No programs matched'
+          }
           description={
-            hasBeenScanned
-              ? 'Your last scan found no matching programs for this property. Results may change as new programs are added or as your property details are updated.'
-              : 'Run a scan to check for potential tax exemptions, rebates, discounts, and other programs that may apply to this home. Results depend on your current property details.'
+            !hasBeenScanned
+              ? 'Run a scan to check for potential tax exemptions, rebates, discounts, and other programs that may apply to this home. Results depend on your current property details.'
+              : summary?.programsEvaluated === 0
+                ? "We don't yet have reviewed programs in our registry for this property's location. This is a coverage gap, not a sign that no benefits exist — check official state and local sources directly."
+                : `Your last scan checked ${summary?.programsEvaluated} reviewed program${summary?.programsEvaluated === 1 ? '' : 's'} and found no match for this property. Results may change as new programs are added or as your property details are updated.`
           }
           action={
             <Button

@@ -153,11 +153,11 @@ export default function FinancialEfficiencyClient() {
     .sort((a, b) => (b.estimatedValue ?? 0) - (a.estimatedValue ?? 0))
     .slice(0, 3);
 
-  // Rank monthly-wins categories by potentialSavingsUsd desc
+  // Rank monthly-wins categories by estimated annual savings desc
   const rankedCategories = [...(homeSavingsQuery.data?.categories ?? [])].sort(
-    (a: any, b: any) =>
-      (b.topOpportunity?.potentialSavingsUsd ?? 0) -
-      (a.topOpportunity?.potentialSavingsUsd ?? 0),
+    (a, b) =>
+      (b.topOpportunity?.estimatedAnnualSavings ?? 0) -
+      (a.topOpportunity?.estimatedAnnualSavings ?? 0),
   );
 
   if (isLoading) {
@@ -190,15 +190,14 @@ export default function FinancialEfficiencyClient() {
       <PageHero
         eyebrow="Save"
         icon={<PieChart className="h-5 w-5" />}
-        title={`${potentialSavings > 0 ? `$${potentialSavings.toLocaleString()}` : 'Elite'} annual savings intelligence for your home.`}
-        description="A fintech-grade view of insurance optimization, hidden asset programs, refinance timing, energy waste, taxes, and equity momentum."
+        title={`${potentialSavings > 0 ? `$${potentialSavings.toLocaleString()}` : 'Your'} annual savings and benefits overview.`}
+        description="A single view of recurring-cost estimates, matched benefit programs, refinance timing, energy waste, and equity momentum for your home."
         action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan policy</SmartCTA>}
         meta={
           <TrustMetaRow
             items={[
-              'Savings ranked by verified upside',
-              'High confidence based on property and market signals',
-              `You've protected $${Math.max(544, Math.round(potentialSavings * 0.28 || 544)).toLocaleString()} this year`,
+              'Opportunities ranked by estimated value',
+              'Based on property details and stored rules — not a live quote',
             ]}
           />
         }
@@ -222,7 +221,7 @@ export default function FinancialEfficiencyClient() {
         <MobileKpiTile
           label="Hidden Assets"
           value={hiddenMatches.length}
-          hint="Unclaimed programs"
+          hint="Matched programs to review"
           tone={hiddenMatches.length > 0 ? 'positive' : 'neutral'}
         />
         <MobileKpiTile
@@ -255,7 +254,7 @@ export default function FinancialEfficiencyClient() {
               <div className="space-y-1">
                 <h2 className="text-xl font-bold text-slate-900">Hidden Asset Programs</h2>
                 <p className="text-sm text-slate-500">
-                  Unclaimed rebates, grants, and programs matched to your property — ranked by value.
+                  Potential rebates, grants, and programs matched to your property — ranked by value. Verify eligibility with the official source before acting.
                 </p>
               </div>
             </div>
@@ -306,7 +305,7 @@ export default function FinancialEfficiencyClient() {
                     }
                     className="w-full justify-between h-9 px-2 text-[11px] font-bold text-amber-700 hover:bg-amber-50 rounded-lg"
                   >
-                    Claim This Benefit
+                    Review This Match
                     <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -352,9 +351,9 @@ export default function FinancialEfficiencyClient() {
                 <ShieldAlert className="h-32 w-32 rotate-12" />
               </div>
               <div className="relative z-10 space-y-4">
-                <h3 className="text-lg font-bold">Uncover Insurance Savings</h3>
+                <h3 className="text-lg font-bold">Check Insurance Coverage Gaps</h3>
                 <p className="text-brand-100 text-xs leading-relaxed max-w-[200px]">
-                  Snap a photo of your policy. AI scans for coverage gaps and better rates.
+                  Snap a photo of your policy. We check it against your stored coverage rules and flag gaps to review.
                 </p>
                 <Button
                   onClick={() => setIsScannerOpen(true)}
@@ -415,7 +414,7 @@ export default function FinancialEfficiencyClient() {
           </div>
         </section>
 
-        {/* ── Pillar 3: Recurring Savings (ranked by potentialSavingsUsd) ── */}
+        {/* ── Pillar 3: Recurring Savings (ranked by estimated annual savings) ── */}
         <section data-section="annual-savings" className={cn('space-y-5', focusSection === 'annual-savings' ? 'scroll-mt-24 rounded-2xl border-2 border-brand-200 ring-2 ring-brand-100 p-4 -mx-4' : undefined)}>
           <div className="flex items-start gap-4 px-1">
             <div className="mt-1 p-2 rounded-xl bg-emerald-50 border-2 border-emerald-100 text-emerald-600">
@@ -431,12 +430,12 @@ export default function FinancialEfficiencyClient() {
 
           {rankedCategories.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {rankedCategories.map((cat: any, idx: number) => (
+              {rankedCategories.map((cat, idx: number) => (
                 <div
                   key={cat.category.key}
                   className={cn(
                     'p-4 bg-white rounded-2xl border-2 hover:border-brand-100 transition-all shadow-sm space-y-3',
-                    idx === 0 && cat.topOpportunity?.potentialSavingsUsd > 0
+                    idx === 0 && (cat.topOpportunity?.estimatedAnnualSavings ?? 0) > 0
                       ? 'border-emerald-100'
                       : 'border-slate-50',
                   )}
@@ -447,17 +446,17 @@ export default function FinancialEfficiencyClient() {
                     </div>
                     <StatusBadge
                       status={cat.status === 'FOUND_SAVINGS' ? 'positive' : 'neutral'}
-                      label={cat.category.name}
+                      label={cat.category.label}
                     />
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-bold text-slate-900">
-                      {cat.topOpportunity?.title || 'Monitoring Cost'}
+                      {cat.topOpportunity?.headline || 'Monitoring cost'}
                     </p>
                     <p className="text-xs text-slate-500 leading-tight">
-                      {cat.topOpportunity?.potentialSavingsUsd
-                        ? `$${cat.topOpportunity.potentialSavingsUsd.toLocaleString()}/yr potential`
-                        : `Watching ${cat.category.name.toLowerCase()} trends.`}
+                      {cat.topOpportunity?.estimatedAnnualSavings
+                        ? `Broad estimate: $${cat.topOpportunity.estimatedAnnualSavings.toLocaleString()}/yr potential`
+                        : `Watching ${cat.category.label.toLowerCase()} trends.`}
                     </p>
                   </div>
                   <Button

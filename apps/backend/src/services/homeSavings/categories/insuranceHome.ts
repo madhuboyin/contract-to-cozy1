@@ -106,7 +106,7 @@ async function generateOpportunities({
       headline: `You may be paying above typical rates in ${property.state || 'your area'}`,
       detail: `You pay about ${round2(monthlyCost)}/month. Similar homes often pay near ${round2(
         baselineAnnual / 12
-      )}/month.`,
+      )}/month. Broad state-level estimate — not a live quote for your address.`,
       rationaleJson: {
         reason: 'above_baseline',
         annualCost,
@@ -125,7 +125,7 @@ async function generateOpportunities({
     drafts.push({
       confidence: HomeSavingsConfidence.MEDIUM,
       headline: `Your renewal is in ${renewalInDays} day${renewalInDays === 1 ? '' : 's'}`,
-      detail: 'Renewal window is usually the best time to compare rates and negotiate discounts.',
+      detail: 'Renewal window is usually the best time to compare rates and negotiate discounts. Amount shown is a broad estimate, not a quote.',
       rationaleJson: {
         reason: 'renewal_window',
         renewalInDays,
@@ -142,7 +142,7 @@ async function generateOpportunities({
       confidence: HomeSavingsConfidence.MEDIUM,
       headline: 'Review deductible and discount options',
       detail:
-        'A high deductible can lower premiums, but make sure it still fits your comfort level and emergency cash.',
+        'A high deductible can lower premiums, but make sure it still fits your comfort level and emergency cash. Amount shown is a broad estimate, not a quote.',
       rationaleJson: {
         reason: 'deductible_review',
         deductible,

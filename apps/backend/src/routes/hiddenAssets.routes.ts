@@ -18,7 +18,7 @@ const router = Router();
 // ============================================================================
 
 const updateMatchStatusBodySchema = z.object({
-  status: z.enum(['VIEWED', 'DISMISSED', 'CLAIMED']),
+  status: z.enum(['VIEWED', 'DISMISSED', 'PURSUING']),
 });
 
 // ============================================================================
@@ -41,7 +41,7 @@ router.use(authenticate);
  *   confidenceLevel  HIGH | MEDIUM | LOW
  *   category         TAX_EXEMPTION | REBATE | UTILITY_INCENTIVE | INSURANCE_DISCOUNT |
  *                    ENERGY_CREDIT | LOCAL_GRANT | HISTORIC_BENEFIT | STORM_RESILIENCE
- *   status           DETECTED | VIEWED | DISMISSED | CLAIMED | EXPIRED | INACTIVE
+ *   status           DETECTED | VIEWED | DISMISSED | PURSUING | EXPIRED | INACTIVE
  *   includeDismissed true — include DISMISSED matches
  *   includeExpired   true — include EXPIRED matches
  */
@@ -76,7 +76,7 @@ router.get('/hidden-asset-programs/:programId', getHiddenAssetProgramDetail);
  * PATCH /api/property-hidden-asset-matches/:matchId
  *
  * Updates the user-facing status of a match.
- * Allowed transitions: DETECTED → VIEWED, DISMISSED, or CLAIMED.
+ * Allowed transitions: DETECTED → VIEWED, DISMISSED, or PURSUING.
  * Property ownership is verified inside the service.
  */
 router.patch(
