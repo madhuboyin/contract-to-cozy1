@@ -11,6 +11,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 
 const {
   parseDockerfileCopyRules,
@@ -18,6 +19,7 @@ const {
   findImportViolationsFromSources,
   findCopiedRelativeImportViolationsFromSources,
   findMissingCopySources,
+  DOCKERFILE_PATH,
 } = require('../../scripts/check-worker-import-boundary.js');
 
 test('parseDockerfileCopyRules extracts a single-source, directory-destination COPY', () => {
@@ -79,6 +81,19 @@ test('resolveAvailableSharedModules ignores COPY rules whose dest is outside src
   assert.equal(available.size, 0);
 });
 
+test('real Docker copy map expands contract directories and includes property-tax ingestion', () => {
+  const rules = parseDockerfileCopyRules(fs.readFileSync(DOCKERFILE_PATH, 'utf8'));
+  const available = resolveAvailableSharedModules(rules);
+  assert.ok(
+    available.has('src/shared/backend/modules/homeEventRadar/contracts/index'),
+  );
+  assert.ok(
+    available.has(
+      'src/shared/backend/services/propertyTax/propertyTaxSourceIngestion.service',
+    ),
+  );
+});
+
 test('findImportViolationsFromSources flags an @worker-shared import with no matching COPY destination', () => {
   const entries = [
     { relFile: 'src/jobs/new.job.ts', source: `import { foo } from '@worker-shared/services/foo';` },
@@ -94,6 +109,20 @@ test('findImportViolationsFromSources does not flag an @worker-shared import tha
     { relFile: 'src/jobs/covered.job.ts', source: `import { foo } from '@worker-shared/services/foo';` },
   ];
   const available = new Set(['src/shared/backend/services/foo']);
+  const violations = findImportViolationsFromSources(entries, available);
+  assert.equal(violations.length, 0);
+});
+
+test('findImportViolationsFromSources resolves a copied directory through its index module', () => {
+  const entries = [
+    {
+      relFile: 'src/jobs/covered-directory.job.ts',
+      source: `import { foo } from '@worker-shared/modules/contracts';`,
+    },
+  ];
+  const available = new Set([
+    'src/shared/backend/modules/contracts/index',
+  ]);
   const violations = findImportViolationsFromSources(entries, available);
   assert.equal(violations.length, 0);
 });

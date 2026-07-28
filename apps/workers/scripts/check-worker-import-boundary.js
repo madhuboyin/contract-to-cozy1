@@ -52,6 +52,22 @@ function collectTsFiles(dir, out = []) {
   return out;
 }
 
+function expandTypeScriptCopySource(sourceFile) {
+  const absoluteSource = path.join(REPO_ROOT, sourceFile);
+  if (!fs.existsSync(absoluteSource)) return [];
+  if (fs.statSync(absoluteSource).isDirectory()) {
+    return collectTsFiles(absoluteSource).map((file) => ({
+      sourceFile: path.relative(REPO_ROOT, file).split(path.sep).join('/'),
+      relativePath: path.relative(absoluteSource, file).split(path.sep).join('/'),
+    }));
+  }
+  if (!sourceFile.endsWith('.ts')) return [];
+  return [{
+    sourceFile,
+    relativePath: path.basename(sourceFile),
+  }];
+}
+
 // Joins Dockerfile backslash-continued lines into single logical
 // instructions, the way Docker's own line joiner does — including
 // silently dropping comment-only lines inside a continuation, which is a
@@ -118,9 +134,18 @@ function resolveAvailableSharedModules(copyRules) {
   for (const { sources, dest } of copyRules) {
     if (!dest.startsWith('src/shared/')) continue;
     const destIsDir = dest.endsWith('/') || sources.length > 1;
+    const destDir = dest.endsWith('/') ? dest.slice(0, -1) : dest;
     if (destIsDir) {
-      const destDir = dest.endsWith('/') ? dest.slice(0, -1) : dest;
       for (const src of sources) {
+        const expanded = expandTypeScriptCopySource(src);
+        if (expanded.length > 0) {
+          for (const file of expanded) {
+            available.add(
+              `${destDir}/${file.relativePath.replace(/\.ts$/, '')}`,
+            );
+          }
+          continue;
+        }
         const base = path.basename(src).replace(/\.ts$/, '');
         available.add(`${destDir}/${base}`);
       }
@@ -149,7 +174,10 @@ function findImportViolationsFromSources(entries, availableSharedModules) {
     for (const spec of specs) {
       if (!spec.startsWith('@worker-shared/')) continue;
       const modulePath = 'src/shared/backend/' + spec.slice('@worker-shared/'.length);
-      if (!availableSharedModules.has(modulePath)) {
+      if (
+        !availableSharedModules.has(modulePath)
+        && !availableSharedModules.has(`${modulePath}/index`)
+      ) {
         violations.push({ file: relFile, spec });
       }
     }
@@ -172,17 +200,20 @@ function copiedSharedSourceEntries(copyRules) {
     const destIsDir = dest.endsWith('/') || sources.length > 1;
     const destDir = dest.endsWith('/') ? dest.slice(0, -1) : dest;
     for (const sourceFile of sources) {
-      if (!sourceFile.endsWith('.ts')) continue;
-      const imageFile = destIsDir
-        ? `${destDir}/${path.basename(sourceFile)}`
-        : dest;
-      const absoluteSource = path.join(REPO_ROOT, sourceFile);
-      if (!fs.existsSync(absoluteSource)) continue;
-      entries.push({
-        sourceFile,
-        imageFile,
-        source: fs.readFileSync(absoluteSource, 'utf8'),
-      });
+      const expanded = expandTypeScriptCopySource(sourceFile);
+      for (const file of expanded) {
+        const imageFile = destIsDir
+          ? `${destDir}/${file.relativePath}`
+          : dest;
+        entries.push({
+          sourceFile: file.sourceFile,
+          imageFile,
+          source: fs.readFileSync(
+            path.join(REPO_ROOT, file.sourceFile),
+            'utf8',
+          ),
+        });
+      }
     }
   }
   return entries;

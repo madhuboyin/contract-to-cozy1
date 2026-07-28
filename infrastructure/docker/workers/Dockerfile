@@ -400,6 +400,10 @@ COPY apps/backend/src/services/taxAssessorAdapters/taxAssessmentTypes.ts \
      apps/backend/src/services/taxAssessorAdapters/socrataTaxAdapter.ts \
      src/shared/backend/services/taxAssessorAdapters/
 COPY apps/backend/src/services/taxAssessmentFetch.service.ts src/shared/backend/services/
+# Canonical assessment persistence used by ingestTaxAssessmentEvents.job.ts.
+# Keep its propertyTax/ path so @worker-shared resolves identically in Docker.
+COPY apps/backend/src/services/propertyTax/propertyTaxSourceIngestion.service.ts \
+     src/shared/backend/services/propertyTax/
 # Provider Trust & Compliance Verification — only providerCompliance.service.ts
 # and the lapse adapter are needed here; providerCredential.service.ts (CRUD,
 # submission) is only used by backend routes/controllers, not worker jobs.
