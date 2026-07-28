@@ -1,12 +1,12 @@
 import 'dotenv/config';
 
-import { prisma } from '../src/lib/prisma';
+import { prisma } from '../lib/prisma';
 import {
   HiddenAssetProgramInput,
   HiddenAssetSourceInput,
   savingsBenefitsAdminService,
-} from '../src/services/savingsBenefitsAdmin.service';
-import { transitionSavingsBenefitProgram } from '../src/services/savingsBenefitsGovernance.service';
+} from '../services/savingsBenefitsAdmin.service';
+import { transitionSavingsBenefitProgram } from '../services/savingsBenefitsGovernance.service';
 
 /**
  * Pilot reviewed-source seed for the Savings and Benefits registry
@@ -16,6 +16,12 @@ import { transitionSavingsBenefitProgram } from '../src/services/savingsBenefits
  * program through the actual governance transitions (SUBMIT_FOR_REVIEW →
  * APPROVE → PUBLISH) rather than inserting PUBLISHED directly — running
  * this script is itself a live proof that the review workflow works.
+ *
+ * Lives under src/scripts/ (not prisma/) so it compiles into
+ * dist/scripts/seedSavingsBenefitsPilot.js — tsconfig.json excludes
+ * prisma/**\/* from the build, and the production image only ships dist/.
+ * Run in production via run-savings-benefits-seed-job.sh (a one-off
+ * Kubernetes Job), mirroring run-property-tax-seed-job.sh.
  *
  * Program names, official URLs, and eligibility summaries were verified
  * against nj.gov on 2026-07-28. Income limits, benefit amounts, and

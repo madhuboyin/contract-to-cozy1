@@ -9,7 +9,7 @@
     "prisma:generate": "prisma generate --schema=./prisma/schema.prisma",
     "seed": "npx prisma db seed",
     "seed:radar-tax-pilots": "ts-node src/scripts/seedReviewedTaxPilots.ts",
-    "seed:savings-benefits-pilot": "ts-node prisma/seedSavingsBenefitsPilot.ts",
+    "seed:savings-benefits-pilot": "ts-node src/scripts/seedSavingsBenefitsPilot.ts",
     "seed:knowledge-hub": "ts-node prisma/knowledgeHub.seed.ts",
     "generate:knowledge-hub-pgadmin": "ts-node prisma/generateKnowledgeHubPgAdminSeed.ts",
     "pretest:unit": "npm run prisma:generate",

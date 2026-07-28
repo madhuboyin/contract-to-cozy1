@@ -34,10 +34,14 @@ appears in a scan result.
 
 The pilot source (New Jersey Division of Taxation) and its two seeded
 programs (Senior Freeze, ANCHOR) live in
-`apps/backend/prisma/seedSavingsBenefitsPilot.ts`. Running
-`npm run seed:savings-benefits-pilot` is idempotent and drives each program
-through the real governance transitions rather than inserting `PUBLISHED`
-directly.
+`apps/backend/src/scripts/seedSavingsBenefitsPilot.ts`. Running
+`npm run seed:savings-benefits-pilot` (local dev, via `ts-node`) is
+idempotent and drives each program through the real governance transitions
+rather than inserting `PUBLISHED` directly. In a deployed environment
+without `npm`/`ts-node` available, run it as a one-off Kubernetes Job via
+`./run-savings-benefits-seed-job.sh` (mirrors `run-property-tax-seed-job.sh`;
+invokes the already-compiled `dist/scripts/seedSavingsBenefitsPilot.js`
+from the backend image).
 
 ### Onboarding a new source
 
