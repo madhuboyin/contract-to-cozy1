@@ -4,6 +4,8 @@ import type {
   HiddenAssetMatchDTO,
   HiddenAssetMatchListDTO,
   HiddenAssetRefreshResultDTO,
+  HiddenAssetSensitiveFactKey,
+  SensitiveFactStatusDTO,
 } from '@/types';
 
 export async function getHiddenAssetMatches(
@@ -34,4 +36,34 @@ export async function updateHiddenAssetMatchStatus(
   const result = await api.updateHiddenAssetMatchStatus(matchId, status);
   if (!result) throw new Error('Status update failed');
   return result;
+}
+
+export async function getHiddenAssetSensitiveFacts(matchId: string): Promise<SensitiveFactStatusDTO[]> {
+  return api.getHiddenAssetSensitiveFacts(matchId);
+}
+
+export async function submitHiddenAssetSensitiveFact(
+  matchId: string,
+  factKey: HiddenAssetSensitiveFactKey,
+  value: string | number | boolean,
+): Promise<SensitiveFactStatusDTO> {
+  const result = await api.submitHiddenAssetSensitiveFact(matchId, { factKey, value, consented: true });
+  if (!result) throw new Error('Failed to record sensitive fact');
+  return result;
+}
+
+export async function declineHiddenAssetSensitiveFact(
+  matchId: string,
+  factKey: HiddenAssetSensitiveFactKey,
+): Promise<SensitiveFactStatusDTO> {
+  const result = await api.declineHiddenAssetSensitiveFact(matchId, factKey);
+  if (!result) throw new Error('Failed to decline sensitive fact');
+  return result;
+}
+
+export async function deleteHiddenAssetSensitiveFact(
+  matchId: string,
+  factKey: HiddenAssetSensitiveFactKey,
+): Promise<void> {
+  await api.deleteHiddenAssetSensitiveFact(matchId, factKey);
 }

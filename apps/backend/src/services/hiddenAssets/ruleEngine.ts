@@ -14,6 +14,7 @@ import {
   ProgramEvalResult,
   PropertyAttributeMap,
   RuleEngineProgramInput,
+  SensitiveAttributeMap,
   SingleRuleEvalResult,
 } from './types';
 
@@ -168,6 +169,75 @@ function resolveAttribute(
   return { value, exists, mappedKey };
 }
 
+/**
+ * Rule attribute strings that reference a sensitive eligibility fact
+ * (audit section 9.6) instead of an ordinary PropertyAttributeMap key.
+ * Deliberately a SEPARATE dictionary from ATTRIBUTE_MAP — a rule authored
+ * with one of these attribute names can never accidentally resolve against
+ * the broad property map, and a rule authored with an ordinary attribute
+ * name can never accidentally pull from the sensitive overlay.
+ */
+const SENSITIVE_ATTRIBUTE_MAP: Record<string, keyof SensitiveAttributeMap> = {
+  income: 'income',
+  annualIncome: 'income',
+  householdIncome: 'income',
+  disability: 'disability',
+  hasDisability: 'disability',
+  age: 'age',
+  ownerAge: 'age',
+  isSenior: 'age',
+  veteranStatus: 'veteranStatus',
+  isVeteran: 'veteranStatus',
+  taxFilingStatus: 'taxFilingStatus',
+  householdComposition: 'householdComposition',
+  householdSize: 'householdComposition',
+  hardshipStatus: 'hardshipStatus',
+  hasHardship: 'hardshipStatus',
+  mortgageHardship: 'hardshipStatus',
+  utilityHardship: 'hardshipStatus',
+  immigrationStatus: 'immigrationStatus',
+};
+
+/**
+ * True when a rule's attribute string references a sensitive fact rather
+ * than an ordinary property attribute.
+ */
+export function isSensitiveAttribute(rawAttribute: string): boolean {
+  return rawAttribute in SENSITIVE_ATTRIBUTE_MAP;
+}
+
+/**
+ * Resolves a rule's attribute string to its SensitiveAttributeMap key, or
+ * null if it isn't a recognized sensitive attribute. Used by
+ * hiddenAssetSensitiveFacts.service.ts to work out which sensitive facts a
+ * program's rules actually reference, without duplicating the alias table.
+ */
+export function resolveSensitiveAttributeKey(rawAttribute: string): keyof SensitiveAttributeMap | null {
+  return SENSITIVE_ATTRIBUTE_MAP[rawAttribute] ?? null;
+}
+
+/**
+ * Resolves a rule's attribute string against the sensitive-fact overlay
+ * ONLY — never against PropertyAttributeMap. When `overlay` is undefined
+ * (the default for every broad/initial scan across all programs) every
+ * sensitive attribute resolves as missing, which is the correct fail-safe:
+ * a program requiring a sensitive fact can never silently match until a
+ * homeowner has explicitly consented to and provided that fact for this
+ * specific program's match (see hiddenAssetSensitiveFacts.service.ts).
+ */
+function resolveSensitiveAttribute(
+  overlay: SensitiveAttributeMap | undefined,
+  rawAttribute: string,
+): { value: unknown; exists: boolean; mappedKey: keyof SensitiveAttributeMap | null } {
+  const mappedKey = SENSITIVE_ATTRIBUTE_MAP[rawAttribute] ?? null;
+  if (!mappedKey || !overlay) {
+    return { value: undefined, exists: false, mappedKey };
+  }
+  const value = overlay[mappedKey];
+  const exists = value !== null && value !== undefined;
+  return { value, exists, mappedKey };
+}
+
 // ============================================================================
 // TYPE COERCIONS
 // ============================================================================
@@ -200,8 +270,11 @@ function toStringList(raw: string): string[] {
 function evaluateRule(
   attrs: PropertyAttributeMap,
   rule: RuleEngineProgramInput['rules'][number],
+  sensitiveOverlay?: SensitiveAttributeMap,
 ): SingleRuleEvalResult {
-  const { value: propValue, exists } = resolveAttribute(attrs, rule.attribute);
+  const { value: propValue, exists } = isSensitiveAttribute(rule.attribute)
+    ? resolveSensitiveAttribute(sensitiveOverlay, rule.attribute)
+    : resolveAttribute(attrs, rule.attribute);
 
   // EXISTS / NOT_EXISTS don't need the property value itself
   if (rule.operator === HiddenAssetRuleOperator.EXISTS) {
@@ -706,6 +779,7 @@ export function evaluateProgram(
   attrs: PropertyAttributeMap,
   program: RuleEngineProgramInput,
   context: EvalContext,
+  sensitiveOverlay?: SensitiveAttributeMap,
 ): ProgramEvalResult {
   const rules = program.rules;
 
@@ -734,8 +808,8 @@ export function evaluateProgram(
   const perRule: SingleRuleEvalResult[] = [];
 
   for (const rule of rules) {
-    const { value: propValue, mappedKey } = resolveAttribute(attrs, rule.attribute);
-    const result = evaluateRule(attrs, rule);
+    const sensitive = isSensitiveAttribute(rule.attribute);
+    const result = evaluateRule(attrs, rule, sensitiveOverlay);
     perRule.push(result);
 
     if (result.attributeMissing) {
@@ -748,8 +822,16 @@ export function evaluateProgram(
       // otherwise leave a misleading reason behind for a program that isn't
       // actually included.
       if (rule.kind !== HiddenAssetRuleKind.DISQUALIFYING) {
-        const key = mappedKey ?? (rule.attribute as keyof PropertyAttributeMap);
-        reasons.push(generateMatchReason(key, rule.operator, rule.value, propValue, context.category));
+        if (sensitive) {
+          // Never restate the homeowner's own sensitive value back to them
+          // as a "reason" — the fact that it satisfied one of this
+          // program's requirements is enough.
+          reasons.push('Meets an eligibility requirement based on information you provided');
+        } else {
+          const { value: propValue, mappedKey } = resolveAttribute(attrs, rule.attribute);
+          const key = mappedKey ?? (rule.attribute as keyof PropertyAttributeMap);
+          reasons.push(generateMatchReason(key, rule.operator, rule.value, propValue, context.category));
+        }
       }
     }
   }
@@ -834,6 +916,13 @@ export function buildPropertyAttributeMap(
     hasCoDetectors?: boolean | null;
     hasFireExtinguisher?: boolean | null;
     hasDrainageIssues?: boolean | null;
+    utilityProvider?: string | null;
+    gasProvider?: string | null;
+    inHistoricDistrict?: boolean | null;
+    historicRegistryStatus?: string | null;
+    inHurricaneZone?: boolean | null;
+    inFloodZone?: boolean | null;
+    inWildfireZone?: boolean | null;
   },
   currentYear: number = new Date().getFullYear(),
 ): PropertyAttributeMap {
@@ -912,17 +1001,17 @@ export function buildPropertyAttributeMap(
     insulationUpgrade: null,
     windowUpgrade: null,
 
-    // Utility (not yet in Property schema)
-    utilityProvider: null,
-    gasProvider: null,
+    // Utility
+    utilityProvider: property.utilityProvider ?? null,
+    gasProvider: property.gasProvider ?? null,
     primaryHeatingFuel: property.primaryHeatingFuel ?? null,
 
-    // Special zones / registries (not yet in Property schema)
-    inHistoricDistrict: null,
-    historicRegistryStatus: null,
-    inHurricaneZone: null,
-    inFloodZone: null,
-    inWildfireZone: null,
+    // Special zones / registries
+    inHistoricDistrict: property.inHistoricDistrict ?? null,
+    historicRegistryStatus: property.historicRegistryStatus ?? null,
+    inHurricaneZone: property.inHurricaneZone ?? null,
+    inFloodZone: property.inFloodZone ?? null,
+    inWildfireZone: property.inWildfireZone ?? null,
   };
 }
 

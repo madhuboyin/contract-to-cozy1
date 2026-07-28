@@ -2535,6 +2535,19 @@ model Property {
   normalizedZipCode String?
   county            String?
   countyFips        String?
+
+  // Homeowner-reported territory facts used by the Hidden Asset Finder's
+  // geography resolver (HSB-010). These are self-reported, not derived from
+  // a live external lookup — deliberately: fabricating a hazard-zone or
+  // utility-provider guess would be worse than leaving it unresolved.
+  utilityProvider        String?
+  gasProvider            String?
+  inHistoricDistrict     Boolean?
+  historicRegistryStatus String?
+  inHurricaneZone        Boolean?
+  inFloodZone            Boolean?
+  inWildfireZone         Boolean?
+
   geocodingStatus   PropertyGeocodingStatus                @default(PENDING)
   geocodingProvider String?
   geocodingVersion  String?
@@ -10898,11 +10911,27 @@ model HiddenAssetProgram {
   applicationWindowOpensAt  DateTime?
   applicationWindowClosesAt DateTime?
 
+  // Incremented on every rule-affecting edit; a HiddenAssetProgramVersionSnapshot
+  // row captures what the PRIOR version looked like at the moment of that
+  // edit (see savingsBenefitsAdmin.service.ts updateProgram). Matches record
+  // the version they were evaluated against (see
+  // PropertyHiddenAssetMatch.programVersionAtMatch) so history stays
+  // traceable even though the live row is edited in place.
+  version Int @default(1)
+
+  // Programs sharing a non-null exclusionGroupKey are mutually exclusive —
+  // a homeowner can realistically claim only one from the group (e.g. two
+  // programs funded from the same capped pool). Null means no known
+  // conflict. Surfaced on matches as mutuallyExclusiveWith, never used to
+  // silently hide a match.
+  exclusionGroupKey String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rules   HiddenAssetProgramRule[]
-  matches PropertyHiddenAssetMatch[]
+  rules            HiddenAssetProgramRule[]
+  matches          PropertyHiddenAssetMatch[]
+  versionSnapshots HiddenAssetProgramVersionSnapshot[]
 
   @@index([category])
   @@index([regionType])
@@ -10914,7 +10943,35 @@ model HiddenAssetProgram {
   @@index([reviewStatus])
   @@index([reviewStatus, regionType, regionValue, isActive])
   @@index([fundingStatus])
+  @@index([exclusionGroupKey])
   @@map("hidden_asset_programs")
+}
+
+// Point-in-time capture of a program + its rules, written just before an
+// admin edit mutates them in place (rule rows are destructively
+// deleted/recreated on update — see updateProgram). Without this, rule
+// history is untraceable (HSB-014): there'd be no way to know what criteria
+// a past match was actually evaluated against once a program changes.
+model HiddenAssetProgramVersionSnapshot {
+  id        String @id @default(uuid())
+  programId String
+  program   HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  // The version NUMBER this snapshot represents (the value program.version
+  // held immediately before this edit — the live row is then bumped past it).
+  version Int
+
+  // Full program + rules payload as it existed at that version, shaped like
+  // HiddenAssetProgramDetailDTO + its rules array.
+  snapshotJson Json
+
+  changeReason String?
+  recordedBy   String?
+  createdAt    DateTime @default(now())
+
+  @@unique([programId, version])
+  @@index([programId])
+  @@map("hidden_asset_program_version_snapshots")
 }
 
 // Individual eligibility rule attached to a program.
@@ -10963,6 +11020,10 @@ model PropertyHiddenAssetMatch {
   totalRuleCount         Int?
   matchReasons           Json? // array of human-readable match signals for display
   propertyContextVersion String?
+  // program.version at the moment this match was last (re-)evaluated —
+  // lets a stale match be recognized as evaluated against superseded
+  // criteria even though the live program row has since changed.
+  programVersionAtMatch  Int?
 
   lastEvaluatedAt DateTime  @default(now())
   firstDetectedAt DateTime  @default(now())
@@ -10976,9 +11037,10 @@ model PropertyHiddenAssetMatch {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  program  HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
-  outcomes HiddenAssetMatchOutcome[]
+  property       Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program        HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  outcomes       HiddenAssetMatchOutcome[]
+  sensitiveFacts PropertyHiddenAssetSensitiveFact[]
 
   @@unique([propertyId, programId])
   @@index([propertyId])
@@ -11015,6 +11077,66 @@ model HiddenAssetMatchOutcome {
   @@index([matchId])
   @@index([matchId, recordedAt])
   @@map("hidden_asset_match_outcomes")
+}
+
+// The finite set of sensitive-personal-attribute categories a program's
+// eligibility rule can reference (audit section 9.6). Never derived from
+// unrelated Property/HomeownerProfile data — only ever populated by an
+// explicit, consented, purpose-bound answer captured for one named match.
+enum HiddenAssetSensitiveFactKey {
+  INCOME
+  DISABILITY
+  AGE
+  VETERAN_STATUS
+  TAX_FILING_STATUS
+  HOUSEHOLD_COMPOSITION
+  HARDSHIP_STATUS
+  IMMIGRATION_STATUS
+  OTHER
+}
+
+enum HiddenAssetSensitiveFactStatus {
+  REQUESTED
+  PROVIDED
+  DECLINED
+}
+
+// A consented, purpose-bound answer to a single sensitive eligibility
+// question, scoped to exactly one match (never collected broadly, never
+// merged into the general PropertyAttributeMap). Deleting the row (see
+// hiddenAssetSensitiveFacts.service.ts deleteSensitiveFact) is a real hard
+// delete, not a soft-delete flag — retention is minimized by actually
+// removing the value, not just hiding it.
+model PropertyHiddenAssetSensitiveFact {
+  id      String @id @default(uuid())
+  matchId String
+  match   PropertyHiddenAssetMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  factKey HiddenAssetSensitiveFactKey
+  status  HiddenAssetSensitiveFactStatus @default(REQUESTED)
+
+  // Null while REQUESTED or after DECLINED — only ever set alongside
+  // PROVIDED, and only after consentedAt is stamped.
+  valueJson Json?
+
+  // Homeowner-facing explanation of why this specific match's program needs
+  // this fact — required so "explain why" is never skipped.
+  purpose String
+
+  consentedAt    DateTime?
+  consentVersion String?
+
+  requestedAt DateTime  @default(now())
+  respondedAt DateTime?
+  requestedBy String?
+  respondedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([matchId, factKey])
+  @@index([matchId])
+  @@map("property_hidden_asset_sensitive_facts")
 }
 
 // Tracks background or manual scan runs for a property.

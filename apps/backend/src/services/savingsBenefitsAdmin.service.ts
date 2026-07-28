@@ -68,6 +68,12 @@ export interface HiddenAssetProgramInput {
   fundingStatus?: HiddenAssetFundingStatus;
   applicationWindowOpensAt?: Date | null;
   applicationWindowClosesAt?: Date | null;
+  /**
+   * Programs sharing a non-null exclusionGroupKey are mutually exclusive —
+   * a homeowner can realistically claim only one from the group. Surfaced
+   * on matches as mutuallyExclusiveWith (see hiddenAssets.service.ts).
+   */
+  exclusionGroupKey?: string | null;
   rules: HiddenAssetProgramRuleInput[];
 }
 
@@ -217,6 +223,7 @@ export class SavingsBenefitsAdminService {
           fundingStatus: input.fundingStatus ?? HiddenAssetFundingStatus.UNKNOWN,
           applicationWindowOpensAt: input.applicationWindowOpensAt ?? null,
           applicationWindowClosesAt: input.applicationWindowClosesAt ?? null,
+          exclusionGroupKey: input.exclusionGroupKey ?? null,
           // "Saving must not publish it" — new programs always start DRAFT;
           // lifecycle moves only through savingsBenefitsGovernance.service.ts.
           reviewStatus: 'DRAFT',
@@ -238,12 +245,26 @@ export class SavingsBenefitsAdminService {
     });
   }
 
-  async updateProgram(programId: string, input: HiddenAssetProgramInput) {
+  async updateProgram(programId: string, input: HiddenAssetProgramInput, actorUserId?: string) {
     assertConsistentGroupKinds(input.rules);
     const existing = await prisma.hiddenAssetProgram.findUnique({ where: { id: programId } });
     if (!existing) throw new Error('Program not found');
 
     return prisma.$transaction(async (tx) => {
+      // Rule rows are destructively deleted/recreated below, which would
+      // otherwise make rule history untraceable (HSB-014) — capture what
+      // this version looked like right before the edit lands.
+      const priorDetail = await this.getProgram(programId, tx);
+      await tx.hiddenAssetProgramVersionSnapshot.create({
+        data: {
+          programId,
+          version: existing.version,
+          snapshotJson: JSON.parse(JSON.stringify(priorDetail)),
+          changeReason: 'Program edited via admin console',
+          recordedBy: actorUserId ?? null,
+        },
+      });
+
       await tx.hiddenAssetProgram.update({
         where: { id: programId },
         data: {
@@ -265,6 +286,8 @@ export class SavingsBenefitsAdminService {
           fundingStatus: input.fundingStatus ?? existing.fundingStatus,
           applicationWindowOpensAt: input.applicationWindowOpensAt ?? null,
           applicationWindowClosesAt: input.applicationWindowClosesAt ?? null,
+          exclusionGroupKey: input.exclusionGroupKey !== undefined ? input.exclusionGroupKey : existing.exclusionGroupKey,
+          version: { increment: 1 },
           // Saving content must not change lifecycle state — reviewStatus,
           // reviewedAt/By, and publishedAt/By are preserved as-is.
           reviewStatus: existing.reviewStatus,
@@ -283,6 +306,13 @@ export class SavingsBenefitsAdminService {
         })),
       });
       return this.getProgram(programId, tx);
+    });
+  }
+
+  async listProgramVersionHistory(programId: string) {
+    return prisma.hiddenAssetProgramVersionSnapshot.findMany({
+      where: { programId },
+      orderBy: { version: 'desc' },
     });
   }
 }

@@ -46,11 +46,20 @@ export interface AdminSourceInput {
   status?: HiddenAssetSourceStatus;
 }
 
+export type HiddenAssetRuleKind = 'MANDATORY' | 'OPTIONAL' | 'DISQUALIFYING';
+
 export interface AdminProgramRuleInput {
   attribute: string;
   operator: string;
   value: string;
   sortOrder?: number;
+  /**
+   * MANDATORY (default): must resolve true or the program is excluded.
+   * OPTIONAL: only raises/lowers confidence, never excludes.
+   * DISQUALIFYING: resolving true excludes the program outright.
+   * Rules sharing a groupKey are OR'd together and must share one kind.
+   */
+  kind?: HiddenAssetRuleKind;
   groupKey?: string | null;
 }
 
@@ -69,6 +78,8 @@ export interface AdminProgramListItem {
   updatedAt: string;
   source: { id: string; name: string };
   rules: AdminProgramRuleInput[];
+  exclusionGroupKey: string | null;
+  version: number;
 }
 
 export interface AdminProgramInput {
@@ -86,7 +97,22 @@ export interface AdminProgramInput {
   sourceLabel?: string | null;
   eligibilityNotes?: string | null;
   expiresAt?: string | null;
+  /**
+   * Programs sharing a non-null exclusionGroupKey are mutually exclusive —
+   * a homeowner can realistically claim only one from the group.
+   */
+  exclusionGroupKey?: string | null;
   rules: AdminProgramRuleInput[];
+}
+
+export interface ProgramVersionSnapshot {
+  id: string;
+  programId: string;
+  version: number;
+  snapshotJson: unknown;
+  changeReason: string | null;
+  recordedBy: string | null;
+  createdAt: string;
 }
 
 export interface EditorialQueueItem {
@@ -159,6 +185,15 @@ export async function updateProgram(
   const res = await api.put<{ program: AdminProgramListItem }>(
     `/api/admin/savings-benefits/programs/${programId}`,
     input,
+  );
+  return res.data;
+}
+
+export async function fetchProgramVersionHistory(
+  programId: string,
+): Promise<{ versions: ProgramVersionSnapshot[] }> {
+  const res = await api.get<{ versions: ProgramVersionSnapshot[] }>(
+    `/api/admin/savings-benefits/programs/${programId}/versions`,
   );
   return res.data;
 }

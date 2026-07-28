@@ -44,11 +44,17 @@ import type {
   HiddenAssetConfidenceLevel,
   HiddenAssetMatchDTO,
   HiddenAssetMatchSummaryDTO,
+  HiddenAssetSensitiveFactKey,
+  SensitiveFactStatusDTO,
 } from '@/types';
 import {
+  declineHiddenAssetSensitiveFact,
+  deleteHiddenAssetSensitiveFact,
   getHiddenAssetCoverage,
   getHiddenAssetMatches,
+  getHiddenAssetSensitiveFacts,
   refreshHiddenAssetMatches,
+  submitHiddenAssetSensitiveFact,
   updateHiddenAssetMatchStatus,
 } from './hiddenAssetApi';
 
@@ -334,6 +340,191 @@ function HiddenAssetMatchCard({
 // MATCH DETAIL SHEET
 // ============================================================================
 
+// ============================================================================
+// SENSITIVE ELIGIBILITY FACTS (consent-gated, per-match)
+// ============================================================================
+
+const SENSITIVE_FACT_LABEL: Record<HiddenAssetSensitiveFactKey, string> = {
+  INCOME: 'Household income',
+  DISABILITY: 'Disability status',
+  AGE: 'Age',
+  VETERAN_STATUS: 'Veteran status',
+  TAX_FILING_STATUS: 'Tax filing status',
+  HOUSEHOLD_COMPOSITION: 'Household composition',
+  HARDSHIP_STATUS: 'Financial hardship',
+  IMMIGRATION_STATUS: 'Immigration / citizenship status',
+  OTHER: 'Program-specific detail',
+};
+
+const SENSITIVE_FACT_INPUT: Record<HiddenAssetSensitiveFactKey, 'text' | 'number' | 'boolean'> = {
+  INCOME: 'text',
+  DISABILITY: 'boolean',
+  AGE: 'number',
+  VETERAN_STATUS: 'boolean',
+  TAX_FILING_STATUS: 'text',
+  HOUSEHOLD_COMPOSITION: 'text',
+  HARDSHIP_STATUS: 'boolean',
+  IMMIGRATION_STATUS: 'text',
+  OTHER: 'text',
+};
+
+function SensitiveFactRow({ matchId, fact }: { matchId: string; fact: SensitiveFactStatusDTO }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState('');
+  const [consented, setConsented] = useState(false);
+  const inputKind = SENSITIVE_FACT_INPUT[fact.factKey];
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['hidden-assets-sensitive-facts', matchId] });
+
+  const submitMutation = useMutation({
+    mutationFn: (value: string | number | boolean) => submitHiddenAssetSensitiveFact(matchId, fact.factKey, value),
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['hidden-assets'] });
+      setDraft('');
+      setConsented(false);
+    },
+  });
+
+  const declineMutation = useMutation({
+    mutationFn: () => declineHiddenAssetSensitiveFact(matchId, fact.factKey),
+    onSuccess: invalidate,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteHiddenAssetSensitiveFact(matchId, fact.factKey),
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['hidden-assets'] });
+    },
+  });
+
+  const pending = submitMutation.isPending || declineMutation.isPending || deleteMutation.isPending;
+
+  function handleSubmit() {
+    if (!consented || !draft.trim()) return;
+    const value = inputKind === 'number' ? Number(draft) : inputKind === 'boolean' ? draft === 'yes' : draft.trim();
+    submitMutation.mutate(value);
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-[hsl(var(--mobile-text-primary))]">
+          {SENSITIVE_FACT_LABEL[fact.factKey]}
+        </p>
+        <StatusChip tone={fact.status === 'PROVIDED' ? 'good' : fact.status === 'DECLINED' ? 'elevated' : 'info'}>
+          {fact.status === 'PROVIDED' ? 'Provided' : fact.status === 'DECLINED' ? 'Skipped' : 'Optional'}
+        </StatusChip>
+      </div>
+      <p className="text-[11px] leading-snug text-[hsl(var(--mobile-text-secondary))]">{fact.purpose}</p>
+
+      {fact.status === 'PROVIDED' ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-[11px]"
+          onClick={() => deleteMutation.mutate()}
+          disabled={pending}
+        >
+          {deleteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Remove this answer'}
+        </Button>
+      ) : (
+        <div className="space-y-2">
+          {inputKind === 'boolean' ? (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={draft === 'yes' ? 'default' : 'outline'}
+                className="h-7 flex-1 text-[11px]"
+                onClick={() => setDraft('yes')}
+              >
+                Yes
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={draft === 'no' ? 'default' : 'outline'}
+                className="h-7 flex-1 text-[11px]"
+                onClick={() => setDraft('no')}
+              >
+                No
+              </Button>
+            </div>
+          ) : (
+            <input
+              type={inputKind === 'number' ? 'number' : 'text'}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Your answer"
+              className="h-8 w-full rounded-md border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 text-xs dark:bg-slate-900"
+            />
+          )}
+          <label className="flex items-start gap-1.5 text-[11px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
+            <input
+              type="checkbox"
+              checked={consented}
+              onChange={(e) => setConsented(e.target.checked)}
+              className="mt-0.5"
+            />
+            I consent to share this to check eligibility for this program only.
+          </label>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="h-7 flex-1 text-[11px]"
+              disabled={!consented || !draft.trim() || pending}
+              onClick={handleSubmit}
+            >
+              {submitMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save answer'}
+            </Button>
+            {fact.status === 'REQUESTED' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-[11px]"
+                disabled={pending}
+                onClick={() => declineMutation.mutate()}
+              >
+                {declineMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Skip'}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SensitiveFactsPanel({ matchId }: { matchId: string }) {
+  const query = useQuery({
+    queryKey: ['hidden-assets-sensitive-facts', matchId],
+    queryFn: () => getHiddenAssetSensitiveFacts(matchId),
+    staleTime: 30_000,
+  });
+
+  const facts = query.data ?? [];
+  if (query.isLoading || facts.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+        Additional eligibility details (optional)
+      </h3>
+      <p className="text-[11px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
+        This program's official criteria include personal details we never collect broadly. Answering is optional,
+        used only for this program, and can be removed at any time.
+      </p>
+      <div className="space-y-2">
+        {facts.map((fact) => (
+          <SensitiveFactRow key={fact.factKey} matchId={matchId} fact={fact} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HiddenAssetDetailSheet({
   match,
   open,
@@ -412,6 +603,22 @@ function HiddenAssetDetailSheet({
               </ul>
             </div>
           )}
+
+          {/* Mutual exclusion notice */}
+          {match.mutuallyExclusiveWith.length > 0 && (
+            <div
+              role="note"
+              className="flex items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2.5"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+              <p className="text-xs leading-snug text-amber-700">
+                This program conflicts with {match.mutuallyExclusiveWith.length === 1 ? 'another matched program' : `${match.mutuallyExclusiveWith.length} other matched programs`} — you can realistically claim only one from this group.
+              </p>
+            </div>
+          )}
+
+          {/* Sensitive eligibility facts (consent-gated, per-match) */}
+          <SensitiveFactsPanel matchId={match.id} />
 
           {/* Estimated value */}
           {valueStr && (

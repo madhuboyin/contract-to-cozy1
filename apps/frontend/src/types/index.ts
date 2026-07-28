@@ -1612,6 +1612,15 @@ export interface Property {
   hasSumpPumpBackup: boolean | null;
   primaryHeatingFuel: string | null;
   hasSecondaryHeat: boolean | null;
+  // Homeowner-reported territory facts used by the Hidden Asset Finder's
+  // geography resolver (self-reported, never inferred from an external lookup).
+  utilityProvider: string | null;
+  gasProvider: string | null;
+  inHistoricDistrict: boolean | null;
+  historicRegistryStatus: string | null;
+  inHurricaneZone: boolean | null;
+  inFloodZone: boolean | null;
+  inWildfireZone: boolean | null;
   isResilienceVerified: boolean;
   isUtilityVerified: boolean;
   currentStreak: number;
@@ -2171,6 +2180,10 @@ export interface HiddenAssetMatchDTO {
   dismissedAt: string | null;
   pursuedAt: string | null;
   propertyContextVersion: string | null;
+  /** program.version this match was last evaluated against. */
+  programVersionAtMatch: number | null;
+  /** Other currently-visible match IDs sharing this program's exclusion group — never all stack. */
+  mutuallyExclusiveWith: string[];
 }
 
 export interface HiddenAssetMatchSummaryDTO {
@@ -2242,6 +2255,31 @@ export interface HiddenAssetCoverageDTO {
   sources: HiddenAssetCoverageSourceDTO[];
   categoriesCovered: HiddenAssetCategory[];
   categoriesNotCovered: HiddenAssetCategory[];
+}
+
+// ============================================================================
+// SENSITIVE ELIGIBILITY FACTS (consent-gated, per-match)
+// ============================================================================
+
+export type HiddenAssetSensitiveFactKey =
+  | 'INCOME'
+  | 'DISABILITY'
+  | 'AGE'
+  | 'VETERAN_STATUS'
+  | 'TAX_FILING_STATUS'
+  | 'HOUSEHOLD_COMPOSITION'
+  | 'HARDSHIP_STATUS'
+  | 'IMMIGRATION_STATUS'
+  | 'OTHER';
+
+export type HiddenAssetSensitiveFactStatus = 'REQUESTED' | 'PROVIDED' | 'DECLINED';
+
+export interface SensitiveFactStatusDTO {
+  factKey: HiddenAssetSensitiveFactKey;
+  status: HiddenAssetSensitiveFactStatus;
+  purpose: string;
+  consentedAt: string | null;
+  respondedAt: string | null;
 }
 
 // ============================================================================

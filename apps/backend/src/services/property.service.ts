@@ -101,6 +101,13 @@ interface CreatePropertyData {
   hasSumpPumpBackup?: boolean | null;
   primaryHeatingFuel?: string | null;
   hasSecondaryHeat?: boolean | null;
+  utilityProvider?: string | null;
+  gasProvider?: string | null;
+  inHistoricDistrict?: boolean | null;
+  historicRegistryStatus?: string | null;
+  inHurricaneZone?: boolean | null;
+  inFloodZone?: boolean | null;
+  inWildfireZone?: boolean | null;
   isResilienceVerified?: boolean;
   isUtilityVerified?: boolean;
   purchasePriceCents?: number | null;
@@ -947,6 +954,13 @@ export async function updateProperty(
     }
   }
   if (data.hasSecondaryHeat !== undefined) updatePayload.hasSecondaryHeat = data.hasSecondaryHeat;
+  if (data.utilityProvider !== undefined) updatePayload.utilityProvider = data.utilityProvider?.trim() || null;
+  if (data.gasProvider !== undefined) updatePayload.gasProvider = data.gasProvider?.trim() || null;
+  if (data.inHistoricDistrict !== undefined) updatePayload.inHistoricDistrict = data.inHistoricDistrict;
+  if (data.historicRegistryStatus !== undefined) updatePayload.historicRegistryStatus = data.historicRegistryStatus?.trim() || null;
+  if (data.inHurricaneZone !== undefined) updatePayload.inHurricaneZone = data.inHurricaneZone;
+  if (data.inFloodZone !== undefined) updatePayload.inFloodZone = data.inFloodZone;
+  if (data.inWildfireZone !== undefined) updatePayload.inWildfireZone = data.inWildfireZone;
   if (data.isResilienceVerified !== undefined) updatePayload.isResilienceVerified = data.isResilienceVerified;
   if (data.isUtilityVerified !== undefined) updatePayload.isUtilityVerified = data.isUtilityVerified;
   if (data.lastAppraisedValue !== undefined) updatePayload.lastAppraisedValue = data.lastAppraisedValue ?? null;

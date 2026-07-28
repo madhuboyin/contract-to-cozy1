@@ -17,6 +17,7 @@ import {
   getEditorialQueuesHandler,
   getProgram,
   getSource,
+  listProgramVersionHistory,
   listPrograms,
   listSources,
   makeTransitionHandler,
@@ -61,6 +62,7 @@ const RuleBodySchema = z.object({
   ]),
   value: z.string(),
   sortOrder: z.number().int().optional(),
+  kind: z.enum(['MANDATORY', 'OPTIONAL', 'DISQUALIFYING']).optional(),
   groupKey: z.string().nullable().optional(),
 });
 
@@ -97,6 +99,7 @@ const ProgramBodySchema = z.object({
   sourceLabel: z.string().nullable().optional(),
   eligibilityNotes: z.string().nullable().optional(),
   expiresAt: z.coerce.date().nullable().optional(),
+  exclusionGroupKey: z.string().nullable().optional(),
   rules: z.array(RuleBodySchema).default([]),
 });
 
@@ -147,6 +150,11 @@ router.put(
   requireCapability('SAVINGS_BENEFITS_AUTHOR'),
   validateBody(ProgramBodySchema),
   updateProgram
+);
+router.get(
+  '/admin/savings-benefits/programs/:programId/versions',
+  requireCapability('SAVINGS_BENEFITS_AUTHOR'),
+  listProgramVersionHistory
 );
 
 // ─── Editorial lifecycle (capability-separated) ────────────────────────────

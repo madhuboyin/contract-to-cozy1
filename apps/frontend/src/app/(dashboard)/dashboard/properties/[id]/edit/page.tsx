@@ -308,6 +308,13 @@ const propertySchema = z.object({
   hasSecuritySystem: z.boolean().nullable().optional(),
   hasFireExtinguisher: z.boolean().nullable().optional(),
   hasIrrigation: z.boolean().nullable().optional(),
+  utilityProvider: z.string().optional().nullable(),
+  gasProvider: z.string().optional().nullable(),
+  inHistoricDistrict: z.boolean().nullable().optional(),
+  historicRegistryStatus: z.string().optional().nullable(),
+  inHurricaneZone: z.boolean().nullable().optional(),
+  inFloodZone: z.boolean().nullable().optional(),
+  inWildfireZone: z.boolean().nullable().optional(),
   hasPrivateOutdoorSpace: z.boolean().nullable().optional(),
   outdoorSpaceTypes: z.array(z.enum(OUTDOOR_SPACE_TYPE_OPTIONS)),
   hasLawn: z.boolean().nullable().optional(),
@@ -394,6 +401,13 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         hasSecuritySystem: property.hasSecuritySystem ?? null,
         hasFireExtinguisher: property.hasFireExtinguisher ?? null,
         hasIrrigation: property.hasIrrigation ?? null,
+        utilityProvider: property.utilityProvider ?? null,
+        gasProvider: property.gasProvider ?? null,
+        inHistoricDistrict: property.inHistoricDistrict ?? null,
+        historicRegistryStatus: property.historicRegistryStatus ?? null,
+        inHurricaneZone: property.inHurricaneZone ?? null,
+        inFloodZone: property.inFloodZone ?? null,
+        inWildfireZone: property.inWildfireZone ?? null,
         hasPrivateOutdoorSpace: property.exteriorProfile?.hasPrivateOutdoorSpace ?? null,
         outdoorSpaceTypes: normalizeOutdoorSpaceTypes(
           property.exteriorProfile?.hasPrivateOutdoorSpace,
@@ -689,6 +703,9 @@ export default function EditPropertyPage() {
       roofReplacementYear: null, foundationType: "" as any, hasDrainageIssues: null, hasSmokeDetectors: null,
       hasCoDetectors: null, hasSecuritySystem: null, hasFireExtinguisher: null,
       hasIrrigation: null,
+      utilityProvider: null, gasProvider: null,
+      inHistoricDistrict: null, historicRegistryStatus: null,
+      inHurricaneZone: null, inFloodZone: null, inWildfireZone: null,
       hasPrivateOutdoorSpace: null, outdoorSpaceTypes: [], hasLawn: null, hasTreesOrShrubs: null, hasDriveway: null,
       purchasePriceDollars: null,
       purchaseDate: null,
@@ -777,6 +794,13 @@ export default function EditPropertyPage() {
         hasSecuritySystem: data.hasSecuritySystem ?? undefined,
         hasFireExtinguisher: data.hasFireExtinguisher ?? undefined,
         hasIrrigation: data.hasIrrigation ?? undefined,
+        utilityProvider: data.utilityProvider ?? undefined,
+        gasProvider: data.gasProvider ?? undefined,
+        inHistoricDistrict: data.inHistoricDistrict ?? undefined,
+        historicRegistryStatus: data.historicRegistryStatus ?? undefined,
+        inHurricaneZone: data.inHurricaneZone ?? undefined,
+        inFloodZone: data.inFloodZone ?? undefined,
+        inWildfireZone: data.inWildfireZone ?? undefined,
         exteriorProfile: {
           hasPrivateOutdoorSpace: data.hasPrivateOutdoorSpace,
           outdoorSpaceTypes: normalizeOutdoorSpaceTypes(data.hasPrivateOutdoorSpace, data.outdoorSpaceTypes),
@@ -1156,6 +1180,30 @@ export default function EditPropertyPage() {
       label: "Irrigation System",
       offHint: "Helps us include lawn and garden services in your plan.",
       onHint: "We'll include outdoor maintenance in your schedule.",
+      impact: "neutral" as const,
+    },
+    inHistoricDistrict: {
+      label: "Historic District",
+      offHint: "Some tax exemptions and grants only apply to registered historic properties.",
+      onHint: "Noted — we'll check for historic-district-specific benefits.",
+      impact: "neutral" as const,
+    },
+    inHurricaneZone: {
+      label: "Hurricane Zone",
+      offHint: "Helps us check for storm-resilience rebates and coverage guidance.",
+      onHint: "Noted — we'll check for hurricane-zone-specific benefits.",
+      impact: "neutral" as const,
+    },
+    inFloodZone: {
+      label: "Flood Zone",
+      offHint: "Helps us check for flood-related rebates and coverage guidance.",
+      onHint: "Noted — we'll check for flood-zone-specific benefits.",
+      impact: "neutral" as const,
+    },
+    inWildfireZone: {
+      label: "Wildfire Zone",
+      offHint: "Helps us check for wildfire-resilience rebates and coverage guidance.",
+      onHint: "Noted — we'll check for wildfire-zone-specific benefits.",
       impact: "neutral" as const,
     },
   } as const;
@@ -2023,6 +2071,70 @@ export default function EditPropertyPage() {
                   );
                 })}
               </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="utilityProvider"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Electric utility provider (optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                          placeholder="e.g. PSEG"
+                          value={field.value || ""}
+                          onChange={(e) => field.onChange(e.target.value || null)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="gasProvider"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Gas utility provider (optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                          placeholder="e.g. National Grid"
+                          value={field.value || ""}
+                          onChange={(e) => field.onChange(e.target.value || null)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {form.watch("inHistoricDistrict") ? (
+                  <FormField
+                    control={form.control}
+                    name="historicRegistryStatus"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">
+                          Historic registry status (optional)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                            placeholder="e.g. National Register of Historic Places"
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(e.target.value || null)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-slate-400">
+                These details help the Hidden Asset Finder check for utility, historic-district, and hazard-zone
+                specific rebates and credits. All are optional and self-reported.
+              </p>
             </PropertyEditSection>
 
             <PropertyEditSection

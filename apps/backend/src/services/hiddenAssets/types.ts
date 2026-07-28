@@ -26,7 +26,7 @@ export interface PropertyAttributeMap {
   state: string | null;
   city: string | null;
   zipCode: string | null;
-  county: string | null;       // not yet in Property schema
+  county: string | null;
   country: string;
 
   // ---------- Ownership / classification ----------
@@ -68,16 +68,38 @@ export interface PropertyAttributeMap {
   windowUpgrade: boolean | null;     // not yet in Property schema
 
   // ---------- Utility ----------
-  utilityProvider: string | null;    // not yet in Property schema
-  gasProvider: string | null;        // not yet in Property schema
+  utilityProvider: string | null;
+  gasProvider: string | null;
   primaryHeatingFuel: string | null;
 
   // ---------- Special zones / registries ----------
-  inHistoricDistrict: boolean | null;      // not yet in Property schema
-  historicRegistryStatus: string | null;   // not yet in Property schema
-  inHurricaneZone: boolean | null;         // not yet in Property schema
-  inFloodZone: boolean | null;             // not yet in Property schema
-  inWildfireZone: boolean | null;          // not yet in Property schema
+  inHistoricDistrict: boolean | null;
+  historicRegistryStatus: string | null;
+  inHurricaneZone: boolean | null;
+  inFloodZone: boolean | null;
+  inWildfireZone: boolean | null;
+}
+
+/**
+ * Sensitive eligibility facts (audit section 9.6: income, disability, age,
+ * veteran status, tax filing status, household composition, hardship,
+ * immigration/other program-specific status). Deliberately NOT a field on
+ * PropertyAttributeMap — these are never resolved from Property/homeowner
+ * records broadly. A value only ever exists here when explicitly consented
+ * and captured for one named match (see hiddenAssetSensitiveFacts.service.ts)
+ * and the overlay passed into evaluateProgram is empty for every other
+ * evaluation context (the initial broad scan across all programs never
+ * receives one).
+ */
+export interface SensitiveAttributeMap {
+  income: string | null;
+  disability: boolean | null;
+  age: number | null;
+  veteranStatus: boolean | null;
+  taxFilingStatus: string | null;
+  householdComposition: string | null;
+  hardshipStatus: boolean | null;
+  immigrationStatus: string | null;
 }
 
 // ============================================================================
@@ -220,6 +242,14 @@ export interface HiddenAssetMatchDTO {
   // Phase-3: confidence calibration transparency
   confidenceCalibrationSummary: HiddenAssetConfidenceCalibrationSummary;
   propertyContextVersion: string | null;
+  // program.version this match was last evaluated against — lets a stale
+  // match be recognized as evaluated against superseded criteria even after
+  // the live program has since changed.
+  programVersionAtMatch: number | null;
+  // Other currently-visible match IDs (on this property) whose program
+  // shares this program's exclusionGroupKey — surfaced so a homeowner never
+  // assumes all matched benefits stack. Never used to auto-hide a match.
+  mutuallyExclusiveWith: string[];
 }
 
 export interface HiddenAssetMatchSummaryDTO {

@@ -99,12 +99,22 @@ export async function createProgram(req: AuthRequest, res: Response): Promise<vo
 
 export async function updateProgram(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const program = await savingsBenefitsAdminService.updateProgram(req.params.programId, req.body);
+    const program = await savingsBenefitsAdminService.updateProgram(req.params.programId, req.body, req.user!.userId);
     res.json({ success: true, data: { program } });
   } catch (err: any) {
     if (handleClientError(err, res)) return;
     logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to update program');
     res.status(500).json({ success: false, error: { message: 'Failed to update program' } });
+  }
+}
+
+export async function listProgramVersionHistory(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const versions = await savingsBenefitsAdminService.listProgramVersionHistory(req.params.programId);
+    res.json({ success: true, data: { versions } });
+  } catch (err: any) {
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to list program version history');
+    res.status(500).json({ success: false, error: { message: 'Failed to list program version history' } });
   }
 }
 

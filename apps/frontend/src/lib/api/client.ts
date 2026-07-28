@@ -1601,6 +1601,13 @@ class APIClient {
       hasSumpPumpBackup?: boolean | null;
       primaryHeatingFuel?: string | null;
       hasSecondaryHeat?: boolean | null;
+      utilityProvider?: string | null;
+      gasProvider?: string | null;
+      inHistoricDistrict?: boolean | null;
+      historicRegistryStatus?: string | null;
+      inHurricaneZone?: boolean | null;
+      inFloodZone?: boolean | null;
+      inWildfireZone?: boolean | null;
       isResilienceVerified?: boolean;
       isUtilityVerified?: boolean;
       purchasePriceCents?: number | null;
@@ -4176,6 +4183,50 @@ class APIClient {
       { status }
     );
     return res.data?.match ?? null;
+  }
+
+  async getHiddenAssetSensitiveFacts(
+    matchId: string
+  ): Promise<import('@/types').SensitiveFactStatusDTO[]> {
+    const res = await this.get<{ facts: import('@/types').SensitiveFactStatusDTO[] }>(
+      `/api/property-hidden-asset-matches/${matchId}/sensitive-facts`
+    );
+    return res.data?.facts ?? [];
+  }
+
+  async submitHiddenAssetSensitiveFact(
+    matchId: string,
+    input: {
+      factKey: import('@/types').HiddenAssetSensitiveFactKey;
+      value: string | number | boolean;
+      consented: true;
+    }
+  ): Promise<import('@/types').SensitiveFactStatusDTO | null> {
+    const res = await this.post<{ fact: import('@/types').SensitiveFactStatusDTO }>(
+      `/api/property-hidden-asset-matches/${matchId}/sensitive-facts`,
+      input
+    );
+    return res.data?.fact ?? null;
+  }
+
+  async declineHiddenAssetSensitiveFact(
+    matchId: string,
+    factKey: import('@/types').HiddenAssetSensitiveFactKey
+  ): Promise<import('@/types').SensitiveFactStatusDTO | null> {
+    const res = await this.post<{ fact: import('@/types').SensitiveFactStatusDTO }>(
+      `/api/property-hidden-asset-matches/${matchId}/sensitive-facts/${factKey}/decline`,
+      {}
+    );
+    return res.data?.fact ?? null;
+  }
+
+  async deleteHiddenAssetSensitiveFact(
+    matchId: string,
+    factKey: import('@/types').HiddenAssetSensitiveFactKey
+  ): Promise<void> {
+    await this.request(`/api/property-hidden-asset-matches/${matchId}/sensitive-facts/${factKey}`, {
+      method: 'DELETE',
+    });
   }
 
   // ==========================================================================

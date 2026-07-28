@@ -9,6 +9,7 @@ require('ts-node/register');
 
 let programs = new Map();
 let rules = [];
+let versionSnapshots = [];
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {
@@ -20,13 +21,19 @@ require.cache[prismaPath] = {
       hiddenAssetProgram: {
         findUnique: async ({ where }) => programs.get(where.id) ?? null,
         create: async ({ data }) => {
-          const row = { id: `program-${programs.size + 1}`, ...data };
+          const row = { id: `program-${programs.size + 1}`, version: 1, ...data };
           programs.set(row.id, row);
           return row;
         },
         update: async ({ where, data }) => {
           const row = programs.get(where.id);
-          Object.assign(row, data);
+          const { version, ...rest } = data;
+          Object.assign(row, rest);
+          if (version && typeof version === 'object' && 'increment' in version) {
+            row.version = (row.version ?? 1) + version.increment;
+          } else if (version !== undefined) {
+            row.version = version;
+          }
           return row;
         },
       },
@@ -37,10 +44,18 @@ require.cache[prismaPath] = {
         },
         deleteMany: async () => ({ count: 0 }),
       },
+      hiddenAssetProgramVersionSnapshot: {
+        create: async ({ data }) => {
+          const row = { id: `snapshot-${versionSnapshots.length + 1}`, ...data };
+          versionSnapshots.push(row);
+          return row;
+        },
+      },
       $transaction: async (fn) =>
         fn({
           hiddenAssetProgram: require.cache[prismaPath].exports.prisma.hiddenAssetProgram,
           hiddenAssetProgramRule: require.cache[prismaPath].exports.prisma.hiddenAssetProgramRule,
+          hiddenAssetProgramVersionSnapshot: require.cache[prismaPath].exports.prisma.hiddenAssetProgramVersionSnapshot,
         }),
     },
   },
@@ -53,6 +68,7 @@ const {
 test.beforeEach(() => {
   programs = new Map();
   rules = [];
+  versionSnapshots = [];
 });
 
 function baseProgramInput(overrides = {}) {

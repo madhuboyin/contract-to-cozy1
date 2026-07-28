@@ -70,7 +70,32 @@ function buildConfidenceCalibrationSummary(row: MatchWithProgram): HiddenAssetCo
   return { matchedRuleCount: matched, totalRuleCount: total, calibrationNote, outcomeNote };
 }
 
-function serializeMatch(row: MatchWithProgram): HiddenAssetMatchDTO {
+/**
+ * Groups a set of matches by their program's exclusionGroupKey and returns,
+ * per matchId, the sibling matchIds sharing that group (never itself). A
+ * null/empty exclusionGroupKey never groups with anything.
+ */
+function computeMutualExclusions(rows: MatchWithProgram[]): Map<string, string[]> {
+  const byGroupKey = new Map<string, string[]>();
+  for (const row of rows) {
+    const key = row.program.exclusionGroupKey;
+    if (!key) continue;
+    const ids = byGroupKey.get(key) ?? [];
+    ids.push(row.id);
+    byGroupKey.set(key, ids);
+  }
+
+  const result = new Map<string, string[]>();
+  for (const ids of byGroupKey.values()) {
+    if (ids.length < 2) continue;
+    for (const id of ids) {
+      result.set(id, ids.filter((other) => other !== id));
+    }
+  }
+  return result;
+}
+
+function serializeMatch(row: MatchWithProgram, mutuallyExclusiveWith: string[] = []): HiddenAssetMatchDTO {
   const p = row.program;
   return {
     id: row.id,
@@ -104,6 +129,8 @@ function serializeMatch(row: MatchWithProgram): HiddenAssetMatchDTO {
     pursuedAt: row.pursuedAt ? row.pursuedAt.toISOString() : null,
     confidenceCalibrationSummary: buildConfidenceCalibrationSummary(row),
     propertyContextVersion: row.propertyContextVersion ?? null,
+    programVersionAtMatch: row.programVersionAtMatch ?? null,
+    mutuallyExclusiveWith,
   };
 }
 
@@ -203,6 +230,13 @@ async function assertPropertyForUser(
       hasCoDetectors: true,
       hasFireExtinguisher: true,
       hasDrainageIssues: true,
+      utilityProvider: true,
+      gasProvider: true,
+      inHistoricDistrict: true,
+      historicRegistryStatus: true,
+      inHurricaneZone: true,
+      inFloodZone: true,
+      inWildfireZone: true,
       homeownerProfile: { select: { userId: true } },
     },
   });
@@ -223,6 +257,13 @@ export function deriveRegionPairs(property: {
   city: string;
   zipCode: string;
   county?: string | null;
+  utilityProvider?: string | null;
+  gasProvider?: string | null;
+  inHistoricDistrict?: boolean | null;
+  historicRegistryStatus?: string | null;
+  inHurricaneZone?: boolean | null;
+  inFloodZone?: boolean | null;
+  inWildfireZone?: boolean | null;
 }): RegionPair[] {
   const pairs: RegionPair[] = [];
 
@@ -240,6 +281,28 @@ export function deriveRegionPairs(property: {
   }
   if (property.zipCode) {
     pairs.push({ regionType: HiddenAssetRegionType.ZIP, regionValue: property.zipCode });
+  }
+  if (property.utilityProvider) {
+    pairs.push({ regionType: HiddenAssetRegionType.UTILITY, regionValue: property.utilityProvider });
+  }
+  if (property.gasProvider) {
+    pairs.push({ regionType: HiddenAssetRegionType.UTILITY, regionValue: property.gasProvider });
+  }
+  // One pair per affirmatively-known hazard zone — never inferred, only
+  // ever emitted when the homeowner has explicitly reported it.
+  if (property.inHurricaneZone) {
+    pairs.push({ regionType: HiddenAssetRegionType.HAZARD_ZONE, regionValue: 'HURRICANE' });
+  }
+  if (property.inFloodZone) {
+    pairs.push({ regionType: HiddenAssetRegionType.HAZARD_ZONE, regionValue: 'FLOOD' });
+  }
+  if (property.inWildfireZone) {
+    pairs.push({ regionType: HiddenAssetRegionType.HAZARD_ZONE, regionValue: 'WILDFIRE' });
+  }
+  if (property.historicRegistryStatus) {
+    pairs.push({ regionType: HiddenAssetRegionType.HISTORIC_DISTRICT, regionValue: property.historicRegistryStatus });
+  } else if (property.inHistoricDistrict) {
+    pairs.push({ regionType: HiddenAssetRegionType.HISTORIC_DISTRICT, regionValue: 'HISTORIC_DISTRICT' });
   }
 
   return pairs;
@@ -377,6 +440,13 @@ async function fetchPropertyForScan(propertyId: string): Promise<PropertyScanInp
       hasCoDetectors: true,
       hasFireExtinguisher: true,
       hasDrainageIssues: true,
+      utilityProvider: true,
+      gasProvider: true,
+      inHistoricDistrict: true,
+      historicRegistryStatus: true,
+      inHurricaneZone: true,
+      inFloodZone: true,
+      inWildfireZone: true,
       homeownerProfile: { select: { userId: true } },
     },
   });
@@ -445,6 +515,7 @@ async function executePropertyScan(
 
     const matchedResults = evalResults.filter((r) => r.matched && r.confidenceLevel !== null);
     const matchedProgramIds = new Set(matchedResults.map((r) => r.programId));
+    const candidateProgramById = new Map(candidatePrograms.map((p) => [p.id, p]));
 
     // Fetch existing matches to preserve user-set statuses
     const existingMatches = await prisma.propertyHiddenAssetMatch.findMany({
@@ -459,6 +530,7 @@ async function executePropertyScan(
       const preserveStatus =
         existing?.status === PropertyHiddenAssetMatchStatus.DISMISSED ||
         existing?.status === PropertyHiddenAssetMatchStatus.PURSUING;
+      const programVersionAtMatch = candidateProgramById.get(result.programId)?.version ?? null;
 
       await prisma.propertyHiddenAssetMatch.upsert({
         where: {
@@ -476,6 +548,7 @@ async function executePropertyScan(
           matchReasons: result.matchReasons,
           lastEvaluatedAt: now,
           propertyContextVersion: financialContext.contextVersion,
+          programVersionAtMatch,
           // Only update status if the user hasn't explicitly acted on this match
           ...(preserveStatus ? {} : { status: PropertyHiddenAssetMatchStatus.DETECTED }),
         },
@@ -494,6 +567,7 @@ async function executePropertyScan(
           lastEvaluatedAt: now,
           firstDetectedAt: now,
           propertyContextVersion: financialContext.contextVersion,
+          programVersionAtMatch,
         },
       });
     }
@@ -573,7 +647,10 @@ async function executePropertyScan(
       matchesExpired,
       matchesInactivated,
       durationMs,
-      matches: freshMatches.map(serializeMatch),
+      matches: (() => {
+        const exclusions = computeMutualExclusions(freshMatches);
+        return freshMatches.map((m) => serializeMatch(m, exclusions.get(m.id) ?? []));
+      })(),
       propertyContextVersion: financialContext.contextVersion,
     };
   } catch (err) {
@@ -607,7 +684,8 @@ export class HiddenAssetService {
 
     const rows = await fetchMatchesForProperty(propertyId, filters);
     const lastScan = await getLastCompletedScan(propertyId);
-    const matches = rows.map(serializeMatch);
+    const exclusions = computeMutualExclusions(rows);
+    const matches = rows.map((m) => serializeMatch(m, exclusions.get(m.id) ?? []));
 
     // Analytics: hidden assets feature viewed
     analyticsEmitter.track({
@@ -775,6 +853,19 @@ export class HiddenAssetService {
       include: { program: true },
     });
 
-    return { match: serializeMatch(updated) };
+    let mutuallyExclusiveWith: string[] = [];
+    if (updated.program.exclusionGroupKey) {
+      const siblings = await prisma.propertyHiddenAssetMatch.findMany({
+        where: {
+          propertyId: updated.propertyId,
+          id: { not: updated.id },
+          program: { exclusionGroupKey: updated.program.exclusionGroupKey },
+        },
+        select: { id: true },
+      });
+      mutuallyExclusiveWith = siblings.map((s) => s.id);
+    }
+
+    return { match: serializeMatch(updated, mutuallyExclusiveWith) };
   }
 }

@@ -9,7 +9,7 @@
 // workspace's patterns (AdminConsoleShell, useAdminGuard, ReasonConfirmDialog).
 
 import React, { useState } from 'react';
-import { Landmark, Loader2, Plus } from 'lucide-react';
+import { Landmark, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ import {
 import type {
   AdminProgramInput,
   AdminProgramListItem,
+  AdminProgramRuleInput,
   AdminSourceInput,
   AdminSourceListItem,
   EditorialQueueItem,
@@ -70,6 +71,27 @@ const CATEGORIES = [
 const REGION_TYPES = ['COUNTRY', 'STATE', 'COUNTY', 'CITY', 'ZIP', 'UTILITY', 'HAZARD_ZONE', 'HISTORIC_DISTRICT'] as const;
 
 const BENEFIT_TYPES = ['TAX_SAVINGS', 'TAX_CREDIT', 'REBATE', 'DISCOUNT', 'GRANT', 'CREDIT', 'OTHER'] as const;
+
+const RULE_OPERATORS = [
+  'EQUALS',
+  'NOT_EQUALS',
+  'IN',
+  'NOT_IN',
+  'GREATER_THAN',
+  'GREATER_THAN_OR_EQUAL',
+  'LESS_THAN',
+  'LESS_THAN_OR_EQUAL',
+  'EXISTS',
+  'NOT_EXISTS',
+  'CONTAINS',
+  'BOOLEAN_IS',
+] as const;
+
+const RULE_KINDS = ['MANDATORY', 'OPTIONAL', 'DISQUALIFYING'] as const;
+
+function emptyRule(): AdminProgramRuleInput {
+  return { attribute: '', operator: 'EQUALS', value: '', kind: 'MANDATORY', groupKey: null };
+}
 
 const HEALTH_TONE: Record<string, string> = {
   HEALTHY: 'bg-emerald-50 text-emerald-700',
@@ -197,8 +219,10 @@ function ProgramFormDialog({
   const [benefitMax, setBenefitMax] = useState(initial?.benefitEstimateMax?.toString() ?? '');
   const [sourceUrl, setSourceUrl] = useState(initial?.sourceUrl ?? '');
   const [eligibilityNotes, setEligibilityNotes] = useState(initial?.eligibilityNotes ?? '');
-  const [ruleAttribute, setRuleAttribute] = useState(initial?.rules[0]?.attribute ?? 'state');
-  const [ruleValue, setRuleValue] = useState(initial?.rules[0]?.value ?? '');
+  const [exclusionGroupKey, setExclusionGroupKey] = useState(initial?.exclusionGroupKey ?? '');
+  const [rules, setRules] = useState<AdminProgramRuleInput[]>(
+    initial?.rules?.length ? initial.rules : [emptyRule()],
+  );
 
   React.useEffect(() => {
     if (!open) return;
@@ -211,9 +235,17 @@ function ProgramFormDialog({
     setBenefitMax(initial?.benefitEstimateMax?.toString() ?? '');
     setSourceUrl(initial?.sourceUrl ?? '');
     setEligibilityNotes(initial?.eligibilityNotes ?? '');
-    setRuleAttribute(initial?.rules[0]?.attribute ?? 'state');
-    setRuleValue(initial?.rules[0]?.value ?? '');
+    setExclusionGroupKey(initial?.exclusionGroupKey ?? '');
+    setRules(initial?.rules?.length ? initial.rules : [emptyRule()]);
   }, [open, initial, sources]);
+
+  function updateRule(index: number, patch: Partial<AdminProgramRuleInput>) {
+    setRules((prev) => prev.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)));
+  }
+
+  function removeRule(index: number) {
+    setRules((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -275,18 +307,79 @@ function ProgramFormDialog({
             <Label>Official source URL</Label>
             <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." />
           </div>
-          <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-3">
-            <div className="col-span-2 text-xs font-semibold text-slate-500">
-              Machine-evaluated rule (property attribute match)
+          <div>
+            <Label>Mutual-exclusion group key (optional)</Label>
+            <Input
+              value={exclusionGroupKey}
+              onChange={(e) => setExclusionGroupKey(e.target.value)}
+              placeholder="e.g. state-energy-rebate-pool-2026"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Programs sharing this key are treated as mutually exclusive — a homeowner can realistically
+              claim only one. Leave blank if this program doesn&apos;t conflict with any other.
+            </p>
+          </div>
+          <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500">
+                Machine-evaluated rules (property attribute match)
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setRules((prev) => [...prev, emptyRule()])}>
+                <Plus className="mr-1 h-3 w-3" /> Add rule
+              </Button>
             </div>
-            <div>
-              <Label>Attribute</Label>
-              <Input value={ruleAttribute} onChange={(e) => setRuleAttribute(e.target.value)} placeholder="state" />
-            </div>
-            <div>
-              <Label>Equals value</Label>
-              <Input value={ruleValue} onChange={(e) => setRuleValue(e.target.value)} placeholder="NJ" />
-            </div>
+            <p className="text-xs text-slate-500">
+              Rules sharing a group key are OR&apos;d together and must share one kind. Sensitive attributes
+              (income, disability, age, veteranStatus, taxFilingStatus, householdComposition, hardshipStatus,
+              immigrationStatus) never resolve from property data — they only ever come from a homeowner&apos;s
+              consented answer for that specific match.
+            </p>
+            {rules.map((rule, index) => (
+              <div key={index} className="grid grid-cols-2 gap-2 rounded-md border border-slate-100 bg-slate-50/60 p-2 sm:grid-cols-6">
+                <div className="col-span-2 sm:col-span-2">
+                  <Label className="text-[11px]">Attribute</Label>
+                  <Input value={rule.attribute} onChange={(e) => updateRule(index, { attribute: e.target.value })} placeholder="state" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Operator</Label>
+                  <Select value={rule.operator} onValueChange={(v) => updateRule(index, { operator: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{RULE_OPERATORS.map((op) => <SelectItem key={op} value={op}>{op}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px]">Value</Label>
+                  <Input value={rule.value} onChange={(e) => updateRule(index, { value: e.target.value })} placeholder="NJ" />
+                </div>
+                <div>
+                  <Label className="text-[11px]">Kind</Label>
+                  <Select value={rule.kind ?? 'MANDATORY'} onValueChange={(v) => updateRule(index, { kind: v as AdminProgramRuleInput['kind'] })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{RULE_KINDS.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end gap-1">
+                  <div className="flex-1">
+                    <Label className="text-[11px]">Group key (OR)</Label>
+                    <Input
+                      value={rule.groupKey ?? ''}
+                      onChange={(e) => updateRule(index, { groupKey: e.target.value || null })}
+                      placeholder="optional"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mb-0.5 shrink-0 text-rose-600 hover:text-rose-700"
+                    disabled={rules.length <= 1}
+                    onClick={() => removeRule(index)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
           <div>
             <Label>Eligibility notes (homeowner-facing, not machine-evaluated)</Label>
@@ -302,7 +395,13 @@ function ProgramFormDialog({
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
           <Button
             size="sm"
-            disabled={pending || !name.trim() || !regionValue.trim() || !sourceId || !ruleValue.trim()}
+            disabled={
+              pending ||
+              !name.trim() ||
+              !regionValue.trim() ||
+              !sourceId ||
+              rules.some((r) => !r.attribute.trim() || (!r.value.trim() && r.operator !== 'EXISTS' && r.operator !== 'NOT_EXISTS'))
+            }
             onClick={() =>
               onSubmit({
                 sourceId,
@@ -314,7 +413,15 @@ function ProgramFormDialog({
                 benefitEstimateMax: benefitMax ? Number(benefitMax) : null,
                 sourceUrl: sourceUrl.trim() || null,
                 eligibilityNotes: eligibilityNotes.trim() || null,
-                rules: [{ attribute: ruleAttribute.trim(), operator: 'EQUALS', value: ruleValue.trim() }],
+                exclusionGroupKey: exclusionGroupKey.trim() || null,
+                rules: rules.map((r, index) => ({
+                  attribute: r.attribute.trim(),
+                  operator: r.operator,
+                  value: r.value.trim(),
+                  sortOrder: index,
+                  kind: r.kind ?? 'MANDATORY',
+                  groupKey: r.groupKey || null,
+                })),
               })
             }
           >
@@ -517,7 +624,8 @@ export default function SavingsBenefitsAdminPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-800">{program.name}</p>
                     <p className="text-[11px] text-slate-400">
-                      {program.source.name} · {program.category} · {program.regionType}:{program.regionValue}
+                      {program.source.name} · {program.category} · {program.regionType}:{program.regionValue} · v{program.version}
+                      {program.exclusionGroupKey ? ` · excludes: ${program.exclusionGroupKey}` : ''}
                     </p>
                   </div>
                   <Badge variant="outline" className="text-[10px]">{program.reviewStatus}</Badge>
