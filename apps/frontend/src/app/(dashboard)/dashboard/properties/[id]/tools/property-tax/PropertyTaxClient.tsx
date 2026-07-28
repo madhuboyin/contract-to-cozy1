@@ -4,7 +4,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 
-import { getPropertyTaxEstimate, PropertyTaxEstimateDTO } from './taxApi';
+import {
+  getPropertyTaxCenterRecord,
+  getPropertyTaxEstimate,
+  saveHomeownerPropertyTaxRecord,
+  type PropertyTaxCenterRecordDTO,
+  type PropertyTaxEstimateDTO,
+  type PropertyTaxFieldDTO,
+} from './taxApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
@@ -27,6 +34,54 @@ function sourceLabel(source?: PropertyTaxEstimateDTO['current']['source']) {
     : 'Rough planning estimate';
 }
 
+function canonicalStateLabel(state?: PropertyTaxCenterRecordDTO['state']) {
+  return {
+    UNKNOWN: 'No canonical record',
+    OFFICIAL: 'Official source',
+    DOCUMENT_CONFIRMED: 'Confirmed document',
+    DOCUMENT_UNCONFIRMED: 'Document needs review',
+    HOMEOWNER_REPORTED: 'Homeowner reported',
+    MIXED: 'Mixed sources',
+    CONFLICTED: 'Conflicting records',
+  }[state ?? 'UNKNOWN'];
+}
+
+function fieldValue(field: PropertyTaxFieldDTO | undefined, kind: 'money' | 'rate' | 'text' = 'text') {
+  if (!field || field.state === 'UNKNOWN') return 'Unknown';
+  if (field.state === 'CONFLICTED') return 'Needs resolution';
+  if (kind === 'money' && typeof field.value === 'number') return money(field.value);
+  if (kind === 'rate' && typeof field.value === 'number') return pct(field.value);
+  if (Array.isArray(field.value)) return field.value.join(', ');
+  return String(field.value ?? 'Unknown');
+}
+
+function CanonicalField({
+  label,
+  field,
+  kind = 'text',
+}: {
+  label: string;
+  field: PropertyTaxFieldDTO | undefined;
+  kind?: 'money' | 'rate' | 'text';
+}) {
+  const conflicted = field?.state === 'CONFLICTED';
+  return (
+    <div className={`rounded-xl border p-3 ${conflicted ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30' : 'border-slate-200 dark:border-slate-700'}`}>
+      <div className="text-xs text-slate-600 dark:text-slate-300">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+        {fieldValue(field, kind)}
+      </div>
+      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        {field?.state === 'KNOWN'
+          ? `${canonicalStateLabel(field.canonicalState)} · ${field.confidence.toLowerCase()} confidence`
+          : field?.state === 'CONFLICTED'
+            ? `${field.observations.length} sources disagree`
+            : 'No sourced value'}
+      </div>
+    </div>
+  );
+}
+
 export default function PropertyTaxClient() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -34,10 +89,18 @@ export default function PropertyTaxClient() {
   const appealMode = searchParams.get('mode') === 'appeal';
 
   const [loading, setLoading] = useState(false);
+  const [recordLoading, setRecordLoading] = useState(false);
+  const [savingRecord, setSavingRecord] = useState(false);
   const [estimate, setEstimate] = useState<PropertyTaxEstimateDTO | null>(null);
+  const [record, setRecord] = useState<PropertyTaxCenterRecordDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recordError, setRecordError] = useState<string | null>(null);
+  const [recordSaved, setRecordSaved] = useState(false);
   const [assessedValue, setAssessedValue] = useState('');
   const [taxRate, setTaxRate] = useState('');
+  const [billAmount, setBillAmount] = useState('');
+  const [parcelId, setParcelId] = useState('');
+  const [taxYear, setTaxYear] = useState(String(new Date().getFullYear()));
   const requestRef = useRef(0);
 
   async function refresh() {
@@ -66,9 +129,50 @@ export default function PropertyTaxClient() {
     }
   }
 
+  async function refreshRecord() {
+    if (!propertyId) return;
+    setRecordLoading(true);
+    setRecordError(null);
+    try {
+      setRecord(await getPropertyTaxCenterRecord(propertyId));
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error ? cause.message : 'Failed to load property tax record');
+    } finally {
+      setRecordLoading(false);
+    }
+  }
+
+  async function saveReportedRecord() {
+    const parsedTaxYear = Number(taxYear);
+    const parsedAssessedValue = assessedValue ? Number(assessedValue) : undefined;
+    const parsedRatePercent = taxRate ? Number(taxRate) : undefined;
+    const parsedBillAmount = billAmount ? Number(billAmount) : undefined;
+
+    setSavingRecord(true);
+    setRecordError(null);
+    setRecordSaved(false);
+    try {
+      const nextRecord = await saveHomeownerPropertyTaxRecord(propertyId, {
+        taxYear: parsedTaxYear,
+        parcelId: parcelId.trim() || undefined,
+        totalAssessedValue: Number.isFinite(parsedAssessedValue) ? parsedAssessedValue : undefined,
+        effectiveTaxRate: parsedRatePercent !== undefined && Number.isFinite(parsedRatePercent)
+          ? parsedRatePercent / 100
+          : undefined,
+        billAmount: Number.isFinite(parsedBillAmount) ? parsedBillAmount : undefined,
+      });
+      setRecord(nextRecord);
+      setRecordSaved(true);
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error ? cause.message : 'Failed to save property tax record');
+    } finally {
+      setSavingRecord(false);
+    }
+  }
+
   useEffect(() => {
     if (!propertyId) return;
-    void refresh();
+    void Promise.all([refresh(), refreshRecord()]);
     track('workflow_started', {
       tool: 'property-tax',
       propertyId,
@@ -81,6 +185,11 @@ export default function PropertyTaxClient() {
 
   const invalidAssessedValue = Boolean(assessedValue) && !Number.isFinite(Number(assessedValue));
   const invalidTaxRate = Boolean(taxRate) && !Number.isFinite(Number(taxRate));
+  const invalidBillAmount = Boolean(billAmount) && !Number.isFinite(Number(billAmount));
+  const invalidTaxYear = !Number.isInteger(Number(taxYear))
+    || Number(taxYear) < 1900
+    || Number(taxYear) > new Date().getFullYear() + 2;
+  const hasReportedValue = Boolean(parcelId.trim() || assessedValue || taxRate || billAmount);
 
   return (
     <ToolWorkspaceTemplate
@@ -93,10 +202,16 @@ export default function PropertyTaxClient() {
         <HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" showDesktop={false} />
       }
       trust={propertyTaxTrust({
-        confidenceLabel: estimate
-          ? `${sourceLabel(estimate.current.source)} · ${estimate.current.confidence.toLowerCase()} input confidence`
-          : 'Planning estimate only',
-        freshnessLabel: estimate?.meta.generatedAt ? 'Calculated from current inputs' : 'Not yet calculated',
+        confidenceLabel: record && record.state !== 'UNKNOWN'
+          ? canonicalStateLabel(record.state)
+          : estimate
+            ? `${sourceLabel(estimate.current.source)} · ${estimate.current.confidence.toLowerCase()} input confidence`
+            : 'Planning estimate only',
+        freshnessLabel: record?.latestTaxYear
+          ? `Canonical tax year ${record.latestTaxYear}`
+          : estimate?.meta.generatedAt
+            ? 'Calculated from current inputs'
+            : 'Not yet calculated',
       })}
     >
       <HomeToolHeader
@@ -110,7 +225,7 @@ export default function PropertyTaxClient() {
         propertyId={propertyId}
         featureKey="PROPERTY_TAX"
         operationKey="VIEW_ESTIMATE"
-        onCaptured={() => void refresh()}
+        onCaptured={() => void Promise.all([refresh(), refreshRecord()])}
       />
 
       <nav aria-label="Property Tax Center stages" className="flex flex-wrap gap-2">
@@ -133,6 +248,69 @@ export default function PropertyTaxClient() {
           Appeal readiness
         </Link>
       </nav>
+
+      <section className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" aria-busy={recordLoading}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Canonical assessment and bill</h2>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              Persisted facts stay separate from the rough planning estimate below.
+            </p>
+          </div>
+          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${
+            record?.state === 'CONFLICTED'
+              ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+              : 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
+          }`}>
+            {recordLoading ? 'Loading record…' : canonicalStateLabel(record?.state)}
+          </span>
+        </div>
+
+        {record?.state === 'UNKNOWN' ? (
+          <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-300">
+            No official, document-confirmed, or homeowner-reported tax record is stored yet.
+            Add values below as homeowner-reported facts; they will remain visibly distinct from official data.
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <CanonicalField label="Parcel ID" field={record?.parcel.fields.parcelId} />
+              <CanonicalField label="Assessed value" field={record?.assessment.fields.totalAssessedValue} kind="money" />
+              <CanonicalField label="Taxable value" field={record?.assessment.fields.taxableValue} kind="money" />
+              <CanonicalField label="Bill amount" field={record?.bill.fields.billAmount} kind="money" />
+              <CanonicalField label="Assessment stage" field={record?.assessment.fields.stage} />
+              <CanonicalField label="Classification" field={record?.assessment.fields.classification} />
+              <CanonicalField label="Effective rate" field={record?.bill.fields.effectiveTaxRate} kind="rate" />
+              <CanonicalField label="Due dates" field={record?.bill.fields.dueDates} />
+            </div>
+
+            <div className="mt-4 grid gap-3 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-3">
+              <div>Tax year: <span className="font-medium text-slate-900 dark:text-slate-100">{record?.latestTaxYear ?? 'Unknown'}</span></div>
+              <div>Parcel match: <span className="font-medium text-slate-900 dark:text-slate-100">{record?.parcel.matchStatus ?? 'UNMATCHED'}</span></div>
+              <div>Jurisdiction: <span className="font-medium text-slate-900 dark:text-slate-100">{record?.parcel.jurisdiction?.normalizedKey ?? 'Not resolved'}</span></div>
+            </div>
+          </>
+        )}
+
+        {record && record.conflicts.length > 0 && (
+          <div role="alert" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-100">
+            <div className="font-semibold">Source conflicts need review</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {record.conflicts.map((conflict) => (
+                <li key={conflict.fieldKey}>
+                  {conflict.fieldKey}: {conflict.observations.length} active observations disagree. No value was selected automatically.
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {recordError && (
+          <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {recordError}
+          </div>
+        )}
+      </section>
 
       {appealMode && (
         <section className="rounded-2xl border border-amber-200/80 bg-amber-50/85 p-5 text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
@@ -163,12 +341,34 @@ export default function PropertyTaxClient() {
       )}
 
       <section className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Planning inputs</h2>
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Planning and homeowner-reported inputs</h2>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-          Enter both values from the same current official bill or notice. A single override does not make the result high confidence.
+          Use values from the same current bill or notice. Refreshing updates only the estimate; saving creates a sourced homeowner-reported record.
         </p>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Tax year</span>
+            <input
+              value={taxYear}
+              onChange={(event) => setTaxYear(event.target.value)}
+              inputMode="numeric"
+              aria-invalid={invalidTaxYear}
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            {invalidTaxYear && <span className="mt-1 block text-xs text-red-600">Enter a valid tax year.</span>}
+          </label>
+
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Parcel ID</span>
+            <input
+              value={parcelId}
+              onChange={(event) => setParcelId(event.target.value)}
+              placeholder="From bill or notice"
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+          </label>
+
           <label className="text-sm">
             <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Assessed value (USD)</span>
             <input
@@ -195,17 +395,51 @@ export default function PropertyTaxClient() {
             {invalidTaxRate && <span className="mt-1 block text-xs text-red-600">Enter a valid number.</span>}
           </label>
 
-          <div className="flex items-end">
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={loading || invalidAssessedValue || invalidTaxRate}
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              {loading ? 'Refreshing…' : 'Refresh planning estimate'}
-            </button>
-          </div>
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Bill amount (USD)</span>
+            <input
+              value={billAmount}
+              onChange={(event) => setBillAmount(event.target.value)}
+              placeholder="e.g. 7800"
+              inputMode="decimal"
+              aria-invalid={invalidBillAmount}
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            {invalidBillAmount && <span className="mt-1 block text-xs text-red-600">Enter a valid number.</span>}
+          </label>
         </div>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={loading || invalidAssessedValue || invalidTaxRate}
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            {loading ? 'Refreshing…' : 'Refresh planning estimate'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveReportedRecord()}
+            disabled={
+              savingRecord
+              || invalidTaxYear
+              || invalidAssessedValue
+              || invalidTaxRate
+              || invalidBillAmount
+              || !hasReportedValue
+            }
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-slate-900 px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-900"
+          >
+            {savingRecord ? 'Saving record…' : 'Save as homeowner-reported'}
+          </button>
+        </div>
+
+        {recordSaved && (
+          <div role="status" className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/35 dark:text-emerald-200">
+            Saved as homeowner-reported facts. These values are not labeled official or document-verified.
+          </div>
+        )}
 
         {error && (
           <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">

@@ -3,7 +3,7 @@
 **Capabilities:** 21.4 Property Tax and Tax Appeal  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 27, 2026  
-**Status:** Implementation in progress — Slice 0 complete
+**Status:** Implementation in progress — Slices 0–1 complete
 **Recommended disposition:** **Consolidate and rebuild**  
 **Current safety classifications:** Property Tax — material financial; Tax Appeal — low consequence  
 **Recommended safety classification:** Material financial and jurisdiction-dependent for the complete outcome family  
@@ -1256,6 +1256,15 @@ Record:
 ### Slice 1 — Canonical parcel, assessment, and bill record
 
 **Goal:** Establish one durable source of tax truth per property and tax year.
+
+**Implementation status (July 27, 2026): Complete**
+
+- Added canonical jurisdiction, parcel match, assessment, bill, field-evidence, supersession, and document-link models directly to `schema.prisma`.
+- Added homeowner-reported record intake with property authorization, bounded validation, tax-year identity, and durable field provenance.
+- Added reconciliation that returns unknown, known, or conflicted per field; differing active observations remain visible and no winner is selected automatically.
+- Added the Property Tax Center record API and canonical UI states for official, document-confirmed, document-unconfirmed, homeowner-reported, conflicted, and unknown records.
+- Kept planning estimates separate from persisted canonical records.
+- Validated and regenerated Prisma artifacts without adding a migration; the user must reconcile the database separately.
 
 **Work**
 

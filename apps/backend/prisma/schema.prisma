@@ -2852,6 +2852,11 @@ model Property {
   permitDisclosureExports   PermitDisclosureExport[]
   inspectionReadinessChecks InspectionReadinessCheck[]
 
+  // Property Tax Center canonical records
+  taxParcelMatches     PropertyTaxParcelMatch[]
+  taxAssessmentRecords PropertyTaxAssessmentRecord[]
+  taxBillRecords       PropertyTaxBillRecord[]
+
   // HOA / Community Rules Compliance Tracker
   hoaAssociation     HoaAssociation?
   hoaApprovalRecords HoaApprovalRecord[]
@@ -3485,6 +3490,9 @@ model Document {
   riskMitigationPlanItems    RiskMitigationPlanItem[]
   capitalTimelineItems       HomeCapitalTimelineItem[]
   negotiationShieldDocuments NegotiationShieldDocument[]
+  propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
+  propertyTaxBillLinks       PropertyTaxBillDocument[]
+  propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
 
   homeSavingsAccountId     String?
@@ -13855,6 +13863,11 @@ model TaxAssessorDataSource {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  parcelMatches     PropertyTaxParcelMatch[]
+  assessmentRecords PropertyTaxAssessmentRecord[]
+  billRecords       PropertyTaxBillRecord[]
+  fieldEvidence     PropertyTaxFieldEvidence[]
+
   @@map("tax_assessor_data_sources")
 }
 
@@ -15612,4 +15625,313 @@ model RecommendationSuppression {
   @@unique([propertyId, definitionId])
   @@index([propertyId])
   @@map("personalization_recommendation_suppressions")
+}
+
+// ============================================================================
+// PROPERTY TAX CENTER — CANONICAL RECORDS
+// ============================================================================
+
+enum PropertyTaxJurisdictionStatus {
+  UNKNOWN
+  COVERED
+  NOT_COVERED
+  DISABLED
+}
+
+enum PropertyTaxParcelMatchStatus {
+  UNMATCHED
+  AMBIGUOUS
+  MATCHED
+  HOMEOWNER_CONFIRMED
+  CONFLICTED
+  REJECTED
+}
+
+enum PropertyTaxParcelMatchMethod {
+  ADDRESS
+  ADDRESS_WITH_PARCEL_EVIDENCE
+  PARCEL_ID
+  DOCUMENT
+  HOMEOWNER_REPORTED
+}
+
+enum PropertyTaxAssessmentStage {
+  UNKNOWN
+  PRELIMINARY
+  TENTATIVE
+  CURRENT_ROLL
+  FINAL
+  CORRECTED
+}
+
+enum PropertyTaxRecordStatus {
+  ACTIVE
+  SUPERSEDED
+  CONFLICTED
+  REJECTED
+}
+
+enum PropertyTaxRecordSourceType {
+  OFFICIAL_SOURCE
+  DOCUMENT
+  HOMEOWNER_REPORTED
+}
+
+enum PropertyTaxFieldConfidence {
+  UNKNOWN
+  LOW
+  MEDIUM
+  HIGH
+  VERIFIED
+}
+
+enum PropertyTaxFieldReviewStatus {
+  UNREVIEWED
+  HOMEOWNER_CONFIRMED
+  VERIFIED
+  CONFLICTED
+  SUPERSEDED
+  REJECTED
+}
+
+enum PropertyTaxDocumentRole {
+  ASSESSMENT_NOTICE
+  TAX_BILL
+  EXEMPTION_NOTICE
+  CORRECTION_NOTICE
+  SUPPORTING_RECORD
+}
+
+// Reviewed rule releases are added in Slice 3. This record establishes stable
+// jurisdiction ownership for parcels, assessments, and bills now.
+model PropertyTaxJurisdiction {
+  id            String @id @default(uuid())
+  normalizedKey String @unique
+  countryCode   String @default("US")
+  stateCode     String
+  countyName    String?
+  countyFips    String?
+  municipality  String?
+  districtName  String?
+  timezone      String?
+  status        PropertyTaxJurisdictionStatus @default(UNKNOWN)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  parcelMatches     PropertyTaxParcelMatch[]
+  assessmentRecords PropertyTaxAssessmentRecord[]
+  billRecords       PropertyTaxBillRecord[]
+
+  @@index([stateCode, countyFips])
+  @@index([stateCode, countyName, municipality])
+  @@map("property_tax_jurisdictions")
+}
+
+model PropertyTaxParcelMatch {
+  id                           String @id @default(uuid())
+  propertyId                   String
+  jurisdictionId               String
+  dataSourceId                 String?
+  parcelId                     String?
+  situsAddress                 String?
+  situsCity                    String?
+  situsState                   String?
+  situsPostalCode              String?
+  matchMethod                  PropertyTaxParcelMatchMethod
+  status                       PropertyTaxParcelMatchStatus @default(UNMATCHED)
+  confidence                   Decimal? @db.Decimal(5, 4)
+  evidenceJson                 Json?
+  sourceExternalId             String?
+  sourceUrl                    String?
+  matchedAt                    DateTime?
+  homeownerConfirmedAt         DateTime?
+  homeownerConfirmedByUserId   String?
+  conflictReason               String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  property     Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  jurisdiction PropertyTaxJurisdiction @relation(fields: [jurisdictionId], references: [id], onDelete: Restrict)
+  dataSource   TaxAssessorDataSource?  @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+
+  assessmentRecords PropertyTaxAssessmentRecord[]
+  billRecords       PropertyTaxBillRecord[]
+  fieldEvidence     PropertyTaxFieldEvidence[]
+
+  @@unique([propertyId, jurisdictionId, parcelId])
+  @@index([propertyId, status])
+  @@index([jurisdictionId, parcelId])
+  @@index([dataSourceId, sourceExternalId])
+  @@map("property_tax_parcel_matches")
+}
+
+model PropertyTaxAssessmentRecord {
+  id                   String @id @default(uuid())
+  propertyId           String
+  jurisdictionId       String
+  parcelMatchId        String?
+  dataSourceId         String?
+  taxYear              Int
+  stage                PropertyTaxAssessmentStage @default(UNKNOWN)
+  status               PropertyTaxRecordStatus @default(ACTIVE)
+  sourceType           PropertyTaxRecordSourceType
+  confidence           PropertyTaxFieldConfidence @default(UNKNOWN)
+  valuationDate        DateTime?
+  assessmentDate       DateTime?
+  effectiveDate        DateTime?
+  observedAt           DateTime @default(now())
+  classification       String?
+  landValue            Decimal? @db.Decimal(16, 2)
+  improvementValue     Decimal? @db.Decimal(16, 2)
+  totalAssessedValue   Decimal? @db.Decimal(16, 2)
+  equalizedValue       Decimal? @db.Decimal(16, 2)
+  taxableValue         Decimal? @db.Decimal(16, 2)
+  assessmentRatio      Decimal? @db.Decimal(12, 8)
+  equalizationRatio    Decimal? @db.Decimal(12, 8)
+  exemptionsJson       Json?
+  capsJson              Json?
+  sourceExternalId     String?
+  sourceUrl            String?
+  rawDataJson          Json?
+  supersededById       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  property     Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  jurisdiction PropertyTaxJurisdiction  @relation(fields: [jurisdictionId], references: [id], onDelete: Restrict)
+  parcelMatch  PropertyTaxParcelMatch?  @relation(fields: [parcelMatchId], references: [id], onDelete: SetNull)
+  dataSource   TaxAssessorDataSource?   @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+  supersededBy PropertyTaxAssessmentRecord?  @relation("PropertyTaxAssessmentSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes   PropertyTaxAssessmentRecord[] @relation("PropertyTaxAssessmentSupersession")
+
+  billRecords   PropertyTaxBillRecord[]
+  fieldEvidence PropertyTaxFieldEvidence[]
+  documents     PropertyTaxAssessmentDocument[]
+
+  @@index([propertyId, taxYear, status])
+  @@index([jurisdictionId, taxYear])
+  @@index([parcelMatchId, taxYear])
+  @@index([dataSourceId, sourceExternalId])
+  @@index([supersededById])
+  @@map("property_tax_assessment_records")
+}
+
+model PropertyTaxBillRecord {
+  id                   String @id @default(uuid())
+  propertyId           String
+  jurisdictionId       String
+  parcelMatchId        String?
+  assessmentRecordId   String?
+  dataSourceId         String?
+  taxYear              Int
+  status               PropertyTaxRecordStatus @default(ACTIVE)
+  sourceType           PropertyTaxRecordSourceType
+  confidence           PropertyTaxFieldConfidence @default(UNKNOWN)
+  billNumber           String?
+  issueDate            DateTime?
+  periodStartDate      DateTime?
+  periodEndDate        DateTime?
+  observedAt           DateTime @default(now())
+  billAmount           Decimal? @db.Decimal(16, 2)
+  currency             String @default("USD")
+  effectiveTaxRate     Decimal? @db.Decimal(12, 8)
+  rateComponentsJson   Json?
+  installmentsJson     Json?
+  dueDatesJson         Json?
+  sourceExternalId     String?
+  sourceUrl            String?
+  rawDataJson          Json?
+  supersededById       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  property         Property                     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  jurisdiction     PropertyTaxJurisdiction      @relation(fields: [jurisdictionId], references: [id], onDelete: Restrict)
+  parcelMatch      PropertyTaxParcelMatch?      @relation(fields: [parcelMatchId], references: [id], onDelete: SetNull)
+  assessmentRecord PropertyTaxAssessmentRecord? @relation(fields: [assessmentRecordId], references: [id], onDelete: SetNull)
+  dataSource       TaxAssessorDataSource?       @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+  supersededBy     PropertyTaxBillRecord?        @relation("PropertyTaxBillSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes       PropertyTaxBillRecord[]       @relation("PropertyTaxBillSupersession")
+
+  fieldEvidence PropertyTaxFieldEvidence[]
+  documents     PropertyTaxBillDocument[]
+
+  @@index([propertyId, taxYear, status])
+  @@index([jurisdictionId, taxYear])
+  @@index([parcelMatchId, taxYear])
+  @@index([assessmentRecordId])
+  @@index([dataSourceId, sourceExternalId])
+  @@index([supersededById])
+  @@map("property_tax_bill_records")
+}
+
+// Exactly one of parcelMatchId, assessmentRecordId, or billRecordId is set by
+// the application. Conflicting observations stay separate; none is silently
+// promoted over another.
+model PropertyTaxFieldEvidence {
+  id                   String @id @default(uuid())
+  parcelMatchId        String?
+  assessmentRecordId   String?
+  billRecordId         String?
+  fieldKey             String
+  valueJson            Json
+  sourceType           PropertyTaxRecordSourceType
+  confidence           PropertyTaxFieldConfidence @default(UNKNOWN)
+  reviewStatus         PropertyTaxFieldReviewStatus @default(UNREVIEWED)
+  sourceDocumentId     String?
+  sourceDataSourceId   String?
+  sourceExternalId     String?
+  sourceUrl            String?
+  observedAt           DateTime @default(now())
+  effectiveAt          DateTime?
+  confirmedAt          DateTime?
+  confirmedByUserId    String?
+  conflictGroupId      String?
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  parcelMatch      PropertyTaxParcelMatch?      @relation(fields: [parcelMatchId], references: [id], onDelete: Cascade)
+  assessmentRecord PropertyTaxAssessmentRecord? @relation(fields: [assessmentRecordId], references: [id], onDelete: Cascade)
+  billRecord       PropertyTaxBillRecord?       @relation(fields: [billRecordId], references: [id], onDelete: Cascade)
+  sourceDocument   Document?                    @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceDataSource TaxAssessorDataSource?       @relation(fields: [sourceDataSourceId], references: [id], onDelete: SetNull)
+
+  @@index([assessmentRecordId, fieldKey, reviewStatus])
+  @@index([billRecordId, fieldKey, reviewStatus])
+  @@index([parcelMatchId, fieldKey, reviewStatus])
+  @@index([sourceDocumentId])
+  @@index([sourceDataSourceId, sourceExternalId])
+  @@index([conflictGroupId])
+  @@map("property_tax_field_evidence")
+}
+
+model PropertyTaxAssessmentDocument {
+  id                 String @id @default(uuid())
+  assessmentRecordId String
+  documentId         String
+  role               PropertyTaxDocumentRole @default(ASSESSMENT_NOTICE)
+  createdAt          DateTime @default(now())
+
+  assessmentRecord PropertyTaxAssessmentRecord @relation(fields: [assessmentRecordId], references: [id], onDelete: Cascade)
+  document         Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentRecordId, documentId])
+  @@index([documentId])
+  @@map("property_tax_assessment_documents")
+}
+
+model PropertyTaxBillDocument {
+  id           String @id @default(uuid())
+  billRecordId String
+  documentId   String
+  role         PropertyTaxDocumentRole @default(TAX_BILL)
+  createdAt    DateTime @default(now())
+
+  billRecord PropertyTaxBillRecord @relation(fields: [billRecordId], references: [id], onDelete: Cascade)
+  document   Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([billRecordId, documentId])
+  @@index([documentId])
+  @@map("property_tax_bill_documents")
 }

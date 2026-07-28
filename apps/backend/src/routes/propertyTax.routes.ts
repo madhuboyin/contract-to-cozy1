@@ -16,6 +16,24 @@ const router = Router();
  *  - taxRate: number (decimal) override e.g. 0.0185
  */
 router.get(
+  '/properties/:propertyId/property-tax/record',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.getPropertyTaxCenter
+);
+
+router.post(
+  '/properties/:propertyId/property-tax/record/homeowner',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.recordHomeownerPropertyTaxValues
+);
+
+router.get(
   '/properties/:propertyId/property-tax/estimate',
   authenticate,
   restrictToHomeowner,
