@@ -1,4 +1,49 @@
-import { HomeSavingsBillingCadence } from '@prisma/client';
+import { HomeSavingsBillingCadence, Prisma } from '@prisma/client';
+
+function decimalEquals(a: Prisma.Decimal | null, b: number | null): boolean {
+  if (a === null || b === null) return a === null && b === null;
+  return a.toNumber() === b;
+}
+
+function dateEquals(a: Date | null, b: Date | null): boolean {
+  if (a === null || b === null) return a === null && b === null;
+  return a.getTime() === b.getTime();
+}
+
+/**
+ * True when a HomeSavingsAccount's cached copy of a canonical record's
+ * facts (insurance premium, warranty cost, renewal date, etc.) has drifted
+ * from the canonical record's current values — the account was only ever
+ * populated once at first capture, so without this check a later edit to
+ * the real policy/warranty would go unnoticed indefinitely.
+ */
+export function canonicalFactsChanged(
+  cached: {
+    providerName: string | null;
+    planName: string | null;
+    amount: Prisma.Decimal | null;
+    startDate: Date | null;
+    renewalDate: Date | null;
+    contractEndDate: Date | null;
+  },
+  canonical: {
+    providerName: string | null;
+    planName: string | null;
+    amount: number | null;
+    startDate: Date | null;
+    renewalDate: Date | null;
+    contractEndDate: Date | null;
+  }
+): boolean {
+  return (
+    cached.providerName !== canonical.providerName ||
+    cached.planName !== canonical.planName ||
+    !decimalEquals(cached.amount, canonical.amount) ||
+    !dateEquals(cached.startDate, canonical.startDate) ||
+    !dateEquals(cached.renewalDate, canonical.renewalDate) ||
+    !dateEquals(cached.contractEndDate, canonical.contractEndDate)
+  );
+}
 
 export function asNumber(value: unknown): number | undefined {
   if (value === null || value === undefined) return undefined;

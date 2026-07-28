@@ -6,7 +6,7 @@ import {
   CategoryModule,
   CategoryOpportunityDraft,
 } from '../types';
-import { amountToAnnual, amountToMonthly, asNumber, daysUntil, round2, toRecord } from '../helpers';
+import { amountToAnnual, amountToMonthly, asNumber, canonicalFactsChanged, daysUntil, round2, toRecord } from '../helpers';
 
 const DEFAULT_BASELINE_ANNUAL = 720;
 const DEFAULT_RENEWAL_WINDOW_DAYS = 45;
@@ -17,7 +17,52 @@ async function ensureAccount({
   existingAccount,
 }: CategoryEnsureAccountParams) {
   if (existingAccount) {
-    return existingAccount;
+    // The account was populated once from the canonical warranty at first
+    // capture — refresh it here so a later cost/expiry edit on the real
+    // warranty isn't silently stale in Home Savings forever.
+    if (!existingAccount.warrantyId) {
+      return existingAccount;
+    }
+    const warranty = await prisma.warranty.findUnique({
+      where: { id: existingAccount.warrantyId },
+    });
+    if (!warranty) {
+      return existingAccount;
+    }
+    const canonical = {
+      providerName: warranty.providerName,
+      planName: warranty.category,
+      amount: asNumber(warranty.cost) ?? null,
+      startDate: warranty.startDate,
+      renewalDate: warranty.expiryDate,
+      contractEndDate: warranty.expiryDate,
+    };
+    if (
+      !canonicalFactsChanged(
+        {
+          providerName: existingAccount.providerName,
+          planName: existingAccount.planName,
+          amount: existingAccount.amount,
+          startDate: existingAccount.startDate,
+          renewalDate: existingAccount.renewalDate,
+          contractEndDate: existingAccount.contractEndDate,
+        },
+        canonical
+      )
+    ) {
+      return existingAccount;
+    }
+    return prisma.homeSavingsAccount.update({
+      where: { id: existingAccount.id },
+      data: {
+        providerName: canonical.providerName,
+        planName: canonical.planName,
+        amount: warranty.cost,
+        startDate: canonical.startDate,
+        renewalDate: canonical.renewalDate,
+        contractEndDate: canonical.contractEndDate,
+      },
+    });
   }
 
   const activeWarranty = await prisma.warranty.findFirst({

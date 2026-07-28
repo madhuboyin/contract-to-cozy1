@@ -10,7 +10,7 @@ import {
   CategoryModule,
   CategoryOpportunityDraft,
 } from '../types';
-import { amountToAnnual, amountToMonthly, asNumber, daysUntil, pickStateValue, round2, toRecord } from '../helpers';
+import { amountToAnnual, amountToMonthly, asNumber, canonicalFactsChanged, daysUntil, pickStateValue, round2, toRecord } from '../helpers';
 
 const DEFAULT_BASELINE_ANNUAL = 1900;
 const DEFAULT_RENEWAL_WINDOW_DAYS = 45;
@@ -21,7 +21,60 @@ async function ensureAccount({
   existingAccount,
 }: CategoryEnsureAccountParams) {
   if (existingAccount) {
-    return existingAccount;
+    // The account was populated once from the canonical policy at first
+    // capture — refresh it here so a later premium/renewal/deductible edit
+    // on the real policy isn't silently stale in Home Savings forever.
+    if (!existingAccount.insurancePolicyId) {
+      return existingAccount;
+    }
+    const policy = await prisma.insurancePolicy.findUnique({
+      where: { id: existingAccount.insurancePolicyId },
+    });
+    if (!policy) {
+      return existingAccount;
+    }
+    const canonical = {
+      providerName: policy.carrierName,
+      planName: policy.coverageType ?? 'Home insurance policy',
+      amount: asNumber(policy.premiumAmount) ?? null,
+      startDate: policy.startDate,
+      renewalDate: policy.expiryDate,
+      contractEndDate: null,
+    };
+    if (
+      !canonicalFactsChanged(
+        {
+          providerName: existingAccount.providerName,
+          planName: existingAccount.planName,
+          amount: existingAccount.amount,
+          startDate: existingAccount.startDate,
+          renewalDate: existingAccount.renewalDate,
+          contractEndDate: existingAccount.contractEndDate,
+        },
+        canonical
+      )
+    ) {
+      return existingAccount;
+    }
+    return prisma.homeSavingsAccount.update({
+      where: { id: existingAccount.id },
+      data: {
+        providerName: canonical.providerName,
+        planName: canonical.planName,
+        accountNumberMasked:
+          policy.policyNumber.length > 4
+            ? `••••${policy.policyNumber.slice(-4)}`
+            : policy.policyNumber,
+        amount: policy.premiumAmount,
+        startDate: canonical.startDate,
+        renewalDate: canonical.renewalDate,
+        planDetailsJson: {
+          policyId: policy.id,
+          deductibleAmount: policy.deductibleAmount,
+          coverageType: policy.coverageType,
+        },
+      },
+    });
   }
 
   const latestPolicy = await prisma.insurancePolicy.findFirst({
