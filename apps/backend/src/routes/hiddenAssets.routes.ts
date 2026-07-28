@@ -5,9 +5,11 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
+  createHiddenAssetMatchOutcome,
   getHiddenAssetCoverageForProperty,
   getHiddenAssetsForProperty,
   getHiddenAssetProgramDetail,
+  listHiddenAssetMatchOutcomes,
   refreshHiddenAssetsForProperty,
   updateHiddenAssetMatchStatus,
 } from '../controllers/hiddenAssets.controller';
@@ -20,6 +22,14 @@ const router = Router();
 
 const updateMatchStatusBodySchema = z.object({
   status: z.enum(['VIEWED', 'DISMISSED', 'PURSUING']),
+});
+
+const recordMatchOutcomeBodySchema = z.object({
+  stage: z.enum(['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN']),
+  amountReceived: z.number().nonnegative().nullable().optional(),
+  currency: z.string().trim().length(3).optional(),
+  evidenceNote: z.string().trim().min(1).max(2000).nullable().optional(),
+  denialReason: z.string().trim().min(1).max(2000).nullable().optional(),
 });
 
 // ============================================================================
@@ -97,6 +107,30 @@ router.patch(
   '/property-hidden-asset-matches/:matchId',
   validateBody(updateMatchStatusBodySchema),
   updateHiddenAssetMatchStatus,
+);
+
+/**
+ * POST /api/property-hidden-asset-matches/:matchId/outcome
+ *
+ * Records the next stage in a match's application/award trail
+ * (SUBMITTED → APPROVED/DENIED/WITHDRAWN → RECEIVED). RECEIVED requires
+ * amountReceived and evidenceNote; DENIED requires denialReason. Property
+ * ownership is verified inside the service.
+ */
+router.post(
+  '/property-hidden-asset-matches/:matchId/outcome',
+  validateBody(recordMatchOutcomeBodySchema),
+  createHiddenAssetMatchOutcome,
+);
+
+/**
+ * GET /api/property-hidden-asset-matches/:matchId/outcome
+ *
+ * Returns the full outcome history for a match, oldest first.
+ */
+router.get(
+  '/property-hidden-asset-matches/:matchId/outcome',
+  listHiddenAssetMatchOutcomes,
 );
 
 export default router;

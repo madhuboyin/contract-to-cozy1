@@ -120,7 +120,39 @@ immediately excluded from `fetchCandidatePrograms`. It can be brought back
 via `REVIVE_TO_DRAFT` if it needs to be reinstated later — this does not
 restore its old review, it starts the DRAFT → PUBLISHED cycle over.
 
-## 3. Known limitations (by design, not oversight)
+## 3. Outcome trail and realized-value ledger
+
+Marking a benefit match `PURSUING` or a recurring-cost opportunity
+`APPLIED`/`SWITCHED` is homeowner intent, not a confirmed result. Both sides
+now have a real application/award trail (`savingsOutcome.service.ts`,
+Slice 7) instead of stopping there:
+
+`SUBMITTED → APPROVED → RECEIVED`, or `→ DENIED` / `→ WITHDRAWN` at any
+non-terminal point. Each stage is its own append-only row (
+`HiddenAssetMatchOutcome` / `HomeSavingsOpportunityOutcome`) so the full
+history is preserved, not overwritten. `RECEIVED` requires an amount/observed
+value and an `evidenceNote` — there is no way to record realized value
+without stating what backs it. The first outcome ever recorded for a match
+or opportunity may be any stage (a homeowner catching up on real history
+isn't forced to fabricate a `SUBMITTED` entry first); after that, transitions
+are enforced (`isValidOutcomeTransition`).
+
+API: `POST`/`GET /api/property-hidden-asset-matches/:matchId/outcome` and
+`POST`/`GET /api/home-savings/opportunities/:id/outcome`. No homeowner or
+admin UI exists for these yet — this slice is backend + tests only.
+
+A `RECEIVED` outcome on the recurring-cost side is the only thing that
+publishes a real `SAVINGS_REALIZATION` signal (`signal.service.ts`); marking
+`APPLIED`/`SWITCHED` alone no longer does (it still refreshes
+`FINANCIAL_DISCIPLINE`, a separate pattern about savings-action behavior).
+A `RECEIVED` outcome on the benefits side does **not** publish that signal —
+`SAVINGS_REALIZATION`'s ownership is pinned to `HomeSavingsService`
+(`SIGNAL_OWNER_BY_KEY`) and existing downstream consumers
+(`financialAssumption.service.ts`, `doNothingSimulator.service.ts`) were
+built assuming that ownership. Widening it to cover benefit outcomes too is
+a deliberate future change, not something this slice does as a side effect.
+
+## 4. Known limitations (by design, not oversight)
 
 - Coverage is New Jersey-only today. Every other state/region correctly
   shows as "not covered" in the homeowner-facing coverage statement — this

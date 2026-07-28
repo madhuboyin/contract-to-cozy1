@@ -5,9 +5,11 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
+  createHomeSavingsOpportunityOutcome,
   getHomeSavingsCategoryDetail,
   getHomeSavingsSummary,
   listHomeSavingsCategories,
+  listHomeSavingsOpportunityOutcomes,
   runHomeSavingsComparison,
   setHomeSavingsOpportunityStatus,
   upsertHomeSavingsAccount,
@@ -44,6 +46,15 @@ const setOpportunityStatusBodySchema = z.object({
   status: z.enum(['NEW', 'VIEWED', 'DISMISSED', 'SAVED', 'APPLIED', 'SWITCHED', 'EXPIRED']),
 });
 
+const recordOpportunityOutcomeBodySchema = z.object({
+  stage: z.enum(['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN']),
+  observedMonthlyValue: z.number().nonnegative().nullable().optional(),
+  observedAnnualValue: z.number().nonnegative().nullable().optional(),
+  currency: z.string().trim().length(3).optional(),
+  evidenceNote: z.string().trim().min(1).max(2000).nullable().optional(),
+  denialReason: z.string().trim().min(1).max(2000).nullable().optional(),
+});
+
 router.use(apiRateLimiter);
 router.use(authenticate);
 
@@ -72,5 +83,26 @@ router.post(
   validateBody(setOpportunityStatusBodySchema),
   setHomeSavingsOpportunityStatus
 );
+
+/**
+ * POST /api/home-savings/opportunities/:id/outcome
+ *
+ * Records the next stage in an opportunity's application/switch trail
+ * (SUBMITTED → APPROVED/DENIED/WITHDRAWN → RECEIVED). RECEIVED requires an
+ * observed value and evidenceNote, and is the only stage that can publish a
+ * real SAVINGS_REALIZATION signal. Ownership is verified inside the service.
+ */
+router.post(
+  '/home-savings/opportunities/:id/outcome',
+  validateBody(recordOpportunityOutcomeBodySchema),
+  createHomeSavingsOpportunityOutcome
+);
+
+/**
+ * GET /api/home-savings/opportunities/:id/outcome
+ *
+ * Returns the full outcome history for an opportunity, oldest first.
+ */
+router.get('/home-savings/opportunities/:id/outcome', listHomeSavingsOpportunityOutcomes);
 
 export default router;

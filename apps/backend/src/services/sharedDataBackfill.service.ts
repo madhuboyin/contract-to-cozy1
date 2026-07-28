@@ -1561,21 +1561,22 @@ export class SharedDataBackfillService {
       orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    const latestAppliedSavings = await prisma.homeSavingsOpportunity.findFirst({
+    // SAVINGS_REALIZATION now requires a real, evidence-backed RECEIVED
+    // outcome (savingsOutcome.service.ts) — an opportunity merely marked
+    // APPLIED/SWITCHED no longer qualifies (Slice 7).
+    const latestReceivedOutcome = await prisma.homeSavingsOpportunityOutcome.findFirst({
       where: {
-        propertyId,
-        status: {
-          in: ['APPLIED', 'SWITCHED'],
-        },
+        stage: 'RECEIVED',
+        opportunity: { propertyId },
       },
       select: {
-        id: true,
-        status: true,
-        estimatedMonthlySavings: true,
-        estimatedAnnualSavings: true,
+        opportunityId: true,
+        observedMonthlyValue: true,
+        observedAnnualValue: true,
         currency: true,
+        evidenceNote: true,
       },
-      orderBy: [{ updatedAt: 'desc' }, { generatedAt: 'desc' }],
+      orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
     const latestRadarMatch = await prisma.propertyRadarMatch.findFirst({
@@ -1649,16 +1650,21 @@ export class SharedDataBackfillService {
         });
       }
 
-      if (latestAppliedSavings) {
+      if (latestReceivedOutcome) {
         try {
-          const savingsSignal = await signalService.publishSavingsRealizationSignal({
-            propertyId,
-            opportunityId: latestAppliedSavings.id,
-            status: latestAppliedSavings.status,
-            estimatedMonthlySavings: asFinite(latestAppliedSavings.estimatedMonthlySavings) ?? null,
-            estimatedAnnualSavings: asFinite(latestAppliedSavings.estimatedAnnualSavings) ?? null,
-            currency: latestAppliedSavings.currency,
-          });
+          const observedMonthly = asFinite(latestReceivedOutcome.observedMonthlyValue) ?? null;
+          const observedAnnual =
+            asFinite(latestReceivedOutcome.observedAnnualValue) ?? (observedMonthly !== null ? observedMonthly * 12 : null);
+          const savingsSignal = observedAnnual
+            ? await signalService.publishSavingsRealizationSignal({
+                propertyId,
+                opportunityId: latestReceivedOutcome.opportunityId,
+                observedAnnualValue: observedAnnual,
+                observedMonthlyValue: observedMonthly,
+                currency: latestReceivedOutcome.currency,
+                evidenceNote: latestReceivedOutcome.evidenceNote ?? '',
+              })
+            : null;
           if (savingsSignal) {
             touch('SAVINGS_REALIZATION');
             if (existingLatest.SAVINGS_REALIZATION?.id === savingsSignal.id) result.refreshed += 1;
@@ -1703,7 +1709,7 @@ export class SharedDataBackfillService {
       result.published += 2;
       touch('MAINT_ADHERENCE');
       touch('COVERAGE_GAP');
-      if (latestAppliedSavings) {
+      if (latestReceivedOutcome) {
         result.published += 1;
         touch('SAVINGS_REALIZATION');
       } else {

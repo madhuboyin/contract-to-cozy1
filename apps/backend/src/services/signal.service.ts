@@ -1,4 +1,4 @@
-import { HomeSavingsOpportunityStatus, MaintenanceTaskStatus, Prisma, Signal } from '@prisma/client';
+import { MaintenanceTaskStatus, Prisma, Signal } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from './coverageGap.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
@@ -1017,35 +1017,67 @@ export class SignalService {
   }
 
   /**
-   * Publishes a SAVINGS_REALIZATION signal — but only from actually observed
-   * or received value, never from an unverified estimate. Marking an
-   * opportunity APPLIED/SWITCHED reflects application/switching intent, not
-   * confirmed savings, so until a real realized-value ledger with evidence
-   * exists (see the Savings and Benefits capability audit, Slice 7), this
-   * publishes nothing and returns null. All callers already treat a null/
-   * falsy result as "skipped," not an error.
+   * Publishes a SAVINGS_REALIZATION signal from a real, evidence-backed
+   * RECEIVED outcome (savingsOutcome.service.ts) — never from an unverified
+   * estimate or from marking an opportunity APPLIED/SWITCHED, which is
+   * application/switching intent, not confirmed savings. Returns null (a
+   * no-op, not an error) if the observed value isn't a positive finite
+   * number — callers already treat a null result as "skipped."
+   *
+   * valueJson keeps the `estimatedAnnualSavings` key name for backward
+   * compatibility with existing downstream readers of this signal
+   * (financialAssumption.service.ts, doNothingSimulator.service.ts) built
+   * against its original contract — it now carries the real observed
+   * value, not an estimate.
    */
   async publishSavingsRealizationSignal(params: {
     propertyId: string;
     opportunityId: string;
-    status: HomeSavingsOpportunityStatus;
-    estimatedAnnualSavings: number | null;
-    estimatedMonthlySavings: number | null;
+    observedAnnualValue: number;
+    observedMonthlyValue: number | null;
     currency: string;
+    evidenceNote: string;
+    capturedAt?: Date;
   }): Promise<SignalDTO | null> {
-    // Marking an opportunity APPLIED/SWITCHED reflects application/switching
-    // intent, not confirmed savings. Publishing the original estimate as a
-    // "realized" signal here would overstate evidence. Until a real
-    // realized-value ledger with observed/received evidence exists (see the
-    // Savings and Benefits capability audit, Slice 7), do not publish a
-    // SAVINGS_REALIZATION signal. Callers already treat a null result as
-    // "skipped," not an error.
-    await this.publishFinancialDisciplinePatternSignal({
-      propertyId: params.propertyId,
-      capturedAt: new Date(),
-    });
+    if (!Number.isFinite(params.observedAnnualValue) || params.observedAnnualValue <= 0) {
+      return null;
+    }
 
-    return null;
+    const capturedAt = params.capturedAt ?? new Date();
+    const validUntil = new Date(capturedAt);
+    validUntil.setDate(validUntil.getDate() + 365);
+
+    return this.publishSignal({
+      propertyId: params.propertyId,
+      signalKey: 'SAVINGS_REALIZATION',
+      sourceModel: 'HomeSavingsService',
+      sourceId: params.opportunityId,
+      valueNumber: params.observedAnnualValue,
+      valueText: 'REALIZED',
+      unit: params.currency,
+      confidence: 0.95,
+      reasons: [params.evidenceNote || 'Observed value recorded by the homeowner.'],
+      evidenceCount: 1,
+      patternKey: 'OBSERVED_REALIZED_SAVINGS',
+      valueJson: {
+        estimatedAnnualSavings: params.observedAnnualValue,
+        observedMonthlySavings: params.observedMonthlyValue,
+        evidenceNote: params.evidenceNote,
+        opportunityId: params.opportunityId,
+      },
+      capturedAt,
+      validUntil,
+    });
+  }
+
+  /**
+   * Public entry point for refreshing the FINANCIAL_DISCIPLINE pattern
+   * signal from outside this service — used when an opportunity is marked
+   * APPLIED/SWITCHED, which reflects savings-action behavior regardless of
+   * whether that specific claim later turns out to be realized.
+   */
+  async refreshFinancialDisciplinePatternSignal(propertyId: string, capturedAt?: Date): Promise<SignalDTO | null> {
+    return this.publishFinancialDisciplinePatternSignal({ propertyId, capturedAt: capturedAt ?? new Date() });
   }
 
   private async publishMaintenancePatternSignals(params: {
@@ -1558,7 +1590,7 @@ export class SignalService {
     });
     if (maintenance) refreshedSignals.push('MAINT_ADHERENCE');
 
-    const [latestCoverageAnalysis, gaps, latestSavingsOpportunity] = await Promise.all([
+    const [latestCoverageAnalysis, gaps, latestReceivedOutcome] = await Promise.all([
       prisma.coverageAnalysis.findFirst({
         where: { propertyId, inventoryItemId: null },
         select: {
@@ -1568,18 +1600,21 @@ export class SignalService {
         orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
       }),
       detectCoverageGaps(propertyId),
-      prisma.homeSavingsOpportunity.findFirst({
+      // SAVINGS_REALIZATION now requires a real, evidence-backed RECEIVED
+      // outcome (savingsOutcome.service.ts) — an opportunity merely marked
+      // APPLIED/SWITCHED no longer qualifies (Slice 7).
+      prisma.homeSavingsOpportunityOutcome.findFirst({
         where: {
-          propertyId,
-          status: { in: ['APPLIED', 'SWITCHED'] },
+          stage: 'RECEIVED',
+          opportunity: { propertyId },
         },
-        orderBy: [{ updatedAt: 'desc' }, { generatedAt: 'desc' }],
+        orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
         select: {
-          id: true,
-          status: true,
-          estimatedMonthlySavings: true,
-          estimatedAnnualSavings: true,
+          opportunityId: true,
+          observedMonthlyValue: true,
+          observedAnnualValue: true,
           currency: true,
+          evidenceNote: true,
         },
       }),
     ]);
@@ -1600,14 +1635,16 @@ export class SignalService {
     });
     if (coverageSignal) refreshedSignals.push('COVERAGE_GAP');
 
-    if (latestSavingsOpportunity) {
+    const observedMonthly = asFinite(latestReceivedOutcome?.observedMonthlyValue);
+    const observedAnnual = asFinite(latestReceivedOutcome?.observedAnnualValue) ?? (observedMonthly !== null ? observedMonthly * 12 : null);
+    if (latestReceivedOutcome && observedAnnual !== null) {
       const savingsSignal = await this.publishSavingsRealizationSignal({
         propertyId,
-        opportunityId: latestSavingsOpportunity.id,
-        status: latestSavingsOpportunity.status,
-        estimatedMonthlySavings: asFinite(latestSavingsOpportunity.estimatedMonthlySavings),
-        estimatedAnnualSavings: asFinite(latestSavingsOpportunity.estimatedAnnualSavings),
-        currency: latestSavingsOpportunity.currency,
+        opportunityId: latestReceivedOutcome.opportunityId,
+        observedAnnualValue: observedAnnual,
+        observedMonthlyValue: observedMonthly,
+        currency: latestReceivedOutcome.currency,
+        evidenceNote: latestReceivedOutcome.evidenceNote ?? '',
       });
       if (savingsSignal) refreshedSignals.push('SAVINGS_REALIZATION');
     } else {

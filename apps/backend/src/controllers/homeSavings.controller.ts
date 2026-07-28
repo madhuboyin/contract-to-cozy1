@@ -10,6 +10,12 @@ import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourn
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getFinancialContextEnvelope } from '../services/financialContext/context';
+import {
+  getHomeSavingsOpportunityOutcomes,
+  RecordHomeSavingsOpportunityOutcomeInput,
+  recordHomeSavingsOpportunityOutcome,
+  SavingsOutcomeGovernanceError,
+} from '../services/savingsOutcome.service';
 
 const service = new HomeSavingsService();
 
@@ -229,6 +235,44 @@ export async function setHomeSavingsOpportunityStatus(req: CustomRequest, res: R
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to update home savings opportunity.',
+    });
+  }
+}
+
+export async function createHomeSavingsOpportunityOutcome(req: CustomRequest, res: Response) {
+  try {
+    const userId = requireUserId(req);
+    const input = req.body as RecordHomeSavingsOpportunityOutcomeInput;
+
+    const outcome = await recordHomeSavingsOpportunityOutcome(req.params.id, userId, input);
+    return res.status(201).json({ success: true, data: outcome });
+  } catch (error: any) {
+    const isNotFound = error?.message === 'Opportunity not found or access denied.';
+    const isAuth = error?.message === 'Authentication required.';
+    const isGovernance = error instanceof SavingsOutcomeGovernanceError;
+    const status = isNotFound ? 404 : isAuth ? 401 : isGovernance ? 422 : 500;
+    logger.error({ err: error }, 'Error recording home savings opportunity outcome');
+    return res.status(status).json({
+      success: false,
+      code: isGovernance ? error.code : undefined,
+      message: error?.message || 'Failed to record opportunity outcome.',
+    });
+  }
+}
+
+export async function listHomeSavingsOpportunityOutcomes(req: CustomRequest, res: Response) {
+  try {
+    const userId = requireUserId(req);
+    const outcomes = await getHomeSavingsOpportunityOutcomes(req.params.id, userId);
+    return res.json({ success: true, data: outcomes });
+  } catch (error: any) {
+    const isNotFound = error?.message === 'Opportunity not found or access denied.';
+    const isAuth = error?.message === 'Authentication required.';
+    const status = isNotFound ? 404 : isAuth ? 401 : 500;
+    logger.error({ err: error }, 'Error fetching home savings opportunity outcomes');
+    return res.status(status).json({
+      success: false,
+      message: error?.message || 'Failed to fetch opportunity outcomes.',
     });
   }
 }

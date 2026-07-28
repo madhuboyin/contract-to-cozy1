@@ -640,22 +640,22 @@ export class HomeSavingsService {
       },
     });
 
+    // Marking APPLIED/SWITCHED reflects application/switching intent, not
+    // confirmed savings — it no longer publishes a SAVINGS_REALIZATION
+    // signal (see signal.service.ts). It still refreshes FINANCIAL_DISCIPLINE,
+    // a distinct pattern about savings-action behavior that holds regardless
+    // of whether this specific claim later turns out to be realized. Actual
+    // realization now flows only through savingsOutcome.service.ts recording
+    // a RECEIVED outcome.
     if (
       opportunity.propertyId &&
       (status === HomeSavingsOpportunityStatus.APPLIED ||
         status === HomeSavingsOpportunityStatus.SWITCHED)
     ) {
       try {
-        await signalService.publishSavingsRealizationSignal({
-          propertyId: opportunity.propertyId,
-          opportunityId: opportunity.id,
-          status: opportunity.status,
-          estimatedMonthlySavings: asNumber(opportunity.estimatedMonthlySavings) ?? null,
-          estimatedAnnualSavings: asNumber(opportunity.estimatedAnnualSavings) ?? null,
-          currency: opportunity.currency,
-        });
+        await signalService.refreshFinancialDisciplinePatternSignal(opportunity.propertyId);
       } catch (signalError) {
-        logger.warn({ signalError }, 'Savings realization signal publish failed');
+        logger.warn({ signalError }, 'Financial discipline signal refresh failed');
       }
     }
 

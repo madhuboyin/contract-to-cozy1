@@ -12,6 +12,12 @@ import {
 } from '@prisma/client';
 import { logger } from '../lib/logger';
 import { getFinancialContextEnvelope } from '../services/financialContext/context';
+import {
+  getHiddenAssetMatchOutcomes,
+  RecordHiddenAssetMatchOutcomeInput,
+  recordHiddenAssetMatchOutcome,
+  SavingsOutcomeGovernanceError,
+} from '../services/savingsOutcome.service';
 
 const service = new HiddenAssetService();
 
@@ -152,6 +158,52 @@ export async function updateHiddenAssetMatchStatus(req: CustomRequest, res: Resp
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to update match status.',
+    });
+  }
+}
+
+// ============================================================================
+// POST /property-hidden-asset-matches/:matchId/outcome
+// GET  /property-hidden-asset-matches/:matchId/outcome
+// ============================================================================
+
+export async function createHiddenAssetMatchOutcome(req: CustomRequest, res: Response) {
+  try {
+    const userId = requireUserId(req);
+    const { matchId } = req.params;
+    const input = req.body as RecordHiddenAssetMatchOutcomeInput;
+
+    const outcome = await recordHiddenAssetMatchOutcome(matchId, userId, input);
+    return res.status(201).json({ success: true, data: outcome });
+  } catch (error: any) {
+    const isNotFound = error?.message === 'Match not found or access denied.';
+    const isAuth = error?.message === 'Authentication required.';
+    const isGovernance = error instanceof SavingsOutcomeGovernanceError;
+    const status = isNotFound ? 404 : isAuth ? 401 : isGovernance ? 422 : 500;
+    logger.error({ err: error }, '[HiddenAssets] createHiddenAssetMatchOutcome error');
+    return res.status(status).json({
+      success: false,
+      code: isGovernance ? error.code : undefined,
+      message: error?.message || 'Failed to record match outcome.',
+    });
+  }
+}
+
+export async function listHiddenAssetMatchOutcomes(req: CustomRequest, res: Response) {
+  try {
+    const userId = requireUserId(req);
+    const { matchId } = req.params;
+
+    const outcomes = await getHiddenAssetMatchOutcomes(matchId, userId);
+    return res.json({ success: true, data: outcomes });
+  } catch (error: any) {
+    const isNotFound = error?.message === 'Match not found or access denied.';
+    const isAuth = error?.message === 'Authentication required.';
+    const status = isNotFound ? 404 : isAuth ? 401 : 500;
+    logger.error({ err: error }, '[HiddenAssets] listHiddenAssetMatchOutcomes error');
+    return res.status(status).json({
+      success: false,
+      message: error?.message || 'Failed to fetch match outcomes.',
     });
   }
 }
