@@ -7,6 +7,7 @@ import {
   Activity,
   Archive,
   ArrowLeft,
+  Bell,
   CalendarRange,
   CheckCircle2,
   CircleDollarSign,
@@ -23,16 +24,21 @@ import {
   deleteOwnershipCostScenario,
   getOwnershipCostChanges,
   getOwnershipCostForecast,
+  getOwnershipCostDecisions,
   getOwnershipCosts,
   getOwnershipCostVariability,
   listOwnershipCostScenarios,
   recalculateOwnershipCostForecast,
   recalculateOwnershipCosts,
   recordOwnershipCostPlanningDecision,
+  recordOwnershipCostDecision,
+  updateOwnershipCostNotificationPreferences,
   updateOwnershipCostScenario,
   type OwnershipCostChangeReadModel,
   type OwnershipCostCategory,
   type OwnershipCostCurrentLens,
+  type OwnershipCostDecisionAction,
+  type OwnershipCostDecisionReadModel,
   type OwnershipCostForecastReadModel,
   type OwnershipCostReadModel,
   type OwnershipCostReadModelCategory,
@@ -1003,6 +1009,7 @@ function BufferPlanningView({
 
 export default function OwnershipCostsClient() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const propertyId = params.id;
   const requestedView = searchParams.get('view');
@@ -1017,6 +1024,10 @@ export default function OwnershipCostsClient() {
   const [changeData, setChangeData] =
     useState<OwnershipCostChangeReadModel | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
+  const [decisionData, setDecisionData] =
+    useState<OwnershipCostDecisionReadModel | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [decisionBusy, setDecisionBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -1025,6 +1036,7 @@ export default function OwnershipCostsClient() {
     setLoading(true);
     setError(null);
     setChangeError(null);
+    setDecisionError(null);
     try {
       const result = forceRefresh
         ? await recalculateOwnershipCosts(propertyId, lens)
@@ -1038,7 +1050,17 @@ export default function OwnershipCostsClient() {
         setChangeError(
           changeCause instanceof Error
             ? changeCause.message
-            : 'Observed changes are temporarily unavailable.',
+          : 'Observed changes are temporarily unavailable.',
+        );
+      }
+      try {
+        setDecisionData(await getOwnershipCostDecisions(propertyId));
+      } catch (decisionCause) {
+        setDecisionData(null);
+        setDecisionError(
+          decisionCause instanceof Error
+            ? decisionCause.message
+            : 'Action decisions are temporarily unavailable.',
         );
       }
     } catch (cause: unknown) {
@@ -1110,6 +1132,110 @@ export default function OwnershipCostsClient() {
       actionType: `correct_${category.category.toLowerCase()}`,
       propertyId,
     });
+  }
+
+  function decisionForChange(
+    change: OwnershipCostChangeReadModel['changes'][number],
+  ) {
+    const sourceActionId = change.id
+      ? `ownership-cost-change:${change.id}`
+      : `ownership-cost-category:${propertyId}:${change.category}`;
+    return decisionData?.decisions.find(
+      (decision) => decision.sourceActionId === sourceActionId,
+    ) ?? null;
+  }
+
+  async function actOnChange(
+    change: OwnershipCostChangeReadModel['changes'][number],
+    action: OwnershipCostDecisionAction,
+  ) {
+    let reason: string | undefined;
+    let revisitAt: string | undefined;
+    if (['DISMISS', 'NO_ACTION', 'RESOLVE'].includes(action)) {
+      reason = window.prompt(
+        action === 'RESOLVE'
+          ? 'What did you decide or complete?'
+          : 'Why does this not need action right now?',
+      )?.trim();
+      if (!reason) return;
+    }
+    if (action === 'SNOOZE') {
+      const defaultDate = new Date();
+      defaultDate.setDate(defaultDate.getDate() + 30);
+      const selected = window.prompt(
+        'Revisit on (YYYY-MM-DD)',
+        defaultDate.toISOString().slice(0, 10),
+      )?.trim();
+      if (!selected) return;
+      const parsed = new Date(`${selected}T12:00:00.000Z`);
+      if (Number.isNaN(parsed.getTime())) {
+        setDecisionError('Enter a valid revisit date.');
+        return;
+      }
+      revisitAt = parsed.toISOString();
+      reason = 'Homeowner scheduled a review.';
+    }
+    const sourceActionId = change.id
+      ? `ownership-cost-change:${change.id}`
+      : `ownership-cost-category:${propertyId}:${change.category}`;
+    setDecisionBusy(sourceActionId);
+    setDecisionError(null);
+    try {
+      const decision = await recordOwnershipCostDecision(propertyId, {
+        action,
+        category: change.category,
+        ...(change.id ? { sourceChangeId: change.id } : {}),
+        sourceActionId,
+        explanation: change.explanation,
+        reason,
+        revisitAt,
+      });
+      setDecisionData(await getOwnershipCostDecisions(propertyId));
+      track(action === 'RESOLVE' ? 'action_completed' : 'action_taken', {
+        tool: 'ownership-costs',
+        propertyId,
+        actionType: `change_${action.toLowerCase()}`,
+      });
+      if (action === 'ACCEPT') router.push(decision.destination.href);
+    } catch (cause) {
+      setDecisionError(
+        cause instanceof Error
+          ? cause.message
+          : 'The homeowner decision could not be recorded.',
+      );
+    } finally {
+      setDecisionBusy(null);
+    }
+  }
+
+  async function toggleNotification(
+    type: keyof OwnershipCostDecisionReadModel['notificationPreferences'],
+    enabled: boolean,
+  ) {
+    setDecisionBusy(`notification:${type}`);
+    setDecisionError(null);
+    try {
+      const saved = await updateOwnershipCostNotificationPreferences(
+        propertyId,
+        { [type]: enabled },
+      );
+      setDecisionData((current) => current
+        ? { ...current, notificationPreferences: saved.preferences }
+        : current);
+      track('action_taken', {
+        tool: 'ownership-costs',
+        propertyId,
+        actionType: `notification_${type.toLowerCase()}_${enabled ? 'on' : 'off'}`,
+      });
+    } catch (cause) {
+      setDecisionError(
+        cause instanceof Error
+          ? cause.message
+          : 'Notification preference could not be saved.',
+      );
+    } finally {
+      setDecisionBusy(null);
+    }
   }
 
   return (
@@ -1212,6 +1338,12 @@ export default function OwnershipCostsClient() {
           >
             Try again
           </button>
+        </div>
+      )}
+
+      {decisionError && (
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          {decisionError}
         </div>
       )}
 
@@ -1490,7 +1622,17 @@ export default function OwnershipCostsClient() {
                     there is an executable next step.
                   </p>
                   <div className="mt-4 space-y-4">
-                    {changeData.changes.map((change) => (
+                    {changeData.changes.map((change) => {
+                      const currentDecision = decisionForChange(change);
+                      const terminal = currentDecision && [
+                        'DISMISSED',
+                        'NO_ACTION',
+                        'RESOLVED',
+                      ].includes(currentDecision.lifecycleState);
+                      const actionKey = change.id
+                        ? `ownership-cost-change:${change.id}`
+                        : `ownership-cost-category:${propertyId}:${change.category}`;
+                      return (
                       <article key={`${change.category}:${change.toSnapshotId}`} className="rounded-2xl border border-slate-200 p-5">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                           <div>
@@ -1583,23 +1725,87 @@ export default function OwnershipCostsClient() {
                         </details>
 
                         <div className="mt-4 flex flex-wrap items-center gap-3">
-                          <Link
-                            href={change.action.href}
-                            onClick={() => track('action_taken', {
-                              tool: 'ownership-costs',
-                              actionType: `review_change_${change.category.toLowerCase()}`,
-                              propertyId,
-                            })}
-                            className="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                          >
-                            {change.action.label}
-                          </Link>
-                          <span className="text-xs text-slate-500">
-                            Dismissal, deferral, and resolution are available when this material change appears in Home Actions.
-                          </span>
+                          {terminal ? (
+                            <button
+                              type="button"
+                              disabled={decisionBusy === actionKey}
+                              onClick={() => void actOnChange(change, 'REOPEN')}
+                              className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-60"
+                            >
+                              Reopen
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                disabled={decisionBusy === actionKey}
+                                onClick={() => void actOnChange(change, 'ACCEPT')}
+                                className="min-h-11 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                              >
+                                {currentDecision?.destination.label ?? 'Take action'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={decisionBusy === actionKey}
+                                onClick={() => void actOnChange(change, 'SAVE')}
+                                className="min-h-11 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                disabled={decisionBusy === actionKey}
+                                onClick={() => void actOnChange(change, 'SNOOZE')}
+                                className="min-h-11 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+                              >
+                                Snooze
+                              </button>
+                              <button
+                                type="button"
+                                disabled={decisionBusy === actionKey}
+                                onClick={() => void actOnChange(change, 'NO_ACTION')}
+                                className="min-h-11 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+                              >
+                                No action
+                              </button>
+                              {currentDecision && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={decisionBusy === actionKey}
+                                    onClick={() => void actOnChange(change, 'RESOLVE')}
+                                    className="min-h-11 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-60"
+                                  >
+                                    Resolve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={decisionBusy === actionKey}
+                                    onClick={() => void actOnChange(change, 'DISMISS')}
+                                    className="min-h-11 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 disabled:opacity-60"
+                                  >
+                                    Dismiss
+                                  </button>
+                                </>
+                              )}
+                            </>
+                          )}
                         </div>
+                        {currentDecision && (
+                          <div className="mt-3 rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
+                            <span className="font-semibold">
+                              {currentDecision.lifecycleState.toLowerCase().replace(/_/g, ' ')}
+                            </span>
+                            {' · '}
+                            Owner: {currentDecision.owner.toLowerCase().replace(/_/g, ' ')}
+                            {currentDecision.revisitAt
+                              ? ` · Revisit ${dateLabel(currentDecision.revisitAt)}`
+                              : ''}
+                          </div>
+                        )}
                       </article>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
 
@@ -1629,6 +1835,62 @@ export default function OwnershipCostsClient() {
           </div>
         )}
       </section>
+
+      {decisionData && (
+        <details className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-900">
+            <Bell className="h-4 w-4 text-teal-700" />
+            Ownership-cost reminders and revisit events
+          </summary>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Choose which changes should return to your attention. Snoozed
+            decisions remain attached to their source snapshot and explanation.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {([
+              ['MATERIAL_CHANGE', 'Material observed changes'],
+              ['UPCOMING_EVENT', 'Upcoming renewals and known events'],
+              ['STALE_SCENARIO', 'Scenarios made stale by new facts'],
+              ['MISSING_HIGH_IMPACT_FACT', 'Missing high-impact cost facts'],
+            ] as const).map(([type, label]) => (
+              <label
+                key={type}
+                className="flex min-h-12 items-center justify-between gap-4 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+              >
+                <span>{label}</span>
+                <input
+                  type="checkbox"
+                  checked={decisionData.notificationPreferences[type]}
+                  disabled={decisionBusy === `notification:${type}`}
+                  onChange={(event) => void toggleNotification(
+                    type,
+                    event.target.checked,
+                  )}
+                  className="h-4 w-4 rounded border-slate-300 text-teal-700"
+                />
+              </label>
+            ))}
+          </div>
+          {decisionData.revisitEvents.length > 0 && (
+            <div className="mt-4 rounded-xl bg-slate-50 p-3">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Scheduled revisits
+              </h3>
+              <ul className="mt-2 space-y-2 text-sm text-slate-600">
+                {decisionData.revisitEvents.map((event) => (
+                  <li key={event.decisionId}>
+                    {event.category.toLowerCase().replace(/_/g, ' ')} ·{' '}
+                    {dateLabel(event.revisitAt)} · {event.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="mt-4 text-xs text-slate-500">
+            {decisionData.lifecycleRule}
+          </p>
+        </details>
+      )}
 
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
         This is educational planning support, not financial, tax, insurance,

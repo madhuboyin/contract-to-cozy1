@@ -11,6 +11,9 @@ import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { findPersonalizationDefinition } from '../modules/personalization/catalog/personalizationDefinitions';
 import type { EnvironmentInsight } from './environment/environmentInsights.service';
 import { getFreshnessNote } from './hiddenAssets/ruleEngine';
+import {
+  resolveOwnershipCostCategoryAction,
+} from './ownershipCosts/ownershipCostDecision.service';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -19,7 +22,7 @@ const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'ownershipCostChange' | 'ownershipCostSnapshot'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1094,11 +1097,21 @@ export async function loadOwnershipCostChangeActions(
   db: HomeActionSourceDb,
 ): Promise<HomeAction[]> {
   if (!db.ownershipCostChange || !db.ownershipCostSnapshot) return [];
-  const latestSnapshot = await db.ownershipCostSnapshot.findFirst({
-    where: { propertyId },
-    orderBy: [{ basePeriodEnd: 'desc' }, { computedAt: 'desc' }],
-    select: { id: true },
-  });
+  const [latestSnapshot, decisionRows] = await Promise.all([
+    db.ownershipCostSnapshot.findFirst({
+      where: { propertyId },
+      orderBy: [{ basePeriodEnd: 'desc' }, { computedAt: 'desc' }],
+      select: { id: true },
+    }),
+    db.ownershipCostDecision?.findMany({
+      where: {
+        propertyId,
+        decisionType: 'CATEGORY_ACTION',
+        status: { not: 'SUPERSEDED' },
+      },
+      select: { sourceActionId: true, payloadJson: true },
+    }) ?? Promise.resolve([]),
+  ]);
   if (!latestSnapshot) return [];
   const changes = await db.ownershipCostChange.findMany({
     where: { propertyId, toSnapshotId: latestSnapshot.id },
@@ -1118,6 +1131,26 @@ export async function loadOwnershipCostChangeActions(
   });
 
   return changes.flatMap((change) => {
+    const actionId = `ownership-cost-change:${change.id}`;
+    const currentDecision = decisionRows.find(
+      (decision) => decision.sourceActionId === actionId,
+    );
+    const decisionPayload = ownershipChangeEvidence(currentDecision?.payloadJson);
+    const lifecycleState = decisionPayload.lifecycleState;
+    const revisitAt = typeof decisionPayload.revisitAt === 'string'
+      ? new Date(decisionPayload.revisitAt)
+      : null;
+    if (
+      ['DISMISSED', 'NO_ACTION', 'RESOLVED'].includes(String(lifecycleState)) ||
+      (
+        lifecycleState === 'SNOOZED' &&
+        revisitAt &&
+        !Number.isNaN(revisitAt.getTime()) &&
+        revisitAt > new Date()
+      )
+    ) {
+      return [];
+    }
     const detail = ownershipChangeEvidence(change.evidenceJson);
     if (detail.materiality?.material !== true) return [];
     const evidence = Array.isArray(detail.evidence) ? detail.evidence : [];
@@ -1152,9 +1185,13 @@ export async function loadOwnershipCostChangeActions(
     const sourceLabel = evidence[0]?.sourceDomain
       ? String(evidence[0].sourceDomain).toLowerCase().replace(/_/g, ' ')
       : 'Ownership Cost Intelligence';
+    const destination = resolveOwnershipCostCategoryAction(
+      propertyId,
+      change.category,
+    );
 
     return [adaptHomeActionSource('SYSTEM', {
-      id: `ownership-cost-change:${change.id}`,
+      id: actionId,
       propertyId,
       lineageId: `ownership-cost-change:${propertyId}:${change.category}`,
       sourceEntityId: change.id,
@@ -1164,7 +1201,7 @@ export async function loadOwnershipCostChangeActions(
       priority: Math.abs(change.amountDeltaCents) >= 100_000 ? 'SOON' : 'PLAN',
       signal: `${categoryLabel} ${direction} by ${amount} per year.`,
       whyItMatters: explanation,
-      recommendedAction: 'Review the observed change and its source evidence',
+      recommendedAction: `${destination.label} after reviewing the observed change`,
       expectedOutcome:
         'Confirm whether the current household plan should change or whether the source record needs correction.',
       timing: {
@@ -1227,14 +1264,21 @@ export async function loadOwnershipCostChangeActions(
       governance: materialFinancialGovernance('ownership-cost-change-v1'),
       primaryCta: {
         kind: 'REVIEW',
-        label: 'Review ownership-cost change',
-        href: `/dashboard/properties/${propertyId}/ownership-costs?view=changes`,
+        label: destination.label,
+        href: destination.href,
       },
-      secondaryCtas: [{
-        kind: 'CORRECT_FACT',
-        label: correctionLabel,
-        href: correctionHref,
-      }],
+      secondaryCtas: [
+        {
+          kind: 'REVIEW',
+          label: 'Review ownership-cost evidence',
+          href: `/dashboard/properties/${propertyId}/ownership-costs?view=changes`,
+        },
+        {
+          kind: 'CORRECT_FACT',
+          label: correctionLabel,
+          href: correctionHref,
+        },
+      ],
       feedbackControls: DEFAULT_FEEDBACK,
       relatedJourneyId: null,
       createdAt: change.createdAt.toISOString(),

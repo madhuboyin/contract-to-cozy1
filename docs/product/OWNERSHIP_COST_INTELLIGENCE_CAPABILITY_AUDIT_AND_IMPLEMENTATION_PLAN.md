@@ -4,7 +4,7 @@
 **Contributing domains:** Property Tax, Coverage and Premium Review, Financing, Expenses, Utilities, Home Record, Capital Timeline, Reserve Fund, Budget Planner, Guidance, and Home Actions  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Implementation in progress — Slices 0–6 started July 28, 2026
+**Status:** Implementation in progress — Slices 0–7 started July 28, 2026
 **Recommended disposition:** **Consolidate, rebuild the calculation and evidence contract, and contain unsupported historical and predictive claims immediately**  
 **Current safety classification:** Material financial  
 **Recommended safety classification:** Material financial  
@@ -208,6 +208,36 @@ Implemented:
 
 Broader action, decision, notification, and revisit lifecycle work remains
 gated for Slice 7.
+
+### July 28, 2026 — Slice 7 action and lifecycle increment
+
+Implemented:
+
+- added one category action resolver with explicit Property Tax, Coverage,
+  Financing, Energy, HOA, Maintenance, Capital Timeline, Reserve Fund, Budget,
+  and Savings owners and executable destinations;
+- added a durable homeowner decision ledger supporting accept, save, dismiss,
+  snooze, no-action, resolve, and reopen as superseding revisions;
+- required homeowner reasons for terminal decisions and bounded snoozes to a
+  future revisit within 365 days;
+- retained the source snapshot, observed change, scenario, action identity, and
+  supported explanation on every decision;
+- added property-scoped notification controls for material changes, upcoming
+  events, stale scenarios, and missing high-impact facts;
+- exposed scheduled revisit events in the decision read model and canonical
+  Ownership Costs experience;
+- replaced passive output completion with explicit homeowner resolution;
+- made promoted Home Actions use the same category resolver and decision
+  lifecycle as the canonical Ownership Costs experience;
+- updated Guidance handoff ownership through canonical tool keys and removed
+  generic-savings fallback behavior;
+- added decision and resolution lineage instrumentation; and
+- added fixtures covering destinations, every lifecycle transition, source
+  preservation, revisit rules, notification persistence, and Home/Guidance
+  agreement.
+
+Downstream consumer cutover and removal of remaining compatibility adapters
+remain Slice 8 work.
 
 ---
 

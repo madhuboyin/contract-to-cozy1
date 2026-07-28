@@ -161,6 +161,69 @@ export type OwnershipCostChangeReadModel = {
   limitations: string[];
 };
 
+export type OwnershipCostDecisionAction =
+  | 'ACCEPT'
+  | 'SAVE'
+  | 'DISMISS'
+  | 'SNOOZE'
+  | 'NO_ACTION'
+  | 'RESOLVE'
+  | 'REOPEN';
+
+export type OwnershipCostDecision = {
+  id: string;
+  snapshotId: string;
+  scenarioId: string | null;
+  sourceActionId: string;
+  recordedAt: string;
+  lifecycleState:
+    | 'OPEN'
+    | 'ACCEPTED'
+    | 'SAVED'
+    | 'DISMISSED'
+    | 'SNOOZED'
+    | 'NO_ACTION'
+    | 'RESOLVED';
+  action: OwnershipCostDecisionAction;
+  category: OwnershipCostCategory;
+  owner: string;
+  destination: {
+    owner: string;
+    label: string;
+    href: string;
+    guidanceToolKey: string;
+  };
+  reason: string;
+  revisitAt: string | null;
+  source: {
+    snapshotId: string;
+    changeId: string | null;
+    scenarioId: string | null;
+    sourceActionId: string;
+    explanation: string;
+  };
+};
+
+export type OwnershipCostNotificationType =
+  | 'MATERIAL_CHANGE'
+  | 'UPCOMING_EVENT'
+  | 'STALE_SCENARIO'
+  | 'MISSING_HIGH_IMPACT_FACT';
+
+export type OwnershipCostDecisionReadModel = {
+  contractVersion: 'ownership-cost-decision-read-v1';
+  decisions: OwnershipCostDecision[];
+  revisitEvents: Array<{
+    decisionId: string;
+    sourceActionId: string;
+    revisitAt: string;
+    category: OwnershipCostCategory;
+    reason: string;
+  }>;
+  notificationPreferences: Record<OwnershipCostNotificationType, boolean>;
+  lifecycleRule: string;
+};
+
 export type OwnershipCostScenarioOverrides = {
   categoryGrowthRates?: Partial<Record<OwnershipCostCategory, number>>;
   categoryAnnualAdjustmentsCents?: Partial<
@@ -503,4 +566,54 @@ export async function recordOwnershipCostPlanningDecision(
     { lens, decisionType },
   );
   return response.data.ownershipCostPlanningDecision;
+}
+
+export async function getOwnershipCostDecisions(propertyId: string) {
+  const response = await api.get<{
+    ownershipCostDecisions: OwnershipCostDecisionReadModel;
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/decisions`,
+  );
+  return response.data.ownershipCostDecisions;
+}
+
+export async function recordOwnershipCostDecision(
+  propertyId: string,
+  input: {
+    action: OwnershipCostDecisionAction;
+    category: OwnershipCostCategory;
+    sourceChangeId?: string;
+    sourceActionId?: string;
+    explanation?: string;
+    reason?: string;
+    revisitAt?: string;
+  },
+) {
+  const response = await api.post<{
+    ownershipCostDecision: OwnershipCostDecision;
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/decisions`,
+    input,
+  );
+  return response.data.ownershipCostDecision;
+}
+
+export async function updateOwnershipCostNotificationPreferences(
+  propertyId: string,
+  preferences: Partial<
+    Record<OwnershipCostNotificationType, boolean>
+  >,
+) {
+  const response = await api.put<{
+    ownershipCostNotificationPreferences: {
+      id: string;
+      preferences: Record<OwnershipCostNotificationType, boolean>;
+      snapshotId: string;
+      recordedAt: string;
+    };
+  }>(
+    `/api/properties/${encodeURIComponent(propertyId)}/ownership-costs/notification-preferences`,
+    preferences,
+  );
+  return response.data.ownershipCostNotificationPreferences;
 }

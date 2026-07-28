@@ -18,6 +18,11 @@ import {
 import {
   ownershipCostVariabilityService,
 } from '../services/ownershipCosts/ownershipCostVariability.service';
+import {
+  OWNERSHIP_COST_DECISION_ACTIONS,
+  OWNERSHIP_COST_NOTIFICATION_TYPES,
+  ownershipCostDecisionService,
+} from '../services/ownershipCosts/ownershipCostDecision.service';
 import { OwnershipCostAccessDeniedError } from '../services/ownershipCosts/ownershipCostObservation.service';
 import {
   OWNERSHIP_COST_CATEGORIES,
@@ -77,6 +82,48 @@ const ownershipCostPlanningDecisionSchema = z.object({
     'CAPITAL_RESERVE',
   ]),
 }).strict();
+
+const ownershipCostDecisionSchema = z.object({
+  action: z.enum(OWNERSHIP_COST_DECISION_ACTIONS),
+  category: z.enum(OWNERSHIP_COST_CATEGORIES).optional(),
+  sourceChangeId: z.string().trim().min(1).max(160).nullable().optional(),
+  scenarioId: z.string().trim().min(1).max(160).nullable().optional(),
+  sourceActionId: z.string().trim().min(1).max(160).nullable().optional(),
+  explanation: z.string().trim().min(1).max(1200).nullable().optional(),
+  reason: z.string().trim().min(1).max(1000).nullable().optional(),
+  revisitAt: z.string().datetime().nullable().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (!value.category && !value.sourceChangeId) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['category'],
+      message: 'A category or source change is required.',
+    });
+  }
+  if (value.action === 'SNOOZE' && !value.revisitAt) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['revisitAt'],
+      message: 'SNOOZE requires a revisit date.',
+    });
+  }
+  if (['DISMISS', 'NO_ACTION', 'RESOLVE'].includes(value.action) && !value.reason) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['reason'],
+      message: `${value.action} requires a homeowner reason.`,
+    });
+  }
+});
+
+const ownershipCostNotificationPreferencesSchema = z.object(
+  Object.fromEntries(
+    OWNERSHIP_COST_NOTIFICATION_TYPES.map((type) => [type, z.boolean().optional()]),
+  ) as Record<typeof OWNERSHIP_COST_NOTIFICATION_TYPES[number], z.ZodOptional<z.ZodBoolean>>,
+).strict().refine(
+  (value) => Object.values(value).some((setting) => setting !== undefined),
+  { message: 'At least one notification preference is required.' },
+);
 
 function ownershipCostError(error: unknown, res: Response) {
   if (error instanceof OwnershipCostAccessDeniedError) {
@@ -368,6 +415,71 @@ export async function recordOwnershipCostPlanningDecision(
     return res.status(201).json({
       success: true,
       data: { ownershipCostPlanningDecision },
+    });
+  } catch (error) {
+    return ownershipCostError(error, res);
+  }
+}
+
+export async function getOwnershipCostDecisions(
+  req: CustomRequest,
+  res: Response,
+) {
+  try {
+    const ownershipCostDecisions = await ownershipCostDecisionService.list(
+      req.params.propertyId,
+      req.user!.userId,
+    );
+    return res.json({
+      success: true,
+      data: { ownershipCostDecisions },
+    });
+  } catch (error) {
+    return ownershipCostError(error, res);
+  }
+}
+
+export async function recordOwnershipCostDecision(
+  req: CustomRequest,
+  res: Response,
+) {
+  const parsed = ownershipCostDecisionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(validationErrorResponse(parsed.error));
+  }
+  try {
+    const ownershipCostDecision = await ownershipCostDecisionService.record(
+      req.params.propertyId,
+      req.user!.userId,
+      parsed.data,
+    );
+    return res.status(201).json({
+      success: true,
+      data: { ownershipCostDecision },
+    });
+  } catch (error) {
+    return ownershipCostError(error, res);
+  }
+}
+
+export async function updateOwnershipCostNotificationPreferences(
+  req: CustomRequest,
+  res: Response,
+) {
+  const parsed = ownershipCostNotificationPreferencesSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(validationErrorResponse(parsed.error));
+  }
+  try {
+    const ownershipCostNotificationPreferences =
+      await ownershipCostDecisionService.updateNotificationPreferences(
+        req.params.propertyId,
+        req.user!.userId,
+        parsed.data,
+      );
+    return res.json({
+      success: true,
+      data: { ownershipCostNotificationPreferences },
     });
   } catch (error) {
     return ownershipCostError(error, res);

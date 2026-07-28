@@ -3,14 +3,17 @@ import {
   createOwnershipCostScenario,
   deleteOwnershipCostScenario,
   getOwnershipCostForecast,
+  getOwnershipCostDecisions,
   getOwnershipCostChanges,
   getOwnershipCosts,
   getOwnershipCostVariability,
   listOwnershipCostScenarios,
   recordOwnershipCostPlanningDecision,
+  recordOwnershipCostDecision,
   recalculateOwnershipCostForecast,
   recalculateOwnershipCosts,
   updateOwnershipCostScenario,
+  updateOwnershipCostNotificationPreferences,
 } from '../controllers/ownershipCosts.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import {
@@ -20,6 +23,32 @@ import {
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 const router = Router();
+
+router.get(
+  '/properties/:propertyId/ownership-costs/decisions',
+  authenticate,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  getOwnershipCostDecisions,
+);
+
+router.post(
+  '/properties/:propertyId/ownership-costs/decisions',
+  authenticate,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  recordOwnershipCostDecision,
+);
+
+router.put(
+  '/properties/:propertyId/ownership-costs/notification-preferences',
+  authenticate,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  updateOwnershipCostNotificationPreferences,
+);
 
 router.get(
   '/properties/:propertyId/ownership-costs/variability',

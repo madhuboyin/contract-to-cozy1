@@ -42,6 +42,7 @@ import {
   getCapabilitySuggestionsFromAuthorizedSources,
 } from './capabilityRecommendation.service';
 import { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
+import { ownershipCostDecisionService } from './ownershipCosts/ownershipCostDecision.service';
 import {
   applyCoverageActionLifecyclePolicy,
   coverageActionRuntimePolicy,
@@ -699,6 +700,36 @@ export async function executeHomeActionCommand(
   const nextTriggerAt = ['DEFER', 'SNOOZE'].includes(input.command)
     ? validateNextTriggerAt(input.nextTriggerAt)
     : null;
+
+  if (action.id.startsWith('ownership-cost-change:')) {
+    const sourceChangeId = action.id.slice('ownership-cost-change:'.length);
+    const ownershipAction = input.command === 'COMPLETE' || input.command === 'ALREADY_DONE'
+      ? 'RESOLVE'
+      : input.command === 'DEFER' || input.command === 'SNOOZE'
+        ? 'SNOOZE'
+        : input.command === 'NOT_RELEVANT'
+          ? 'NO_ACTION'
+          : 'DISMISS';
+    const decision = await ownershipCostDecisionService.record(
+      propertyId,
+      userId,
+      {
+        action: ownershipAction,
+        sourceChangeId,
+        sourceActionId: action.id,
+        reason,
+        revisitAt: nextTriggerAt?.toISOString() ?? null,
+      },
+    );
+    return {
+      actionId,
+      command: input.command,
+      state: decision.lifecycleState,
+      nextTriggerAt: decision.revisitAt,
+      decisionId: decision.id,
+      recordedAt: decision.recordedAt,
+    };
+  }
 
   if (
     action.id === `refinance-data-required:${propertyId}` &&
