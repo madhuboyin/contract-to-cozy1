@@ -49,7 +49,7 @@ export default function BreakEvenClient() {
   const searchParams = useSearchParams();
   const requestedAssumptionSetId = searchParams.get('assumptionSetId');
 
-  const [years, setYears] = useState<5 | 10 | 20 | 30>(20);
+  const [years, setYears] = useState<5 | 10>(10);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<BreakEvenDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export default function BreakEvenClient() {
     track('workflow_completed', { tool: 'break-even', propertyId });
   }, [propertyId, data]);
 
-  async function load(nextYears: 5 | 10 | 20 | 30) {
+  async function load(nextYears: 5 | 10) {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
@@ -92,7 +92,7 @@ export default function BreakEvenClient() {
   }, [propertyId, requestedAssumptionSetId]);
 
   const chartModel = useMemo(() => {
-    const hist = data?.history ?? [];
+    const hist = data?.projection ?? [];
     if (!hist.length) {
       return {
         x: ['—', '—'],
@@ -249,7 +249,7 @@ export default function BreakEvenClient() {
 
           {/* Premium Time Selector */}
           <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
-            {([5, 10, 20, 30] as const).map((y) => (
+            {([5, 10] as const).map((y) => (
               <button
                 key={y}
                 type="button"
@@ -476,6 +476,13 @@ export default function BreakEvenClient() {
               <div key={i} className="text-xs text-slate-600 leading-relaxed">• {n}</div>
             ))}
           </div>
+          {data?.ownershipCostContext && (
+            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+              Ownership-cost lens: <span className="font-semibold">operating expense</span>
+              {' · '}Snapshot {data.ownershipCostContext.snapshotId}
+              {' · '}Forecast method {data.ownershipCostContext.forecastMethodVersion}
+            </div>
+          )}
 
           {/* Next Action - Premium CTA */}
           {data?.nextAction && (

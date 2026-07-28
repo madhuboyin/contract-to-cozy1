@@ -549,7 +549,6 @@ function pickPreferredEvidence(args: {
     args.journey.journeyTypeKey === 'asset_lifecycle_resolution' &&
     (args.step.stepKey === 'estimate_cost_impact' ||
       args.step.toolKey === 'ownership-costs' ||
-      args.step.toolKey === 'true-cost' ||
       args.step.label.toLowerCase().includes('cost tradeoff'));
 
   const fallbackCandidates = isLegacyLifecycleCostStep
@@ -586,7 +585,6 @@ function buildRepairReplaceStepEvidenceFallback(args: {
     args.journey.journeyTypeKey === 'asset_lifecycle_resolution' &&
     (args.selectedStep.stepKey === 'estimate_cost_impact' ||
       args.selectedStep.toolKey === 'ownership-costs' ||
-      args.selectedStep.toolKey === 'true-cost' ||
       args.selectedStep.label.toLowerCase().includes('cost tradeoff'));
 
   if (!isLegacyLifecycleCostStep) return null;

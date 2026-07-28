@@ -19,6 +19,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { track } from '@/lib/analytics/events';
+import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import {
   createOwnershipCostScenario,
   deleteOwnershipCostScenario,
@@ -1326,6 +1327,13 @@ export default function OwnershipCostsClient() {
           })}
         </nav>
       </section>
+
+      <PropertyContextCapturePanel
+        propertyId={propertyId}
+        featureKey="OWNERSHIP_COSTS"
+        operationKey="VIEW_ANALYSIS"
+        onCaptured={() => load(true)}
+      />
 
       {error && (
         <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">

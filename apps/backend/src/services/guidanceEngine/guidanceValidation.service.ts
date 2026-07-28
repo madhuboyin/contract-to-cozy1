@@ -25,7 +25,6 @@ const TOOL_FRESHNESS_DAYS: Record<string, number> = {
   'do-nothing-simulator': 120,
   'home-savings': 120,
   'ownership-costs': 120,
-  'true-cost': 120,
 };
 
 const FAMILY_FRESHNESS_DAYS: Record<string, number> = {

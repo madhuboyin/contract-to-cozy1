@@ -62,12 +62,6 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
       'cost explainer',
       'cost volatility',
     ],
-    routeAliases: [
-      '/dashboard/properties/[id]/tools/true-cost',
-      '/dashboard/properties/[id]/tools/cost-explainer',
-      '/dashboard/properties/[id]/tools/cost-growth',
-      '/dashboard/properties/[id]/tools/cost-volatility',
-    ],
     navTarget: 'ownership-costs',
     homeownerOutcome:
       'Understand the current cost of owning this home, the evidence behind each category, verified changes, planning scenarios, and the next relevant action.',

@@ -29,7 +29,7 @@ import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
 import { ReplacementPrioritiesCapture } from '@/components/guidance/ReplacementPrioritiesCapture';
-import { TrueCostGuidanceStep } from '@/components/guidance/TrueCostGuidanceStep';
+import { OwnershipCostsGuidanceStep } from '@/components/guidance/OwnershipCostsGuidanceStep';
 import { CapitalTimelineGuidanceStep } from '@/components/guidance/CapitalTimelineGuidanceStep';
 import { DoNothingGuidanceStep } from '@/components/guidance/DoNothingGuidanceStep';
 import { HomeSavingsGuidanceStep } from '@/components/guidance/HomeSavingsGuidanceStep';
@@ -304,9 +304,9 @@ export default function GuidanceStepPageClient() {
       );
     }
 
-    if (targetStep.toolKey === 'true-cost') {
+    if (targetStep.toolKey === 'ownership-costs') {
       return (
-        <TrueCostGuidanceStep
+        <OwnershipCostsGuidanceStep
           propertyId={propertyId}
           journeyId={journey.id}
           stepId={targetStep.id}

@@ -116,9 +116,6 @@ export type CtcTool =
   // Added as part of the tool-instrumentation coverage sprint
   | 'break-even'
   | 'capital-timeline'
-  | 'cost-explainer'
-  | 'cost-growth'
-  | 'cost-volatility'
   | 'diy'
   | 'financing'
   | 'hoa'
@@ -133,8 +130,7 @@ export type CtcTool =
   | 'permits'
   | 'plant-advisor'
   | 'reserve-fund'
-  | 'sell-hold-rent'
-  | 'true-cost';
+  | 'sell-hold-rent';
 
 function toEventAttributes(properties: Record<string, unknown>): Record<string, string> {
   const attrs: Record<string, string> = {};

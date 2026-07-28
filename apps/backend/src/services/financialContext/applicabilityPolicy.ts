@@ -127,24 +127,6 @@ export function evaluateFinancialContext(
       'PROPERTY_USE_AVAILABLE_FOR_BUDGET_PLANNING',
       'BUDGET_PLANNING_CONTEXT_INCOMPLETE',
     ),
-    costGrowthModeling: requiresFacts(
-      context,
-      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
-      'PROPERTY_AND_LOCATION_AVAILABLE_FOR_COST_GROWTH',
-      'COST_GROWTH_CONTEXT_INCOMPLETE',
-    ),
-    costVolatilityModeling: requiresFacts(
-      context,
-      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
-      'PROPERTY_AND_LOCATION_AVAILABLE_FOR_COST_VOLATILITY',
-      'COST_VOLATILITY_CONTEXT_INCOMPLETE',
-    ),
-    costExplainerModeling: requiresFacts(
-      context,
-      ['core.propertyUse', 'core.occupancyStatus', 'location.state', 'location.zipCode'],
-      'PROPERTY_AND_LOCATION_AVAILABLE_FOR_COST_EXPLANATION',
-      'COST_EXPLAINER_CONTEXT_INCOMPLETE',
-    ),
     propertyBenchmarking: requiresFacts(
       context,
       ['core.propertyUse', 'core.occupancyStatus', 'core.dwellingType', 'location.state', 'location.zipCode'],

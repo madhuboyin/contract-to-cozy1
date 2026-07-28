@@ -16,7 +16,7 @@ const BreakEvenQuerySchema = z.object({
     propertyId: z.string().min(1),
   }),
   query: z.object({
-    years: z.union([z.literal('5'), z.literal('10'), z.literal('20'), z.literal('30')]).optional(),
+    years: z.union([z.literal('5'), z.literal('10')]).optional(),
     assumptionSetId: z.string().uuid().optional(),
     homeValueNow: z.string().optional(),
     appreciationRate: z.string().optional(),

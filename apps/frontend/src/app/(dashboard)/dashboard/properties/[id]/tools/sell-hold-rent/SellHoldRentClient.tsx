@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
-import MultiLineChart from '../cost-growth/MultiLineChart';
+import MultiLineChart from '../insurance-trend/MultiLineChart';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
@@ -162,7 +162,7 @@ export default function SellHoldRentClient() {
     winner === 'SELL' ? sellNet : winner === 'RENT' ? rentNet : winner === 'HOLD' ? holdNet : null;
 
   const chartModel = useMemo(() => {
-    const h = data?.history ?? [];
+    const h = data?.projection ?? [];
     const x = h.map((r) => String(r.year));
     return {
       x: x.length >= 2 ? x : ['—', '—'],
@@ -445,6 +445,13 @@ export default function SellHoldRentClient() {
               </div>
             ))}
           </div>
+          {data?.ownershipCostContext && (
+            <div className="mt-3 rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2 text-xs leading-5 text-teal-900">
+              Ownership-cost lens: <span className="font-semibold">operating expense</span>
+              {' · '}Snapshot {data.ownershipCostContext.snapshotId}
+              {' · '}Forecast method {data.ownershipCostContext.forecastMethodVersion}
+            </div>
+          )}
         </div>
       )}
 

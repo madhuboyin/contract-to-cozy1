@@ -1,7 +1,5 @@
 // apps/backend/src/services/breakEven.service.ts
 import { prisma } from '../lib/prisma';
-import { HomeCostGrowthService } from './homeCostGrowth.service';
-import { TrueCostOwnershipService } from './trueCostOwnership.service';
 import { AppreciationIndexService } from './appreciationIndex.service';
 import {
   FinancialAssumptionService,
@@ -12,11 +10,15 @@ import {
 import { buildAnnualCostSeries, buildAnnualGainSeries } from './tools/financialProjectionMath';
 import { computeMonthlyPayment } from './tools/mortgageMath';
 import { getCanonicalMortgage } from './canonicalFinanceAdapter.service';
+import {
+  ownershipCostConsumerProjectionService,
+  type OwnershipCostConsumerProjection,
+} from './ownershipCosts/ownershipCostConsumerProjection.service';
 
-export type BreakEvenYears = 5 | 10 | 20 | 30;
+export type BreakEvenYears = 5 | 10;
 
 export type BreakEvenInput = {
-  years?: BreakEvenYears; // default 20
+  years?: BreakEvenYears; // default 10
   assumptionSetId?: string;
   homeValueNow?: number; // optional override
   appreciationRate?: number; // decimal override
@@ -41,6 +43,17 @@ export type BreakEvenDTO = {
   preferenceProfileId?: string | null;
   sharedSignalsUsed?: string[];
   financialAssumptions?: FinancialAssumptions;
+  ownershipCostContext: {
+    contractVersion: string;
+    lens: 'OPERATING_EXPENSE';
+    snapshotId: string;
+    definitionVersion: string;
+    methodVersion: string;
+    categoryDefinitionVersion: string;
+    forecastId: string | null;
+    forecastMethodVersion: string;
+    calculationFingerprint: string;
+  };
 
   input: {
     propertyId: string;
@@ -62,7 +75,7 @@ export type BreakEvenDTO = {
     monthlyPayment?: number | null;
   };
 
-  history: Array<{
+  projection: Array<{
     year: number; // calendar year
     annualExpenses: number;
     annualAppreciationGain: number;
@@ -145,8 +158,8 @@ type DebtProjectionYear = {
 };
 
 function clampYears(y?: number): BreakEvenYears {
-  if (y === 5 || y === 10 || y === 20 || y === 30) return y;
-  return 20;
+  if (y === 5 || y === 10) return y;
+  return 10;
 }
 
 function toMoney(n: number) {
@@ -179,6 +192,22 @@ function bumpConfidence(
 ): 'HIGH' | 'MEDIUM' | 'LOW' {
   const rank = { LOW: 1, MEDIUM: 2, HIGH: 3 } as const;
   return rank[next] > rank[cur] ? next : cur;
+}
+
+function ownershipCostContext(
+  projection: OwnershipCostConsumerProjection,
+): BreakEvenDTO['ownershipCostContext'] {
+  return {
+    contractVersion: projection.contractVersion,
+    lens: 'OPERATING_EXPENSE',
+    snapshotId: projection.snapshot.id,
+    definitionVersion: projection.snapshot.definitionVersion,
+    methodVersion: projection.snapshot.methodVersion,
+    categoryDefinitionVersion: projection.snapshot.categoryDefinitionVersion,
+    forecastId: projection.forecast.id,
+    forecastMethodVersion: projection.forecast.methodVersion,
+    calculationFingerprint: projection.forecast.calculationFingerprint,
+  };
 }
 
 function projectDebtByYear(args: {
@@ -237,8 +266,6 @@ function projectDebtByYear(args: {
 }
 
 export class BreakEvenService {
-  private costGrowth = new HomeCostGrowthService();
-  private trueCost = new TrueCostOwnershipService();
   private appreciation = new AppreciationIndexService();
   private financialAssumptionService = new FinancialAssumptionService();
 
@@ -248,6 +275,7 @@ export class BreakEvenService {
     userId?: string
   ): Promise<BreakEvenDTO> {
     const years = clampYears(input.years);
+    if (!userId) throw new Error('Authentication is required for Break-Even.');
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -257,6 +285,9 @@ export class BreakEvenService {
         city: true,
         state: true,
         zipCode: true,
+        financingProfile: {
+          select: { purchasePriceCents: true },
+        },
       },
     });
     if (!property) throw new Error('Property not found');
@@ -270,19 +301,39 @@ export class BreakEvenService {
     const notes: string[] = [];
     const dataSources: string[] = [
       'Internal property profile (address/state/zip)',
-      'HomeCostGrowthService (Phase 1 heuristics)',
+      'Ownership Cost Intelligence versioned snapshot and forecast',
       'AssumptionSet + PreferenceProfile (shared financial assumptions)',
     ];
 
-    // Base: still call HomeCostGrowthService to anchor homeValueNow + annualExpensesNow
-    const baseCg = await this.costGrowth.estimate(propertyId, {
-      years: 10,
-      homeValueNow: input.homeValueNow,
-    });
-
-    const homeValueNow = baseCg.current.homeValueNow;
-    let appreciationRate = baseCg.current.appreciationRate; // replaced below if FHFA comps used
-    const annualExpensesNow = baseCg.current.annualExpensesNow;
+    const ownershipCosts = await ownershipCostConsumerProjectionService
+      .getProjection({
+        propertyId,
+        userId,
+        lens: 'OPERATING_EXPENSE',
+        horizonYears: years,
+      });
+    const homeValueNow = input.homeValueNow
+      ?? (
+        property.financingProfile?.purchasePriceCents != null
+          ? property.financingProfile.purchasePriceCents / 100
+          : 350_000
+      );
+    let appreciationRate = input.appreciationRate ?? 0.035;
+    const annualExpensesNow = ownershipCosts.currentAnnualDollars;
+    const canonicalForwardExpenses = ownershipCosts.forwardAnnualDollars
+      .map((period) => period.base);
+    if (property.financingProfile?.purchasePriceCents != null && input.homeValueNow == null) {
+      dataSources.push('PropertyFinancingProfile purchase price');
+    } else if (input.homeValueNow == null) {
+      notes.push(
+        'Current home value is unavailable; the disposition model uses a clearly labeled $350,000 fallback.',
+      );
+    }
+    dataSources.push(
+      `Ownership-cost lens: ${ownershipCosts.lens}`,
+      `Ownership-cost snapshot: ${ownershipCosts.snapshot.id}`,
+      `Ownership-cost forecast: ${ownershipCosts.forecast.id ?? ownershipCosts.forecast.calculationFingerprint}`,
+    );
 
     const mortgageBalanceNow =
       input.mortgageBalance ?? canonicalMortgage?.mortgageBalance ?? null;
@@ -358,8 +409,8 @@ export class BreakEvenService {
             asOf: new Date().toISOString(),
             annualizedRatePct: Math.round(appreciationRate * 1000) / 10,
             confidence: 'LOW',
-            fallbackChain: ['HomeCostGrowthService heuristic'],
-            notes: ['FHFA series alignment insufficient; using localized heuristic.'],
+            fallbackChain: ['Explicit national planning fallback'],
+            notes: ['FHFA series alignment insufficient; using a 3.5% planning assumption.'],
           };
         }
       } catch {
@@ -371,44 +422,24 @@ export class BreakEvenService {
           asOf: new Date().toISOString(),
           annualizedRatePct: Math.round(appreciationRate * 1000) / 10,
           confidence: 'LOW',
-          fallbackChain: ['HomeCostGrowthService heuristic'],
-          notes: ['FHFA dataset unavailable; using localized heuristic.'],
+          fallbackChain: ['Explicit national planning fallback'],
+          notes: ['FHFA dataset unavailable; using a 3.5% planning assumption.'],
         };
       }
     } else {
       notes.push('Used client-provided appreciationRate override for projection.');
     }
 
-    // True cost anchor note (unchanged)
-    try {
-      const tc = await this.trueCost.estimate(propertyId, {
-        years: 5,
-        homeValueNow: input.homeValueNow,
-      });
-      dataSources.push('TrueCostOwnershipService (annualTotalNow anchor; Phase 1)');
-      const tcNow = tc.current.annualTotalNow;
-      const diffPct = annualExpensesNow > 0 ? Math.abs(tcNow - annualExpensesNow) / annualExpensesNow : 0;
-      if (diffPct > 0.2) {
-        notes.push(
-          'Note: True Cost (incl utilities) differs materially from cost-growth (excl utilities). Break-even uses cost-growth expenses for consistency.'
-        );
-      }
-    } catch {
-      // ignore
-    }
-
-    // Infer a default expense growth rate from the first two forward insurance
-    // projection points. These are assumptions, not observed history.
-    let inferredExpenseGrowth = 0.04;
-    const h = baseCg.projection;
-    if (h.length >= 2) {
-      const a = h[h.length - 2].annualInsurance;
-      const b = h[h.length - 1].annualInsurance;
-      if (a > 0 && Number.isFinite(a) && Number.isFinite(b)) {
-        const g = b / a - 1;
-        if (Number.isFinite(g) && g > -0.2 && g < 0.3) inferredExpenseGrowth = g;
-      }
-    }
+    const firstForecast = canonicalForwardExpenses[0] ?? annualExpensesNow;
+    const lastForecast =
+      canonicalForwardExpenses.at(-1) ?? firstForecast;
+    const inferredExpenseGrowth =
+      firstForecast > 0 && canonicalForwardExpenses.length > 1
+        ? Math.pow(
+          lastForecast / firstForecast,
+          1 / (canonicalForwardExpenses.length - 1),
+        ) - 1
+        : 0;
     const sharedFinancialOverrides = {
       appreciationRate: input.appreciationRate,
       inflationRate: input.inflationRate,
@@ -475,7 +506,9 @@ export class BreakEvenService {
     }
 
     // Project base ownership + appreciation series
-    const baseAnnualExpenses = buildAnnualCostSeries(annualExpensesNow, expenseGrowthRate, years);
+    const baseAnnualExpenses = input.expenseGrowthRate !== undefined
+      ? buildAnnualCostSeries(annualExpensesNow, expenseGrowthRate, years)
+      : [annualExpensesNow, ...canonicalForwardExpenses].slice(0, years);
     const baseAnnualAppGain = buildAnnualGainSeries(homeValueNow, appreciationRate, years);
 
     // Debt-aware add-ons (interest as cost, principal as equity gain)
@@ -506,7 +539,7 @@ export class BreakEvenService {
     );
 
     // Cumulative + net
-    const historyOut: BreakEvenDTO['history'] = [];
+    const projectionOut: BreakEvenDTO['projection'] = [];
     let cumExp = 0;
     let cumGain = 0;
 
@@ -515,7 +548,7 @@ export class BreakEvenService {
       cumGain += annualAppGain[i];
       const net = cumGain - cumExp;
 
-      historyOut.push({
+      projectionOut.push({
         year: nowYear + i,
         annualExpenses: toMoney(annualExpenses[i]),
         annualAppreciationGain: toMoney(annualAppGain[i]),
@@ -526,7 +559,7 @@ export class BreakEvenService {
     }
 
     // Break-even status
-    const netSeries = historyOut.map((x) => x.netCumulative);
+    const netSeries = projectionOut.map((x) => x.netCumulative);
     const beIdx = firstBreakEvenIndex(netSeries);
     const reached = beIdx !== null;
 
@@ -537,7 +570,7 @@ export class BreakEvenService {
     const breakEvenCalendarYear =
       breakEvenYearIndex !== null ? nowYear + (breakEvenYearIndex - 1) : null;
     const netAtBreakEven =
-      breakEvenYearIndex !== null ? historyOut[breakEvenYearIndex - 1]?.netCumulative ?? null : null;
+      breakEvenYearIndex !== null ? projectionOut[breakEvenYearIndex - 1]?.netCumulative ?? null : null;
 
     // Sensitivity (unchanged)
     const sens = (adj: number) => {
@@ -549,7 +582,15 @@ export class BreakEvenService {
       const er = expenseGrowthRate - adj * 0.5;
 
       const gains = buildAnnualGainSeries(homeValueNow, ar, years);
-      const costs = buildAnnualCostSeries(annualExpensesNow, er, years);
+      const costs = adj === 0 && input.expenseGrowthRate === undefined
+        ? baseAnnualExpenses
+        : ownershipCosts.forwardAnnualDollars.length > 0
+          ? [
+              annualExpensesNow,
+              ...ownershipCosts.forwardAnnualDollars.map((period) =>
+                adj < 0 ? period.high : period.low),
+            ].slice(0, years)
+          : buildAnnualCostSeries(annualExpensesNow, er, years);
       for (let t = 0; t < years; t++) {
         cumE += costs[t] + annualDebtInterest[t];
         cumG += gains[t] + annualPrincipalPaydown[t];
@@ -623,6 +664,7 @@ export class BreakEvenService {
             };
 
     return {
+      ownershipCostContext: ownershipCostContext(ownershipCosts),
       assumptionSetId: financialContext.assumptionSetId,
       preferenceProfileId: financialContext.preferenceProfileId,
       sharedSignalsUsed: financialContext.sharedSignalsUsed,
@@ -662,7 +704,7 @@ export class BreakEvenService {
         monthlyPayment: debtMode === 'ON' ? debtMonthlyPayment : monthlyPaymentInput,
       },
 
-      history: historyOut,
+      projection: projectionOut,
 
       breakEven: {
         status,
@@ -677,9 +719,9 @@ export class BreakEvenService {
       events,
 
       rollup: {
-        netAtHorizon: historyOut[historyOut.length - 1].netCumulative,
-        cumulativeExpensesAtHorizon: historyOut[historyOut.length - 1].cumulativeExpenses,
-        cumulativeAppreciationAtHorizon: historyOut[historyOut.length - 1].cumulativeAppreciationGain,
+        netAtHorizon: projectionOut[projectionOut.length - 1].netCumulative,
+        cumulativeExpensesAtHorizon: projectionOut[projectionOut.length - 1].cumulativeExpenses,
+        cumulativeAppreciationAtHorizon: projectionOut[projectionOut.length - 1].cumulativeAppreciationGain,
       },
 
       drivers,

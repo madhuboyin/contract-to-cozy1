@@ -303,16 +303,7 @@ const homeTools: DiscoverableToolDefinition[] = MOBILE_HOME_TOOL_LINKS.map((tool
   icon: tool.icon,
   workflowOnly: Boolean(tool.workflowOnly),
   baseHref: (propertyId) => buildHomeToolHref(propertyId, tool.hrefSuffix, tool.navTarget),
-  routeHints: tool.key === 'ownership-costs'
-    ? [
-        tool.hrefSuffix.split('?')[0],
-        tool.navTarget,
-        'tools/true-cost',
-        'tools/cost-explainer',
-        'tools/cost-growth',
-        'tools/cost-volatility',
-      ]
-    : [tool.hrefSuffix.split('?')[0], tool.navTarget],
+  routeHints: [tool.hrefSuffix.split('?')[0], tool.navTarget],
 }));
 
 const homeToolIds = new Set(homeTools.map((tool) => tool.id));
@@ -338,16 +329,11 @@ const TOOL_ID_ALIASES: Record<string, string> = {
   'climate-risk': 'climate',
   'coverage-analysis': 'coverage-intelligence',
   'coverage-options': 'coverage-intelligence',
-  'cost-explainer': 'ownership-costs',
-  'cost-growth': 'ownership-costs',
-  'cost-volatility': 'ownership-costs',
   'document-vault': 'documents',
   'do-nothing': 'do-nothing-simulator',
   'energy-audit': 'energy',
   'insurance-trend': 'coverage-intelligence',
   'risk-premium-optimizer': 'coverage-intelligence',
-  'true-cost': 'ownership-costs',
-  'true-cost-ownership': 'ownership-costs',
   hoa: 'hoa-compliance',
   'home-capital-timeline': 'capital-timeline',
   'home-upgrades': 'modifications',

@@ -274,7 +274,7 @@ function mapIncidentTypeToGuidance(
       signalIntentFamily: 'financial_exposure',
       issueDomain: 'FINANCIAL',
       readiness: 'NEEDS_CONTEXT',
-      sourceToolKey: 'true-cost',
+      sourceToolKey: 'ownership-costs',
     };
   }
 

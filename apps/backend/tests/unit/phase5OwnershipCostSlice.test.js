@@ -32,7 +32,6 @@ test('ownership cost tools require canonical occupancy and location context', ()
   }));
   assert.equal(incomplete.ownershipCostModeling.status, 'UNKNOWN');
   assert.equal(incomplete.homeSavingsModeling.status, 'UNKNOWN');
-  assert.equal(incomplete.costGrowthModeling.status, 'UNKNOWN');
 
   const complete = evaluateFinancialContext(snapshot({
     'core.propertyUse': 'PRIMARY_RESIDENCE',
@@ -45,9 +44,6 @@ test('ownership cost tools require canonical occupancy and location context', ()
   assert.equal(complete.homeSavingsModeling.status, 'APPLICABLE');
   assert.equal(complete.budgetPlanning.status, 'APPLICABLE');
   assert.equal(complete.ownershipCostModeling.status, 'APPLICABLE');
-  assert.equal(complete.costGrowthModeling.status, 'APPLICABLE');
-  assert.equal(complete.costVolatilityModeling.status, 'APPLICABLE');
-  assert.equal(complete.costExplainerModeling.status, 'APPLICABLE');
 });
 
 test('each ownership-cost feature has a feature-specific context scope', () => {
@@ -55,10 +51,7 @@ test('each ownership-cost feature has a feature-specific context scope', () => {
     'DO_NOTHING',
     'HOME_SAVINGS',
     'BUDGET_PLANNER',
-    'TRUE_COST',
-    'COST_GROWTH',
-    'COST_VOLATILITY',
-    'COST_EXPLAINER',
+    'OWNERSHIP_COSTS',
   ]) {
     assert.ok(FINANCIAL_FEATURE_SCOPES[feature].includes('CORE'), feature);
     assert.ok(FINANCIAL_FEATURE_SCOPES[feature].includes('FINANCIAL'), feature);
@@ -76,10 +69,6 @@ test('persisted tools stamp context provenance and live tools disclose calculati
 
   for (const source of [
     '../../src/routes/budgetForecaster.routes.ts',
-    '../../src/controllers/trueCostOwnership.controller.ts',
-    '../../src/controllers/homeCostGrowth.controller.ts',
-    '../../src/controllers/costVolatility.controller.ts',
-    '../../src/controllers/costExplainer.controller.ts',
   ]) {
     const contents = read(source);
     assert.match(contents, /propertyContext/);
@@ -88,15 +77,15 @@ test('persisted tools stamp context provenance and live tools disclose calculati
   }
 });
 
-test('home value fallbacks prefer the canonical appraisal or financing profile', () => {
+test('downstream cost decisions retain canonical snapshot and forecast versions', () => {
   for (const source of [
-    '../../src/services/trueCostOwnership.service.ts',
-    '../../src/services/homeCostGrowth.service.ts',
+    '../../src/services/breakEven.service.ts',
+    '../../src/services/sellHoldRent.service.ts',
   ]) {
     const contents = read(source);
-    assert.match(contents, /lastAppraisedValue/);
-    assert.match(contents, /financingProfile.*purchasePriceCents/s);
-    assert.match(contents, /Canonical property financing profile/);
+    assert.match(contents, /ownershipCostConsumerProjectionService/);
+    assert.match(contents, /ownershipCostContext/);
+    assert.match(contents, /calculationFingerprint/);
   }
 });
 
@@ -105,10 +94,7 @@ test('ownership-cost interfaces surface Property Context reconciliation notices'
     '../../../frontend/src/components/ai/DoNothingSimulatorPanel.tsx',
     '../../../frontend/src/components/ai/HomeSavingsCheckPanel.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/components/BudgetForecaster.tsx',
-    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/true-cost/TrueCostClient.tsx',
-    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-growth/HomeCostGrowthClient.tsx',
-    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-volatility/CostVolatilityClient.tsx',
-    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-explainer/CostExplainerClient.tsx',
+    '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/ownership-costs/OwnershipCostsClient.tsx',
   ]) {
     assert.match(read(source), /PropertyContextCapturePanel/, source);
   }

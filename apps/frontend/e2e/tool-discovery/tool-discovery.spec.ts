@@ -100,9 +100,9 @@ const canonicalCatalogFixture: CapabilityCatalog = {
       badges: [],
     },
     {
-      id: 'cost-growth',
+      id: 'ownership-costs',
       version: 1,
-      label: 'Cost Growth',
+      label: 'Ownership Costs',
       shortDescription: 'Model long-term ownership cost trends.',
       longDescription: 'Review how recurring ownership costs may change over time.',
       iconName: 'dollar-sign',
@@ -113,8 +113,8 @@ const canonicalCatalogFixture: CapabilityCatalog = {
       supportedContext: ['PROPERTY'],
       readinessRequirements: [{ kind: 'PROPERTY', reason: 'Select a property first.' }],
       expectedOutput: 'A long-term ownership cost projection.',
-      routeTemplate: '/dashboard/properties/[id]/tools/cost-growth',
-      href: '/dashboard/properties/tool-discovery-property/tools/cost-growth',
+      routeTemplate: '/dashboard/properties/[id]/ownership-costs',
+      href: '/dashboard/properties/tool-discovery-property/ownership-costs',
       workflowOnly: false,
       releaseStage: 'ACTIVE',
       badges: [],
@@ -252,12 +252,12 @@ test('Explore tools searches the canonical registry and hides workflow-only tool
   const search = page.getByLabel('Search home tools');
   await search.fill('cost growth');
   await expect(search).toHaveValue('cost growth');
-  await expect(page.getByText('Cost Growth', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ownership Costs', { exact: true })).toBeVisible();
   await expect(page.getByText('Plant Advisor', { exact: true })).toHaveCount(0);
 
-  const costGrowthLink = page.getByRole('link', { name: /Cost Growth/ });
-  await expect(costGrowthLink).toHaveAttribute('href', /launchSurface=explore_tools/);
-  await expect(costGrowthLink).toHaveAttribute('href', /contextVersion=tool-context-v2/);
+  const ownershipCostsLink = page.getByRole('link', { name: /Ownership Costs/ });
+  await expect(ownershipCostsLink).toHaveAttribute('href', /launchSurface=explore_tools/);
+  await expect(ownershipCostsLink).toHaveAttribute('href', /contextVersion=tool-context-v2/);
 });
 
 test('cards, search, explanations, and feedback controls meet the accessibility gate', async ({ page }) => {
@@ -307,7 +307,7 @@ test('cards, search, explanations, and feedback controls meet the accessibility 
   await search.focus();
   await expect(search).toBeFocused();
   await page.keyboard.type('cost growth');
-  await expect(page.getByText('Cost Growth', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ownership Costs', { exact: true })).toBeVisible();
 
   const inline = page.getByTestId('inline-capability-coverage-options');
   await centerInViewport(inline);
@@ -381,22 +381,22 @@ test('actual-view telemetry records only viewport-qualified tools and deduplicat
     });
   expect(initialEvents.some((event) => event.surface === 'explore_tools')).toBe(false);
 
-  const costGrowthLink = page.getByRole('link', { name: /Cost Growth/ });
-  await centerInViewport(costGrowthLink);
+  const ownershipCostsLink = page.getByRole('link', { name: /Ownership Costs/ });
+  await centerInViewport(ownershipCostsLink);
   await expect.poll(async () =>
     (await discoveredEvents(page))
       .filter((event) =>
         event.surface === 'explore_tools'
-        && event.toolId === 'cost-growth').length).toBe(1);
+        && event.toolId === 'ownership-costs').length).toBe(1);
 
   await page.getByRole('heading', { name: 'Tool discovery acceptance' })
     .scrollIntoViewIfNeeded();
-  await centerInViewport(costGrowthLink);
+  await centerInViewport(ownershipCostsLink);
   await page.waitForTimeout(900);
   expect(
     (await discoveredEvents(page)).filter((event) =>
       event.surface === 'explore_tools'
-      && event.toolId === 'cost-growth'),
+      && event.toolId === 'ownership-costs'),
   ).toHaveLength(1);
 
   await page.reload();

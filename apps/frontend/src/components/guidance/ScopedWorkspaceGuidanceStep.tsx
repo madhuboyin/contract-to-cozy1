@@ -110,15 +110,6 @@ const WORKSPACE_BRIDGE_CONFIG: Record<string, WorkspaceBridgeConfig> = {
       'Return here when you are ready to continue the guided path.',
     ],
   },
-  'true-cost': {
-    actionLabel: 'Open true cost analysis',
-    summary: 'Estimate the full out-of-pocket impact before deciding whether to act now, wait, or change course.',
-    bullets: [
-      'Review total ownership or remediation cost in context.',
-      'Use the result to support the decision step that follows.',
-      'Return here when you are ready to continue the journey.',
-    ],
-  },
   'do-nothing-simulator': {
     actionLabel: 'Open cost of delay analysis',
     summary: 'Model the downside of waiting so you can compare action now versus delay with real context.',

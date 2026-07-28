@@ -93,7 +93,7 @@ export class GuidanceCopyService {
     if (toolKey === 'booking') return 'Book Service When Ready';
     if (toolKey === 'do-nothing-simulator') return 'Compare Act Now vs Delay';
     if (toolKey === 'home-savings') return 'Review Savings and Funding Options';
-    if (toolKey === 'ownership-costs' || toolKey === 'true-cost') return 'Review Ownership Costs';
+    if (toolKey === 'ownership-costs') return 'Review Ownership Costs';
 
     return 'Review Next Step';
   }

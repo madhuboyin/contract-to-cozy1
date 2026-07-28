@@ -36,7 +36,6 @@ const RELIABLE_SOURCE_TOOLS = new Set([
   'inspection-report',
   'recalls',
   'ownership-costs',
-  'true-cost',
   'do-nothing-simulator',
   'home-savings',
 ]);

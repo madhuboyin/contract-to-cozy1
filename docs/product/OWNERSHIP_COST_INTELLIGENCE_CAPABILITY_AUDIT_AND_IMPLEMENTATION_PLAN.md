@@ -4,7 +4,7 @@
 **Contributing domains:** Property Tax, Coverage and Premium Review, Financing, Expenses, Utilities, Home Record, Capital Timeline, Reserve Fund, Budget Planner, Guidance, and Home Actions  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Implementation in progress — Slices 0–7 started July 28, 2026
+**Status:** Implementation in progress — Slices 0–8 started July 28, 2026
 **Recommended disposition:** **Consolidate, rebuild the calculation and evidence contract, and contain unsupported historical and predictive claims immediately**  
 **Current safety classification:** Material financial  
 **Recommended safety classification:** Material financial  
@@ -238,6 +238,33 @@ Implemented:
 
 Downstream consumer cutover and removal of remaining compatibility adapters
 remain Slice 8 work.
+
+### July 28, 2026 — Slice 8 consumer cutover and retirement increment
+
+Implemented:
+
+- added one versioned, lens-locked ownership-cost consumer projection over the
+  canonical current snapshot and forward forecast;
+- cut Break-Even and Sell / Hold / Rent away from the legacy True Cost and
+  Cost Growth services while retaining snapshot, forecast, definition, method,
+  category, and calculation-fingerprint provenance;
+- kept Budget Planner and Reserve Fund handoffs on the canonical variability
+  planning decision and kept Capital Timeline inputs separate from recurring
+  operating expense;
+- replaced the True Cost Guidance adapter with an explicit canonical Ownership
+  Costs snapshot-review step;
+- failed closed when a downstream read crosses snapshot or lens versions;
+- retired the four legacy APIs with explicit `410 Gone` responses pointing to
+  the canonical view and reduced the four browser routes to redirects only;
+- removed the legacy controllers, services, route modules, frontend clients,
+  APIs, charts, feature registrations, discovery entries, mobile entries,
+  icons, and homeowner-facing analytics identifiers;
+- updated canonical property-context capture and tool-discovery acceptance
+  fixtures; and
+- added Slice 8 regression coverage for version retention, lens locking,
+  retired endpoints, deleted consumers, and dead navigation.
+
+Operational validation and launch governance remain Slice 9 work.
 
 ---
 

@@ -27,7 +27,16 @@ import { OwnershipCostAccessDeniedError } from '../services/ownershipCosts/owner
 import {
   OWNERSHIP_COST_CATEGORIES,
 } from '../services/ownershipCosts/ownershipCost.contract';
-import { validationErrorResponse } from './ownershipCostContainment.schemas';
+function validationErrorResponse(error: z.ZodError) {
+  return {
+    success: false,
+    message: 'Invalid ownership-cost request.',
+    errors: error.issues.map((issue) => ({
+      field: issue.path.join('.'),
+      message: issue.message,
+    })),
+  };
+}
 
 export const ownershipCostReadQuerySchema = z.object({
   lens: z.enum(OWNERSHIP_COST_CURRENT_LENSES)
@@ -171,7 +180,7 @@ async function respondWithCurrentCost(
       userId: req.user?.userId,
       propertyId: req.params.propertyId,
       moduleKey: AnalyticsModule.FINANCIAL,
-      featureKey: AnalyticsFeature.TRUE_COST_OWNERSHIP,
+      featureKey: AnalyticsFeature.OWNERSHIP_COSTS,
       metadataJson: {
         capability: 'ownership-costs',
         lens: ownershipCosts.selectedLens,

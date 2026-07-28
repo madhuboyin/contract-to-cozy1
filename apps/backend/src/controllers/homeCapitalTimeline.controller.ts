@@ -39,7 +39,7 @@ function buildTimelineNextAction(propertyId: string, analysis: any): TimelineNex
     };
   }
   return {
-    href: `/dashboard/properties/${propertyId}/tools/true-cost`,
+    href: `/dashboard/properties/${propertyId}/ownership-costs?view=forecast`,
     label: 'See full cost of ownership',
     reason: 'Pair capital planning with your projected operating costs',
   };

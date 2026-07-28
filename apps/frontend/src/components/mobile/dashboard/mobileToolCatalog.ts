@@ -284,7 +284,7 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     emoji: '📊',
     group: 'planning',
     isActive: (pathname) =>
-      /^\/dashboard\/properties\/[^/]+\/(?:ownership-costs|tools\/(?:true-cost|cost-explainer|cost-growth|cost-volatility))(\/|$)/.test(pathname),
+      /^\/dashboard\/properties\/[^/]+\/ownership-costs(\/|$)/.test(pathname),
   },
   {
     key: 'capital-timeline',
@@ -583,7 +583,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     navTarget: 'ownership-costs',
     icon: resolveToolIcon('home', 'ownership-costs'),
     isActive: (pathname) =>
-      /^\/dashboard\/properties\/[^/]+\/(?:ownership-costs|tools\/(?:true-cost|cost-explainer|cost-growth|cost-volatility))(\/|$)/.test(pathname),
+      /^\/dashboard\/properties\/[^/]+\/ownership-costs(\/|$)/.test(pathname),
   },
   {
     key: 'negotiation-shield',

@@ -212,13 +212,13 @@ export function mapGuidanceEvidence(evidence: any) {
     expectedScopeId: evidence.expectedScopeId ?? null,
     actualScopeCategory:
       evidence.actualScopeCategory ??
-      (evidence.sourceToolKey === 'ownership-costs' || evidence.sourceToolKey === 'true-cost'
+      (evidence.sourceToolKey === 'ownership-costs'
         ? 'PROPERTY'
         : null) ??
       (evidence.inventoryItemId ? 'ITEM' : 'PROPERTY'),
     actualScopeId:
       evidence.actualScopeId ??
-      (evidence.sourceToolKey === 'ownership-costs' || evidence.sourceToolKey === 'true-cost'
+      (evidence.sourceToolKey === 'ownership-costs'
         ? evidence.propertyId
         : null) ??
       evidence.inventoryItemId ??

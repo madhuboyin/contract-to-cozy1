@@ -130,7 +130,7 @@ function normalizeToolOutput(toolKey: string, producedData: Record<string, unkno
     };
   }
 
-  if (key === 'ownership-costs' || key === 'true-cost') {
+  if (key === 'ownership-costs') {
     return {
       annualTotalNow: pickNumber(producedData.annualTotalNow),
       total5yCost: pickNumber(producedData.total5y),
@@ -138,7 +138,7 @@ function normalizeToolOutput(toolKey: string, producedData: Record<string, unkno
       insurance5y: pickNumber(producedData.insurance5y),
       maintenance5y: pickNumber(producedData.maintenance5y),
       utilities5y: pickNumber(producedData.utilities5y),
-      trueCostConfidence: pickString(producedData.confidence),
+      ownershipCostConfidence: pickString(producedData.confidence),
     };
   }
 

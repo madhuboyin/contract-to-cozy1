@@ -1260,7 +1260,6 @@ export class GuidanceJourneyService {
     return (
       stepKey === 'estimate_cost_impact' ||
       toolKey === 'ownership-costs' ||
-      toolKey === 'true-cost' ||
       label.includes('cost tradeoff')
     );
   }

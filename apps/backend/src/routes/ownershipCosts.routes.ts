@@ -24,6 +24,32 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 const router = Router();
 
+const legacyOwnershipCostApis = [
+  ['true-cost', 'current'],
+  ['cost-explainer', 'changes'],
+  ['cost-growth', 'forecast'],
+  ['cost-volatility', 'variability'],
+] as const;
+
+for (const [legacyTool, view] of legacyOwnershipCostApis) {
+  router.get(
+    `/properties/:propertyId/tools/${legacyTool}`,
+    authenticate,
+    apiRateLimiter,
+    propertyAuthMiddleware,
+    (req, res) => res.status(410).json({
+      success: false,
+      code: 'OWNERSHIP_COST_LEGACY_API_RETIRED',
+      message:
+        `${legacyTool} was consolidated into the versioned Ownership Costs contract.`,
+      canonicalUrl:
+        `/api/properties/${encodeURIComponent(req.params.propertyId)}/ownership-costs/${view === 'current' ? '' : view}`
+          .replace(/\/$/, ''),
+      lens: 'OPERATING_EXPENSE',
+    }),
+  );
+}
+
 router.get(
   '/properties/:propertyId/ownership-costs/decisions',
   authenticate,

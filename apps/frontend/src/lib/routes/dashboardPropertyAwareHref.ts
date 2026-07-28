@@ -170,9 +170,12 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
     },
   },
   '/dashboard/cost-growth': {
-    navTarget: 'cost-growth',
-    toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/tools/cost-growth`, query),
+    navTarget: 'ownership-costs',
+    toPropertyHref: (propertyId, query) => {
+      const nextQuery = new URLSearchParams(query);
+      nextQuery.set('view', 'forecast');
+      return buildHref(`/dashboard/properties/${propertyId}/ownership-costs`, nextQuery);
+    },
   },
   '/dashboard/sell-hold-rent': {
     navTarget: 'sell-hold-rent',
@@ -180,14 +183,17 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
       buildHref(`/dashboard/properties/${propertyId}/tools/sell-hold-rent`, query),
   },
   '/dashboard/true-cost': {
-    navTarget: 'true-cost',
+    navTarget: 'ownership-costs',
     toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/tools/true-cost`, query),
+      buildHref(`/dashboard/properties/${propertyId}/ownership-costs`, query),
   },
   '/dashboard/cost-explainer': {
-    navTarget: 'cost-explainer',
-    toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/tools/cost-explainer`, query),
+    navTarget: 'ownership-costs',
+    toPropertyHref: (propertyId, query) => {
+      const nextQuery = new URLSearchParams(query);
+      nextQuery.set('view', 'changes');
+      return buildHref(`/dashboard/properties/${propertyId}/ownership-costs`, nextQuery);
+    },
   },
   '/dashboard/mortgage-refinance-radar': {
     navTarget: 'mortgage-refinance-radar',
@@ -225,9 +231,12 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
       buildHref(`/dashboard/properties/${propertyId}/tools/capital-timeline`, query),
   },
   '/dashboard/cost-volatility': {
-    navTarget: 'cost-volatility',
-    toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/tools/cost-volatility`, query),
+    navTarget: 'ownership-costs',
+    toPropertyHref: (propertyId, query) => {
+      const nextQuery = new URLSearchParams(query);
+      nextQuery.set('view', 'variability');
+      return buildHref(`/dashboard/properties/${propertyId}/ownership-costs`, nextQuery);
+    },
   },
   '/dashboard/plant-advisor': {
     navTarget: 'plant-advisor',
@@ -282,10 +291,7 @@ const NAV_TARGET_SUFFIXES: Record<string, string> = {
   'property-tax': 'tools/property-tax',
   'ownership-costs': 'ownership-costs',
   'insurance-trend': 'tools/insurance-trend',
-  'cost-growth': 'tools/cost-growth',
   'sell-hold-rent': 'tools/sell-hold-rent',
-  'true-cost': 'tools/true-cost',
-  'cost-explainer': 'tools/cost-explainer',
   'mortgage-refinance-radar': 'tools/mortgage-refinance-radar',
   'neighborhood-change-radar': 'tools/neighborhood-change-radar',
   'home-digital-twin': 'tools/home-digital-twin',
@@ -293,7 +299,6 @@ const NAV_TARGET_SUFFIXES: Record<string, string> = {
   'home-habit-coach': 'tools/home-habit-coach',
   'break-even': 'tools/break-even',
   'capital-timeline': 'tools/capital-timeline',
-  'cost-volatility': 'tools/cost-volatility',
   'plant-advisor': 'tools/plant-advisor',
   'home-gazette': 'tools/home-gazette',
   'home-digital-will': 'tools/home-digital-will',

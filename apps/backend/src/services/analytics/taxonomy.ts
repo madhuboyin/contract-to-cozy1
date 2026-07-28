@@ -134,14 +134,11 @@ export const AnalyticsFeature = {
 
   // Financial (additional tools)
   BREAK_EVEN:             'break_even',
-  COST_EXPLAINER:         'cost_explainer',
-  COST_VOLATILITY:        'cost_volatility',
+  OWNERSHIP_COSTS:        'ownership_costs',
   RISK_PREMIUM_OPTIMIZER: 'risk_premium_optimizer',
   DIY_DECISION:           'diy_decision',
   DO_NOTHING_SIMULATOR:   'do_nothing_simulator',
   FINANCING:              'financing',
-  TRUE_COST_OWNERSHIP:    'true_cost_ownership',
-  HOME_COST_GROWTH:       'home_cost_growth',
   HOME_SAVINGS:           'home_savings',
   COVERAGE_OPTIONS:       'coverage_options',
   MORTGAGE_REFINANCE_RADAR: 'mortgage_refinance_radar',

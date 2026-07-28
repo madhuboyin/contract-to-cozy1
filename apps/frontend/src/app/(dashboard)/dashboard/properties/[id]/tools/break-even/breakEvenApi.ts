@@ -2,11 +2,22 @@ import { api } from '@/lib/api/client';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export type BreakEvenDTO = {
+  ownershipCostContext: {
+    contractVersion: string;
+    lens: 'OPERATING_EXPENSE';
+    snapshotId: string;
+    definitionVersion: string;
+    methodVersion: string;
+    categoryDefinitionVersion: string;
+    forecastId: string | null;
+    forecastMethodVersion: string;
+    calculationFingerprint: string;
+  };
   propertyContext?: PropertyContextEnvelope;
   calculationContext?: { mode: 'CANONICAL' | 'SCENARIO'; overrideFields: string[] };
   input: {
     propertyId: string;
-    years: 5 | 10 | 20 | 30;
+    years: 5 | 10;
     addressLabel: string;
     state: string;
     zipCode: string;
@@ -24,7 +35,7 @@ export type BreakEvenDTO = {
     monthlyPayment?: number | null;
   };
 
-  history: Array<{
+  projection: Array<{
     year: number;
     annualExpenses: number;
     annualAppreciationGain: number;
@@ -90,7 +101,7 @@ export type BreakEvenDTO = {
 export async function getBreakEven(
   propertyId: string,
   opts?: {
-    years?: 5 | 10 | 20 | 30;
+    years?: 5 | 10;
     homeValueNow?: number;
     appreciationRate?: number;
     expenseGrowthRate?: number;

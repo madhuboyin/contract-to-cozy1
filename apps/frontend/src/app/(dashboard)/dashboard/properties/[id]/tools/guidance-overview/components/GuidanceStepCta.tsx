@@ -18,7 +18,7 @@ import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
 import { ReplacementPrioritiesCapture } from '@/components/guidance/ReplacementPrioritiesCapture';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
-import { TrueCostGuidanceStep } from '@/components/guidance/TrueCostGuidanceStep';
+import { OwnershipCostsGuidanceStep } from '@/components/guidance/OwnershipCostsGuidanceStep';
 import { CapitalTimelineGuidanceStep } from '@/components/guidance/CapitalTimelineGuidanceStep';
 import { DoNothingGuidanceStep } from '@/components/guidance/DoNothingGuidanceStep';
 import { HomeSavingsGuidanceStep } from '@/components/guidance/HomeSavingsGuidanceStep';
@@ -344,10 +344,10 @@ export function GuidanceStepCta({
     );
   }
 
-  if (step.toolKey === 'true-cost' && activePrimaryAction) {
+  if (step.toolKey === 'ownership-costs' && activePrimaryAction) {
     const trueCostItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
     return (
-      <TrueCostGuidanceStep
+      <OwnershipCostsGuidanceStep
         propertyId={propertyId}
         journeyId={activePrimaryAction.journeyId}
         stepId={step.id}

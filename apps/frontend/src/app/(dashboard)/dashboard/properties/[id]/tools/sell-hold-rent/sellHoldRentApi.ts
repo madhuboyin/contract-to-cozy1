@@ -19,6 +19,17 @@ export type SellHoldRentInput = {
 };
 
 export type SellHoldRentDTO = {
+  ownershipCostContext: {
+    contractVersion: string;
+    lens: 'OPERATING_EXPENSE';
+    snapshotId: string;
+    definitionVersion: string;
+    methodVersion: string;
+    categoryDefinitionVersion: string;
+    forecastId: string | null;
+    forecastMethodVersion: string;
+    calculationFingerprint: string;
+  };
   propertyContext?: PropertyContextEnvelope;
   calculationContext?: { mode: 'CANONICAL' | 'SCENARIO'; overrideFields: string[] };
   input: {
@@ -88,7 +99,7 @@ export type SellHoldRentDTO = {
     };
   };
 
-  history: Array<{
+  projection: Array<{
     year: number;
     homeValue: number;
     ownershipCosts: number;

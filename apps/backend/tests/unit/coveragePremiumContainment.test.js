@@ -142,15 +142,17 @@ test('ungrounded coverage advisor and legacy output contract are removed', () =>
 
 test('synthetic insurance history service and downstream consumers are removed', () => {
   const syntheticPath = path.resolve(__dirname, '../../src/services/insuranceCostTrend.service.ts');
-  const consumers = [
-    '../../src/services/costExplainer.service.ts',
-    '../../src/services/trueCostOwnership.service.ts',
-    '../../src/services/costVolatility.service.ts',
-  ].map(source).join('\n');
+  const consumer = source(
+    '../../src/services/ownershipCosts/ownershipCostConsumerProjection.service.ts',
+  );
 
   assert.equal(fs.existsSync(syntheticPath), false);
-  assert.doesNotMatch(consumers, /InsuranceCostTrendService|insuranceCostTrend\.service/);
-  assert.match(consumers, /getObservedInsurancePremiumHistory/);
+  assert.doesNotMatch(
+    consumer,
+    /InsuranceCostTrendService|insuranceCostTrend\.service/,
+  );
+  assert.match(consumer, /ownershipCostReadModelService/);
+  assert.match(consumer, /ownershipCostForecastService/);
 });
 
 test('downstream coverage contracts do not interpret scenario verdicts as coverage truth', () => {

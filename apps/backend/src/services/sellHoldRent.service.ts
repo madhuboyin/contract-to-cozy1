@@ -1,19 +1,20 @@
 // apps/backend/src/services/sellHoldRent.service.ts
 import { prisma } from '../lib/prisma';
 
-import { HomeCostGrowthService } from './homeCostGrowth.service';
-import { TrueCostOwnershipService } from './trueCostOwnership.service';
 import { listToolOverrides } from './toolOverride.service';
 import { getCanonicalMortgage } from './canonicalFinanceAdapter.service';
 import {
   FinancialAssumptionService,
   FinancialAssumptions,
-  deriveExpenseGrowthRate,
   hasFinancialAssumptionInput,
 } from './financialAssumption.service';
 
 import { amortizeYears, computeMonthlyPayment } from '../services/tools/mortgageMath';
 import { projectValueAtYear } from './tools/financialProjectionMath';
+import {
+  ownershipCostConsumerProjectionService,
+  type OwnershipCostConsumerProjection,
+} from './ownershipCosts/ownershipCostConsumerProjection.service';
 
 type Confidence = 'HIGH' | 'MEDIUM' | 'LOW';
 type Impact = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -50,6 +51,17 @@ export type SellHoldRentDTO = {
   preferenceProfileId?: string | null;
   sharedSignalsUsed?: string[];
   financialAssumptions?: FinancialAssumptions;
+  ownershipCostContext: {
+    contractVersion: string;
+    lens: 'OPERATING_EXPENSE';
+    snapshotId: string;
+    definitionVersion: string;
+    methodVersion: string;
+    categoryDefinitionVersion: string;
+    forecastId: string | null;
+    forecastMethodVersion: string;
+    calculationFingerprint: string;
+  };
 
   input: {
     propertyId: string;
@@ -80,7 +92,7 @@ export type SellHoldRentDTO = {
       notes: string[];
     };
     hold: {
-      totalOwnershipCosts: number;     // true-cost + (interest, if debt known)
+      totalOwnershipCosts: number;     // canonical operating expense + interest, if debt is known
       appreciationGain: number;
       principalPaydown: number;        // 0 if no debt
       net: number;                     // appreciation + principalPaydown - costs
@@ -92,7 +104,7 @@ export type SellHoldRentDTO = {
         vacancyLoss: number;
         managementFees: number;
       };
-      totalOwnershipCosts: number;     // true-cost + (interest, if debt known)
+      totalOwnershipCosts: number;     // canonical operating expense + interest, if debt is known
       appreciationGain: number;
       principalPaydown: number;
       net: number;                     // rentalCash + appreciation + principalPaydown - costs
@@ -100,7 +112,7 @@ export type SellHoldRentDTO = {
     };
   };
 
-  history: Array<{
+  projection: Array<{
     year: number;
     homeValue: number;
     ownershipCosts: number;
@@ -135,6 +147,22 @@ function clamp(n: number, min: number, max: number) {
 }
 function roundMoney(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+function ownershipCostContext(
+  projection: OwnershipCostConsumerProjection,
+): SellHoldRentDTO['ownershipCostContext'] {
+  return {
+    contractVersion: projection.contractVersion,
+    lens: 'OPERATING_EXPENSE',
+    snapshotId: projection.snapshot.id,
+    definitionVersion: projection.snapshot.definitionVersion,
+    methodVersion: projection.snapshot.methodVersion,
+    categoryDefinitionVersion: projection.snapshot.categoryDefinitionVersion,
+    forecastId: projection.forecast.id,
+    forecastMethodVersion: projection.forecast.methodVersion,
+    calculationFingerprint: projection.forecast.calculationFingerprint,
+  };
 }
 function zipPrefix(zip: string) {
   const z = String(zip || '').replace(/\D/g, '');
@@ -213,8 +241,6 @@ function buildDrivers(args: {
 
 export class SellHoldRentService {
   constructor(
-    private costGrowth = new HomeCostGrowthService(),
-    private trueCost = new TrueCostOwnershipService(),
     private financialAssumptionService = new FinancialAssumptionService()
   ) {}
 
@@ -223,6 +249,7 @@ export class SellHoldRentService {
     input: SellHoldRentInput = {},
     userId?: string
   ): Promise<SellHoldRentDTO> {
+    if (!userId) throw new Error('Authentication is required for Sell / Hold / Rent.');
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: {
@@ -233,6 +260,9 @@ export class SellHoldRentService {
         zipCode: true,
         propertySize: true,
         yearBuilt: true,
+        financingProfile: {
+          select: { purchasePriceCents: true },
+        },
       },
     });
     if (!property) throw new Error('Property not found');
@@ -246,20 +276,18 @@ export class SellHoldRentService {
     // --- Phase 3 persisted overrides ---
     const toolOv = await loadToolOverrideMap(propertyId);
 
-    // --- Cost growth tool gives appreciation rate + value trajectory ---
-    const cg = await this.costGrowth.estimate(propertyId, { years: years as any } as any);
-
-    const modeledAppreciation =
-      (cg as any)?.current?.appreciationRate ??
-      (cg as any)?.current?.annualAppreciationRate ??
-      0.035;
-
-    // home value: request override > tool override > costGrowth current > heuristic fallback
+    const ownershipCostProjection =
+      await ownershipCostConsumerProjectionService.getProjection({
+        propertyId,
+        userId,
+        lens: 'OPERATING_EXPENSE',
+        horizonYears: years,
+      });
+    const modeledAppreciation = 0.035;
     const modeledHomeValue =
-      (cg as any)?.current?.homeValueNow ??
-      (cg as any)?.current?.homeValue ??
-      (cg as any)?.current?.valueNow ??
-      350000;
+      property.financingProfile?.purchasePriceCents != null
+        ? property.financingProfile.purchasePriceCents / 100
+        : 350_000;
 
     const homeValueNow = pickOverride(input.homeValueNow, toolOv['homeValueNow'], modeledHomeValue);
 
@@ -325,35 +353,8 @@ export class SellHoldRentService {
     const appreciationRate = clamp(financialContext.assumptions.appreciationRate, 0, 0.15);
     const sellingCostRate = clamp(financialContext.assumptions.sellingCostPercent, 0.01, 0.12);
     const rentGrowthRate = clamp(financialContext.assumptions.rentGrowthRate, 0, 0.1);
-    const ownershipGrowthRate = deriveExpenseGrowthRate(financialContext.assumptions);
-
-    // --- Ownership costs from TrueCost tool (5y fixed), extend to 10y with a light drift assumption ---
-    const tc = await this.trueCost.estimate(propertyId, {
-      homeValueNow,
-      // allow overrides later via ToolOverride keys if you add UI:
-      insuranceAnnualNow: toolOv['insuranceAnnualNow'],
-      maintenanceAnnualNow: toolOv['maintenanceAnnualNow'],
-      utilitiesAnnualNow: toolOv['utilitiesAnnualNow'],
-      inflationRate: financialContext.assumptions.inflationRate,
-    } as any);
-
-    const annualTotalNow = (tc as any)?.current?.annualTotalNow ?? 0;
-    const total5y = (tc as any)?.rollup?.total5y ?? 0;
-
-    const ownershipCosts =
-      years === 5
-        ? total5y
-        : (() => {
-            // extend years 6..10 using drift on current annual baseline
-            // keeps behavior deterministic + cheap (<200ms)
-            let s = total5y;
-            let base = annualTotalNow;
-            for (let i = 6; i <= 10; i++) {
-              base = base * (1 + ownershipGrowthRate);
-              s += base;
-            }
-            return s;
-          })();
+    const ownershipCosts = ownershipCostProjection.forwardAnnualDollars
+      .reduce((total, period) => total + period.base, 0);
 
     // --- Debt aware (Phase 3) ---
     const snap = await getCanonicalMortgage(propertyId);
@@ -465,9 +466,11 @@ export class SellHoldRentService {
     else sellNotes.push('Mortgage not modeled (no financing profile or override).');
 
     const holdNotes: string[] = [
-      'Ownership costs use True Cost model components (tax + insurance + maintenance + utilities).',
+      'Ownership costs use the versioned Ownership Cost Intelligence operating-expense lens.',
     ];
-    if (years === 10) holdNotes.push('Years 6–10 ownership costs extend the 5y True Cost baseline with an inflation drift assumption.');
+    holdNotes.push(
+      `Snapshot ${ownershipCostProjection.snapshot.id} and forecast ${ownershipCostProjection.forecast.id ?? ownershipCostProjection.forecast.calculationFingerprint} are retained with this decision.`,
+    );
     if (debtMode === 'ON') holdNotes.push('Mortgage interest is treated as a cost; principal paydown increases equity.');
     else holdNotes.push('Mortgage not modeled (no financing profile or override).');
 
@@ -481,31 +484,25 @@ export class SellHoldRentService {
     if (debtMode === 'ON') rentNotes.push('Mortgage interest is treated as a cost; principal paydown increases equity.');
     else rentNotes.push('Mortgage not modeled (no financing profile or override).');
 
-    // --- history: keep chart calm (5 points) using last 5 years ending now ---
-    const nowYear = new Date().getFullYear();
-    const historyYears = 5;
-    const history: SellHoldRentDTO['history'] = [];
-    const historicalValueSeries = Array.from({ length: historyYears }, (_, idx) =>
-      homeValueNow * Math.pow(1 + appreciationRate, idx - (historyYears - 1))
-    );
-    for (let i = historyYears - 1; i >= 0; i--) {
-      const year = nowYear - i;
-      const t = historyYears - 1 - i; // 0..4
-
-      const hv = historicalValueSeries[t] ?? homeValueNow;
-      const annualCosts = annualTotalNow * Math.pow(1 + ownershipGrowthRate, t);
+    const projection: SellHoldRentDTO['projection'] = [];
+    for (let t = 0; t < years; t += 1) {
+      const costPeriod = ownershipCostProjection.forwardAnnualDollars[t];
+      if (!costPeriod) break;
+      const year = costPeriod.year;
+      const hv = homeValueNow * Math.pow(1 + appreciationRate, t + 1);
+      const annualCosts = costPeriod.base;
 
       // show “net delta” as: appreciation for that year minus costs (and minus interest if debt ON)
       const annualAppGain = hv * appreciationRate;
       const annualInterest = debtMode === 'ON' ? (debt.interestPaid / Math.max(1, years)) : 0;
 
       // rent delta adds net rent - overheads (simplified annualized)
-      const annualRent = monthlyRentNow * 12 * Math.pow(1 + rentGrowthRate, t - (historyYears - 1));
+      const annualRent = monthlyRentNow * 12 * Math.pow(1 + rentGrowthRate, t);
       const annualVac = annualRent * vacancyRate;
       const annualMgmt = annualRent * managementRate;
       const rentDelta = (annualRent - annualVac - annualMgmt) + annualAppGain - annualCosts - annualInterest;
 
-      history.push({
+      projection.push({
         year,
         homeValue: roundMoney(hv),
         ownershipCosts: roundMoney(annualCosts),
@@ -525,8 +522,7 @@ export class SellHoldRentService {
     }
 
     const dataSources: string[] = [
-      'HomeCostGrowthService (appreciation/value trend)',
-      'TrueCostOwnershipService (tax/insurance/maintenance/utilities)',
+      'Ownership Cost Intelligence versioned operating-expense snapshot and forecast',
       'ToolOverride (persisted per-property overrides)',
       'AssumptionSet + PreferenceProfile (shared financial assumptions)',
     ];
@@ -536,6 +532,7 @@ export class SellHoldRentService {
     if (debtMode === 'ON') dataSources.push('PropertyFinancingProfile + mortgageMath (debt modeling)');
 
     return {
+      ownershipCostContext: ownershipCostContext(ownershipCostProjection),
       assumptionSetId: financialContext.assumptionSetId,
       preferenceProfileId: financialContext.preferenceProfileId,
       sharedSignalsUsed: financialContext.sharedSignalsUsed,
@@ -606,7 +603,7 @@ export class SellHoldRentService {
         },
       },
 
-      history,
+      projection,
 
       recommendation: {
         winner,
@@ -640,9 +637,7 @@ export class SellHoldRentService {
           debtMode === 'ON'
             ? 'Debt-aware modeling is ON (snapshot/overrides present).'
             : 'Debt-aware modeling is OFF (no snapshot/overrides).',
-          years === 10
-            ? '10y mode extends True Cost beyond 5y using shared expense-growth assumptions.'
-            : '5y mode uses True Cost 5y rollup directly.',
+          `The ${years}-year ownership-cost total comes directly from the canonical forecast without a downstream extension.`,
         ],
         confidence,
       },
