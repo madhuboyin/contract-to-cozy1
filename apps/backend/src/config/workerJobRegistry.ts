@@ -871,6 +871,27 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     supportsPropertyScope: true,
     humanApprovalClass: 'NONE',
   },
+
+  // ── Savings and Benefits (cron) ────────────────────────────────────────────
+  {
+    key: 'savings-benefits-deadline-reminders',
+    name: 'Savings and Benefits Deadline Reminders',
+    description:
+      'Sends in-app notifications to homeowners for benefit matches whose program application window closes within 5 days and that have not yet been notified or acted on.',
+    category: 'FINANCIAL_MARKET',
+    schedule: 'Daily at 8:00 AM EST',
+    cronExpression: '0 8 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'savings-benefits-deadline-reminders',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'DECIDE',
+    defaultEnabledInBeta: true,
+    supportsDryRun: true,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
+  },
   {
     key: 'permit-fetch',
     name: 'Permit History Fetch',

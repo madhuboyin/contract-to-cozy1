@@ -24,6 +24,10 @@ export function permitTrackerUrl(propertyId: string): string {
   return `/dashboard/properties/${propertyId}/tools/permits`;
 }
 
+export function savingsBenefitsUrl(propertyId: string): string {
+  return `/dashboard/properties/${propertyId}/tools/savings-benefits`;
+}
+
 export function homeHabitCoachUrl(propertyId: string): string {
   return `/dashboard/properties/${propertyId}/tools/home-habit-coach`;
 }

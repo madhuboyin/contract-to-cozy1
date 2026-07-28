@@ -66,6 +66,7 @@ import { fetchPermitHistoryJob, FETCH_PERMIT_HISTORY_JOB } from './jobs/fetchPer
 import { detectUnpermittedWorkJob, DETECT_UNPERMITTED_WORK_JOB } from './jobs/detectUnpermittedWork.job';
 import { generatePermitDisclosureJob, GENERATE_PERMIT_DISCLOSURE_JOB } from './jobs/generatePermitDisclosure.job';
 import { permitInspectionReminderJob } from './jobs/permitInspectionReminder.job';
+import { savingsBenefitsDeadlineReminderJob } from './jobs/savingsBenefitsDeadlineReminder.job';
 import { recalculateReserveFundsJob } from './jobs/recalculateReserveFunds.job';
 import { reserveFundReconciliationJob } from './jobs/reserveFundReconciliation.job';
 import { reserveFundBalanceReminderJob } from './jobs/reserveFundBalanceReminder.job';
@@ -412,6 +413,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
   'permit-inspection-reminders':     async (opts) => permitInspectionReminderJob(opts),
+  'savings-benefits-deadline-reminders': async (opts) => savingsBenefitsDeadlineReminderJob(opts),
   'reserve-fund-recalculation':      async (opts) => {
     const result = await recalculateReserveFundsJob(opts);
     logger.info({ ...result }, `[reserve-fund-recalculation] recalculated=${result.recalculated} skipped=${result.skipped} failed=${result.failed}`);

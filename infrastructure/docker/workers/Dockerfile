@@ -240,6 +240,7 @@ COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueu
 COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \
      apps/backend/src/services/hiddenAssets/categoryConfig.ts \
      apps/backend/src/services/hiddenAssets/types.ts \
+     apps/backend/src/services/hiddenAssets/fundingWindow.ts \
      src/shared/backend/services/hiddenAssets/
 # Copy homeHabitCoach service files needed by habitGeneration.job.ts
 COPY apps/backend/src/services/homeHabitCoach/habitGenerationEngine.ts \

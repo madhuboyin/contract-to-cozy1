@@ -11015,6 +11015,10 @@ model PropertyHiddenAssetMatch {
   firstDetectedAt DateTime  @default(now())
   dismissedAt     DateTime?
   pursuedAt       DateTime?
+  // Set once savingsBenefitsDeadlineReminderJob has sent an
+  // applicationWindowClosesAt reminder for this match — idempotency guard,
+  // mirroring PermitInspectionMilestone.notificationSentAt.
+  notificationSentAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
