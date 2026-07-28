@@ -8,9 +8,13 @@ export enum PropertyIntelligenceJobType {
   CALCULATE_RISK_REPORT = 'CALCULATE_RISK_REPORT',
   CALCULATE_FES = 'CALCULATE_FES',
   CALCULATE_HIDDEN_ASSETS = 'CALCULATE_HIDDEN_ASSETS',
+  REFRESH_HOME_DIGITAL_TWIN = 'REFRESH_HOME_DIGITAL_TWIN',
+  COMPUTE_HOME_DIGITAL_TWIN_SCENARIO = 'COMPUTE_HOME_DIGITAL_TWIN_SCENARIO',
 }
 
 export interface PropertyIntelligenceJobPayload {
   propertyId: string;
   jobType: PropertyIntelligenceJobType;
+  scenarioId?: string;
+  digitalTwinId?: string;
 }

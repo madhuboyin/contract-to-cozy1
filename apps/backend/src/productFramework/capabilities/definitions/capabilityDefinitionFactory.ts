@@ -223,12 +223,11 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     acceptedContext: ['PROPERTY', 'PROJECT', 'DOCUMENT'],
   },
   'home-digital-twin': {
-    sourceKinds: ['SYSTEM', 'PERSONALIZATION'],
-    triggerFamily: 'PROPERTY_CONTEXT_INCOMPLETE',
-    reason: 'Known, missing, or conflicting Home Record facts can be reviewed together.',
-    // Not safe-partial-value: the capability also surfaces MATERIAL_FINANCIAL
-    // scenario computation, which safePartialValue is restricted from (see
-    // capability.contract.ts superRefine).
+    sourceKinds: ['SYSTEM', 'PROJECT', 'MAINTENANCE', 'INCIDENT'],
+    triggerFamily: 'ACTIVE_SYSTEM_DECISION',
+    reason: 'A specific home system has an active repair, replacement, upgrade, or wait decision.',
+    requiresExplicitTrigger: true,
+    acceptedContext: ['PROPERTY', 'HOME_ACTION', 'PROJECT', 'ISSUE'],
     readinessRequirements: [
       { kind: 'KNOWN_FACTS', minimum: 1, reason: 'Add at least one verified Home Record fact.' },
     ],

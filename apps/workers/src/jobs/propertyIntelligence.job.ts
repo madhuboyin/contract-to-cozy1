@@ -14,16 +14,22 @@ import { calculateFinancialEfficiency } from '@worker-shared/utils/FinancialCalc
 import { HiddenAssetService } from '@worker-shared/services/hiddenAssets.service';
 import RiskAssessmentService from '@worker-shared/services/RiskAssessment.service';
 import { capturePropertyScoreSnapshots } from './propertyScoreSnapshots.job';
+import { HomeDigitalTwinService } from '@worker-shared/services/homeDigitalTwin.service';
+import { HomeDigitalTwinScenarioService } from '@worker-shared/services/homeDigitalTwinScenario.service';
 
 export enum PropertyIntelligenceJobType {
   CALCULATE_RISK_REPORT = 'CALCULATE_RISK_REPORT',
   CALCULATE_FES = 'CALCULATE_FES',
   CALCULATE_HIDDEN_ASSETS = 'CALCULATE_HIDDEN_ASSETS',
+  REFRESH_HOME_DIGITAL_TWIN = 'REFRESH_HOME_DIGITAL_TWIN',
+  COMPUTE_HOME_DIGITAL_TWIN_SCENARIO = 'COMPUTE_HOME_DIGITAL_TWIN_SCENARIO',
 }
 
 export interface PropertyIntelligenceJobPayload {
   propertyId: string;
   jobType: PropertyIntelligenceJobType;
+  scenarioId?: string;
+  digitalTwinId?: string;
 }
 
 const hiddenAssetService = new HiddenAssetService();
@@ -221,4 +227,36 @@ export async function processHiddenAssetScan(
     logger.error({ err: error }, `❌ Error running hidden asset scan for property ${propertyId}`);
     throw error;
   }
+}
+
+/**
+ * Refresh an existing projection after canonical property inputs change.
+ * A property without a twin is a normal no-op: initialization remains
+ * homeowner-driven, while existing projections stay current automatically.
+ */
+export async function processHomeDigitalTwinRefresh(
+  jobData: PropertyIntelligenceJobPayload,
+) {
+  const twin = await prisma.homeDigitalTwin.findUnique({
+    where: { propertyId: jobData.propertyId },
+    select: { id: true },
+  });
+  if (!twin) {
+    logger.info(`[HomeDigitalTwin] No projection exists for ${jobData.propertyId}; refresh skipped.`);
+    return;
+  }
+  await new HomeDigitalTwinService().refreshTwin(jobData.propertyId);
+  logger.info(`[HomeDigitalTwin] Projection refreshed for ${jobData.propertyId}.`);
+}
+
+export async function processHomeDigitalTwinScenarioCompute(
+  jobData: PropertyIntelligenceJobPayload,
+) {
+  if (!jobData.scenarioId || !jobData.digitalTwinId) {
+    throw new Error('Scenario compute job is missing scenarioId or digitalTwinId.');
+  }
+  await new HomeDigitalTwinScenarioService().computeScenario(
+    jobData.scenarioId,
+    jobData.digitalTwinId,
+  );
 }

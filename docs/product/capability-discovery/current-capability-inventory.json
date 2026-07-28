@@ -14,9 +14,9 @@
     "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
   ],
   "summary": {
-    "aiCatalogEntries": 36,
+    "aiCatalogEntries": 35,
     "homeCatalogEntries": 35,
-    "overlappingEntries": 24,
+    "overlappingEntries": 23,
     "distinctCapabilities": 47,
     "routeVerified": 47,
     "canonicalRelationshipCoverage": 30,
@@ -342,17 +342,16 @@
       "id": "home-digital-twin",
       "label": "Home Upgrade Planner",
       "sources": [
-        "home",
-        "ai"
+        "home"
       ],
       "canonicalRoute": "/dashboard/properties/[id]/tools/home-digital-twin",
       "routeVerified": true,
       "workflowOnly": false,
-      "outcomeCategory": "PROTECT_MONITOR",
+      "outcomeCategory": "DECIDE_COMPARE",
       "rolloutKey": "HOME_DIGITAL_TWIN",
       "releaseStage": "ACTIVE",
       "safetyTier": "MATERIAL_FINANCIAL",
-      "completionKind": "ARTIFACT_CREATED",
+      "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

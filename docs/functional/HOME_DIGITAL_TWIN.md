@@ -2,12 +2,12 @@
 # Home Digital Twin / Home Upgrade Planner
 Functional Documentation
 
-> **Status:** This document reflects the target architecture from
-> `docs/product/HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md`
-> (audit date July 27, 2026), which has been fully implemented (Slices 0–8).
-> It replaces an earlier pre-audit draft of this document that described a
-> standalone "Digital Twin" destination, custom data-fetching hooks, and a
-> compute service that do not match the current implementation.
+> **Status:** Implementation in progress. The July 28, 2026 P0 trust pass
+> removed age-derived failure/risk claims, separated input assumptions from
+> system-derived impacts, removed heuristic “Bottom line” treatment, and
+> removed projection-owned confirmation. Remaining slice gaps are listed in
+> section 7; this document must not be read as evidence that Slices 0–8 are
+> complete.
 
 ---
 
@@ -60,8 +60,9 @@ The Home Upgrade Planner is built around one loop, not a dashboard:
 
 1. **See** — modeled home systems with age, condition, and cost, each
    showing whether it's known, estimated, or conflicting, and why.
-2. **Correct** — every uncertain fact links to the real owning surface
-   (property edit / a specific inventory item), never a twin-owned edit form.
+2. **Correct** — every inferred, default, unknown, or conflicting fact links
+   to the real owning surface (property edit / a specific inventory item),
+   never a twin-owned edit or confirmation action.
 3. **Compare** — repair / replace / upgrade / wait scenarios for one system,
    with ranges (not point values), sensitivity, and a safety boundary for
    safety-sensitive systems (electrical, roof, foundation).
@@ -109,8 +110,13 @@ into one.
 WINDOWS|SOLAR|FLOORING|EXTERIOR|FOUNDATION|APPLIANCE|OTHER)`,
 `lifecycleState (ACTIVE|SUPERSEDED|RETIRED)`, `status`, `sourceType`,
 `sourceReferenceId`, `installYear`, `estimatedAgeYears`, `usefulLifeYears`,
-`conditionScore`, `failureRiskScore`, cost estimates, `isUserConfirmed`,
+`conditionScore`, cost estimates,
 `confidenceScore`.
+
+`failureRiskScore` and `isUserConfirmed` remain legacy schema fields only.
+The builder clears both on refresh, the API never emits a failure-risk value,
+and neither field is used for readiness, recommendations, or computation.
+Age relative to typical service life is shown only as a planning window.
 
 A component whose backing inventory item disappears (deleted, replaced) is
 retired, not silently left stale — never deleted outright, so `retiredAt`/
@@ -222,7 +228,8 @@ APPLIANCES, DOCUMENTATION, COST_BASIS, ENERGY_BASIS, RISK_BASIS`).
 ## APIs (all under `/api/properties/:propertyId/home-digital-twin`)
 
 **Twin:** `GET /`, `POST /init`, `POST /refresh`
-**Facts:** `GET /fact-readiness`, `PATCH /components/:componentId`
+**Facts:** `GET /fact-readiness` (corrections link to canonical owning routes;
+there is no projection-owned confirmation mutation)
 **Recommendations:** `GET /recommended-scenarios`
 **Scenarios:** `GET /scenarios`, `POST /scenarios`, `GET /scenarios/:id`,
 `PATCH /scenarios/:id`, `DELETE /scenarios/:id` (archived-only, refused if a
@@ -260,6 +267,11 @@ archived-only delete, and the handoff panel (linked project or pre-filled
 create-project link, wayfinding links, expected-vs-actual cost once a linked
 project completes).
 
+Caller-provided values and calculations that depend on them render under
+**Input assumptions**. Heuristic scenarios do not receive a “Bottom line”
+banner. Risk-reduction percentages are never derived from age; an explicitly
+entered risk expectation remains an unverified input assumption.
+
 Accessibility: `motion-reduce:animate-none` on every animated element,
 `aria-live`/`aria-busy` on the async content region. `Sheet` is Radix-based,
 so focus trapping/ESC/keyboard behavior come from the primitive rather than
@@ -275,8 +287,8 @@ Frontend `track()` events (see `src/lib/analytics/events.ts`), tool key
 `home-digital-twin`:
 
 - `workflow_started` — page entry.
-- `action_taken` with `actionType`: `fact_confirmed`,
-  `scenario_compare_opened`, `decision_selected` / `decision_deferred` /
+- `action_taken` with `actionType`: `scenario_compare_opened`,
+  `decision_selected` / `decision_deferred` /
   `decision_rejected` / `decision_closed`, `handoff_service_price_radar`,
   `handoff_inspection`, `handoff_renovation_advisor`, `handoff_reserve_fund`,
   `handoff_capital_timeline`, `handoff_create_project`,
@@ -298,24 +310,28 @@ opt-in per the plan's "only with homeowner control" requirement.
 
 ---
 
-# 7. Explicitly out of scope
+# 7. Known remaining work
 
-- A universal Home Record CRUD page — corrections stay on the existing
+- A universal Home Record CRUD page remains intentionally out of scope —
+  corrections stay on the existing
   owning surfaces (property edit, inventory item, room, document, policy,
   warranty, project detail).
-- Real external pricing/utility/incentive-provider integrations — cost/
+- Real external pricing/utility/incentive-provider integrations are not yet
+  implemented — cost/
   utility/risk defaults are internal, reviewed category defaults, not live
   third-party data feeds. No "incentive discovery" handoff exists because no
   such capability exists elsewhere in the platform yet.
-- A BullMQ-backed async job queue for computation — init/refresh/scenario-
+- A BullMQ-backed async job queue for computation is not yet implemented —
+  init/refresh/scenario-
   compute run synchronously in the request; the reliability controls above
   (dedup, bounded retry, last-good) were built to make that safe without
   one. If genuine long-running/background computation becomes necessary,
   this would be revisited as new, explicitly-scoped work.
-- Editing a scenario's assumptions after creation — only name/description
+- Editing a scenario's assumptions after creation remains incomplete — only name/description
   are editable; there is no reusable assumption-editing form to extend (the
   only creation path today is from a suggested scenario's pre-built
   payload). A full manual "new scenario" form is future work.
-- Automated browser/end-to-end and formal accessibility test suites — this
+- Automated browser/end-to-end and formal accessibility test suites remain
+  incomplete — this
   session's environment does not run one; only backend unit tests exist for
   this capability today.

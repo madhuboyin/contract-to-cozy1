@@ -65,6 +65,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/financialContext \
              src/shared/backend/services/planningContext \
              src/shared/backend/types \
+             src/shared/backend/validators \
              src/shared/backend/lib \
              src/shared/backend/modules/gazette/services \
              src/shared/backend/modules/gazette/editorial \
@@ -117,6 +118,14 @@ COPY apps/backend/src/modules/homeEventRadar/queues/radarMatch.queue.ts \
      src/shared/backend/modules/homeEventRadar/queues/
 
 COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
+COPY apps/backend/src/services/homeDigitalTwin.service.ts \
+     apps/backend/src/services/homeDigitalTwinScenario.service.ts \
+     apps/backend/src/services/homeDigitalTwinBuilder.service.ts \
+     apps/backend/src/services/homeDigitalTwinQuality.service.ts \
+     apps/backend/src/services/homeDigitalTwinRunLock.ts \
+     src/shared/backend/services/
+COPY apps/backend/src/config/homeDigitalTwinOperationalControls.ts src/shared/backend/config/
+COPY apps/backend/src/validators/homeDigitalTwin.validators.ts src/shared/backend/validators/
 COPY apps/backend/src/config/risk-constants.ts apps/backend/src/config/workerJobRegistry.ts apps/backend/src/config/queueDefaults.ts apps/backend/src/config/workerExecutionPolicy.ts apps/backend/src/config/appConfig.ts apps/backend/src/config/smokeTestConfig.ts src/shared/backend/config/
 # Maintenance reminders (WKR-001) — a plain relative-import sibling of the
 # already-copied notification.service/prisma/workerExecutionPolicy shared

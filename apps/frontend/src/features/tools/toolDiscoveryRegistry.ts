@@ -105,6 +105,10 @@ const HOME_OUTCOME_BY_GROUP: Record<MobileHomeToolGroupKey, ToolOutcomeCategory>
   records: 'UNDERSTAND_HOME',
 };
 
+const HOME_OUTCOME_BY_TOOL: Partial<Record<string, ToolOutcomeCategory>> = {
+  'home-digital-twin': 'DECIDE_COMPARE',
+};
+
 const AI_OUTCOME_BY_GROUP: Record<MobileAiToolGroup, ToolOutcomeCategory> = {
   core: 'DECIDE_COMPARE',
   wealth: 'SAVE_OPTIMIZE',
@@ -210,7 +214,7 @@ const COMPLETION_KIND_BY_CATEGORY: Record<ToolOutcomeCategory, ToolCompletionKin
 
 const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'home-digital-will': 'ARTIFACT_CREATED',
-  'home-digital-twin': 'ARTIFACT_CREATED',
+  'home-digital-twin': 'DECISION_RECORDED',
   'material-specs': 'ARTIFACT_CREATED',
   'plant-advisor': 'OUTPUT_GENERATED',
   diy: 'DECISION_RECORDED',
@@ -297,7 +301,7 @@ const homeTools: DiscoverableToolDefinition[] = MOBILE_HOME_TOOL_LINKS.map((tool
   id: tool.key,
   label: tool.name,
   description: tool.desktopDescription ?? tool.description,
-  outcomeCategory: HOME_OUTCOME_BY_GROUP[tool.group],
+  outcomeCategory: HOME_OUTCOME_BY_TOOL[tool.key] ?? HOME_OUTCOME_BY_GROUP[tool.group],
   icon: tool.icon,
   workflowOnly: Boolean(tool.workflowOnly),
   baseHref: (propertyId) => buildHomeToolHref(propertyId, tool.hrefSuffix, tool.navTarget),

@@ -3,7 +3,6 @@ import type {
   HomeDigitalTwinDTO,
   ScenarioSuggestionDTO,
   HomeTwinScenarioDTO,
-  HomeTwinComponentDTO,
   HomeTwinFactReadinessSummaryDTO,
   HomeTwinScenarioReadinessDTO,
   HomeTwinScenarioComparisonDTO,
@@ -11,6 +10,7 @@ import type {
   HomeTwinScenarioDecisionStatus,
   CreateScenarioInput,
   UpdateScenarioInput,
+  HomeTwinScenarioRunDTO,
 } from '@/types';
 
 export async function getHomeDigitalTwin(propertyId: string): Promise<HomeDigitalTwinDTO | null> {
@@ -55,16 +55,6 @@ export async function getHomeDigitalTwinFactReadiness(
   return result ?? EMPTY_FACT_READINESS_SUMMARY;
 }
 
-export async function confirmHomeDigitalTwinComponent(
-  propertyId: string,
-  componentId: string,
-  isUserConfirmed: boolean,
-): Promise<HomeTwinComponentDTO> {
-  const result = await api.confirmHomeDigitalTwinComponent(propertyId, componentId, isUserConfirmed);
-  if (!result) throw new Error('Failed to update component confirmation');
-  return result;
-}
-
 export async function getDigitalTwinRecommendations(
   propertyId: string,
 ): Promise<ScenarioSuggestionDTO[]> {
@@ -98,6 +88,13 @@ export async function computeDigitalTwinScenario(
   return result;
 }
 
+export async function listDigitalTwinScenarioRuns(
+  propertyId: string,
+  scenarioId: string,
+): Promise<HomeTwinScenarioRunDTO[]> {
+  return api.listDigitalTwinScenarioRuns(propertyId, scenarioId);
+}
+
 export async function updateDigitalTwinScenario(
   propertyId: string,
   scenarioId: string,
@@ -124,6 +121,13 @@ export async function compareDigitalTwinScenarios(
   componentId: string,
 ): Promise<HomeTwinScenarioComparisonDTO | null> {
   return api.compareDigitalTwinScenarios(propertyId, componentId);
+}
+
+export async function ensureDigitalTwinComparisonOptions(
+  propertyId: string,
+  componentId: string,
+): Promise<HomeTwinScenarioComparisonDTO | null> {
+  return api.ensureDigitalTwinComparisonOptions(propertyId, componentId);
 }
 
 export async function recordDigitalTwinScenarioDecision(

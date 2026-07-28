@@ -73,8 +73,8 @@ export async function withBoundedRetry<T>(fn: () => Promise<T>, attempts = 2): P
 function buildComponentConfidenceDisclosure(c: ComponentRow): string | null {
   if (c.confidenceScore == null) return null;
   const pct = Math.round(c.confidenceScore * 100);
-  const sourceNote = c.isUserConfirmed || c.sourceType === 'MANUAL'
-    ? 'confirmed by homeowner'
+  const sourceNote = c.sourceType === 'MANUAL'
+    ? 'reported in a canonical home record'
     : 'modeled from property data';
   return `Component data confidence: ${pct}% (${sourceNote}). Cost and lifespan estimates may vary.`;
 }
@@ -93,7 +93,9 @@ function serializeComponent(c: ComponentRow) {
     estimatedAgeYears: c.estimatedAgeYears,
     usefulLifeYears: c.usefulLifeYears,
     conditionScore: c.conditionScore,
-    failureRiskScore: c.failureRiskScore,
+    // Legacy compatibility field. Age/service-life depletion is not a
+    // calibrated probability and must never leave the API as failure risk.
+    failureRiskScore: null,
     replacementCostEstimate: decimalToNumber(c.replacementCostEstimate),
     annualOperatingCostEstimate: decimalToNumber(c.annualOperatingCostEstimate),
     annualMaintenanceCostEstimate: decimalToNumber(c.annualMaintenanceCostEstimate),
@@ -123,6 +125,9 @@ function serializeComponent(c: ComponentRow) {
       sourceField: f.sourceField,
       observedAt: f.observedAt,
       derivationMethod: f.derivationMethod,
+      derivationVersion: f.derivationVersion,
+      modelVersion: f.modelVersion,
+      sourceVerified: f.sourceVerified,
       confidenceScore: f.confidenceScore,
       conflictGroupId: f.conflictGroupId,
       correctionDestination: f.correctionDestination,
@@ -397,7 +402,7 @@ export class HomeDigitalTwinService {
   async refreshTwin(propertyId: string) {
     const existing = await prisma.homeDigitalTwin.findUnique({
       where: { propertyId },
-      select: { id: true },
+      select: { id: true, dependencyFingerprint: true },
     });
 
     if (!existing) {
@@ -435,6 +440,25 @@ export class HomeDigitalTwinService {
 
       const refreshedContextVersion = await resolveTwinContextVersion(propertyId);
       const now = new Date();
+      if (
+        existing.dependencyFingerprint &&
+        existing.dependencyFingerprint !== dependencyFingerprint
+      ) {
+        await prisma.homeTwinScenario.updateMany({
+          where: {
+            digitalTwinId: existing.id,
+            status: 'COMPUTED',
+            OR: [
+              { baselineDependencyFingerprint: null },
+              { baselineDependencyFingerprint: { not: dependencyFingerprint } },
+            ],
+          },
+          data: {
+            staleAt: now,
+            staleReason: 'Home facts changed after this comparison was computed.',
+          },
+        });
+      }
       await prisma.homeDigitalTwin.update({
         where: { id: existing.id },
         data: {

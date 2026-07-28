@@ -7,6 +7,7 @@ import { HomeDigitalTwinScenarioService } from '../services/homeDigitalTwinScena
 import { HomeDigitalTwinRecommendationsService } from '../services/homeDigitalTwinRecommendations.service';
 import { HomeDigitalTwinFactReadinessService } from '../services/homeDigitalTwinFactReadiness.service';
 import { getPlanningContextEnvelope } from '../services/planningContext/context';
+import JobQueueService from '../services/JobQueue.service';
 
 const twinService = new HomeDigitalTwinService();
 const scenarioService = new HomeDigitalTwinScenarioService();
@@ -85,24 +86,6 @@ export async function getFactReadiness(
     const { propertyId } = req.params;
     const summary = await factReadinessService.getSummary(propertyId);
     res.json({ success: true, data: { summary } });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function confirmComponent(
-  req: CustomRequest,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const { propertyId, componentId } = req.params;
-    const component = await factReadinessService.setComponentConfirmed(
-      propertyId,
-      componentId,
-      req.body.isUserConfirmed,
-    );
-    res.json({ success: true, data: { component } });
   } catch (err) {
     next(err);
   }
@@ -195,6 +178,21 @@ export async function getScenario(
   }
 }
 
+export async function listScenarioRuns(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId, scenarioId } = req.params;
+    const twin = await getTwinIdForProperty(propertyId);
+    const runs = await scenarioService.listScenarioRuns(scenarioId, twin.id);
+    res.json({ success: true, data: { runs } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function updateScenario(
   req: CustomRequest,
   res: Response,
@@ -222,8 +220,10 @@ export async function computeScenario(
   try {
     const { propertyId, scenarioId } = req.params;
     const twin = await getTwinIdForProperty(propertyId);
-    const scenario = await scenarioService.computeScenario(scenarioId, twin.id);
-    res.json({ success: true, data: { scenario } });
+    await scenarioService.getScenario(scenarioId, twin.id);
+    await JobQueueService.enqueueHomeDigitalTwinScenarioCompute(propertyId, twin.id, scenarioId);
+    const scenario = await scenarioService.getScenario(scenarioId, twin.id);
+    res.status(202).json({ success: true, data: { scenario, queued: true } });
   } catch (err) {
     next(err);
   }
@@ -263,6 +263,38 @@ export async function compareScenarios(
     const twin = await getTwinIdForProperty(propertyId);
     const comparison = await scenarioService.compareScenarios(twin.id, componentId);
     res.json({ success: true, data: { comparison } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function ensureComparisonOptions(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId, componentId } = req.params;
+    const userId = req.user?.userId;
+    if (!userId) throw new APIError('Authentication required', 401, 'UNAUTHORIZED');
+    const twin = await getTwinIdForProperty(propertyId);
+    const comparison = await scenarioService.ensureComparisonOptions(
+      twin.id,
+      propertyId,
+      componentId,
+      userId,
+    );
+    await Promise.all(
+      comparison.options
+        .filter((option) => option.status !== 'COMPUTED')
+        .map((option) =>
+          JobQueueService.enqueueHomeDigitalTwinScenarioCompute(
+            propertyId,
+            twin.id,
+            option.id,
+          )),
+    );
+    res.status(202).json({ success: true, data: { comparison, queued: true } });
   } catch (err) {
     next(err);
   }

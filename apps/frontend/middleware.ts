@@ -154,7 +154,9 @@ export function middleware(request: NextRequest) {
     (pathname === '/acceptance/property-context' &&
       process.env.PROPERTY_CONTEXT_ACCEPTANCE_FIXTURE === '1') ||
     (pathname === '/acceptance/tool-discovery' &&
-      process.env.TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1');
+      process.env.TOOL_DISCOVERY_ACCEPTANCE_FIXTURE === '1') ||
+    (pathname === '/acceptance/home-digital-twin' &&
+      process.env.HOME_DIGITAL_TWIN_ACCEPTANCE_FIXTURE === '1');
 
   // ------------------------------------------------------------------
   // 1. Generate CSP nonce and attach headers to the forwarded request

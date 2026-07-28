@@ -1101,10 +1101,10 @@ async function loadHomeDigitalTwinFactReviewActions(
   if (!twin) return [];
 
   const components = await db.homeTwinComponent.findMany({
-    where: { digitalTwinId: twin.id, lifecycleState: 'ACTIVE', isUserConfirmed: false },
+    where: { digitalTwinId: twin.id, lifecycleState: 'ACTIVE' },
     select: {
       projectedFacts: {
-        where: { factState: { in: ['CONFLICTED', 'DEFAULT', 'UNKNOWN'] } },
+        where: { factState: { in: ['INFERRED', 'CONFLICTED', 'DEFAULT', 'UNKNOWN'] } },
         select: { factState: true, correctionDestination: true },
       },
     },
@@ -1127,11 +1127,11 @@ async function loadHomeDigitalTwinFactReviewActions(
     priority: conflictCount > 0 ? 'SOON' : 'CONSIDER',
     signal: conflictCount > 0
       ? `${conflictCount} home fact${conflictCount === 1 ? '' : 's'} have conflicting records on file.`
-      : `${needsAttention.length} home fact${needsAttention.length === 1 ? '' : 's'} could use a confirmation.`,
+      : `${needsAttention.length} home fact${needsAttention.length === 1 ? '' : 's'} should be added or verified at its source.`,
     whyItMatters:
-      'Your Home Record projection uses these facts for planning and cost estimates — confirming them keeps that projection trustworthy.',
+      'Your planning tools use these Home Record facts for timing and cost estimates — correcting the owning record keeps projections trustworthy.',
     recommendedAction: 'Review the flagged home facts',
-    expectedOutcome: 'Confirmed facts stop being re-guessed on every projection refresh.',
+    expectedOutcome: 'Canonical Home Record facts replace inferred or default projection values.',
     timing: {
       dueAt: null,
       windowStart: null,

@@ -11,14 +11,18 @@
 
 import { HomeTwinFactState } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { APIError } from '../middleware/error.middleware';
 
 // Fact states that represent something worth a homeowner's attention —
 // either because the value isn't really known (DEFAULT/UNKNOWN) or because
 // two sources disagree (CONFLICTED). INFERRED is a system assumption but is
 // surfaced separately at lower priority since it is at least a real, if
 // weak, signal (e.g. derived from year built).
-const NEEDS_ATTENTION_STATES = new Set<HomeTwinFactState>(['CONFLICTED', 'DEFAULT', 'UNKNOWN']);
+const NEEDS_ATTENTION_STATES = new Set<HomeTwinFactState>([
+  'INFERRED',
+  'CONFLICTED',
+  'DEFAULT',
+  'UNKNOWN',
+]);
 
 const FIELD_LABELS: Record<string, string> = {
   installYear: 'install year',
@@ -50,6 +54,8 @@ function reasonFor(factState: HomeTwinFactState, fieldLabel: string, componentLa
       return `We don't have any home-specific data for ${componentLabel}'s ${fieldLabel} — using a category default.`;
     case 'UNKNOWN':
       return `${componentLabel}'s ${fieldLabel} is unknown.`;
+    case 'INFERRED':
+      return `${componentLabel}'s ${fieldLabel} is inferred from other home data — add or confirm it at the source.`;
     default:
       return `${componentLabel}'s ${fieldLabel} could use a confirmation.`;
   }
@@ -81,7 +87,6 @@ export class HomeDigitalTwinFactReadinessService {
         id: true,
         componentType: true,
         label: true,
-        isUserConfirmed: true,
         projectedFacts: {
           select: {
             id: true,
@@ -115,16 +120,12 @@ export class HomeDigitalTwinFactReadinessService {
     for (const component of components) {
       const componentLabel = component.label ?? COMPONENT_LABELS[component.componentType] ?? component.componentType;
 
-      // A homeowner-confirmed component is settled — its facts don't need
-      // attention regardless of how the system originally derived them.
-      if (component.isUserConfirmed) continue;
-
       for (const fact of component.projectedFacts) {
         if (fact.factState === 'VERIFIED' || fact.factState === 'REPORTED' || fact.factState === 'DOCUMENT_DERIVED') {
           knownFactCount++;
           continue;
         }
-        if (!NEEDS_ATTENTION_STATES.has(fact.factState)) continue; // INFERRED: not surfaced as an action item
+        if (!NEEDS_ATTENTION_STATES.has(fact.factState)) continue;
 
         needsAttentionCount++;
         const fieldLabel = FIELD_LABELS[fact.fieldName] ?? fact.fieldName;
@@ -149,33 +150,11 @@ export class HomeDigitalTwinFactReadinessService {
       hasTwin: true,
       knownFactCount,
       needsAttentionCount,
-      confirmedComponentCount: components.filter((c) => c.isUserConfirmed).length,
+      // Projection-owned confirmation was removed because it could freeze
+      // inferred/default values and compete with canonical Home Record facts.
+      confirmedComponentCount: 0,
       totalComponentCount: components.length,
       items,
     };
-  }
-
-  /**
-   * Confirms (or un-confirms) a component's currently derived values as
-   * accurate. A confirmed component is left untouched by future rebuilds
-   * (see HomeDigitalTwinBuilderService.upsertComponent) — this is the
-   * "leave as reviewed" action, not a value-correction API. Correcting a
-   * wrong value still happens at the canonical source (property edit,
-   * inventory, ...); confirming only records that the homeowner reviewed
-   * and accepted what the projection currently shows.
-   */
-  async setComponentConfirmed(propertyId: string, componentId: string, isUserConfirmed: boolean) {
-    const component = await prisma.homeTwinComponent.findFirst({
-      where: { id: componentId, propertyId },
-      select: { id: true },
-    });
-    if (!component) {
-      throw new APIError('Component not found', 404, 'COMPONENT_NOT_FOUND');
-    }
-
-    return prisma.homeTwinComponent.update({
-      where: { id: componentId },
-      data: { isUserConfirmed },
-    });
   }
 }

@@ -5,47 +5,29 @@
 // unknown) and links each one to its existing owning surface — property
 // edit, a specific inventory item, or the inventory list. This is
 // deliberately not a new place to edit data: "Fix" navigates away, and
-// "Looks right" only confirms the projection's current values, it never
-// changes them.
+// Every action navigates to the canonical source. Projection-owned
+// confirmation is deliberately absent because it can freeze inferred/default
+// values and compete with the Home Record.
 
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, ClipboardList, AlertTriangle } from 'lucide-react';
 import { track } from '@/lib/analytics/events';
 import { MobileCard, StatusChip } from '@/components/mobile/dashboard/MobilePrimitives';
-import {
-  getHomeDigitalTwinFactReadiness,
-  confirmHomeDigitalTwinComponent,
-} from '../tools/home-digital-twin/homeDigitalTwinApi';
+import { getHomeDigitalTwinFactReadiness } from '../tools/home-digital-twin/homeDigitalTwinApi';
 import type { HomeTwinFactReadinessItemDTO } from '@/types';
 
 const MAX_VISIBLE_ITEMS = 4;
 
 export default function HomeRecordReadinessCard({ propertyId }: { propertyId: string }) {
-  const queryClient = useQueryClient();
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
-
   const { data, isLoading } = useQuery({
     queryKey: ['home-digital-twin-fact-readiness', propertyId],
     queryFn: () => getHomeDigitalTwinFactReadiness(propertyId),
     enabled: Boolean(propertyId),
     staleTime: 5 * 60 * 1000,
-  });
-
-  const confirmMutation = useMutation({
-    mutationFn: (componentId: string) =>
-      confirmHomeDigitalTwinComponent(propertyId, componentId, true),
-    onMutate: (componentId: string) => setConfirmingId(componentId),
-    onSuccess: () => {
-      track('action_taken', { tool: 'home-digital-twin', propertyId, actionType: 'fact_confirmed' });
-    },
-    onSettled: () => {
-      setConfirmingId(null);
-      queryClient.invalidateQueries({ queryKey: ['home-digital-twin-fact-readiness', propertyId] });
-    },
   });
 
   // Conflict signal — measured separately from engagement, once per load.
@@ -108,8 +90,6 @@ export default function HomeRecordReadinessCard({ propertyId }: { propertyId: st
             <ReadinessRow
               key={`${item.componentId}:${item.fieldName}`}
               item={item}
-              isConfirming={confirmingId === item.componentId && confirmMutation.isPending}
-              onConfirm={() => confirmMutation.mutate(item.componentId)}
             />
           ))}
           {overflowCount > 0 && (
@@ -125,12 +105,8 @@ export default function HomeRecordReadinessCard({ propertyId }: { propertyId: st
 
 function ReadinessRow({
   item,
-  isConfirming,
-  onConfirm,
 }: {
   item: HomeTwinFactReadinessItemDTO;
-  isConfirming: boolean;
-  onConfirm: () => void;
 }) {
   return (
     <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5 space-y-1.5">
@@ -151,14 +127,6 @@ function ReadinessRow({
             Fix it
           </Link>
         )}
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={isConfirming}
-          className="text-[12px] font-medium text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))] disabled:opacity-50"
-        >
-          {isConfirming ? 'Saving…' : 'Looks right'}
-        </button>
       </div>
     </div>
   );

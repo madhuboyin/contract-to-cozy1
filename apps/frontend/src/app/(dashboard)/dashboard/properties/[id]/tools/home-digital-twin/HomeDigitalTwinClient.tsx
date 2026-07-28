@@ -75,7 +75,9 @@ import {
   getDigitalTwinScenarioHandoff,
   getDigitalTwinScenarioReadiness,
   compareDigitalTwinScenarios,
+  ensureDigitalTwinComparisonOptions,
   deleteDigitalTwinScenario,
+  listDigitalTwinScenarioRuns,
 } from './homeDigitalTwinApi';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
 import HomeRecordReadinessCard from '../../components/HomeRecordReadinessCard';
@@ -541,7 +543,7 @@ function ComponentCard({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1 text-[hsl(var(--mobile-text-secondary))]">
-            {component.failureRiskScore != null && component.failureRiskScore >= 0.45 && (
+            {pct != null && pct >= 60 && (
               <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden="true" />
             )}
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -633,13 +635,13 @@ function ComponentDetailSheet({
           </div>
 
           {/* Planning attention — age-based signal, not a failure probability */}
-          {component.failureRiskScore != null && (
+          {pct != null && (
             <div className="space-y-1">
               <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Planning Attention
               </h3>
               <p className="text-sm font-semibold">
-                {planningAttentionLabel(component.failureRiskScore)}
+                {planningAttentionLabel(pct / 100)}
               </p>
               <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
                 Based on age relative to a typical service-life range for this system. Age alone does not predict
@@ -1003,6 +1005,7 @@ function ScenarioDetailSheet({
   onArchive,
   onDecide,
   onRename,
+  onUpdateAssumptions,
   onDelete,
   isComputing,
   isUpdating,
@@ -1018,6 +1021,7 @@ function ScenarioDetailSheet({
   onArchive: (id: string, archived: boolean) => void;
   onDecide: (id: string, decisionStatus: HomeTwinScenarioDecisionStatus, decisionReason: string | null) => void;
   onRename: (id: string, name: string) => void;
+  onUpdateAssumptions: (id: string, inputPayload: Record<string, unknown>) => void;
   onDelete: (id: string) => void;
   isComputing: boolean;
   isUpdating: boolean;
@@ -1027,10 +1031,17 @@ function ScenarioDetailSheet({
   const [decisionReason, setDecisionReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
+  const [assumptionsDraft, setAssumptionsDraft] = useState('');
+  const [assumptionsError, setAssumptionsError] = useState<string | null>(null);
 
   const { data: handoff } = useQuery({
     queryKey: ['home-digital-twin-scenario-handoff', propertyId, scenario?.id],
     queryFn: () => getDigitalTwinScenarioHandoff(propertyId, scenario?.id ?? ''),
+    enabled: open && !!scenario,
+  });
+  const { data: computationRuns = [] } = useQuery({
+    queryKey: ['home-digital-twin-scenario-runs', propertyId, scenario?.id],
+    queryFn: () => listDigitalTwinScenarioRuns(propertyId, scenario?.id ?? ''),
     enabled: open && !!scenario,
   });
 
@@ -1038,7 +1049,9 @@ function ScenarioDetailSheet({
     setDecisionReason(scenario?.decisionReason ?? '');
     setReasonError(null);
     setNameDraft(scenario?.name ?? '');
-  }, [scenario?.id]);
+    setAssumptionsDraft(JSON.stringify(scenario?.inputPayload ?? {}, null, 2));
+    setAssumptionsError(null);
+  }, [scenario?.decisionReason, scenario?.id, scenario?.inputPayload, scenario?.name, scenario?.updatedAt]);
 
   if (!scenario) return null;
 
@@ -1087,6 +1100,30 @@ function ScenarioDetailSheet({
             </StatusChip>
           </div>
 
+          {scenario.staleAt && (
+            <div role="status" aria-live="polite" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <p className="text-xs font-semibold text-amber-900">Results need refreshing</p>
+              <p className="text-xs text-amber-800">
+                {scenario.staleReason ?? 'Home facts or assumptions changed after this option was computed.'}
+              </p>
+            </div>
+          )}
+
+          {computationRuns[0] && (
+            <details className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5">
+              <summary className="cursor-pointer text-xs font-semibold text-[hsl(var(--mobile-text-secondary))]">
+                Evidence used for latest calculation
+              </summary>
+              <div className="mt-2 space-y-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                <p>Model: {computationRuns[0].modelVersion}</p>
+                <p>Started: {formatDate(computationRuns[0].startedAt)}</p>
+                <p>
+                  Inputs, source facts, assumptions, and outputs were preserved with this run.
+                </p>
+              </div>
+            </details>
+          )}
+
           {/* Decision — select / defer / reject / close, with a recorded reason */}
           <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5">
             <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
@@ -1125,6 +1162,48 @@ function ScenarioDetailSheet({
                 </Button>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+              Assumptions
+            </h3>
+            <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+              Adjust the values used for this option, save, then recompute.
+            </p>
+            <textarea
+              className="min-h-32 w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-transparent px-2.5 py-2 font-mono text-xs"
+              value={assumptionsDraft}
+              onChange={(event) => {
+                setAssumptionsDraft(event.target.value);
+                setAssumptionsError(null);
+              }}
+              aria-label="Scenario assumptions as JSON"
+              aria-describedby={assumptionsError ? 'scenario-assumptions-error' : undefined}
+            />
+            {assumptionsError && (
+              <p id="scenario-assumptions-error" role="alert" className="text-xs text-red-600">
+                {assumptionsError}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isUpdating}
+              onClick={() => {
+                try {
+                  const parsed = JSON.parse(assumptionsDraft);
+                  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+                    throw new Error('Assumptions must be an object.');
+                  }
+                  onUpdateAssumptions(scenario.id, parsed as Record<string, unknown>);
+                } catch (error) {
+                  setAssumptionsError(error instanceof Error ? error.message : 'Enter valid assumptions.');
+                }
+              }}
+            >
+              Save assumptions
+            </Button>
           </div>
 
           {/* Handoff — act on the decision without re-entering what's already known */}
@@ -1256,17 +1335,13 @@ function ScenarioDetailSheet({
 
           {/* Computed impacts */}
           {scenario.status === 'COMPUTED' && scenario.impacts.length > 0 && (() => {
-            // The takeaway banner may only come from a system-generated summary
-            // row, never a caller-supplied one — see HDT-005. isUserSupplied
-            // rows are rendered separately below as "Your estimates" so they
-            // are never blended in with computed evidence.
-            const takeaway = scenario.impacts.find(
-              (i) => i.impactType === 'CUSTOM' && !i.isUserSupplied,
-            );
             const computedImpacts = scenario.impacts.filter(
               (i) => i.impactType !== 'CUSTOM' && !i.isUserSupplied,
             );
             const userSuppliedImpacts = scenario.impacts.filter((i) => i.isUserSupplied);
+            const planningNotes = scenario.impacts.filter(
+              (i) => i.impactType === 'CUSTOM' && !i.isUserSupplied && i.valueText,
+            );
 
             const formatImpactValue = (impact: HomeTwinScenarioImpactDTO, value: number) =>
               impact.unit === 'USD'
@@ -1278,56 +1353,50 @@ function ScenarioDetailSheet({
             const renderImpactRow = (impact: HomeTwinScenarioImpactDTO) => {
               const hasRange =
                 impact.valueLow != null && impact.valueHigh != null && impact.valueLow !== impact.valueHigh;
+              const sourceLabel = {
+                HOMEOWNER_ASSUMPTION: 'Input assumption',
+                CANONICAL_RECORD: 'Home Record',
+                SYSTEM_CALCULATION: 'Planning calculation',
+                CATEGORY_DEFAULT: 'Category default',
+              }[impact.sourceClass] ?? 'Planning source';
               return (
-                <div key={impact.id} className="flex items-start justify-between gap-3 text-sm">
-                  <span className="text-[hsl(var(--mobile-text-secondary))]">
-                    {IMPACT_TYPE_LABEL[impact.impactType] ?? impact.impactType}
-                  </span>
-                  <span
-                    className={cn(
-                      'shrink-0 font-medium text-right',
-                      impact.direction === 'POSITIVE'
-                        ? 'text-green-700'
-                        : impact.direction === 'NEGATIVE'
-                          ? 'text-red-600'
-                          : 'text-[hsl(var(--foreground))]',
-                    )}
-                  >
-                    {impact.impactType === 'PAYBACK_PERIOD' && impact.valueText
-                      ? impact.valueText
-                      : impact.impactType === 'COMFORT_IMPACT' && impact.valueText
+                <div key={impact.id} className="space-y-0.5 rounded-lg border border-[hsl(var(--mobile-border-subtle))] px-2.5 py-2">
+                  <div className="flex items-start justify-between gap-3 text-sm">
+                    <span className="text-[hsl(var(--mobile-text-secondary))]">
+                      {IMPACT_TYPE_LABEL[impact.impactType] ?? impact.impactType}
+                    </span>
+                    <span
+                      className={cn(
+                        'shrink-0 font-medium text-right',
+                        impact.direction === 'POSITIVE'
+                          ? 'text-green-700'
+                          : impact.direction === 'NEGATIVE'
+                            ? 'text-red-600'
+                            : 'text-[hsl(var(--foreground))]',
+                      )}
+                    >
+                      {impact.impactType === 'PAYBACK_PERIOD' && impact.valueText
                         ? impact.valueText
-                        : hasRange
-                          ? `${formatImpactValue(impact, impact.valueLow!)}–${formatImpactValue(impact, impact.valueHigh!)}`
-                          : impact.valueNumeric != null
-                            ? formatImpactValue(impact, impact.valueNumeric)
-                            : impact.valueText ?? '—'}
-                  </span>
+                        : impact.impactType === 'COMFORT_IMPACT' && impact.valueText
+                          ? impact.valueText
+                          : hasRange
+                            ? `${formatImpactValue(impact, impact.valueLow!)}–${formatImpactValue(impact, impact.valueHigh!)}`
+                            : impact.valueNumeric != null
+                              ? formatImpactValue(impact, impact.valueNumeric)
+                              : impact.valueText ?? '—'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                    {sourceLabel}
+                    {impact.sourceAsOf ? ` · as of ${formatDate(impact.sourceAsOf)}` : ''}
+                    {impact.qualificationText ? ` · ${impact.qualificationText}` : ''}
+                  </p>
                 </div>
               );
             };
 
             return (
               <div className="space-y-3">
-                {/* Takeaway banner — system-generated summaries only */}
-                {takeaway?.valueText && (
-                  <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
-                    <p className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))] mb-1">
-                      Bottom line
-                    </p>
-                    <p
-                      className={cn(
-                        'text-sm font-medium leading-snug',
-                        takeaway.direction === 'POSITIVE'
-                          ? 'text-green-700'
-                          : 'text-[hsl(var(--foreground))]',
-                      )}
-                    >
-                      {takeaway.valueText}
-                    </p>
-                  </div>
-                )}
-
                 {computedImpacts.length > 0 && (
                   <div className="space-y-2">
                     <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
@@ -1342,14 +1411,23 @@ function ScenarioDetailSheet({
                   </div>
                 )}
 
+                {planningNotes.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
+                      Planning notes
+                    </h3>
+                    <div className="space-y-1.5">{planningNotes.map(renderImpactRow)}</div>
+                  </div>
+                )}
+
                 {userSuppliedImpacts.length > 0 && (
                   <div className="space-y-2">
                     <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
-                      Your estimates
+                      Input assumptions
                     </h3>
                     <div className="space-y-1.5">{userSuppliedImpacts.map(renderImpactRow)}</div>
                     <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                      You entered these values. They have not been independently verified or computed.
+                      These values were entered or calculated from input assumptions. They have not been independently verified.
                     </p>
                   </div>
                 )}
@@ -1369,7 +1447,7 @@ function ScenarioDetailSheet({
                       ))}
                     </div>
                     <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                      If you're going to double-check one number before trusting this range, check the one with the larger swing.
+                      If you&apos;re going to double-check one number before trusting this range, check the one with the larger swing.
                     </p>
                   </div>
                 )}
@@ -1381,8 +1459,8 @@ function ScenarioDetailSheet({
           {canCompute && (
             <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
               <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-                This scenario hasn&apos;t been computed yet. Run the compute engine to see projected
-                impacts based on your home&apos;s current modeled state.
+                This option has not been compared yet. Calculate it to see estimated
+                impacts based on your home&apos;s current information.
               </p>
             </div>
           )}
@@ -1484,10 +1562,29 @@ function CompareScenariosSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const queryClient = useQueryClient();
   const { data: comparison, isLoading } = useQuery({
     queryKey: ['home-digital-twin-scenario-comparison', propertyId, componentId],
     queryFn: () => compareDigitalTwinScenarios(propertyId, componentId ?? ''),
     enabled: open && !!componentId,
+  });
+  const ensureOptions = useMutation({
+    mutationFn: () => ensureDigitalTwinComparisonOptions(propertyId, componentId ?? ''),
+    onSuccess: (result) => {
+      queryClient.setQueryData(
+        ['home-digital-twin-scenario-comparison', propertyId, componentId],
+        result,
+      );
+      for (const delay of [2500, 7000]) {
+        window.setTimeout(
+          () => queryClient.invalidateQueries({
+            queryKey: ['home-digital-twin-scenario-comparison', propertyId, componentId],
+          }),
+          delay,
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
+    },
   });
 
   const keyImpact = (scenario: HomeTwinScenarioDTO, type: string) =>
@@ -1514,16 +1611,38 @@ function CompareScenariosSheet({
           )}
 
           {!isLoading && comparison && comparison.options.length === 0 && (
-            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-              No computed options yet for this system. Run and compute at least two scenarios (e.g.
-              repair vs. replace) to compare them here.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                Create a complete repair, replace, upgrade, and wait comparison for this system.
+              </p>
+              <Button
+                onClick={() => ensureOptions.mutate()}
+                disabled={ensureOptions.isPending}
+                className="w-full"
+              >
+                {ensureOptions.isPending ? 'Building options…' : 'Build four-option comparison'}
+              </Button>
+            </div>
           )}
 
           {!isLoading && comparison && comparison.options.length === 1 && (
-            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-              Only one computed option exists for this system so far. Create and compute another
-              (e.g. repair vs. replace) to compare them side by side.
+            <div className="space-y-3">
+              <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                Complete this comparison with repair, replace, upgrade, and wait options.
+              </p>
+              <Button
+                onClick={() => ensureOptions.mutate()}
+                disabled={ensureOptions.isPending}
+                className="w-full"
+              >
+                {ensureOptions.isPending ? 'Building options…' : 'Complete comparison'}
+              </Button>
+            </div>
+          )}
+
+          {ensureOptions.isError && (
+            <p role="alert" className="text-sm text-red-600">
+              Could not build comparison options. Please try again.
             </p>
           )}
 
@@ -1583,9 +1702,13 @@ function CompareScenariosSheet({
 // MAIN CLIENT COMPONENT
 // ============================================================================
 
-export default function HomeDigitalTwinClient() {
+export default function HomeDigitalTwinClient({
+  propertyIdOverride,
+}: {
+  propertyIdOverride?: string;
+} = {}) {
   const params = useParams<{ id: string }>();
-  const propertyId = params.id;
+  const propertyId = propertyIdOverride ?? params.id;
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const toolLaunchContext = useToolLaunchContext();
@@ -1743,7 +1866,15 @@ export default function HomeDigitalTwinClient() {
     mutationFn: (scenarioId: string) => computeDigitalTwinScenario(propertyId, scenarioId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
-      toast({ title: 'Impacts computed', description: 'Scenario results are ready.' });
+      window.setTimeout(
+        () => queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] }),
+        2500,
+      );
+      window.setTimeout(
+        () => queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] }),
+        7000,
+      );
+      toast({ title: 'Comparison queued', description: 'Results will refresh automatically.' });
     },
     onError: () =>
       toast({ title: 'Compute failed. Please try again.', variant: 'destructive' }),
@@ -1751,7 +1882,7 @@ export default function HomeDigitalTwinClient() {
 
   // ── Update scenario mutation ────────────────────────────────────────────────
   const updateMutation = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: { isPinned?: boolean; isArchived?: boolean; name?: string; description?: string | null } }) =>
+    mutationFn: ({ id, input }: { id: string; input: { isPinned?: boolean; isArchived?: boolean; name?: string; description?: string | null; inputPayload?: Record<string, unknown> } }) =>
       updateDigitalTwinScenario(propertyId, id, input),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
@@ -1760,6 +1891,9 @@ export default function HomeDigitalTwinClient() {
       }
       if (variables.input.name) {
         toast({ title: 'Renamed', description: `Now called "${variables.input.name}".` });
+      }
+      if (variables.input.inputPayload) {
+        toast({ title: 'Assumptions saved', description: 'Recompute this option to refresh its results.' });
       }
     },
     onError: () =>
@@ -1834,7 +1968,8 @@ export default function HomeDigitalTwinClient() {
         eyebrow="Home tool"
         title="Home Upgrade Planner"
         subtitle="See what we know about your home's systems, correct what's uncertain, and compare the cost, timing, savings, and risk trade-offs of a repair or upgrade."
-       className="lg:hidden"/>
+        showOnDesktop
+      />
 
       {/* Tool rail */}
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
@@ -1969,8 +2104,8 @@ export default function HomeDigitalTwinClient() {
                 ))}
               </div>
               <p className="pt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-                Suggestions are derived from component age and risk data. Running a scenario creates
-                a draft — nothing is scheduled or committed.
+                Suggestions use evidence-bounded install dates and typical planning windows. Age is
+                not a failure prediction. Running a scenario creates a draft — nothing is scheduled or committed.
               </p>
             </MobileSection>
           )}
@@ -2068,6 +2203,7 @@ export default function HomeDigitalTwinClient() {
         onPin={(id, pinned) => updateMutation.mutate({ id, input: { isPinned: pinned } })}
         onArchive={(id, archived) => updateMutation.mutate({ id, input: { isArchived: archived } })}
         onRename={(id, name) => updateMutation.mutate({ id, input: { name } })}
+        onUpdateAssumptions={(id, inputPayload) => updateMutation.mutate({ id, input: { inputPayload } })}
         onDelete={(id) => deleteMutation.mutate(id)}
         onDecide={(id, decisionStatus, decisionReason) =>
           decisionMutation.mutate({ id, decisionStatus, decisionReason })

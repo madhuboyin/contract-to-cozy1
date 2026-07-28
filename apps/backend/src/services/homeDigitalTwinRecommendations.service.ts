@@ -12,7 +12,7 @@
  * - Low-data or low-confidence components are suppressed to avoid noise
  */
 
-import { HomeTwinComponentType, HomeTwinScenarioType } from '@prisma/client';
+import { HomeTwinComponentType, HomeTwinFactState, HomeTwinScenarioType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 
@@ -68,10 +68,10 @@ type ComponentRow = {
   estimatedAgeYears: number | null;
   usefulLifeYears: number | null;
   conditionScore: number | null;
-  failureRiskScore: number | null;
   replacementCostEstimate: { toString(): string } | null; // Decimal
   confidenceScore: number | null;
   installYear: number | null;
+  projectedFacts: Array<{ fieldName: string; factState: HomeTwinFactState }>;
 };
 
 function decimalToNum(d: { toString(): string } | null): number | null {
@@ -85,14 +85,16 @@ function ageRatio(c: ComponentRow): number | null {
   return c.estimatedAgeYears / c.usefulLifeYears;
 }
 
-function resolveUrgency(
-  ratio: number | null,
-  failureRisk: number | null,
-): 'HIGH' | 'MEDIUM' | 'LOW' {
-  if ((ratio != null && ratio >= 0.85) || (failureRisk != null && failureRisk >= 0.65)) {
+function hasEvidenceBoundedInstallDate(c: ComponentRow): boolean {
+  const state = c.projectedFacts.find((fact) => fact.fieldName === 'installYear')?.factState;
+  return state === 'REPORTED' || state === 'VERIFIED' || state === 'DOCUMENT_DERIVED';
+}
+
+function resolveUrgency(ratio: number | null): 'HIGH' | 'MEDIUM' | 'LOW' {
+  if (ratio != null && ratio >= 0.85) {
     return 'HIGH';
   }
-  if ((ratio != null && ratio >= 0.60) || (failureRisk != null && failureRisk >= 0.45)) {
+  if (ratio != null && ratio >= 0.60) {
     return 'MEDIUM';
   }
   return 'LOW';
@@ -101,18 +103,17 @@ function resolveUrgency(
 /**
  * Scoring function for ranking suggestions.
  * Higher score = higher priority.
- * Factors: urgency weight + confidence boost + estimated value signal.
+ * Factors: planning-window urgency and evidence confidence. Estimated project
+ * cost is deliberately not a priority input: expensive work is not more
+ * important merely because it is expensive.
  */
 function scoreCandidate(
   urgency: 'HIGH' | 'MEDIUM' | 'LOW',
   confidence: number | null,
-  estimatedCost: number | null,
 ): number {
   const urgencyScore = urgency === 'HIGH' ? 3 : urgency === 'MEDIUM' ? 2 : 1;
   const confidenceBoost = (confidence ?? 0.5) * 1.5;
-  // Higher-cost items have more impact potential — normalize against $20k cap
-  const valueBoost = estimatedCost != null ? Math.min(estimatedCost / 20000, 1) : 0;
-  return urgencyScore + confidenceBoost + valueBoost;
+  return urgencyScore + confidenceBoost;
 }
 
 /**
@@ -122,22 +123,21 @@ function scoreCandidate(
 function replaceSuggestion(
   c: ComponentRow,
   minAgeRatio: number,
-  minFailureRisk: number,
   title: string,
   description: string,
 ): ScenarioSuggestion | null {
-  // Skip if we don't have enough data to make a meaningful suggestion
+  // An age-based planning window requires a reported/verified/document-derived
+  // install date. Inferred dates may prompt fact review, but must never create
+  // replacement urgency or failure guidance.
+  if (!hasEvidenceBoundedInstallDate(c)) return null;
+
   if (c.confidenceScore != null && c.confidenceScore < 0.25) return null;
 
   const ratio = ageRatio(c);
-  const risk = c.failureRiskScore;
-
   const meetsAge = ratio != null && ratio >= minAgeRatio;
-  const meetsRisk = risk != null && risk >= minFailureRisk;
+  if (!meetsAge) return null;
 
-  if (!meetsAge && !meetsRisk) return null;
-
-  const urgency = resolveUrgency(ratio, risk);
+  const urgency = resolveUrgency(ratio);
   const cost =
     decimalToNum(c.replacementCostEstimate) ??
     DEFAULT_REPLACEMENT_COST[c.componentType] ??
@@ -151,19 +151,13 @@ function replaceSuggestion(
   const usefulLifeLabel =
     c.usefulLifeYears != null ? `${c.usefulLifeYears}-year typical lifespan` : 'typical lifespan';
 
-  const reasonParts: string[] = [];
-  if (meetsAge && c.estimatedAgeYears != null && c.usefulLifeYears != null) {
-    const pct = Math.round((c.estimatedAgeYears / c.usefulLifeYears) * 100);
-    reasonParts.push(
-      `${c.label ?? c.componentType} is ${ageLabel} (${pct}% through its ${usefulLifeLabel})`,
-    );
-  }
-  if (meetsRisk && risk != null) {
-    reasonParts.push(`failure risk score is ${Math.round(risk * 100)}%`);
-  }
+  const pct = Math.round((c.estimatedAgeYears! / c.usefulLifeYears!) * 100);
+  const reason =
+    `${c.label ?? c.componentType} is ${ageLabel} (${pct}% through its ${usefulLifeLabel}). ` +
+    'Age identifies a planning window, not a probability of failure; verify physical condition before deciding.';
 
   return {
-    key: `replace-${c.componentType.toLowerCase().replace(/_/g, '-')}`,
+    key: `replace-${c.componentType.toLowerCase().replace(/_/g, '-')}-${c.id}`,
     title,
     description,
     scenarioType: 'REPLACE_COMPONENT',
@@ -171,12 +165,11 @@ function replaceSuggestion(
     componentId: c.id,
     urgency,
     estimatedUpfrontCost: cost,
-    reason: reasonParts.join('; '),
+    reason,
     suggestedInputPayload: {
       componentType: c.componentType,
       assumptions: {
         replacementCost: cost,
-        riskReductionPercent: risk != null ? Math.round(risk * 80) : undefined,
         newUsefulLifeYears: c.usefulLifeYears ?? undefined,
       },
     },
@@ -211,7 +204,7 @@ export class HomeDigitalTwinRecommendationsService {
     }
 
     const components = await prisma.homeTwinComponent.findMany({
-      where: { digitalTwinId: twin.id, isUserConfirmed: false, lifecycleState: 'ACTIVE' },
+      where: { digitalTwinId: twin.id, lifecycleState: 'ACTIVE' },
       select: {
         id: true,
         componentType: true,
@@ -219,10 +212,13 @@ export class HomeDigitalTwinRecommendationsService {
         estimatedAgeYears: true,
         usefulLifeYears: true,
         conditionScore: true,
-        failureRiskScore: true,
         replacementCostEstimate: true,
         confidenceScore: true,
         installYear: true,
+        projectedFacts: {
+          where: { fieldName: 'installYear' },
+          select: { fieldName: true, factState: true },
+        },
       },
     });
 
@@ -238,53 +234,45 @@ export class HomeDigitalTwinRecommendationsService {
     const suggestions: ScenarioSuggestion[] = [];
 
     // ── HVAC ─────────────────────────────────────────────────────────────────
-    const hvac = byType.get('HVAC');
-    if (hvac) {
+    for (const hvac of components.filter((component) => component.componentType === 'HVAC')) {
       const s = replaceSuggestion(
         hvac,
         0.75, // 75% through useful life
-        0.50, // 50% failure risk
         'Replace Aging HVAC System',
-        'Your HVAC system is approaching end of useful life. Replacing it now can reduce energy costs and prevent unexpected failure.',
+        'Your HVAC system is approaching its typical replacement planning window. Compare waiting, inspection, repair, and replacement before deciding.',
       );
       if (s) suggestions.push(s);
     }
 
     // ── ROOF ──────────────────────────────────────────────────────────────────
-    const roof = byType.get('ROOF');
-    if (roof) {
+    for (const roof of components.filter((component) => component.componentType === 'ROOF')) {
       const s = replaceSuggestion(
         roof,
         0.72,
-        0.45,
         'Roof Replacement',
-        'Your roof is aging and may need replacement soon. A new roof improves protection, energy efficiency, and home resale value.',
+        'Your roof is approaching its typical replacement planning window. Confirm its physical condition before choosing repair or replacement.',
       );
       if (s) suggestions.push(s);
     }
 
     // ── WATER HEATER ──────────────────────────────────────────────────────────
-    const waterHeater = byType.get('WATER_HEATER');
-    if (waterHeater) {
+    for (const waterHeater of components.filter((component) => component.componentType === 'WATER_HEATER')) {
       const s = replaceSuggestion(
         waterHeater,
         0.80,
-        0.55,
         'Replace Aging Water Heater',
-        'Your water heater is nearing the end of its typical lifespan. Proactive replacement avoids emergency failures.',
+        'Your water heater is nearing its typical replacement planning window. Compare inspection, waiting, repair, and replacement.',
       );
       if (s) suggestions.push(s);
     }
 
     // ── ELECTRICAL ────────────────────────────────────────────────────────────
-    const electrical = byType.get('ELECTRICAL');
-    if (electrical) {
+    for (const electrical of components.filter((component) => component.componentType === 'ELECTRICAL')) {
       const s = replaceSuggestion(
         electrical,
         0.80,
-        0.45,
         'Electrical Panel Upgrade',
-        'An aging electrical panel increases risk and may not support modern appliance loads. Upgrading improves safety and resale value.',
+        'Your electrical panel is approaching its typical planning window. Have a licensed electrician assess condition and capacity before deciding.',
       );
       if (s) suggestions.push(s);
     }
@@ -295,13 +283,13 @@ export class HomeDigitalTwinRecommendationsService {
     const homeAgeYears = property?.yearBuilt
       ? new Date().getFullYear() - property.yearBuilt
       : null;
-    const homeIsOldEnoughForInsulation = homeAgeYears == null || homeAgeYears >= 15;
+    const homeIsOldEnoughForInsulation = homeAgeYears != null && homeAgeYears >= 15;
 
     const shouldSuggestInsulation =
+      Boolean(insulation) &&
       homeIsOldEnoughForInsulation &&
-      (!insulation ||
-        (insulation.confidenceScore ?? 1) < 0.50 ||
-        (ageRatio(insulation) ?? 0) >= 0.50);
+      ((insulation?.confidenceScore ?? 0) >= 0.50) &&
+      (ageRatio(insulation!) ?? 0) >= 0.50;
 
     if (shouldSuggestInsulation) {
       const ageDesc = homeAgeYears != null ? `${homeAgeYears}-year-old home` : 'your home';
@@ -309,18 +297,15 @@ export class HomeDigitalTwinRecommendationsService {
         key: 'upgrade-insulation',
         title: 'Upgrade Insulation',
         description:
-          'Adding or upgrading insulation is one of the highest-ROI energy improvements. Typical payback is 3–7 years with ongoing comfort and energy savings.',
+          'Insulation may improve comfort and energy performance, but savings depend on your home, climate, utility usage, and installation details.',
         scenarioType: 'ENERGY_IMPROVEMENT',
         componentType: 'INSULATION',
         componentId: insulation?.id ?? null,
         urgency: 'LOW',
         estimatedUpfrontCost: insulationCost,
-        reason: insulation
-          ? `Insulation data has low confidence or is aging in your ${ageDesc}`
-          : `No insulation has been modeled for your ${ageDesc} — a high-value opportunity to evaluate`,
+        reason: `Recorded insulation is in its planning window for this ${ageDesc}; verify current performance before deciding.`,
         suggestedInputPayload: {
           upfrontCost: insulationCost,
-          energySavingsPerYear: 380,
           comfortImpactDescription: 'Improved temperature consistency across all rooms',
         },
       });
@@ -330,7 +315,7 @@ export class HomeDigitalTwinRecommendationsService {
     const windows = byType.get('WINDOWS');
     if (windows) {
       const ratio = ageRatio(windows);
-      if (ratio != null && ratio >= 0.70) {
+      if (hasEvidenceBoundedInstallDate(windows) && ratio != null && ratio >= 0.70) {
         const cost = decimalToNum(windows.replacementCostEstimate) ?? 8000;
         suggestions.push({
           key: 'upgrade-windows',
@@ -340,49 +325,28 @@ export class HomeDigitalTwinRecommendationsService {
           scenarioType: 'ENERGY_IMPROVEMENT',
           componentType: 'WINDOWS',
           componentId: windows.id,
-          urgency: resolveUrgency(ratio, windows.failureRiskScore),
+          urgency: resolveUrgency(ratio),
           estimatedUpfrontCost: cost,
           reason: `Windows are ${Math.round(ratio * 100)}% through their typical lifespan`,
           suggestedInputPayload: {
             upfrontCost: cost,
-            energySavingsPerYear: 250,
             comfortImpactDescription: 'Reduced drafts and improved indoor temperature control',
           },
         });
       }
     }
 
-    // ── SOLAR — only suggest when twin has enough data to trust the absence ──
-    const hasSolar = byType.has('SOLAR');
-    const twinCompleteness = twin.completenessScore ?? 0;
-    if (!hasSolar && twinCompleteness >= 0.40) {
-      suggestions.push({
-        key: 'consider-solar',
-        title: 'Consider Solar Panels',
-        description:
-          'Solar panels can significantly reduce electricity bills and increase property value. Typical payback is 6–10 years.',
-        scenarioType: 'ENERGY_IMPROVEMENT',
-        componentType: 'SOLAR',
-        componentId: null,
-        urgency: 'LOW',
-        estimatedUpfrontCost: 18000,
-        reason: 'No solar system has been detected on this property',
-        suggestedInputPayload: {
-          upfrontCost: 18000,
-          energySavingsPerYear: 1500,
-          carbonOffsetTonsCO2PerYear: 3.2,
-          comfortImpactDescription: 'Reduced reliance on grid energy',
-        },
-      });
-    }
+    // Solar suitability requires roof/site and utility evidence that this
+    // projection does not currently own, so absence alone cannot create a
+    // recommendation.
 
-    // Score and sort: weighted by urgency, confidence, and estimated cost impact
+    // Score and sort: weighted by planning urgency and evidence confidence.
     suggestions.sort((a, b) => {
-      const aComp = byType.get(a.componentType ?? 'OTHER' as HomeTwinComponentType);
-      const bComp = byType.get(b.componentType ?? 'OTHER' as HomeTwinComponentType);
+      const aComp = components.find((component) => component.id === a.componentId);
+      const bComp = components.find((component) => component.id === b.componentId);
       return (
-        scoreCandidate(b.urgency, bComp?.confidenceScore ?? null, b.estimatedUpfrontCost) -
-        scoreCandidate(a.urgency, aComp?.confidenceScore ?? null, a.estimatedUpfrontCost)
+        scoreCandidate(b.urgency, bComp?.confidenceScore ?? null) -
+        scoreCandidate(a.urgency, aComp?.confidenceScore ?? null)
       );
     });
 

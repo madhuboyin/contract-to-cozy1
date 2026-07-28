@@ -14,6 +14,7 @@ import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
 import { createLazyQueue } from '../lib/queuePort';
 import { JOB_REGISTRY } from '../config/workerJobRegistry';
 import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
+import { prisma } from '../lib/prisma';
 
 // -----------------------------------------------------------------------------
 // Shared Redis Connection Configuration
@@ -134,6 +135,67 @@ export const getGeneratePermitDisclosureQueue = createLazyQueue<GeneratePermitDi
 // Job Queue Service
 // -----------------------------------------------------------------------------
 export class JobQueueService {
+  /**
+   * Mark existing outputs stale immediately, then enqueue one deduplicated
+   * refresh. Completed jobs are removed so a later canonical edit can reuse
+   * the stable property-scoped job id.
+   */
+  public async enqueueHomeDigitalTwinRefresh(
+    propertyId: string,
+    reason = 'Canonical home facts changed.',
+  ): Promise<void> {
+    const twin = await prisma.homeDigitalTwin.findUnique({
+      where: { propertyId },
+      select: { id: true },
+    });
+    if (!twin) return;
+
+    const staleAt = new Date();
+    await prisma.$transaction([
+      prisma.homeDigitalTwin.update({
+        where: { id: twin.id },
+        data: { status: 'STALE', staleReason: reason },
+      }),
+      prisma.homeTwinScenario.updateMany({
+        where: { digitalTwinId: twin.id, status: 'COMPUTED' },
+        data: { staleAt, staleReason: reason },
+      }),
+    ]);
+
+    await getPropertyIntelligenceQueue().add(
+      PropertyIntelligenceJobType.REFRESH_HOME_DIGITAL_TWIN,
+      { propertyId, jobType: PropertyIntelligenceJobType.REFRESH_HOME_DIGITAL_TWIN },
+      {
+        jobId: `${propertyId}-HOME-DIGITAL-TWIN`,
+        delay: 10_000,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      },
+    );
+  }
+
+  public async enqueueHomeDigitalTwinScenarioCompute(
+    propertyId: string,
+    digitalTwinId: string,
+    scenarioId: string,
+  ): Promise<void> {
+    await getPropertyIntelligenceQueue().add(
+      PropertyIntelligenceJobType.COMPUTE_HOME_DIGITAL_TWIN_SCENARIO,
+      {
+        propertyId,
+        digitalTwinId,
+        scenarioId,
+        jobType: PropertyIntelligenceJobType.COMPUTE_HOME_DIGITAL_TWIN_SCENARIO,
+      },
+      {
+        jobId: `${scenarioId}-HOME-DIGITAL-TWIN-SCENARIO`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      },
+    );
+  }
 
   /**
    * Enqueue all Property Intelligence jobs for a property
@@ -206,6 +268,11 @@ export class JobQueueService {
         ...defaultOptions,
       }
     );
+
+    // One delayed, property-keyed refresh absorbs bursts of canonical edits
+    // and allows the risk/FES jobs above to publish their latest inputs first.
+    // BullMQ's stable job id deduplicates concurrent enqueue attempts.
+    await this.enqueueHomeDigitalTwinRefresh(propertyId);
 
     logger.info(
       `[QUEUE-MANAGER] Risk + FES + HiddenAssets jobs enqueued for property ${propertyId}`

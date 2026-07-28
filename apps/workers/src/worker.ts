@@ -77,6 +77,8 @@ import {
   processRiskCalculation,
   processFESCalculation,
   processHiddenAssetScan,
+  processHomeDigitalTwinRefresh,
+  processHomeDigitalTwinScenarioCompute,
   PropertyIntelligenceJobType,
   PropertyIntelligenceJobPayload,
 } from './jobs/propertyIntelligence.job';
@@ -907,6 +909,14 @@ function startWorker() {
 
           case PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS:
             await processHiddenAssetScan(job.data);
+            break;
+
+          case PropertyIntelligenceJobType.REFRESH_HOME_DIGITAL_TWIN:
+            await processHomeDigitalTwinRefresh(job.data);
+            break;
+
+          case PropertyIntelligenceJobType.COMPUTE_HOME_DIGITAL_TWIN_SCENARIO:
+            await processHomeDigitalTwinScenarioCompute(job.data);
             break;
 
           default:

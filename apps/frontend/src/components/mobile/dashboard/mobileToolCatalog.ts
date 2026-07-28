@@ -185,16 +185,6 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
 
   // --- CONTINUOUS INTELLIGENCE ---
   {
-    key: 'home-digital-twin',
-    title: 'Home Upgrade Planner',
-    description: 'Compare repair, replace, and upgrade options with real cost ranges',
-    href: '/dashboard/home-digital-twin',
-    icon: resolveToolIcon('home', 'home-digital-twin'),
-    emoji: '🧬',
-    group: 'monitoring',
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-twin(\/|$)/.test(pathname),
-  },
-  {
     key: 'home-event-radar',
     title: 'Event Radar',
     description: 'Track real-time signals affecting your home',
@@ -802,6 +792,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     hrefSuffix: 'tools/home-digital-twin',
     navTarget: 'tool:home-digital-twin',
     icon: resolveToolIcon('home', 'home-digital-twin'),
+    workflowOnly: true,
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-twin(\/|$)/.test(pathname),
   },

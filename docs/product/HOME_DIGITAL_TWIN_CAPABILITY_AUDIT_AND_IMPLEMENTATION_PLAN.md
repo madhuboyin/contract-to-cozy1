@@ -3,7 +3,7 @@
 **Capability:** 21.3 Home Digital Twin  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 27, 2026  
-**Status:** Implemented (Slices 0–8 complete). See `docs/functional/HOME_DIGITAL_TWIN.md` for the current-state functional description this plan drove.  
+**Status:** In progress. P0 trust containment for age-derived failure claims, input-assumption provenance, and projection-owned confirmation was completed July 28, 2026. Slice 0 still has placement/framework work, and Slices 1–8 retain gaps documented in `docs/functional/HOME_DIGITAL_TWIN.md`.
 **Recommended disposition:** **Merge and reposition**  
 **Current safety classification:** Low consequence  
 **Recommended safety classification:** Mixed — low consequence for record projection; material financial for upgrade scenarios  
@@ -777,6 +777,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** Safety / trust  
+**Implementation status (July 28, 2026):** Resolved. The builder and API leave the legacy `failureRiskScore` empty, recommendations use evidence-bounded planning-window language, and scenario computation no longer derives risk reduction from age or condition.
 
 **Recommendation**
 
@@ -806,6 +807,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** Material financial trust  
+**Implementation status (July 28, 2026):** Partially contained. Unsupported system-generated property-value and insurance claims remain suppressed; heuristic “Bottom line” treatment was removed; caller-provided costs, savings, payback dependencies, and risk expectations are separated as input assumptions. Full per-impact source class, freshness, and assumption-dependency persistence remains open.
 
 **Recommendation**
 
@@ -822,6 +824,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** Integrity  
+**Implementation status (July 28, 2026):** Resolved for current scenario paths. Direct caller values and calculations dependent on them persist as `isUserSupplied=true` and render under “Input assumptions,” while heuristic system summaries are no longer promoted as a bottom line.
 
 **Recommendation**
 
@@ -853,6 +856,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P0  
 **Type:** Functional completeness  
+**Implementation status (July 28, 2026):** Projection-owned confirmation was removed. Inferred, default, unknown, and conflicting facts remain visible and link to canonical correction destinations; rebuilds no longer freeze components based on `isUserConfirmed`. Richer field-specific canonical editing and audit history remain part of later slice work.
 
 **Recommendation**
 
@@ -868,6 +872,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Trust / UX  
+**Implementation status (July 28, 2026):** Implemented. Scenario readiness is component- and scenario-type-specific and reports known inputs, missing inputs, why each matters, and the applicable professional boundary.
 
 **Recommendation**
 
@@ -882,6 +887,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Data architecture  
+**Implementation status (July 28, 2026):** Implemented for projection-owned systems. Inventory-backed HVAC, water heaters, roofs, electrical panels, plumbing systems, solar, windows, appliances, and flooring retain stable per-record identities; unsupported active components are retired on refresh and duplicate logical keys are prevented by the database identity constraint.
 
 **Recommendation**
 
@@ -897,6 +903,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Decision quality  
+**Implementation status (July 28, 2026):** Implemented. Replacement guidance requires reported, verified, or document-derived installation evidence; sparse/default data is suppressed; ranking excludes project cost; and copy frames age as a planning window rather than failure urgency.
 
 **Recommendation**
 
@@ -915,6 +922,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Best-in-class functionality  
+**Implementation status (July 28, 2026):** Implemented. A component comparison can materialize repair, replace, upgrade, and wait options, exposes low/base/high ranges and payback sensitivity, and allows assumptions to be revised and recomputed.
 
 **Recommendation**
 
@@ -930,6 +938,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Closed loop  
+**Implementation status (July 28, 2026):** Implemented. Options support select, defer, reject, close, revise, archive, and delete controls; selected decisions hand off with prefilled context to projects, quote review, inspection, renovation risk, reserve planning, and capital planning, and completed project outcomes are reconciled against the projected range.
 
 **Recommendation**
 
@@ -945,6 +954,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Reliability / trust  
+**Implementation status (July 28, 2026):** Implemented. Every run persists immutable input, component, source, assumption, model-version, and output snapshots; impact rows identify their source class, source date, qualification, and assumptions; run evidence is available through an authorized API and the scenario detail UI.
 
 **Recommendation**
 
@@ -959,6 +969,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Operations  
+**Implementation status (July 28, 2026):** Implemented for canonical property and inventory dependencies. Updates immediately mark projections and computed scenarios stale, enqueue one delayed property-keyed BullMQ refresh with retries, deduplicate concurrent work, and preserve the last good projection on failure. Scenario calculations are also queued and deduplicated.
 
 **Recommendation**
 
@@ -976,6 +987,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Product experience  
+**Implementation status (July 28, 2026):** Implemented. The permanent AI catalog entry was removed and the property tool entry is workflow-only; the capability remains discoverable through explicit contextual framework recommendations and direct workflow handoffs.
 
 **Recommendation**
 
@@ -990,6 +1002,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** UX / accessibility  
+**Implementation status (July 28, 2026):** Implemented. The outcome-first planner header is visible on desktop and mobile, stale and returning states identify the next action, and technology-first compute-engine language was removed.
 
 **Recommendation**
 
@@ -1005,6 +1018,7 @@ The target should be event-driven and dependency-aware.
 
 **Priority:** P1  
 **Type:** Quality  
+**Implementation status (July 28, 2026):** Implemented for the P1 contracts. Builder truth tables cover multi-component identity and complete field lineage; service contracts cover provenance, queueing, staleness, controls, scenario calculations, and decisions; frontend contract tests cover accessible state; and Playwright exercises the production planner client at desktop and mobile breakpoints with an axe scan.
 
 **Recommendation**
 
@@ -1730,4 +1744,3 @@ The first change should not be a larger scenario engine or a visual redesign. It
 Then implement the projection lineage and Home Record correction contract before rebuilding scenario planning.
 
 This sequence prevents a polished experience from amplifying unreliable conclusions and ensures later planning features are built on a trustworthy Living Home Record.
-

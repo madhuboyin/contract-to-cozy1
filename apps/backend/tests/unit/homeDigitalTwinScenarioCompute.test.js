@@ -58,29 +58,29 @@ test('REPAIR_COMPONENT respects a homeowner-supplied repair cost with a narrower
   const suppliedSpread = cost.valueHigh - cost.valueLow;
   const defaultSpread = defaultCost.valueHigh - defaultCost.valueLow;
   assert.ok(suppliedSpread / cost.valueNumeric < defaultSpread / defaultCost.valueNumeric, 'homeowner-supplied cost should have a narrower relative range than the default');
+  assert.equal(cost.isUserSupplied, true);
 });
 
-test('REPAIR_COMPONENT never claims to reset age-related risk the way replacement does', () => {
+test('age-derived component state never produces repair or replacement risk-reduction claims', () => {
   const repair = computeImpacts('REPAIR_COMPONENT', { componentType: 'HVAC', assumptions: {} }, component());
   const replace = computeImpacts('REPLACE_COMPONENT', { componentType: 'HVAC', assumptions: {} }, component());
 
-  const repairRisk = impactOf(repair.impacts, 'RISK_REDUCTION');
-  const replaceRisk = impactOf(replace.impacts, 'RISK_REDUCTION');
-  assert.ok(repairRisk.valueNumeric < replaceRisk.valueNumeric);
+  assert.equal(impactOf(repair.impacts, 'RISK_REDUCTION'), undefined);
+  assert.equal(impactOf(replace.impacts, 'RISK_REDUCTION'), undefined);
 });
 
 // ── WAIT_MONITOR ────────────────────────────────────────────────────────────
 
-test('WAIT_MONITOR costs nothing and claims zero risk reduction', () => {
+test('WAIT_MONITOR costs nothing and makes no age-based risk claim', () => {
   const { impacts } = computeImpacts('WAIT_MONITOR', { reviewMonths: 9 }, null);
   const cost = impactOf(impacts, 'UPFRONT_COST');
   const risk = impactOf(impacts, 'RISK_REDUCTION');
 
   assert.equal(cost.valueNumeric, 0);
-  assert.equal(risk.valueNumeric, 0);
-  assert.equal(risk.direction, 'NEUTRAL');
+  assert.equal(risk, undefined);
   const summary = impactOf(impacts, 'CUSTOM');
   assert.match(summary.valueText, /9 months/);
+  assert.equal(summary.isUserSupplied, true);
 });
 
 // ── Ranges on REPLACE_COMPONENT ─────────────────────────────────────────────
@@ -107,6 +107,45 @@ test('an explicit homeowner-provided replacement cost gets the narrowest range',
   assert.equal(cost.valueNumeric, 10000);
   assert.equal(cost.valueLow, 9000);
   assert.equal(cost.valueHigh, 11000);
+  assert.equal(cost.isUserSupplied, true);
+});
+
+test('homeowner-entered savings and their derived payback remain input assumptions', () => {
+  const { impacts } = computeImpacts(
+    'REPLACE_COMPONENT',
+    { componentType: 'HVAC', assumptions: { replacementCost: 10000, annualSavings: 400 } },
+    component(),
+  );
+
+  assert.equal(impactOf(impacts, 'UPFRONT_COST').isUserSupplied, true);
+  assert.equal(impactOf(impacts, 'ANNUAL_SAVINGS').isUserSupplied, true);
+  assert.equal(impactOf(impacts, 'PAYBACK_PERIOD').isUserSupplied, true);
+  assert.equal(
+    impacts.some((impact) => impact.impactType === 'CUSTOM' && !impact.isUserSupplied),
+    false,
+    'heuristic scenarios must not emit a system-generated bottom-line summary',
+  );
+});
+
+test('explicit risk reduction is preserved only as a homeowner assumption', () => {
+  const { impacts } = computeImpacts(
+    'REPLACE_COMPONENT',
+    { componentType: 'HVAC', assumptions: { riskReductionPercent: 40 } },
+    component(),
+  );
+  const risk = impactOf(impacts, 'RISK_REDUCTION');
+
+  assert.equal(risk.valueNumeric, 40);
+  assert.equal(risk.isUserSupplied, true);
+  assert.match(risk.valueText, /your assumption/i);
+});
+
+test('energy scenarios without a savings baseline suppress savings and payback', () => {
+  const { impacts } = computeImpacts('ENERGY_IMPROVEMENT', { upfrontCost: 3500 }, null);
+
+  assert.equal(impactOf(impacts, 'ANNUAL_SAVINGS'), undefined);
+  assert.equal(impactOf(impacts, 'PAYBACK_PERIOD'), undefined);
+  assert.equal(impactOf(impacts, 'ENERGY_USE_CHANGE'), undefined);
 });
 
 test('PAYBACK_PERIOD is expressed as a range, not a single point, once there are savings', () => {

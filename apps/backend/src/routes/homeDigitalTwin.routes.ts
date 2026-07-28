@@ -7,7 +7,6 @@ import {
   initTwinBodySchema,
   createScenarioBodySchema,
   updateScenarioBodySchema,
-  confirmComponentBodySchema,
   scenarioDecisionBodySchema,
 } from '../validators/homeDigitalTwin.validators';
 import {
@@ -15,15 +14,16 @@ import {
   initTwin,
   refreshTwin,
   getFactReadiness,
-  confirmComponent,
   getRecommendedScenarios,
   listScenarios,
   createScenario,
   getScenario,
+  listScenarioRuns,
   updateScenario,
   computeScenario,
   getScenarioReadiness,
   compareScenarios,
+  ensureComparisonOptions,
   recordScenarioDecision,
   getScenarioHandoff,
   deleteScenario,
@@ -110,27 +110,6 @@ router.get(
   '/properties/:propertyId/home-digital-twin/fact-readiness',
   propertyAuthMiddleware,
   getFactReadiness,
-);
-
-/**
- * PATCH /api/properties/:propertyId/home-digital-twin/components/:componentId
- *
- * Confirms (or un-confirms) a component's currently derived values as
- * accurate. This is the "I reviewed this, it's correct" action — a
- * confirmed component is left untouched by future rebuilds. It is not a
- * value-correction API: to fix a wrong value, the homeowner still goes to
- * the canonical source (property edit, inventory, ...), which the
- * fact-readiness summary links to directly.
- *
- * Body:
- *   isUserConfirmed  boolean (required)
- */
-router.patch(
-  '/properties/:propertyId/home-digital-twin/components/:componentId',
-  propertyAuthMiddleware,
-  requireHouseholdRole('CONTRIBUTOR'),
-  validateBody(confirmComponentBodySchema),
-  confirmComponent,
 );
 
 // ============================================================================
@@ -276,6 +255,18 @@ router.get(
 );
 
 /**
+ * GET /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/runs
+ *
+ * Returns immutable computation inputs, source snapshots, model version, and
+ * output snapshots so historical results remain inspectable and reproducible.
+ */
+router.get(
+  '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/runs',
+  propertyAuthMiddleware,
+  listScenarioRuns,
+);
+
+/**
  * PATCH /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId
  *
  * Updates mutable metadata on a scenario.
@@ -339,6 +330,13 @@ router.get(
   '/properties/:propertyId/home-digital-twin/components/:componentId/scenarios/compare',
   propertyAuthMiddleware,
   compareScenarios,
+);
+
+router.post(
+  '/properties/:propertyId/home-digital-twin/components/:componentId/scenarios/options',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  ensureComparisonOptions,
 );
 
 // ============================================================================

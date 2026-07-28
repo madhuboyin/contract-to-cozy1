@@ -21,11 +21,12 @@
  * inferred date render as "known" (HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_
  * IMPLEMENTATION_PLAN.md HDT-001).
  *
- * Build operations are idempotent and transactional: existing non-user-
- * confirmed system-derived components are updated in place; confirmed ones
- * are left untouched; a mid-run failure rolls back rather than leaving a
- * partially-updated projection (see HomeDigitalTwinService, which relies on
- * this to preserve the last good projection).
+ * Build operations are idempotent and transactional: existing derived
+ * components are updated in place from their canonical sources; a mid-run
+ * failure rolls back rather than leaving a partially-updated projection
+ * (see HomeDigitalTwinService, which relies on this to preserve the last
+ * good projection). A projection-owned confirmation flag must never freeze
+ * canonical updates.
  */
 
 import {
@@ -137,11 +138,6 @@ function conditionFromAgeRatio(ageYears: number, usefulLifeYears: number): numbe
   return 0.15; // past useful life
 }
 
-/** Failure risk is inversely related to condition. */
-function failureRiskFromCondition(conditionScore: number): number {
-  return Math.round((1 - conditionScore) * 100) / 100;
-}
-
 /**
  * Simple confidence score based on how many known data points we have
  * relative to the max possible.
@@ -175,6 +171,8 @@ type ProjectedFactSpec = {
   sourceField?: string | null;
   observedAt?: Date | null;
   derivationMethod?: string | null;
+  modelVersion?: string;
+  sourceVerified?: boolean | null;
   confidenceScore?: number | null;
   conflictGroupId?: string | null;
   correctionDestination?: string | null;
@@ -420,6 +418,111 @@ type ComponentSpec = {
   facts: ProjectedFactSpec[];
 };
 
+const PROJECTION_MODEL_VERSION = 'home-projection-v2';
+
+/**
+ * Every value exposed on a projected component must have field-level lineage.
+ * Component builders provide the most specific canonical facts; this fills in
+ * the derived/default planning fields so downstream consumers never receive a
+ * value that has no source classification or derivation contract.
+ */
+function ensureCompleteFactLineage(spec: ComponentSpec): void {
+  const existing = new Set(spec.facts.map((fact) => fact.fieldName));
+  const installFact = spec.facts.find((fact) => fact.fieldName === 'installYear');
+  const derivedState: HomeTwinFactState =
+    installFact?.factState === 'CONFLICTED'
+      ? 'CONFLICTED'
+      : spec.estimatedAgeYears == null
+        ? 'UNKNOWN'
+        : 'INFERRED';
+
+  const add = (fact: ProjectedFactSpec) => {
+    if (!existing.has(fact.fieldName)) {
+      spec.facts.push({ modelVersion: PROJECTION_MODEL_VERSION, ...fact });
+      existing.add(fact.fieldName);
+    }
+  };
+
+  add({
+    fieldName: 'estimatedAgeYears',
+    valueNumeric: spec.estimatedAgeYears,
+    unit: 'YEARS',
+    factState: derivedState,
+    sourceType: installFact?.sourceType ?? 'SYSTEM_DERIVED',
+    sourceRecordType: installFact?.sourceRecordType,
+    sourceRecordId: installFact?.sourceRecordId,
+    sourceField: installFact?.fieldName,
+    observedAt: installFact?.observedAt,
+    derivationMethod: 'current_year_minus_install_year',
+    sourceVerified: installFact?.sourceVerified ?? false,
+    confidenceScore: installFact?.confidenceScore ?? 0.1,
+  });
+  add({
+    fieldName: 'usefulLifeYears',
+    valueNumeric: spec.usefulLifeYears,
+    unit: 'YEARS',
+    factState: 'DEFAULT',
+    sourceType: 'SYSTEM_DERIVED',
+    derivationMethod: `category_service_life_default:${spec.componentType}`,
+    sourceVerified: false,
+    confidenceScore: 0.35,
+  });
+  add({
+    fieldName: 'conditionScore',
+    valueNumeric: spec.conditionScore,
+    unit: 'RATIO',
+    factState: spec.conditionScore == null ? 'UNKNOWN' : derivedState,
+    sourceType: 'SYSTEM_DERIVED',
+    sourceRecordType: installFact?.sourceRecordType,
+    sourceRecordId: installFact?.sourceRecordId,
+    sourceField: 'estimatedAgeYears,usefulLifeYears',
+    observedAt: installFact?.observedAt,
+    derivationMethod: 'age_service_life_planning_bucket_not_physical_condition',
+    sourceVerified: false,
+    confidenceScore: Math.min(installFact?.confidenceScore ?? 0.1, 0.4),
+  });
+  add({
+    fieldName: 'replacementCostEstimate',
+    valueNumeric: spec.replacementCostEstimate,
+    unit: 'USD',
+    factState: 'DEFAULT',
+    sourceType: 'SYSTEM_DERIVED',
+    derivationMethod: `category_replacement_cost_default:${spec.componentType}`,
+    sourceVerified: false,
+    confidenceScore: 0.25,
+  });
+  add({
+    fieldName: 'annualOperatingCostEstimate',
+    valueNumeric: spec.annualOperatingCostEstimate,
+    unit: 'USD_PER_YEAR',
+    factState: 'DEFAULT',
+    sourceType: 'SYSTEM_DERIVED',
+    derivationMethod: `category_operating_cost_default:${spec.componentType}`,
+    sourceVerified: false,
+    confidenceScore: 0.25,
+  });
+  add({
+    fieldName: 'annualMaintenanceCostEstimate',
+    valueNumeric: spec.annualMaintenanceCostEstimate,
+    unit: 'USD_PER_YEAR',
+    factState: 'DEFAULT',
+    sourceType: 'SYSTEM_DERIVED',
+    derivationMethod: `category_maintenance_cost_default:${spec.componentType}`,
+    sourceVerified: false,
+    confidenceScore: 0.25,
+  });
+  add({
+    fieldName: 'confidenceScore',
+    valueNumeric: spec.confidenceScore,
+    unit: 'RATIO',
+    factState: 'INFERRED',
+    sourceType: 'SYSTEM_DERIVED',
+    derivationMethod: 'known_points_ratio_v1',
+    sourceVerified: false,
+    confidenceScore: 0.5,
+  });
+}
+
 type PropertyRow = {
   yearBuilt: number | null;
   propertySize: number | null;
@@ -586,7 +689,7 @@ export class HomeDigitalTwinBuilderService {
   ): Promise<string> {
     const existing = await tx.homeTwinComponent.findUnique({
       where: { digitalTwinId_identityKey: { digitalTwinId, identityKey: spec.identityKey } },
-      select: { id: true, isUserConfirmed: true },
+      select: { id: true },
     });
 
     const sharedFields = {
@@ -601,7 +704,10 @@ export class HomeDigitalTwinBuilderService {
       estimatedAgeYears: spec.estimatedAgeYears,
       usefulLifeYears: spec.usefulLifeYears,
       conditionScore: spec.conditionScore,
-      failureRiskScore: spec.failureRiskScore,
+      // Age/service-life heuristics are planning signals, not calibrated
+      // failure probabilities. Keep the legacy column empty until a
+      // validated evidence model exists.
+      failureRiskScore: null,
       replacementCostEstimate: toDecimal(spec.replacementCostEstimate),
       annualOperatingCostEstimate: toDecimal(spec.annualOperatingCostEstimate),
       annualMaintenanceCostEstimate: toDecimal(spec.annualMaintenanceCostEstimate),
@@ -610,14 +716,13 @@ export class HomeDigitalTwinBuilderService {
       lastModeledAt: new Date(),
     };
 
-    // Homeowner-confirmed components are left untouched — the whole point of
-    // confirmation is that the system stops overwriting it on every rebuild.
-    if (existing?.isUserConfirmed) {
-      return existing.id;
-    }
-
     const componentId = existing
-      ? (await tx.homeTwinComponent.update({ where: { id: existing.id }, data: sharedFields })).id
+      ? (
+          await tx.homeTwinComponent.update({
+            where: { id: existing.id },
+            data: { ...sharedFields, isUserConfirmed: false },
+          })
+        ).id
       : (
           await tx.homeTwinComponent.create({
             data: {
@@ -657,6 +762,8 @@ export class HomeDigitalTwinBuilderService {
           sourceField: fact.sourceField ?? null,
           observedAt: fact.observedAt ?? null,
           derivationMethod: fact.derivationMethod ?? null,
+          modelVersion: fact.modelVersion ?? PROJECTION_MODEL_VERSION,
+          sourceVerified: fact.sourceVerified ?? null,
           confidenceScore: fact.confidenceScore ?? null,
           conflictGroupId: fact.conflictGroupId ?? null,
           correctionDestination: fact.correctionDestination ?? null,
@@ -672,6 +779,8 @@ export class HomeDigitalTwinBuilderService {
           sourceField: fact.sourceField ?? null,
           observedAt: fact.observedAt ?? null,
           derivationMethod: fact.derivationMethod ?? null,
+          modelVersion: fact.modelVersion ?? PROJECTION_MODEL_VERSION,
+          sourceVerified: fact.sourceVerified ?? null,
           confidenceScore: fact.confidenceScore ?? null,
           conflictGroupId: fact.conflictGroupId ?? null,
           correctionDestination: fact.correctionDestination ?? null,
@@ -695,11 +804,11 @@ export class HomeDigitalTwinBuilderService {
     const currentKeys = new Set(specs.map((s) => s.identityKey));
     const activeComponents = await tx.homeTwinComponent.findMany({
       where: { digitalTwinId, lifecycleState: 'ACTIVE' },
-      select: { id: true, identityKey: true, isUserConfirmed: true },
+      select: { id: true, identityKey: true },
     });
 
     const orphaned = activeComponents.filter(
-      (c) => !currentKeys.has(c.identityKey) && !upsertedIds.has(c.id) && !c.isUserConfirmed,
+      (c) => !currentKeys.has(c.identityKey) && !upsertedIds.has(c.id),
     );
     if (orphaned.length === 0) return;
 
@@ -788,7 +897,7 @@ export class HomeDigitalTwinBuilderService {
           estimatedAgeYears: age,
           usefulLifeYears: defaults.usefulLifeYears,
           conditionScore: condition,
-          failureRiskScore: condition != null ? failureRiskFromCondition(condition) : null,
+          failureRiskScore: null,
           replacementCostEstimate: cost.value,
           annualOperatingCostEstimate: defaults.annualOperatingCost,
           annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
@@ -873,7 +982,7 @@ export class HomeDigitalTwinBuilderService {
           estimatedAgeYears: age,
           usefulLifeYears: whConfig.usefulLifeYears,
           conditionScore: condition,
-          failureRiskScore: condition != null ? failureRiskFromCondition(condition) : null,
+          failureRiskScore: null,
           replacementCostEstimate: cost.value,
           annualOperatingCostEstimate: defaults.annualOperatingCost,
           annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
@@ -906,191 +1015,203 @@ export class HomeDigitalTwinBuilderService {
     // ── ROOF ──────────────────────────────────────────────────────────────────
     {
       const defaults = COMPONENT_DEFAULTS.ROOF;
-      const resolved = resolveInstallYear({
-        reportedYear: property.roofReplacementYear,
-        reportedSourceField: 'roofReplacementYear',
-        inventoryItem: undefined,
-        inferredYear: property.yearBuilt ?? null,
-        inferredMethod: 'year_built_direct',
-        inferredNote: 'Age estimated from year built (original roof assumed)',
-        yr,
-      });
-      // Roof replacement year is a dedicated, explicit profile field —
-      // reclassify as VERIFIED-strength REPORTED rather than the generic
-      // property-profile path used by systems without a dedicated field.
-      if (resolved.fact.factState === 'REPORTED') {
-        resolved.fact.confidenceScore = 0.75;
+      const roofInventory = inventoryItems.filter(
+        (item) =>
+          item.category === 'ROOF_EXTERIOR' &&
+          /\b(roof|shingle|membrane)\b/i.test(item.name),
+      );
+
+      const buildRoofSpec = (
+        identityKey: string,
+        label: string,
+        item: InventoryItemRow | undefined,
+        useReportedYear: boolean,
+      ): ComponentSpec => {
+        const resolved = resolveInstallYear({
+          reportedYear: useReportedYear ? property.roofReplacementYear : null,
+          reportedSourceField: 'roofReplacementYear',
+          inventoryItem: item,
+          inferredYear: property.yearBuilt ?? null,
+          inferredMethod: 'year_built_direct',
+          inferredNote: 'Age estimated from year built (original roof assumed)',
+          yr,
+        });
+        if (resolved.fact.factState === 'REPORTED') resolved.fact.confidenceScore = 0.75;
+        const age = ageFromInstallYear(resolved.installYear);
+        const cost = replacementCostFact({
+          reportedCents: item?.replacementCostCents,
+          scaledValue: scaledRoofCost(property.propertySize, property.roofType),
+          scaledMethod: 'sqft_and_material_scaled',
+        });
+        let knownPoints = resolved.isKnownSource ? 1 : 0;
+        if (property.roofType) knownPoints++;
+        if (riskReport) knownPoints++;
+        return {
+          identityKey,
+          componentType: 'ROOF',
+          label,
+          status: statusFromResolution(resolved),
+          sourceType: resolved.sourceType,
+          sourceReferenceId: resolved.sourceReferenceId,
+          installYear: resolved.installYear,
+          estimatedAgeYears: age,
+          usefulLifeYears: defaults.usefulLifeYears,
+          conditionScore: age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null,
+          failureRiskScore: null,
+          replacementCostEstimate: cost.value,
+          annualOperatingCostEstimate: defaults.annualOperatingCost,
+          annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
+          confidenceScore: deriveConfidence(knownPoints, 3),
+          metadata: {
+            roofType: property.roofType,
+            propertySizeSqft: property.propertySize,
+            inventoryItemId: item?.id ?? null,
+            dataSourceNote: resolved.dataSourceNote,
+          },
+          facts: [resolved.fact, cost.fact],
+        };
+      };
+
+      if (roofInventory.length > 0) {
+        roofInventory.forEach((item, index) => specs.push(buildRoofSpec(
+          `ROOF:${item.id}`,
+          roofInventory.length > 1 ? `Roof ${index + 1} (${item.name})` : 'Roof',
+          item,
+          roofInventory.length === 1,
+        )));
+      } else {
+        specs.push(buildRoofSpec('ROOF:PRIMARY', 'Roof', undefined, true));
       }
-
-      let knownPoints = resolved.isKnownSource ? 1 : 0;
-      if (property.roofType) knownPoints++;
-      if (riskReport) knownPoints++;
-
-      const age = ageFromInstallYear(resolved.installYear);
-      const condition = age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null;
-
-      // Boost failure risk from risk report if high overall risk
-      let failureRisk = condition != null ? failureRiskFromCondition(condition) : null;
-      if (failureRisk != null && riskReport && riskReport.riskScore > 70) {
-        failureRisk = Math.min(1, failureRisk * 1.15);
-      }
-
-      const cost = replacementCostFact({
-        reportedCents: null,
-        scaledValue: scaledRoofCost(property.propertySize, property.roofType),
-        scaledMethod: 'sqft_and_material_scaled',
-      });
-
-      specs.push({
-        identityKey: 'ROOF:PRIMARY',
-        componentType: 'ROOF',
-        label: 'Roof',
-        status: statusFromResolution(resolved),
-        sourceType: resolved.sourceType,
-        sourceReferenceId: resolved.sourceReferenceId,
-        installYear: resolved.installYear,
-        estimatedAgeYears: age,
-        usefulLifeYears: defaults.usefulLifeYears,
-        conditionScore: condition,
-        failureRiskScore: failureRisk,
-        replacementCostEstimate: cost.value,
-        annualOperatingCostEstimate: defaults.annualOperatingCost,
-        annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
-        confidenceScore: deriveConfidence(knownPoints, 3),
-        metadata: {
-          roofType: property.roofType,
-          propertySizeSqft: property.propertySize,
-          dataSourceNote: resolved.dataSourceNote,
-        },
-        facts: [resolved.fact, cost.fact],
-      });
     }
 
     // ── ELECTRICAL ────────────────────────────────────────────────────────────
     {
       const defaults = COMPONENT_DEFAULTS.ELECTRICAL;
       const electricalInventory = inventoryItems.filter((i) => i.category === 'ELECTRICAL');
+      const buildElectricalSpec = (
+        identityKey: string,
+        label: string,
+        item: InventoryItemRow | undefined,
+        useReportedAge: boolean,
+      ): ComponentSpec => {
+        const reportedYear = useReportedAge && property.electricalPanelAge != null
+          ? yr - property.electricalPanelAge
+          : null;
+        const resolved = resolveInstallYear({
+          reportedYear,
+          reportedSourceField: 'electricalPanelAge',
+          inventoryItem: item,
+          inferredYear: property.yearBuilt ?? null,
+          inferredMethod: 'year_built_direct',
+          inferredNote: 'Age estimated from year built (original electrical system assumed)',
+          yr,
+        });
+        const age = ageFromInstallYear(resolved.installYear);
+        const cost = replacementCostFact({
+          reportedCents: item?.replacementCostCents,
+          scaledValue: defaults.replacementCost,
+          scaledMethod: 'category_default',
+        });
+        return {
+          identityKey,
+          componentType: 'ELECTRICAL',
+          label,
+          status: statusFromResolution(resolved),
+          sourceType: resolved.sourceType,
+          sourceReferenceId: resolved.sourceReferenceId,
+          installYear: resolved.installYear,
+          estimatedAgeYears: age,
+          usefulLifeYears: defaults.usefulLifeYears,
+          conditionScore: age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null,
+          failureRiskScore: null,
+          replacementCostEstimate: cost.value,
+          annualOperatingCostEstimate: defaults.annualOperatingCost,
+          annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
+          confidenceScore: deriveConfidence(
+            (resolved.isKnownSource ? 1 : 0) + (item?.replacementCostCents ? 1 : 0),
+            2,
+          ),
+          metadata: {
+            electricalPanelAge: useReportedAge ? property.electricalPanelAge : null,
+            inventoryItemId: item?.id ?? null,
+            dataSourceNote: resolved.dataSourceNote,
+          },
+          facts: [resolved.fact, cost.fact],
+        };
+      };
 
-      const isKnownSource = property.electricalPanelAge != null;
-      const installYear = isKnownSource
-        ? yr - (property.electricalPanelAge as number)
-        : property.yearBuilt ?? null;
-
-      const installYearFact: ProjectedFactSpec = isKnownSource
-        ? {
-            fieldName: 'installYear',
-            valueNumeric: installYear,
-            factState: 'REPORTED',
-            sourceType: 'PROPERTY_PROFILE',
-            sourceRecordType: 'Property',
-            sourceField: 'electricalPanelAge',
-            derivationMethod: 'direct',
-            confidenceScore: 0.7,
-          }
-        : installYear
-          ? {
-              fieldName: 'installYear',
-              valueNumeric: installYear,
-              factState: 'INFERRED',
-              sourceType: 'SYSTEM_DERIVED',
-              sourceRecordType: 'Property',
-              sourceField: 'yearBuilt',
-              derivationMethod: 'year_built_direct',
-              confidenceScore: 0.25,
-            }
-          : {
-              fieldName: 'installYear',
-              valueNumeric: null,
-              factState: 'DEFAULT',
-              sourceType: 'SYSTEM_DERIVED',
-              derivationMethod: 'category_default',
-              confidenceScore: 0.1,
-            };
-
-      let knownPoints = isKnownSource ? 1 : 0;
-      if (electricalInventory.length > 0) knownPoints++;
-
-      const age = ageFromInstallYear(installYear);
-      const condition = age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null;
-
-      specs.push({
-        identityKey: 'ELECTRICAL:PRIMARY',
-        componentType: 'ELECTRICAL',
-        label: 'Electrical System',
-        status: isKnownSource ? 'KNOWN' : 'ESTIMATED',
-        sourceType: isKnownSource ? 'PROPERTY_PROFILE' : 'SYSTEM_DERIVED',
-        sourceReferenceId: null,
-        installYear,
-        estimatedAgeYears: age,
-        usefulLifeYears: defaults.usefulLifeYears,
-        conditionScore: condition,
-        failureRiskScore: condition != null ? failureRiskFromCondition(condition) : null,
-        replacementCostEstimate: defaults.replacementCost,
-        annualOperatingCostEstimate: defaults.annualOperatingCost,
-        annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
-        confidenceScore: deriveConfidence(knownPoints, 2),
-        metadata: {
-          electricalPanelAge: property.electricalPanelAge,
-          inventoryItemCount: electricalInventory.length,
-        },
-        facts: [installYearFact],
-      });
+      if (electricalInventory.length > 0) {
+        electricalInventory.forEach((item, index) => specs.push(buildElectricalSpec(
+          `ELECTRICAL:${item.id}`,
+          electricalInventory.length > 1 ? `Electrical Panel ${index + 1} (${item.name})` : 'Electrical System',
+          item,
+          electricalInventory.length === 1,
+        )));
+      } else {
+        specs.push(buildElectricalSpec('ELECTRICAL:PRIMARY', 'Electrical System', undefined, true));
+      }
     }
 
     // ── PLUMBING ──────────────────────────────────────────────────────────────
     {
       const defaults = COMPONENT_DEFAULTS.PLUMBING;
       const plumbingInventory = inventoryItems.filter((i) => i.category === 'PLUMBING');
+      const buildPlumbingSpec = (
+        identityKey: string,
+        label: string,
+        item?: InventoryItemRow,
+      ): ComponentSpec => {
+        const resolved = resolveInstallYear({
+          reportedYear: null,
+          reportedSourceField: 'installedOn',
+          inventoryItem: item,
+          inferredYear: property.yearBuilt ?? null,
+          inferredMethod: 'year_built_direct',
+          inferredNote: 'Age estimated from year built (original plumbing assumed)',
+          yr,
+        });
+        const age = ageFromInstallYear(resolved.installYear);
+        const cost = replacementCostFact({
+          reportedCents: item?.replacementCostCents,
+          scaledValue: defaults.replacementCost,
+          scaledMethod: 'category_default',
+        });
+        return {
+          identityKey,
+          componentType: 'PLUMBING',
+          label,
+          status: statusFromResolution(resolved),
+          sourceType: resolved.sourceType,
+          sourceReferenceId: resolved.sourceReferenceId,
+          installYear: resolved.installYear,
+          estimatedAgeYears: age,
+          usefulLifeYears: defaults.usefulLifeYears,
+          conditionScore: age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null,
+          failureRiskScore: null,
+          replacementCostEstimate: cost.value,
+          annualOperatingCostEstimate: defaults.annualOperatingCost,
+          annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
+          confidenceScore: deriveConfidence(
+            (resolved.isKnownSource ? 1 : 0) + (item?.replacementCostCents ? 1 : 0),
+            2,
+          ),
+          metadata: {
+            inventoryItemId: item?.id ?? null,
+            dataSourceNote: resolved.dataSourceNote,
+          },
+          facts: [resolved.fact, cost.fact],
+        };
+      };
 
-      const installYear = property.yearBuilt ?? null;
-      let knownPoints = 0;
-      if (plumbingInventory.length > 0) knownPoints++;
-      if (property.yearBuilt) knownPoints++;
-
-      const age = ageFromInstallYear(installYear);
-      const condition = age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null;
-
-      specs.push({
-        identityKey: 'PLUMBING:PRIMARY',
-        componentType: 'PLUMBING',
-        label: 'Plumbing',
-        status: 'ESTIMATED',
-        sourceType: plumbingInventory.length > 0 ? 'INVENTORY' : 'SYSTEM_DERIVED',
-        sourceReferenceId: null,
-        installYear,
-        estimatedAgeYears: age,
-        usefulLifeYears: defaults.usefulLifeYears,
-        conditionScore: condition,
-        failureRiskScore: condition != null ? failureRiskFromCondition(condition) : null,
-        replacementCostEstimate: defaults.replacementCost,
-        annualOperatingCostEstimate: defaults.annualOperatingCost,
-        annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
-        confidenceScore: deriveConfidence(knownPoints, 3),
-        metadata: {
-          inventoryItemCount: plumbingInventory.length,
-        },
-        facts: [
-          installYear
-            ? {
-                fieldName: 'installYear',
-                valueNumeric: installYear,
-                factState: 'INFERRED',
-                sourceType: 'SYSTEM_DERIVED',
-                sourceRecordType: 'Property',
-                sourceField: 'yearBuilt',
-                derivationMethod: 'year_built_direct',
-                confidenceScore: 0.2,
-              }
-            : {
-                fieldName: 'installYear',
-                valueNumeric: null,
-                factState: 'DEFAULT',
-                sourceType: 'SYSTEM_DERIVED',
-                derivationMethod: 'category_default',
-                confidenceScore: 0.1,
-              },
-        ],
-      });
+      if (plumbingInventory.length > 0) {
+        plumbingInventory.forEach((item, index) => specs.push(buildPlumbingSpec(
+          `PLUMBING:${item.id}`,
+          plumbingInventory.length > 1 ? `Plumbing System ${index + 1} (${item.name})` : 'Plumbing',
+          item,
+        )));
+      } else {
+        specs.push(buildPlumbingSpec('PLUMBING:PRIMARY', 'Plumbing'));
+      }
     }
 
     // ── FOUNDATION ────────────────────────────────────────────────────────────
@@ -1112,7 +1233,7 @@ export class HomeDigitalTwinBuilderService {
         estimatedAgeYears: age,
         usefulLifeYears: defaults.usefulLifeYears,
         conditionScore: condition,
-        failureRiskScore: condition != null ? failureRiskFromCondition(condition) : null,
+        failureRiskScore: null,
         replacementCostEstimate: defaults.replacementCost,
         annualOperatingCostEstimate: defaults.annualOperatingCost,
         annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
@@ -1167,7 +1288,7 @@ export class HomeDigitalTwinBuilderService {
         estimatedAgeYears: age,
         usefulLifeYears: defaults.usefulLifeYears,
         conditionScore: condition,
-        failureRiskScore: condition != null ? failureRiskFromCondition(condition) : null,
+        failureRiskScore: null,
         replacementCostEstimate: defaults.replacementCost,
         annualOperatingCostEstimate: defaults.annualOperatingCost,
         annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
@@ -1240,7 +1361,7 @@ export class HomeDigitalTwinBuilderService {
           estimatedAgeYears: age,
           usefulLifeYears: defaults.usefulLifeYears,
           conditionScore: condition,
-          failureRiskScore: condition != null ? failureRiskFromCondition(condition) : null,
+          failureRiskScore: null,
           replacementCostEstimate: cost.value,
           annualOperatingCostEstimate: defaults.annualOperatingCost,
           annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
@@ -1256,6 +1377,12 @@ export class HomeDigitalTwinBuilderService {
     }
 
     for (const spec of specs) {
+      for (const fact of spec.facts) {
+        fact.modelVersion ??= PROJECTION_MODEL_VERSION;
+        fact.sourceVerified ??=
+          fact.factState === 'VERIFIED' || fact.factState === 'DOCUMENT_DERIVED';
+      }
+      ensureCompleteFactLineage(spec);
       for (const fact of spec.facts) {
         fact.correctionDestination = correctionDestinationFor(spec.componentType, fact, propertyId);
       }

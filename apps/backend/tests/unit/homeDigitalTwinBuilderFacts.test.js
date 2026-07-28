@@ -88,6 +88,26 @@ test('with no signal at all, install year fact is DEFAULT, not silently INFERRED
   assert.equal(installFact.factState, 'DEFAULT');
 });
 
+test('age and service-life depletion never produce a failure probability', () => {
+  const property = baseProperty({
+    yearBuilt: 1980,
+    hvacInstallYear: 2000,
+    waterHeaterInstallYear: 2005,
+    roofReplacementYear: 1995,
+    electricalPanelAge: 45,
+  });
+  const specs = builder.deriveSpecs(property, [], { riskScore: 95, details: {}, lastCalculatedAt: new Date() }, 'property-1');
+
+  assert.ok(specs.length > 0);
+  for (const spec of specs) {
+    assert.equal(
+      spec.failureRiskScore,
+      null,
+      `${spec.identityKey} must not translate age or aggregate property risk into failure probability`,
+    );
+  }
+});
+
 // HDT-009: multiple real systems of the same type must become distinct
 // components with stable per-item identity, not collapse into one.
 test('multiple HVAC inventory items become distinct components with stable identityKeys', () => {
@@ -121,12 +141,53 @@ test('a single HVAC inventory item still allows the profile install year to appl
   assert.equal(hvacSpecs[0].installYear, 2018);
 });
 
-test('roof and electrical keep single-instance PRIMARY identity', () => {
+test('roof and electrical use PRIMARY identity when no canonical item exists', () => {
   const property = baseProperty({ roofReplacementYear: 2010, electricalPanelAge: 5 });
   const specs = builder.deriveSpecs(property, [], null, 'property-1');
 
   assert.ok(specFor(specs, 'ROOF:PRIMARY'));
   assert.ok(specFor(specs, 'ELECTRICAL:PRIMARY'));
+});
+
+test('multiple roofs and electrical panels preserve stable inventory identities', () => {
+  const property = baseProperty({ roofReplacementYear: 2010, electricalPanelAge: 5 });
+  const items = [
+    inventoryItem({ id: 'roof-a', name: 'Main roof shingles', category: 'ROOF_EXTERIOR' }),
+    inventoryItem({ id: 'roof-b', name: 'Garage roof membrane', category: 'ROOF_EXTERIOR' }),
+    inventoryItem({ id: 'panel-a', name: 'Main panel', category: 'ELECTRICAL' }),
+    inventoryItem({ id: 'panel-b', name: 'Garage subpanel', category: 'ELECTRICAL' }),
+  ];
+  const specs = builder.deriveSpecs(property, items, null, 'property-1');
+
+  assert.deepEqual(
+    specs.filter((s) => s.componentType === 'ROOF').map((s) => s.identityKey).sort(),
+    ['ROOF:roof-a', 'ROOF:roof-b'],
+  );
+  assert.deepEqual(
+    specs.filter((s) => s.componentType === 'ELECTRICAL').map((s) => s.identityKey).sort(),
+    ['ELECTRICAL:panel-a', 'ELECTRICAL:panel-b'],
+  );
+});
+
+test('every modeled output has versioned field-level lineage', () => {
+  const specs = builder.deriveSpecs(baseProperty({ yearBuilt: 2000 }), [], null, 'property-1');
+  const expected = [
+    'estimatedAgeYears',
+    'usefulLifeYears',
+    'conditionScore',
+    'replacementCostEstimate',
+    'annualOperatingCostEstimate',
+    'annualMaintenanceCostEstimate',
+    'confidenceScore',
+  ];
+  for (const spec of specs) {
+    for (const fieldName of expected) {
+      const fact = spec.facts.find((candidate) => candidate.fieldName === fieldName);
+      assert.ok(fact, `${spec.identityKey} is missing lineage for ${fieldName}`);
+      assert.equal(fact.modelVersion, 'home-projection-v2');
+      assert.equal(typeof fact.derivationMethod, 'string');
+    }
+  }
 });
 
 test('disagreeing property-profile and inventory install years are CONFLICTED, not silently resolved', () => {

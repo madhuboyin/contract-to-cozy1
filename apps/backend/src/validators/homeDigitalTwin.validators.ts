@@ -16,14 +16,6 @@ export const initTwinBodySchema = z.object({
 });
 
 // ============================================================================
-// COMPONENT CONFIRMATION
-// ============================================================================
-
-export const confirmComponentBodySchema = z.object({
-  isUserConfirmed: z.boolean(),
-});
-
-// ============================================================================
 // SCENARIO LIST QUERY
 // ============================================================================
 
@@ -43,8 +35,9 @@ export const listScenariosQuerySchema = z.object({
 
 /**
  * REPLACE_COMPONENT / UPGRADE_COMPONENT
- * Accepts either replacementCost or projectCost (alias).
- * riskReductionPercent is supported explicitly (e.g. new roof → 55% risk drop).
+ * Accepts either replacementCost or projectCost (alias). Any supplied risk
+ * reduction remains a homeowner planning assumption; the compute engine does
+ * not derive it from component age or condition.
  */
 const replaceOrUpgradePayloadSchema = z.object({
   componentType: z.nativeEnum(HomeTwinComponentType),
@@ -91,11 +84,12 @@ const waitMonitorPayloadSchema = z.object({
 
 /**
  * ENERGY_IMPROVEMENT (insulation / windows / solar)
- * upfrontCost + energySavingsPerYear are the primary inputs.
+ * Savings are optional: without a utility baseline or homeowner estimate the
+ * engine must suppress savings/payback instead of fabricating a point claim.
  */
 const energyImprovementPayloadSchema = z.object({
   upfrontCost:                   z.number().nonnegative(),
-  energySavingsPerYear:          z.number().nonnegative(),
+  energySavingsPerYear:          z.number().nonnegative().optional(),
   carbonOffsetTonsCO2PerYear:    z.number().nonnegative().optional(),
   comfortImpactDescription:      z.string().max(500).optional(),
   resilienceImpactDescription:   z.string().max(500).optional(),
@@ -160,7 +154,7 @@ const customPayloadSchema = z
 // PAYLOAD SCHEMA RESOLVER
 // ============================================================================
 
-function payloadSchemaFor(
+export function payloadSchemaFor(
   scenarioType: HomeTwinScenarioType,
 ): z.ZodTypeAny {
   switch (scenarioType) {
@@ -235,10 +229,16 @@ export const updateScenarioBodySchema = z
     isArchived:  z.boolean().optional(),
     name:        z.string().min(1).max(255).optional(),
     description: z.string().max(1000).optional().nullable(),
+    inputPayload: z.record(z.string(), z.unknown()).optional(),
   })
   .refine(
-    (d) => d.isPinned !== undefined || d.isArchived !== undefined || d.name !== undefined || d.description !== undefined,
-    { message: 'At least one of isPinned, isArchived, name, or description must be provided' },
+    (d) =>
+      d.isPinned !== undefined ||
+      d.isArchived !== undefined ||
+      d.name !== undefined ||
+      d.description !== undefined ||
+      d.inputPayload !== undefined,
+    { message: 'At least one editable field must be provided' },
   );
 
 // ============================================================================

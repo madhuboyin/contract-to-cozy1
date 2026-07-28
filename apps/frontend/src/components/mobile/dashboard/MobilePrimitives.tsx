@@ -577,14 +577,16 @@ export function MobilePageIntro({
   eyebrow,
   action,
   className,
+  showOnDesktop = false,
 }: {
   title: string;
   subtitle?: string;
   eyebrow?: string;
   action?: React.ReactNode;
   className?: string;
+  showOnDesktop?: boolean;
 }) {
-  const hideOnDesktop = eyebrow === 'Home tool' || eyebrow === 'Home tools';
+  const hideOnDesktop = !showOnDesktop && (eyebrow === 'Home tool' || eyebrow === 'Home tools');
 
   return (
     <MobileSection className={cn('space-y-2', hideOnDesktop && 'lg:hidden', className)}>

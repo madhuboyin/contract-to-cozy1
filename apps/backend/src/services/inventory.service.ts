@@ -17,6 +17,7 @@ import { assertSafeUrl } from '../utils/ssrfGuard';
 import { logger } from '../lib/logger';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { buildInventoryCoveragePresentation } from './inventoryCoverageState.service';
+import JobQueueService from './JobQueue.service';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -440,6 +441,10 @@ export class InventoryService {
     } catch (e: any) {
       logger.error({ err: e }, '[HOME_EVENTS_AUTOGEN] onInventoryItemCreated failed');
     }
+    JobQueueService.enqueueHomeDigitalTwinRefresh(
+      propertyId,
+      'Inventory changed; the home projection is being refreshed.',
+    ).catch((err) => logger.error({ err }, '[INVENTORY_CREATE] Twin refresh enqueue failed'));
   
     return created;
   }
@@ -575,6 +580,10 @@ export class InventoryService {
         logger.error({ err }, '[INVENTORY_UPDATE] Maintenance forecast generation failed (non-blocking)');
       });
     }
+    JobQueueService.enqueueHomeDigitalTwinRefresh(
+      propertyId,
+      'Inventory changed; the home projection is being refreshed.',
+    ).catch((err) => logger.error({ err }, '[INVENTORY_UPDATE] Twin refresh enqueue failed'));
 
     return updated;
   }
@@ -624,6 +633,10 @@ export class InventoryService {
     });
 
     await prisma.inventoryItem.delete({ where: { id: itemId } });
+    JobQueueService.enqueueHomeDigitalTwinRefresh(
+      propertyId,
+      'Inventory changed; the home projection is being refreshed.',
+    ).catch((err) => logger.error({ err }, '[INVENTORY_DELETE] Twin refresh enqueue failed'));
   }
 
   // ---------------- Document linking ----------------
