@@ -115,6 +115,8 @@ export type RiskPremiumOptimizationDTO = {
     linkedHomeEventId?: string | null;
     completedAt?: string | null;
   }>;
+  planRebuildRequired?: boolean;
+  suppressedPlanItemCount?: number;
   computedAt: string;
   observedPremiumComparison?: {
     hasCompletedMitigations: boolean;
@@ -317,12 +319,36 @@ function toPercent(value: number | null): number | null {
   return value <= 1 ? Math.round(value * 100) : value;
 }
 
+const PROFESSIONAL_HELP_LEVELS = new Set([
+  'DIY_ALLOWED',
+  'PROFESSIONAL_RECOMMENDED',
+  'QUALIFIED_PROFESSIONAL_REQUIRED',
+  'ASK_CARRIER',
+]);
+const HANDOFF_KINDS = new Set(['DIY', 'PROVIDER', 'CARRIER']);
+
+function hasGovernedPlanGuidance(item: RiskMitigationPlanItem): boolean {
+  if (!item.carrierReviewQuestion?.trim()) return false;
+  if (!item.professionalHelpLevel || !PROFESSIONAL_HELP_LEVELS.has(item.professionalHelpLevel)) {
+    return false;
+  }
+  if (!item.handoffJson || typeof item.handoffJson !== 'object' || Array.isArray(item.handoffJson)) {
+    return false;
+  }
+  const handoff = item.handoffJson as Record<string, unknown>;
+  return HANDOFF_KINDS.has(String(handoff.kind))
+    && typeof handoff.label === 'string'
+    && handoff.label.trim().length > 0
+    && typeof handoff.href === 'string'
+    && handoff.href.trim().length > 0
+    && typeof handoff.safetyNote === 'string'
+    && handoff.safetyNote.trim().length > 0;
+}
+
 function mapPlanItemToDto(item: RiskMitigationPlanItem): RiskPremiumOptimizationDTO['planItems'][number] {
-  const legacyHelp = mitigationHandoff(
-    item.propertyId,
-    item.actionType,
-    item.title ?? item.actionType.toLowerCase().replace(/_/g, ' ')
-  );
+  if (!hasGovernedPlanGuidance(item)) {
+    throw new Error(`Risk mitigation plan item ${item.id} is missing governed guidance.`);
+  }
   return {
     id: item.id,
     actionType: item.actionType,
@@ -333,15 +359,10 @@ function mapPlanItemToDto(item: RiskMitigationPlanItem): RiskPremiumOptimization
     why: item.why,
     estimatedCost: asNumber(item.estimatedCost) ?? null,
     carrierBenefitStatus: item.carrierBenefitStatus as RiskPremiumOptimizationDTO['planItems'][number]['carrierBenefitStatus'],
-    carrierReviewQuestion:
-      item.carrierReviewQuestion ??
-      `Ask your carrier whether documented ${(item.title ?? 'loss-prevention work').toLowerCase()} affects eligibility or a policy-specific discount.`,
+    carrierReviewQuestion: item.carrierReviewQuestion as string,
     professionalHelpLevel:
-      (item.professionalHelpLevel as RiskPremiumOptimizationDTO['planItems'][number]['professionalHelpLevel'] | null) ??
-      legacyHelp.professionalHelpLevel,
-    handoff:
-      (item.handoffJson as RiskPremiumOptimizationDTO['planItems'][number]['handoff'] | null) ??
-      (legacyHelp.handoff as RiskPremiumOptimizationDTO['planItems'][number]['handoff']),
+      item.professionalHelpLevel as RiskPremiumOptimizationDTO['planItems'][number]['professionalHelpLevel'],
+    handoff: item.handoffJson as RiskPremiumOptimizationDTO['planItems'][number]['handoff'],
     evidenceDocumentId: item.evidenceDocumentId ?? null,
     linkedHomeEventId: item.linkedHomeEventId ?? null,
     completedAt: item.completedAt ? item.completedAt.toISOString() : null,
@@ -356,6 +377,8 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
   });
   const sharedMeta = parseSharedMetaFromSnapshot(record.inputsSnapshot);
   const observedPremiumComparison = parseMitigationVerificationFromSnapshot(record.inputsSnapshot);
+  const governedPlanItems = planItems.filter(hasGovernedPlanGuidance);
+  const suppressedPlanItemCount = planItems.length - governedPlanItems.length;
 
   return {
     id: record.id,
@@ -364,7 +387,7 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     assumptionSetId: record.assumptionSetId ?? null,
     preferenceProfileId: sharedMeta.preferenceProfileId,
     sharedSignalsUsed: sharedMeta.sharedSignalsUsed,
-    status: record.status,
+    status: suppressedPlanItemCount > 0 ? 'STALE' : record.status,
     confidence: record.confidence,
     summary: record.summary ?? undefined,
     coverageReviewId: record.coverageReviewId ?? null,
@@ -373,7 +396,9 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     recommendations: safeArray<RiskPremiumOptimizationDTO['recommendations'][number]>(
       record.recommendations
     ),
-    planItems: planItems.map(mapPlanItemToDto),
+    planItems: governedPlanItems.map(mapPlanItemToDto),
+    planRebuildRequired: suppressedPlanItemCount > 0,
+    suppressedPlanItemCount,
     computedAt: record.computedAt.toISOString(),
     observedPremiumComparison,
   };

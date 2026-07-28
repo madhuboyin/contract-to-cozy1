@@ -145,5 +145,8 @@ test('comparison UI and service preserve decision, evidence, and advice boundari
 
   assert.match(controller, /completionKind: 'DECISION_RECORDED'/);
   assert.match(controller, /outputEntityType: 'COVERAGE_DECISION'/);
-  assert.match(definition, /id === 'coverage-intelligence' \? 'DECISION_RECORDED'/);
+  assert.match(
+    definition,
+    /id === 'coverage-intelligence'[\s\S]*?\? 'DECISION_RECORDED'/,
+  );
 });

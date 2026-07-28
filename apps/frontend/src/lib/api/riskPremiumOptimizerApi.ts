@@ -87,6 +87,8 @@ export type RiskPremiumOptimizationDTO = {
     completedAt?: string | null;
   }>;
 
+  planRebuildRequired?: boolean;
+  suppressedPlanItemCount?: number;
   computedAt: string;
   observedPremiumComparison?: {
     hasCompletedMitigations: boolean;

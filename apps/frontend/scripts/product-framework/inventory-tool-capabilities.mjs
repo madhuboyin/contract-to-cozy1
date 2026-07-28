@@ -148,6 +148,27 @@ function parseCanonicalRecommendationModes(filePaths) {
   return result;
 }
 
+function parseCanonicalRouteTemplates(filePaths) {
+  const result = new Map();
+  const rowPattern =
+    /^\s*\['([^']+)',\s*'[^']*',\s*'[^']*',\s*'([^']+)'/gm;
+  const objectPattern =
+    /\{\s*id:\s*'([^']+)'[\s\S]*?\brouteTemplate:\s*'([^']+)'[\s\S]*?\}/g;
+  for (const filePath of filePaths) {
+    const source = read(filePath);
+    for (const match of [
+      ...source.matchAll(rowPattern),
+      ...source.matchAll(objectPattern),
+    ]) {
+      if (result.has(match[1])) {
+        throw new Error(`Duplicate canonical capability route: ${match[1]}`);
+      }
+      result.set(match[1], match[2]);
+    }
+  }
+  return result;
+}
+
 function walkPages(directory) {
   const pages = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -208,6 +229,9 @@ function buildInventory() {
   const canonicalRecommendationModes = parseCanonicalRecommendationModes(
     backendCapabilityDefinitionPaths,
   );
+  const canonicalRouteTemplates = parseCanonicalRouteTemplates(
+    backendCapabilityDefinitionPaths,
+  );
   const lifecycleCanonicalIds = parseStringSet(
     read(backendLifecycleContractPath),
     'DISCOVERABLE_TOOL_IDS',
@@ -229,7 +253,7 @@ function buildInventory() {
     const outcomeCategory = homeEntry
       ? homeOutcomeByGroup[homeEntry.group]
       : aiOutcomeByGroup[aiEntry.group];
-    const route = canonicalRoute(entry);
+    const route = canonicalRouteTemplates.get(id) ?? canonicalRoute(entry);
     const canonicalMode = canonicalRecommendationModes.get(id);
     const recommendationDisposition = canonicalMode === 'CONTEXTUAL'
       ? 'CONTEXTUAL_CANONICAL'

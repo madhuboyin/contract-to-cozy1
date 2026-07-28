@@ -240,8 +240,13 @@ export type CoverageAnalysisDTO = {
   computedAt: string;
 
   overallVerdict: CoverageVerdict;
+  /** @deprecated Property-level clients must use insuranceReviewState and scenario facts. */
   insuranceVerdict: CoverageVerdict;
   warrantyVerdict: CoverageVerdict;
+  insuranceReviewState:
+    | 'POLICY_RECORD_INCOMPLETE'
+    | 'QUESTIONS_PRESENT'
+    | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
 
   confidence: CoverageConfidence;
   impactLevel?: CoverageImpactLevel;

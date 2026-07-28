@@ -338,7 +338,9 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           <PropertyContextStatusNotice context={analysis.propertyContext} title="Optimizer applicability" />
           {(analysis.status === 'STALE' || rerunRecommended) && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              Inputs changed or plan progress was updated. Rebuild the plan for a fresh review.
+              {analysis.planRebuildRequired
+                ? `${analysis.suppressedPlanItemCount ?? 0} earlier plan item(s) were withheld because required carrier-review or safety guidance was incomplete. Rebuild the plan to replace them with governed guidance.`
+                : 'Inputs changed or plan progress was updated. Rebuild the plan for a fresh review.'}
             </div>
           )}
 

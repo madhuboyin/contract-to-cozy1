@@ -34,6 +34,23 @@ export async function installCoverageJourneyApi(page: Page) {
   let decisionRecorded = false;
   let handoffStatus = 'SUBMITTED';
 
+  await page.route(`**/api/properties/${propertyId}/coverage-analysis`, async (route) => {
+    assertAuthenticated(route.request());
+    await fulfillJson(route, {
+      success: true,
+      data: {
+        exists: true,
+        analysis: coverageAnalysisFixture(),
+      },
+    });
+  });
+  await page.route(`**/api/properties/${propertyId}/inventory/items`, async (route) => {
+    assertAuthenticated(route.request());
+    await fulfillJson(route, {
+      success: true,
+      data: { items: [] },
+    });
+  });
   await page.route('**/api/home-management/insurance-policies?**', async (route) => {
     assertAuthenticated(route.request());
     await fulfillJson(route, {
@@ -254,6 +271,54 @@ export async function installCoverageJourneyApi(page: Page) {
       data: { request: handoffRequestFixture(handoffStatus) },
     });
   });
+}
+
+function coverageAnalysisFixture() {
+  return {
+    id: 'coverage-analysis-acceptance',
+    propertyId,
+    homeownerProfileId: 'profile-acceptance',
+    status: 'READY',
+    computedAt: '2026-07-27T00:00:00.000Z',
+    overallVerdict: 'WORTH_IT',
+    insuranceVerdict: 'SITUATIONAL',
+    warrantyVerdict: 'WORTH_IT',
+    insuranceReviewState: 'QUESTIONS_PRESENT',
+    confidence: 'MEDIUM',
+    impactLevel: 'MEDIUM',
+    summary: 'Unsafe legacy summary must not be rendered.',
+    strategicAdvice: null,
+    addOnRecommendations: [],
+    nextSteps: [],
+    insurance: {
+      inputsUsed: {
+        annualPremiumUsd: 2400,
+        deductibleUsd: 2500,
+        cashBufferUsd: 5000,
+      },
+      flags: [{
+        code: 'POLICY_RECORD_QUESTION',
+        label: 'Confirm the controlling deductible and exclusions.',
+        severity: 'MEDIUM',
+      }],
+      recommendedAddOns: [],
+    },
+    warranty: {
+      inputsUsed: {
+        warrantyAnnualCostUsd: 700,
+        warrantyServiceFeeUsd: 100,
+      },
+      expectedAnnualRepairRiskUsd: 900,
+      expectedNetImpactUsd: 200,
+      breakEvenMonths: 10,
+    },
+    decisionTrace: [{
+      label: 'Modeled repair exposure',
+      detail: 'Fixture scenario input.',
+      impact: 'NEUTRAL',
+    }],
+    scenarios: [],
+  };
 }
 
 function comparisonFixture(decisions: unknown[]) {

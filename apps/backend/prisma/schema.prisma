@@ -7005,8 +7005,8 @@ model RiskMitigationPlanItem {
   carrierBenefitStatus       String   @default("UNKNOWN")
   carrierBenefitEvidenceJson Json?
   // Nullable only for plan items created before the governed loss-prevention
-  // fields existed. New writes always populate these fields; reads derive a
-  // conservative action-specific fallback for legacy rows.
+  // fields existed. New writes always populate these fields; readers suppress
+  // incomplete rows and require a governed plan rebuild.
   carrierReviewQuestion      String?
   professionalHelpLevel      String?
   handoffJson                Json?

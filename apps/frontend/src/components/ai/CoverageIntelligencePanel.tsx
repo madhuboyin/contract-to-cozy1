@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
   AlertTriangle,
-  CheckCircle2,
   ChevronDown,
   DollarSign,
   Hourglass,
@@ -16,7 +15,6 @@ import {
   Sparkles,
   Tv,
   Wrench,
-  X,
   Zap,
 } from 'lucide-react';
 import {
@@ -82,9 +80,11 @@ function humanizeEnum(value?: string | null) {
 }
 
 function insuranceReviewState(analysis: CoverageAnalysisDTO): string {
-  return analysis.insurance.flags.length > 0
-    ? 'Questions to review'
-    : 'Limited record review';
+  if (analysis.insuranceReviewState === 'QUESTIONS_PRESENT') return 'Questions to review';
+  if (analysis.insuranceReviewState === 'NO_QUESTIONS_FROM_REVIEWED_FIELDS') {
+    return 'No questions from reviewed fields';
+  }
+  return 'Policy record incomplete';
 }
 
 function normalizeOverrides(overrides: CoverageAnalysisOverrides): CoverageAnalysisOverrides {
@@ -134,112 +134,37 @@ function severityPillClasses(severity?: 'LOW' | 'MEDIUM' | 'HIGH') {
   return 'border-slate-200 bg-slate-100 text-slate-700';
 }
 
-// ─── Desktop-only helpers ────────────────────────────────────────────────────
-
-function verdictHeadline(verdict?: CoverageAnalysisDTO['overallVerdict']): string {
-  if (verdict === 'NOT_WORTH_IT') return 'Warranty is not worth it at current costs';
-  if (verdict === 'WORTH_IT') return 'Warranty coverage is financially justified';
-  return 'Warranty value is borderline — deductible and premium are the deciding factors';
-}
-
-function verdictBadgeClass(verdict?: CoverageAnalysisDTO['overallVerdict']): string {
-  if (verdict === 'NOT_WORTH_IT') return 'border-rose-200 bg-rose-50 text-rose-700';
-  if (verdict === 'WORTH_IT') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-  return 'border-amber-200 bg-amber-50 text-amber-700';
-}
-
 function deltaColorClass(delta: number): string {
-  if (delta < 0) return 'text-rose-600';
-  if (delta > 0) return 'text-emerald-600';
-  return 'text-slate-700';
+  return delta === 0 ? 'text-slate-700' : 'text-slate-900';
 }
 
 function deltaCaptionShort(delta: number): string {
-  if (delta < 0) return `warranty costs ${money(Math.abs(delta))} more than repairs`;
-  if (delta > 0) return `warranty saves ${money(delta)} vs. expected repairs`;
-  return 'no net difference detected';
+  if (delta < 0) return `modeled warranty cost is ${money(Math.abs(delta))} above modeled repair exposure`;
+  if (delta > 0) return `modeled repair exposure is ${money(delta)} above modeled warranty cost`;
+  return 'modeled costs are equal under these assumptions';
 }
 
-function verdictRecommendation(analysis: CoverageAnalysisDTO): string {
-  if (analysis.nextSteps && analysis.nextSteps.length > 0) {
-    return analysis.nextSteps[0].title;
-  }
-  if (analysis.overallVerdict === 'NOT_WORTH_IT') {
-    return 'Skip warranty — expected repair costs are below warranty premium';
-  }
-  if (analysis.overallVerdict === 'WORTH_IT') {
-    return 'Consider maintaining or purchasing warranty coverage';
-  }
-  return 'Review deductible and warranty terms before deciding';
+function reviewFocus(): string {
+  return 'Review contract exclusions, service fees, and controlling terms before deciding.';
 }
 
-function simulationTakeaway(analysis: CoverageAnalysisDTO, overrides: CoverageAnalysisOverrides): string {
-  const repairRisk = analysis.warranty.expectedAnnualRepairRiskUsd ?? 0;
-  const warrantyCost = analysis.warranty.inputsUsed.warrantyAnnualCostUsd ?? 0;
+function simulationTakeaway(analysis: CoverageAnalysisDTO): string {
   const delta = analysis.warranty.expectedNetImpactUsd ?? 0;
-
-  if (analysis.overallVerdict === 'WORTH_IT') {
-    return `Warranty saves an estimated ${money(Math.abs(delta))} annually under these assumptions.`;
-  }
-
-  if (analysis.overallVerdict === 'NOT_WORTH_IT') {
-    if (repairRisk > 0 && warrantyCost > repairRisk) {
-      if (overrides.warrantyAnnualCostUsd !== undefined) {
-        return `Warranty becomes worthwhile if annual cost drops below ${money(repairRisk)}.`;
-      }
-      if (overrides.deductibleUsd !== undefined) {
-        return `With this deductible, warranty tips favorable only if annual cost falls below ${money(repairRisk)}.`;
-      }
-      return `Warranty becomes worthwhile if annual cost drops below ${money(repairRisk)}.`;
-    }
-    return 'No favorable scenario found with current assumptions.';
-  }
-
-  // SITUATIONAL
-  if (repairRisk > 0 && warrantyCost > 0) {
-    return `Results are borderline — warranty tips worthwhile if annual cost falls below ${money(repairRisk)}.`;
-  }
-  return 'Small changes to premium or deductible can flip this result either way.';
+  return `${deltaCaptionShort(delta)}. This is scenario math, not guaranteed savings or a direction to buy or decline a contract.`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-function verdictHeroClass(verdict?: CoverageAnalysisDTO['overallVerdict']) {
-  if (verdict === 'NOT_WORTH_IT') {
-    return 'border-rose-200/90 bg-[linear-gradient(145deg,#fffaf9,#ffeef0)]';
-  }
-  if (verdict === 'WORTH_IT') {
-    return 'border-emerald-200/90 bg-[linear-gradient(145deg,#ffffff,#ecfdf5)]';
-  }
-  return 'border-amber-200/90 bg-[linear-gradient(145deg,#ffffff,#fffbeb)]';
+function scenarioHeroClass() {
+  return 'border-slate-200/90 bg-[linear-gradient(145deg,#ffffff,#f8fafc)]';
 }
 
-function verdictPanelClass(verdict?: CoverageAnalysisDTO['overallVerdict']) {
-  if (verdict === 'NOT_WORTH_IT') {
-    return 'border-rose-200 bg-rose-50/55';
-  }
-  if (verdict === 'WORTH_IT') {
-    return 'border-emerald-200 bg-emerald-50/55';
-  }
-  return 'border-amber-200 bg-amber-50/55';
+function scenarioPanelClass() {
+  return 'border-slate-200 bg-slate-50/70';
 }
 
-function getVerdictIcon(verdict?: CoverageAnalysisDTO['overallVerdict']) {
-  if (verdict === 'NOT_WORTH_IT') {
-    return {
-      Icon: X,
-      wrap: 'bg-rose-500 text-white',
-    };
-  }
-  if (verdict === 'WORTH_IT') {
-    return {
-      Icon: CheckCircle2,
-      wrap: 'bg-emerald-500 text-white',
-    };
-  }
+function getScenarioIcon() {
   return {
-    Icon: AlertTriangle,
-    wrap: 'bg-amber-500 text-white',
+    Icon: Shield,
+    wrap: 'bg-slate-700 text-white',
   };
 }
 
@@ -249,7 +174,7 @@ function getVerdictIcon(verdict?: CoverageAnalysisDTO['overallVerdict']) {
 function InsuranceInputTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50 p-2.5">
-      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="text-[11px] text-slate-600">{label}</p>
       <p className="mt-1 text-sm font-semibold text-slate-700">{value}</p>
     </div>
   );
@@ -286,7 +211,7 @@ function DecisionTraceCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="text-base font-semibold text-gray-900">Decision trace</h4>
-          <p className="mt-1 text-xs text-slate-500">How the property-level recommendation was reached, step by step</p>
+          <p className="mt-1 text-xs text-slate-500">Inputs and modeled effects used in the property-level comparison</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {(['NEUTRAL', 'NEGATIVE', 'POSITIVE'] as const).map((impact) => (
@@ -603,17 +528,17 @@ export default function CoverageIntelligencePanel({
         {analysis && (
           <>
             <ResultHeroCard
-              eyebrow="Coverage Result"
-              title="Coverage Intelligence"
-              value={humanizeEnum(analysis.overallVerdict)}
+              eyebrow="Scenario comparison"
+              title="Coverage & Premium Review"
+              value="Review modeled tradeoffs"
               status={<StatusChip tone={statusChipTone}>{humanizeEnum(analysis.status)}</StatusChip>}
-              summary={analysis.summary || 'No summary available.'}
+              summary="This comparison shows modeled warranty cost and repair exposure. Insurance findings are questions from the available record, not a coverage or purchase conclusion."
               highlights={[
                 `Confidence: ${analysis.confidence}`,
                 `Insurance review: ${insuranceReviewState(analysis)}`,
-                `Warranty verdict: ${humanizeEnum(analysis.warrantyVerdict)}`,
+                'Warranty: scenario estimate only',
               ]}
-              className={verdictHeroClass(analysis.overallVerdict)}
+              className={scenarioHeroClass()}
               actions={
                 <ActionPriorityRow
                   primaryAction={
@@ -666,10 +591,10 @@ export default function CoverageIntelligencePanel({
             <ReadOnlySummaryBlock
               columns={2}
               items={[
-                { label: 'Overall verdict', value: humanizeEnum(analysis.overallVerdict), emphasize: true },
+                { label: 'Comparison state', value: 'Scenario estimate only', emphasize: true },
                 { label: 'Impact level', value: humanizeEnum(analysis.impactLevel) },
                 { label: 'Insurance review', value: insuranceReviewState(analysis) },
-                { label: 'Warranty verdict', value: humanizeEnum(analysis.warrantyVerdict) },
+                { label: 'Warranty comparison', value: 'Modeled cost and repair exposure' },
                 { label: 'Computed', value: compactDate(analysis.computedAt) },
                 { label: 'Guidance', value: 'Educational only; not carrier advice.' },
               ]}
@@ -917,11 +842,14 @@ export default function CoverageIntelligencePanel({
 
           {/* Item selector — for drilling into a specific item's page; does not affect property analysis */}
           <div className="min-w-0 flex-1">
-            <p className="mb-1.5 text-xs font-medium text-slate-600">Drill into item</p>
+            <label htmlFor="coverage-item-selector" className="mb-1.5 block text-xs font-medium text-slate-600">
+              Drill into item
+            </label>
             {itemsError ? (
               <p className="text-xs text-rose-600">{itemsError}</p>
             ) : (
               <select
+                id="coverage-item-selector"
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
                 value={selectedItemId}
                 onChange={(e) => setSelectedItemId(e.target.value)}
@@ -969,19 +897,19 @@ export default function CoverageIntelligencePanel({
                 </>
               )}
             </Button>
-            <p className="text-[11px] text-slate-400">Covers all home systems</p>
+            <p className="text-[11px] text-slate-600">Covers all home systems</p>
           </div>
         </div>
 
         {/* ─── 2. HERO VERDICT AREA (full-width, no sidebar) ───────────────── */}
         {analysis ? (() => {
-          const verdictIcon = getVerdictIcon(analysis.overallVerdict);
+          const scenarioIcon = getScenarioIcon();
           const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
           const risk = getBiggestRisk(analysis);
           const metricItems = [
-            { label: 'Overall verdict', value: humanizeEnum(analysis.overallVerdict) },
+            { label: 'Comparison state', value: 'Scenario estimate' },
             { label: 'Insurance review', value: insuranceReviewState(analysis) },
-            { label: 'Warranty', value: humanizeEnum(analysis.warrantyVerdict) },
+            { label: 'Warranty', value: 'Modeled tradeoffs' },
             { label: 'Confidence', value: humanizeEnum(analysis.confidence) },
             { label: 'Impact level', value: humanizeEnum(analysis.impactLevel) },
             {
@@ -992,12 +920,12 @@ export default function CoverageIntelligencePanel({
             },
           ];
           return (
-            <section className={cn('mt-4 rounded-2xl border p-6', verdictHeroClass(analysis.overallVerdict))}>
+            <section className={cn('mt-4 rounded-2xl border p-6', scenarioHeroClass())}>
               {/* Top row: eyebrow + timestamp + Re-run */}
               <div className="flex items-center justify-between gap-4">
-                <p className="text-[11px] font-semibold tracking-normal text-slate-400">Coverage Insight</p>
+                <p className="text-[11px] font-semibold tracking-normal text-slate-600">Coverage Insight</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-400">{compactDate(analysis.computedAt)}</span>
+                  <span className="text-[11px] text-slate-600">{compactDate(analysis.computedAt)}</span>
                   <Button
                     onClick={runNow}
                     disabled={running}
@@ -1011,23 +939,23 @@ export default function CoverageIntelligencePanel({
                 </div>
               </div>
 
-              {/* Verdict icon + badges + headline */}
+              {/* Scenario icon + status + headline */}
               <div className="mt-3 flex items-start gap-4">
-                <span className={cn('mt-0.5 inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl shadow-sm', verdictIcon.wrap)}>
-                  <verdictIcon.Icon className="h-6 w-6" />
+                <span className={cn('mt-0.5 inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl shadow-sm', scenarioIcon.wrap)}>
+                  <scenarioIcon.Icon className="h-6 w-6" />
                 </span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={cn('rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-normal', verdictBadgeClass(analysis.overallVerdict))}>
-                      {humanizeEnum(analysis.overallVerdict)}
+                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-semibold tracking-normal text-slate-700">
+                      Scenario estimate
                     </span>
                     <StatusChip tone={statusChipTone}>{humanizeEnum(analysis.status)}</StatusChip>
                   </div>
                   <h2 className="mt-2.5 text-2xl font-semibold leading-snug tracking-tight text-slate-900">
-                    {verdictHeadline(analysis.overallVerdict)}
+                    Warranty cost and modeled repair exposure
                   </h2>
                   <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                    {analysis.summary || 'Based on your home systems, current coverage, and expected repair exposure.'}
+                    Review the assumptions and controlling contract terms. This comparison does not tell you whether to buy or decline protection.
                   </p>
                 </div>
               </div>
@@ -1036,7 +964,7 @@ export default function CoverageIntelligencePanel({
               <dl className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-1.5 xl:grid-cols-6">
                 {metricItems.map(({ label, value }) => (
                   <div key={label} className="rounded-lg border border-white/60 bg-white/70 px-3 py-2 shadow-sm">
-                    <dt className="text-[11px] text-slate-400">{label}</dt>
+                    <dt className="text-[11px] text-slate-600">{label}</dt>
                     <dd className="mt-0.5 text-xs font-semibold text-slate-800">{value}</dd>
                   </div>
                 ))}
@@ -1049,31 +977,31 @@ export default function CoverageIntelligencePanel({
                   <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">
                     {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
                   </p>
-                  <p className="mt-1.5 text-[11px] leading-snug text-slate-400">based on system age &amp; failure probability</p>
+                  <p className="mt-1.5 text-[11px] leading-snug text-slate-600">based on system age &amp; failure probability</p>
                 </div>
                 <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
                   <p className="text-xs font-medium text-slate-500">Warranty Cost</p>
                   <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">
                     {money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}
                   </p>
-                  <p className="mt-1.5 text-[11px] leading-snug text-slate-400">annual premium</p>
+                  <p className="mt-1.5 text-[11px] leading-snug text-slate-600">annual premium</p>
                 </div>
                 <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
                   <p className="text-xs font-medium text-slate-500">Cost Difference</p>
                   <p className={cn('mt-2 text-[1.6rem] font-semibold leading-none tracking-tight', deltaColorClass(annualDelta))}>
                     {money(annualDelta)}
                   </p>
-                  <p className="mt-1.5 text-[11px] leading-snug text-slate-400">{deltaCaptionShort(annualDelta)}</p>
+                  <p className="mt-1.5 text-[11px] leading-snug text-slate-600">{deltaCaptionShort(annualDelta)}</p>
                 </div>
               </div>
 
-              {/* Recommendation + Biggest risk */}
+              {/* Review focus + biggest record signal */}
               <div className={cn('mt-3 grid gap-3', risk ? 'xl:grid-cols-2' : 'grid-cols-1')}>
                 <div className="flex items-center gap-3 rounded-xl border border-black/[0.07] bg-white/60 px-4 py-3">
                   <Shield className="h-4 w-4 flex-shrink-0 text-slate-400" />
-                  <span className="text-[11px] font-semibold tracking-normal text-slate-400">Recommendation</span>
+                  <span className="text-[11px] font-semibold tracking-normal text-slate-600">Review focus</span>
                   <span className="mx-0.5 h-3.5 w-px flex-shrink-0 bg-slate-200" />
-                  <span className="text-sm font-medium text-slate-800">{verdictRecommendation(analysis)}</span>
+                  <span className="text-sm font-medium text-slate-800">{reviewFocus()}</span>
                 </div>
                 {risk && (
                   <div className="rounded-xl border border-rose-100 bg-rose-50/60 px-4 py-3">
@@ -1086,7 +1014,7 @@ export default function CoverageIntelligencePanel({
                 )}
               </div>
 
-              <p className="mt-3 text-[11px] leading-relaxed text-slate-400">Educational only. Not carrier-specific advice.</p>
+              <p className="mt-3 text-[11px] leading-relaxed text-slate-600">Educational only. Not carrier-specific advice.</p>
             </section>
           );
         })() : (
@@ -1122,7 +1050,7 @@ export default function CoverageIntelligencePanel({
         {/* ─── 3. NEXT STEPS (full-width horizontal cards) ─────────────────── */}
         {analysis && analysis.nextSteps && analysis.nextSteps.length > 0 && (
           <div className="mt-4 rounded-2xl border border-black/[0.07] bg-white p-5 shadow-sm">
-            <p className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Next Steps</p>
+            <p className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-600">Next Steps</p>
             <div className={cn(
               'grid gap-3',
               analysis.nextSteps.length === 1 ? 'grid-cols-1'
@@ -1169,7 +1097,7 @@ export default function CoverageIntelligencePanel({
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">Scenario Simulator</h3>
                   <p className="mt-0.5 text-sm text-slate-500">
-                    Adjust property-wide assumptions to explore how the verdict would change.
+                    Adjust property-wide assumptions to explore how the modeled cost comparison changes.
                   </p>
                 </div>
                 <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-400" />
@@ -1177,10 +1105,11 @@ export default function CoverageIntelligencePanel({
 
               <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                  <label htmlFor="coverage-annual-premium" className="mb-1.5 block text-xs font-medium text-slate-600">
                     Annual Premium (USD)
                   </label>
                   <input
+                    id="coverage-annual-premium"
                     type="number"
                     min={0}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
@@ -1194,10 +1123,11 @@ export default function CoverageIntelligencePanel({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                  <label htmlFor="coverage-deductible" className="mb-1.5 block text-xs font-medium text-slate-600">
                     Deductible (USD)
                   </label>
                   <input
+                    id="coverage-deductible"
                     type="number"
                     min={0}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
@@ -1211,10 +1141,11 @@ export default function CoverageIntelligencePanel({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                  <label htmlFor="coverage-warranty-annual-cost" className="mb-1.5 block text-xs font-medium text-slate-600">
                     Warranty Annual Cost (USD)
                   </label>
                   <input
+                    id="coverage-warranty-annual-cost"
                     type="number"
                     min={0}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
@@ -1228,10 +1159,11 @@ export default function CoverageIntelligencePanel({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                  <label htmlFor="coverage-warranty-service-fee" className="mb-1.5 block text-xs font-medium text-slate-600">
                     Warranty Service Fee (USD)
                   </label>
                   <input
+                    id="coverage-warranty-service-fee"
                     type="number"
                     min={0}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
@@ -1245,10 +1177,11 @@ export default function CoverageIntelligencePanel({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                  <label htmlFor="coverage-cash-buffer" className="mb-1.5 block text-xs font-medium text-slate-600">
                     Cash Buffer (USD)
                   </label>
                   <input
+                    id="coverage-cash-buffer"
                     type="number"
                     min={0}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
@@ -1262,10 +1195,11 @@ export default function CoverageIntelligencePanel({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                  <label htmlFor="coverage-risk-tolerance" className="mb-1.5 block text-xs font-medium text-slate-600">
                     Risk Tolerance
                   </label>
                   <select
+                    id="coverage-risk-tolerance"
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
                     value={overrides.riskTolerance ?? 'MEDIUM'}
                     onChange={(e) =>
@@ -1321,22 +1255,17 @@ export default function CoverageIntelligencePanel({
 
               {/* Simulation Result Box */}
               {hasSimulated && (
-                <div className={cn('mt-4 rounded-xl border p-3.5', verdictPanelClass(analysis.overallVerdict))}>
+                <div className={cn('mt-4 rounded-xl border p-3.5', scenarioPanelClass())}>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[11px] font-semibold tracking-normal text-slate-500">
                       Simulation result
                     </p>
-                    <span
-                      className={cn(
-                        'rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-normal',
-                        verdictBadgeClass(analysis.overallVerdict)
-                      )}
-                    >
-                      {humanizeEnum(analysis.overallVerdict)}
+                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold tracking-normal text-slate-700">
+                      Scenario estimate
                     </span>
                   </div>
                   <p className="mt-2 text-xs font-medium leading-relaxed text-slate-700">
-                    {simulationTakeaway(analysis, overrides)}
+                    {simulationTakeaway(analysis)}
                   </p>
                   {analysis.warranty.breakEvenMonths != null && (
                     <p className="mt-1.5 text-[11px] text-slate-500">
@@ -1355,12 +1284,12 @@ export default function CoverageIntelligencePanel({
               <div className="mt-5">
                 <div className="mb-3 flex items-center gap-2">
                   <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
-                  <p className="text-[11px] font-semibold tracking-normal text-slate-400">
+                  <p className="text-[11px] font-semibold tracking-normal text-slate-600">
                     Policy Signals
                   </p>
                 </div>
                 {analysis.insurance.flags.length === 0 ? (
-                  <p className="pl-5 text-sm text-slate-400">No critical signals detected.</p>
+                  <p className="pl-5 text-sm text-slate-600">No critical signals detected.</p>
                 ) : (
                   <div className="space-y-2">
                     {analysis.insurance.flags.map((flag) => (
@@ -1390,12 +1319,12 @@ export default function CoverageIntelligencePanel({
               <div className="mt-5">
                 <div className="mb-3 flex items-center gap-2">
                   <Shield className="h-3.5 w-3.5 text-slate-400" />
-                  <p className="text-[11px] font-semibold tracking-normal text-slate-400">
+                  <p className="text-[11px] font-semibold tracking-normal text-slate-600">
                     Topics to Review
                   </p>
                 </div>
                 {analysis.insurance.recommendedAddOns.length === 0 ? (
-                  <p className="pl-5 text-sm text-slate-400">
+                  <p className="pl-5 text-sm text-slate-600">
                     No topics were generated from the current limited signals. This does not confirm coverage.
                   </p>
                 ) : (

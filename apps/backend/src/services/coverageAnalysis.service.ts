@@ -73,8 +73,13 @@ export type CoverageAnalysisDTO = {
   computedAt: string;
 
   overallVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
+  /** @deprecated Property-level clients must use insuranceReviewState and scenario facts. */
   insuranceVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
   warrantyVerdict: 'WORTH_IT' | 'SITUATIONAL' | 'NOT_WORTH_IT';
+  insuranceReviewState:
+    | 'POLICY_RECORD_INCOMPLETE'
+    | 'QUESTIONS_PRESENT'
+    | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
 
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   impactLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
@@ -213,9 +218,17 @@ type ComputedSnapshot = {
   overallVerdict: CoverageVerdict;
   insuranceVerdict: CoverageVerdict;
   warrantyVerdict: CoverageVerdict;
+  insuranceReviewState:
+    | 'POLICY_RECORD_INCOMPLETE'
+    | 'QUESTIONS_PRESENT'
+    | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
   summary?: string;
   nextSteps: NextStep[];
   insuranceResult: {
+    reviewState:
+      | 'POLICY_RECORD_INCOMPLETE'
+      | 'QUESTIONS_PRESENT'
+      | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
     inputsUsed: {
       annualPremiumUsd?: number;
       deductibleUsd?: number;
@@ -346,12 +359,6 @@ function safeArray<T>(value: Prisma.JsonValue | null | undefined): T[] {
 function safeObject<T extends object>(value: Prisma.JsonValue | null | undefined, fallback: T): T {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
   return value as T;
-}
-
-function verdictWeight(verdict: CoverageVerdict): number {
-  if (verdict === CoverageVerdict.WORTH_IT) return 2;
-  if (verdict === CoverageVerdict.SITUATIONAL) return 1;
-  return 0;
 }
 
 function severityWeight(severity: Severity): number {
@@ -611,9 +618,14 @@ function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
   const insuranceResult = safeObject(
     analysis.insuranceResult,
     {
+      reviewState: 'POLICY_RECORD_INCOMPLETE',
       inputsUsed: {},
       flags: [],
     } as {
+      reviewState:
+        | 'POLICY_RECORD_INCOMPLETE'
+        | 'QUESTIONS_PRESENT'
+        | 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
       inputsUsed: { annualPremiumUsd?: number; deductibleUsd?: number; cashBufferUsd?: number };
       flags: InsuranceFlag[];
     }
@@ -659,6 +671,17 @@ function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
     overallVerdict: analysis.overallVerdict,
     insuranceVerdict: analysis.insuranceVerdict,
     warrantyVerdict: analysis.warrantyVerdict,
+    insuranceReviewState:
+      insuranceResult.reviewState === 'POLICY_RECORD_INCOMPLETE'
+      || insuranceResult.reviewState === 'QUESTIONS_PRESENT'
+      || insuranceResult.reviewState === 'NO_QUESTIONS_FROM_REVIEWED_FIELDS'
+        ? insuranceResult.reviewState
+        : insuranceResult.flags?.length
+          ? 'QUESTIONS_PRESENT'
+          : insuranceResult.inputsUsed?.annualPremiumUsd !== undefined
+            || insuranceResult.inputsUsed?.deductibleUsd !== undefined
+            ? 'NO_QUESTIONS_FROM_REVIEWED_FIELDS'
+            : 'POLICY_RECORD_INCOMPLETE',
     confidence: analysis.confidence,
     impactLevel: analysis.impactLevel ?? undefined,
     summary: analysis.summary ?? undefined,
@@ -1011,31 +1034,18 @@ export class CoverageIntelligenceService {
       });
     }
 
-    const insurancePressureScore = insuranceFlags.reduce(
-      (sum, flag) => sum + severityWeight(flag.severity),
-      0
-    );
-
-    const insuranceVerdict: CoverageVerdict =
+    // The persisted enum remains for schema compatibility, but property insurance
+    // records never receive a buy/skip or "worth it" conclusion.
+    const insuranceVerdict = CoverageVerdict.SITUATIONAL;
+    const insuranceReviewState: ComputedSnapshot['insuranceReviewState'] =
       insurancePolicies.length === 0
-        ? CoverageVerdict.WORTH_IT
-        : insurancePressureScore >= 8
-          ? CoverageVerdict.WORTH_IT
-          : insurancePressureScore >= 4
-            ? CoverageVerdict.SITUATIONAL
-            : annualPremiumUsd > 0 && annualPremiumUsd > (expectedAnnualRepairRiskUsd * 0.8 + 1500)
-              ? CoverageVerdict.NOT_WORTH_IT
-              : CoverageVerdict.SITUATIONAL;
-
-    const averageVerdictScore =
-      (verdictWeight(insuranceVerdict) + verdictWeight(warrantyVerdict)) / 2 +
-      (insurancePressureScore >= 8 ? 0.25 : 0);
-    const overallVerdict: CoverageVerdict =
-      averageVerdictScore >= 1.55
-        ? CoverageVerdict.WORTH_IT
-        : averageVerdictScore >= 0.8
-          ? CoverageVerdict.SITUATIONAL
-          : CoverageVerdict.NOT_WORTH_IT;
+        ? 'POLICY_RECORD_INCOMPLETE'
+        : insuranceFlags.length > 0
+          ? 'QUESTIONS_PRESENT'
+          : 'NO_QUESTIONS_FROM_REVIEWED_FIELDS';
+    // Warranty math remains a scenario classification for existing consumers. It
+    // is not combined with insurance facts into a property protection verdict.
+    const overallVerdict = warrantyVerdict;
 
     const confidenceSignals = [
       inventoryItems.length > 0,
@@ -1196,11 +1206,7 @@ export class CoverageIntelligenceService {
     }
 
     const summary =
-      overallVerdict === CoverageVerdict.WORTH_IT
-        ? 'Coverage stack appears valuable for this property. Keep limits and deductible settings aligned to risk signals.'
-        : overallVerdict === CoverageVerdict.SITUATIONAL
-          ? 'Coverage value is mixed. A periodic review of deductibles, add-ons, and warranty costs is recommended.'
-          : 'Current protection mix may not be cost-efficient. Revisit assumptions and verify if coverage levels match your risk profile.';
+      'This comparison shows modeled warranty cost and repair exposure. Insurance findings are questions from the available record, not a coverage or purchase conclusion.';
 
     const snapshot: ComputedSnapshot = {
       status: CoverageAnalysisStatus.READY,
@@ -1209,9 +1215,11 @@ export class CoverageIntelligenceService {
       overallVerdict,
       insuranceVerdict,
       warrantyVerdict,
+      insuranceReviewState,
       summary,
       nextSteps: dedupeSteps(nextSteps).slice(0, 5),
       insuranceResult: {
+        reviewState: insuranceReviewState,
         inputsUsed: {
           annualPremiumUsd: toMoney(annualPremiumUsd),
           deductibleUsd: toMoney(deductibleUsd),
@@ -2035,6 +2043,7 @@ export class CoverageIntelligenceService {
         overallVerdict: snapshot.overallVerdict,
         insuranceVerdict: snapshot.insuranceVerdict,
         warrantyVerdict: snapshot.warrantyVerdict,
+        insuranceReviewState: snapshot.insuranceReviewState,
         confidence: snapshot.confidence,
         impactLevel: snapshot.impactLevel,
         summary: snapshot.summary,

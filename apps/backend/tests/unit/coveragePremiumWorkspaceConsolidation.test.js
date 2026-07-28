@@ -69,6 +69,14 @@ test('generated capability inventory contains one coverage and premium capabilit
       label: 'Coverage & Premium Review',
     }],
   );
+  assert.equal(
+    coverageCapabilities[0].canonicalRoute,
+    '/dashboard/properties/[id]/tools/coverage-intelligence',
+  );
+  const resolverAlias = read(
+    'apps/frontend/src/app/(dashboard)/dashboard/coverage-intelligence/page.tsx',
+  );
+  assert.match(resolverAlias, /PropertyScopedToolRedirectPage/);
 });
 
 test('legacy analytics ids converge on the canonical coverage lifecycle', () => {

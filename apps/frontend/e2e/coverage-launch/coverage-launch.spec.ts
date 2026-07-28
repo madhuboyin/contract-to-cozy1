@@ -18,6 +18,19 @@ test('canonical journey preserves evidence, tradeoffs, durable decision, mitigat
   await page.goto('/acceptance/coverage-launch');
 
   await expect(page.getByRole('heading', { name: 'Current policy record' })).toBeVisible();
+  await expect(page.getByRole('heading', {
+    name: 'Warranty cost and modeled repair exposure',
+  })).toBeVisible();
+  await expect(page.locator('dd').filter({ hasText: 'Questions to review' })).toBeVisible();
+  for (const unsupportedConclusion of [
+    /worth it/i,
+    /financially justified/i,
+    /warranty saves/i,
+    /skip warranty/i,
+    /unsafe legacy summary/i,
+  ]) {
+    await expect(page.getByText(unsupportedConclusion)).toHaveCount(0);
+  }
   await expect(page.getByText('Example Mutual · ending 4242').first()).toBeVisible();
   await expect(page.getByText('2026 declarations.pdf').first()).toBeVisible();
   await expect(page.getByRole('heading', {

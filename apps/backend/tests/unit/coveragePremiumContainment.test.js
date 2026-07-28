@@ -55,6 +55,27 @@ test('coverage record UI does not present a missing heuristic gap as proof of co
   assert.doesNotMatch(options, /proofType: 'coverage_gap_snapshot'/);
 });
 
+test('property coverage comparison keeps legacy verdict enums out of directive homeowner copy', () => {
+  const intelligence = source('../../../frontend/src/components/ai/CoverageIntelligencePanel.tsx');
+  const service = source('../../src/services/coverageAnalysis.service.ts');
+
+  for (const unsupportedClaim of [
+    'Warranty is not worth it',
+    'financially justified',
+    'warranty saves',
+    'Skip warranty',
+    'Overall verdict',
+    'Warranty verdict',
+  ]) {
+    assert.equal(intelligence.includes(unsupportedClaim), false, unsupportedClaim);
+  }
+  assert.match(intelligence, /Scenario estimate/);
+  assert.match(intelligence, /does not tell you whether to buy or decline protection/);
+  assert.match(service, /const insuranceVerdict = CoverageVerdict\.SITUATIONAL/);
+  assert.doesNotMatch(service, /insurancePolicies\.length === 0\s*\?\s*CoverageVerdict\.WORTH_IT/);
+  assert.doesNotMatch(service, /verdictWeight\(insuranceVerdict\)/);
+});
+
 test('item protection UI keeps internal verdicts out of homeowner-facing directive copy', () => {
   const itemCoverage = source(
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/items/[itemId]/coverage/ItemGetCoverageClient.tsx',

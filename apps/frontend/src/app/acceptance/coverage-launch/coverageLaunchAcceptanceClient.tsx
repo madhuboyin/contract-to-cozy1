@@ -6,6 +6,7 @@ import InsuranceHandoffPanel from '@/components/coverage/InsuranceHandoffPanel';
 import InsuranceMarketContextPanel from '@/components/coverage/InsuranceMarketContextPanel';
 import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadinessPanel';
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
+import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
 
 export const COVERAGE_LAUNCH_ACCEPTANCE_PROPERTY_ID =
   '11111111-1111-4111-8111-111111111111';
@@ -24,6 +25,7 @@ export function CoverageLaunchAcceptanceClient() {
       <section aria-labelledby="acceptance-policy-heading" className="space-y-3">
         <h2 id="acceptance-policy-heading" className="text-xl font-semibold">Current policy record</h2>
         <PolicyRecordReadinessPanel propertyId={COVERAGE_LAUNCH_ACCEPTANCE_PROPERTY_ID} />
+        <CoverageIntelligencePanel propertyId={COVERAGE_LAUNCH_ACCEPTANCE_PROPERTY_ID} />
       </section>
       <section aria-labelledby="acceptance-review-heading" className="space-y-3">
         <h2 id="acceptance-review-heading" className="text-xl font-semibold">Review questions</h2>

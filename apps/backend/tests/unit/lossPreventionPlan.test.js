@@ -69,13 +69,14 @@ test('canonical schema links the plan to a coverage review and removes savings c
   assert.doesNotMatch(statuses, /\bDONE\b/);
 });
 
-test('legacy plan rows derive conservative guidance instead of requiring a destructive backfill', () => {
+test('incomplete plan rows are suppressed and require a governed plan rebuild', () => {
   const service = read('apps/backend/src/services/riskPremiumOptimizer.service.ts');
 
-  assert.match(service, /const legacyHelp = mitigationHandoff/);
-  assert.match(service, /item\.carrierReviewQuestion \?\?/);
-  assert.match(service, /legacyHelp\.professionalHelpLevel/);
-  assert.match(service, /legacyHelp\.handoff/);
+  assert.match(service, /hasGovernedPlanGuidance/);
+  assert.match(service, /planRebuildRequired: suppressedPlanItemCount > 0/);
+  assert.match(service, /status: suppressedPlanItemCount > 0 \? 'STALE'/);
+  assert.doesNotMatch(service, /const legacyHelp = mitigationHandoff/);
+  assert.doesNotMatch(service, /item\.carrierReviewQuestion \?\?/);
 });
 
 test('loss-prevention output contains no additive savings or policy-lever plan items', () => {

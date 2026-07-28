@@ -181,7 +181,7 @@
       "sources": [
         "ai"
       ],
-      "canonicalRoute": "/dashboard/coverage-intelligence",
+      "canonicalRoute": "/dashboard/properties/[id]/tools/coverage-intelligence",
       "routeVerified": true,
       "workflowOnly": false,
       "outcomeCategory": "DECIDE_COMPARE",
