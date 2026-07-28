@@ -265,16 +265,6 @@ export default function MobileDashboardHome({
     staleTime: 5 * 60 * 1000,
   });
 
-  const financialSummaryQuery = useQuery({
-    queryKey: ['mobile-financial-summary', propertyId],
-    queryFn: async () => {
-      if (!propertyId) return null;
-      return api.getFinancialReportSummary(propertyId);
-    },
-    enabled: !!propertyId,
-    staleTime: 5 * 60 * 1000,
-  });
-
   const dailySnapshotQuery = useQuery({
     queryKey: ['mobile-daily-snapshot', propertyId],
     queryFn: async () => {
@@ -366,7 +356,6 @@ export default function MobileDashboardHome({
 
   const homeScore = Math.round(homeScoreQuery.data?.homeScore ?? 0);
   const riskExposure = Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0);
-  const financialScore = Math.round(financialSummaryQuery.data?.financialEfficiencyScore ?? 0);
   const urgentActionCount = orchestrationQuery.data?.pendingActionCount ?? 0;
   const topActions = (orchestrationQuery.data?.actions ?? []).slice(0, 2);
   const overdueCount = maintenanceStatsQuery.data?.overdue ?? 0;
@@ -376,7 +365,7 @@ export default function MobileDashboardHome({
   const homeEquityDollars = Number(homeEquityQuery.data?.totalEquityWithMaintenanceCents || 0) / 100;
 
   const confidenceLabel = homeScore >= 80 ? 'High confidence' : homeScore >= 60 ? 'Medium confidence' : 'Building';
-  const signalCount = Math.max(6, [homeScore > 0, riskExposure >= 0, financialScore > 0, Boolean(weatherInsight), Boolean(dailySnapshotQuery.data)].filter(Boolean).length * 2);
+  const signalCount = Math.max(6, [homeScore > 0, riskExposure >= 0, Boolean(weatherInsight), Boolean(dailySnapshotQuery.data)].filter(Boolean).length * 2);
 
   const isStable = urgentActionCount === 0 && overdueCount === 0;
 
@@ -897,11 +886,11 @@ export default function MobileDashboardHome({
                   Open Financial Tools
                 </Link>
                 <MoneyImpactTrackerCard
-                  annualExposure={financialSummaryQuery.data?.financialExposureTotal || 0}
+                  annualExposure={riskExposure}
                   annualSavings={savingsQuery.data?.potentialAnnualSavings || 0}
                   monthlySavings={monthlySavings}
-                  weeklyFinancialDelta={snapshotsQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null}
-                  financialTrend={(snapshotsQuery.data?.scores?.FINANCIAL?.trend || []).map((p) => p.score)}
+                  weeklyFinancialDelta={snapshotsQuery.data?.scores?.RISK?.deltaFromPreviousWeek ?? null}
+                  financialTrend={(snapshotsQuery.data?.scores?.RISK?.trend || []).map((p) => p.score)}
                 />
               </CollapsibleRow>
 

@@ -61,11 +61,11 @@ function resolveActionTool(title: string | undefined, propertyId: string): Actio
   if (/REFINANC/.test(key))
     return { href: `${base}/mortgage-refinance-radar`, label: 'Refinance Radar', toolKey: 'mortgage-refinance-radar' };
   if (/SAVINGS|EFFICIENCY|COST/.test(key))
-    return { href: `/dashboard/properties/${propertyId}/financial-efficiency?focus=breakdown`, label: 'Financial Efficiency', toolKey: 'financial-efficiency' };
+    return { href: `${base}/savings-benefits?section=recurring`, label: 'Savings and Benefits', toolKey: 'savings-benefits' };
   return { href: `${base}/maintenance`, label: 'Maintenance', toolKey: 'maintenance' };
 }
 
-type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
+type SummaryKind = 'HEALTH' | 'RISK';
 
 const RISK_EXPOSURE_CAP = 15000;
 const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100];
@@ -163,10 +163,7 @@ function scoreTooltip(kind: SummaryKind) {
   if (kind === 'HEALTH') {
     return 'Health score measures how well-maintained your home is across all tracked items.';
   }
-  if (kind === 'RISK') {
-    return 'Risk ring shows protection level (100 - risk exposure). Lower protection indicates higher current risk.';
-  }
-  return 'Financial score reflects expected cost efficiency based on projected maintenance and risk trends.';
+  return 'Risk ring shows protection level (100 - risk exposure). Lower protection indicates higher current risk.';
 }
 
 function formatDaysAgo(input?: string | null) {
@@ -204,19 +201,6 @@ function getPulseCardStyle(kind: SummaryKind, score: number) {
   return 'bg-amber-50/30 border-amber-200/50';
 }
 
-function extractCurrency(input: string): string | null {
-  const match = input.match(/\$\s?[\d,]+(?:\.\d+)?/);
-  if (!match) return null;
-  return match[0].replace(/\s+/g, '').replace(/\.00$/, '');
-}
-
-function extractDateLabel(input: string): string | null {
-  const match = input.match(
-    /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?\b/i
-  );
-  return match ? match[0].replace(/\s+/g, ' ').trim() : null;
-}
-
 function scoreStatusClass(kind: SummaryKind, score: number) {
   if (kind === 'RISK') {
     if (score >= 80) return 'text-emerald-600';
@@ -236,8 +220,6 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const [actionBusy, setActionBusy] = useState<'COMPLETE' | 'DISMISS' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actualRecallCount, setActualRecallCount] = useState<number | null>(null);
-  const [annualMaintenanceCost, setAnnualMaintenanceCost] = useState<number | null>(null);
-  const [annualSavingsPotential, setAnnualSavingsPotential] = useState<number | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     if (!propertyId) {
@@ -253,11 +235,9 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
       setSnapshot(data);
       track('morning_brief_opened', { propertyId, itemCount: data.payload.summary.length });
 
-      // Fetch recall count, maintenance cost, and financial efficiency report in parallel — all non-critical
-      const [recallsResult, statsResult, fesResult] = await Promise.allSettled([
+      // Fetch recall count in parallel — non-critical
+      const [recallsResult] = await Promise.allSettled([
         listPropertyRecalls(propertyId),
-        api.getMaintenanceTaskStats(propertyId),
-        api.getDetailedFESReport(propertyId),
       ]);
 
       if (recallsResult.status === 'fulfilled') {
@@ -267,20 +247,6 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         setActualRecallCount(activeRecalls.length);
       } else {
         setActualRecallCount(null);
-      }
-
-      if (statsResult.status === 'fulfilled' && statsResult.value.success) {
-        const cost = statsResult.value.data.totalEstimatedCost;
-        setAnnualMaintenanceCost(cost > 0 ? cost : null);
-      }
-
-      if (fesResult.status === 'fulfilled' && fesResult.value !== 'QUEUED') {
-        const report = fesResult.value;
-        const actualTotal = (report.actualInsuranceCost || 0) + (report.actualUtilityCost || 0) + (report.actualWarrantyCost || 0);
-        const gap = (report.marketAverageTotal || 0) - actualTotal;
-        setAnnualSavingsPotential(gap > 0 ? gap : null);
-      } else {
-        setAnnualSavingsPotential(null);
       }
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load Morning Home Pulse.');
@@ -479,11 +445,6 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
             : row.kind === 'RISK' && (riskExposurePct ?? 0) >= 60
               ? 1
               : 0;
-          const annualCost = annualMaintenanceCost !== null
-            ? new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(annualMaintenanceCost)
-            : extractCurrency(`${row.reason} ${payload.homeWin.detail} ${payload.surprise.detail}`)
-            ?? (scoreValue > 0 ? `Score: ${scoreValue}/100` : 'No data yet');
-          const nextRenewal = extractDateLabel(`${payload.surprise.headline} ${payload.surprise.detail}`) ?? 'Not scheduled';
           const detailRows =
             row.kind === 'HEALTH'
               ? [
@@ -514,81 +475,35 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                           : 'text-xs font-semibold text-red-700',
                   },
                 ]
-              : row.kind === 'RISK'
-                ? [
-                    {
-                      key: 'risk-exposure',
-                      icon: AlertTriangle,
-                      label: 'Exposure',
-                      value: riskExposure,
-                      valueClassName: 'text-xs font-semibold text-amber-700',
-                    },
-                    {
-                      key: 'active-trigger',
-                      icon: Cloud,
-                      label: 'Active trigger',
-                      value: triggerPill,
-                      valueClassName: '',
-                    },
-                    {
-                      key: 'coverage-gap',
-                      icon: Shield,
-                      label: 'Coverage gap',
-                      value:
-                        inferredGapCount > 0
-                          ? `${inferredGapCount} item${inferredGapCount !== 1 ? 's' : ''} unprotected`
-                          : 'Fully covered',
-                      valueClassName:
-                        inferredGapCount > 0
-                          ? 'text-xs font-semibold text-red-700'
-                          : 'text-xs font-semibold text-emerald-700',
-                    },
-                  ]
-                : [
-                    {
-                      key: 'annual-cost',
-                      icon: DollarSign,
-                      label: 'Annual maintenance cost',
-                      value: annualCost,
-                      valueClassName: 'text-xs font-semibold text-gray-800',
-                    },
-                    {
-                      key: 'savings',
-                      icon: TrendingDown,
-                      label: 'Potential savings',
-                      value:
-                        scoreValue >= 90
-                          ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Optimized
-                            </span>
-                          )
-                          : (
-                            <Link
-                              href={`/dashboard/properties/${propertyId}/financial-efficiency?focus=breakdown`}
-                              className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
-                              onClick={() => track('morning_brief_savings_clicked', { propertyId, scoreValue })}
-                            >
-                              {annualSavingsPotential !== null
-                                ? new Intl.NumberFormat(undefined, {
-                                    style: 'currency',
-                                    currency: 'USD',
-                                    maximumFractionDigits: 0,
-                                  }).format(annualSavingsPotential)
-                                : 'Review savings'}
-                            </Link>
-                          ),
-                      valueClassName: '',
-                    },
-                    {
-                      key: 'next-renewal',
-                      icon: CalendarDays,
-                      label: 'Next renewal',
-                      value: nextRenewal,
-                      valueClassName: 'text-xs font-semibold text-gray-800',
-                    },
-                  ];
+              : [
+                  {
+                    key: 'risk-exposure',
+                    icon: AlertTriangle,
+                    label: 'Exposure',
+                    value: riskExposure,
+                    valueClassName: 'text-xs font-semibold text-amber-700',
+                  },
+                  {
+                    key: 'active-trigger',
+                    icon: Cloud,
+                    label: 'Active trigger',
+                    value: triggerPill,
+                    valueClassName: '',
+                  },
+                  {
+                    key: 'coverage-gap',
+                    icon: Shield,
+                    label: 'Coverage gap',
+                    value:
+                      inferredGapCount > 0
+                        ? `${inferredGapCount} item${inferredGapCount !== 1 ? 's' : ''} unprotected`
+                        : 'Fully covered',
+                    valueClassName:
+                      inferredGapCount > 0
+                        ? 'text-xs font-semibold text-red-700'
+                        : 'text-xs font-semibold text-emerald-700',
+                  },
+                ];
 
           return (
             <div

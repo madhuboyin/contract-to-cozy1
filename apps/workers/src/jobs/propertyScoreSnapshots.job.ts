@@ -13,7 +13,7 @@ import { prisma } from '../lib/prisma';
 import { logger, AppLogger } from '../lib/logger';
 import { calculateHealthScore } from '../utils/propertyScore.util';
 
-type ScoreType = 'HEALTH' | 'RISK' | 'FINANCIAL';
+type ScoreType = 'HEALTH' | 'RISK';
 
 // W4 item 1: small, job-scoped dependency interface (see
 // reserveFundBalanceReminder.job.ts for the pattern). The `propertyScoreSnapshot`
@@ -23,7 +23,7 @@ type ScoreType = 'HEALTH' | 'RISK' | 'FINANCIAL';
 export interface PropertyScoreSnapshotsDeps {
   prisma: Pick<
     typeof prisma,
-    'propertyScoreSnapshot' | 'riskAssessmentReport' | 'financialEfficiencyReport' | 'property' | 'warranty' | 'document' | 'booking' | 'inventoryItem'
+    'propertyScoreSnapshot' | 'riskAssessmentReport' | 'property' | 'warranty' | 'document' | 'booking' | 'inventoryItem'
   >;
   logger: AppLogger;
 }
@@ -55,12 +55,6 @@ export function getBandForScore(scoreType: ScoreType, score: number): string {
     if (score >= 60) return 'Moderate Risk';
     if (score >= 40) return 'Elevated Risk';
     return 'High Risk';
-  }
-
-  if (scoreType === 'FINANCIAL') {
-    if (score >= 90) return 'Excellent';
-    if (score >= 70) return 'Average';
-    return 'Below Average';
   }
 
   if (score >= 85) return 'Excellent';
@@ -148,7 +142,7 @@ export async function capturePropertyScoreSnapshots(
   deps: PropertyScoreSnapshotsDeps = defaultDeps,
 ): Promise<void> {
   const { prisma } = deps;
-  const [riskReport, financialReport, propertyCore, warranties, documentCount, activeBookings, applianceItems] =
+  const [riskReport, propertyCore, warranties, documentCount, activeBookings, applianceItems] =
     await Promise.all([
       prisma.riskAssessmentReport.findUnique({
         where: { propertyId },
@@ -156,17 +150,6 @@ export async function capturePropertyScoreSnapshots(
           riskScore: true,
           financialExposureTotal: true,
           details: true,
-          lastCalculatedAt: true,
-        },
-      }),
-      prisma.financialEfficiencyReport.findUnique({
-        where: { propertyId },
-        select: {
-          financialEfficiencyScore: true,
-          actualInsuranceCost: true,
-          actualUtilityCost: true,
-          actualWarrantyCost: true,
-          marketAverageTotal: true,
           lastCalculatedAt: true,
         },
       }),
@@ -239,27 +222,6 @@ export async function capturePropertyScoreSnapshots(
       snapshotJson: {
         financialExposureTotal: asNumber(riskReport.financialExposureTotal),
         highRiskAssets: highRiskCount,
-      },
-    }, deps);
-  }
-
-  if (financialReport) {
-    const actualInsuranceCost = asNumber(financialReport.actualInsuranceCost);
-    const actualUtilityCost = asNumber(financialReport.actualUtilityCost);
-    const actualWarrantyCost = asNumber(financialReport.actualWarrantyCost);
-    const annualCost = actualInsuranceCost + actualUtilityCost + actualWarrantyCost;
-
-    await upsertPropertyScoreSnapshot({
-      propertyId,
-      homeownerProfileId,
-      scoreType: 'FINANCIAL',
-      score: Math.round(asNumber(financialReport.financialEfficiencyScore) * 10) / 10,
-      scoreMax: 100,
-      scoreBand: getBandForScore('FINANCIAL', asNumber(financialReport.financialEfficiencyScore)),
-      computedAt: financialReport.lastCalculatedAt ? new Date(financialReport.lastCalculatedAt) : new Date(),
-      snapshotJson: {
-        annualCost,
-        marketAverageTotal: asNumber(financialReport.marketAverageTotal),
       },
     }, deps);
   }

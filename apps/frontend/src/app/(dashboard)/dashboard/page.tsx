@@ -23,8 +23,7 @@ import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'd
 // NEW IMPORTS FOR SCORECARDS AND LAYOUT
 import { DashboardShell } from '@/components/DashboardShell';
 import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
-import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
-import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
+import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { WelcomeModal } from './components/WelcomeModal';
 

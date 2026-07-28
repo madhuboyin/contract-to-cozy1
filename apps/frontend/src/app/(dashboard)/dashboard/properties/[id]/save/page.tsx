@@ -9,9 +9,9 @@ export default async function SaveRedirectPage({ params, searchParams }: SavePag
   const { id } = await params;
   const search = await searchParams;
   const query = new URLSearchParams();
-  query.set('tab', 'financial-efficiency');
+  query.set('section', 'recurring');
   for (const [key, value] of Object.entries(search)) {
-    if (key !== 'tab' && typeof value === 'string') query.set(key, value);
+    if (key !== 'section' && typeof value === 'string') query.set(key, value);
   }
-  redirect(`/dashboard/properties/${encodeURIComponent(id)}?${query.toString()}`);
+  redirect(`/dashboard/properties/${encodeURIComponent(id)}/tools/savings-benefits?${query.toString()}`);
 }

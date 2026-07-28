@@ -92,8 +92,6 @@ make deploy-pi        # Deploy to Raspberry Pi k3s cluster
 
 **Key API prefixes:** `/api/auth`, `/api/properties`, `/api/providers`, `/api/bookings`, `/api/risk`, `/api/gemini`, `/api/inventory`, `/api/room-insights`, `/api/home-events`
 
-**Financial routes** use a versioned prefix: `/api/v1/financial-efficiency`, `/api/v1/properties`
-
 **Auth:** JWT tokens in `Authorization: Bearer <token>` header. Three roles: `HOMEOWNER`, `PROVIDER`, `ADMIN`.
 
 **API Docs:** Swagger UI at `/api/docs` (auto-generated from JSDoc annotations on routes)

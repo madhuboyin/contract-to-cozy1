@@ -1,7 +1,6 @@
 // apps/workers/src/worker.ts
 import {
   Property,
-  PropertyType,
   Prisma
 } from '@prisma/client';
 import cron from 'node-cron';
@@ -9,7 +8,6 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 import { Worker, Queue } from 'bullmq';
 
-import { calculateFinancialEfficiency } from '@worker-shared/utils/FinancialCalculator.util';
 import { calculateHealthScore } from './utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest, runWeeklyHomeBriefDigest } from './jobs/sendEmailNotification.job';
 import { sendFeedbackNotificationJob } from './jobs/sendFeedbackNotification.job';
@@ -76,7 +74,6 @@ import { providerMissingCredentialSweepJob } from './jobs/providerMissingCredent
 import { runNewHomeWarrantyDeadlineJob } from './jobs/newHomeWarrantyDeadline.job';
 import {
   processRiskCalculation,
-  processFESCalculation,
   processHiddenAssetScan,
   processHomeDigitalTwinRefresh,
   processHomeDigitalTwinScenarioCompute,
@@ -221,7 +218,7 @@ async function sendMaintenanceReminders() {
   return result;
 }
 
-// processRiskCalculation/processFESCalculation/processHiddenAssetScan moved
+// processRiskCalculation/processHiddenAssetScan moved
 // to ./jobs/propertyIntelligence.job.ts (W4 item 4 — testability
 // extraction, no logic changes).
 
@@ -903,10 +900,6 @@ function startWorker() {
         switch (jobType) {
           case PropertyIntelligenceJobType.CALCULATE_RISK_REPORT:
             await processRiskCalculation(job.data);
-            break;
-            
-          case PropertyIntelligenceJobType.CALCULATE_FES:
-            await processFESCalculation(job.data);
             break;
 
           case PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS:

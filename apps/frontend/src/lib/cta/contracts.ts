@@ -161,20 +161,6 @@ export const PAGE_CONTRACTS: Record<string, PageContract> = {
     metrics: ['amount', 'percentage', 'delta'],
     description: 'Risk assessment with exposure details',
   },
-  
-  '/dashboard/properties/:id/financial-efficiency': {
-    route: '/dashboard/properties/:id/financial-efficiency',
-    features: [
-      'focus-breakdown',
-      'view-trends',
-      'cost-breakdown',
-      'expected-cost-validation',
-    ],
-    params: ['focus', 'expectedCost', 'view'],
-    metrics: ['amount', 'delta'],
-    description: 'Financial efficiency with cost breakdown',
-  },
-  
   '/dashboard/properties/:id/tools/home-savings': {
     route: '/dashboard/properties/:id/tools/home-savings',
     features: [

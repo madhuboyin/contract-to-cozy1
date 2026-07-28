@@ -112,7 +112,7 @@ export type CtcTool =
   | 'vault'
   | 'magic-scan'
   | 'resolution-hub'
-  | 'financial-efficiency'
+  | 'savings-benefits'
   // Added as part of the tool-instrumentation coverage sprint
   | 'break-even'
   | 'capital-timeline'

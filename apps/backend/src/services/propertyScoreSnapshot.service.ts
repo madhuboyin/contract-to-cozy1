@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 
-export type PropertyScoreType = 'HEALTH' | 'RISK' | 'FINANCIAL';
+export type PropertyScoreType = 'HEALTH' | 'RISK';
 
 export type ScorePointDTO = {
   weekStart: string;
@@ -25,7 +25,6 @@ export type PropertyScoreSnapshotSummaryDTO = {
   scores: {
     HEALTH: ScoreSeriesDTO;
     RISK: ScoreSeriesDTO;
-    FINANCIAL: ScoreSeriesDTO;
   };
 };
 
@@ -105,7 +104,7 @@ export async function getPropertyScoreSnapshotSummary(
   }
 
   const weeks = clampWeeks(weeksInput);
-  const scoreTypes: PropertyScoreType[] = ['HEALTH', 'RISK', 'FINANCIAL'];
+  const scoreTypes: PropertyScoreType[] = ['HEALTH', 'RISK'];
 
   const rowsByType = await Promise.all(
     scoreTypes.map(async (scoreType) => {
@@ -136,7 +135,6 @@ export async function getPropertyScoreSnapshotSummary(
     scores: {
       HEALTH: buildSeries('HEALTH', map.get('HEALTH') ?? []),
       RISK: buildSeries('RISK', map.get('RISK') ?? []),
-      FINANCIAL: buildSeries('FINANCIAL', map.get('FINANCIAL') ?? []),
     },
   };
 }

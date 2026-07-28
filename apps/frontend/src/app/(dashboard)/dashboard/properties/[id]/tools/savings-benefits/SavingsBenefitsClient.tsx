@@ -2,27 +2,15 @@
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import { Clock3 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HiddenAssetFinderClient from '../hidden-asset-finder/HiddenAssetFinderClient';
 import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
+import { InProgressPanel, RealizedPanel } from './SavingsBenefitsUnifiedPanels';
 
 type Section = 'benefits' | 'recurring' | 'in-progress' | 'realized';
 
 const VALID_SECTIONS: Section[] = ['benefits', 'recurring', 'in-progress', 'realized'];
-
-function NotTrackedYetPanel({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900/30">
-      <Clock3 className="h-6 w-6 text-slate-400" aria-hidden="true" />
-      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</p>
-      <p className="max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-        {description}
-      </p>
-    </div>
-  );
-}
 
 export default function SavingsBenefitsClient() {
   const params = useParams<{ id: string }>();
@@ -76,17 +64,11 @@ export default function SavingsBenefitsClient() {
         </TabsContent>
 
         <TabsContent value="in-progress" className="mt-5">
-          <NotTrackedYetPanel
-            title="Application tracking isn't available yet"
-            description="Once you start pursuing a benefit or switching a recurring-cost provider, this section will track its progress. That tracking isn't built yet — this is not a sign that nothing is in progress."
-          />
+          <InProgressPanel propertyId={propertyId} />
         </TabsContent>
 
         <TabsContent value="realized" className="mt-5">
-          <NotTrackedYetPanel
-            title="Realized-savings tracking isn't available yet"
-            description="This section will show amounts actually received or observed, with evidence, once that tracking is built. Estimated values shown elsewhere in this workspace are not counted here until confirmed."
-          />
+          <RealizedPanel propertyId={propertyId} />
         </TabsContent>
       </Tabs>
     </ToolWorkspaceTemplate>

@@ -283,16 +283,6 @@ describe('CTA Contract System', () => {
       expect(contract.params).toContain('amount');
     });
 
-    it('has financial efficiency contract', () => {
-      const contract = PAGE_CONTRACTS['/dashboard/properties/:id/financial-efficiency'];
-      
-      expect(contract).toBeDefined();
-      expect(contract.features).toContain('focus-breakdown');
-      expect(contract.features).toContain('expected-cost-validation');
-      expect(contract.params).toContain('focus');
-      expect(contract.params).toContain('expectedCost');
-    });
-
     it('has home savings contract', () => {
       const contract = PAGE_CONTRACTS['/dashboard/properties/:id/tools/home-savings'];
       

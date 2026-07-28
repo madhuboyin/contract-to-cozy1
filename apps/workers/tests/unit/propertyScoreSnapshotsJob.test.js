@@ -29,7 +29,6 @@ const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, c
 function fakeDeps({
   properties = [],
   riskReport = null,
-  financialReport = null,
   propertyCore = null,
   existingSnapshot = null,
   snapshotModelMissing = false,
@@ -63,7 +62,6 @@ function fakeDeps({
           return riskReport;
         },
       },
-      financialEfficiencyReport: { findUnique: async () => financialReport },
       property: {
         findUnique: async () => propertyCore,
         findMany: async () => properties,
@@ -85,12 +83,6 @@ test('getBandForScore: RISK bands', () => {
   assert.equal(getBandForScore('RISK', 65), 'Moderate Risk');
   assert.equal(getBandForScore('RISK', 45), 'Elevated Risk');
   assert.equal(getBandForScore('RISK', 20), 'High Risk');
-});
-
-test('getBandForScore: FINANCIAL bands', () => {
-  assert.equal(getBandForScore('FINANCIAL', 95), 'Excellent');
-  assert.equal(getBandForScore('FINANCIAL', 75), 'Average');
-  assert.equal(getBandForScore('FINANCIAL', 50), 'Below Average');
 });
 
 test('getBandForScore: HEALTH (default) bands', () => {
@@ -196,25 +188,6 @@ test('captures a RISK snapshot when a risk report exists', async () => {
   assert.equal(riskCreate.data.snapshotJson.highRiskAssets, 1);
 });
 
-test('captures a FINANCIAL snapshot when a financial report exists', async () => {
-  const { deps, calls } = fakeDeps({
-    financialReport: {
-      financialEfficiencyScore: 88,
-      actualInsuranceCost: 100,
-      actualUtilityCost: 50,
-      actualWarrantyCost: 25,
-      marketAverageTotal: 200,
-      lastCalculatedAt: new Date(),
-    },
-  });
-
-  await capturePropertyScoreSnapshots('property-1', 'homeowner-1', deps);
-
-  const financialCreate = calls.creates.find((c) => c.data.scoreType === 'FINANCIAL');
-  assert.ok(financialCreate);
-  assert.equal(financialCreate.data.snapshotJson.annualCost, 175);
-});
-
 test('captures a HEALTH snapshot when the property core record exists', async () => {
   const { deps, calls } = fakeDeps({
     propertyCore: { id: 'property-1', propertySize: 2000, yearBuilt: 2000 },
@@ -229,7 +202,6 @@ test('captures a HEALTH snapshot when the property core record exists', async ()
 test('skips every snapshot type independently when its source data is absent', async () => {
   const { deps, calls } = fakeDeps({
     riskReport: null,
-    financialReport: null,
     propertyCore: null,
   });
 
@@ -251,8 +223,8 @@ test('captureWeeklyScoreSnapshotsJob processes every property', async () => {
 
   await captureWeeklyScoreSnapshotsJob(deps);
 
-  // Both properties share the same mocked riskReport/financialReport/etc.
-  // fixtures, so 2 properties x 1 (RISK) snapshot type = 2 creates.
+  // Both properties share the same mocked riskReport/etc. fixtures, so
+  // 2 properties x 1 (RISK) snapshot type = 2 creates.
   assert.equal(calls.creates.length, 2);
 });
 

@@ -43,9 +43,6 @@ import {
   RiskAssessmentReport,
   AssetRiskDetail,
   PrimaryRiskSummary, // [NEW IMPORT]
-  // NEW FINANCIAL EFFICIENCY TYPES
-  FinancialEfficiencyReport, // [NEW IMPORT]
-  FinancialReportSummary, // [NEW IMPORT]
   PropertyScoreSnapshotSummary,
   HomeScoreReport,
   HomeScoreCorrection,
@@ -2052,33 +2049,6 @@ class APIClient {
     return null;
   }
   
-  // ==========================================================================
-  // [NEW IMPLEMENTATION] FINANCIAL EFFICIENCY ENDPOINTS (PHASE 2.5)
-  // ==========================================================================
-
-  async getFinancialReportSummary(propertyId: string): Promise<FinancialReportSummary | null> {
-    // The summary endpoint returns the data directly, not wrapped in success/data
-    const response = await this.request<FinancialReportSummary>(`/api/v1/financial-efficiency/summary?propertyId=${propertyId}`);
-
-    // FIX: Handle both wrapped and direct responses
-    if (response.success && response.data) {
-        // Wrapped response format
-        const processedData: FinancialReportSummary = {
-            ...response.data,
-            financialExposureTotal: toNumber(response.data.financialExposureTotal),
-        };
-        return processedData;
-    } else if ((response as any).propertyId) {
-        // Direct response format (what the backend actually returns)
-        const directResponse = response as any as FinancialReportSummary;
-        return {
-            ...directResponse,
-            financialExposureTotal: toNumber(directResponse.financialExposureTotal),
-        };
-    }
-    return null;
-}
-
   async getPropertyScoreSnapshots(
     propertyId: string,
     weeks = 52
@@ -2294,54 +2264,6 @@ class APIClient {
     );
   }
 
-  /**
-   * Fetches the full detailed FES report, queuing a new calculation if stale/missing.
-   * @returns The FinancialEfficiencyReport object or the string 'QUEUED'.
-   */
-  async getDetailedFESReport(propertyId: string): Promise<FinancialEfficiencyReport | 'QUEUED'> {
-    // Calls GET /api/v1/properties/:propertyId/financial-efficiency
-    const response = await this.request<FinancialEfficiencyReport>(`/api/v1/properties/${propertyId}/financial-efficiency`);
-
-    if (response.success) {
-      const rawReport = response.data;
-      
-      // Check if backend returned 'QUEUED' status
-      if ((rawReport as any).status === 'QUEUED') {
-        return 'QUEUED';
-      }
-
-      // Process the report - convert decimal fields to numbers
-      const processedReport: FinancialEfficiencyReport = {
-        id: rawReport.id,
-        propertyId: rawReport.propertyId,
-        financialEfficiencyScore: rawReport.financialEfficiencyScore,
-        // Convert all relevant decimal-based fields to number
-        actualInsuranceCost: toNumber((rawReport as any).actualInsuranceCost),
-        actualUtilityCost: toNumber((rawReport as any).actualUtilityCost),
-        actualWarrantyCost: toNumber((rawReport as any).actualWarrantyCost),
-        marketAverageTotal: toNumber((rawReport as any).marketAverageTotal), 
-        lastCalculatedAt: rawReport.lastCalculatedAt,
-        createdAt: rawReport.createdAt,
-        updatedAt: rawReport.updatedAt,
-      };
-
-      return processedReport;
-    } 
-    // If response.success is false, request() would have thrown an APIError.
-    throw new Error("Failed to retrieve detailed FES report."); 
-  }
-  
-  /**
-   * Triggers an on-demand FES calculation job.
-   * Calls POST /api/v1/properties/:propertyId/financial-efficiency/recalculate
-   */
-  async recalculateFES(propertyId: string): Promise<APIResponse<{ success: boolean; status: 'QUEUED' }>> {
-    return this.request<{ success: boolean; status: 'QUEUED' }>(`/api/v1/properties/${propertyId}/financial-efficiency/recalculate`, {
-      method: 'POST',
-      body: {},
-    });
-  }
-  
   // ==========================================================================
   // NEW FAVORITES ENDPOINTS (PHASE 1)
   // ==========================================================================
@@ -4254,6 +4176,19 @@ class APIClient {
       { status }
     );
     return res.data?.match ?? null;
+  }
+
+  // ==========================================================================
+  // SAVINGS & BENEFITS — UNIFIED READ VIEW
+  // ==========================================================================
+
+  async getSavingsBenefitsUnified(
+    propertyId: string
+  ): Promise<import('@/types').SavingsBenefitsUnifiedResponseDTO | null> {
+    const res = await this.get<import('@/types').SavingsBenefitsUnifiedResponseDTO>(
+      `/api/properties/${propertyId}/savings-benefits`
+    );
+    return res.data ?? null;
   }
 
   // ==========================================================================

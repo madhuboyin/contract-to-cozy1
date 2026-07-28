@@ -1,12 +1,12 @@
 // apps/workers/tests/unit/propertyIntelligenceJob.test.js
 //
-// W4 item 4: processRiskCalculation/processFESCalculation/
-// processHiddenAssetScan (registry key property-intelligence, the BullMQ
-// Worker on property-intelligence-queue) had no dedicated test — the
-// functions were previously inline in worker.ts, which has real side
-// effects at module load and must never be `require`d directly in a test.
-// Extracted verbatim into apps/workers/src/jobs/propertyIntelligence.job.ts
-// this session (no logic changes) specifically to make this possible.
+// W4 item 4: processRiskCalculation/processHiddenAssetScan (registry key
+// property-intelligence, the BullMQ Worker on property-intelligence-queue)
+// had no dedicated test — the functions were previously inline in worker.ts,
+// which has real side effects at module load and must never be `require`d
+// directly in a test. Extracted verbatim into
+// apps/workers/src/jobs/propertyIntelligence.job.ts this session (no logic
+// changes) specifically to make this possible.
 //
 // W4 item 1 (DI refactor): dependencies are injected directly instead of
 // via require.cache.
@@ -18,7 +18,6 @@ require('ts-node/register');
 
 const {
   processRiskCalculation,
-  processFESCalculation,
   processHiddenAssetScan,
   processHomeDigitalTwinRefresh,
   processHomeDigitalTwinScenarioCompute,
@@ -27,35 +26,18 @@ const {
 const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
 function fakeDeps({
-  propertyForFES = null,
   homeownerProfileId = 'homeowner-1',
   riskCalculateShouldThrow = false,
-  fesFinancialResult,
   hiddenAssetScanResult = { programsEvaluated: 0, matchesFound: 0, matchesExpired: 0, matchesInactivated: 0 },
   hiddenAssetScanShouldThrow = false,
   snapshotShouldThrow = false,
 } = {}) {
-  const calls = { riskCalculateArgs: [], fesUpsertArgs: [], hiddenAssetScanArgs: [], scoreSnapshotArgs: [] };
+  const calls = { riskCalculateArgs: [], hiddenAssetScanArgs: [], scoreSnapshotArgs: [] };
 
   const deps = {
     prisma: {
       property: {
-        findUnique: async (args) => {
-          if (args.select?.homeownerProfileId !== undefined) {
-            return { homeownerProfileId };
-          }
-          return propertyForFES;
-        },
-      },
-      financialEfficiencyReport: {
-        upsert: async (args) => {
-          calls.fesUpsertArgs.push(args);
-          return args;
-        },
-      },
-      financialEfficiencyConfig: {
-        findUnique: async () => null,
-        findFirst: async () => null,
+        findUnique: async () => ({ homeownerProfileId }),
       },
     },
     logger: noopLogger,
@@ -73,15 +55,6 @@ function fakeDeps({
         return hiddenAssetScanResult;
       },
     },
-    calculateFinancialEfficiency:
-      fesFinancialResult ??
-      (() => ({
-        score: 80,
-        actualInsuranceCost: { plus: () => ({ plus: () => ({ toFixed: () => '0.00' }) }) },
-        actualUtilityCost: 0,
-        actualWarrantyCost: 0,
-        marketAverageTotal: 0,
-      })),
     capturePropertyScoreSnapshots: async (propertyId, hpId) => {
       calls.scoreSnapshotArgs.push({ propertyId, hpId });
       if (snapshotShouldThrow) throw new Error('snapshot failed');
@@ -122,53 +95,6 @@ test('processRiskCalculation skips the snapshot update when the property has no 
   const { deps, calls } = fakeDeps({ homeownerProfileId: null });
 
   await processRiskCalculation({ propertyId: 'property-1', jobType: 'CALCULATE_RISK_REPORT' }, deps);
-
-  assert.equal(calls.scoreSnapshotArgs.length, 0);
-});
-
-test('processFESCalculation throws when the property does not exist', async () => {
-  const { deps } = fakeDeps({ propertyForFES: null });
-
-  await assert.rejects(
-    () => processFESCalculation({ propertyId: 'missing-property', jobType: 'CALCULATE_FES' }, deps),
-    /Property not found for FES calculation/,
-  );
-});
-
-test('processFESCalculation saves the result and captures score snapshots when homeownerProfileId is present', async () => {
-  const { deps, calls } = fakeDeps({
-    propertyForFES: {
-      id: 'property-1',
-      homeownerProfileId: 'homeowner-1',
-      dwellingType: 'DETACHED_SINGLE_FAMILY',
-      zipCode: '10001',
-      insurancePolicies: [],
-      warranties: [],
-      expenses: [],
-    },
-  });
-
-  await processFESCalculation({ propertyId: 'property-1', jobType: 'CALCULATE_FES' }, deps);
-
-  assert.equal(calls.fesUpsertArgs.length, 1);
-  assert.equal(calls.fesUpsertArgs[0].where.propertyId, 'property-1');
-  assert.deepEqual(calls.scoreSnapshotArgs, [{ propertyId: 'property-1', hpId: 'homeowner-1' }]);
-});
-
-test('processFESCalculation skips score snapshots when the property has no homeownerProfileId', async () => {
-  const { deps, calls } = fakeDeps({
-    propertyForFES: {
-      id: 'property-1',
-      homeownerProfileId: null,
-      dwellingType: 'UNKNOWN',
-      zipCode: '10001',
-      insurancePolicies: [],
-      warranties: [],
-      expenses: [],
-    },
-  });
-
-  await processFESCalculation({ propertyId: 'property-1', jobType: 'CALCULATE_FES' }, deps);
 
   assert.equal(calls.scoreSnapshotArgs.length, 0);
 });

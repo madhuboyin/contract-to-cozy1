@@ -21,7 +21,7 @@ import { weatherService } from './weather.service';
 import { getPlanningContextEnvelope } from './planningContext/context';
 import type { getAggregationContextEnvelope } from './aggregationContext/context';
 
-type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
+type SummaryKind = 'HEALTH' | 'RISK';
 type InsightSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 
 type SnapshotSummaryRow = {
@@ -288,14 +288,9 @@ function formatScoreReason(
     if (ctx.overdueCount > 0) return 'Overdue maintenance needs attention';
     return 'Stable';
   }
-  if (kind === 'RISK') {
-    if (ctx.weatherSeverity === 'HIGH') return 'Weather trigger elevated risk';
-    if (delta < 0) return 'Reduced exposure from recent activity';
-    return 'Updated from recent activity';
-  }
-  if (ctx.expiringWarranties > 0) return 'Renewal decisions pending';
-  if (delta > 0) return 'Improved by recent efficiency updates';
-  return 'Stable';
+  if (ctx.weatherSeverity === 'HIGH') return 'Weather trigger elevated risk';
+  if (delta < 0) return 'Reduced exposure from recent activity';
+  return 'Updated from recent activity';
 }
 
 function toSnapshotDto(snapshot: {
@@ -360,11 +355,6 @@ export class DailyHomePulseService {
             riskScore: true,
             financialExposureTotal: true,
             details: true,
-          },
-        },
-        financialReport: {
-          select: {
-            financialEfficiencyScore: true,
           },
         },
       },
@@ -974,7 +964,6 @@ export class DailyHomePulseService {
           asNumber(property.riskReport?.riskScore) ??
           0
       ) || 0;
-    const financialScore = Math.round(asNumber(property.financialReport?.financialEfficiencyScore) ?? 0);
 
     const previousSnapshot = await prisma.propertyDailySnapshot.findFirst({
       where: {
@@ -991,7 +980,6 @@ export class DailyHomePulseService {
 
     const previousHealth = asNumber(safeObject(previousScoreJson.HEALTH).value) ?? healthScore;
     const previousRisk = asNumber(safeObject(previousScoreJson.RISK).value) ?? riskValue;
-    const previousFinancial = asNumber(safeObject(previousScoreJson.FINANCIAL).value) ?? financialScore;
 
     const weatherInsight = (() => {
       if (weatherIncident) {
@@ -1044,13 +1032,6 @@ export class DailyHomePulseService {
         value: riskValue,
         delta: Math.round((riskValue - previousRisk) * 10) / 10,
         reason: formatScoreReason('RISK', riskValue - previousRisk, scoreContext),
-      },
-      {
-        kind: 'FINANCIAL',
-        label: 'Financial',
-        value: financialScore,
-        delta: Math.round((financialScore - previousFinancial) * 10) / 10,
-        reason: formatScoreReason('FINANCIAL', financialScore - previousFinancial, scoreContext),
       },
     ];
 
@@ -1153,7 +1134,6 @@ export class DailyHomePulseService {
     const scoreJson: SnapshotScoreJson = {
       HEALTH: scoreRows.find((row) => row.kind === 'HEALTH')!,
       RISK: scoreRows.find((row) => row.kind === 'RISK')!,
-      FINANCIAL: scoreRows.find((row) => row.kind === 'FINANCIAL')!,
       generatedAt: new Date().toISOString(),
       timezone,
     };

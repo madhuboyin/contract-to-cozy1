@@ -310,18 +310,6 @@ export class JobQueueService {
     );
 
     await queue.add(
-      PropertyIntelligenceJobType.CALCULATE_FES,
-      {
-        propertyId,
-        jobType: PropertyIntelligenceJobType.CALCULATE_FES,
-      },
-      {
-        jobId: `${propertyId}-FES`,
-        ...defaultOptions,
-      }
-    );
-
-    await queue.add(
       PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS,
       {
         propertyId,
@@ -334,7 +322,7 @@ export class JobQueueService {
     );
 
     // One delayed, property-keyed refresh absorbs bursts of canonical edits
-    // and allows the risk/FES jobs above to publish their latest inputs first.
+    // and allows the risk job above to publish its latest inputs first.
     // BullMQ's stable job id deduplicates concurrent enqueue attempts.
     await this.enqueueHomeDigitalTwinRefresh(propertyId);
 

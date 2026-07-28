@@ -51,7 +51,7 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     key: 'property-intelligence',
     name: 'Property Intelligence',
     description:
-      'Calculates risk report, financial efficiency score, and hidden asset matches per property. Enqueued automatically when a property is updated.',
+      'Calculates risk report and hidden asset matches per property. Enqueued automatically when a property is updated.',
     category: 'PROPERTY_INTELLIGENCE',
     schedule: 'On-demand (event-driven)',
     cronExpression: '',

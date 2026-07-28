@@ -823,7 +823,6 @@ export default function HomeScoreReportPage() {
         snapshot: {
           health: point.healthScore,
           risk: point.riskScore,
-          financial: point.financialScore,
         },
       })),
     [report?.trend]

@@ -27,11 +27,18 @@ import type {
   ClimateRegion,
   CoolingType,
   HeatingType,
-  PropertyType,
   RoofType,
   Season,
   WaterHeaterType,
 } from '@prisma/client';
+
+// Legacy property-type targeting values, from before Property Context's
+// canonical DwellingType enum existed. No longer a Prisma-backed enum (its
+// only DB usage — FinancialEfficiencyConfig's benchmark lookup — was
+// retired), but targetingRulesJson on existing HabitTemplate rows can still
+// carry these values, so the type stays as a standalone alias rather than a
+// live DB reference.
+export type LegacyPropertyType = 'SINGLE_FAMILY' | 'TOWNHOME' | 'CONDO' | 'APARTMENT' | 'MULTI_UNIT' | 'INVESTMENT_PROPERTY';
 
 export type PropertyContextFlag =
   | 'hasSumpPump'
@@ -43,7 +50,7 @@ export type PropertyContextFlag =
   | 'hasDrainageIssues';
 
 export interface HabitTargetingRules {
-  propertyTypes?: PropertyType[];
+  propertyTypes?: LegacyPropertyType[];
   dwellingTypes?: string[];
   seasons?: Season[];
   months?: number[];
@@ -61,7 +68,7 @@ export interface HabitTargetingRules {
 }
 
 export interface PropertyEvalContext {
-  propertyType?: PropertyType | string | null;
+  propertyType?: LegacyPropertyType | string | null;
   yearBuilt?: number | null;
   state?: string | null;
   climateRegion?: ClimateRegion | null;
@@ -80,7 +87,7 @@ export interface PropertyEvalContext {
   hasDrainageIssues?: boolean | null;
 }
 
-const dwellingTypesByLegacyPropertyType: Record<PropertyType, string[]> = {
+const dwellingTypesByLegacyPropertyType: Record<LegacyPropertyType, string[]> = {
   SINGLE_FAMILY: ['DETACHED_SINGLE_FAMILY', 'ATTACHED_SINGLE_FAMILY'],
   TOWNHOME: ['TOWNHOUSE'],
   CONDO: ['CONDO_UNIT'],

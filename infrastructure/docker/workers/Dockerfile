@@ -117,7 +117,7 @@ COPY apps/backend/src/modules/homeEventRadar/queues/radarMatch.queue.ts \
      apps/backend/src/modules/homeEventRadar/queues/radarIngest.queue.ts \
      src/shared/backend/modules/homeEventRadar/queues/
 
-COPY apps/backend/src/utils/riskCalculator.util.ts apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
+COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/services/homeDigitalTwin.service.ts \
      apps/backend/src/services/homeDigitalTwinScenario.service.ts \
      apps/backend/src/services/homeDigitalTwinBuilder.service.ts \

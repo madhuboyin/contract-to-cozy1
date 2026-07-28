@@ -3,7 +3,6 @@ import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util';
 import RiskAssessmentService, { RiskAssessmentContextError } from './RiskAssessment.service';
-import { FinancialReportService } from './FinancialReport.service';
 import {
   formatMajorApplianceType,
   inferMajorApplianceType,
@@ -17,7 +16,7 @@ import {
 } from './propertyScoreSnapshot.service';
 import { logger } from '../lib/logger';
 
-type HomeScoreComponentKey = 'HEALTH' | 'RISK' | 'FINANCIAL';
+type HomeScoreComponentKey = 'HEALTH' | 'RISK';
 type HomeScoreConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 type HomeScoreProvenance = 'SYSTEM_COMPUTED' | 'USER_STATED' | 'INFERRED';
 type HomeScoreImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
@@ -88,7 +87,6 @@ export type HomeScoreTrendPointDTO = {
   homeScore: number;
   healthScore: number | null;
   riskScore: number | null;
-  financialScore: number | null;
 };
 
 export type HomeScoreConsistencyCheckDTO = {
@@ -194,7 +192,7 @@ export type HomeScoreExecutiveSummaryDTO = {
 };
 
 export type HomeScoreRadarAxisDTO = {
-  key: 'MAINTENANCE' | 'INSURANCE' | 'SAFETY' | 'FINANCIAL' | 'WEATHER';
+  key: 'MAINTENANCE' | 'INSURANCE' | 'SAFETY' | 'WEATHER';
   label: string;
   score: number;
   confidence: HomeScoreConfidence;
@@ -556,16 +554,6 @@ function toDisplayValue(value: unknown): string {
   return String(value);
 }
 
-function summarizeFinancialStatus(status: string | undefined) {
-  if (status === 'MISSING_DATA') {
-    return 'Financial inputs are incomplete; add policy, warranty, or utility costs for a stronger score.';
-  }
-  if (status === 'QUEUED') {
-    return 'Financial score is recalculating in the background.';
-  }
-  return 'Financial score is based on annual cost data and benchmark comparison.';
-}
-
 function summarizeRiskStatus(exposure: number, reportStatus: 'READY' | 'QUEUED') {
   if (reportStatus === 'QUEUED') {
     return 'Risk report is recalculating in the background.';
@@ -580,7 +568,6 @@ function buildHomeScoreTrend(summary: PropertyScoreSnapshotSummaryDTO): HomeScor
       weekStart: string;
       healthScore: number | null;
       riskScore: number | null;
-      financialScore: number | null;
     }
   >();
 
@@ -590,12 +577,10 @@ function buildHomeScoreTrend(summary: PropertyScoreSnapshotSummaryDTO): HomeScor
         weekStart: point.weekStart,
         healthScore: null,
         riskScore: null,
-        financialScore: null,
       };
 
       if (key === 'HEALTH') record.healthScore = point.score;
       if (key === 'RISK') record.riskScore = point.score;
-      if (key === 'FINANCIAL') record.financialScore = point.score;
 
       byWeek.set(point.weekStart, record);
     }
@@ -603,26 +588,23 @@ function buildHomeScoreTrend(summary: PropertyScoreSnapshotSummaryDTO): HomeScor
 
   addPoints('HEALTH', summary.scores.HEALTH.trend);
   addPoints('RISK', summary.scores.RISK.trend);
-  addPoints('FINANCIAL', summary.scores.FINANCIAL.trend);
 
   return Array.from(byWeek.values())
     .sort((a, b) => new Date(a.weekStart).getTime() - new Date(b.weekStart).getTime())
     .map((point) => {
       const homeScore = Math.round(
-        average([point.healthScore, point.riskScore, point.financialScore]) * 10
+        average([point.healthScore, point.riskScore]) * 10
       ) / 10;
       return {
         weekStart: point.weekStart,
         homeScore,
         healthScore: point.healthScore,
         riskScore: point.riskScore,
-        financialScore: point.financialScore,
       };
     });
 }
 
 export class HomeScoreReportService {
-  private readonly financialService = new FinancialReportService();
   private readonly preferenceProfileService = new PreferenceProfileService();
 
   private withHomeScoreReturnContext(propertyId: string, targetHref?: string): string | undefined {
@@ -1301,7 +1283,7 @@ export class HomeScoreReportService {
         key: 'insuranceCount',
         label: 'Insurance policies linked',
         value: signals.insuranceCount,
-        component: 'FINANCIAL',
+        component: 'GENERAL',
         provenance: 'SYSTEM_COMPUTED',
         verifyHref: `/dashboard/insurance?propertyId=${propertyId}`,
       },
@@ -1310,7 +1292,7 @@ export class HomeScoreReportService {
         key: 'warrantyCount',
         label: 'Warranties linked',
         value: signals.warrantyCount,
-        component: 'FINANCIAL',
+        component: 'GENERAL',
         provenance: 'SYSTEM_COMPUTED',
         verifyHref: `/dashboard/warranties?propertyId=${propertyId}`,
       },
@@ -1369,10 +1351,9 @@ export class HomeScoreReportService {
     const componentMeta: Record<HomeScoreComponentKey, { label: string; confidence: HomeScoreConfidence }> = {
       HEALTH: { label: 'Property Health', confidence: 'HIGH' },
       RISK: { label: 'Risk Assessment', confidence: 'HIGH' },
-      FINANCIAL: { label: 'Financial Efficiency', confidence: 'MEDIUM' },
     };
 
-    (['HEALTH', 'RISK', 'FINANCIAL'] as const).forEach((key) => {
+    (['HEALTH', 'RISK'] as const).forEach((key) => {
       const points = [...scoreSummary.scores[key].trend].sort(
         (a, b) => new Date(a.weekStart).getTime() - new Date(b.weekStart).getTime()
       );
@@ -1583,8 +1564,7 @@ export class HomeScoreReportService {
   private buildVerificationOpportunities(
     propertyId: string,
     signals: PropertyQualitySignals,
-    riskReportReady: boolean,
-    financialStatus: 'CALCULATED' | 'MISSING_DATA' | 'QUEUED' | 'NO_PROPERTY'
+    riskReportReady: boolean
   ): HomeScoreVerificationOpportunityDTO[] {
     const opportunities: HomeScoreVerificationOpportunityDTO[] = [];
 
@@ -1624,18 +1604,6 @@ export class HomeScoreReportService {
       });
     }
 
-    if (financialStatus !== 'CALCULATED') {
-      opportunities.push({
-        id: 'complete-financial-inputs',
-        title: 'Add insurance and warranty cost inputs',
-        detail: 'Complete annual premium and coverage details to firm up financial confidence.',
-        component: 'FINANCIAL',
-        verificationType: 'PROFILE',
-        estimatedConfidenceGain: 'HIGH',
-        href: `/dashboard/properties/${propertyId}/financial-efficiency`,
-      });
-    }
-
     if (signals.insuranceCount === 0) {
       opportunities.push({
         id: 'link-insurance-policy',
@@ -1653,7 +1621,7 @@ export class HomeScoreReportService {
         id: 'link-warranty-data',
         title: 'Link warranties to major items',
         detail: 'Coverage links reduce uncertainty in lifecycle and risk calculations.',
-        component: 'FINANCIAL',
+        component: 'RISK',
         verificationType: 'DOCUMENT',
         estimatedConfidenceGain: 'MEDIUM',
         href: `/dashboard/warranties?propertyId=${propertyId}`,
@@ -1807,8 +1775,7 @@ export class HomeScoreReportService {
 
   private buildRadar(
     components: HomeScoreComponentDTO[],
-    signals: PropertyQualitySignals,
-    financialSummaryStatus: 'CALCULATED' | 'MISSING_DATA' | 'QUEUED' | 'NO_PROPERTY'
+    signals: PropertyQualitySignals
   ): HomeScoreRadarDTO {
     const componentScore = (key: HomeScoreComponentKey) => components.find((component) => component.key === key)?.score ?? 0;
     const maintenanceScore = Math.round(
@@ -1835,7 +1802,6 @@ export class HomeScoreReportService {
     const safetyScore = Math.round(
       clamp(45 + safetySignal * 22 - safetyUnknown * 8 + (signals.property.hasFireExtinguisher ? 8 : 0), 0, 100)
     );
-    const financialScore = Math.round(componentScore('FINANCIAL'));
     const weatherScore = Math.round(
       clamp(
         componentScore('RISK') * 0.7 + (signals.property.hasDrainageIssues ? -12 : 10),
@@ -1865,13 +1831,6 @@ export class HomeScoreReportService {
         score: safetyScore,
         confidence: safetyUnknown > 0 ? 'MEDIUM' : 'HIGH',
         estimated: safetyUnknown > 0,
-      },
-      {
-        key: 'FINANCIAL',
-        label: 'Financial',
-        score: financialScore,
-        confidence: financialSummaryStatus === 'CALCULATED' ? 'HIGH' : 'LOW',
-        estimated: financialSummaryStatus !== 'CALCULATED',
       },
       {
         key: 'WEATHER',
@@ -2265,7 +2224,7 @@ export class HomeScoreReportService {
       const rows = (await snapshotModel.findMany({
         where: {
           propertyId: { not: propertyId },
-          scoreType: { in: ['HEALTH', 'RISK', 'FINANCIAL'] },
+          scoreType: { in: ['HEALTH', 'RISK'] },
           property: whereProperty,
         },
         orderBy: [{ weekStart: 'desc' }],
@@ -2451,7 +2410,7 @@ export class HomeScoreReportService {
   private buildMethodology(): HomeScoreMethodologyDTO {
     return {
       summary:
-        'HomeScore combines health, risk, and financial signals into a 0-100 score intended to support planning and value protection decisions.',
+        'HomeScore combines health and risk signals into a 0-100 score intended to support planning and value protection decisions.',
       inputsUsed: [
         'Property profile details',
         'Maintenance activity and overdue tasks',
@@ -2533,13 +2492,12 @@ export class HomeScoreReportService {
   private async build(propertyId: string, userId: string, weeks: number): Promise<HomeScoreBuildResult> {
     const propertyContext = await this.assertPropertyAccess(propertyId, userId);
 
-    const [healthResult, riskReportOrQueued, financialSummary, scoreSummary, qualitySignals, homeEvents, canonicalAppliances, doNothingRuns] = await Promise.all([
+    const [healthResult, riskReportOrQueued, scoreSummary, qualitySignals, homeEvents, canonicalAppliances, doNothingRuns] = await Promise.all([
       this.getHealthScore(propertyId),
       RiskAssessmentService.getOrCreateRiskReport(propertyId, userId).catch((error) => {
         if (error instanceof RiskAssessmentContextError) return 'QUEUED' as const;
         throw error;
       }),
-      this.financialService.getFinancialEfficiencySummary(propertyId),
       getPropertyScoreSnapshotSummary(propertyId, userId, weeks),
       this.getPropertyQualitySignals(propertyId),
       prisma.homeEvent.findMany({
@@ -2606,20 +2564,9 @@ export class HomeScoreReportService {
       ? clamp(asNumber((riskReportOrQueued as any).riskScore), 0, 100)
       : scoreSummary.scores.RISK.latest?.score ?? 0;
 
-    const financialScore =
-      financialSummary.status === 'CALCULATED'
-        ? clamp(asNumber(financialSummary.financialEfficiencyScore), 0, 100)
-        : scoreSummary.scores.FINANCIAL.latest?.score ?? 0;
-
     const healthConfidenceRatio = 1 - healthResult.missingCount / Math.max(healthResult.health.insights.length || 1, 1);
     const healthConfidence = confidenceFromRatio(healthConfidenceRatio);
     const riskConfidence: HomeScoreConfidence = riskReportReady ? 'HIGH' : 'LOW';
-    const financialConfidence: HomeScoreConfidence =
-      financialSummary.status === 'CALCULATED'
-        ? 'HIGH'
-        : financialSummary.status === 'MISSING_DATA'
-        ? 'LOW'
-        : 'MEDIUM';
 
     const components: HomeScoreComponentDTO[] = [
       {
@@ -2648,35 +2595,22 @@ export class HomeScoreReportService {
           : 'Using latest stored snapshot while risk report recalculates.',
         lastUpdatedAt: riskReportReady ? (riskReportOrQueued as any).lastCalculatedAt : null,
       },
-      {
-        key: 'FINANCIAL',
-        label: 'Financial Efficiency',
-        score: clamp(financialScore, 0, 100),
-        scoreMax: 100,
-        deltaFromPreviousWeek: scoreSummary.scores.FINANCIAL.deltaFromPreviousWeek,
-        status: summarizeFinancialStatus(financialSummary.status),
-        confidence: financialConfidence,
-        provenance: financialSummary.status === 'CALCULATED' ? 'SYSTEM_COMPUTED' : 'INFERRED',
-        sourceSummary: financialSummary.status === 'CALCULATED'
-          ? 'Derived from premiums, warranties, and utility expenses versus benchmark.'
-          : 'Derived from available snapshot signals; add complete cost data to improve confidence.',
-        lastUpdatedAt: financialSummary.lastCalculatedAt ? new Date(financialSummary.lastCalculatedAt).toISOString() : null,
-      },
     ];
 
+    // Financial Efficiency was retired (its benchmark comparison overlapped
+    // with Savings and Benefits' recurring-cost tracking) — weight
+    // redistributed proportionally across health/risk rather than left
+    // computing a score from data no UI explains to the homeowner anymore.
     const homeScore = Math.round(
-      (healthScore * 0.4 + riskScore * 0.35 + clamp(financialScore, 0, 100) * 0.25) * 10
+      (healthScore * 0.525 + riskScore * 0.475) * 10
     ) / 10;
 
     const previousHomeScore =
-      scoreSummary.scores.HEALTH.previous ||
-      scoreSummary.scores.RISK.previous ||
-      scoreSummary.scores.FINANCIAL.previous
+      scoreSummary.scores.HEALTH.previous || scoreSummary.scores.RISK.previous
         ? Math.round(
             average([
               scoreSummary.scores.HEALTH.previous?.score ?? null,
               scoreSummary.scores.RISK.previous?.score ?? null,
-              scoreSummary.scores.FINANCIAL.previous?.score ?? null,
             ]) * 10
           ) / 10
         : null;
@@ -2730,32 +2664,6 @@ export class HomeScoreReportService {
           actionHref: `/dashboard/properties/${propertyId}/risk-assessment`,
         });
       }
-    }
-
-    if (financialSummary.status === 'MISSING_DATA') {
-      reasons.push({
-        id: 'financial-missing-data',
-        title: 'Financial efficiency is using incomplete cost inputs',
-        detail: 'Add insurance, warranty, and utility costs to tighten this score.',
-        component: 'FINANCIAL',
-        impact: 'NEGATIVE',
-        weight: 82,
-        confidence: 'HIGH',
-        provenance: 'USER_STATED',
-        actionHref: `/dashboard/properties/${propertyId}/financial-efficiency`,
-      });
-    } else if (financialSummary.status === 'CALCULATED' && financialSummary.financialEfficiencyScore < 75) {
-      reasons.push({
-        id: 'financial-benchmark-gap',
-        title: 'Annual home cost is above benchmark',
-        detail: `Your efficiency score is ${Math.round(financialSummary.financialEfficiencyScore)}.`,
-        component: 'FINANCIAL',
-        impact: 'NEGATIVE',
-        weight: 74,
-        confidence: 'MEDIUM',
-        provenance: 'SYSTEM_COMPUTED',
-        actionHref: `/dashboard/properties/${propertyId}/financial-efficiency`,
-      });
     }
 
     const whatChangedSinceLastWeek: HomeScoreReasonDTO[] = [];
@@ -2818,8 +2726,7 @@ export class HomeScoreReportService {
           rank ===
           Math.min(
             confidenceRank[healthConfidence],
-            confidenceRank[riskConfidence],
-            confidenceRank[financialConfidence]
+            confidenceRank[riskConfidence]
           ) &&
           key
       )?.[0] ?? 'MEDIUM'
@@ -2829,23 +2736,19 @@ export class HomeScoreReportService {
       userStated: qualitySignals.userStatedFilled,
       inferred:
         healthResult.missingCount +
-        (riskReportReady ? 0 : 1) +
-        (financialSummary.status === 'CALCULATED' ? 0 : 1),
+        (riskReportReady ? 0 : 1),
       systemComputed:
         Number(riskReportReady) +
-        Number(financialSummary.status === 'CALCULATED') +
         Number(qualitySignals.documentCount > 0) +
         Number(scoreSummary.scores.HEALTH.latest !== null) +
-        Number(scoreSummary.scores.RISK.latest !== null) +
-        Number(scoreSummary.scores.FINANCIAL.latest !== null),
+        Number(scoreSummary.scores.RISK.latest !== null),
     };
 
     const confidenceWeight = overallConfidence === 'HIGH' ? 0.9 : overallConfidence === 'MEDIUM' ? 0.7 : 0.5;
     const dataCompletenessWeight = clamp(
       qualitySignals.profileCompletenessRatio * 0.55 +
-        (qualitySignals.documentCount > 0 ? 0.15 : 0) +
-        (riskReportReady ? 0.15 : 0) +
-        (financialSummary.status === 'CALCULATED' ? 0.15 : 0),
+        (qualitySignals.documentCount > 0 ? 0.225 : 0) +
+        (riskReportReady ? 0.225 : 0),
       0,
       1
     );
@@ -2875,8 +2778,7 @@ export class HomeScoreReportService {
     const verificationOpportunities = this.buildVerificationOpportunities(
       propertyId,
       qualitySignals,
-      riskReportReady,
-      financialSummary.status
+      riskReportReady
     );
     const correctionHistory = await this.getCorrectionHistory(propertyId);
     const fieldFacts = this.buildFieldFacts(propertyId, qualitySignals, components);
@@ -2945,8 +2847,6 @@ export class HomeScoreReportService {
           financialImpact:
             reason.component === 'RISK'
               ? Math.round(riskExposure * 0.14)
-              : reason.component === 'FINANCIAL'
-              ? Math.round(financialExposure.headlineMoneyAtRisk * 0.08)
               : null,
           confidence: reason.confidence,
           provenance,
@@ -3025,7 +2925,7 @@ export class HomeScoreReportService {
       scoreDeltaFromPreviousPeriod: deltaFromPreviousWeek,
       trendStatus: trend.length > 1 ? 'AVAILABLE' : 'INSUFFICIENT_HISTORY',
     };
-    const radar = this.buildRadar(components, qualitySignals, financialSummary.status);
+    const radar = this.buildRadar(components, qualitySignals);
 
     const report: HomeScoreReportDTO = {
       propertyId,
@@ -3203,13 +3103,10 @@ export class HomeScoreReportService {
     await this.assertPropertyAccess(propertyId, userId);
     const preferenceProfile = await this.preferenceProfileService.getCurrentProfile(propertyId);
 
-    await Promise.all([
-      RiskAssessmentService.calculateAndSaveReport(propertyId, undefined, userId).catch((error) => {
-        if (error instanceof RiskAssessmentContextError) return null;
-        throw error;
-      }),
-      this.financialService.calculateAndSaveFES(propertyId),
-    ]);
+    await RiskAssessmentService.calculateAndSaveReport(propertyId, undefined, userId).catch((error) => {
+      if (error instanceof RiskAssessmentContextError) return null;
+      throw error;
+    });
     const result = await this.build(propertyId, userId, weeks);
     try {
       await this.persistReportSnapshot(

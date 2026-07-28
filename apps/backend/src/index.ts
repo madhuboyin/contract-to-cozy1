@@ -45,7 +45,6 @@ import serviceCategoryRoutes from './routes/service-category.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import homeownerManagementRoutes from './routes/home-management.routes';
 import riskRoutes from './routes/risk.routes';
-import financialRoutes from './routes/financialEfficiency.routes';
 import geminiRoutes from './routes/gemini.routes';
 import emergencyRoutes from './routes/emergency.routes';
 import documentRoutes from './routes/document.routes';
@@ -129,6 +128,7 @@ import knowledgeHubRoutes from './routes/knowledgeHub.routes';
 import knowledgeHubAdminRoutes from './routes/knowledgeHubAdmin.routes';
 import homeDigitalWillRoutes from './routes/homeDigitalWill.routes';
 import hiddenAssetsRoutes from './routes/hiddenAssets.routes';
+import savingsBenefitsUnifiedRoutes from './routes/savingsBenefitsUnified.routes';
 import homeDigitalTwinRoutes from './routes/homeDigitalTwin.routes';
 import neighborhoodIntelligenceRoutes from './neighborhoodIntelligence/neighborhoodIntelligence.routes';
 import adminAnalyticsRoutes from './routes/adminAnalytics.routes';
@@ -495,10 +495,6 @@ app.use('/api/maintenance-templates', maintenanceRoutes);
 app.use('/api/home-management', homeownerManagementRoutes);
 app.use('/api/risk', riskRoutes);
 
-// Financial efficiency routes
-app.use('/api/v1/financial-efficiency', financialRoutes); 
-app.use('/api/v1/properties', financialRoutes);
-
 // Community routes (NEW)
 app.use(communityRoutes(prisma));
 
@@ -573,6 +569,7 @@ app.use('/api', narrativeRoutes);
 app.use('/api', knowledgeHubAdminRoutes);
 app.use('/api', homeDigitalWillRoutes);
 app.use('/api', hiddenAssetsRoutes);
+app.use('/api', savingsBenefitsUnifiedRoutes);
 app.use('/api', homeDigitalTwinRoutes);
 app.use('/api', neighborhoodIntelligenceRoutes);
 app.use('/api', adminAnalyticsRoutes);

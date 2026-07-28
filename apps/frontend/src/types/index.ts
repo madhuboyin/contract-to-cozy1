@@ -723,49 +723,8 @@ export interface PrimaryRiskSummary {
 
 
 // ============================================================================
-// NEW FINANCIAL EFFICIENCY TYPES (PHASE 2 - FES)
-// ============================================================================
 
-/**
- * Status for the Financial Efficiency calculation job.
- */
-export type FinancialSummaryStatus = 'CALCULATED' | 'QUEUED' | 'MISSING_DATA' | 'NO_PROPERTY';
-
-/**
- * Full Financial Efficiency Report (Matches Prisma model output)
- */
-export interface FinancialEfficiencyReport {
-  id: string;
-  propertyId: string;
-  // The final calculated FES score
-  financialEfficiencyScore: number; // 0.0 to 100.0+
-  
-  // Component Breakdown (Actual Costs converted from Decimal on the backend)
-  actualInsuranceCost: number;
-  actualUtilityCost: number;
-  actualWarrantyCost: number;
-  marketAverageTotal: number; // Total market average for comparison
-  
-  // Timestamps
-  lastCalculatedAt: string; // ISO Date string
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Lightweight Financial Efficiency Summary for Dashboard Card.
- */
-export interface FinancialReportSummary {
-  propertyId: string;
-  financialEfficiencyScore: number;
-  // Total actual annual cost (AC_Total) for display on the card
-  financialExposureTotal: number; 
-  status: FinancialSummaryStatus;
-  lastCalculatedAt: Date | string | null;
-  message?: string;
-}
-
-export type PropertyScoreType = 'HEALTH' | 'RISK' | 'FINANCIAL';
+export type PropertyScoreType = 'HEALTH' | 'RISK';
 
 export interface PropertyScoreTrendPoint {
   weekStart: string;
@@ -790,11 +749,10 @@ export interface PropertyScoreSnapshotSummary {
   scores: {
     HEALTH: PropertyScoreSeries;
     RISK: PropertyScoreSeries;
-    FINANCIAL: PropertyScoreSeries;
   };
 }
 
-export type HomeScoreComponentKey = 'HEALTH' | 'RISK' | 'FINANCIAL';
+export type HomeScoreComponentKey = 'HEALTH' | 'RISK';
 export type HomeScoreConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 export type HomeScoreProvenance = 'SYSTEM_COMPUTED' | 'USER_STATED' | 'INFERRED';
 export type HomeScoreImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
@@ -842,7 +800,6 @@ export interface HomeScoreTrendPoint {
   homeScore: number;
   healthScore: number | null;
   riskScore: number | null;
-  financialScore: number | null;
 }
 
 export interface HomeScoreConsistencyCheck {
@@ -948,7 +905,7 @@ export interface HomeScoreExecutiveSummary {
 }
 
 export interface HomeScoreRadarAxis {
-  key: 'MAINTENANCE' | 'INSURANCE' | 'SAFETY' | 'FINANCIAL' | 'WEATHER';
+  key: 'MAINTENANCE' | 'INSURANCE' | 'SAFETY' | 'WEATHER';
   label: string;
   score: number;
   confidence: HomeScoreConfidence;
@@ -2287,6 +2244,48 @@ export interface HiddenAssetCoverageDTO {
   categoriesNotCovered: HiddenAssetCategory[];
 }
 
+// ============================================================================
+// SAVINGS & BENEFITS — UNIFIED READ VIEW
+// Normalizes PropertyHiddenAssetMatch (benefits) and HomeSavingsOpportunity
+// (recurring-cost) into one shape. Read-only projection; each family's own
+// write actions (refresh, status updates, plan editing) still live on their
+// dedicated endpoints/tabs.
+// ============================================================================
+
+export type SavingsBenefitsFamily = 'BENEFIT' | 'RECURRING_COST';
+export type SavingsBenefitsLifecycle = 'IN_PROGRESS' | 'REALIZED';
+export type SavingsBenefitsValueBasis = 'ONE_TIME' | 'RECURRING' | 'UNKNOWN';
+
+export interface SavingsBenefitsUnifiedItemDTO {
+  id: string;
+  family: SavingsBenefitsFamily;
+  lifecycle: SavingsBenefitsLifecycle;
+  title: string;
+  category: string;
+  explanation: string | null;
+  estimatedValue: number | null;
+  estimatedValueBasis: SavingsBenefitsValueBasis;
+  realizedValue: number | null;
+  currency: string;
+  deadline: string | null;
+  sourceLabel: string | null;
+  statusLabel: string;
+  outcomeStage: 'SUBMITTED' | 'APPROVED' | 'DENIED' | 'RECEIVED' | 'WITHDRAWN' | null;
+  detailHref: string;
+  updatedAt: string;
+}
+
+export interface SavingsBenefitsUnifiedResponseDTO {
+  propertyId: string;
+  inProgress: SavingsBenefitsUnifiedItemDTO[];
+  realized: SavingsBenefitsUnifiedItemDTO[];
+  totals: {
+    inProgressCount: number;
+    realizedCount: number;
+    realizedValueTotal: number;
+    realizedValueByFamily: Record<SavingsBenefitsFamily, number>;
+  };
+}
 
 // ============================================================================
 // NEW BUDGET FORECASTER TYPES (PHASE 3)

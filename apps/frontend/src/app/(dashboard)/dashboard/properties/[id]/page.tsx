@@ -21,7 +21,6 @@ import {
   Calendar,
   History,
   Ruler,
-  DollarSign,
   Wrench,
   Settings,
   ShieldAlert,
@@ -606,52 +605,6 @@ const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
   </>
 );
 
-// NEW: FinancialEfficiencyTab
-const FinancialEfficiencyTab = ({ propertyId }: { propertyId: string }) => (
-  <>
-    <MobileCard className="space-y-3 border-slate-200/80 bg-white md:hidden">
-      <MobileSectionHeader
-        title="Financial Efficiency"
-        subtitle="Compare annual cost against neighborhood benchmarks."
-      />
-      <p className="text-sm text-slate-700">
-        Review insurance, utility, and warranty spend versus market expectations.
-      </p>
-      <Link href={`/dashboard/properties/${propertyId}/financial-efficiency`}>
-        <Button className="w-full min-h-[44px]">
-          <DollarSign className="mr-2 h-4 w-4" />
-          View Financial Efficiency Report
-        </Button>
-      </Link>
-    </MobileCard>
-
-    <Card className="hidden md:block">
-      <CardHeader className="p-4">
-        <CardTitle className="font-heading text-xl flex items-center gap-2">
-          <DollarSign className="h-5 w-5 text-green-600" />
-          Financial Efficiency Report
-        </CardTitle>
-        <CardDescription className="font-body text-sm">
-          View a detailed comparison of your annual home expenses against market benchmarks.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-3">
-        <p className="font-body text-base text-gray-700">
-          Access the Financial Efficiency Score (FES) report to analyze your annual spending on insurance,
-          utilities, and warranties relative to market averages.
-        </p>
-        <Link href={`/dashboard/properties/${propertyId}/financial-efficiency`}>
-          <Button variant="default">
-            <DollarSign className="mr-2 h-4 w-4" />
-            View Financial Efficiency Report
-          </Button>
-        </Link>
-      </CardContent>
-    </Card>
-  </>
-);
-
-
 // UPDATED: DocumentsTab with Phase 2 typography and compact spacing
 const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
   <>
@@ -812,7 +765,6 @@ const PROPERTY_HUB_TABS = [
   'maintenance',
   'incidents',
   'risk-protection',
-  'financial-efficiency',
 ] as const;
 
 type PropertyHubTab = (typeof PROPERTY_HUB_TABS)[number];
@@ -827,7 +779,6 @@ const PROPERTY_HUB_TAB_OPTIONS: Array<{
   { value: 'maintenance', label: 'Maintenance Plan', shortLabel: 'Maint.', icon: Zap },
   { value: 'incidents', label: 'Incidents', shortLabel: 'Alerts', icon: ShieldAlert },
   { value: 'risk-protection', label: 'Risk & Protection', shortLabel: 'Risk', icon: Shield },
-  { value: 'financial-efficiency', label: 'Financial Efficiency', shortLabel: 'Finance', icon: DollarSign },
 ];
 
 function resolvePropertyHubTab(rawValue: string | null): PropertyHubTab {
@@ -1354,10 +1305,6 @@ export default function PropertyDetailPage() {
 
           <TabsContent value="risk-protection" className={tabPanelClassName}>
             <RiskProtectionTab propertyId={property.id} />
-          </TabsContent>
-
-          <TabsContent value="financial-efficiency" className={tabPanelClassName}>
-            <FinancialEfficiencyTab propertyId={property.id} />
           </TabsContent>
         </PropertyHubTemplate>
       </Tabs>
