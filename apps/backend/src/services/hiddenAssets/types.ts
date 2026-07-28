@@ -3,6 +3,7 @@ import {
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
   HiddenAssetRegionType,
+  HiddenAssetRuleKind,
   HiddenAssetRuleOperator,
   PropertyHiddenAssetMatchStatus,
 } from '@prisma/client';
@@ -121,7 +122,26 @@ export interface RuleEngineProgramInput {
     operator: HiddenAssetRuleOperator;
     value: string;
     sortOrder: number;
+    kind: HiddenAssetRuleKind;
+    groupKey: string | null;
   }>;
+}
+
+// ============================================================================
+// EXPRESSION GROUP EVALUATION (mandatory / optional / disqualifying)
+// ============================================================================
+
+/**
+ * Rules sharing a non-null groupKey are OR'd into one expression group; a
+ * null groupKey makes a rule its own singleton group. A group's status
+ * reflects whether ANY rule in it matched, or — when none matched — whether
+ * the group is still unresolved (some attribute unknown) versus definitively
+ * failed (every rule evaluable and false).
+ */
+export interface GroupEvalResult {
+  groupKey: string;
+  kind: HiddenAssetRuleKind;
+  status: 'SATISFIED' | 'UNKNOWN' | 'NOT_SATISFIED';
 }
 
 // ============================================================================

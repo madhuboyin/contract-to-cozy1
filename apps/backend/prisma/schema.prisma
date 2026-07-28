@@ -10707,6 +10707,23 @@ enum HiddenAssetRegionType {
   HISTORIC_DISTRICT
 }
 
+// A rule's role in program eligibility, distinct from whether it happens to
+// match. Rules sharing a non-null groupKey are OR'd together into one
+// expression group; the group's kind (all rules in a group must share one)
+// determines how the group's result affects the overall program decision.
+//   MANDATORY     — the group must resolve true for the program to match at
+//                    all. Unresolved (unknown) keeps the program a candidate
+//                    but caps confidence; resolved false excludes it.
+//   OPTIONAL      — never excludes the program; only raises or lowers
+//                    confidence once mandatory criteria are satisfied.
+//   DISQUALIFYING — resolving true excludes the program outright, regardless
+//                    of every other rule.
+enum HiddenAssetRuleKind {
+  MANDATORY
+  OPTIONAL
+  DISQUALIFYING
+}
+
 enum HiddenAssetBenefitType {
   TAX_SAVINGS
   TAX_CREDIT
@@ -10880,8 +10897,13 @@ model HiddenAssetProgramRule {
   operator  HiddenAssetRuleOperator
   value     String // stored as string; engine casts per attribute type
 
-  sortOrder Int     @default(0)
-  groupKey  String? // reserved for future grouped/OR logic
+  // Rules sharing a non-null groupKey form one OR expression group (the
+  // group is satisfied if any rule in it matches); a null groupKey makes the
+  // rule its own singleton group. See HiddenAssetRuleKind for how a group's
+  // kind determines its effect on the overall program match decision.
+  kind      HiddenAssetRuleKind @default(MANDATORY)
+  sortOrder Int                 @default(0)
+  groupKey  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

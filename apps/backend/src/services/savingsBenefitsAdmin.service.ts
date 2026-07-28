@@ -10,6 +10,7 @@
 
 import {
   HiddenAssetProgramReviewStatus,
+  HiddenAssetRuleKind,
   HiddenAssetRuleOperator,
   HiddenAssetSourceKind,
   HiddenAssetSourceStatus,
@@ -33,6 +34,14 @@ export interface HiddenAssetProgramRuleInput {
   operator: HiddenAssetRuleOperator;
   value: string;
   sortOrder?: number;
+  /**
+   * MANDATORY (default): must resolve true or the program is excluded.
+   * OPTIONAL: only raises/lowers confidence, never excludes.
+   * DISQUALIFYING: resolving true excludes the program outright.
+   * Rules sharing a groupKey are OR'd together and must share one kind —
+   * createProgram/updateProgram reject a groupKey with mixed kinds.
+   */
+  kind?: HiddenAssetRuleKind;
   groupKey?: string | null;
 }
 
@@ -52,6 +61,28 @@ export interface HiddenAssetProgramInput {
   eligibilityNotes?: string | null;
   expiresAt?: Date | null;
   rules: HiddenAssetProgramRuleInput[];
+}
+
+/**
+ * Rules sharing a groupKey are OR'd together into one expression group by
+ * the rule engine (see hiddenAssets/ruleEngine.ts) — a group can only carry
+ * one kind (MANDATORY/OPTIONAL/DISQUALIFYING), so mixing kinds under the
+ * same groupKey would make the group's effect on the match decision
+ * ambiguous. Reject that at write time rather than silently picking one.
+ */
+function assertConsistentGroupKinds(rules: HiddenAssetProgramRuleInput[]): void {
+  const kindByGroup = new Map<string, HiddenAssetRuleKind>();
+  for (const rule of rules) {
+    if (!rule.groupKey) continue;
+    const kind = rule.kind ?? 'MANDATORY';
+    const existing = kindByGroup.get(rule.groupKey);
+    if (existing && existing !== kind) {
+      throw new Error(
+        `Rules in groupKey "${rule.groupKey}" must share one kind (found ${existing} and ${kind}).`,
+      );
+    }
+    kindByGroup.set(rule.groupKey, kind);
+  }
 }
 
 function sourceHealth(source: {
@@ -156,6 +187,7 @@ export class SavingsBenefitsAdminService {
   }
 
   async createProgram(input: HiddenAssetProgramInput) {
+    assertConsistentGroupKinds(input.rules);
     return prisma.$transaction(async (tx) => {
       const program = await tx.hiddenAssetProgram.create({
         data: {
@@ -186,6 +218,7 @@ export class SavingsBenefitsAdminService {
           operator: rule.operator,
           value: rule.value,
           sortOrder: rule.sortOrder ?? index,
+          kind: rule.kind ?? 'MANDATORY',
           groupKey: rule.groupKey ?? null,
         })),
       });
@@ -194,6 +227,7 @@ export class SavingsBenefitsAdminService {
   }
 
   async updateProgram(programId: string, input: HiddenAssetProgramInput) {
+    assertConsistentGroupKinds(input.rules);
     const existing = await prisma.hiddenAssetProgram.findUnique({ where: { id: programId } });
     if (!existing) throw new Error('Program not found');
 
@@ -228,6 +262,7 @@ export class SavingsBenefitsAdminService {
           operator: rule.operator,
           value: rule.value,
           sortOrder: rule.sortOrder ?? index,
+          kind: rule.kind ?? 'MANDATORY',
           groupKey: rule.groupKey ?? null,
         })),
       });

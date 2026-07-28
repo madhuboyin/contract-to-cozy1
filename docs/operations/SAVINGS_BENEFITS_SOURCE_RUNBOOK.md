@@ -52,10 +52,19 @@ from the backend image).
    be re-reviewed).
 3. Add each program under **Programs**: category, region, benefit type, the
    machine-evaluable rule(s) the rule engine can actually check today
-   (property-level attributes only — state/city/zip; **not** income, age,
-   or residency duration, which the rule engine does not model as of this
-   writing), and `eligibilityNotes` spelling out every criterion the rule
-   engine cannot evaluate, for the homeowner to verify themselves.
+   (property-level attributes only — state/city/county/zip; **not** income,
+   age, or residency duration, which the rule engine does not model as of
+   this writing), and `eligibilityNotes` spelling out every criterion the
+   rule engine cannot evaluate, for the homeowner to verify themselves. The
+   admin console currently authors a single MANDATORY, EQUALS-only rule per
+   program; `HiddenAssetProgramRuleInput.kind` (MANDATORY/OPTIONAL/
+   DISQUALIFYING) and `groupKey` (OR-grouping rules that share a key) exist
+   in the service layer for richer programs but have no console UI yet —
+   use `savingsBenefitsAdminService.createProgram`/`updateProgram` directly
+   for those until the console catches up. See
+   `apps/backend/src/services/hiddenAssets/ruleEngine.ts` for exactly how a
+   program's groups are combined into a match decision and confidence
+   level.
 4. Submit the program for review (`SUBMIT_FOR_REVIEW`), have a different
    admin approve it (`APPROVE`) after independently checking the official
    source, then publish (`PUBLISH`).
@@ -100,6 +109,14 @@ restore its old review, it starts the DRAFT → PUBLISHED cycle over.
   admin console or the pilot seed script; see the audit's Slice 2 write-up
   for why (recall ingestion's zero-review model was explicitly rejected as
   the wrong precedent here).
-- No income/age/household eligibility modeling yet — those criteria live in
-  `eligibilityNotes` as homeowner-facing text, not machine-evaluated rules,
-  until Slice 3 (eligibility expression and context) is implemented.
+- No income/age/household eligibility modeling yet. The rule engine now
+  distinguishes mandatory, optional, and disqualifying criteria and supports
+  OR expression groups (Slice 3), but sensitive facts like income, age,
+  disability, and veteran status still have no consented capture path —
+  those criteria live in `eligibilityNotes` as homeowner-facing text, not
+  machine-evaluated rules, until a dedicated consented eligibility-fact
+  store is built (see section 9.6 of the audit).
+- County is resolvable (`Property.county` feeds both region matching and the
+  rule engine's `county` attribute), but utility, hazard-zone, and
+  historic-district geography still resolve to `null` — `Property` has no
+  fields for them yet.

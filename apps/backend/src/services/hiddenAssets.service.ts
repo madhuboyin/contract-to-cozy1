@@ -177,6 +177,7 @@ async function assertPropertyForUser(
       state: true,
       city: true,
       zipCode: true,
+      county: true,
       yearBuilt: true,
       propertySize: true,
       dwellingType: true,
@@ -211,10 +212,11 @@ async function assertPropertyForUser(
 // REGION KEY DERIVATION
 // ============================================================================
 
-function deriveRegionPairs(property: {
+export function deriveRegionPairs(property: {
   state: string;
   city: string;
   zipCode: string;
+  county?: string | null;
 }): RegionPair[] {
   const pairs: RegionPair[] = [];
 
@@ -223,6 +225,9 @@ function deriveRegionPairs(property: {
 
   if (property.state) {
     pairs.push({ regionType: HiddenAssetRegionType.STATE, regionValue: property.state });
+  }
+  if (property.county) {
+    pairs.push({ regionType: HiddenAssetRegionType.COUNTY, regionValue: property.county });
   }
   if (property.city) {
     pairs.push({ regionType: HiddenAssetRegionType.CITY, regionValue: property.city });
@@ -342,6 +347,7 @@ async function fetchPropertyForScan(propertyId: string): Promise<PropertyScanInp
       state: true,
       city: true,
       zipCode: true,
+      county: true,
       yearBuilt: true,
       propertySize: true,
       dwellingType: true,

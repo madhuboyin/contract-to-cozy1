@@ -1,10 +1,16 @@
-import { HiddenAssetCategory, HiddenAssetConfidenceLevel, HiddenAssetRuleOperator } from '@prisma/client';
+import {
+  HiddenAssetCategory,
+  HiddenAssetConfidenceLevel,
+  HiddenAssetRuleKind,
+  HiddenAssetRuleOperator,
+} from '@prisma/client';
 import {
   applyConfidenceCaps,
   applyFreshnessPenalty,
 } from './categoryConfig';
 import {
   EvalContext,
+  GroupEvalResult,
   ProgramEvalResult,
   PropertyAttributeMap,
   RuleEngineProgramInput,
@@ -278,42 +284,100 @@ function evaluateRule(
 }
 
 // ============================================================================
-// BASE CONFIDENCE COMPUTATION
+// EXPRESSION GROUP EVALUATION AND MATCH DECISION
 // ============================================================================
 
 /**
- * Computes a base confidence level purely from rule evaluation counts.
- *
- * This is the raw signal before category caps and freshness penalties are
- * applied. The calling code applies those downstream.
+ * Groups a program's rules by groupKey (rules sharing a non-null groupKey
+ * are OR'd together; a null groupKey makes a rule its own singleton group)
+ * and reduces each group to a single status:
+ *   SATISFIED     — at least one rule in the group matched
+ *   UNKNOWN       — none matched, but at least one attribute was missing
+ *                    (the group could still resolve true once known)
+ *   NOT_SATISFIED — every rule was evaluable and every one failed
  */
-function computeBaseConfidence(
-  totalRules: number,
-  matchedCount: number,
-  missingCount: number,
-): HiddenAssetConfidenceLevel | null {
-  // No rules → geographic pre-filter already matched → LOW
-  if (totalRules === 0) return HiddenAssetConfidenceLevel.LOW;
+function evaluateGroups(
+  rules: RuleEngineProgramInput['rules'],
+  perRule: SingleRuleEvalResult[],
+): GroupEvalResult[] {
+  const groups = new Map<
+    string,
+    { kind: HiddenAssetRuleKind; anyMatched: boolean; anyUnknown: boolean }
+  >();
 
-  const failedCount = totalRules - matchedCount - missingCount;
+  rules.forEach((rule, i) => {
+    const key = rule.groupKey ?? `__singleton_${rule.id}`;
+    const result = perRule[i];
+    const group = groups.get(key) ?? { kind: rule.kind, anyMatched: false, anyUnknown: false };
+    if (result.matched) group.anyMatched = true;
+    if (result.attributeMissing) group.anyUnknown = true;
+    groups.set(key, group);
+  });
 
-  // Clear disqualification: rules were evaluable but all failed
-  if (matchedCount === 0 && failedCount > 0) return null;
+  return [...groups.entries()].map(([groupKey, group]) => ({
+    groupKey,
+    kind: group.kind,
+    status: group.anyMatched ? 'SATISFIED' : group.anyUnknown ? 'UNKNOWN' : 'NOT_SATISFIED',
+  }));
+}
 
-  // All attributes missing, nothing failed → possible but unverifiable
-  if (matchedCount === 0 && failedCount === 0) return HiddenAssetConfidenceLevel.LOW;
+interface MatchDecision {
+  included: boolean;
+  baseLevel: HiddenAssetConfidenceLevel | null;
+  /** Mandatory groups still unresolved — surfaced as an eligibility caveat. */
+  unresolvedMandatoryCount: number;
+}
 
-  // Compute ratio over evaluable (non-missing) rules
-  const availableRules = totalRules - missingCount;
-  const matchRatio = availableRules > 0 ? matchedCount / availableRules : 0;
-  const missingRatio = missingCount / totalRules;
+/**
+ * Decides whether a program matches at all, and if so its base confidence,
+ * from expression-group results:
+ *   - a satisfied DISQUALIFYING group excludes the program outright;
+ *   - a definitively failed MANDATORY group excludes the program;
+ *   - remaining MANDATORY groups that are still UNKNOWN keep the program a
+ *     candidate but cap confidence at LOW until those facts are known;
+ *   - once every MANDATORY group is confirmed SATISFIED, OPTIONAL groups
+ *     determine whether confidence reaches MEDIUM or HIGH.
+ */
+function decideProgramMatch(groups: GroupEvalResult[]): MatchDecision {
+  const disqualifying = groups.filter((g) => g.kind === HiddenAssetRuleKind.DISQUALIFYING);
+  const mandatory = groups.filter((g) => g.kind === HiddenAssetRuleKind.MANDATORY);
+  const optional = groups.filter((g) => g.kind === HiddenAssetRuleKind.OPTIONAL);
 
-  // High data-missing rate caps at LOW regardless of ratio
-  if (missingRatio >= 0.5) return HiddenAssetConfidenceLevel.LOW;
+  if (disqualifying.some((g) => g.status === 'SATISFIED')) {
+    return { included: false, baseLevel: null, unresolvedMandatoryCount: 0 };
+  }
+  if (mandatory.some((g) => g.status === 'NOT_SATISFIED')) {
+    return { included: false, baseLevel: null, unresolvedMandatoryCount: 0 };
+  }
 
-  if (matchRatio >= 0.9) return HiddenAssetConfidenceLevel.HIGH;
-  if (matchRatio >= 0.6) return HiddenAssetConfidenceLevel.MEDIUM;
-  return HiddenAssetConfidenceLevel.LOW;
+  const optionalSatisfiedCount = optional.filter((g) => g.status === 'SATISFIED').length;
+  const optionalLevel: HiddenAssetConfidenceLevel =
+    optional.length === 0 || optionalSatisfiedCount === optional.length
+      ? HiddenAssetConfidenceLevel.HIGH
+      : optionalSatisfiedCount > 0
+        ? HiddenAssetConfidenceLevel.MEDIUM
+        : HiddenAssetConfidenceLevel.LOW;
+
+  // No mandatory criteria at all (e.g. only disqualifiers + optional rules)
+  // — confidence rests entirely on optional signal.
+  if (mandatory.length === 0) {
+    return { included: true, baseLevel: optionalLevel, unresolvedMandatoryCount: 0 };
+  }
+
+  const unresolvedMandatoryCount = mandatory.filter((g) => g.status === 'UNKNOWN').length;
+  if (unresolvedMandatoryCount > 0) {
+    // Can't yet confirm every mandatory criterion — a real candidate, but
+    // capped low until those facts are known.
+    return { included: true, baseLevel: HiddenAssetConfidenceLevel.LOW, unresolvedMandatoryCount };
+  }
+
+  // Every mandatory group confirmed satisfied — optional rules can still
+  // pull confidence down from HIGH to MEDIUM, never below.
+  const level =
+    optionalLevel === HiddenAssetConfidenceLevel.LOW
+      ? HiddenAssetConfidenceLevel.MEDIUM
+      : optionalLevel;
+  return { included: true, baseLevel: level, unresolvedMandatoryCount: 0 };
 }
 
 // ============================================================================
@@ -634,7 +698,7 @@ function generateMatchReason(
  * - estimated value range from program registry
  *
  * The confidence level is computed in three stages:
- *   1. Base confidence from rule evaluation ratios
+ *   1. Base confidence from mandatory/optional/disqualifying expression groups
  *   2. Category-specific caps (e.g. missing hazard zone → STORM_RESILIENCE capped)
  *   3. Freshness penalty (stale lastVerifiedAt → confidence reduced)
  */
@@ -667,25 +731,34 @@ export function evaluateProgram(
   let matchedCount = 0;
   let missingCount = 0;
   const reasons: string[] = [];
+  const perRule: SingleRuleEvalResult[] = [];
 
   for (const rule of rules) {
     const { value: propValue, mappedKey } = resolveAttribute(attrs, rule.attribute);
     const result = evaluateRule(attrs, rule);
+    perRule.push(result);
 
     if (result.attributeMissing) {
       missingCount++;
     } else if (result.matched) {
       matchedCount++;
-      const key = mappedKey ?? (rule.attribute as keyof PropertyAttributeMap);
-      reasons.push(generateMatchReason(key, rule.operator, rule.value, propValue, context.category));
+      // A matched DISQUALIFYING rule means the exclusion condition was
+      // detected, not a supporting reason — and a matched MANDATORY/OPTIONAL
+      // rule that ends up excluded (a sibling mandatory group failed) would
+      // otherwise leave a misleading reason behind for a program that isn't
+      // actually included.
+      if (rule.kind !== HiddenAssetRuleKind.DISQUALIFYING) {
+        const key = mappedKey ?? (rule.attribute as keyof PropertyAttributeMap);
+        reasons.push(generateMatchReason(key, rule.operator, rule.value, propValue, context.category));
+      }
     }
   }
 
-  // Stage 1: base confidence from rule counts
-  const baseLevel = computeBaseConfidence(rules.length, matchedCount, missingCount);
-  const matched = baseLevel !== null;
+  // Stage 1: base confidence from mandatory/optional/disqualifying groups
+  const groups = evaluateGroups(rules, perRule);
+  const decision = decideProgramMatch(groups);
 
-  if (!matched) {
+  if (!decision.included || decision.baseLevel === null) {
     return {
       programId: program.id,
       matched: false,
@@ -700,10 +773,17 @@ export function evaluateProgram(
   }
 
   // Stage 2: category-specific attribute caps
-  const cappedLevel = applyConfidenceCaps(baseLevel, context.category, attrs);
+  const cappedLevel = applyConfidenceCaps(decision.baseLevel, context.category, attrs);
 
   // Stage 3: freshness penalty
   const finalLevel = applyFreshnessPenalty(cappedLevel, context.lastVerifiedAt);
+
+  if (decision.unresolvedMandatoryCount > 0) {
+    const criterion = decision.unresolvedMandatoryCount === 1 ? 'criterion' : 'criteria';
+    reasons.push(
+      `${decision.unresolvedMandatoryCount} required eligibility ${criterion} still need${decision.unresolvedMandatoryCount === 1 ? 's' : ''} verification`,
+    );
+  }
 
   return {
     programId: program.id,
@@ -734,6 +814,7 @@ export function buildPropertyAttributeMap(
     state: string;
     city: string;
     zipCode: string;
+    county?: string | null;
     yearBuilt?: number | null;
     propertySize?: number | null;
     dwellingType?: string | null;
@@ -787,7 +868,7 @@ export function buildPropertyAttributeMap(
     state: property.state ?? null,
     city: property.city ?? null,
     zipCode: property.zipCode ?? null,
-    county: null,                         // not yet in Property schema
+    county: property.county ?? null,
     country: 'USA',
 
     // Ownership / classification
