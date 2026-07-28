@@ -359,7 +359,7 @@
     },
     {
       "id": "home-digital-twin",
-      "label": "Home Digital Twin",
+      "label": "Home Upgrade Planner",
       "sources": [
         "home",
         "ai"

@@ -1046,6 +1046,16 @@ Why:
 - material financial implications;
 - clear path from detected change to decision and action.
 
+**Pilot result (July 28, 2026): Implemented.** The two audited capabilities were
+consolidated into one property-scoped `property-tax` capability named **Property Tax
+Center**. Its canonical route is
+`/dashboard/properties/[id]/tools/property-tax`; Tax Appeal is the `stage=appeal`
+workflow, carries the same material-financial and jurisdiction-dependent safety boundary,
+and is no longer separately registered. Completion is `DECISION_RECORDED`, with external
+filing and realized outcomes tracked as explicit downstream events. See the
+[Property Tax Center FRD](../functional/PROPERTY_TAX_CENTER_FRD.md) and
+[operations and governance runbook](../operations/PROPERTY_TAX_CENTER_OPERATIONS_AND_GOVERNANCE.md).
+
 ### 21.5 Pilot success criteria
 
 The pilot succeeds when it:

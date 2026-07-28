@@ -8,8 +8,13 @@ Homeowner Intelligence Platform
 **Home Tools** (Property-Scoped Analytical Tools)
 
 ## Document Version
-v1.0 — Phase 1 Complete  
-Prepared for Phase 2 planning
+v1.1 — Current-state reconciliation
+Updated July 28, 2026
+
+> Property Tax is now governed by the
+> [Property Tax Center FRD](./PROPERTY_TAX_CENTER_FRD.md). References in older audits
+> to modeled tax history, a reassessment risk score, appeal eligibility, or a standalone
+> Tax Appeal Assistant describe retired behavior.
 
 ---
 
@@ -67,27 +72,33 @@ These tools are intentionally **educational, explainable, and trust-building**, 
 
 ---
 
-### 4.1 Property Tax Analyzer
+### 4.1 Property Tax Center
 
 #### Purpose
-Help homeowners understand **tax trajectory and reassessment pressure**.
+Help homeowners understand and verify their assessment and bill, select the safest
+reviewed correction or savings path, and track any external action.
 
 #### Outputs
-- Current annual property tax
-- Historical trend (5y / 10y)
-- Year-over-year delta
-- Reassessment cadence indicators
+- Canonical parcel, assessment, and bill state with field-level provenance
+- Official, document-confirmed, homeowner-reported, conflicted, unknown, and estimated states
+- Reviewed assessment changes, exemptions, correction paths, and jurisdiction deadlines
+- Evidence-qualified appeal readiness and durable case tracking
+- Confirmed determination, refund or credit, and verified realized savings
 
-#### Data Sources (Phase 1)
-- Modeled tax history
-- State reassessment heuristics
+#### Data Sources
+- Enabled, reviewed tax-assessor sources where exact coverage and a confident match exist
+- Homeowner-confirmed tax documents
+- Homeowner-reported planning values, clearly labeled
+- Versioned, cited jurisdiction-rule releases
 
 #### Value
-- Explains tax volatility
-- Reduces confusion around reassessments
+- Explains what changed without fabricating history or comparisons
+- Supports exemption, correction, informal-review, and appeal decisions
+- Preserves the path from reviewed signal to external outcome
 
 #### Confidence Labeling
-- Medium (modeled)
+- Trust is field-specific; one confirmed value does not elevate unrelated values
+- Planning estimates never become official history, deadlines, or appeal conclusions
 
 ---
 
@@ -340,21 +351,25 @@ Phase 2 evolves **Home Tools** from *explainable insights* into **actionable int
 
 ---
 
-### 3.1 Property Tax Analyzer (Phase 2)
+### 3.1 Property Tax Center (Implemented)
 
-#### New Capabilities
-- Ingest **county-level assessment history**
-- Track **millage rate changes**
-- Detect reassessment events automatically
+#### Current Capabilities
+- Ingest reviewed assessor records for explicitly configured coverage
+- Persist canonical assessment and bill records with source evidence
+- Detect reviewed assessment changes through Home Event Radar
+- Apply versioned jurisdiction rules and deadline verification
+- Support document confirmation, non-appeal actions, evidence, cases, and outcomes
 
-#### New Outputs
-- “Reassessment risk score”
-- Upcoming reassessment window prediction
-- Tax appeal eligibility indicator
+#### Current Outputs
+- Source, tax year, assessment stage, match confidence, and coverage limitations
+- Confirmed changes and conflicts
+- Reviewed official next steps and missing evidence
+- Case status, reminders, determination, and verified realized outcome
 
-#### AI Additions
-- Plain-English explanation of assessment changes
-- “Should you appeal?” guidance
+#### AI Boundary
+- AI may extract candidate document fields or draft from confirmed facts when enabled
+- AI cannot predict appeal success, invent rules or deadlines, or represent external filing
+- Homeowner confirmation and reviewed rules remain authoritative
 
 ---
 

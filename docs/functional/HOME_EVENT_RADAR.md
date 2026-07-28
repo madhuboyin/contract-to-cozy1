@@ -379,8 +379,9 @@ dedupe key; Radar matching and provider jobs do not call Guidance. Resolution th
 Property tax reassessment data, fetched from reviewed Socrata open-data
 portals. The first production-shaped pilot is the NYC Department of Finance
 Bronx Tax Class 1 current roll. It mirrors the existing permit-adapter
-pipeline's jurisdiction-config pattern while keeping production launch closed
-until a monitored-property dry run passes.
+pipeline's jurisdiction-config pattern. Accepted source and jurisdiction-rule
+definitions are seeded idempotently, but environment launch remains closed until database
+schema reconciliation, a monitored-property dry run, and operations review pass.
 
 **Data flow:**
 ```text
@@ -389,8 +390,11 @@ TaxAssessorDataSource (jurisdiction config, per county)
 socrataTaxAdapter.fetchAssessments()  — validated/escaped SoQL + timeout + pagination + 429 backoff
         ↓
 address-confident RawTaxAssessmentRecord[]  — unmatched/ambiguous rows withheld
+        ├── propertyTaxSourceIngestionService.persist()
+        │       ↓
+        │   canonical Property Tax assessment record + field evidence
         ↓
-normalizeTaxAssessmentRecord()  — severity + property evidence + bounded lifecycle/TTL
+normalizeTaxAssessmentRecord()  — Radar severity + property evidence + bounded lifecycle/TTL
         ↓
 CanonicalRadarObservation (family: tax, eventType: tax_reassessment)
         ↓
@@ -416,13 +420,20 @@ property_radar_matches  (+ Incident promotion if moderate/high impact)
 
 **Cron registration:** `tax-assessment-ingest` in `workerJobRegistry.ts` (category `RISK_SAFETY`), wired into `CRON_HANDLERS` in `worker.ts`. Weekly, Mondays 6:00 AM (county tax rolls update infrequently). Override via `TAX_ASSESSMENT_INGEST_CRON` env var, following the same `CRON_ENV_OVERRIDES` pattern as other adjustable jobs.
 
-**Guidance journey:** new `tax_reassessment_resolution` journey template — see [Guidance Journey Integration](#guidance-journey-integration).
+**Guidance journey:** `tax_reassessment_resolution` is created on eligible Incident
+promotion. The reviewed Radar action opens the canonical Property Tax Center at
+`/dashboard/properties/[id]/tools/property-tax?stage=changes` and preserves event, match,
+and action context. Radar owns discovery and match lifecycle; the Center owns record
+verification, homeowner decisions, cases, filing confirmation, and realized outcomes. See
+the [Property Tax Center FRD](./PROPERTY_TAX_CENTER_FRD.md).
 
-**Setup required before this fetches anything:** at least one accepted real
-`TaxAssessorDataSource` row must be configured with a valid coverage key, Socrata
-`baseUrl`/`datasetId`, field mapping, and address column. No rows are seeded by default. The worker
-job is additionally `defaultEnabledInBeta: false`, external ingestion remains disabled, and an
-explicit policy override is required after pilot acceptance.
+**Setup required before this fetches anything:** the target database must first be
+reconciled with the repository Prisma schema. The reviewed pilot source and rule release
+must then be upserted with `seedReviewedTaxPilots.ts`, verified for the environment, and
+enabled through the governed operations flow. The worker job remains
+`defaultEnabledInBeta: false`; an explicit policy override is required after pilot
+acceptance. See
+[Property Tax Center Operations and Governance](../operations/PROPERTY_TAX_CENTER_OPERATIONS_AND_GOVERNANCE.md).
 
 **Tests:** adapter/routing tests cover every accepted coverage type, source validation, safe SoQL,
 timeouts, address confidence, batching, and caching. Worker tests cover TTL/severity normalization,
@@ -1107,7 +1118,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 | **Background workers** | QA/E2E fixture ingestion is disabled in production; real tax-assessment, NWS alert, and Open-Meteo freeze-forecast adapters exist; Utility remains contract/integration-gated, while Insurance has an accepted no-go decision and no production source |
 | **Incident lifecycle** | Eligible `moderate`/`high` matches project through `RadarIncidentPromotionService`; terminal events and impact downgrades reconcile via `IncidentService.setStatus` |
 | **Compound intelligence** | `compound-v1` durably correlates reviewed fresh property matches/facts, preserves constituent source/severity provenance, reconciles active/resolved lifecycle, and adds only registry-owned actions |
-| **Guidance engine** | `tax_reassessment_resolution` journey auto-created on promotion; weather-family journeys route to `Incidents`, not Home Event Radar |
+| **Guidance engine** | `tax_reassessment_resolution` journey auto-created on promotion; its reviewed action hands off to Property Tax Center `stage=changes` with launch context, while weather-family journeys route to `Incidents` |
 | **Audit log** | Analytics events written to platform audit log via `AuditLog` model |
 | **Dashboard widget** | `MobileDashboardHome.tsx` queries radar feed to show new/active event counts on the home screen |
 
@@ -1115,7 +1126,7 @@ PropertyRadarState updated + PropertyRadarAction logged
 
 ## Current Limitations
 
-- Three real external source paths exist: tax reassessment (code-complete but disabled pending an accepted configured pilot), NWS alerts, and Open-Meteo freeze forecasts.
+- Three real external source paths exist: tax reassessment (code-complete with a reviewed Bronx Tax Class 1 seed definition, but environment enablement remains gated by schema reconciliation, dry run, and operations review), NWS alerts, and Open-Meteo freeze forecasts.
 - Durable canonical ingestion and revision-driven matching are implemented for NWS, freeze, and test fixtures. Exact property, normalized ZIP, city/state, county FIPS, state, point/radius, and Polygon/MultiPolygon scopes are matched through resumable pages with independently retryable property jobs. Spatial matching uses the canonical property point and indexed PostGIS queries.
 - Property impact uses pure `impact-v1` family rules with explicit unknown handling, stable driver codes, fact-level lineage, and canonical responsibility-aware action routing. Bounded `confidence-v1` scoring records source, geography, freshness, relevant property completeness, and domain evidence; Low confidence stays awareness-only. Bounded `priority-v1` scoring is ordering-only, persists operational diagnostics, uses onset/expiration timing and match-specific state, and never blends stale global signals into the feed. `match-lifecycle-v1` persists Now/Upcoming/Recently Ended, independently marks source freshness, detects homeowner-material revisions, and closes matches/Incidents that no longer intersect current property geography. Property creation, geography/fact/responsibility changes, Radar mitigation state, and canonical completion changes publish durable database-backed reconciliation events that replay active events in bounded cursor pages. An hourly leased safety net resumes incomplete revision/property pages, retries capped Radar dead letters, materializes source coverage, and expires visibility/material-update markers without interpreting source failure as clear.
 - `compound-v1` creates durable property-level insights for reviewed rain/outage/sump, smoke/filter, freeze/outage/electric-heat, and severe-weather/open-roof combinations. It retains each constituent match, source, URL, timing, and original severity, never creates a derived provider severity, and resolves insights when the complete active constituent set no longer qualifies.

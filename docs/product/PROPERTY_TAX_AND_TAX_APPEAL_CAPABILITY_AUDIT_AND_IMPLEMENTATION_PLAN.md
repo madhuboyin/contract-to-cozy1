@@ -3,15 +3,21 @@
 **Capabilities:** 21.4 Property Tax and Tax Appeal  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 27, 2026  
-**Status:** Implementation in progress — Slices 0–1 complete
+**Status:** Implemented — Slices 0–9 complete July 28, 2026
 **Recommended disposition:** **Consolidate and rebuild**  
-**Current safety classifications:** Property Tax — material financial; Tax Appeal — low consequence  
+**Audited safety classifications:** Property Tax — material financial; Tax Appeal — low consequence
 **Recommended safety classification:** Material financial and jurisdiction-dependent for the complete outcome family  
 **Primary outcome family:** Property Tax Understanding, Savings, and Appeal
+**Governing current-state FRD:** [Property Tax Center FRD](../functional/PROPERTY_TAX_CENTER_FRD.md)
+**Operations:** [Property Tax Center Operations and Governance](../operations/PROPERTY_TAX_CENTER_OPERATIONS_AND_GOVERNANCE.md)
 
 ---
 
 ## 1. Executive Decision
+
+> **Historical baseline:** Sections 1–11 preserve the July 27 audit findings that motivated
+> the implementation. They describe the pre-Slice 0 system, not the current product.
+> Current behavior is governed by the Property Tax Center FRD linked above.
 
 Property Tax and Tax Appeal are not separate homeowner jobs. They are stages of one outcome:
 
@@ -1480,6 +1486,17 @@ Record:
 
 **Goal:** Establish one source of product and operational truth.
 
+**Implementation status (July 28, 2026): Complete**
+
+- Added the combined Property Tax Center FRD as the governing current-state contract.
+- Reconciled Product Framework registration, canonical and legacy route inventory, and
+  Home Tools terminology.
+- Documented the Home Event Radar-to-Property Tax Center handoff and ownership boundary.
+- Added the source, jurisdiction-rule, AI, privacy, support, operations, and database-schema
+  governance runbook.
+- Preserved historical audit findings as explicitly historical while removing stale
+  modeled-history, risk-score, eligibility, route, and submission claims from current docs.
+
 **Work**
 
 - Create a combined Property Tax Center FRD.
@@ -1844,21 +1861,16 @@ The Property Tax and Tax Appeal exercise is complete when:
 
 ## 19. Recommended Immediate Next Step
 
-Begin with **Slice 0 — Truth, safety, and route containment**.
+Slices 0–9 are complete. The next step is an environment rollout handoff, not another
+product slice:
 
-Before building new jurisdiction workflows:
+1. reconcile the target database with `apps/backend/prisma/schema.prisma` using the
+   database owner's reviewed process;
+2. upsert and review the Bronx Tax Class 1 source and rule release;
+3. run an allowlisted monitored-property dry run;
+4. verify the operations dashboard and fail-closed source/rule/AI controls;
+5. run targeted backend contracts and the property-tax browser acceptance matrix; and
+6. record the environment enablement decision and rollback evidence.
 
-- remove the fabricated historical and comparison outputs;
-- remove appeal probability and unsupported confidence;
-- remove static deadline authority;
-- remove “Ready to Submit” language;
-- correct completion and safety metadata;
-- establish the single property-scoped route.
-
-Then implement the canonical assessment record and connect the reviewed Bronx source pipeline.
-
-That produces one narrow but trustworthy vertical slice:
-
-> An officially matched assessment change appears in the Property Tax Center, explains its source and limitations, and gives the homeowner the correct reviewed next step.
-
-This is a stronger foundation than expanding the current nationwide heuristic calculator or AI-generated appeal letter.
+No additional jurisdiction should be enabled until its source mapping and rule release pass
+the same governance process.

@@ -1,5 +1,9 @@
 # AI Features - Implementation Summary
 
+> Reconciled July 28, 2026: Tax Appeal is no longer a standalone AI card or
+> capability. It is the governed appeal stage of the
+> [Property Tax Center](./PROPERTY_TAX_CENTER_FRD.md). AI is optional and fail-closed.
+
 ## 🎯 Overview
 
 11 AI-powered features built using Google Gemini API for Contract to Cozy platform.
@@ -182,18 +186,19 @@
 
 ---
 
-### 10. Tax Appeal Assistant
-**What:** AI-powered tax appeal analysis  
+### 10. Property Tax Center
+**What:** Source- and rule-governed property-tax review with optional AI assistance
 **Icon:** Scale (blue/indigo gradient)  
-**Route:** `/dashboard/tax-appeal`  
-**Cost:** ~$0.004 per analysis
+**Route:** `/dashboard/properties/[id]/tools/property-tax`
+**Cost:** Variable when approved AI extraction or drafting is enabled
 
 **Features:**
-- Property assessment review
-- Comparable property analysis
-- Appeal letter generation
-- Evidence compilation
-- Success probability scoring
+- Official, document-confirmed, homeowner-reported, and estimated trust states
+- Reviewed assessment, bill, exemption, correction, and appeal workflows
+- Evidence qualification and durable appeal case tracking
+- Optional document-field extraction that requires homeowner confirmation
+- Optional narrative drafting grounded in confirmed facts and reviewed rules
+- No success probability, automated filing, or unsupported deadline generation
 
 ---
 
@@ -243,7 +248,8 @@
 │ Climate │  Mods   │Appreciat│ Energy │
 ├─────────┼─────────┼─────────┼────────┤
 │   📷    │   ⚖️    │   🚚    │        │
-│ Visual  │Tax Appeal│ Moving │        │
+│ Visual  │Property │ Moving │        │
+│         │Tax Center│        │        │
 └─────────┴─────────┴─────────┴────────┘
 ```
 
@@ -330,9 +336,9 @@ async getBudgetForecast(propertyId)
 | Appreciation | $0.002 | $2.00 |
 | Energy | $0.003 | $3.00 |
 | Visual Inspector | $0.005 | $5.00 |
-| Tax Appeal | $0.004 | $4.00 |
+| Property Tax Center AI | Variable; disabled by default | Not projected |
 | Moving Concierge | $0.003 | $3.00 |
-| **Total** | **~$0.03** | **~$32/mo** |
+| **Total (excluding optional Property Tax AI)** | **Variable** | **Not projected** |
 
 **Free Tier:** 1M tokens/day (covers ~50k requests across all features)
 
@@ -370,7 +376,7 @@ model: "gemini-2.0-flash-exp"
 | Appreciation | Property data | No |
 | Energy | Property systems | No |
 | Visual Inspector | Image upload | No |
-| Tax Appeal | Property assessment | No |
+| Property Tax Center | Reviewed assessor data and homeowner-confirmed documents | Schema reconciliation is a separate release handoff |
 | Moving Concierge | User input | Yes (moving_plans table) |
 
 **Migrations needed:** Documents (2 fields), Moving Concierge (new table)
@@ -447,7 +453,7 @@ Track:
 7. Appreciation (Green) - Value tracking
 8. Energy (Yellow) - Efficiency
 9. Visual Inspector (Purple) - Image analysis
-10. Tax Appeal (Blue) - Assessment appeals
+10. Property Tax Center (Blue) - Governed tax decisions and appeal stage
 
 **HOME_BUYER Dashboard:**
 - All above features PLUS
@@ -471,7 +477,7 @@ Track:
 - Home: Modifications
 - TrendingUp: Appreciation
 - Camera: Visual Inspector
-- Scale: Tax Appeal
+- Scale: Property Tax Center
 - Truck: Moving Concierge
 - Sparkles: AI indicator (all cards)
 
