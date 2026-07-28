@@ -105,7 +105,6 @@ const DATA_SENSITIVITY_BY_CAPABILITY_ID: Record<
   'quote-comparison': 'SENSITIVE',
   'risk-premium-optimizer': 'SENSITIVE',
   'seller-prep': 'SENSITIVE',
-  'tax-appeal': 'SENSITIVE',
 };
 
 function governanceDefinition(

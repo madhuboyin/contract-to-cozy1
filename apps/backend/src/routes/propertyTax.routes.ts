@@ -14,7 +14,6 @@ const router = Router();
  * Optional query params:
  *  - assessedValue: number (USD) override
  *  - taxRate: number (decimal) override e.g. 0.0185
- *  - historyYears: number (default 7)
  */
 router.get(
   '/properties/:propertyId/property-tax/estimate',

@@ -3,7 +3,7 @@
 **Capabilities:** 21.4 Property Tax and Tax Appeal  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 27, 2026  
-**Status:** Recommended implementation plan  
+**Status:** Implementation in progress — Slice 0 complete
 **Recommended disposition:** **Consolidate and rebuild**  
 **Current safety classifications:** Property Tax — material financial; Tax Appeal — low consequence  
 **Recommended safety classification:** Material financial and jurisdiction-dependent for the complete outcome family  
@@ -1228,6 +1228,15 @@ Record:
 
 **Goal:** Stop unsupported homeowner conclusions and unify entry.
 
+**Implementation status (July 27, 2026): Complete**
+
+- Removed synthetic property-tax history, peer medians, percentile claims, and conclusions derived from them.
+- Replaced the legacy appeal analysis with a rules-not-verified readiness response that cannot claim probability, savings, deadlines, or a submission-ready packet.
+- Removed the legacy Tax Appeal Assistant UI.
+- Corrected mixed manual/heuristic input confidence and stopped estimate loading from emitting workflow completion.
+- Consolidated capability registration, catalog placement, legacy routing, and Radar handoffs into the property-scoped Property Tax Center and its `mode=appeal` stage.
+- Updated downstream cost tools so they hold the current planning estimate constant instead of consuming fabricated tax history.
+
 **Work**
 
 - Remove synthetic history, medians, percentile, and action copy.
@@ -1763,4 +1772,3 @@ That produces one narrow but trustworthy vertical slice:
 > An officially matched assessment change appears in the Property Tax Center, explains its source and limitations, and gives the homeowner the correct reviewed next step.
 
 This is a stronger foundation than expanding the current nationwide heuristic calculator or AI-generated appeal letter.
-

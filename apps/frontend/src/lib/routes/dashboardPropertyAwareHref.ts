@@ -148,6 +148,14 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
     toPropertyHref: (propertyId, query) =>
       buildHref(`/dashboard/properties/${propertyId}/tools/property-tax`, query),
   },
+  '/dashboard/tax-appeal': {
+    navTarget: 'property-tax',
+    toPropertyHref: (propertyId, query) => {
+      const nextQuery = new URLSearchParams(query);
+      nextQuery.set('mode', 'appeal');
+      return buildHref(`/dashboard/properties/${propertyId}/tools/property-tax`, nextQuery);
+    },
+  },
   '/dashboard/insurance-trend': {
     navTarget: 'insurance-trend',
     toPropertyHref: (propertyId, query) => {

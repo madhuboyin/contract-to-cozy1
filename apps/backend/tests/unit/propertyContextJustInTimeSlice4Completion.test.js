@@ -19,7 +19,6 @@ const financialSurfaces = [
   ['BREAK_EVEN', 'VIEW_ANALYSIS', '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/break-even/BreakEvenClient.tsx'],
   ['SELL_HOLD_RENT', 'VIEW_ANALYSIS', '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/SellHoldRentClient.tsx'],
   ['PROPERTY_TAX', 'VIEW_ESTIMATE', '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/property-tax/PropertyTaxClient.tsx'],
-  ['TAX_APPEAL', 'RUN_ANALYSIS', '../../../frontend/src/components/TaxAppealAssistant.tsx'],
   ['HIDDEN_ASSETS', 'VIEW_MATCHES', '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/hidden-asset-finder/HiddenAssetFinderClient.tsx'],
 ];
 

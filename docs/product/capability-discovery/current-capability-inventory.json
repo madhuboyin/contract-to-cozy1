@@ -14,16 +14,16 @@
     "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
   ],
   "summary": {
-    "aiCatalogEntries": 38,
+    "aiCatalogEntries": 37,
     "homeCatalogEntries": 35,
     "overlappingEntries": 24,
-    "distinctCapabilities": 49,
-    "routeVerified": 49,
+    "distinctCapabilities": 48,
+    "routeVerified": 48,
     "canonicalRelationshipCoverage": 30,
     "contextualCapabilities": 22,
     "workflowOnly": 1,
-    "lifecycleCanonicalized": 49,
-    "catalogOnlyCapabilities": 26
+    "lifecycleCanonicalized": 48,
+    "catalogOnlyCapabilities": 25
   },
   "capabilities": [
     {
@@ -731,7 +731,7 @@
     },
     {
       "id": "property-tax",
-      "label": "Property Tax",
+      "label": "Property Tax Center",
       "sources": [
         "home",
         "ai"
@@ -743,7 +743,7 @@
       "rolloutKey": "PROPERTY_TAX",
       "releaseStage": "ACTIVE",
       "safetyTier": "MATERIAL_FINANCIAL",
-      "completionKind": "OUTPUT_GENERATED",
+      "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
@@ -876,24 +876,6 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
-    },
-    {
-      "id": "tax-appeal",
-      "label": "Tax Appeals",
-      "sources": [
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/tax-appeal",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "PLAN_BUDGET",
-      "rolloutKey": "TAX_APPEAL",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": false,
-      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "true-cost",

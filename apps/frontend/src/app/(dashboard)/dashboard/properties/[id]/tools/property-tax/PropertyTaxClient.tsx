@@ -1,276 +1,104 @@
-// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tax/property-tax/PropertyTaxClient.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useParams, useSearchParams } from 'next/navigation';
 
 import { getPropertyTaxEstimate, PropertyTaxEstimateDTO } from './taxApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
-import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { propertyTaxTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
-function money(n: number | null | undefined, currency = 'USD') {
-  if (n === null || n === undefined) return '—';
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
+
+function money(value: number | null | undefined, currency = 'USD') {
+  if (value === null || value === undefined) return '—';
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value);
 }
 
-function pct(n: number) {
-  return `${(n * 100).toFixed(2)}%`;
+function pct(value: number) {
+  return `${(value * 100).toFixed(2)}%`;
 }
 
-function MiniLineChart({
-  points,
-}: {
-  points: { xLabel: string; y: number }[];
-}) {
-  const w = 640;
-  const h = 180;
-
-  const padL = 54;
-  const padR = 14;
-  const padT = 12;
-  const padB = 32;
-
-  const safe =
-    points.length >= 2
-      ? points
-      : [
-          { xLabel: '—', y: 0 },
-          { xLabel: '—', y: 0 },
-        ];
-
-  const rawMin = Math.min(...safe.map((p) => p.y));
-  const rawMax = Math.max(...safe.map((p) => p.y), 1);
-  const range = rawMax - rawMin;
-  const rel = range / Math.max(rawMax, 1);
-
-  // If variation is small, pad the scale to make slope visually meaningful.
-  // Otherwise, start at 0 to show "absolute" level.
-  let minY: number;
-  let maxY: number;
-
-  if (rel < 0.12) {
-    const pad = Math.max(rawMax * 0.08, 250); // at least $250 padding
-    minY = Math.max(0, rawMin - pad);
-    maxY = rawMax + pad;
-  } else {
-    minY = 0;
-    maxY = rawMax;
-  }
-
-  const spanY = Math.max(1e-6, maxY - minY);
-
-  const xFor = (i: number) =>
-    padL + (i * (w - padL - padR)) / Math.max(1, safe.length - 1);
-
-  const yFor = (v: number) =>
-    padT + (h - padT - padB) * (1 - (v - minY) / spanY);
-
-  const path = safe
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i).toFixed(2)} ${yFor(p.y).toFixed(2)}`)
-    .join(' ');
-
-  // ✅ 5 Y ticks (top -> bottom)
-  const yTicks = [1, 0.75, 0.5, 0.25, 0].map((t) => minY + (maxY - minY) * t);
-
-  // ✅ X ticks:
-  // - If <= 5 points, show all labels (your requirement).
-  // - If more (future), show first/mid/last.
-  const xTicks =
-    safe.length <= 5
-      ? safe.map((p, idx) => ({ idx, label: p.xLabel }))
-      : [
-          { idx: 0, label: safe[0].xLabel },
-          { idx: Math.floor((safe.length - 1) / 2), label: safe[Math.floor((safe.length - 1) / 2)].xLabel },
-          { idx: safe.length - 1, label: safe[safe.length - 1].xLabel },
-        ];
-
-  const fmtMoneyShort = (v: number) => {
-    if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
-    if (v >= 1000) return `$${Math.round(v / 1000)}k`;
-    return `$${Math.round(v)}`;
-  };
-
-  return (
-    <div className="w-full" style={{ aspectRatio: `${w}/${h}` }}>
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      width="100%"
-      height="100%"
-      className="block text-slate-600 dark:text-slate-300"
-      role="img"
-      aria-label="Property tax trend chart"
-    >
-      {/* axes */}
-      <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeOpacity="0.18" />
-      <line x1={padL} y1={padT} x2={padL} y2={h - padB} stroke="currentColor" strokeOpacity="0.18" />
-
-      {/* y ticks + grid */}
-      {yTicks.map((v, i) => {
-        const y = yFor(v);
-        return (
-          <g key={i}>
-            <line x1={padL} y1={y} x2={w - padR} y2={y} stroke="currentColor" strokeOpacity="0.06" />
-            <text x={padL - 10} y={y + 4} fontSize="11" textAnchor="end" fill="currentColor" opacity="0.45">
-              {fmtMoneyShort(v)}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* line */}
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="2.75" />
-
-      {/* x ticks */}
-      {xTicks.map((t, i) => {
-        const x = xFor(t.idx);
-        return (
-          <g key={i}>
-            <line x1={x} y1={h - padB} x2={x} y2={h - padB + 5} stroke="currentColor" strokeOpacity="0.22" />
-            <text x={x} y={h - 8} fontSize="11" textAnchor="middle" fill="currentColor" opacity="0.45">
-              {t.label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-    </div>
-  );
+function sourceLabel(source?: PropertyTaxEstimateDTO['current']['source']) {
+  return source === 'HOMEOWNER_REPORTED'
+    ? 'Homeowner-reported planning inputs'
+    : 'Rough planning estimate';
 }
 
 export default function PropertyTaxClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const appealMode = searchParams.get('mode') === 'appeal';
 
   const [loading, setLoading] = useState(false);
   const [estimate, setEstimate] = useState<PropertyTaxEstimateDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [assessedValue, setAssessedValue] = useState('');
+  const [taxRate, setTaxRate] = useState('');
+  const requestRef = useRef(0);
 
-  // Optional overrides UI (simple, can be enhanced later)
-  const [assessedValue, setAssessedValue] = useState<string>(''); // USD
-  const [taxRate, setTaxRate] = useState<string>(''); // decimal
-  const [trendYears, setTrendYears] = useState<5 | 10>(5);
-  const reqRef = React.useRef(0);
-  const workflowCompletedTrackedRef = React.useRef(false);
-
-  useEffect(() => {
-    if (!propertyId || !estimate || workflowCompletedTrackedRef.current) return;
-    workflowCompletedTrackedRef.current = true;
-    track('workflow_completed', { tool: 'property-tax', propertyId });
-  }, [propertyId, estimate]);
-
-  async function getAndSet(years: 5 | 10) {
+  async function refresh() {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
-  
-    const av = assessedValue ? Number(assessedValue) : undefined;
-    // User enters percent (e.g. 1.85); API expects decimal (e.g. 0.0185)
-    const trPct = taxRate ? Number(taxRate) : undefined;
-    const tr = trPct !== undefined && Number.isFinite(trPct) ? trPct / 100 : undefined;
-    const reqId = ++reqRef.current;
-    try {
-      const r = await getPropertyTaxEstimate(propertyId, {
-        assessedValue: Number.isFinite(av as any) ? av : undefined,
-        taxRate: Number.isFinite(tr as any) ? tr : undefined,
-        historyYears: years,
-      });
 
-      if (reqId !== reqRef.current) return;
-      setEstimate(r);
-    } catch (e: any) {
-      if (reqId !== reqRef.current) return;
-      setError(e?.message || 'Failed to load property tax estimate');
+    const assessedValueInput = assessedValue ? Number(assessedValue) : undefined;
+    const taxRatePercent = taxRate ? Number(taxRate) : undefined;
+    const taxRateInput = taxRatePercent !== undefined && Number.isFinite(taxRatePercent)
+      ? taxRatePercent / 100
+      : undefined;
+    const requestId = ++requestRef.current;
+
+    try {
+      const result = await getPropertyTaxEstimate(propertyId, {
+        assessedValue: Number.isFinite(assessedValueInput) ? assessedValueInput : undefined,
+        taxRate: Number.isFinite(taxRateInput) ? taxRateInput : undefined,
+      });
+      if (requestId === requestRef.current) setEstimate(result);
+    } catch (cause: unknown) {
+      if (requestId !== requestRef.current) return;
+      setError(cause instanceof Error ? cause.message : 'Failed to load property tax estimate');
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
-  }
-  
-  async function refresh() {
-    await getAndSet(trendYears);
   }
 
   useEffect(() => {
     if (!propertyId) return;
-    refresh();
-    track('workflow_started', { tool: 'property-tax', propertyId, entryPoint: 'direct' });
+    void refresh();
+    track('workflow_started', {
+      tool: 'property-tax',
+      propertyId,
+      entryPoint: appealMode ? 'appeal_redirect' : 'direct',
+    });
+    // Loading an estimate is not workflow completion. Completion requires a
+    // recorded decision or external tax action.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
-  const historyPoints = useMemo(() => {
-    const hist = estimate?.history ?? [];
-    if (!hist.length) return [];
-  
-    if (trendYears === 5) {
-      return hist.slice(-5).map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
-    }
-
-    // 10y: show all 10 data points; chart x-axis renders first/mid/last labels to avoid crowding
-    return hist.slice(-10).map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
-  }, [estimate, trendYears]);
-    
-
-  const confidenceBadge = (c?: string) => {
-    const base = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur';
-    if (c === 'HIGH') return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700`}>High confidence</span>;
-    if (c === 'MEDIUM') return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-800`}>Medium confidence</span>;
-    return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>Estimated</span>;
-  };
+  const invalidAssessedValue = Boolean(assessedValue) && !Number.isFinite(Number(assessedValue));
+  const invalidTaxRate = Boolean(taxRate) && !Number.isFinite(Number(taxRate));
 
   return (
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
       eyebrow="Home tool"
-      title="Property Tax Intelligence"
-      subtitle="Review tax estimates, trend projection, and key drivers behind changes."
+      title="Property Tax Center"
+      subtitle="Understand the current planning estimate, verify official facts, and prepare the right next step."
       introAction={
         <HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" showDesktop={false} />
       }
       trust={propertyTaxTrust({
-        confidenceLabel: estimate?.current?.confidence ?? 'Heuristic estimate — confidence reflects local rate data availability.',
-        freshnessLabel: estimate?.meta?.generatedAt ? 'Updated with latest tax estimate' : 'Run estimate to refresh',
+        confidenceLabel: estimate
+          ? `${sourceLabel(estimate.current.source)} · ${estimate.current.confidence.toLowerCase()} input confidence`
+          : 'Planning estimate only',
+        freshnessLabel: estimate?.meta.generatedAt ? 'Calculated from current inputs' : 'Not yet calculated',
       })}
-      priorityAction={(() => {
-        if (!estimate || loading) return undefined;
-        const hist = estimate.history ?? [];
-        const latestAnnualTax = hist.at(-1)?.annualTax ?? estimate.current.annualTax ?? 0;
-        const prevAnnualTax = hist.at(-2)?.annualTax ?? null;
-        if (prevAnnualTax == null || prevAnnualTax <= 0) return undefined;
-
-        const yoy = (latestAnnualTax - prevAnnualTax) / prevAnnualTax;
-        const annualTax = estimate.current.annualTax ?? 0;
-        const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
-        const fmtMoney = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
-        if (yoy > 0.05) {
-          return {
-            title: `Your property tax is projected up ${fmtPct(yoy)} this year — adding ${fmtMoney(annualTax * yoy)}/year`,
-            description: 'An increase above 5% is worth reviewing. If your assessed value exceeds market reality, you may have grounds to contest.',
-            impactLabel: `${fmtPct(yoy)} year-over-year increase`,
-            confidenceLabel: estimate.current.confidence ?? 'Medium',
-            primaryAction: (
-              <Button type="button" className="w-full sm:w-auto">
-                Contest your assessment
-              </Button>
-            ),
-          };
-        }
-        if (yoy > 0.01) {
-          return {
-            title: `Your property tax is up ${fmtPct(yoy)} this year — a modest increase within normal bounds`,
-            description: 'No immediate action required, but review the trend line below to catch acceleration early.',
-            impactLabel: `${fmtPct(yoy)} year-over-year`,
-            confidenceLabel: estimate.current.confidence ?? 'Medium',
-          };
-        }
-        return undefined;
-      })()}
     >
-
-      {/* Tool identity + Related tools — desktop only, above NBA */}
       <HomeToolHeader
         toolId="property-tax"
         propertyId={propertyId}
@@ -278,228 +106,181 @@ export default function PropertyTaxClient() {
         currentToolId="property-tax"
       />
 
-      <PropertyContextCapturePanel propertyId={propertyId} featureKey="PROPERTY_TAX" operationKey="VIEW_ESTIMATE" onCaptured={() => getAndSet(trendYears)} />
+      <PropertyContextCapturePanel
+        propertyId={propertyId}
+        featureKey="PROPERTY_TAX"
+        operationKey="VIEW_ESTIMATE"
+        onCaptured={() => void refresh()}
+      />
 
-      {/* Controls */}
-      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Optional overrides</div>
-        <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-          If you know your assessed value or local rate, enter it for a tighter estimate.
-        </div>
+      <nav aria-label="Property Tax Center stages" className="flex flex-wrap gap-2">
+        <Link
+          href={`/dashboard/properties/${propertyId}/tools/property-tax`}
+          aria-current={!appealMode ? 'page' : undefined}
+          className={`rounded-full border px-4 py-2 text-sm font-medium ${
+            !appealMode ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+          }`}
+        >
+          Overview
+        </Link>
+        <Link
+          href={`/dashboard/properties/${propertyId}/tools/property-tax?mode=appeal`}
+          aria-current={appealMode ? 'page' : undefined}
+          className={`rounded-full border px-4 py-2 text-sm font-medium ${
+            appealMode ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+          }`}
+        >
+          Appeal readiness
+        </Link>
+      </nav>
 
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+      {appealMode && (
+        <section className="rounded-2xl border border-amber-200/80 bg-amber-50/85 p-5 text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
+          <h2 className="text-base font-semibold">Appeal readiness requires verified local rules</h2>
+          <p className="mt-2 text-sm">
+            This center does not currently determine your chance of success, filing deadline, required form, or expected savings.
+            Confirm those details with the official assessor or appeals authority before filing.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-amber-200/70 bg-white/70 p-4 dark:border-amber-800/50 dark:bg-slate-950/35">
+              <h3 className="text-sm font-semibold">Verify first</h3>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                <li>Parcel, tax year, assessment stage, and valuation date</li>
+                <li>Classification, assessment ratio, exemptions, and taxable value</li>
+                <li>Official deadline, permitted grounds, form, fee, and evidence standard</li>
+              </ul>
+            </div>
+            <div className="rounded-xl border border-amber-200/70 bg-white/70 p-4 dark:border-amber-800/50 dark:bg-slate-950/35">
+              <h3 className="text-sm font-semibold">Prepare evidence</h3>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                <li>The current assessment notice or bill</li>
+                <li>Documents supporting factual, exemption, classification, or condition issues</li>
+                <li>Jurisdiction-qualified comparable records when permitted</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Planning inputs</h2>
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+          Enter both values from the same current official bill or notice. A single override does not make the result high confidence.
+        </p>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
           <label className="text-sm">
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-300">Assessed value (USD)</div>
+            <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Assessed value (USD)</span>
             <input
               value={assessedValue}
-              onChange={(e) => setAssessedValue(e.target.value)}
+              onChange={(event) => setAssessedValue(event.target.value)}
               placeholder="e.g. 425000"
               inputMode="decimal"
-              className={`min-h-[44px] w-full rounded-xl border bg-white/85 px-3 py-2.5 text-sm text-slate-800 shadow-sm backdrop-blur outline-none transition-colors focus:ring-2 dark:bg-slate-900/55 dark:text-slate-100 sm:min-h-0 sm:py-2 ${assessedValue && !Number.isFinite(Number(assessedValue)) ? 'border-red-300 focus:ring-red-200 dark:border-red-700/70 dark:focus:ring-red-800/60' : 'border-slate-300/70 focus:border-slate-400 focus:ring-slate-200 dark:border-slate-700/70 dark:focus:border-slate-500 dark:focus:ring-slate-700'}`}
+              aria-invalid={invalidAssessedValue}
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
-            {assessedValue && !Number.isFinite(Number(assessedValue)) && (
-              <div className="text-xs text-red-500 mt-1">Enter a valid number</div>
-            )}
+            {invalidAssessedValue && <span className="mt-1 block text-xs text-red-600">Enter a valid number.</span>}
           </label>
 
           <label className="text-sm">
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-300">Tax rate (%)</div>
+            <span className="mb-1 block text-xs text-slate-600 dark:text-slate-300">Effective tax rate (%)</span>
             <input
               value={taxRate}
-              onChange={(e) => setTaxRate(e.target.value)}
+              onChange={(event) => setTaxRate(event.target.value)}
               placeholder="e.g. 1.85"
               inputMode="decimal"
-              className={`min-h-[44px] w-full rounded-xl border bg-white/85 px-3 py-2.5 text-sm text-slate-800 shadow-sm backdrop-blur outline-none transition-colors focus:ring-2 dark:bg-slate-900/55 dark:text-slate-100 sm:min-h-0 sm:py-2 ${taxRate && !Number.isFinite(Number(taxRate)) ? 'border-red-300 focus:ring-red-200 dark:border-red-700/70 dark:focus:ring-red-800/60' : 'border-slate-300/70 focus:border-slate-400 focus:ring-slate-200 dark:border-slate-700/70 dark:focus:border-slate-500 dark:focus:ring-slate-700'}`}
+              aria-invalid={invalidTaxRate}
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
-            {taxRate && !Number.isFinite(Number(taxRate)) && (
-              <div className="text-xs text-red-500 mt-1">Enter a valid number</div>
-            )}
+            {invalidTaxRate && <span className="mt-1 block text-xs text-red-600">Enter a valid number.</span>}
           </label>
 
           <div className="flex items-end">
             <button
-              onClick={refresh}
-              disabled={loading}
-              className="inline-flex h-10 w-full items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
+              type="button"
+              onClick={() => void refresh()}
+              disabled={loading || invalidAssessedValue || invalidTaxRate}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
-              {loading ? 'Refreshing…' : 'Refresh estimate'}
+              {loading ? 'Refreshing…' : 'Refresh planning estimate'}
             </button>
           </div>
         </div>
 
         {error && (
-          <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
-            <div className="flex-1 text-sm text-red-600">{error}</div>
-            <button onClick={() => refresh()} className="shrink-0 text-sm font-medium text-red-700 hover:text-red-900 active:opacity-70">Retry</button>
+          <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38 lg:col-span-2">
-          <div className="flex items-start justify-between gap-3">
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/55 lg:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Estimated annual property tax</div>
-              <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">{estimate?.input?.addressLabel || '—'}</div>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Rough annual property-tax estimate</h2>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{estimate?.input.addressLabel || '—'}</p>
             </div>
-            {confidenceBadge(estimate?.current?.confidence)}
+            <span className="rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+              {sourceLabel(estimate?.current.source)}
+            </span>
           </div>
-
-          <div className="mt-4 flex items-end justify-between gap-4">
+          <div className="mt-5 flex flex-wrap items-end justify-between gap-5">
             <div>
-              <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{money(estimate?.current?.annualTax)}</div>
-              <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">≈ {money(estimate?.current?.monthlyTax)} / month</div>
+              <div className="text-3xl font-semibold text-slate-900 dark:text-slate-100">{money(estimate?.current.annualTax)}</div>
+              <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">About {money(estimate?.current.monthlyTax)} per month</div>
             </div>
-
-            <div className="text-right">
-              <div className="text-xs text-slate-500 dark:text-slate-300">Assessed value</div>
-              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{money(estimate?.current?.assessedValue)}</div>
-              <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Rate: {estimate?.current?.taxRate ? pct(estimate.current.taxRate) : '—'}</div>
+            <div className="text-right text-sm">
+              <div>Assessed value: {money(estimate?.current.assessedValue)}</div>
+              <div className="mt-1">Effective rate: {estimate?.current.taxRate ? pct(estimate.current.taxRate) : '—'}</div>
             </div>
           </div>
+          <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-300">
+            This is not an observed tax record. It must not be used to infer historical changes, peer standing, appeal merit, or a filing deadline.
+          </p>
+        </div>
 
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <div className="text-xs text-slate-500 dark:text-slate-300">
-              Trend (last {estimate?.history?.length || trendYears} yrs)
-            </div>
-
-            <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (trendYears === 5) return;
-                  setTrendYears(5);
-                  await getAndSet(5);
-                }}
-                className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
-                  trendYears === 5
-                    ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
-                    : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
-                }`}
-              >
-                5y
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (trendYears === 10) return;
-                  setTrendYears(10);
-                  await getAndSet(10);
-                }}
-                className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
-                  trendYears === 10
-                    ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
-                    : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
-                }`}
-              >
-                10y
-              </button>
-            </div>
-          </div>
-
-
-          <div className="mt-2 text-slate-700 dark:text-slate-200">
-            <MiniLineChart points={historyPoints} />
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(estimate?.projection || []).map((p) => (
-              <div key={p.years} className="rounded-xl border border-slate-300/70 bg-white/80 px-3 py-2 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55">
-                <div className="text-xs text-slate-500 dark:text-slate-300">{p.years}-year est.</div>
-                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{money(p.estimatedAnnualTax)}</div>
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/55">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Planning scenarios</h2>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Forward projections only; these are not historical observations.</p>
+          <div className="mt-4 space-y-3">
+            {(estimate?.projection || []).map((projection) => (
+              <div key={projection.years} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <div className="text-xs text-slate-600 dark:text-slate-300">{projection.years}-year scenario</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{money(projection.estimatedAnnualTax)}</div>
               </div>
             ))}
           </div>
         </div>
+      </section>
 
-        {/* Comparison */}
-        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Comparison</div>
-          <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-            Approximate percentile within your state: <span className="font-medium">{estimate?.comparison?.percentileApprox ?? '—'}%</span>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <div>
-              <div className="text-xs text-slate-500 dark:text-slate-300">City median (est.)</div>
-              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{money(estimate?.comparison?.cityMedianAnnualTax)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 dark:text-slate-300">County median (est.)</div>
-              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{money(estimate?.comparison?.countyMedianAnnualTax)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 dark:text-slate-300">State median (est.)</div>
-              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{money(estimate?.comparison?.stateMedianAnnualTax)}</div>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs text-slate-500 dark:text-slate-300">Note</div>
-            <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-              Median figures are estimates based on state and county-level averages. Your actual position may vary by local assessment district.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Drivers */}
-      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What impacts your property tax</div>
-        <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Plain-English drivers to help explain increases over time.</div>
-
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          {(estimate?.drivers || []).map((d) => (
-            <div key={d.factor} className="rounded-2xl border border-white/70 bg-white/68 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+      <section className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/55">
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">What affects this estimate</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {(estimate?.drivers || []).map((driver) => (
+            <div key={driver.factor} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
-                <span className="rounded-full border border-slate-300/70 bg-slate-50/85 px-2.5 py-1 text-xs text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
-                  {d.impact}
-                </span>
+                <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">{driver.factor}</h3>
+                <span className="text-xs text-slate-600 dark:text-slate-300">{driver.impact}</span>
               </div>
-              <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{d.explanation}</div>
+              <p className="mt-2 text-xs text-slate-700 dark:text-slate-300">{driver.explanation}</p>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* Meta */}
-      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Data & assumptions</div>
-        <div className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
-          {(estimate?.meta?.notes || []).slice(0, 6).map((n, idx) => (
-            <div key={idx}>• {n}</div>
-          ))}
-          <div className="pt-2 text-slate-500 dark:text-slate-300">Generated: {estimate?.meta?.generatedAt || '—'}</div>
-        </div>
-      </div>
-
-      {estimate && (
-        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
-          <div className="mt-3 space-y-2">
-            {estimate.comparison?.percentileApprox !== undefined && estimate.comparison.percentileApprox > 60 && (
-              <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
-                Your estimated tax is in the <span className="font-semibold">{estimate.comparison.percentileApprox}th percentile</span> for your state — above the majority of homeowners. Consider reviewing your assessed value with your county assessor; an informal appeal can reduce your bill if the valuation is above market.
-              </div>
-            )}
-            {estimate.comparison?.percentileApprox !== undefined && estimate.comparison.percentileApprox <= 60 && (
-              <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-                Your estimated tax is below the majority of similar homeowners in your state. Review annually — reassessment cycles or local budget changes can shift your bill unexpectedly.
-              </div>
-            )}
-            {!estimate.comparison?.percentileApprox && (
-              <div className="rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-                Enter your assessed value override above for a sharper estimate, then compare to your county assessor&apos;s records annually.
-              </div>
-            )}
-            <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-              See how taxes fit into your total cost picture with the <span className="font-medium">True Cost of Ownership</span> tool — it combines taxes, insurance, maintenance, and utilities into one view.
-            </div>
-          </div>
-        </div>
-      )}
+      <section className="rounded-2xl border border-white/70 bg-white/80 p-5 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-900/55">
+        <h2 className="font-semibold text-slate-900 dark:text-slate-100">Safe next step</h2>
+        <p className="mt-2 text-slate-700 dark:text-slate-300">
+          Verify the current parcel, classification, exemptions, assessed and taxable values, bill amount, and local process with the official assessor or collector.
+        </p>
+        <Link
+          href={`/dashboard/properties/${propertyId}/tools/property-tax?mode=appeal`}
+          className="mt-4 inline-flex min-h-11 items-center rounded-full bg-slate-900 px-4 font-medium text-white dark:bg-white dark:text-slate-900"
+        >
+          Review appeal readiness
+        </Link>
+      </section>
     </ToolWorkspaceTemplate>
   );
 }

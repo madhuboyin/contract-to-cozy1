@@ -20,8 +20,8 @@ const inventory = JSON.parse(fs.readFileSync(
 ));
 
 test('canonical registry has exact catalog identity, route, release, and lifecycle parity', () => {
-  assert.equal(canonicalCapabilityRegistry.capabilities.length, 49);
-  assert.equal(inventory.summary.distinctCapabilities, 49);
+  assert.equal(canonicalCapabilityRegistry.capabilities.length, 48);
+  assert.equal(inventory.summary.distinctCapabilities, 48);
 
   const expectedIds = inventory.capabilities.map((entry) => entry.id).sort();
   const actualIds = canonicalCapabilityRegistry.capabilities.map((entry) => entry.id);

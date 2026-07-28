@@ -38,6 +38,19 @@ describe('buildPropertyAwareDashboardHref', () => {
       .toBe('/dashboard/properties/property-123/maintenance?taskId=task-1');
   });
 
+  it('maps the legacy tax appeal route to the canonical appeal-readiness stage', () => {
+    const href = buildPropertyAwareDashboardHref(
+      'property-123',
+      '/dashboard/tax-appeal?source=radar&propertyId=old-id',
+    );
+    const { path, params } = parseHref(href);
+
+    expect(path).toBe('/dashboard/properties/property-123/tools/property-tax');
+    expect(params.get('mode')).toBe('appeal');
+    expect(params.get('source')).toBe('radar');
+    expect(params.get('propertyId')).toBeNull();
+  });
+
   it('preserves query params on mapped routes and removes propertyId from source query', () => {
     const href = buildPropertyAwareDashboardHref(
       'property-123',

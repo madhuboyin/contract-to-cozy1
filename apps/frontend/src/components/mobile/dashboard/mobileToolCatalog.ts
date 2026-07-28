@@ -18,7 +18,6 @@ export type MobileAiToolKey =
   | 'appreciation'
   | 'energy'
   | 'visual-inspector'
-  | 'tax-appeal'
   | 'property-tax'
   | 'insurance-trend'
   | 'cost-growth'
@@ -153,8 +152,8 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   },
   {
     key: 'property-tax',
-    title: 'Property Tax',
-    description: 'Forecast and track annual tax drag',
+    title: 'Property Tax Center',
+    description: 'Verify tax facts and prepare next steps',
     href: '/dashboard/property-tax',
     icon: resolveToolIcon('home', 'property-tax'),
     emoji: '🏛️',
@@ -299,16 +298,6 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     emoji: '🧮',
     group: 'planning',
     isActive: (pathname) => /^\/dashboard\/budget(\/|$)/.test(pathname),
-  },
-  {
-    key: 'tax-appeal',
-    title: 'Tax Appeals',
-    description: 'Evaluate and manage tax appeal options',
-    href: '/dashboard/tax-appeal',
-    icon: resolveToolIcon('ai', 'tax-appeal'),
-    emoji: '⚖️',
-    group: 'planning',
-    isActive: (pathname) => /^\/dashboard\/tax-appeal(\/|$)/.test(pathname),
   },
   {
     key: 'cost-growth',
@@ -629,9 +618,9 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'property-tax',
     group: 'ownership',
-    name: 'Property Tax',
-    description: "Forecast annual tax drag",
-    desktopDescription: "Forecast annual property tax burden and monitor drivers of future tax increases.",
+    name: 'Property Tax Center',
+    description: "Verify tax facts and next steps",
+    desktopDescription: "Review a planning estimate, verify official property-tax facts, and prepare a jurisdiction-qualified next step.",
     hrefSuffix: 'tools/property-tax',
     navTarget: 'tool:property-tax',
     icon: resolveToolIcon('home', 'property-tax'),

@@ -17,7 +17,6 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   ['reserve-fund', 'Reserve Fund Planner', 'Plan reserves for future repairs and replacements.', '/dashboard/properties/[id]/tools/reserve-fund', 'RESERVE_FUND', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['seller-prep', 'Seller Prep', 'Prepare the property, documents, and timeline for sale.', '/dashboard/properties/[id]/seller-prep', 'SELLER_PREP', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['status-board', 'Status Board', 'Review readiness and active priorities in one place.', '/dashboard/properties/[id]/status-board', 'STATUS_BOARD', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
-  ['tax-appeal', 'Tax Appeals', 'Evaluate and prepare a property tax appeal.', '/dashboard/tax-appeal', 'TAX_APPEAL', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
 ] as const).map(([
   id,
   label,

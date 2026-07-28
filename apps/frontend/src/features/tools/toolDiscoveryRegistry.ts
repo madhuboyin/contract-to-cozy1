@@ -150,7 +150,6 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'plant-advisor': 'PLANT_ADVISOR',
   'neighborhood-change-radar': 'NEIGHBORHOOD_CHANGE_RADAR',
   'visual-inspector': 'VISUAL_INSPECTOR',
-  'tax-appeal': 'TAX_APPEAL',
   'guidance-overview': 'GUIDANCE_OVERVIEW',
   'quote-comparison': 'QUOTE_COMPARISON',
   'reserve-fund': 'RESERVE_FUND',
@@ -217,6 +216,7 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   diy: 'DECISION_RECORDED',
   'inspection-hub': 'ARTIFACT_CREATED',
   'project-tracker': 'ACTION_COMPLETED',
+  'property-tax': 'DECISION_RECORDED',
 };
 
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {

@@ -8,7 +8,6 @@ type ImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 export type PropertyTaxEstimateInput = {
   assessedValue?: number; // USD (override)
   taxRate?: number; // e.g. 0.0185 = 1.85% (override)
-  historyYears?: number; // default 7
 };
 
 export type PropertyTaxEstimateDTO = {
@@ -29,18 +28,10 @@ export type PropertyTaxEstimateDTO = {
     annualTax: number;
     monthlyTax: number;
     confidence: PropertyTaxConfidence;
+    source: 'HOMEOWNER_REPORTED' | 'PLANNING_ESTIMATE';
   };
-
-  history: { year: number; annualTax: number }[];
 
   projection: { years: 5 | 10 | 20; estimatedAnnualTax: number; assumptions: string[] }[];
-
-  comparison: {
-    stateMedianAnnualTax: number;
-    countyMedianAnnualTax: number;
-    cityMedianAnnualTax: number;
-    percentileApprox: number; // 1..99
-  };
 
   drivers: {
     factor: string;
@@ -60,8 +51,6 @@ export type PropertyTaxEstimateDTO = {
     notes: string[];
   };
 };
-
-const DEFAULT_HISTORY_YEARS = 7;
 
 // Conservative, approximate effective property tax rates by state.
 // (These are heuristics for v1; later you’ll replace with county/school district providers.)
@@ -104,10 +93,6 @@ function assumedAnnualIncreaseRate(state: string) {
   return 0.03;
 }
 
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
 function toMoney(n: number) {
   return Math.round(n * 100) / 100;
 }
@@ -139,22 +124,6 @@ function estimateTaxRate(state: string): { rate: number; confidence: PropertyTax
   return { rate, confidence: 'LOW', notes };
 }
 
-function buildHistory(currentAnnualTax: number, state: string, historyYears: number) {
-  const nowYear = new Date().getFullYear();
-  const g = assumedAnnualIncreaseRate(state);
-
-  const years = clamp(historyYears, 3, 15);
-  const out: { year: number; annualTax: number }[] = [];
-
-  // Build past years ending at current year
-  for (let i = years - 1; i >= 0; i--) {
-    const year = nowYear - i;
-    const factor = Math.pow(1 + g, -i);
-    out.push({ year, annualTax: toMoney(currentAnnualTax * factor) });
-  }
-  return out;
-}
-
 function buildProjections(currentAnnualTax: number, state: string) {
   const g = assumedAnnualIncreaseRate(state);
 
@@ -170,59 +139,31 @@ function buildProjections(currentAnnualTax: number, state: string) {
   return [mk(5), mk(10), mk(20)];
 }
 
-function buildComparison(currentAnnualTax: number, state: string) {
-  // v1 heuristic: treat "state median annual tax" as 85% of current (or a state baseline if you add one later).
-  // Later: replace with real city/county medians from open data.
-  const stateMedian = toMoney(currentAnnualTax * 0.85);
-  const countyMedian = toMoney(currentAnnualTax * 0.95);
-  const cityMedian = toMoney(currentAnnualTax * 0.9);
-
-  // percentile heuristic: compare to state median
-  const ratio = stateMedian > 0 ? currentAnnualTax / stateMedian : 1;
-  const percentileApprox = clamp(Math.round(50 + (ratio - 1) * 40), 1, 99);
-
-  return {
-    stateMedianAnnualTax: stateMedian,
-    countyMedianAnnualTax: countyMedian,
-    cityMedianAnnualTax: cityMedian,
-    percentileApprox,
-  };
-}
-
 type Driver = { factor: string; impact: ImpactLevel; explanation: string };
 
 function buildDriversLocalized(
-  args: { state: string; zipCode: string; taxRate: number; assessedValue: number },
+  args: {
+    assessedValueSource: 'HOMEOWNER_REPORTED' | 'PLANNING_ESTIMATE';
+    taxRateSource: 'HOMEOWNER_REPORTED' | 'PLANNING_ESTIMATE';
+  },
   school?: SchoolInsights | null
 ): Driver[] {
-  const { state, zipCode, taxRate, assessedValue } = args;
-
-  const zp = zipPrefix(zipCode);
-  const rateBand = typicalEffectiveRateBand(state, taxRate);
-  const growth = localGrowthHint(state, zipCode);
-
   const drivers: Driver[] = [
     {
-      factor: `Local effective tax rates (${state})`,
-      impact: rateBand.band,
+      factor: 'Assessed value input',
+      impact: args.assessedValueSource === 'HOMEOWNER_REPORTED' ? 'MEDIUM' : 'HIGH',
       explanation:
-        `Based on your state (${state}), your effective rate (${(taxRate * 100).toFixed(2)}%) is ${rateBand.msg}. ` +
-        `This is one of the biggest drivers of annual tax differences across ZIP codes.`,
+        args.assessedValueSource === 'HOMEOWNER_REPORTED'
+          ? 'This planning estimate uses the assessed value you entered. It has not been verified against an assessor record or tax notice.'
+          : 'No assessed value was confirmed, so this planning estimate uses property size and a state-level price-per-square-foot heuristic.',
     },
     {
-      factor: `Assessed value pressure (ZIP ${zipCode})`,
-      impact: assessedValue >= 500000 ? 'HIGH' : assessedValue >= 300000 ? 'MEDIUM' : 'LOW',
+      factor: 'Effective tax rate input',
+      impact: args.taxRateSource === 'HOMEOWNER_REPORTED' ? 'MEDIUM' : 'HIGH',
       explanation:
-        `Your estimate scales with assessed value. ZIP prefix ${zp} is used to anchor localized messaging in v1; ` +
-        `we’ll enrich this with county/assessor data later for more precision.`,
-    },
-    {
-      factor: `Reassessment & market growth signals (ZIP ${zipCode})`,
-      impact: growth,
-      explanation:
-        growth === 'HIGH'
-          ? `Homes in parts of your region (ZIP prefix ${zp}) often experience faster valuation changes, which can push taxes upward during reassessments.`
-          : `Your region (ZIP prefix ${zp}) typically follows moderate reassessment-driven changes compared to high-growth metros.`,
+        args.taxRateSource === 'HOMEOWNER_REPORTED'
+          ? 'This planning estimate uses the effective rate you entered. It has not been verified against jurisdiction rate components.'
+          : 'No local rate was confirmed, so this planning estimate uses a state-level effective-rate heuristic.',
     },
   ];
 
@@ -236,69 +177,40 @@ function buildDriversLocalized(
   const districtLine = district ? `District: ${district}.` : `District: not resolved.`;
   const ppeLine = ppe ? `Per-pupil spend (est.): ~$${Math.round(ppe).toLocaleString()}.` : `Per-pupil spend: —.`;
 
-  drivers.splice(1, 0, {
-    factor: `School district signal (${state})`,
+  drivers.push({
+    factor: 'School district context',
     impact,
     explanation:
       `${districtLine} ${ppeLine} Confidence: ${conf}. ` +
-      `School district funding can be a meaningful component of local property tax rates.`,
+      'This context does not establish the property tax rate or an appeal ground.',
   });
 
-  if (stateHasHomestead(state)) {
-    drivers.push({
-      factor: `Exemptions & caps (${state})`,
-      impact: 'MEDIUM',
-      explanation:
-        `Many homeowners can reduce taxable value or limit increases via exemptions/caps (often called “homestead” or similar). ` +
-        `We can surface eligibility prompts later once you confirm your residency/ownership status.`,
-    });
-  }
+  drivers.push({
+    factor: 'Exemptions and caps',
+    impact: 'MEDIUM',
+    explanation:
+      'Eligibility has not been evaluated. Confirm exemptions, caps, classification, and taxable value with the official assessor or collector before acting.',
+  });
 
   return drivers;
 }
 
-function zipPrefix(zip: string) {
-  const z = String(zip || '').replace(/\D/g, '');
-  return z.length >= 3 ? z.slice(0, 3) : z;
-}
-
-function stateHasHomestead(state: string) {
-  // v1: broad hinting; expand later per-state
-  return [
-    'TX','FL','CA','NY','NJ','IL','WA','MA','CO','NC','GA','AZ'
-  ].includes(state);
-}
-
-function localGrowthHint(state: string, zip: string): ImpactLevel {
-  const zp = zipPrefix(zip);
-  if (state === 'TX' && ['786', '787', '750', '752'].includes(zp)) return 'HIGH';
-  if (state === 'FL' && ['331', '333', '334', '328'].includes(zp)) return 'HIGH';
-  if (state === 'CA' && ['900', '902', '940', '941', '943'].includes(zp)) return 'HIGH';
-  return 'MEDIUM';
-}
-
-function typicalEffectiveRateBand(state: string, rate: number): { band: ImpactLevel; msg: string } {
-  const baseline = EFFECTIVE_TAX_RATE_BY_STATE[state] ?? 0.011;
-  const delta = rate - baseline;
-  if (delta > 0.003) return { band: 'HIGH', msg: 'higher than typical for your state' };
-  if (delta < -0.003) return { band: 'LOW', msg: 'lower than typical for your state' };
-  return { band: 'MEDIUM', msg: 'around typical for your state' };
+function lowestConfidence(...values: PropertyTaxConfidence[]): PropertyTaxConfidence {
+  const rank: Record<PropertyTaxConfidence, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+  return values.reduce((lowest, value) => rank[value] < rank[lowest] ? value : lowest, 'HIGH');
 }
 
 function buildPropertyTaxNextSteps(args: {
   propertyId: string;
-  state: string;
   confidence: PropertyTaxConfidence;
-  annualTax: number;
-  percentileApprox: number;
 }): PropertyTaxEstimateDTO['nextSteps'] {
-  const { propertyId, state, confidence, annualTax, percentileApprox } = args;
+  const { propertyId, confidence } = args;
   const steps: PropertyTaxEstimateDTO['nextSteps'] = [];
 
   if (confidence === 'LOW') {
     steps.push({
       title: 'Complete your property profile',
-      detail: 'Adding your property size and confirmed assessed value will significantly improve the accuracy of this estimate.',
+      detail: 'Add both the assessed value and effective tax rate from the same current bill or notice before using this estimate for budgeting.',
       action: {
         href: `/dashboard/properties/${propertyId}/settings`,
         label: 'Update property profile',
@@ -306,37 +218,13 @@ function buildPropertyTaxNextSteps(args: {
     });
   }
 
-  if (percentileApprox >= 70) {
-    steps.push({
-      title: 'Review your assessed value for errors',
-      detail: `Your estimated tax is above typical for ${state}. Errors in square footage, lot size, or classification can inflate the bill — most counties allow a formal appeal.`,
-      action: {
-        href: `/dashboard/properties/${propertyId}/tools/negotiation-shield`,
-        label: 'Start a negotiation case',
-        targetTool: 'negotiation-shield',
-      },
-    });
-  }
-
-  if (stateHasHomestead(state)) {
-    steps.push({
-      title: 'Check homestead and exemption eligibility',
-      detail: `${state} offers homestead and potentially other exemptions that can reduce your taxable assessed value. Primary-residence owners are often eligible.`,
-      action: {
-        href: `/dashboard/properties/${propertyId}/tools/property-tax`,
-        label: 'Explore exemptions',
-        targetTool: 'property-tax',
-      },
-    });
-  }
-
   steps.push({
-    title: 'Track your tax bill year-over-year',
-    detail: 'Use the Cost Volatility tool to monitor reassessment cadence and flag years where a step-change is likely.',
+    title: 'Verify the official record',
+    detail: 'Confirm the parcel, assessment year, classification, exemptions, assessed value, taxable value, bill, and current filing information with the official assessor or collector.',
     action: {
-      href: `/dashboard/properties/${propertyId}/tools/cost-volatility`,
-      label: 'View cost volatility',
-      targetTool: 'cost-volatility',
+      href: `/dashboard/properties/${propertyId}/tools/property-tax?mode=appeal`,
+      label: 'Review appeal readiness',
+      targetTool: 'property-tax',
     },
   });
 
@@ -375,37 +263,39 @@ export class PropertyTaxService {
     let assessedValue: number;
     let taxRate: number;
 
-    let confidence: PropertyTaxConfidence = 'LOW';
+    let assessedValueConfidence: PropertyTaxConfidence;
+    let taxRateConfidence: PropertyTaxConfidence;
 
     if (opts.assessedValue !== undefined) {
       assessedValue = opts.assessedValue;
       notes.push('Assessed value override was provided by the client.');
-      confidence = 'HIGH';
+      assessedValueConfidence = 'HIGH';
     } else {
       const r = estimateAssessedValueUSD({ state, propertySize: property.propertySize });
       assessedValue = r.value;
       notes.push(...r.notes);
-      confidence = r.confidence;
+      assessedValueConfidence = r.confidence;
     }
 
     if (opts.taxRate !== undefined) {
       taxRate = opts.taxRate;
       notes.push('Tax rate override was provided by the client.');
-      confidence = 'HIGH';
+      taxRateConfidence = 'HIGH';
     } else {
       const r = estimateTaxRate(state);
       taxRate = r.rate;
       notes.push(...r.notes);
-      confidence = confidence === 'HIGH' ? 'HIGH' : r.confidence; // preserve HIGH if overrides exist
+      taxRateConfidence = r.confidence;
     }
 
+    const confidence = lowestConfidence(assessedValueConfidence, taxRateConfidence);
+    const source = opts.assessedValue !== undefined && opts.taxRate !== undefined
+      ? 'HOMEOWNER_REPORTED' as const
+      : 'PLANNING_ESTIMATE' as const;
     const annualTax = toMoney(assessedValue * taxRate);
     const monthlyTax = toMoney(annualTax / 12);
 
-    const historyYears = opts.historyYears ?? DEFAULT_HISTORY_YEARS;
-    const history = buildHistory(annualTax, state, historyYears);
     const projection = buildProjections(annualTax, state);
-    const comparison = buildComparison(annualTax, state);
     // ✅ Real-data school district + finance signals
     const street = String(property.address || '').split(',')[0].trim();
 
@@ -426,20 +316,15 @@ export class PropertyTaxService {
 
     const drivers = buildDriversLocalized(
       {
-        state,
-        zipCode: property.zipCode,
-        taxRate,
-        assessedValue,
+        assessedValueSource: opts.assessedValue !== undefined ? 'HOMEOWNER_REPORTED' : 'PLANNING_ESTIMATE',
+        taxRateSource: opts.taxRate !== undefined ? 'HOMEOWNER_REPORTED' : 'PLANNING_ESTIMATE',
       },
       schoolInsights
     );
       
     const nextSteps = buildPropertyTaxNextSteps({
       propertyId,
-      state,
       confidence,
-      annualTax,
-      percentileApprox: comparison.percentileApprox,
     });
 
     return {
@@ -459,10 +344,9 @@ export class PropertyTaxService {
         annualTax,
         monthlyTax,
         confidence,
+        source,
       },
-      history,
       projection,
-      comparison,
       drivers,
       nextSteps,
       meta: {

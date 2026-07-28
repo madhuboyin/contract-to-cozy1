@@ -82,7 +82,7 @@ router.post('/extract-bill', authenticate, upload.single('taxBill'), validatePdf
  * @swagger
  * /api/tax-appeal/analyze:
  *   post:
- *     summary: Analyze property tax appeal opportunity
+ *     summary: Review property tax appeal readiness
  *     tags: [Tax Appeal]
  *     security:
  *       - bearerAuth: []
@@ -105,7 +105,7 @@ router.post('/extract-bill', authenticate, upload.single('taxBill'), validatePdf
  *                 type: string
  *     responses:
  *       200:
- *         description: Appeal analysis completed
+ *         description: Appeal readiness reviewed
  */
 router.post('/analyze', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -126,7 +126,7 @@ router.post('/analyze', authenticate, async (req: AuthRequest, res: Response) =>
       });
     }
 
-    logger.info({ propertyId }, '[TAX-APPEAL] Analyzing appeal opportunity for property');
+    logger.info({ propertyId }, '[TAX-APPEAL] Reviewing appeal readiness for property');
 
     const report = await taxAppealService.analyzeAppealOpportunity(
       propertyId,

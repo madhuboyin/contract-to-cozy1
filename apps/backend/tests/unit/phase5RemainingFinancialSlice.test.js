@@ -108,7 +108,6 @@ test('remaining Phase 5 interfaces surface reconciliation notices', () => {
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/break-even/BreakEvenClient.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/SellHoldRentClient.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/property-tax/PropertyTaxClient.tsx',
-    '../../../frontend/src/components/TaxAppealAssistant.tsx',
     '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/hidden-asset-finder/HiddenAssetFinderClient.tsx',
   ]) {
     assert.match(read(source), /PropertyContextCapturePanel/, source);

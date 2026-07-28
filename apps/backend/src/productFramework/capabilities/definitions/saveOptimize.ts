@@ -10,7 +10,7 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
   ['hidden-asset-finder', 'Hidden Asset Finder', 'Find rebates, credits, and benefits for home systems.', '/dashboard/properties/[id]/tools/hidden-asset-finder', 'HIDDEN_ASSET_FINDER', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['home-savings', 'Home Savings Check', 'Find recurring home savings opportunities.', '/dashboard/home-savings', 'HOME_SAVINGS', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['mortgage-refinance-radar', 'Mortgage Refinance Radar', 'Track potential mortgage optimization windows.', '/dashboard/properties/[id]/tools/mortgage-refinance-radar', 'MORTGAGE_REFINANCE_RADAR', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
-  ['property-tax', 'Property Tax', 'Forecast and track annual property tax costs.', '/dashboard/properties/[id]/tools/property-tax', 'PROPERTY_TAX', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
+  ['property-tax', 'Property Tax Center', 'Verify property-tax facts and prepare jurisdiction-qualified next steps.', '/dashboard/properties/[id]/tools/property-tax', 'PROPERTY_TAX', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['sell-hold-rent', 'Sell / Hold / Rent', 'Compare ownership paths and their tradeoffs.', '/dashboard/properties/[id]/tools/sell-hold-rent', 'SELL_HOLD_RENT', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['true-cost', 'True Cost', 'Review the full cost of owning this home.', '/dashboard/properties/[id]/tools/true-cost', 'TRUE_COST', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
 ] as const).map(([
@@ -33,6 +33,16 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
   releaseStage,
   safetyTier,
   completionKind:
-    id === 'coverage-intelligence' ? 'DECISION_RECORDED' as const : 'OUTPUT_GENERATED' as const,
+    id === 'coverage-intelligence' || id === 'property-tax'
+      ? 'DECISION_RECORDED' as const
+      : 'OUTPUT_GENERATED' as const,
+  ...(id === 'property-tax' ? {
+    version: 2,
+    homeownerOutcome:
+      'Verify the relevant property-tax facts and record a no-action, correction, exemption, review, or appeal decision.',
+    expectedOutput:
+      'A recorded property-tax decision or externally completed action grounded in verified jurisdiction rules.',
+    completionSignal: 'property_tax_decision_or_external_action_recorded',
+  } : {}),
   mode,
 })));

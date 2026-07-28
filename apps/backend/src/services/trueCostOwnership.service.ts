@@ -190,15 +190,11 @@ export class TrueCostOwnershipService {
       confidence = hv.confidence;
     }
 
-    // Taxes: rely on existing tax tool logic for annualNow + series
-    // Your tax service signature may vary; the common pattern is estimate(propertyId, { historyYears })
-    const tax = await this.propertyTax.estimate(propertyId, { historyYears: years } as any);
-    const taxHist = (tax?.history || []).slice(-years);
-    const annualTaxNow = (tax?.current as any)?.annualTax ?? taxHist.at(-1)?.annualTax ?? 0;
-
-    if (!(tax as any)?.history?.length) {
-      notes.push('Tax series was not available; using current annual tax for projection.');
-    }
+    // Taxes are a current planning estimate until canonical tax-year records
+    // exist. Do not manufacture historical observations.
+    const tax = await this.propertyTax.estimate(propertyId);
+    const annualTaxNow = tax.current.annualTax;
+    notes.push('Observed tax history is unavailable; the current planning estimate is held constant in the modeled series.');
 
     // Insurance: reuse insurance trend estimate() for a modeled now and growth rate; take its history if available
     const ins = await this.insuranceTrend.estimate(propertyId, {
@@ -263,10 +259,6 @@ export class TrueCostOwnershipService {
     const yearLabels: number[] = [];
     for (let i = years - 1; i >= 0; i--) yearLabels.push(nowYear - i);
 
-    // Taxes: if tax history exists, align by year; else backfill constant
-    const taxByYear = new Map<number, number>();
-    for (const h of taxHist) taxByYear.set(h.year, h.annualTax);
-
     // Insurance: from insurance trend history if present; else backfill by its growth rate
     const insByYear = new Map<number, number>();
     if (insHist.length) {
@@ -291,7 +283,7 @@ export class TrueCostOwnershipService {
     }
 
     const history = yearLabels.map((y) => {
-      const annualTax = taxByYear.get(y) ?? annualTaxNow;
+      const annualTax = annualTaxNow;
       const annualInsurance = insByYear.get(y) ?? annualInsuranceNow;
       const annualMaintenance = maintByYear.get(y) ?? annualMaintenanceNow;
       const annualUtilities = utilByYear.get(y) ?? annualUtilitiesNow;

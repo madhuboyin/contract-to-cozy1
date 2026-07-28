@@ -106,11 +106,10 @@ export class CostExplainerService {
       [property.address, property.city].filter(Boolean).join(', ') || 'Property';
 
     // 1) Taxes
-    const tax = await this.propertyTax.estimate(propertyId, { historyYears: years } as any);
-    const taxHist = (tax?.history || []).slice(-Math.max(2, years));
-    const taxNow = (tax?.current as any)?.annualTax ?? taxHist.at(-1)?.annualTax ?? 0;
-    const taxPrev = taxHist.length >= 2 ? taxHist.at(-2)!.annualTax : taxNow;
-    const taxDelta = taxNow - taxPrev;
+    const tax = await this.propertyTax.estimate(propertyId);
+    const taxNow = tax.current.annualTax;
+    const taxPrev = taxNow;
+    const taxDelta = 0;
 
     // 2) Insurance (your service exposes estimate(), not getTrend())
     const ins = await this.insuranceTrend.estimate(propertyId, { years });
@@ -135,15 +134,13 @@ export class CostExplainerService {
     const totalPrev = taxPrev + insPrev + maintPrev;
     const totalDelta = totalNow - totalPrev;
 
-    // ✅ Build a history series for the chart (align by year)
-    // We anchor maintenance to the same years as tax/insurance history.
-    // Use the “last N years” from tax history if available, else insurance, else fallback.
+    // Build the modeled cost series without inventing property-tax history.
+    // Until observed tax-year records exist, the current planning estimate is
+    // held constant and must not be interpreted as a historical observation.
     const yearsBack = years;
-    const taxSeries = (tax?.history || []).slice(-yearsBack);
     const insSeries = (ins?.history || []).slice(-yearsBack);
 
     const byYear = new Map<number, { tax?: number; ins?: number }>();
-    for (const h of taxSeries) byYear.set(h.year, { ...(byYear.get(h.year) || {}), tax: h.annualTax });
     for (const h of insSeries) byYear.set(h.year, { ...(byYear.get(h.year) || {}), ins: h.annualPremium });
 
     const yearKeys = Array.from(byYear.keys()).sort((a, b) => a - b);
@@ -180,9 +177,6 @@ export class CostExplainerService {
     const zipPrefix = String(zip).slice(0, 3);
     const coastal = ['FL', 'TX', 'LA', 'NC', 'SC', 'NJ', 'NY', 'MA'].includes(state);
 
-    const taxConfidence: 'HIGH' | 'MEDIUM' | 'LOW' =
-      ((tax as any)?.meta?.confidence as any) ?? 'MEDIUM';
-
     const insConfidence: 'HIGH' | 'MEDIUM' | 'LOW' = insuranceIsEducational
       ? 'LOW'
       : (((ins as any)?.meta?.confidence as any) ?? 'LOW');
@@ -190,13 +184,13 @@ export class CostExplainerService {
     const explanations: CostExplainerDTO['explanations'] = [
       {
         category: 'TAXES',
-        headline: `Property taxes ${taxDelta >= 0 ? 'increased' : 'decreased'} about ${fmtMoney(taxDelta)} vs last year`,
+        headline: 'A year-over-year property-tax change is not available',
         bullets: [
-          `In ${state}, reassessment cadence and levy adjustments can move the bill even without a big change in your home.`,
-          `Your ZIP prefix ${zipPrefix} suggests local variability in assessed values; small changes can compound.`,
-          taxDelta >= 0 ? `Net effect: taxes are contributing upward pressure this year.` : `Net effect: taxes are easing slightly this year.`,
+          'The tax component is a current planning estimate, not an observed assessment or bill history.',
+          'Verify tax-year records with the official assessor or collector before drawing a trend conclusion.',
+          `The modeled cost series holds the current estimate of ${fmtMoney(taxNow)} constant.`,
         ],
-        confidence: taxConfidence,
+        confidence: 'LOW',
       },
       {
         category: 'INSURANCE',

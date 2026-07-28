@@ -20,12 +20,9 @@ export async function getPropertyTaxEstimate(req: CustomRequest, res: Response, 
 
     const assessedValue = parseNumber(req.query.assessedValue); // USD
     const taxRate = parseNumber(req.query.taxRate); // decimal
-    const historyYears = parseNumber(req.query.historyYears);
-
     const estimate = await service.estimate(propertyId, {
       assessedValue,
       taxRate,
-      historyYears: historyYears ? Math.round(historyYears) : undefined,
     });
     const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'PROPERTY_TAX_VALUE');
     const overrideFields = Object.entries({ assessedValue, taxRate })

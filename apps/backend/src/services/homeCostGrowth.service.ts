@@ -359,11 +359,9 @@ export class HomeCostGrowthService {
     const taxEstimate = await this.taxSvc.estimate(propertyId, {
       assessedValue: opts.assessedValue,
       taxRate: opts.taxRate,
-      historyYears: years,
     });
 
-    const taxHistory = (taxEstimate.history || []).slice(-years);
-    const annualTaxNow = taxEstimate.current?.annualTax ?? (taxHistory.at(-1)?.annualTax ?? 0);
+    const annualTaxNow = taxEstimate.current.annualTax;
 
     if (opts.assessedValue !== undefined) notes.push('Assessed value override applied to PropertyTaxService.');
     if (opts.taxRate !== undefined) notes.push('Tax rate override applied to PropertyTaxService.');
@@ -402,8 +400,6 @@ export class HomeCostGrowthService {
     const nowYear = new Date().getFullYear();
     const history: HomeCostGrowthDTO['history'] = [];
 
-    const taxByYear = new Map<number, number>((taxHistory || []).map((h) => [h.year, h.annualTax]));
-
     // Home value series
     const homeValueByYear: { year: number; homeValue: number }[] = [];
     for (let i = years - 1; i >= 0; i--) {
@@ -417,7 +413,9 @@ export class HomeCostGrowthService {
       const year = nowYear - i;
 
       const homeValue = homeValueByYear.find((x) => x.year === year)?.homeValue ?? 0;
-      const annualTax = toMoney(taxByYear.get(year) ?? annualTaxNow * Math.pow(1 + inflation, -i));
+      // No observed tax-year history is available yet. Hold the current
+      // planning estimate constant instead of fabricating a historical trend.
+      const annualTax = toMoney(annualTaxNow);
       const annualInsurance = toMoney(annualInsuranceNow * Math.pow(1 + inflation, -i));
       const annualMaintenance = toMoney(annualMaintenanceNow * Math.pow(1 + inflation, -i));
 
