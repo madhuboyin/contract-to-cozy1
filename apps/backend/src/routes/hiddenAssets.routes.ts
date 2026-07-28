@@ -5,6 +5,7 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
+  getHiddenAssetCoverageForProperty,
   getHiddenAssetsForProperty,
   getHiddenAssetProgramDetail,
   refreshHiddenAssetsForProperty,
@@ -62,6 +63,19 @@ router.post(
   '/properties/:propertyId/hidden-assets/refresh',
   propertyAuthMiddleware,
   refreshHiddenAssetsForProperty,
+);
+
+/**
+ * GET /api/properties/:propertyId/hidden-assets/coverage
+ *
+ * Reports which reviewed sources cover this property's region and which
+ * benefit categories have no published program there — the real answer to
+ * "what was checked," distinct from "how many matches were found."
+ */
+router.get(
+  '/properties/:propertyId/hidden-assets/coverage',
+  propertyAuthMiddleware,
+  getHiddenAssetCoverageForProperty,
 );
 
 /**

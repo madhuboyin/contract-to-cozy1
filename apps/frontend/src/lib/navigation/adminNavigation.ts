@@ -141,6 +141,15 @@ export const ADMIN_NAV: NavJob[] = [
     globalHref: true,
   },
   {
+    key: 'admin-savings-benefits',
+    name: 'Savings and Benefits',
+    href: '/dashboard/admin/savings-benefits',
+    icon: Landmark,
+    description: 'Reviewed source registry: sources, programs, and the review/publish workflow',
+    engines: [],
+    globalHref: true,
+  },
+  {
     key: 'admin-user-support',
     name: 'User & Account Support',
     href: '/dashboard/admin/users',

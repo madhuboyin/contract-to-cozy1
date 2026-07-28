@@ -10747,6 +10747,29 @@ enum PropertyHiddenAssetMatchStatus {
   INACTIVE
 }
 
+enum HiddenAssetSourceKind {
+  OFFICIAL_GOVERNMENT
+  OFFICIAL_UTILITY
+  OFFICIAL_NONPROFIT
+  CARRIER_MANUFACTURER
+  LICENSED_MARKET_PARTNER
+  PUBLIC_BENCHMARK
+}
+
+enum HiddenAssetSourceStatus {
+  ACTIVE
+  PAUSED
+  RETIRED
+}
+
+enum HiddenAssetProgramReviewStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
 enum PropertyHiddenAssetScanRunStatus {
   PENDING
   RUNNING
@@ -10757,6 +10780,30 @@ enum PropertyHiddenAssetScanRunStatus {
 // Master registry of incentive/benefit programs.
 // Each program defines a benefit that may apply to one or more properties
 // based on geography, property attributes, and eligibility rules.
+// Reviewed organization/registry that owns one or more benefit programs.
+// Separated from HiddenAssetProgram so coverage and health can be reported
+// at the source level (e.g. "NJ Division of Taxation, last reviewed <date>")
+// independent of any single program's own freshness fields.
+model HiddenAssetSource {
+  id         String                  @id @default(uuid())
+  name       String
+  sourceKind HiddenAssetSourceKind
+  officialUrl String
+  reviewSlaDays Int                  @default(180)
+  status     HiddenAssetSourceStatus @default(ACTIVE)
+
+  lastReviewedAt DateTime?
+  lastReviewedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  programs HiddenAssetProgram[]
+
+  @@index([status])
+  @@map("hidden_asset_sources")
+}
+
 model HiddenAssetProgram {
   id          String              @id @default(uuid())
   name        String
@@ -10776,6 +10823,22 @@ model HiddenAssetProgram {
   // Official source (for "Last verified" UX and linking)
   sourceUrl   String?
   sourceLabel String?
+
+  // Reviewed source registry — a program is always owned by exactly one
+  // reviewed source; only a source's own health/status governs whether its
+  // programs are eligible to publish, but visibility to homeowners is
+  // governed by reviewStatus below, not this relation alone.
+  sourceId String
+  source   HiddenAssetSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  // Editorial review lifecycle (fail-closed): only PUBLISHED programs are
+  // ever evaluated against a homeowner's property — see
+  // fetchCandidatePrograms in hiddenAssets.service.ts.
+  reviewStatus HiddenAssetProgramReviewStatus @default(DRAFT)
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  publishedAt  DateTime?
+  publishedBy  String?
 
   // Eligibility context for human review / display
   eligibilityNotes String?
@@ -10800,6 +10863,9 @@ model HiddenAssetProgram {
   @@index([isActive])
   @@index([expiresAt])
   @@index([regionType, regionValue, isActive])
+  @@index([sourceId])
+  @@index([reviewStatus])
+  @@index([reviewStatus, regionType, regionValue, isActive])
   @@map("hidden_asset_programs")
 }
 
@@ -10991,6 +11057,13 @@ enum HomeTwinImpactDirection {
   UNKNOWN
 }
 
+enum HomeTwinImpactSourceClass {
+  HOMEOWNER_ASSUMPTION
+  CANONICAL_RECORD
+  SYSTEM_CALCULATION
+  CATEGORY_DEFAULT
+}
+
 enum HomeTwinDataQualityDimension {
   PROPERTY_PROFILE
   SYSTEMS
@@ -11170,7 +11243,7 @@ model HomeTwinComponent {
   estimatedAgeYears             Float?
   usefulLifeYears               Float?
   conditionScore                Float?
-  failureRiskScore              Float?
+  failureRiskScore              Float?    // legacy only; always null until a calibrated evidence model exists
   replacementCostEstimate       Decimal?  @db.Decimal(12, 2)
   annualOperatingCostEstimate   Decimal?  @db.Decimal(12, 2)
   annualMaintenanceCostEstimate Decimal?  @db.Decimal(12, 2)
@@ -11227,6 +11300,8 @@ model HomeTwinProjectedFact {
 
   derivationMethod  String? // short machine-readable rule id, e.g. "year_built_offset_5"
   derivationVersion Int     @default(1)
+  modelVersion      String  @default("home-projection-v2")
+  sourceVerified    Boolean?
   confidenceScore   Float?
 
   // Facts that disagree about the same real-world value share a
@@ -11284,6 +11359,9 @@ model HomeTwinScenario {
   decisionReason   String?
   decidedAt        DateTime?
   decidedByUserId  String?
+  baselineDependencyFingerprint String?
+  staleAt          DateTime?
+  staleReason      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11327,11 +11405,15 @@ model HomeTwinScenarioImpact {
   valueJson       Json?
   unit            String? // e.g. USD, YEARS, PERCENT, SCORE
   direction       HomeTwinImpactDirection @default(UNKNOWN)
+  sourceClass     HomeTwinImpactSourceClass @default(SYSTEM_CALCULATION)
+  sourceAsOf      DateTime?
+  assumptionsJson Json?
+  qualificationText String?
   confidenceScore Float?
   sortOrder       Int                     @default(0)
-  // True when this row's values were supplied directly by the caller
-  // (CUSTOM scenario expectedImpacts) rather than computed by the engine.
-  // Must never be presented as system-computed evidence.
+  // True when this row's value was supplied by the caller or calculated
+  // from caller-supplied assumptions. It must remain inside the input-
+  // assumption boundary and never be presented as independent system evidence.
   isUserSupplied  Boolean                 @default(false)
 
   createdAt DateTime @default(now())
@@ -11389,7 +11471,10 @@ model HomeTwinComputationRun {
   // SCENARIO_COMPUTE only: the exact input assumptions and component facts
   // used for this run, frozen at compute time.
   inputSnapshot      Json?
+  outputSnapshot     Json?
+  sourceSnapshot     Json?
   calculationVersion Int  @default(1)
+  modelVersion       String @default("hdt-scenario-v2")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

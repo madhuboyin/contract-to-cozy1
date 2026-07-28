@@ -4217,6 +4217,15 @@ class APIClient {
     return res.data ?? null;
   }
 
+  async getHiddenAssetCoverage(
+    propertyId: string
+  ): Promise<import('@/types').HiddenAssetCoverageDTO | null> {
+    const res = await this.get<import('@/types').HiddenAssetCoverageDTO>(
+      `/api/properties/${propertyId}/hidden-assets/coverage`
+    );
+    return res.data ?? null;
+  }
+
   async refreshHiddenAssetMatches(
     propertyId: string
   ): Promise<import('@/types').HiddenAssetRefreshResultDTO | null> {
@@ -4296,18 +4305,6 @@ class APIClient {
     return res.data?.summary ?? null;
   }
 
-  async confirmHomeDigitalTwinComponent(
-    propertyId: string,
-    componentId: string,
-    isUserConfirmed: boolean
-  ): Promise<import('@/types').HomeTwinComponentDTO | null> {
-    const res = await this.patch<{ component: import('@/types').HomeTwinComponentDTO }>(
-      `/api/properties/${propertyId}/home-digital-twin/components/${componentId}`,
-      { isUserConfirmed }
-    );
-    return res.data?.component ?? null;
-  }
-
   async getDigitalTwinRecommendations(
     propertyId: string
   ): Promise<import('@/types').ScenarioSuggestionDTO[] | null> {
@@ -4353,6 +4350,16 @@ class APIClient {
     return res.data?.scenario ?? null;
   }
 
+  async listDigitalTwinScenarioRuns(
+    propertyId: string,
+    scenarioId: string,
+  ): Promise<import('@/types').HomeTwinScenarioRunDTO[]> {
+    const res = await this.get<{ runs: import('@/types').HomeTwinScenarioRunDTO[] }>(
+      `/api/properties/${propertyId}/home-digital-twin/scenarios/${scenarioId}/runs`,
+    );
+    return res.data?.runs ?? [];
+  }
+
   async updateDigitalTwinScenario(
     propertyId: string,
     scenarioId: string,
@@ -4389,6 +4396,17 @@ class APIClient {
   ): Promise<import('@/types').HomeTwinScenarioComparisonDTO | null> {
     const res = await this.get<{ comparison: import('@/types').HomeTwinScenarioComparisonDTO }>(
       `/api/properties/${propertyId}/home-digital-twin/components/${componentId}/scenarios/compare`
+    );
+    return res.data?.comparison ?? null;
+  }
+
+  async ensureDigitalTwinComparisonOptions(
+    propertyId: string,
+    componentId: string
+  ): Promise<import('@/types').HomeTwinScenarioComparisonDTO | null> {
+    const res = await this.post<{ comparison: import('@/types').HomeTwinScenarioComparisonDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/components/${componentId}/scenarios/options`,
+      {}
     );
     return res.data?.comparison ?? null;
   }

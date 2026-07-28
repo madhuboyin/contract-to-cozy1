@@ -16,6 +16,7 @@ import {
   getFreshnessNote,
 } from './hiddenAssets/ruleEngine';
 import {
+  CoverageDTO,
   HiddenAssetMatchDTO,
   HiddenAssetMatchFilters,
   HiddenAssetMatchListDTO,
@@ -245,6 +246,10 @@ async function fetchCandidatePrograms(regionPairs: RegionPair[]) {
   return prisma.hiddenAssetProgram.findMany({
     where: {
       isActive: true,
+      // Fail closed: a DRAFT/IN_REVIEW/APPROVED-but-not-yet-published
+      // program has not cleared editorial review and must never be
+      // evaluated against a homeowner's property.
+      reviewStatus: 'PUBLISHED',
       AND: [
         {
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
@@ -643,6 +648,63 @@ export class HiddenAssetService {
       throw new Error(`Property ${propertyId} not found for internal scan.`);
     }
     return executePropertyScan(propertyId, property);
+  }
+
+  /**
+   * Reports what was actually checked for this property: which reviewed
+   * sources cover its region, and which benefit categories have no published
+   * program there yet. This is the concrete mechanism behind "a successful
+   * scan is not source coverage" — a homeowner-visible, real answer to
+   * "what did you check?" instead of an opaque program count.
+   */
+  async getCoverageForProperty(propertyId: string, userId: string): Promise<CoverageDTO> {
+    const property = await assertPropertyForUser(propertyId, userId);
+    const regionPairs = deriveRegionPairs(property);
+    const now = new Date();
+
+    const publishedPrograms = await prisma.hiddenAssetProgram.findMany({
+      where: {
+        isActive: true,
+        reviewStatus: 'PUBLISHED',
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        AND: regionPairs.length > 0
+          ? [{ OR: regionPairs.map(({ regionType, regionValue }) => ({ regionType, regionValue })) }]
+          : [{ id: 'never-matches' }],
+      },
+      include: { source: true },
+    });
+
+    const sourceById = new Map<string, (typeof publishedPrograms)[number]['source']>();
+    const categoriesCovered = new Set<HiddenAssetCategory>();
+    for (const program of publishedPrograms) {
+      sourceById.set(program.source.id, program.source);
+      categoriesCovered.add(program.category);
+    }
+
+    const sources = [...sourceById.values()].map((source) => {
+      const staleBefore = new Date(now.getTime() - source.reviewSlaDays * 24 * 60 * 60 * 1000);
+      const stale = !source.lastReviewedAt || source.lastReviewedAt < staleBefore;
+      return {
+        id: source.id,
+        name: source.name,
+        sourceKind: source.sourceKind,
+        officialUrl: source.officialUrl,
+        lastReviewedAt: source.lastReviewedAt ? source.lastReviewedAt.toISOString() : null,
+        stale,
+      };
+    });
+
+    const allCategories = Object.values(HiddenAssetCategory);
+    const categoriesNotCovered = allCategories.filter((category) => !categoriesCovered.has(category));
+
+    return {
+      propertyId,
+      generatedAt: now.toISOString(),
+      regionsChecked: regionPairs.map((pair) => `${pair.regionType}:${pair.regionValue}`),
+      sources,
+      categoriesCovered: [...categoriesCovered],
+      categoriesNotCovered,
+    };
   }
 
   /**

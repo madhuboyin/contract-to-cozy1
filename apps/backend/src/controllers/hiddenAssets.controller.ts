@@ -89,6 +89,27 @@ export async function refreshHiddenAssetsForProperty(req: CustomRequest, res: Re
 }
 
 // ============================================================================
+// GET /properties/:propertyId/hidden-assets/coverage
+// ============================================================================
+
+export async function getHiddenAssetCoverageForProperty(req: CustomRequest, res: Response) {
+  try {
+    const userId = requireUserId(req);
+    const { propertyId } = req.params;
+
+    const result = await service.getCoverageForProperty(propertyId, userId);
+    return res.json({ success: true, data: result });
+  } catch (error: any) {
+    const status = error?.message === 'Authentication required.' ? 401 : 500;
+    logger.error({ err: error }, '[HiddenAssets] getHiddenAssetCoverageForProperty error');
+    return res.status(status).json({
+      success: false,
+      message: error?.message || 'Failed to fetch hidden asset coverage.',
+    });
+  }
+}
+
+// ============================================================================
 // GET /hidden-asset-programs/:programId
 // ============================================================================
 

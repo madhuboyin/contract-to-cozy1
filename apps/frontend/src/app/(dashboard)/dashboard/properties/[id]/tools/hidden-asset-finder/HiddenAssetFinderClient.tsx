@@ -46,6 +46,7 @@ import type {
   HiddenAssetMatchSummaryDTO,
 } from '@/types';
 import {
+  getHiddenAssetCoverage,
   getHiddenAssetMatches,
   refreshHiddenAssetMatches,
   updateHiddenAssetMatchStatus,
@@ -641,6 +642,15 @@ export default function HiddenAssetFinderClient() {
     enabled: !!propertyId,
   });
 
+  // Real coverage statement — what reviewed sources actually cover this
+  // property's region, distinct from how many matches were found.
+  const coverageQuery = useQuery({
+    queryKey: ['hidden-assets-coverage', propertyId],
+    queryFn: () => getHiddenAssetCoverage(propertyId),
+    enabled: !!propertyId,
+    staleTime: 60_000,
+  });
+
   // Derive selectedMatch from current query data — always fresh, no stale state.
   const selectedMatch = data?.matches.find((m) => m.id === selectedMatchId) ?? null;
 
@@ -782,6 +792,33 @@ export default function HiddenAssetFinderClient() {
        className="lg:hidden"/>
 
       <PropertyContextCapturePanel propertyId={propertyId} featureKey="HIDDEN_ASSETS" operationKey="VIEW_MATCHES" onCaptured={async () => { await refetch(); }} />
+
+      {/* Real coverage statement — what was actually checked, not a vague count */}
+      {coverageQuery.data ? (
+        <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-slate-50/70 px-3 py-2.5 text-xs text-slate-600 dark:bg-slate-900/30 dark:text-slate-300">
+          {coverageQuery.data.sources.length > 0 ? (
+            <p>
+              Checked{' '}
+              {coverageQuery.data.sources.map((source, i) => (
+                <span key={source.id}>
+                  {i > 0 ? ', ' : ''}
+                  <span className="font-semibold">{source.name}</span>
+                  {source.stale ? ' (review overdue)' : ''}
+                </span>
+              ))}
+              . {coverageQuery.data.categoriesNotCovered.length > 0
+                ? `${coverageQuery.data.categoriesNotCovered.length} benefit ${coverageQuery.data.categoriesNotCovered.length === 1 ? 'category has' : 'categories have'} no reviewed program for this address yet — that's a coverage gap, not confirmation nothing exists there.`
+                : 'All tracked benefit categories have at least one reviewed program for this address.'}
+            </p>
+          ) : (
+            <p>
+              No reviewed sources cover this property&apos;s region yet. This is a coverage gap in our
+              registry, not confirmation that no benefits exist here — check official state and local
+              sources directly.
+            </p>
+          )}
+        </div>
+      ) : null}
 
       {/* Filter surface: tool rail + filters */}
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">

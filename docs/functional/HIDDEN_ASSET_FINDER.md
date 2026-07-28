@@ -25,32 +25,69 @@ The feature is implemented as a full stack flow:
 
 ## Product Scope
 
-Hidden Asset Finder is currently an MVP with a deterministic rule engine and no live government or utility data feed integration.
+Hidden Asset Finder is currently an MVP with a deterministic rule engine, a
+reviewed-source admin console, and no live government or utility data feed
+integration. It is the "benefits and rebates" engine behind the consolidated
+**Savings and Benefits** capability (see
+[HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md](../product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md)).
 
 Current behavior:
 
-- evaluates programs stored in the `hidden_asset_programs` admin table
+- evaluates only `PUBLISHED` programs from the reviewed `hidden_asset_programs`
+  registry — DRAFT/IN_REVIEW/APPROVED programs are never evaluated against a
+  homeowner's property (fail-closed by construction, not convention)
+- programs are populated and reviewed through the admin console at
+  `/dashboard/admin/savings-benefits` (DRAFT → IN_REVIEW → APPROVED →
+  PUBLISHED, three separated capabilities) or the pilot seed script
+  `npm run seed:savings-benefits-pilot` — see
+  [SAVINGS_BENEFITS_SOURCE_RUNBOOK.md](../operations/SAVINGS_BENEFITS_SOURCE_RUNBOOK.md)
 - matches programs to properties using geography (country, state, city, ZIP) and property attribute rules
 - computes explainable confidence levels using a three-stage pipeline
 - persists match rows with match reasons, estimated value ranges, and match status
-- exposes list, refresh, program detail, and match status update endpoints
+- exposes list, refresh, coverage, program detail, and match status update endpoints
+- the coverage endpoint (`GET .../hidden-assets/coverage`) reports which
+  reviewed sources actually cover the property's region and which benefit
+  categories have no published program there — coverage is New Jersey-only
+  as of the pilot seed, by design, not an oversight
 - supports filter by category and confidence level in the UI
 - auto-marks matches as VIEWED when a user opens the detail sheet
-- preserves user-set terminal statuses (DISMISSED, CLAIMED) across re-scans
+- preserves user-set terminal statuses (DISMISSED, PURSUING) across re-scans
 - triggers on property create and update events via the shared job queue
 - runs a weekly batch refresh job on Sunday mornings
 
 Not included in the current implementation:
 
-- live external feed integrations (IRS, state energy offices, utility APIs)
-- admin UI for managing programs and rules
+- live external feed integrations (IRS, state energy offices, utility APIs) —
+  intentionally deferred; see the capability audit's Slice 2 rationale
+- income/age/household eligibility modeling (rule engine only evaluates
+  property-level attributes; those criteria live in `eligibilityNotes` as
+  homeowner-facing text until Slice 3)
 - property owner application or claim verification flows
 - email or push notifications for new matches
 - export or share flows
 
 ## Database Design
 
-Hidden Asset Finder uses four Prisma models in [schema.prisma](/Users/madhuboyina/Desktop/madhu/contract-to-cozy/apps/backend/prisma/schema.prisma).
+Hidden Asset Finder uses five Prisma models in [schema.prisma](/Users/madhuboyina/Desktop/madhu/contract-to-cozy/apps/backend/prisma/schema.prisma).
+
+### `HiddenAssetSource`
+
+Reviewed organization/registry that owns one or more benefit programs, added
+in the Slice 2 reviewed-source-registry work.
+
+Table:
+
+- `hidden_asset_sources`
+
+Key fields:
+
+- `id`
+- `name`
+- `sourceKind` (`OFFICIAL_GOVERNMENT | OFFICIAL_UTILITY | OFFICIAL_NONPROFIT | CARRIER_MANUFACTURER | LICENSED_MARKET_PARTNER | PUBLIC_BENCHMARK`)
+- `officialUrl`
+- `reviewSlaDays` — how often the source itself must be re-reviewed
+- `status` (`ACTIVE | PAUSED | RETIRED`)
+- `lastReviewedAt` / `lastReviewedBy`
 
 ### `HiddenAssetProgram`
 
@@ -78,6 +115,11 @@ Key fields:
 - `currency`
 - `sourceUrl`
 - `sourceLabel`
+- `sourceId` — required FK to `HiddenAssetSource`
+- `reviewStatus` (`DRAFT | IN_REVIEW | APPROVED | PUBLISHED | ARCHIVED`) —
+  only `PUBLISHED` programs are ever evaluated against a property
+- `reviewedAt` / `reviewedBy`
+- `publishedAt` / `publishedBy`
 - `eligibilityNotes`
 - `confidenceWeight`
 - `expiresAt`
@@ -174,7 +216,7 @@ Key fields:
 - `lastEvaluatedAt`
 - `firstDetectedAt`
 - `dismissedAt`
-- `claimedAt`
+- `pursuedAt`
 - `createdAt`
 - `updatedAt`
 
@@ -310,11 +352,11 @@ The full match lifecycle:
 - `DETECTED` — initial state; program matched but not yet seen by the user
 - `VIEWED` — user opened the detail sheet for this match (auto-set, fire-and-forget)
 - `DISMISSED` — user explicitly dismissed the match as not relevant
-- `CLAIMED` — user marked the match as pursuing
+- `PURSUING` — user marked the match as pursuing
 - `EXPIRED` — program has expired (`expiresAt` in the past) and was inactivated during re-scan
 - `INACTIVE` — program was deactivated (`isActive = false`) during re-scan
 
-User-set terminal statuses (`DISMISSED`, `CLAIMED`) are preserved across re-scans.
+User-set terminal statuses (`DISMISSED`, `PURSUING`) are preserved across re-scans.
 
 ### `PropertyHiddenAssetScanRunStatus`
 
@@ -369,7 +411,7 @@ Query params supported on the list endpoint (all optional):
 
 Status values allowed on the PATCH endpoint:
 
-- `VIEWED | DISMISSED | CLAIMED`
+- `VIEWED | DISMISSED | PURSUING`
 
 ### Controllers
 
@@ -431,7 +473,7 @@ Scan execution steps inside `executePropertyScan`:
 4. derive region pairs from property location fields
 5. fetch candidate programs for those regions
 6. evaluate each program through the rule engine
-7. upsert `PropertyHiddenAssetMatch` rows for matched programs (preserve DISMISSED/CLAIMED status)
+7. upsert `PropertyHiddenAssetMatch` rows for matched programs (preserve DISMISSED/PURSUING status)
 8. transition EXPIRED/INACTIVE for programs no longer active or matched
 9. update scan run to `COMPLETED` with stats
 10. return `RefreshResultDTO`
@@ -533,7 +575,7 @@ The frontend consumes these fields from `HiddenAssetMatchDTO`:
 - `lastEvaluatedAt`
 - `firstDetectedAt`
 - `dismissedAt`
-- `claimedAt`
+- `pursuedAt`
 
 The summary included in `HiddenAssetMatchListDTO`:
 
@@ -714,7 +756,7 @@ The right-side sheet (`side="right" sm:max-w-md`) renders when a match card is t
 Footer action buttons:
 
 - "Not relevant" — sets status to `DISMISSED`; closes sheet on success
-- "Mark as Pursuing" — sets status to `CLAIMED`; closes sheet on success; adds a verification reminder beneath the button on claimed confirmation
+- "Mark as Pursuing" — sets status to `PURSUING`; closes sheet on success; adds a verification reminder beneath the button on claimed confirmation
 
 When the detail sheet opens, a fire-and-forget `VIEWED` status update is sent automatically with no toast.
 
@@ -913,7 +955,7 @@ Current backend and frontend flow:
 9. backend derives region pairs from the property's address fields
 10. backend loads candidate programs for those regions
 11. backend evaluates each program through the three-stage confidence pipeline
-12. backend upserts `PropertyHiddenAssetMatch` rows (preserving DISMISSED/CLAIMED)
+12. backend upserts `PropertyHiddenAssetMatch` rows (preserving DISMISSED/PURSUING)
 13. backend transitions expired or inactive programs to `EXPIRED` / `INACTIVE`
 14. backend marks scan run `COMPLETED` with stats
 15. backend returns `RefreshResultDTO` with the updated match list

@@ -1,5 +1,6 @@
 import { api } from '@/lib/api/client';
 import type {
+  HiddenAssetCoverageDTO,
   HiddenAssetMatchDTO,
   HiddenAssetMatchListDTO,
   HiddenAssetRefreshResultDTO,
@@ -10,6 +11,12 @@ export async function getHiddenAssetMatches(
   params?: { category?: string; confidenceLevel?: string; includeDismissed?: boolean },
 ): Promise<HiddenAssetMatchListDTO | null> {
   return api.getHiddenAssetMatches(propertyId, params);
+}
+
+export async function getHiddenAssetCoverage(
+  propertyId: string,
+): Promise<HiddenAssetCoverageDTO | null> {
+  return api.getHiddenAssetCoverage(propertyId);
 }
 
 export async function refreshHiddenAssetMatches(

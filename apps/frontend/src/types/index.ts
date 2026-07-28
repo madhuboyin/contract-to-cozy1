@@ -2269,6 +2269,24 @@ export interface HiddenAssetRefreshResultDTO {
   propertyContext?: import('@/components/property-context/propertyContextTypes').PropertyContextEnvelope;
 }
 
+export interface HiddenAssetCoverageSourceDTO {
+  id: string;
+  name: string;
+  sourceKind: string;
+  officialUrl: string;
+  lastReviewedAt: string | null;
+  stale: boolean;
+}
+
+export interface HiddenAssetCoverageDTO {
+  propertyId: string;
+  generatedAt: string;
+  regionsChecked: string[];
+  sources: HiddenAssetCoverageSourceDTO[];
+  categoriesCovered: HiddenAssetCategory[];
+  categoriesNotCovered: HiddenAssetCategory[];
+}
+
 
 // ============================================================================
 // NEW BUDGET FORECASTER TYPES (PHASE 3)
@@ -3817,6 +3835,9 @@ export interface HomeTwinProjectedFactDTO {
   sourceField: string | null;
   observedAt: string | null;
   derivationMethod: string | null;
+  derivationVersion: number;
+  modelVersion: string;
+  sourceVerified: boolean | null;
   confidenceScore: number | null;
   conflictGroupId: string | null;
   correctionDestination: string | null;
@@ -3862,6 +3883,10 @@ export interface HomeTwinScenarioImpactDTO {
   id: string;
   impactType: HomeTwinImpactType;
   direction: HomeTwinImpactDirection;
+  sourceClass: 'HOMEOWNER_ASSUMPTION' | 'CANONICAL_RECORD' | 'SYSTEM_CALCULATION' | 'CATEGORY_DEFAULT';
+  sourceAsOf: string | null;
+  assumptionsJson: Record<string, unknown> | null;
+  qualificationText: string | null;
   valueNumeric: number | null;
   // Low/high bound the same figure with the uncertainty implied by its
   // source. Null on both when no defensible range exists (e.g. a
@@ -3873,9 +3898,9 @@ export interface HomeTwinScenarioImpactDTO {
   unit: string | null;
   confidenceScore: number | null;
   sortOrder: number;
-  // True when this row reflects a homeowner-entered assumption rather than
-  // an engine-computed figure. Must be rendered distinctly from computed
-  // impacts, never blended in as system evidence.
+  // True when this row reflects an input assumption or a calculation that
+  // depends on input assumptions. Must be rendered distinctly from independent
+  // system-derived impacts and never blended in as system evidence.
   isUserSupplied: boolean;
 }
 
@@ -3895,6 +3920,9 @@ export interface HomeTwinScenarioDTO {
   description: string | null;
   inputPayload: Record<string, unknown>;
   baselineSnapshot: Record<string, unknown> | null;
+  baselineDependencyFingerprint: string | null;
+  staleAt: string | null;
+  staleReason: string | null;
   isPinned: boolean;
   isArchived: boolean;
   lastComputedAt: string | null;
@@ -3930,6 +3958,19 @@ export interface HomeTwinScenarioDTO {
     category: string | null;
     inventoryItemId: string | null;
   };
+}
+
+export interface HomeTwinScenarioRunDTO {
+  id: string;
+  status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+  modelVersion: string;
+  inputSnapshot: Record<string, unknown> | null;
+  sourceSnapshot: Record<string, unknown> | null;
+  outputSnapshot: Record<string, unknown> | null;
+  calculationVersion: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  errorMessage: string | null;
 }
 
 export type HomeTwinScenarioDecisionStatus = 'OPEN' | 'SELECTED' | 'DEFERRED' | 'REJECTED' | 'CLOSED';
@@ -4075,6 +4116,7 @@ export interface UpdateScenarioInput {
   isArchived?: boolean;
   name?: string;
   description?: string | null;
+  inputPayload?: Record<string, unknown>;
 }
 
 // ============================================================================

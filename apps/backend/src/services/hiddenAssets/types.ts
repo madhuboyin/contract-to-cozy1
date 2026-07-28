@@ -253,3 +253,28 @@ export interface RefreshResultDTO {
   matches: HiddenAssetMatchDTO[];
   propertyContextVersion: string;
 }
+
+export interface CoverageSourceDTO {
+  id: string;
+  name: string;
+  sourceKind: string;
+  officialUrl: string;
+  /** Null means never reviewed. */
+  lastReviewedAt: string | null;
+  /** True when past the source's own review SLA, or never reviewed. */
+  stale: boolean;
+}
+
+/**
+ * What was actually checked for a property: which reviewed sources cover
+ * its region, and which benefit categories have no published program there.
+ * The homeowner-facing answer to "a successful scan is not source coverage."
+ */
+export interface CoverageDTO {
+  propertyId: string;
+  generatedAt: string;
+  regionsChecked: string[];
+  sources: CoverageSourceDTO[];
+  categoriesCovered: HiddenAssetCategory[];
+  categoriesNotCovered: HiddenAssetCategory[];
+}
