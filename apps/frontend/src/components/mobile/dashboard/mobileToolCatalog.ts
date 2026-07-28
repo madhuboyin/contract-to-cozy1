@@ -8,7 +8,7 @@ export type MobileAiToolKey =
   | 'coverage-intelligence'
   | 'risk-premium-optimizer'
   | 'do-nothing-simulator'
-  | 'home-savings'
+  | 'savings-benefits'
   | 'emergency'
   | 'documents'
   | 'oracle'
@@ -27,7 +27,6 @@ export type MobileAiToolKey =
   | 'mortgage-refinance-radar'
   | 'neighborhood-change-radar'
   | 'home-digital-twin'
-  | 'hidden-asset-finder'
   | 'home-habit-coach'
   | 'break-even'
   | 'capital-timeline'
@@ -138,17 +137,17 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
 
   // --- WEALTH & SAVINGS ---
   {
-    key: 'home-savings',
-    title: 'Home Savings Check',
-    description: 'Find recurring savings opportunities',
-    href: '/dashboard/home-savings',
-    icon: resolveToolIcon('ai', 'home-savings'),
+    key: 'savings-benefits',
+    title: 'Savings and Benefits',
+    description: 'Find rebates, credits, and recurring savings for this home',
+    href: '/dashboard/savings-benefits',
+    icon: resolveToolIcon('home', 'savings-benefits'),
     emoji: '💸',
     group: 'wealth',
     artworkKey: 'home-savings-check',
     isActive: (pathname) =>
-      /^\/dashboard\/home-savings(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/home-savings(\/|$)/.test(pathname),
+      /^\/dashboard\/savings-benefits(\/|$)/.test(pathname) ||
+      /^\/dashboard\/properties\/[^/]+\/tools\/(?:savings-benefits|hidden-asset-finder|home-savings)(\/|$)/.test(pathname),
   },
   {
     key: 'property-tax',
@@ -182,16 +181,6 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     isActive: (pathname) =>
       /^\/dashboard\/coverage-intelligence(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/tools\/(?:coverage-intelligence|coverage-options|insurance-trend|risk-premium-optimizer)(\/|$)/.test(pathname),
-  },
-  {
-    key: 'hidden-asset-finder',
-    title: 'Asset Finder',
-    description: 'Find rebates and benefits for your systems',
-    href: '/dashboard/hidden-asset-finder',
-    icon: resolveToolIcon('home', 'hidden-asset-finder'),
-    emoji: '🔍',
-    group: 'wealth',
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/hidden-asset-finder(\/|$)/.test(pathname),
   },
 
   // --- CONTINUOUS INTELLIGENCE ---
@@ -793,16 +782,16 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-will(\/|$)/.test(pathname),
   },
   {
-    key: 'hidden-asset-finder',
+    key: 'savings-benefits',
     group: 'ownership',
-    name: 'Hidden Asset Finder',
-    description: "Find potential rebates, credits, and benefits for your home",
-    desktopDescription: "Identify likely rebates, credits, grants, and benefits tied to your property and systems.",
-    hrefSuffix: 'tools/hidden-asset-finder',
-    navTarget: 'tool:hidden-asset-finder',
-    icon: resolveToolIcon('home', 'hidden-asset-finder'),
+    name: 'Savings and Benefits',
+    description: "Find rebates, credits, and recurring savings for this home",
+    desktopDescription: "Identify likely rebates, credits, grants, and recurring-cost savings tied to your property and systems.",
+    hrefSuffix: 'tools/savings-benefits',
+    navTarget: 'tool:savings-benefits',
+    icon: resolveToolIcon('home', 'savings-benefits'),
     isActive: (pathname) =>
-      /^\/dashboard\/properties\/[^/]+\/tools\/hidden-asset-finder(\/|$)/.test(pathname),
+      /^\/dashboard\/properties\/[^/]+\/tools\/(?:savings-benefits|hidden-asset-finder|home-savings)(\/|$)/.test(pathname),
   },
   {
     key: 'home-digital-twin',

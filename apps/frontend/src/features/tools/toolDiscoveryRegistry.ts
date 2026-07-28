@@ -121,7 +121,7 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'coverage-intelligence': 'COVERAGE_INTELLIGENCE',
   'replace-repair': 'REPLACE_OR_REPAIR',
   'do-nothing-simulator': 'DO_NOTHING_SIMULATOR',
-  'home-savings': 'HOME_SAVINGS',
+  'savings-benefits': 'SAVINGS_BENEFITS',
   energy: 'ENERGY_AUDIT',
   oracle: 'APPLIANCE_ORACLE',
   appreciation: 'VALUE_TRACKER',
@@ -141,7 +141,6 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'seller-prep': 'SELLER_PREP',
   'status-board': 'STATUS_BOARD',
   'home-digital-will': 'HOME_DIGITAL_WILL',
-  'hidden-asset-finder': 'HIDDEN_ASSET_FINDER',
   'home-digital-twin': 'HOME_DIGITAL_TWIN',
   'home-habit-coach': 'HOME_HABIT_COACH',
   'mortgage-refinance-radar': 'MORTGAGE_REFINANCE_RADAR',
@@ -165,13 +164,14 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
 
 const BETA_TOOL_IDS = new Set([
   'emergency', 'documents', 'budget', 'climate', 'modifications', 'energy',
-  'coverage-intelligence', 'neighborhood-change-radar',
+  'coverage-intelligence', 'neighborhood-change-radar', 'savings-benefits',
 ]);
 
 const MATERIAL_TOOL_IDS = new Set([
   'replace-repair', 'sell-hold-rent', 'break-even', 'do-nothing-simulator',
   'property-tax', 'cost-growth', 'cost-explainer', 'true-cost', 'cost-volatility',
   'capital-timeline', 'reserve-fund', 'financing', 'mortgage-refinance-radar',
+  'savings-benefits',
   // Mixed-consequence: the same route surfaces low-consequence record
   // projection and MATERIAL_FINANCIAL scenario computation (replacement
   // cost, savings, risk claims). See
@@ -186,7 +186,7 @@ const COVERAGE_TOOL_IDS = new Set([
 const REQUIREMENT_OVERRIDES: Record<string, Partial<DiscoverableToolDefinition['requirements']>> = {
   'capital-timeline': { minimumTrackedSystems: 1 },
   'reserve-fund': { minimumTrackedSystems: 1 },
-  'hidden-asset-finder': { minimumTrackedSystems: 1 },
+  'savings-benefits': { minimumTrackedSystems: 1 },
   'home-digital-twin': { minimumKnownFacts: 1 },
 };
 
@@ -217,6 +217,7 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'inspection-hub': 'ARTIFACT_CREATED',
   'project-tracker': 'ACTION_COMPLETED',
   'property-tax': 'DECISION_RECORDED',
+  'savings-benefits': 'DECISION_RECORDED',
 };
 
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {

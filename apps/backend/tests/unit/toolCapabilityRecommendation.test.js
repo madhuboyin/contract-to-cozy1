@@ -51,6 +51,47 @@ const {
 
 const NOW = '2026-07-24T12:00:00.000Z';
 
+const recommendationTestRegistry = (() => {
+  const definitions = canonicalCapabilityRegistry.capabilities.map(
+    (capability) => structuredClone(capability),
+  );
+  const coverage = definitions.find(
+    (capability) => capability.id === 'coverage-intelligence',
+  );
+  coverage.destination.acceptedContext = [
+    'PROPERTY',
+    'HOME_ACTION',
+    'INVENTORY_ITEM',
+    'DOCUMENT',
+    'JOURNEY',
+    'PROJECT',
+  ];
+  coverage.recommendation = {
+    ...coverage.recommendation,
+    mode: 'CONTEXTUAL',
+    sourceKinds: ['COVERAGE'],
+    jobs: ['DECIDE'],
+    triggerFamilies: ['COVERAGE_GAPS_PRESENT'],
+    recommendationDefinitionCodes: ['coverage_gap_review'],
+    reasonTemplates: {
+      COVERAGE_GAPS_PRESENT:
+        'Confirmed coverage gaps make a coverage comparison useful now.',
+    },
+    readinessRequirements: [
+      { kind: 'PROPERTY', reason: 'Select a property first.' },
+      {
+        kind: 'COVERAGE_GAPS',
+        minimum: 1,
+        reason: 'Identify at least one coverage gap.',
+      },
+    ],
+    baseScore: 60,
+    maxImpressionsPer30Days: 3,
+    cooldownDaysAfterDismissal: 30,
+  };
+  return createToolCapabilityRegistry(definitions);
+})();
+
 test('CAP-704 paused and out-of-window recommendation definitions are suppressed', () => {
   const now = new Date(NOW);
   const active = {
@@ -134,7 +175,7 @@ test('CAP-400 builds a deterministic normalized evaluator source contract', () =
       actionId: 'action-a',
       signalIntentFamilies: ['coverage_gap', 'coverage_gap'],
       sourceEntityType: 'INVENTORY_ITEM',
-      ctaCapabilityIds: ['coverage-options'],
+      ctaCapabilityIds: ['coverage-intelligence'],
       recommendationDefinitionCodes: ['coverage_gap_review'],
       missingFactKeys: ['coverage.insurancePolicies'],
     }],
@@ -171,10 +212,10 @@ test('CAP-400 builds a deterministic normalized evaluator source contract', () =
       outputEntityId: 'report-1',
       verifiedAt: NOW,
     }],
-    availableCapabilityIds: ['seller-prep', 'coverage-options', 'coverage-options'],
+    availableCapabilityIds: ['seller-prep', 'coverage-intelligence', 'coverage-intelligence'],
     availabilityPolicyVersion: 'rollout-v2',
     lifecycle: [{
-      capabilityId: 'coverage-options',
+      capabilityId: 'coverage-intelligence',
       impressionCount30Days: 2,
       lastImpressionAt: NOW,
       lastDismissedAt: null,
@@ -197,7 +238,7 @@ test('CAP-400 builds a deterministic normalized evaluator source contract', () =
   assert.deepEqual(result.actions.map((item) => item.id), ['action-a', 'action-b']);
   assert.deepEqual(result.actions[0].signalIntentFamilies, ['coverage_gap']);
   assert.deepEqual(result.availability.availableCapabilityIds, [
-    'coverage-options',
+    'coverage-intelligence',
     'seller-prep',
   ]);
   assert.equal(result.propertyContext.knownFactCount, 1);
@@ -266,15 +307,26 @@ test('CAP-400 rejects property-crossing snapshots and Home Actions', () => {
 
 function matcherRegistry() {
   const coverage = structuredClone(
-    canonicalCapabilityRegistry.getById('coverage-options'),
+    recommendationTestRegistry.getById('coverage-intelligence'),
   );
   const inspection = structuredClone(
     canonicalCapabilityRegistry.getById('inspection-hub'),
   );
   coverage.recommendation.recommendationDefinitionCodes = ['coverage_gap_review'];
+  coverage.recommendation.mode = 'CONTEXTUAL';
+  coverage.recommendation.sourceKinds = ['COVERAGE'];
+  coverage.recommendation.jobs = ['DECIDE'];
+  coverage.recommendation.triggerFamilies = ['COVERAGE_GAPS_PRESENT'];
+  coverage.recommendation.reasonTemplates = {
+    COVERAGE_GAPS_PRESENT:
+      'Confirmed coverage gaps make a coverage comparison useful now.',
+  };
+  coverage.recommendation.baseScore = 60;
+  coverage.recommendation.maxImpressionsPer30Days = 3;
+  coverage.recommendation.cooldownDaysAfterDismissal = 30;
   coverage.destination.acceptedContext = ['PROPERTY', 'INVENTORY_ITEM', 'DOCUMENT'];
   coverage.recommendation.explicitRelatedCapabilityIds = [];
-  inspection.recommendation.explicitRelatedCapabilityIds = ['coverage-options'];
+  inspection.recommendation.explicitRelatedCapabilityIds = ['coverage-intelligence'];
   inspection.lifecycle.outputEntityTypes = ['DOCUMENT'];
   return createToolCapabilityRegistry([coverage, inspection]);
 }
@@ -296,7 +348,7 @@ function matcherContext(overrides = {}) {
       actionId: 'action-1',
       signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
       sourceEntityType: 'INVENTORY_ITEM',
-      ctaCapabilityIds: ['coverage-options'],
+      ctaCapabilityIds: ['coverage-intelligence'],
       recommendationDefinitionCodes: ['coverage_gap_review'],
     }],
     journeys: [{
@@ -453,7 +505,7 @@ test('CAP-401 matches every reviewed structured source with stable precedence', 
 
   assert.doesNotThrow(() => CapabilityCandidateMatchResultSchema.parse(result));
   const coverage = result.candidates.filter(
-    (candidate) => candidate.capabilityId === 'coverage-options',
+    (candidate) => candidate.capabilityId === 'coverage-intelligence',
   );
   assert.deepEqual(
     coverage.map((candidate) => candidate.source.kind),
@@ -557,7 +609,7 @@ test('CAP-401 ignores inactive journeys, projects, and personalization sources',
   assert.deepEqual(result.candidates, []);
 });
 
-function evaluateReadiness(context, registry = canonicalCapabilityRegistry) {
+function evaluateReadiness(context, registry = recommendationTestRegistry) {
   const matchResult = matchCapabilityCandidates({ registry, context });
   return evaluateCapabilityCandidateReadiness({
     registry,
@@ -589,7 +641,7 @@ test('CAP-402 returns READY when required structured context is satisfied', () =
     actionSourceMetadata: [{
       actionId: 'action-1',
       signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
-      ctaCapabilityIds: ['coverage-options'],
+      ctaCapabilityIds: ['coverage-intelligence'],
     }],
     readinessMetrics: {
       trackedSystemCount: 2,
@@ -601,7 +653,7 @@ test('CAP-402 returns READY when required structured context is satisfied', () =
 
   const result = evaluateReadiness(context);
   assert.doesNotThrow(() => CapabilityReadinessResultSchema.parse(result));
-  const coverage = candidateById(result, 'coverage-options');
+  const coverage = candidateById(result, 'coverage-intelligence');
   assert.equal(coverage.readiness.state, 'READY');
   assert.equal(
     coverage.readiness.checks.every((item) => item.result === 'TRUE'),
@@ -630,7 +682,7 @@ test('CAP-402 fails closed for false or unknown regulated and material readiness
   });
   const coverage = candidateById(
     evaluateReadiness(coverageContext),
-    'coverage-options',
+    'coverage-intelligence',
   );
   assert.equal(coverage.readiness.state, 'UNAVAILABLE');
   assert.equal(
@@ -671,6 +723,20 @@ test('CAP-402 fails closed for false or unknown regulated and material readiness
 });
 
 test('CAP-402 allows NEEDS_CONTEXT only for explicitly reviewed safe partial value', () => {
+  // savings-benefits is MATERIAL_FINANCIAL and does not carry
+  // safePartialValue (restricted to LOW_CONSEQUENCE capabilities). This
+  // clones it purely to exercise the safePartialValue mechanism itself,
+  // the same technique the jurisdiction test below already uses.
+  const safePartialCapability = structuredClone(
+    canonicalCapabilityRegistry.getById('savings-benefits'),
+  );
+  // safePartialValue is schema-restricted to LOW_CONSEQUENCE capabilities;
+  // downgrade the clone's tier purely to exercise the mechanism in isolation.
+  safePartialCapability.governance.safetyTier = 'LOW_CONSEQUENCE';
+  safePartialCapability.recommendation.safePartialValue = true;
+  safePartialCapability.recommendation.explicitRelatedCapabilityIds = [];
+  const safePartialRegistry = createToolCapabilityRegistry([safePartialCapability]);
+
   const context = buildCapabilityRecommendationContext({
     propertyId: 'property-1',
     propertyContext: propertyContext(),
@@ -691,8 +757,8 @@ test('CAP-402 allows NEEDS_CONTEXT only for explicitly reviewed safe partial val
     surface: 'HOME',
   });
   const hiddenAsset = candidateById(
-    evaluateReadiness(context),
-    'hidden-asset-finder',
+    evaluateReadiness(context, safePartialRegistry),
+    'savings-benefits',
   );
 
   assert.equal(hiddenAsset.readiness.state, 'NEEDS_CONTEXT');
@@ -733,7 +799,7 @@ test('CAP-402 evaluates required source context and jurisdiction without raw fac
   );
 
   const hiddenAsset = structuredClone(
-    canonicalCapabilityRegistry.getById('hidden-asset-finder'),
+    canonicalCapabilityRegistry.getById('savings-benefits'),
   );
   hiddenAsset.recommendation.readinessRequirements = [
     { kind: 'JURISDICTION', reason: 'Confirm an eligible jurisdiction.' },
@@ -760,7 +826,7 @@ test('CAP-402 evaluates required source context and jurisdiction without raw fac
   });
   const unsupported = candidateById(
     evaluateReadiness(unsupportedContext, jurisdictionRegistry),
-    'hidden-asset-finder',
+    'savings-benefits',
   );
   assert.equal(unsupported.readiness.state, 'UNAVAILABLE');
   assert.equal(
@@ -800,7 +866,7 @@ test('CAP-402 rejects stale registry and context versions', () => {
   );
 });
 
-function govern(context, registry = canonicalCapabilityRegistry) {
+function govern(context, registry = recommendationTestRegistry) {
   const matchResult = matchCapabilityCandidates({ registry, context });
   const readinessResult = evaluateCapabilityCandidateReadiness({
     registry,
@@ -814,7 +880,7 @@ function govern(context, registry = canonicalCapabilityRegistry) {
   });
 }
 
-function suppress(context, registry = canonicalCapabilityRegistry) {
+function suppress(context, registry = recommendationTestRegistry) {
   return applyCapabilitySuppressionPolicy({
     registry,
     context,
@@ -838,20 +904,20 @@ function governedCoverageContext(overrides = {}) {
     actionSourceMetadata: [{
       actionId: 'action-1',
       signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
-      ctaCapabilityIds: ['coverage-options'],
+      ctaCapabilityIds: ['coverage-intelligence'],
     }],
     readinessMetrics: {
       coverageGapCount: 1,
       jurisdictionStatus: 'KNOWN',
     },
-    availableCapabilityIds: ['coverage-options'],
+    availableCapabilityIds: ['coverage-intelligence'],
     availabilityPolicyVersion: 'rollout-v2',
     availabilityStatus: 'EVALUATED',
     governance: {
       canUseCapabilities: true,
       allowedSafetyTiers: ['REGULATED_COVERAGE'],
       enforceApprovals: true,
-      approvedCapabilityIds: ['coverage-options'],
+      approvedCapabilityIds: ['coverage-intelligence'],
       evidenceAccess: 'ALLOWED',
       contextFreshness: 'CURRENT',
     },
@@ -863,7 +929,7 @@ function governedCoverageContext(overrides = {}) {
 test('CAP-403 promotes only candidates passing release, permission, safety, and freshness gates', () => {
   const result = govern(governedCoverageContext());
   assert.doesNotThrow(() => CapabilityGovernanceResultSchema.parse(result));
-  const coverage = candidateById(result, 'coverage-options');
+  const coverage = candidateById(result, 'coverage-intelligence');
   assert.deepEqual(coverage.policy, {
     decision: 'PROMOTABLE',
     reasonCodes: [],
@@ -880,14 +946,15 @@ test('CAP-403 promotes only candidates passing release, permission, safety, and 
 
 test('CAP-903 invalid governance definition blocks runtime promotion', () => {
   const coverage = structuredClone(
-    canonicalCapabilityRegistry.getById('coverage-options'),
+    recommendationTestRegistry.getById('coverage-intelligence'),
   );
+  coverage.recommendation.mode = 'CONTEXTUAL';
   coverage.governance.professionalBoundary = null;
   coverage.recommendation.explicitRelatedCapabilityIds = [];
   const registry = createToolCapabilityRegistry([coverage]);
   const candidate = candidateById(
     govern(governedCoverageContext(), registry),
-    'coverage-options',
+    'coverage-intelligence',
   );
 
   assert.equal(candidate.policy.decision, 'BLOCKED');
@@ -970,7 +1037,7 @@ test('CAP-403 blocks unavailable, unauthorized, unapproved, and stale candidates
   for (const fixture of cases) {
     const coverage = candidateById(
       govern(governedCoverageContext(fixture.overrides)),
-      'coverage-options',
+      'coverage-intelligence',
     );
     assert.equal(coverage.policy.decision, 'BLOCKED', fixture.name);
     assert.equal(coverage.policy.ctaAllowed, false, fixture.name);
@@ -998,7 +1065,7 @@ test('CAP-403 applies degraded-response withholding without exposing evidence', 
     },
   });
   const context = governedCoverageContext({ actions: [degradedAction] });
-  const coverage = candidateById(govern(context), 'coverage-options');
+  const coverage = candidateById(govern(context), 'coverage-intelligence');
 
   assert.equal(coverage.policy.decision, 'WITHHELD');
   assert.equal(coverage.policy.ctaAllowed, false);
@@ -1019,7 +1086,7 @@ test('CAP-403 can omit unauthorized evidence without blocking an otherwise safe 
       contextFreshness: 'CURRENT',
     },
   });
-  const coverage = candidateById(govern(context), 'coverage-options');
+  const coverage = candidateById(govern(context), 'coverage-intelligence');
 
   assert.equal(coverage.policy.decision, 'PROMOTABLE');
   assert.equal(coverage.policy.ctaAllowed, true);
@@ -1054,7 +1121,7 @@ test('CAP-403 rejects stale readiness results before applying policy', () => {
 test('CAP-404 suppresses a capability already launched by its source action', () => {
   const result = suppress(governedCoverageContext());
   assert.doesNotThrow(() => CapabilitySuppressionResultSchema.parse(result));
-  const coverage = candidateById(result, 'coverage-options');
+  const coverage = candidateById(result, 'coverage-intelligence');
 
   assert.equal(coverage.suppression.suppressed, true);
   assert.deepEqual(coverage.suppression.reasonCodes, [
@@ -1096,7 +1163,7 @@ test('CAP-404 rejects terminal and explicitly stale source actions', () => {
         signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
       }],
     });
-    const coverage = candidateById(suppress(context), 'coverage-options');
+    const coverage = candidateById(suppress(context), 'coverage-intelligence');
     assert.equal(coverage.suppression.suppressed, true);
     assert.equal(
       coverage.suppression.reasonCodes.includes(fixture.reason),
@@ -1112,14 +1179,14 @@ test('CAP-404 enforces dismissal cooldown and impression frequency caps', () => 
       signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
     }],
     lifecycle: [{
-      capabilityId: 'coverage-options',
+      capabilityId: 'coverage-intelligence',
       impressionCount30Days: 3,
       lastImpressionAt: '2026-07-23T12:00:00.000Z',
       lastDismissedAt: '2026-07-20T12:00:00.000Z',
       lastCompletedAt: null,
     }],
   });
-  const coverage = candidateById(suppress(context), 'coverage-options');
+  const coverage = candidateById(suppress(context), 'coverage-intelligence');
 
   assert.deepEqual(coverage.suppression.reasonCodes, [
     'RECENTLY_DISMISSED',
@@ -1143,7 +1210,7 @@ test('CAP-404 allows renewed relevance after completion and suppresses older sig
       signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
     }],
     lifecycle: [{
-      capabilityId: 'coverage-options',
+      capabilityId: 'coverage-intelligence',
       impressionCount30Days: 0,
       lastImpressionAt: null,
       lastDismissedAt: null,
@@ -1156,11 +1223,11 @@ test('CAP-404 allows renewed relevance after completion and suppresses older sig
 
   const oldSignal = candidateById(
     suppress(contextFor('2026-07-21T12:00:00.000Z')),
-    'coverage-options',
+    'coverage-intelligence',
   );
   const renewedSignal = candidateById(
     suppress(contextFor('2026-07-23T12:00:00.000Z', 'action-v3')),
-    'coverage-options',
+    'coverage-intelligence',
   );
   assert.equal(
     oldSignal.suppression.reasonCodes.includes(
@@ -1176,7 +1243,7 @@ test('CAP-404 allows renewed relevance after completion and suppresses older sig
 
 test('CAP-701 scopes frequency caps to the same source action and context version', () => {
   const lifecycle = [{
-    capabilityId: 'coverage-options',
+    capabilityId: 'coverage-intelligence',
     impressionCount30Days: 6,
     lastImpressionAt: '2026-07-23T12:00:00.000Z',
     lastDismissedAt: null,
@@ -1198,7 +1265,7 @@ test('CAP-701 scopes frequency caps to the same source action and context versio
   }];
   const renewedScope = candidateById(
     suppress(governedCoverageContext({ lifecycle })),
-    'coverage-options',
+    'coverage-intelligence',
   );
   assert.equal(
     renewedScope.suppression.reasonCodes.includes('FREQUENCY_CAP_REACHED'),
@@ -1213,7 +1280,7 @@ test('CAP-701 scopes frequency caps to the same source action and context versio
   });
   const cappedScope = candidateById(
     suppress(governedCoverageContext({ lifecycle })),
-    'coverage-options',
+    'coverage-intelligence',
   );
   assert.equal(
     cappedScope.suppression.reasonCodes.includes('FREQUENCY_CAP_REACHED'),
@@ -1243,7 +1310,7 @@ test('CAP-701 applies not-relevant renewal and explicit snooze expiry', () => {
         signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
       }],
       lifecycle: [{
-        capabilityId: 'coverage-options',
+        capabilityId: 'coverage-intelligence',
         impressionCount30Days: 0,
         lastImpressionAt: null,
         lastDismissedAt: null,
@@ -1258,7 +1325,7 @@ test('CAP-701 applies not-relevant renewal and explicit snooze expiry', () => {
 
   const stale = candidateById(
     suppress(contextFor('2026-07-21T12:00:00.000Z')),
-    'coverage-options',
+    'coverage-intelligence',
   );
   assert.equal(
     stale.suppression.reasonCodes.includes(
@@ -1277,7 +1344,7 @@ test('CAP-701 applies not-relevant renewal and explicit snooze expiry', () => {
       '2026-07-26T12:00:00.000Z',
       'action-v3',
     )),
-    'coverage-options',
+    'coverage-intelligence',
   );
   assert.equal(
     renewedAfterExpiry.suppression.reasonCodes.includes(
@@ -1294,7 +1361,7 @@ test('CAP-701 applies not-relevant renewal and explicit snooze expiry', () => {
 test('CAP-701 aggregates lifecycle feedback and scoped actual-view events', () => {
   const events = aggregateCapabilityLifecycleEvents([
     {
-      featureKey: 'coverage-options',
+      featureKey: 'coverage-intelligence',
       eventName: 'TOOL_DISCOVERED',
       occurredAt: new Date('2026-07-20T12:00:00.000Z'),
       metadataJson: {
@@ -1303,7 +1370,7 @@ test('CAP-701 aggregates lifecycle feedback and scoped actual-view events', () =
       },
     },
     {
-      featureKey: 'coverage-options',
+      featureKey: 'coverage-intelligence',
       eventName: 'TOOL_DISCOVERED',
       occurredAt: new Date('2026-07-21T12:00:00.000Z'),
       metadataJson: {
@@ -1312,13 +1379,13 @@ test('CAP-701 aggregates lifecycle feedback and scoped actual-view events', () =
       },
     },
     {
-      featureKey: 'coverage-options',
+      featureKey: 'coverage-intelligence',
       eventName: 'TOOL_NOT_RELEVANT',
       occurredAt: new Date('2026-07-22T12:00:00.000Z'),
       metadataJson: {},
     },
     {
-      featureKey: 'coverage-options',
+      featureKey: 'coverage-intelligence',
       eventName: 'TOOL_SNOOZED',
       occurredAt: new Date('2026-07-23T12:00:00.000Z'),
       metadataJson: { snoozedUntil: '2026-07-30T12:00:00.000Z' },
@@ -1339,7 +1406,7 @@ test('CAP-701 aggregates lifecycle feedback and scoped actual-view events', () =
 
 test('CAP-404 suppresses equivalent outcomes for one source deterministically', () => {
   const coverage = structuredClone(
-    canonicalCapabilityRegistry.getById('coverage-options'),
+    recommendationTestRegistry.getById('coverage-intelligence'),
   );
   const inspection = structuredClone(
     canonicalCapabilityRegistry.getById('inspection-hub'),
@@ -1358,7 +1425,7 @@ test('CAP-404 suppresses equivalent outcomes for one source deterministically', 
       actionId: 'action-1',
       signalIntentFamilies: ['COVERAGE_GAPS_PRESENT'],
     }],
-    availableCapabilityIds: ['coverage-options', 'inspection-hub'],
+    availableCapabilityIds: ['coverage-intelligence', 'inspection-hub'],
     governance: {
       canUseCapabilities: true,
       allowedSafetyTiers: ['LOW_CONSEQUENCE', 'REGULATED_COVERAGE'],
@@ -1375,7 +1442,7 @@ test('CAP-404 suppresses equivalent outcomes for one source deterministically', 
     candidate.suppression.reasonCodes.includes('EQUIVALENT_OUTCOME_DUPLICATE'));
 
   assert.equal(retained.length, 1);
-  assert.equal(retained[0].capabilityId, 'coverage-options');
+  assert.equal(retained[0].capabilityId, 'coverage-intelligence');
   assert.equal(duplicate.capabilityId, 'inspection-hub');
 });
 
@@ -1463,7 +1530,7 @@ function rankingFixture() {
   const suppressionResult = suppress(context);
   const baseCandidate = candidateById(
     suppressionResult,
-    'coverage-options',
+    'coverage-intelligence',
   );
   return { context, suppressionResult, baseCandidate };
 }
@@ -1529,7 +1596,7 @@ function rankingCandidate(baseCandidate, capabilityId, overrides = {}) {
 
 function rankingSuppressionResult(candidates) {
   return {
-    registryVersion: canonicalCapabilityRegistry.version,
+    registryVersion: recommendationTestRegistry.version,
     contextVersion: 'context-v7',
     candidates,
     diagnostics: {
@@ -1542,12 +1609,12 @@ function rankingSuppressionResult(candidates) {
 test('CAP-405 returns bounded named score components and selects useful results', () => {
   const { context, suppressionResult } = rankingFixture();
   const result = rankCapabilityCandidates({
-    registry: canonicalCapabilityRegistry,
+    registry: recommendationTestRegistry,
     context,
     suppressionResult,
   });
   assert.doesNotThrow(() => CapabilityRankingResultSchema.parse(result));
-  const coverage = candidateById(result, 'coverage-options');
+  const coverage = candidateById(result, 'coverage-intelligence');
   const componentTotal = Object.values(coverage.ranking.components)
     .reduce((sum, score) => sum + score, 0);
 
@@ -1564,7 +1631,7 @@ test('CAP-405 returns bounded named score components and selects useful results'
 
 test('CAP-405 does not pad a surface with candidates below the useful threshold', () => {
   const { context, baseCandidate } = rankingFixture();
-  const weak = rankingCandidate(baseCandidate, 'coverage-options', {
+  const weak = rankingCandidate(baseCandidate, 'coverage-intelligence', {
     baseScore: 0,
     source: {
       kind: 'PERSONALIZATION',
@@ -1602,7 +1669,7 @@ test('CAP-405 does not pad a surface with candidates below the useful threshold'
     },
   });
   const result = rankCapabilityCandidates({
-    registry: canonicalCapabilityRegistry,
+    registry: recommendationTestRegistry,
     context,
     suppressionResult: rankingSuppressionResult([weak]),
   });
@@ -1619,13 +1686,13 @@ test('CAP-405 does not pad a surface with candidates below the useful threshold'
 test('CAP-405 caps Home at three and prefers an alternative outcome', () => {
   const { context, baseCandidate } = rankingFixture();
   const candidates = [
-    rankingCandidate(baseCandidate, 'coverage-options', { baseScore: 100 }),
+    rankingCandidate(baseCandidate, 'coverage-intelligence', { baseScore: 100 }),
     rankingCandidate(baseCandidate, 'cost-growth', { baseScore: 90 }),
     rankingCandidate(baseCandidate, 'insurance-trend', { baseScore: 80 }),
     rankingCandidate(baseCandidate, 'inspection-hub', { baseScore: 60 }),
   ];
   const result = rankCapabilityCandidates({
-    registry: canonicalCapabilityRegistry,
+    registry: recommendationTestRegistry,
     context,
     suppressionResult: rankingSuppressionResult(candidates),
   });
@@ -1637,7 +1704,7 @@ test('CAP-405 caps Home at three and prefers an alternative outcome', () => {
 
   assert.equal(result.maximumSelected, 3);
   assert.deepEqual(selectedIds, [
-    'coverage-options',
+    'coverage-intelligence',
     'cost-growth',
     'inspection-hub',
   ]);
@@ -1659,7 +1726,7 @@ test('CAP-405 avoids repeated source actions and breaks ties deterministically',
     observedAt: NOW,
   };
   const candidates = [
-    rankingCandidate(baseCandidate, 'coverage-options', {
+    rankingCandidate(baseCandidate, 'coverage-intelligence', {
       source: repeatedSource,
     }),
     rankingCandidate(baseCandidate, 'inspection-hub', {
@@ -1668,7 +1735,7 @@ test('CAP-405 avoids repeated source actions and breaks ties deterministically',
     rankingCandidate(baseCandidate, 'plant-advisor'),
   ];
   const rank = (values) => rankCapabilityCandidates({
-    registry: canonicalCapabilityRegistry,
+    registry: recommendationTestRegistry,
     context,
     suppressionResult: rankingSuppressionResult(values),
   });
@@ -1681,7 +1748,7 @@ test('CAP-405 avoids repeated source actions and breaks ties deterministically',
     'SOURCE_DIVERSITY_DEFERRED',
   );
   assert.equal(
-    candidateById(first, 'coverage-options').ranking.selected,
+    candidateById(first, 'coverage-intelligence').ranking.selected,
     true,
   );
   assert.equal(candidateById(first, 'plant-advisor').ranking.selected, true);
@@ -1693,7 +1760,7 @@ test('CAP-405 rejects stale suppression contracts before scoring', () => {
   staleContextResult.contextVersion = 'context-v0';
   assert.throws(
     () => rankCapabilityCandidates({
-      registry: canonicalCapabilityRegistry,
+      registry: recommendationTestRegistry,
       context,
       suppressionResult: staleContextResult,
     }),
@@ -1704,7 +1771,7 @@ test('CAP-405 rejects stale suppression contracts before scoring', () => {
   staleRegistryResult.registryVersion = 'registry-v0';
   assert.throws(
     () => rankCapabilityCandidates({
-      registry: canonicalCapabilityRegistry,
+      registry: recommendationTestRegistry,
       context,
       suppressionResult: staleRegistryResult,
     }),
@@ -1712,7 +1779,7 @@ test('CAP-405 rejects stale suppression contracts before scoring', () => {
   );
 });
 
-function buildRankedResult(context, registry = canonicalCapabilityRegistry) {
+function buildRankedResult(context, registry = recommendationTestRegistry) {
   return rankCapabilityCandidates({
     registry,
     context,
@@ -1724,7 +1791,7 @@ function buildRankedResult(context, registry = canonicalCapabilityRegistry) {
   });
 }
 
-function explain(context, registry = canonicalCapabilityRegistry) {
+function explain(context, registry = recommendationTestRegistry) {
   return buildCapabilitySuggestionResponse({
     registry,
     context,
@@ -1744,7 +1811,7 @@ test('CAP-406 builds a narrow suggestion from reviewed copy and structured linea
   assert.equal(result.suggestions.length, 1);
   const suggestion = result.suggestions[0];
 
-  assert.equal(suggestion.capabilityId, 'coverage-options');
+  assert.equal(suggestion.capabilityId, 'coverage-intelligence');
   assert.equal(suggestion.rank, 1);
   assert.equal(suggestion.reasonCode, 'COVERAGE_GAPS_PRESENT');
   assert.equal(
@@ -1757,7 +1824,7 @@ test('CAP-406 builds a narrow suggestion from reviewed copy and structured linea
   assert.equal(suggestion.manifestVersion, 1);
   assert.equal(
     suggestion.launch.href,
-    '/dashboard/properties/property-1/tools/coverage-options',
+    '/dashboard/properties/property-1/tools/coverage-intelligence',
   );
   assert.match(suggestion.recommendationVersion, /^capability-recommendation-v/);
 
@@ -1837,8 +1904,9 @@ test('CAP-406 omits evidence details when evidence access is restricted', () => 
 
 test('CAP-406 fails closed for unresolved route context', () => {
   const coverage = structuredClone(
-    canonicalCapabilityRegistry.getById('coverage-options'),
+    recommendationTestRegistry.getById('coverage-intelligence'),
   );
+  coverage.recommendation.mode = 'CONTEXTUAL';
   coverage.destination.routeTemplate =
     '/dashboard/properties/[id]/rooms/[roomId]/coverage';
   coverage.recommendation.explicitRelatedCapabilityIds = [];
@@ -1868,7 +1936,7 @@ test('CAP-406 rejects stale ranking contracts before building explanations', () 
 
   assert.throws(
     () => buildCapabilitySuggestionResponse({
-      registry: canonicalCapabilityRegistry,
+      registry: recommendationTestRegistry,
       context,
       rankingResult,
     }),
@@ -1878,7 +1946,7 @@ test('CAP-406 rejects stale ranking contracts before building explanations', () 
 
 function capabilityApiDependencies(overrides = {}) {
   return {
-    registry: canonicalCapabilityRegistry,
+    registry: recommendationTestRegistry,
     loadRequiredSources: async () => ({
       propertyContext: propertyContext(),
       actions: [action({
@@ -1905,7 +1973,7 @@ function capabilityApiDependencies(overrides = {}) {
       coverageGapCount: 1,
       jurisdictionStatus: 'KNOWN',
     }),
-    availableCapabilityIds: () => ['coverage-options'],
+    availableCapabilityIds: () => ['coverage-intelligence'],
     now: () => new Date(NOW),
     ...overrides,
   };
@@ -1922,7 +1990,7 @@ test('CAP-407 orchestrates CAP-400 through CAP-406 into the API response', async
   assert.doesNotThrow(() => CapabilitySuggestionResponseSchema.parse(result));
   assert.equal(result.surface, 'HOME');
   assert.equal(result.suggestions.length, 1);
-  assert.equal(result.suggestions[0].capabilityId, 'coverage-options');
+  assert.equal(result.suggestions[0].capabilityId, 'coverage-intelligence');
   assert.equal(result.suggestions[0].source.id, 'action-1');
 });
 
@@ -1984,9 +2052,9 @@ test('CAP-902 enforced human policy approvals gate runtime capability promotion'
     limit: 3,
   }, capabilityApiDependencies({
     enforceApprovals: true,
-    loadApprovedCapabilityIds: async () => ['coverage-options'],
+    loadApprovedCapabilityIds: async () => ['coverage-intelligence'],
   }));
-  assert.equal(approved.suggestions[0].capabilityId, 'coverage-options');
+  assert.equal(approved.suggestions[0].capabilityId, 'coverage-intelligence');
 });
 
 test('CAP-703 records selected recommendation eligibility with canonical lineage', async () => {
@@ -2014,7 +2082,7 @@ test('CAP-703 records selected recommendation eligibility with canonical lineage
     reasonCode: event.reasonCode,
     readiness: event.readiness,
   })), [{
-    toolId: 'coverage-options',
+    toolId: 'coverage-intelligence',
     stage: 'ELIGIBLE',
     surface: 'unified_home',
     sourceKind: 'HOME_ACTION',
@@ -2159,7 +2227,7 @@ test('CAP-407 derives duplicate CTA and trigger metadata from canonical routes',
     primaryCta: {
       kind: 'REVIEW',
       label: 'Compare coverage',
-      href: '/dashboard/properties/property-1/tools/coverage-options?from=home',
+      href: '/dashboard/properties/property-1/tools/coverage-intelligence?from=home',
     },
   });
   const metadata = buildCapabilityActionSourceMetadata({
@@ -2168,7 +2236,7 @@ test('CAP-407 derives duplicate CTA and trigger metadata from canonical routes',
     propertyId: 'property-1',
   })[0];
 
-  assert.deepEqual(metadata.ctaCapabilityIds, ['coverage-options']);
+  assert.deepEqual(metadata.ctaCapabilityIds, ['coverage-intelligence']);
   assert.equal(
     metadata.signalIntentFamilies.includes('COVERAGE_GAPS_PRESENT'),
     true,

@@ -177,7 +177,6 @@ const OUTPUT_ENTITY_TYPES: Record<
   ToolCapabilityDefinition['lifecycle']['outputEntityTypes']
 > = {
   diy: ['PROJECT'],
-  'hidden-asset-finder': ['INVENTORY_ITEM'],
   'hoa-compliance': ['DOCUMENT'],
   'home-digital-will': ['DOCUMENT'],
   'home-renovation-risk-advisor': ['PROJECT'],
@@ -215,15 +214,6 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     reason: 'A reviewed low-risk task may be suitable for a guided DIY project.',
     requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'HOME_ACTION', 'PROJECT', 'ISSUE'],
-  },
-  'hidden-asset-finder': {
-    sourceKinds: ['SYSTEM', 'PERSONALIZATION'],
-    triggerFamily: 'PROPERTY_BENEFIT_EXPLORATION',
-    reason: 'Existing systems can be checked for rebates, credits, and ownership benefits.',
-    safePartialValue: true,
-    readinessRequirements: [
-      { kind: 'TRACKED_SYSTEMS', minimum: 1, reason: 'Add at least one home system.' },
-    ],
   },
   'hoa-compliance': {
     sourceKinds: ['PROJECT'],
@@ -331,6 +321,25 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'PROJECT', 'DOCUMENT', 'JOURNEY'],
   },
+  'savings-benefits': {
+    // Inherited from the retired hidden-asset-finder capability this
+    // consolidates. The audit that drove this consolidation explicitly
+    // critiques "add at least one system" as an incorrect universal
+    // readiness gate (not every benefit — e.g. a nationwide property-tax
+    // exemption — needs a tracked system) — kept as-is here to land the
+    // identity/routing consolidation without changing behavior; fixing the
+    // gate itself belongs to Slice 3 (eligibility expression and context).
+    sourceKinds: ['SYSTEM', 'PERSONALIZATION'],
+    triggerFamily: 'PROPERTY_BENEFIT_EXPLORATION',
+    reason: 'Existing systems can be checked for rebates, credits, and ownership benefits.',
+    // Not safe-partial-value: this capability is MATERIAL_FINANCIAL (the
+    // retired hidden-asset-finder was LOW_CONSEQUENCE), and safePartialValue
+    // is restricted to LOW_CONSEQUENCE capabilities (see capability.contract.ts
+    // superRefine).
+    readinessRequirements: [
+      { kind: 'TRACKED_SYSTEMS', minimum: 1, reason: 'Add at least one home system.' },
+    ],
+  },
   'sell-hold-rent': {
     sourceKinds: ['GUIDANCE', 'PERSONALIZATION'],
     triggerFamily: 'OWNERSHIP_OUTLOOK_SHIFT',
@@ -365,7 +374,6 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'cost-volatility': ['cost-growth', 'break-even', 'sell-hold-rent'],
   financing: ['capital-timeline', 'mortgage-refinance-radar', 'break-even'],
   'guidance-overview': ['status-board', 'home-event-radar', 'home-risk-replay'],
-  'hidden-asset-finder': ['home-digital-twin', 'home-digital-will', 'status-board'],
   'home-digital-twin': ['capital-timeline', 'status-board', 'home-risk-replay'],
   'home-digital-will': ['home-event-radar', 'home-risk-replay', 'status-board'],
   'home-event-radar': ['home-risk-replay', 'home-timeline', 'status-board'],
@@ -383,6 +391,7 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'property-tax': ['true-cost', 'cost-growth', 'capital-timeline'],
   'quote-comparison': ['service-price-radar', 'negotiation-shield', 'price-finalization'],
   'reserve-fund': ['capital-timeline', 'true-cost', 'break-even'],
+  'savings-benefits': ['property-tax', 'coverage-intelligence', 'mortgage-refinance-radar'],
   'sell-hold-rent': ['break-even', 'cost-volatility', 'capital-timeline'],
   'seller-prep': ['sell-hold-rent', 'home-timeline', 'capital-timeline'],
   'service-price-radar': ['negotiation-shield', 'cost-explainer', 'true-cost'],

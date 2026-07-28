@@ -13,7 +13,7 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
       'break-even',
       'capital-timeline',
       'cost-growth',
-      'hidden-asset-finder',
+      'savings-benefits',
       'home-digital-twin',
       'home-event-radar',
       'home-habit-coach',
@@ -27,8 +27,8 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
   {
     id: 'sparse-new-home',
     description: 'A new home with sparse verified facts and no tracked systems.',
-    contextualCapabilityIds: ['home-digital-twin', 'hidden-asset-finder'],
-    needsContextCapabilityIds: ['home-digital-twin', 'hidden-asset-finder'],
+    contextualCapabilityIds: ['home-digital-twin', 'savings-benefits'],
+    needsContextCapabilityIds: ['home-digital-twin', 'savings-benefits'],
   },
   {
     id: 'property-preparing-for-sale',
@@ -154,13 +154,13 @@ readonly CapabilityGoldenRankingExpectation[] = [
     fixtureId: 'sparse-new-home',
     ineligibleCapabilityId: 'seller-prep',
     duplicateCapabilityId: 'home-digital-twin',
-    expectedTopCapabilityIds: ['hidden-asset-finder', 'home-digital-twin'],
+    expectedTopCapabilityIds: ['savings-benefits', 'home-digital-twin'],
     expectedReasonCodes: {
-      'hidden-asset-finder': 'PROPERTY_BENEFIT_EXPLORATION',
+      'savings-benefits': 'PROPERTY_BENEFIT_EXPLORATION',
       'home-digital-twin': 'PROPERTY_CONTEXT_INCOMPLETE',
     },
     readinessExplanations: {
-      'hidden-asset-finder': ['Add at least one home system.'],
+      'savings-benefits': ['Add at least one home system.'],
       'home-digital-twin': ['Add at least one verified Home Record fact.'],
     },
   }),

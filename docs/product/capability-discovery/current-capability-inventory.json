@@ -14,16 +14,16 @@
     "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
   ],
   "summary": {
-    "aiCatalogEntries": 37,
+    "aiCatalogEntries": 36,
     "homeCatalogEntries": 35,
     "overlappingEntries": 24,
-    "distinctCapabilities": 48,
-    "routeVerified": 48,
+    "distinctCapabilities": 47,
+    "routeVerified": 47,
     "canonicalRelationshipCoverage": 30,
     "contextualCapabilities": 22,
     "workflowOnly": 1,
-    "lifecycleCanonicalized": 48,
-    "catalogOnlyCapabilities": 25
+    "lifecycleCanonicalized": 47,
+    "catalogOnlyCapabilities": 24
   },
   "capabilities": [
     {
@@ -321,25 +321,6 @@
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
-      "id": "hidden-asset-finder",
-      "label": "Hidden Asset Finder",
-      "sources": [
-        "home",
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/hidden-asset-finder",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "HIDDEN_ASSET_FINDER",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
-    },
-    {
       "id": "hoa-compliance",
       "label": "HOA Compliance",
       "sources": [
@@ -489,24 +470,6 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
-    },
-    {
-      "id": "home-savings",
-      "label": "Home Savings Check",
-      "sources": [
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/home-savings",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "SAVE_OPTIMIZE",
-      "rolloutKey": "HOME_SAVINGS",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_GENERATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": false,
-      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "home-timeline",
@@ -802,6 +765,25 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
+    },
+    {
+      "id": "savings-benefits",
+      "label": "Savings and Benefits",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/savings-benefits",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "SAVE_OPTIMIZE",
+      "rolloutKey": "SAVINGS_BENEFITS",
+      "releaseStage": "BETA",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "DECISION_RECORDED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": true,
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
       "id": "sell-hold-rent",

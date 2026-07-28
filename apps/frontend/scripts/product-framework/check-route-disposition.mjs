@@ -111,6 +111,7 @@ export const ROUTE_DISPOSITION_RULES = [
       '/dashboard/inventory',
       '/dashboard/maintenance',
       '/dashboard/risk-premium-optimizer',
+      '/dashboard/savings-benefits',
       '/dashboard/vault',
     ]),
   },
