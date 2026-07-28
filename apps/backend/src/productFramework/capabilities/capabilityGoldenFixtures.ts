@@ -28,7 +28,7 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
     id: 'sparse-new-home',
     description: 'A new home with sparse verified facts and no tracked systems.',
     contextualCapabilityIds: ['savings-benefits'],
-    needsContextCapabilityIds: ['savings-benefits'],
+    needsContextCapabilityIds: [],
   },
   {
     id: 'property-preparing-for-sale',
@@ -157,9 +157,6 @@ readonly CapabilityGoldenRankingExpectation[] = [
     expectedTopCapabilityIds: ['savings-benefits'],
     expectedReasonCodes: {
       'savings-benefits': 'PROPERTY_BENEFIT_EXPLORATION',
-    },
-    readinessExplanations: {
-      'savings-benefits': ['Add at least one home system.'],
     },
   }),
   expectation({

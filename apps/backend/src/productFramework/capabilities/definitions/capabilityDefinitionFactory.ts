@@ -321,13 +321,6 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     acceptedContext: ['PROPERTY', 'PROJECT', 'DOCUMENT', 'JOURNEY'],
   },
   'savings-benefits': {
-    // Inherited from the retired hidden-asset-finder capability this
-    // consolidates. The audit that drove this consolidation explicitly
-    // critiques "add at least one system" as an incorrect universal
-    // readiness gate (not every benefit — e.g. a nationwide property-tax
-    // exemption — needs a tracked system) — kept as-is here to land the
-    // identity/routing consolidation without changing behavior; fixing the
-    // gate itself belongs to Slice 3 (eligibility expression and context).
     sourceKinds: ['SYSTEM', 'PERSONALIZATION'],
     triggerFamily: 'PROPERTY_BENEFIT_EXPLORATION',
     reason: 'Existing systems can be checked for rebates, credits, and ownership benefits.',
@@ -335,8 +328,21 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     // retired hidden-asset-finder was LOW_CONSEQUENCE), and safePartialValue
     // is restricted to LOW_CONSEQUENCE capabilities (see capability.contract.ts
     // superRefine).
+    //
+    // Gated on JURISDICTION (property location known), not TRACKED_SYSTEMS —
+    // the audit explicitly critiques "add at least one system" as an
+    // incorrect universal readiness gate (Slice 4): a nationwide property-tax
+    // exemption or a location-based rebate needs no tracked system at all.
+    // Location is the one fact nearly every benefit category depends on;
+    // finer-grained, opportunity-specific readiness (equipment, occupancy,
+    // utility territory) is surfaced per-match inside the workspace via
+    // confidence level and unresolved-criteria caveats, not at this
+    // coarse discoverability gate — see hiddenAssets/ruleEngine.ts.
     readinessRequirements: [
-      { kind: 'TRACKED_SYSTEMS', minimum: 1, reason: 'Add at least one home system.' },
+      {
+        kind: 'JURISDICTION',
+        reason: 'Confirm the property location before checking for rebates, credits, and benefits.',
+      },
     ],
   },
   'sell-hold-rent': {
