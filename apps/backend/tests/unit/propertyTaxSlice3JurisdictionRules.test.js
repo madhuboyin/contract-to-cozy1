@@ -156,7 +156,7 @@ test('active reviewed profile exposes citations and governed deadlines', async (
   assert.equal(result.coverage, 'REVIEWED');
   assert.equal(result.profile.propertyClass, '1');
   assert.equal(result.profile.assessmentRatio, 0.06);
-  assert.equal(result.profile.citations.length, 3);
+  assert.equal(result.profile.citations.length, release.citations.length);
   assert.ok(result.deadlines.every((deadline) => deadline.officialUrl));
   assert.equal(
     result.deadlines.find((deadline) =>
@@ -246,7 +246,10 @@ test('reviewed Bronx rule seeding is idempotent across profiles, citations, and 
   assert.equal(count, 1);
   assert.equal(calls.profile[0].create.status, 'ACTIVE');
   assert.equal(calls.profile[0].create.propertyClass, '1');
-  assert.equal(calls.citation.length, 3);
+  assert.equal(
+    calls.citation.length,
+    NYC_DOF_BRONX_CLASS_1_RULE_V1.citations.length,
+  );
   assert.equal(calls.deadline.length, 3);
   assert.ok(calls.deadline.every((call) => call.create.officialUrl));
   assert.equal(calls.control.length, 1);

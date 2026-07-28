@@ -269,6 +269,93 @@ export type PropertyTaxActionsDTO = {
   }>;
 };
 
+export type PropertyTaxAppealGround =
+  | 'ASSESSED_VALUE'
+  | 'TAX_CLASS'
+  | 'EXEMPTION';
+
+export type PropertyTaxAppealReadinessDTO = {
+  selectedGround: PropertyTaxAppealGround;
+  status: 'READY' | 'NOT_READY' | 'NOT_COVERED' | 'NO_SUPPORTED_GROUND';
+  reason: string | null;
+  reviewedGrounds: Array<{
+    code: string;
+    label: string;
+    formCode: string | null;
+  }>;
+  ground?: {
+    code: PropertyTaxAppealGround;
+    label: string;
+    formCode: string | null;
+    requirements: Record<string, unknown>;
+  };
+  ruleProfile: {
+    id: string;
+    title: string;
+    version: number;
+    reviewedAt: string;
+    expiresAt: string;
+  } | null;
+  evaluatedAt?: string;
+  canonical?: {
+    valuationDate: string | null;
+    classification: unknown;
+    totalAssessedValue: number | null;
+    taxableValue: number | null;
+    assessmentRatio: number | null;
+    effectiveTaxRate: number | null;
+  };
+  gaps: string[];
+  effort: 'LOW' | 'MEDIUM' | 'HIGH';
+  evidence: Array<{
+    id: string;
+    evidenceKey: string;
+    ground: PropertyTaxAppealGround;
+    type:
+      | 'FACTUAL_ERROR'
+      | 'CONDITION'
+      | 'EXEMPTION_DECISION'
+      | 'SUPPORTING_DOCUMENT';
+    title: string;
+    description: string | null;
+    facts: Record<string, unknown>;
+    sourceUrl: string | null;
+    supportingDocumentId: string | null;
+    confirmedAt: string;
+  }>;
+  comparables: Array<{
+    id: string;
+    comparableKey: string;
+    address: string;
+    saleDate: string;
+    salePrice: number;
+    propertyClass: string;
+    sourceUrl: string | null;
+    sourceDocumentId: string | null;
+    adjustments: {
+      time: number;
+      condition: number;
+      size: number;
+      other: number;
+    };
+    adjustmentRationale: string | null;
+    adjustedSalePrice: number;
+    qualification: 'QUALIFIED' | 'NOT_QUALIFIED';
+    reasons: string[];
+  }>;
+  taxAtStake: {
+    low: number;
+    high: number;
+    currency: 'USD';
+    method: string;
+    effectiveTaxRate: number;
+    assessmentRatio: number;
+    indicatedMarketValueRange: { low: number; high: number };
+    indicatedAssessedValueRange: { low: number; high: number };
+  } | null;
+  professionalBoundary: string;
+};
+
 export type HomeownerPropertyTaxRecordInput = {
   taxYear: number;
   parcelId?: string;
@@ -402,6 +489,76 @@ export async function decidePropertyTaxAction(
     input,
   );
   return res.data?.action;
+}
+
+export async function getPropertyTaxAppealReadiness(
+  propertyId: string,
+  ground: PropertyTaxAppealGround,
+  options: {
+    revisedNoticeDate?: string;
+    revisedNoticeQualifies?: boolean;
+  } = {},
+): Promise<PropertyTaxAppealReadinessDTO> {
+  const query = new URLSearchParams({ ground });
+  if (options.revisedNoticeDate) {
+    query.set('revisedNoticeDate', options.revisedNoticeDate);
+  }
+  if (options.revisedNoticeQualifies === true) {
+    query.set('revisedNoticeQualifies', 'true');
+  }
+  const res = await api.get(
+    `/api/properties/${propertyId}/property-tax/appeal/readiness?${query}`,
+  );
+  return res.data?.readiness as PropertyTaxAppealReadinessDTO;
+}
+
+export async function savePropertyTaxAppealEvidence(
+  propertyId: string,
+  input: {
+    evidenceKey: string;
+    ground: PropertyTaxAppealGround;
+    type:
+      | 'FACTUAL_ERROR'
+      | 'CONDITION'
+      | 'EXEMPTION_DECISION'
+      | 'SUPPORTING_DOCUMENT';
+    title: string;
+    description?: string;
+    facts: Record<string, unknown>;
+    sourceUrl?: string;
+    supportingDocumentId?: string;
+  },
+) {
+  const res = await api.put(
+    `/api/properties/${propertyId}/property-tax/appeal/evidence`,
+    input,
+  );
+  return res.data?.evidence;
+}
+
+export async function savePropertyTaxAppealComparable(
+  propertyId: string,
+  input: {
+    comparableKey: string;
+    address: string;
+    saleDate: string;
+    salePrice: number;
+    propertyClass: string;
+    sourceUrl?: string;
+    adjustments?: {
+      time?: number;
+      condition?: number;
+      size?: number;
+      other?: number;
+      rationale?: string;
+    };
+  },
+) {
+  const res = await api.put(
+    `/api/properties/${propertyId}/property-tax/appeal/comparables`,
+    input,
+  );
+  return res.data?.comparable;
 }
 
 export async function saveHomeownerPropertyTaxRecord(

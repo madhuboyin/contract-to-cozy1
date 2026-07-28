@@ -11,6 +11,7 @@ import { propertyTaxRuleService } from '../services/propertyTax/propertyTaxRule.
 import { propertyTaxRuleControlService } from '../services/propertyTax/propertyTaxRuleControl.service';
 import { propertyTaxDocumentIntakeService } from '../services/propertyTax/propertyTaxDocumentIntake.service';
 import { propertyTaxHomeownerActionService } from '../services/propertyTax/propertyTaxHomeownerAction.service';
+import { propertyTaxAppealReadinessService } from '../services/propertyTax/propertyTaxAppealReadiness.service';
 
 const service = new PropertyTaxService();
 
@@ -362,6 +363,154 @@ export async function decidePropertyTaxAction(req: CustomRequest, res: Response,
       ...parsed.data,
     });
     res.json({ success: true, data: { action } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const appealGroundSchema = z.enum([
+  'ASSESSED_VALUE',
+  'TAX_CLASS',
+  'EXEMPTION',
+]);
+
+export async function getPropertyTaxAppealReadiness(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const ground = appealGroundSchema.safeParse(
+      req.query.ground ?? 'ASSESSED_VALUE',
+    );
+    if (!ground.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Unsupported appeal ground',
+      });
+      return;
+    }
+    const revisedNoticeDate = typeof req.query.revisedNoticeDate === 'string'
+      ? req.query.revisedNoticeDate
+      : undefined;
+    if (
+      revisedNoticeDate
+      && !/^\d{4}-\d{2}-\d{2}$/.test(revisedNoticeDate)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'revisedNoticeDate must use YYYY-MM-DD',
+      });
+      return;
+    }
+    const readiness = await propertyTaxAppealReadinessService.evaluate(
+      req.params.propertyId,
+      req.user!.userId,
+      ground.data,
+      new Date(),
+      {
+        revisedNoticeDate,
+        revisedNoticeQualifies:
+          req.query.revisedNoticeQualifies === 'true',
+      },
+    );
+    res.json({ success: true, data: { readiness } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const evidenceKeySchema = z.string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[a-zA-Z0-9:_-]+$/);
+
+const propertyTaxAppealEvidenceSchema = z.object({
+  evidenceKey: evidenceKeySchema,
+  ground: appealGroundSchema,
+  type: z.enum([
+    'FACTUAL_ERROR',
+    'CONDITION',
+    'EXEMPTION_DECISION',
+    'SUPPORTING_DOCUMENT',
+  ]),
+  title: z.string().trim().min(3).max(200),
+  description: z.string().trim().max(2_000).optional(),
+  facts: z.record(z.string(), z.unknown()),
+  sourceUrl: z.url().max(2_000).optional(),
+  supportingDocumentId: z.string().uuid().optional(),
+}).strict();
+
+export async function upsertPropertyTaxAppealEvidence(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = propertyTaxAppealEvidenceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid property tax appeal evidence',
+        errors: parsed.error.issues,
+      });
+      return;
+    }
+    const evidence = await propertyTaxAppealReadinessService.upsertEvidence({
+      propertyId: req.params.propertyId,
+      userId: req.user!.userId,
+      ...parsed.data,
+    });
+    res.json({ success: true, data: { evidence } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const comparableAdjustmentSchema = z.object({
+  time: z.number().finite().min(-1_000_000_000).max(1_000_000_000).optional(),
+  condition: z.number().finite().min(-1_000_000_000).max(1_000_000_000).optional(),
+  size: z.number().finite().min(-1_000_000_000).max(1_000_000_000).optional(),
+  other: z.number().finite().min(-1_000_000_000).max(1_000_000_000).optional(),
+  rationale: z.string().trim().max(1_000).optional(),
+}).strict();
+
+const propertyTaxAppealComparableSchema = z.object({
+  comparableKey: evidenceKeySchema,
+  address: z.string().trim().min(5).max(300),
+  saleDate: z.iso.date(),
+  salePrice: z.number().finite().positive().max(1_000_000_000),
+  propertyClass: z.string().trim().min(1).max(120),
+  livingAreaSqFt: z.number().finite().positive().max(1_000_000).optional(),
+  lotSizeSqFt: z.number().finite().positive().max(10_000_000).optional(),
+  condition: z.string().trim().max(300).optional(),
+  sourceUrl: z.url().max(2_000).optional(),
+  sourceDocumentId: z.string().uuid().optional(),
+  adjustments: comparableAdjustmentSchema.optional(),
+}).strict();
+
+export async function upsertPropertyTaxAppealComparable(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = propertyTaxAppealComparableSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid property tax comparable',
+        errors: parsed.error.issues,
+      });
+      return;
+    }
+    const comparable = await propertyTaxAppealReadinessService.upsertComparable({
+      propertyId: req.params.propertyId,
+      userId: req.user!.userId,
+      ...parsed.data,
+    });
+    res.json({ success: true, data: { comparable } });
   } catch (error) {
     next(error);
   }

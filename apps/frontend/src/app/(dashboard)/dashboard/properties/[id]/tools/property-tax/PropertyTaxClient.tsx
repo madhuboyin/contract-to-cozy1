@@ -15,12 +15,17 @@ import {
   stagePropertyTaxDocumentFields,
   confirmPropertyTaxDocument,
   decidePropertyTaxAction,
+  getPropertyTaxAppealReadiness,
+  savePropertyTaxAppealComparable,
+  savePropertyTaxAppealEvidence,
   saveHomeownerPropertyTaxRecord,
   type PropertyTaxCenterRecordDTO,
   type PropertyTaxCoverageDTO,
   type PropertyTaxRulesDTO,
   type PropertyTaxDocumentIntakeDTO,
   type PropertyTaxActionsDTO,
+  type PropertyTaxAppealGround,
+  type PropertyTaxAppealReadinessDTO,
   type PropertyTaxEstimateDTO,
   type PropertyTaxFieldDTO,
 } from './taxApi';
@@ -128,6 +133,24 @@ export default function PropertyTaxClient() {
   const [actionNotes, setActionNotes] = useState<Record<string, string>>({});
   const [actionReferences, setActionReferences] = useState<Record<string, string>>({});
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+  const [appealGround, setAppealGround] = useState<PropertyTaxAppealGround>('ASSESSED_VALUE');
+  const [appealReadiness, setAppealReadiness] = useState<PropertyTaxAppealReadinessDTO | null>(null);
+  const [appealBusy, setAppealBusy] = useState(false);
+  const [appealEvidenceDescription, setAppealEvidenceDescription] = useState('');
+  const [appealEvidenceSourceUrl, setAppealEvidenceSourceUrl] = useState('');
+  const [appealClaimedClass, setAppealClaimedClass] = useState('');
+  const [appealExemptionProgram, setAppealExemptionProgram] = useState('');
+  const [appealExemptionDecision, setAppealExemptionDecision] = useState('DENIED');
+  const [appealNoticeDate, setAppealNoticeDate] = useState('');
+  const [appealRevisedNoticeDate, setAppealRevisedNoticeDate] = useState('');
+  const [appealRevisedNoticeQualifies, setAppealRevisedNoticeQualifies] = useState(false);
+  const [comparableAddress, setComparableAddress] = useState('');
+  const [comparableSaleDate, setComparableSaleDate] = useState('');
+  const [comparableSalePrice, setComparableSalePrice] = useState('');
+  const [comparableClass, setComparableClass] = useState('');
+  const [comparableSourceUrl, setComparableSourceUrl] = useState('');
+  const [comparableAdjustment, setComparableAdjustment] = useState('');
+  const [comparableRationale, setComparableRationale] = useState('');
   const [assessedValue, setAssessedValue] = useState('');
   const [taxRate, setTaxRate] = useState('');
   const [billAmount, setBillAmount] = useState('');
@@ -313,6 +336,138 @@ export default function PropertyTaxClient() {
     }
   }
 
+  async function refreshAppealReadiness(
+    ground: PropertyTaxAppealGround = appealGround,
+  ) {
+    if (!propertyId) return;
+    setAppealBusy(true);
+    setRecordError(null);
+    try {
+      setAppealReadiness(
+        await getPropertyTaxAppealReadiness(propertyId, ground, {
+          revisedNoticeDate: appealRevisedNoticeDate || undefined,
+          revisedNoticeQualifies: appealRevisedNoticeQualifies,
+        }),
+      );
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to evaluate appeal readiness');
+    } finally {
+      setAppealBusy(false);
+    }
+  }
+
+  async function saveAppealEvidence() {
+    if (!appealEvidenceSourceUrl.trim()) return;
+    setAppealBusy(true);
+    setRecordError(null);
+    try {
+      const common = {
+        evidenceKey: `${appealGround.toLowerCase()}-primary`,
+        ground: appealGround,
+        title: appealGround === 'TAX_CLASS'
+          ? 'Tax class factual record'
+          : appealGround === 'EXEMPTION'
+            ? 'Exemption decision notice'
+            : 'Condition or valuation evidence',
+        description: appealEvidenceDescription.trim() || undefined,
+        sourceUrl: appealEvidenceSourceUrl.trim(),
+      };
+      if (appealGround === 'TAX_CLASS') {
+        await savePropertyTaxAppealEvidence(propertyId, {
+          ...common,
+          type: 'FACTUAL_ERROR',
+          facts: {
+            claimedClassification: appealClaimedClass.trim(),
+            officialRecordMismatch: true,
+          },
+        });
+      } else if (appealGround === 'EXEMPTION') {
+        await savePropertyTaxAppealEvidence(propertyId, {
+          ...common,
+          type: 'EXEMPTION_DECISION',
+          facts: {
+            programName: appealExemptionProgram.trim(),
+            decisionType: appealExemptionDecision,
+            noticeDate: appealNoticeDate,
+          },
+        });
+      } else {
+        await savePropertyTaxAppealEvidence(propertyId, {
+          ...common,
+          type: 'CONDITION',
+          facts: {
+            conditionAsOfValuationDate: appealEvidenceDescription.trim(),
+          },
+        });
+      }
+      setAppealReadiness(
+        await getPropertyTaxAppealReadiness(propertyId, appealGround, {
+          revisedNoticeDate: appealRevisedNoticeDate || undefined,
+          revisedNoticeQualifies: appealRevisedNoticeQualifies,
+        }),
+      );
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to save appeal evidence');
+    } finally {
+      setAppealBusy(false);
+    }
+  }
+
+  async function saveAppealComparable() {
+    const salePrice = Number(comparableSalePrice);
+    const otherAdjustment = comparableAdjustment.trim()
+      ? Number(comparableAdjustment)
+      : 0;
+    if (
+      !comparableAddress.trim()
+      || !comparableSaleDate
+      || !Number.isFinite(salePrice)
+      || !comparableClass.trim()
+      || !comparableSourceUrl.trim()
+      || !Number.isFinite(otherAdjustment)
+    ) return;
+    setAppealBusy(true);
+    setRecordError(null);
+    try {
+      await savePropertyTaxAppealComparable(propertyId, {
+        comparableKey: globalThis.crypto.randomUUID(),
+        address: comparableAddress.trim(),
+        saleDate: comparableSaleDate,
+        salePrice,
+        propertyClass: comparableClass.trim(),
+        sourceUrl: comparableSourceUrl.trim(),
+        adjustments: {
+          other: otherAdjustment,
+          rationale: otherAdjustment !== 0
+            ? comparableRationale.trim()
+            : undefined,
+        },
+      });
+      setComparableAddress('');
+      setComparableSaleDate('');
+      setComparableSalePrice('');
+      setComparableSourceUrl('');
+      setComparableAdjustment('');
+      setComparableRationale('');
+      setAppealReadiness(
+        await getPropertyTaxAppealReadiness(propertyId, appealGround, {
+          revisedNoticeDate: appealRevisedNoticeDate || undefined,
+          revisedNoticeQualifies: appealRevisedNoticeQualifies,
+        }),
+      );
+    } catch (cause: unknown) {
+      setRecordError(cause instanceof Error
+        ? cause.message
+        : 'Failed to save comparable evidence');
+    } finally {
+      setAppealBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!propertyId) return;
     void Promise.all([refresh(), refreshRecord()]);
@@ -325,6 +480,11 @@ export default function PropertyTaxClient() {
     // recorded decision or external tax action.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  useEffect(() => {
+    if (appealMode && propertyId) void refreshAppealReadiness(appealGround);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appealMode, propertyId, appealGround]);
 
   const invalidAssessedValue = Boolean(assessedValue) && !Number.isFinite(Number(assessedValue));
   const invalidTaxRate = Boolean(taxRate) && !Number.isFinite(Number(taxRate));
@@ -806,6 +966,297 @@ export default function PropertyTaxClient() {
                 <li>Jurisdiction-qualified comparable records when permitted</li>
               </ul>
             </div>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-amber-300 bg-white/80 p-4 dark:border-amber-800 dark:bg-slate-950/45">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">Evidence-qualified appeal readiness</h3>
+                <p className="mt-1 text-xs">
+                  Readiness checks reviewed ground requirements and sourced evidence. It is not a likelihood-of-success score.
+                </p>
+              </div>
+              <label className="text-xs font-semibold">
+                Reviewed ground
+                <select
+                  value={appealGround}
+                  onChange={(event) => setAppealGround(event.target.value as PropertyTaxAppealGround)}
+                  className="mt-1 block min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  {(appealReadiness?.reviewedGrounds.length
+                    ? appealReadiness.reviewedGrounds
+                    : [
+                        { code: 'ASSESSED_VALUE', label: 'Assessed value' },
+                        { code: 'TAX_CLASS', label: 'Tax class' },
+                        { code: 'EXEMPTION', label: 'Exemption decision' },
+                      ]).map((ground) => (
+                    <option key={ground.code} value={ground.code}>
+                      {ground.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-amber-950 px-3 py-1 text-xs font-semibold text-white dark:bg-amber-200 dark:text-amber-950">
+                {appealBusy ? 'CHECKING' : appealReadiness?.status ?? 'NOT CHECKED'}
+              </span>
+              {appealReadiness && (
+                <span className="text-xs font-semibold">
+                  Preparation effort: {appealReadiness.effort.toLowerCase()}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-amber-200 p-3 dark:border-amber-800/70">
+              <div className="text-sm font-semibold">Revised-notice filing window, if applicable</div>
+              <p className="mt-1 text-xs">
+                Use this only when the fixed filing deadline has passed and an official revised notice may qualify under the reviewed exception.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <input
+                  type="date"
+                  aria-label="Revised notice date"
+                  value={appealRevisedNoticeDate}
+                  onChange={(event) => setAppealRevisedNoticeDate(event.target.value)}
+                  className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <label className="flex max-w-xl items-start gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={appealRevisedNoticeQualifies}
+                    onChange={(event) => setAppealRevisedNoticeQualifies(event.target.checked)}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  I reviewed the official notice and confirm it states an assessed-value increase or exemption reduction/removal covered by the reviewed exception.
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void refreshAppealReadiness(appealGround)}
+                  disabled={
+                    appealBusy
+                    || (
+                      Boolean(appealRevisedNoticeDate)
+                      && !appealRevisedNoticeQualifies
+                    )
+                  }
+                  className="min-h-11 rounded-xl border border-amber-400 px-3 py-2 text-xs font-semibold disabled:opacity-50 dark:border-amber-700"
+                >
+                  Recheck filing window
+                </button>
+              </div>
+            </div>
+
+            {appealReadiness?.reason && (
+              <p className="mt-3 text-sm">{appealReadiness.reason}</p>
+            )}
+            {appealReadiness && appealReadiness.gaps.length > 0 && (
+              <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
+                <div className="text-sm font-semibold">Exact gaps</div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {appealReadiness.gaps.map((gap) => (
+                    <li key={gap}>{gap}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {appealReadiness?.taxAtStake && (
+              <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50 p-4 text-teal-950 dark:border-teal-800 dark:bg-teal-950/35 dark:text-teal-100">
+                <div className="text-xs font-semibold uppercase tracking-wide">Tax at stake—not promised savings</div>
+                <div className="mt-1 text-xl font-semibold">
+                  {money(appealReadiness.taxAtStake.low)}–{money(appealReadiness.taxAtStake.high)}
+                </div>
+                <p className="mt-2 text-xs">{appealReadiness.taxAtStake.method}</p>
+              </div>
+            )}
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-amber-200 p-4 dark:border-amber-800/70">
+                <h4 className="text-sm font-semibold">
+                  {appealGround === 'TAX_CLASS'
+                    ? 'Add factual-error evidence'
+                    : appealGround === 'EXEMPTION'
+                      ? 'Add the exemption decision'
+                      : 'Add condition or valuation evidence'}
+                </h4>
+                {appealGround === 'TAX_CLASS' && (
+                  <input
+                    value={appealClaimedClass}
+                    onChange={(event) => setAppealClaimedClass(event.target.value)}
+                    placeholder="Claimed correct tax class"
+                    className="mt-3 min-h-11 w-full rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                )}
+                {appealGround === 'EXEMPTION' && (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={appealExemptionProgram}
+                      onChange={(event) => setAppealExemptionProgram(event.target.value)}
+                      placeholder="Exemption program"
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <select
+                      value={appealExemptionDecision}
+                      onChange={(event) => setAppealExemptionDecision(event.target.value)}
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      <option value="DENIED">Denied</option>
+                      <option value="REVOKED">Revoked</option>
+                      <option value="REDUCED">Reduced</option>
+                      <option value="OMITTED">Omitted</option>
+                    </select>
+                    <input
+                      type="date"
+                      value={appealNoticeDate}
+                      onChange={(event) => setAppealNoticeDate(event.target.value)}
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                )}
+                <textarea
+                  value={appealEvidenceDescription}
+                  onChange={(event) => setAppealEvidenceDescription(event.target.value)}
+                  placeholder="Describe the fact or condition as of the valuation date"
+                  className="mt-2 min-h-24 w-full rounded-xl border border-amber-300 bg-white p-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <input
+                  type="url"
+                  value={appealEvidenceSourceUrl}
+                  onChange={(event) => setAppealEvidenceSourceUrl(event.target.value)}
+                  placeholder="Official or supporting source URL"
+                  className="mt-2 min-h-11 w-full rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => void saveAppealEvidence()}
+                  disabled={
+                    appealBusy
+                    || !appealEvidenceSourceUrl.trim()
+                    || (appealGround === 'TAX_CLASS' && !appealClaimedClass.trim())
+                    || (
+                      appealGround === 'EXEMPTION'
+                      && (!appealExemptionProgram.trim() || !appealNoticeDate)
+                    )
+                  }
+                  className="mt-3 min-h-11 rounded-xl bg-amber-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-amber-200 dark:text-amber-950"
+                >
+                  Save confirmed evidence
+                </button>
+              </div>
+
+              {appealGround === 'ASSESSED_VALUE' ? (
+                <div className="rounded-xl border border-amber-200 p-4 dark:border-amber-800/70">
+                  <h4 className="text-sm font-semibold">Add a sourced comparable sale</h4>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={comparableAddress}
+                      onChange={(event) => setComparableAddress(event.target.value)}
+                      placeholder="Comparable address"
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <input
+                      type="date"
+                      value={comparableSaleDate}
+                      onChange={(event) => setComparableSaleDate(event.target.value)}
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <input
+                      inputMode="decimal"
+                      value={comparableSalePrice}
+                      onChange={(event) => setComparableSalePrice(event.target.value)}
+                      placeholder="Sale price"
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <input
+                      value={comparableClass}
+                      onChange={(event) => setComparableClass(event.target.value)}
+                      placeholder="Tax class"
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <input
+                      type="url"
+                      value={comparableSourceUrl}
+                      onChange={(event) => setComparableSourceUrl(event.target.value)}
+                      placeholder="Sale record source URL"
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100 sm:col-span-2"
+                    />
+                    <input
+                      inputMode="decimal"
+                      value={comparableAdjustment}
+                      onChange={(event) => setComparableAdjustment(event.target.value)}
+                      placeholder="Net adjustment (+/− dollars)"
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <input
+                      value={comparableRationale}
+                      onChange={(event) => setComparableRationale(event.target.value)}
+                      placeholder="Required when adjusted"
+                      className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void saveAppealComparable()}
+                    disabled={
+                      appealBusy
+                      || !comparableAddress.trim()
+                      || !comparableSaleDate
+                      || !Number.isFinite(Number(comparableSalePrice))
+                      || Number(comparableSalePrice) <= 0
+                      || !comparableClass.trim()
+                      || !comparableSourceUrl.trim()
+                      || (
+                        Boolean(comparableAdjustment.trim())
+                        && Number(comparableAdjustment) !== 0
+                        && !comparableRationale.trim()
+                      )
+                    }
+                    className="mt-3 min-h-11 rounded-xl bg-amber-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-amber-200 dark:text-amber-950"
+                  >
+                    Add comparable
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 p-4 text-sm dark:border-amber-800/70">
+                  <h4 className="font-semibold">Evidence standard</h4>
+                  <p className="mt-2">
+                    The source must establish the factual mismatch or official exemption disposition. This workflow does not decide legal eligibility or predict the authority’s decision.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {appealReadiness && appealReadiness.comparables.length > 0 && (
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold">Comparable qualification</h4>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  {appealReadiness.comparables.map((comparable) => (
+                    <div key={comparable.id} className="rounded-xl border border-amber-200 p-3 text-sm dark:border-amber-800/70">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-semibold">{comparable.address}</span>
+                        <span className="text-xs font-semibold">{comparable.qualification}</span>
+                      </div>
+                      <div className="mt-1 text-xs">
+                        {new Date(comparable.saleDate).toLocaleDateString()} · {money(comparable.salePrice)} · adjusted {money(comparable.adjustedSalePrice)}
+                      </div>
+                      {comparable.reasons.length > 0 && (
+                        <ul className="mt-2 list-disc pl-5 text-xs">
+                          {comparable.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {appealReadiness && (
+              <p className="mt-4 border-t border-amber-200 pt-3 text-xs dark:border-amber-800/70">
+                {appealReadiness.professionalBoundary}
+              </p>
+            )}
           </div>
         </section>
       )}

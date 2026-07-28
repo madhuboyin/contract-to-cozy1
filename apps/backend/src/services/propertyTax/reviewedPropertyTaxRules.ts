@@ -54,12 +54,70 @@ export const NYC_DOF_BRONX_CLASS_1_RULE_V1 = {
       requestForReviewIsNotTaxCommissionAppeal: true,
     },
     appealGroundsJson: {
-      supported: [
-        'assessed value',
-        'tax class',
-        'qualifying exemption denial, revocation, or reduction',
-      ],
       outcomePredictionAllowed: false,
+      professionalReviewRecommendedWhen: [
+        'the claimed reduction or tax at stake is material',
+        'the property has mixed use, multiple parcels, or complex ownership',
+        'the evidence conflicts or the correct form or ground remains unclear',
+      ],
+      grounds: [
+        {
+          code: 'ASSESSED_VALUE',
+          label: 'Assessed value or overvaluation',
+          formCode: 'TC108',
+          requirements: {
+            canonicalFields: [
+              'totalAssessedValue',
+              'valuationDate',
+              'classification',
+            ],
+            assessmentRatioRequired: true,
+            minimumQualifiedComparables: 3,
+            comparableWindowDays: 365,
+            comparableFields: [
+              'address',
+              'saleDate',
+              'salePrice',
+              'propertyClass',
+              'source',
+            ],
+            adjustmentsRequireRationale: true,
+          },
+        },
+        {
+          code: 'TAX_CLASS',
+          label: 'Incorrect tax class',
+          formCode: 'TC106',
+          requirements: {
+            canonicalFields: ['classification'],
+            evidenceType: 'FACTUAL_ERROR',
+            factualFields: [
+              'claimedClassification',
+              'officialRecordMismatch',
+            ],
+          },
+        },
+        {
+          code: 'EXEMPTION',
+          label: 'Exemption denial, revocation, reduction, or omission',
+          formCode: 'TC106',
+          requirements: {
+            evidenceType: 'EXEMPTION_DECISION',
+            factualFields: [
+              'programName',
+              'decisionType',
+              'noticeDate',
+            ],
+            acceptedDecisionTypes: [
+              'DENIED',
+              'REVOKED',
+              'REDUCED',
+              'OMITTED',
+            ],
+            eligibilityConclusionAllowed: false,
+          },
+        },
+      ],
     },
     stagesJson: {
       tentativeRoll: '2026-01-15',
@@ -83,6 +141,10 @@ export const NYC_DOF_BRONX_CLASS_1_RULE_V1 = {
         'https://www.nyc.gov/site/taxcommission/about/challenging-notice-of-property-value.page',
       forms:
         'https://www.nyc.gov/site/taxcommission/forms/application-forms.page',
+      assessedValueInstructions:
+        'https://www.nyc.gov/assets/taxcommission/downloads/pdf/tc108.pdf',
+      taxCalculation:
+        'https://www.nyc.gov/site/finance/property/property-calculating-your-annual-tax-blll.page',
       exemptions:
         'https://www.nyc.gov/site/finance/property/residential-properties-exemptions.page',
     },
@@ -124,6 +186,25 @@ export const NYC_DOF_BRONX_CLASS_1_RULE_V1 = {
         'https://www.nyc.gov/site/finance/property/property-determining-your-assessed-value.page',
       retrievedAt: new Date('2026-07-27T12:00:00.000Z'),
       notes: 'Class 1 assessment ratio and annual/five-year caps.',
+    },
+    {
+      title: 'TC108 Class One Application and Instructions',
+      publisher: 'NYC Tax Commission',
+      officialUrl:
+        'https://www.nyc.gov/assets/taxcommission/downloads/pdf/tc108.pdf',
+      retrievedAt: new Date('2026-07-27T12:00:00.000Z'),
+      effectiveAt: new Date('2026-01-15T05:00:00.000Z'),
+      notes:
+        'Reviewed form instructions for a Class One assessed-value claim; users must verify the current form before filing.',
+    },
+    {
+      title: 'Calculating Your Annual Property Tax',
+      publisher: 'NYC Department of Finance',
+      officialUrl:
+        'https://www.nyc.gov/site/finance/property/property-calculating-your-annual-tax-blll.page',
+      retrievedAt: new Date('2026-07-27T12:00:00.000Z'),
+      notes:
+        'Taxable-value and tax-rate calculation context used for a non-guaranteed tax-at-stake range.',
     },
   ],
   deadlines: [

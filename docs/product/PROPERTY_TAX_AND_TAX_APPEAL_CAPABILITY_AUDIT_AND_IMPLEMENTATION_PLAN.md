@@ -1364,6 +1364,18 @@ Record:
 
 **Goal:** Decide whether preparing an appeal is supported.
 
+**Implementation status (July 27, 2026): Complete**
+
+- Added reviewed, coded assessed-value, tax-class, and exemption grounds with ground-specific forms, canonical fact requirements, evidence requirements, and official-source provenance.
+- Added durable homeowner-confirmed factual-error, condition, exemption-decision, and supporting-document evidence linked to the active reviewed rule release.
+- Added durable sourced comparable-sale records with valuation date, property class, size and condition context, explicit time/condition/size/other adjustments, and mandatory adjustment rationale.
+- Added deterministic comparable qualification against the canonical valuation date, canonical property class, reviewed time window, and source requirements.
+- Added fail-closed readiness outcomes for ready, not ready, not covered, and no supported ground with exact missing facts or evidence.
+- Added assessment-ratio normalization and a bounded tax-at-stake range derived from qualified adjusted sale prices and sourced tax facts; no probability or guaranteed-savings output is produced.
+- Added effort guidance and an explicit professional boundary for material, complex, or conflicting claims.
+- Added Property Tax Center ground selection, evidence capture, comparable qualification, gap display, tax-at-stake disclosure, and professional-boundary UI.
+- Kept schema changes direct and did not add a migration; the user must reconcile the database separately.
+
 **Work**
 
 - Add jurisdiction-permitted grounds.

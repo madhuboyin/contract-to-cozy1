@@ -2858,6 +2858,8 @@ model Property {
   taxBillRecords       PropertyTaxBillRecord[]
   taxDocumentIntakes   PropertyTaxDocumentIntake[]
   taxHomeownerActions  PropertyTaxHomeownerAction[]
+  taxAppealEvidence    PropertyTaxAppealEvidence[]
+  taxAppealComparables PropertyTaxAppealComparable[]
 
   // HOA / Community Rules Compliance Tracker
   hoaAssociation     HoaAssociation?
@@ -3496,6 +3498,8 @@ model Document {
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
   propertyTaxIntake          PropertyTaxDocumentIntake?
+  propertyTaxAppealEvidence  PropertyTaxAppealEvidence[]   @relation("PropertyTaxAppealEvidenceDocument")
+  propertyTaxAppealComparables PropertyTaxAppealComparable[] @relation("PropertyTaxAppealComparableDocument")
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
 
   homeSavingsAccountId     String?
@@ -15775,6 +15779,19 @@ enum PropertyTaxHomeownerActionStatus {
   DISMISSED
 }
 
+enum PropertyTaxAppealGround {
+  ASSESSED_VALUE
+  TAX_CLASS
+  EXEMPTION
+}
+
+enum PropertyTaxAppealEvidenceType {
+  FACTUAL_ERROR
+  CONDITION
+  EXEMPTION_DECISION
+  SUPPORTING_DOCUMENT
+}
+
 // Reviewed rule releases are added in Slice 3. This record establishes stable
 // jurisdiction ownership for parcels, assessments, and bills now.
 model PropertyTaxJurisdiction {
@@ -15848,6 +15865,8 @@ model PropertyTaxRuleProfile {
   deadlineRules     PropertyTaxDeadlineRule[]
   controlEvents     PropertyTaxRuleControlEvent[]
   homeownerActions  PropertyTaxHomeownerAction[]
+  appealEvidence    PropertyTaxAppealEvidence[]
+  appealComparables PropertyTaxAppealComparable[]
 
   @@unique([jurisdictionId, slug, version])
   @@index([jurisdictionId, propertyClass, status])
@@ -16008,6 +16027,75 @@ model PropertyTaxHomeownerAction {
   @@index([ruleProfileId, type])
   @@index([intakeId])
   @@map("property_tax_homeowner_actions")
+}
+
+// Appeal evidence remains homeowner-confirmed and ground-specific. Readiness is
+// derived from this evidence plus the canonical record and reviewed rule
+// release; it is never represented as a probability of success.
+model PropertyTaxAppealEvidence {
+  id                  String @id @default(uuid())
+  propertyId          String
+  ruleProfileId       String
+  evidenceKey         String
+  ground              PropertyTaxAppealGround
+  type                PropertyTaxAppealEvidenceType
+  title               String
+  description         String?
+  factsJson           Json
+  sourceUrl           String?
+  supportingDocumentId String?
+  confirmedAt         DateTime
+  confirmedByUserId   String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  property          Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  ruleProfile       PropertyTaxRuleProfile @relation(fields: [ruleProfileId], references: [id], onDelete: Restrict)
+  supportingDocument Document?             @relation("PropertyTaxAppealEvidenceDocument", fields: [supportingDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, evidenceKey])
+  @@index([propertyId, ground, type])
+  @@index([ruleProfileId])
+  @@index([supportingDocumentId])
+  @@map("property_tax_appeal_evidence")
+}
+
+// Comparables are preserved as sourced records with explicit adjustments.
+// Qualification is recomputed against the active reviewed rule, valuation
+// date, and canonical property class on every readiness request.
+model PropertyTaxAppealComparable {
+  id                    String @id @default(uuid())
+  propertyId            String
+  ruleProfileId         String
+  comparableKey         String
+  address               String
+  saleDate              DateTime
+  salePrice             Decimal @db.Decimal(16, 2)
+  propertyClass         String
+  livingAreaSqFt        Decimal? @db.Decimal(12, 2)
+  lotSizeSqFt           Decimal? @db.Decimal(12, 2)
+  condition             String?
+  sourceUrl             String?
+  sourceDocumentId      String?
+  timeAdjustment        Decimal @default(0) @db.Decimal(16, 2)
+  conditionAdjustment   Decimal @default(0) @db.Decimal(16, 2)
+  sizeAdjustment        Decimal @default(0) @db.Decimal(16, 2)
+  otherAdjustment       Decimal @default(0) @db.Decimal(16, 2)
+  adjustmentRationale   String?
+  confirmedAt           DateTime
+  confirmedByUserId     String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  property       Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  ruleProfile    PropertyTaxRuleProfile @relation(fields: [ruleProfileId], references: [id], onDelete: Restrict)
+  sourceDocument Document?              @relation("PropertyTaxAppealComparableDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, comparableKey])
+  @@index([propertyId, saleDate])
+  @@index([ruleProfileId])
+  @@index([sourceDocumentId])
+  @@map("property_tax_appeal_comparables")
 }
 
 model PropertyTaxParcelMatch {

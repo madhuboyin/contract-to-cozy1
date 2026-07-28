@@ -94,6 +94,30 @@ router.put(
   propertyAuthMiddleware,
   controller.decidePropertyTaxAction,
 );
+router.get(
+  '/properties/:propertyId/property-tax/appeal/readiness',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.getPropertyTaxAppealReadiness,
+);
+router.put(
+  '/properties/:propertyId/property-tax/appeal/evidence',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.upsertPropertyTaxAppealEvidence,
+);
+router.put(
+  '/properties/:propertyId/property-tax/appeal/comparables',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  controller.upsertPropertyTaxAppealComparable,
+);
 
 router.get(
   '/properties/:propertyId/property-tax/coverage',
