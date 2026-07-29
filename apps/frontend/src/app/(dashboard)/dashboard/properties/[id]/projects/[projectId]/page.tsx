@@ -259,6 +259,44 @@ export default function ProjectDashboardPage() {
         )}
       </MobileCard>
 
+      {p.renovationCaseId && p.renovationScopeSnapshot ? (
+        <MobileCard className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-700">Renovation handoff</h2>
+              <p className="text-xs text-slate-500">
+                Scope version {p.renovationScopeSnapshot.version} · {p.renovationScopeSnapshot.approvalStatus.toLowerCase()}
+              </p>
+            </div>
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/dashboard/properties/${propertyId}/renovations/${p.renovationCaseId}/readiness`}>
+                View readiness source
+              </Link>
+            </Button>
+          </div>
+          {p.renovationScopeSnapshot.summary ? (
+            <p className="text-sm text-slate-700">{p.renovationScopeSnapshot.summary}</p>
+          ) : null}
+          <div className="grid gap-2 text-xs sm:grid-cols-3">
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="font-semibold text-slate-700">Conditions</p>
+              <p className="mt-1 text-slate-500">{p.inheritedConditions?.length ?? 0} inherited</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="font-semibold text-slate-700">Open dependencies</p>
+              <p className="mt-1 text-slate-500">{p.inheritedDependencies?.length ?? 0} preserved</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="font-semibold text-slate-700">Evidence requirements</p>
+              <p className="mt-1 text-slate-500">{p.evidenceRequirements?.length ?? 0} preserved</p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500">
+            This handoff preserves source records and does not establish legal compliance.
+          </p>
+        </MobileCard>
+      ) : null}
+
       {/* Open issues summary */}
       {openIssues.length > 0 && (
         <MobileCard variant="compact" className="space-y-2">

@@ -193,6 +193,11 @@ export default function RenovationCompliancePage() {
             Review requirements
           </Link>
         </Button>
+        <Button asChild>
+          <Link href={`/dashboard/properties/${propertyId}/renovations/${caseId}/readiness`}>
+            Check start readiness
+          </Link>
+        </Button>
       </div>
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}

@@ -2503,6 +2503,51 @@ class APIClient {
       `/api/properties/${propertyId}/renovation-cases/${caseId}/compliance-workflow`,
     );
   }
+  async getRenovationReadiness(propertyId: string, caseId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}/readiness`);
+  }
+  async evaluateRenovationReadiness(
+    propertyId: string,
+    caseId: string,
+    fulfillmentMode: 'PROVIDER' | 'DIY',
+  ): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}/readiness/evaluate`, {
+      method: 'POST',
+      body: JSON.stringify({ fulfillmentMode }),
+    });
+  }
+  async updateRenovationReadinessItem(
+    propertyId: string,
+    caseId: string,
+    itemId: string,
+    input: Record<string, unknown>,
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/readiness/items/${itemId}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    );
+  }
+  async governRenovationReadinessOverride(
+    propertyId: string,
+    caseId: string,
+    itemId: string,
+    input: Record<string, unknown>,
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/readiness/items/${itemId}/override`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
+  async handoffRenovationProject(
+    propertyId: string,
+    caseId: string,
+    input: Record<string, unknown>,
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/project-handoff`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
   async attachRenovationComplianceRecord(
     propertyId: string,
     caseId: string,

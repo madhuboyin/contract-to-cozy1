@@ -30,6 +30,7 @@ import { transitionWorkItem } from '../modules/homeOperations/application/transi
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { maintenanceTaskSourceAdapter } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
 import { resolveInspectionFindingWorkKey, propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
+import { invalidateStatusForInventoryItem } from './homeStatusBoard.service';
 import type { OperationalWorkItemState } from '@prisma/client';
 import { evaluateRequirementCompletionCheck } from './projectCompliance/completionPolicy';
 
@@ -594,7 +595,9 @@ export async function createProject(propertyId: string, data: any) {
   const { milestones: initialMilestones, ...projectData } = data;
 
   const activeStatuses: ProjectRecordStatus[] = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'];
-  const sourceConflict = projectData.guidanceJourneyId
+  const sourceConflict = projectData.renovationCaseId
+    ? { renovationCaseId: projectData.renovationCaseId }
+    : projectData.guidanceJourneyId
     ? { guidanceJourneyId: projectData.guidanceJourneyId }
     : projectData.priceFinalizationId
     ? { priceFinalizationId: projectData.priceFinalizationId }
@@ -602,7 +605,7 @@ export async function createProject(propertyId: string, data: any) {
       ? { bookingId: projectData.bookingId }
       : null;
   const project = await withSerializableDedupe(async (tx) => {
-    const [journey, inventoryItem, priceFinalization, booking, provider] = await Promise.all([
+    const [journey, inventoryItem, priceFinalization, booking, provider, renovationCase] = await Promise.all([
       projectData.guidanceJourneyId
         ? tx.guidanceJourney.findFirst({
             where: { id: projectData.guidanceJourneyId, propertyId },
@@ -632,6 +635,17 @@ export async function createProject(propertyId: string, data: any) {
             },
           })
         : null,
+      projectData.renovationCaseId
+        ? tx.renovationCase.findFirst({
+            where: {
+              id: projectData.renovationCaseId,
+              propertyId,
+              currentScopeVersionId: projectData.renovationScopeVersionId,
+              archivedAt: null,
+            },
+            select: { id: true },
+          })
+        : null,
     ]);
     if (projectData.guidanceJourneyId && !journey) {
       throw new APIError('Guidance journey not found for this property.', 400, 'INVALID_GUIDANCE_JOURNEY');
@@ -650,6 +664,13 @@ export async function createProject(propertyId: string, data: any) {
     }
     if (projectData.contractorId && !provider) {
       throw new APIError('Selected provider was not found.', 400, 'INVALID_PROVIDER');
+    }
+    if (projectData.renovationCaseId && !renovationCase) {
+      throw new APIError(
+        'Renovation handoff must reference this property and its current scope version.',
+        409,
+        'RENOVATION_PROJECT_SCOPE_MISMATCH',
+      );
     }
     const eligibility = provider?.categoryEligibility?.[0];
     if (projectData.sourceType === 'GUIDANCE' && provider && (
@@ -716,6 +737,21 @@ export async function createProject(propertyId: string, data: any) {
         sourceEntityType: projectData.sourceEntityType,
         sourceEntityId: projectData.sourceEntityId,
         sourceJourneyId: projectData.sourceJourneyId,
+        renovationCaseId: projectData.renovationCaseId,
+        renovationScopeVersionId: projectData.renovationScopeVersionId,
+        ...(projectData.renovationScopeSnapshot !== undefined && {
+          renovationScopeSnapshot: projectData.renovationScopeSnapshot as Prisma.InputJsonValue,
+        }),
+        ...(projectData.inheritedConditions !== undefined && {
+          inheritedConditions: projectData.inheritedConditions as Prisma.InputJsonValue,
+        }),
+        ...(projectData.inheritedDependencies !== undefined && {
+          inheritedDependencies: projectData.inheritedDependencies as Prisma.InputJsonValue,
+        }),
+        ...(projectData.evidenceRequirements !== undefined && {
+          evidenceRequirements: projectData.evidenceRequirements as Prisma.InputJsonValue,
+        }),
+        contractDocumentIds: projectData.contractDocumentIds ?? [],
         permitApplicability: projectData.permitApplicability ?? 'UNKNOWN',
         permitApplicabilityBasis: projectData.permitApplicabilityBasis,
         hoaApplicability: projectData.hoaApplicability ?? 'UNKNOWN',
@@ -2097,6 +2133,11 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       'Verified project completion updated canonical home facts.',
       inventoryItemId ? { sourceReferenceIds: [inventoryItemId] } : undefined,
     ).catch((err) => logger.error({ err }, '[PROJECT_COMPLETION] Twin refresh enqueue failed'));
+    // Home Operations Slice 7: nudge Status Board's separate condition model
+    // to recompute on the next read rather than staying stale for up to 24h.
+    if (inventoryItemId) {
+      await invalidateStatusForInventoryItem(propertyId, inventoryItemId);
+    }
   }
   if (verifiedSuccess) {
     await syncJourneyWorkItemForProjectEvent(propertyId, result.project.guidanceJourneyId, projectId, 'VERIFIED', userId);

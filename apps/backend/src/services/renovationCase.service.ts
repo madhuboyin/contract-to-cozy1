@@ -238,6 +238,91 @@ export async function transitionRenovationCase(
     });
     if (prior) return getRenovationCase(propertyId, renovationCaseId);
   }
+  if (data.lifecycle === 'READY_TO_START' || data.lifecycle === 'IN_EXECUTION') {
+    const readinessItems = existing.currentScopeVersionId
+      ? await prisma.renovationStartReadinessItem.findMany({
+          where: {
+            renovationCaseId,
+            propertyId,
+            scopeVersionId: existing.currentScopeVersionId,
+          },
+          select: {
+            itemKey: true,
+            status: true,
+            isBlocking: true,
+            overrideAcknowledgedAt: true,
+            derivedAt: true,
+          },
+        })
+      : [];
+    const earliestDerivedAt = readinessItems.length
+      ? readinessItems.reduce(
+          (earliest, item) => item.derivedAt < earliest ? item.derivedAt : earliest,
+          readinessItems[0].derivedAt,
+        )
+      : null;
+    const changedSourceCount = earliestDerivedAt
+      ? await prisma.renovationRequirement.count({
+          where: {
+            renovationCaseId,
+            recordStatus: 'CURRENT',
+            updatedAt: { gt: earliestDerivedAt },
+          },
+        }) + await prisma.renovationComplianceCondition.count({
+          where: {
+            renovationCaseId,
+            scopeVersionId: existing.currentScopeVersionId!,
+            updatedAt: { gt: earliestDerivedAt },
+          },
+        })
+      : 0;
+    const currentScope = existing.currentScopeVersionId
+      ? await prisma.renovationScopeVersion.findUnique({
+          where: { id: existing.currentScopeVersionId },
+          select: { approvalStatus: true },
+        })
+      : null;
+    const blockingOpen = readinessItems.filter(item =>
+      item.status === 'OPEN' && item.isBlocking && !item.overrideAcknowledgedAt,
+    );
+    const scopeItem = readinessItems.find(item => item.itemKey === 'approved-scope');
+    const scheduleItem = readinessItems.find(item => item.itemKey === 'execution-schedule');
+    const sourceProjectionChanged =
+      (currentScope?.approvalStatus === 'APPROVED') !== (scopeItem?.status === 'SATISFIED')
+      || Boolean(existing.targetStartDate) !== (scheduleItem?.status === 'SATISFIED');
+    if (
+      !readinessItems.length
+      || changedSourceCount > 0
+      || sourceProjectionChanged
+      || blockingOpen.length > 0
+    ) {
+      throw new APIError(
+        'Evaluate and resolve the current scope readiness checklist before advancing this case.',
+        409,
+        'RENOVATION_CASE_READINESS_REQUIRED',
+        {
+          currentScopeVersionId: existing.currentScopeVersionId,
+          readinessEvaluated: readinessItems.length > 0,
+          changedSourceCount,
+          sourceProjectionChanged,
+          blockingItemCount: blockingOpen.length,
+        },
+      );
+    }
+    if (data.lifecycle === 'IN_EXECUTION') {
+      const project = await prisma.projectRecord.findUnique({
+        where: { renovationCaseId },
+        select: { id: true },
+      });
+      if (!project) {
+        throw new APIError(
+          'Create the linked Project from the approved case scope before starting execution.',
+          409,
+          'RENOVATION_CASE_PROJECT_HANDOFF_REQUIRED',
+        );
+      }
+    }
+  }
   if (!canTransitionRenovationCase(existing.lifecycle, data.lifecycle, data.resumeLifecycle)) {
     throw new APIError(
       `Cannot transition renovation case from ${existing.lifecycle} to ${data.lifecycle}.`,

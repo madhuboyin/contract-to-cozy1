@@ -4,6 +4,64 @@ import * as service from '../services/renovationCase.service';
 import * as exploreService from '../services/renovationExplore.service';
 import * as requirementService from '../services/renovationRequirement.service';
 import * as complianceService from '../services/renovationComplianceWorkflow.service';
+import * as readinessService from '../services/renovationReadiness.service';
+
+export async function getReadiness(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await readinessService.getReadiness(req.params.propertyId, req.params.caseId);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function evaluateReadiness(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await readinessService.evaluateReadiness(
+      req.params.propertyId,
+      req.params.caseId,
+      req.user!.userId,
+      req.body.fulfillmentMode,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function updateReadinessItem(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await readinessService.updateReadinessItem(
+      req.params.propertyId,
+      req.params.caseId,
+      req.params.itemId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function governReadinessOverride(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await readinessService.governOverride(
+      req.params.propertyId,
+      req.params.caseId,
+      req.params.itemId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function handoffRenovationProject(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await readinessService.handoffToProject(
+      req.params.propertyId,
+      req.params.caseId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
 
 export async function getComplianceWorkflow(req: Request, res: Response, next: NextFunction) {
   try {

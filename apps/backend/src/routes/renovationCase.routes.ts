@@ -33,6 +33,12 @@ import {
   ReviewHoaDocumentExtractionSchema,
   UpdateRenovationComplianceConditionSchema,
 } from '../validators/renovationComplianceWorkflow.validators';
+import {
+  EvaluateRenovationReadinessSchema,
+  GovernRenovationReadinessOverrideSchema,
+  HandoffRenovationProjectSchema,
+  UpdateRenovationReadinessItemSchema,
+} from '../validators/renovationReadiness.validators';
 
 const router = Router();
 const canContribute = requireHouseholdRole('CONTRIBUTOR');
@@ -80,6 +86,39 @@ router.get(
   '/properties/:propertyId/renovation-cases/:caseId',
   propertyAuthMiddleware,
   controller.getCase,
+);
+router.get(
+  '/properties/:propertyId/renovation-cases/:caseId/readiness',
+  propertyAuthMiddleware,
+  controller.getReadiness,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/:caseId/readiness/evaluate',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(EvaluateRenovationReadinessSchema),
+  controller.evaluateReadiness,
+);
+router.patch(
+  '/properties/:propertyId/renovation-cases/:caseId/readiness/items/:itemId',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(UpdateRenovationReadinessItemSchema),
+  controller.updateReadinessItem,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/:caseId/readiness/items/:itemId/override',
+  propertyAuthMiddleware,
+  ownerOnly,
+  validateBody(GovernRenovationReadinessOverrideSchema),
+  controller.governReadinessOverride,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/:caseId/project-handoff',
+  propertyAuthMiddleware,
+  ownerOnly,
+  validateBody(HandoffRenovationProjectSchema),
+  controller.handoffRenovationProject,
 );
 router.get(
   '/properties/:propertyId/renovation-cases/:caseId/compliance-workflow',

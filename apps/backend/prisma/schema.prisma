@@ -13132,6 +13132,10 @@ enum RenovationCaseEventType {
   PARTICIPANT_ADDED
   PARTICIPANT_REMOVED
   CASE_ARCHIVED
+  READINESS_EVALUATED
+  READINESS_OVERRIDE_RECORDED
+  READINESS_OVERRIDE_REVOKED
+  PROJECT_HANDOFF_STARTED
 }
 
 model RenovationCase {
@@ -13177,6 +13181,7 @@ model RenovationCase {
   requirements        RenovationRequirement[]
   requirementEvents   RenovationRequirementEvent[]
   complianceConditions RenovationComplianceCondition[]
+  executionProject     ProjectRecord?
 
   @@unique([propertyId, idempotencyKey])
   @@index([propertyId, lifecycle])
@@ -13355,6 +13360,86 @@ enum RenovationComplianceConditionStatus {
   SATISFIED
   WAIVED_WITH_ACKNOWLEDGMENT
   EXPIRED
+}
+
+enum RenovationReadinessItemCategory {
+  APPROVED_SCOPE
+  REQUIREMENT
+  COMPLIANCE_CONDITION
+  CONTRACTOR
+  CONTRACT
+  SCHEDULE
+  DEPENDENCY
+  EVIDENCE
+}
+
+enum RenovationReadinessItemStatus {
+  OPEN
+  SATISFIED
+}
+
+enum RenovationReadinessEventType {
+  EVALUATED
+  ITEM_SATISFIED
+  ITEM_REOPENED
+  OVERRIDE_RECORDED
+  OVERRIDE_REVOKED
+  PROJECT_HANDOFF
+}
+
+model RenovationStartReadinessItem {
+  id                       String @id @default(uuid())
+  renovationCaseId         String
+  propertyId               String
+  scopeVersionId           String
+  itemKey                  String
+  category                 RenovationReadinessItemCategory
+  title                    String
+  reason                   String @db.Text
+  exactNextAction          String @db.Text
+  status                   RenovationReadinessItemStatus @default(OPEN)
+  isBlocking               Boolean @default(true)
+  overrideAllowed          Boolean @default(false)
+  manualSatisfactionAllowed Boolean @default(false)
+  ownerUserId              String
+  dueAt                    DateTime
+  evidenceRequired         String @db.Text
+  evidenceDocumentId       String?
+  evidenceReference        String?
+  sourceType               String
+  sourceId                 String
+  sourceObservedAt         DateTime?
+  manuallySatisfiedAt      DateTime?
+  manuallySatisfiedByUserId String?
+  satisfactionNotes        String?
+  overrideAcknowledgedAt   DateTime?
+  overrideAcknowledgedByUserId String?
+  overrideReason           String?
+  derivedAt                DateTime @default(now())
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([renovationCaseId, scopeVersionId, itemKey])
+  @@index([renovationCaseId, scopeVersionId, status])
+  @@index([propertyId, ownerUserId, dueAt])
+  @@map("renovation_start_readiness_items")
+}
+
+model RenovationReadinessEvent {
+  id               String @id @default(uuid())
+  renovationCaseId String
+  propertyId       String
+  scopeVersionId   String
+  readinessItemId  String?
+  eventType        RenovationReadinessEventType
+  actorUserId      String?
+  reason           String?
+  payload          Json?
+  occurredAt       DateTime @default(now())
+
+  @@index([renovationCaseId, occurredAt(sort: Desc)])
+  @@index([readinessItemId, occurredAt])
+  @@map("renovation_readiness_events")
 }
 
 enum HoaDocumentReviewStatus {
@@ -13585,6 +13670,7 @@ model RenovationScopeVersion {
   authorityProfiles RenovationAuthorityProfile[]
   requirements RenovationRequirement[]
   complianceConditions RenovationComplianceCondition[]
+  executionProjects ProjectRecord[]
 
   @@unique([renovationCaseId, version])
   @@unique([renovationCaseId, idempotencyKey])
@@ -16534,6 +16620,13 @@ model ProjectRecord {
   sourceEntityType      String?
   sourceEntityId        String?
   sourceJourneyId       String?
+  renovationCaseId      String? @unique
+  renovationScopeVersionId String?
+  renovationScopeSnapshot Json?
+  inheritedConditions    Json?
+  inheritedDependencies  Json?
+  evidenceRequirements   Json?
+  contractDocumentIds    String[] @default([])
 
   // Explicit completion applicability. UNKNOWN never passes a completion gate.
   permitApplicability      ProjectRequirementApplicability @default(UNKNOWN)
@@ -16614,6 +16707,8 @@ model ProjectRecord {
   inventoryItem     InventoryItem?     @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   priceFinalization PriceFinalization? @relation(fields: [priceFinalizationId], references: [id], onDelete: SetNull)
   bookingSource     Booking?           @relation("ProjectFromBooking", fields: [bookingId], references: [id], onDelete: SetNull)
+  renovationCase    RenovationCase?     @relation(fields: [renovationCaseId], references: [id], onDelete: SetNull)
+  renovationScopeVersion RenovationScopeVersion? @relation(fields: [renovationScopeVersionId], references: [id], onDelete: SetNull)
 
   milestones          ProjectMilestone[]
   payments            ProjectPayment[]
@@ -16635,6 +16730,7 @@ model ProjectRecord {
   @@index([inventoryItemId])
   @@index([priceFinalizationId])
   @@index([bookingId])
+  @@index([renovationScopeVersionId])
   @@index([sourceEntityType, sourceEntityId])
   @@map("project_records")
 }

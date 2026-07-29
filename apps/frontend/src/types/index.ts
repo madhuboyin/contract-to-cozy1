@@ -6072,6 +6072,43 @@ export interface ProjectRecord {
   fundingMode: 'SELF_PAID' | 'COVERED' | 'MIXED';
   complexity: 'MINOR' | 'MAJOR';
   recommendationVersion?: string | null;
+  renovationCaseId?: string | null;
+  renovationScopeVersionId?: string | null;
+  renovationScopeSnapshot?: {
+    version: number;
+    summary?: string | null;
+    workItems: unknown[];
+    spacesAffected: string[];
+    systemsAffected: string[];
+    intendedUse?: string | null;
+    approvalStatus: string;
+    contractCostCents?: number | null;
+  } | null;
+  inheritedConditions?: Array<{
+    id: string;
+    title: string;
+    description: string;
+    status: string;
+    isBlocking: boolean;
+    dueAt?: string | null;
+    evidenceDocumentId?: string | null;
+  }> | null;
+  inheritedDependencies?: Array<{
+    readinessItemId: string;
+    title: string;
+    isBlocking: boolean;
+    overrideAcknowledgedAt?: string | null;
+    dueAt?: string | null;
+  }> | null;
+  evidenceRequirements?: Array<{
+    readinessItemId: string;
+    title: string;
+    evidenceRequired: string;
+    evidenceDocumentId?: string | null;
+    sourceType: string;
+    sourceId: string;
+  }> | null;
+  contractDocumentIds?: string[];
   permitApplicability: ProjectRequirementApplicability;
   permitApplicabilityBasis?: string | null;
   hoaApplicability: ProjectRequirementApplicability;
