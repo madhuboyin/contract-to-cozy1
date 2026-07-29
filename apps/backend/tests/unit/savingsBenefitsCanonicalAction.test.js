@@ -7,8 +7,12 @@ require('ts-node/register');
 
 const {
   assertPartnerHandoffGovernance,
+  isCanonicalIntentActionType,
   isCanonicalActionTransitionAllowed,
 } = require('../../src/services/savingsBenefitsCanonical.service.ts');
+const {
+  assertSavingsBenefitPartnerDeliveryGovernance,
+} = require('../../src/services/savingsBenefitsPartner.service.ts');
 const {
   valueBasisForBenefitPeriod,
 } = require('../../src/services/savingsBenefitsUnified.service.ts');
@@ -20,6 +24,14 @@ test('canonical savings actions only leave STARTED for a terminal state', () => 
   assert.equal(isCanonicalActionTransitionAllowed('COMPLETED', 'STARTED'), false);
   assert.equal(isCanonicalActionTransitionAllowed('CANCELLED', 'COMPLETED'), false);
   assert.equal(isCanonicalActionTransitionAllowed('UNKNOWN', 'COMPLETED'), false);
+});
+
+test('outcome stages cannot be authored as canonical intent actions', () => {
+  assert.equal(isCanonicalIntentActionType('PREPARE'), true);
+  assert.equal(isCanonicalIntentActionType('EXTERNALLY_SUBMITTED'), true);
+  assert.equal(isCanonicalIntentActionType('APPROVED'), false);
+  assert.equal(isCanonicalIntentActionType('DENIED'), false);
+  assert.equal(isCanonicalIntentActionType('RECEIVED'), false);
 });
 
 test('benefit amount periods retain their exact one-time, monthly, or annual basis', () => {
@@ -96,6 +108,71 @@ test('partner handoffs fail closed unless recipient, disclosure, rank basis, and
       compensationMayOccur: true,
     }, sharedFields),
     /server-derived opportunity data/,
+  );
+});
+
+test('partner delivery revalidates live approval and the exact consented terms', () => {
+  const sharedFields = {
+    category: 'REBATE',
+    opportunityFamily: 'BENEFIT',
+    opportunityId: 'match-1',
+    opportunityTitle: 'State energy rebate',
+  };
+  const action = {
+    partnerId: 'partner-1',
+    property: { state: 'NJ' },
+    partner: {
+      id: 'partner-1',
+      status: 'ACTIVE',
+      supportedJurisdictions: ['NJ'],
+      disclosureVersion: 'v1',
+      compensationMayOccur: true,
+      effectiveAt: new Date('2026-01-01T00:00:00.000Z'),
+      expiresAt: null,
+    },
+    consentJson: {
+      partnerId: 'partner-1',
+      disclosureAcknowledged: true,
+      consentVersion: 'v1',
+      consentedAt: '2026-07-29T11:30:00.000Z',
+      compensationMayOccur: true,
+      rankingInfluenced: false,
+      selectionCriteria: ['Licensed in the property state'],
+      nonCommercialAlternative: 'Apply directly through the official program.',
+      sharedFieldNames: Object.keys(sharedFields),
+    },
+    sharedFieldsJson: sharedFields,
+  };
+  const now = new Date('2026-07-29T12:00:00.000Z');
+
+  assert.doesNotThrow(() => assertSavingsBenefitPartnerDeliveryGovernance(action, now));
+  assert.throws(
+    () => assertSavingsBenefitPartnerDeliveryGovernance({
+      ...action,
+      partner: { ...action.partner, status: 'PAUSED' },
+    }, now),
+    /approval changed/,
+  );
+  assert.throws(
+    () => assertSavingsBenefitPartnerDeliveryGovernance({
+      ...action,
+      partner: { ...action.partner, disclosureVersion: 'v2' },
+    }, now),
+    /terms or shared fields changed/,
+  );
+  assert.throws(
+    () => assertSavingsBenefitPartnerDeliveryGovernance({
+      ...action,
+      partner: { ...action.partner, compensationMayOccur: false },
+    }, now),
+    /terms or shared fields changed/,
+  );
+  assert.throws(
+    () => assertSavingsBenefitPartnerDeliveryGovernance({
+      ...action,
+      property: { state: 'CA' },
+    }, now),
+    /no longer supports/,
   );
 });
 

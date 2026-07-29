@@ -44,7 +44,9 @@ const runComparisonBodySchema = z.object({
 });
 
 const setOpportunityStatusBodySchema = z.object({
-  status: z.enum(['NEW', 'VIEWED', 'DISMISSED', 'SAVED', 'APPLIED', 'SWITCHED', 'EXPIRED']),
+  // Only non-decision presentation state remains on the legacy endpoint.
+  // Save/dismiss/apply/switch must create a canonical action.
+  status: z.literal('VIEWED'),
 });
 
 const recordOpportunityOutcomeBodySchema = z.object({

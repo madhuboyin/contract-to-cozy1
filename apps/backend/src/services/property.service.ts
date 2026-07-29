@@ -30,6 +30,7 @@ import {
   requestRadarPropertyReconciliation,
   type RadarPropertyReconciliationReason,
 } from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
+import { requestPropertySavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -140,6 +141,44 @@ interface CreatePropertyData {
 
 interface UpdatePropertyData extends Partial<CreatePropertyData> {
 
+}
+
+const SAVINGS_BENEFITS_RELEVANT_PROPERTY_UPDATE_FIELDS = new Set<keyof UpdatePropertyData>([
+  'address',
+  'city',
+  'state',
+  'zipCode',
+  'dwellingType',
+  'propertyUse',
+  'occupancyStatus',
+  'propertySize',
+  'yearBuilt',
+  'heatingType',
+  'waterHeaterType',
+  'roofType',
+  'roofReplacementYear',
+  'hasIrrigation',
+  'hasSmokeDetectors',
+  'hasSecuritySystem',
+  'hasSumpPump',
+  'hasSumpPumpBackup',
+  'primaryHeatingFuel',
+  'utilityProvider',
+  'gasProvider',
+  'inHistoricDistrict',
+  'historicRegistryStatus',
+  'inHurricaneZone',
+  'inFloodZone',
+  'inWildfireZone',
+  'lastAppraisedValue',
+]);
+
+export function shouldReevaluateSavingsBenefitsForPropertyUpdate(
+  data: UpdatePropertyData,
+): boolean {
+  return Object.keys(data).some((field) =>
+    SAVINGS_BENEFITS_RELEVANT_PROPERTY_UPDATE_FIELDS.has(field as keyof UpdatePropertyData),
+  );
 }
 
 const responsibilityFactKeyByScope: Record<PropertyResponsibilityScope, string> = {
@@ -1113,6 +1152,16 @@ export async function updateProperty(
       await reevaluateActiveWeatherIncidentsForProperty(propertyId);
     } catch (error) {
       logger.warn({ err: error, propertyId }, '[PROPERTY] Weather incident reevaluation failed after profile update');
+    }
+  }
+
+  if (shouldReevaluateSavingsBenefitsForPropertyUpdate(data)) {
+    const queued = await requestPropertySavingsBenefitsReevaluation(
+      propertyId,
+      'property-eligibility-facts-updated',
+    );
+    if (!queued) {
+      throw new Error('Property updated, but Savings & Benefits reevaluation could not be queued.');
     }
   }
 

@@ -199,6 +199,54 @@ const SENSITIVE_ATTRIBUTE_MAP: Record<string, keyof SensitiveAttributeMap> = {
   immigrationStatus: 'immigrationStatus',
 };
 
+const RESOLVABLE_PROPERTY_ATTRIBUTES = new Set<keyof PropertyAttributeMap>([
+  'state',
+  'city',
+  'zipCode',
+  'county',
+  'country',
+  'propertyType',
+  'isPrimaryResidence',
+  'yearBuilt',
+  'squareFootage',
+  'assessedValue',
+  'hvacType',
+  'waterHeaterType',
+  'roofType',
+  'roofMaterial',
+  'roofAge',
+  'heatPumpInstalled',
+  'heatPumpWaterHeaterInstalled',
+  'sumpPumpInstalled',
+  'hasSecuritySystem',
+  'fireAlarm',
+  'hasIrrigation',
+  'hasSumpPumpBackup',
+  'utilityProvider',
+  'gasProvider',
+  'primaryHeatingFuel',
+  'inHistoricDistrict',
+  'historicRegistryStatus',
+  'inHurricaneZone',
+  'inFloodZone',
+  'inWildfireZone',
+]);
+
+/**
+ * True only when an authored rule can be resolved from a current property
+ * field/derivation or from the purpose-bound sensitive-fact workflow.
+ * Attributes that are known to the future-facing type map but are currently
+ * hard-coded to null are intentionally rejected until a capture path exists.
+ */
+export function isSupportedEligibilityAttribute(rawAttribute: string): boolean {
+  const attribute = rawAttribute.trim();
+  if (Object.prototype.hasOwnProperty.call(SENSITIVE_ATTRIBUTE_MAP, attribute)) return true;
+  const mapped = Object.prototype.hasOwnProperty.call(ATTRIBUTE_MAP, attribute)
+    ? ATTRIBUTE_MAP[attribute]
+    : undefined;
+  return mapped !== undefined && RESOLVABLE_PROPERTY_ATTRIBUTES.has(mapped);
+}
+
 /**
  * True when a rule's attribute string references a sensitive fact rather
  * than an ordinary property attribute.

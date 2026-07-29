@@ -14,10 +14,6 @@ import { logger } from '../lib/logger';
 import { getFinancialContextEnvelope } from '../services/financialContext/context';
 import {
   getHiddenAssetMatchOutcomes,
-  RecordHiddenAssetMatchOutcomeInput,
-  recordHiddenAssetMatchOutcome,
-  revokeHiddenAssetMatchOutcome,
-  SavingsOutcomeGovernanceError,
 } from '../services/savingsOutcome.service';
 
 const service = new HiddenAssetService();
@@ -29,23 +25,12 @@ function requireUserId(req: CustomRequest): string {
 }
 
 export async function revokeHiddenAssetMatchOutcomeController(req: CustomRequest, res: Response) {
-  try {
-    const userId = requireUserId(req);
-    const outcome = await revokeHiddenAssetMatchOutcome(
-      req.params.outcomeId,
-      userId,
-      String(req.body.reason),
-    );
-    return res.json({ success: true, data: outcome });
-  } catch (error: any) {
-    const isGovernance = error instanceof SavingsOutcomeGovernanceError;
-    const status = error?.message === 'Outcome not found or access denied.' ? 404 : isGovernance ? 422 : 500;
-    return res.status(status).json({
-      success: false,
-      code: isGovernance ? error.code : undefined,
-      message: error?.message || 'Failed to revoke match outcome.',
-    });
-  }
+  return res.status(410).json({
+    success: false,
+    code: 'CANONICAL_ACTION_REQUIRED',
+    message:
+      'Outcome revocation requires its canonical Savings & Benefits action. Use the canonical action outcome-revocation endpoint.',
+  });
 }
 
 // ============================================================================
@@ -190,25 +175,12 @@ export async function updateHiddenAssetMatchStatus(req: CustomRequest, res: Resp
 // ============================================================================
 
 export async function createHiddenAssetMatchOutcome(req: CustomRequest, res: Response) {
-  try {
-    const userId = requireUserId(req);
-    const { matchId } = req.params;
-    const input = req.body as RecordHiddenAssetMatchOutcomeInput;
-
-    const outcome = await recordHiddenAssetMatchOutcome(matchId, userId, input);
-    return res.status(201).json({ success: true, data: outcome });
-  } catch (error: any) {
-    const isNotFound = error?.message === 'Match not found or access denied.';
-    const isAuth = error?.message === 'Authentication required.';
-    const isGovernance = error instanceof SavingsOutcomeGovernanceError;
-    const status = isNotFound ? 404 : isAuth ? 401 : isGovernance ? 422 : 500;
-    logger.error({ err: error }, '[HiddenAssets] createHiddenAssetMatchOutcome error');
-    return res.status(status).json({
-      success: false,
-      code: isGovernance ? error.code : undefined,
-      message: error?.message || 'Failed to record match outcome.',
-    });
-  }
+  return res.status(410).json({
+    success: false,
+    code: 'CANONICAL_ACTION_REQUIRED',
+    message:
+      'Outcome writes require a canonical Savings & Benefits action. Use /api/properties/:propertyId/savings-benefits/actions/:actionId/outcome.',
+  });
 }
 
 export async function listHiddenAssetMatchOutcomes(req: CustomRequest, res: Response) {

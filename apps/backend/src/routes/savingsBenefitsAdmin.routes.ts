@@ -33,6 +33,7 @@ import {
   upsertPartner,
   verifyOutcome,
 } from '../controllers/savingsBenefitsAdmin.controller';
+import { isSupportedEligibilityAttribute } from '../services/hiddenAssets/ruleEngine';
 
 const router = Router();
 
@@ -96,7 +97,10 @@ const ComplaintResolutionBodySchema = z.object({
 });
 
 const RuleBodySchema = z.object({
-  attribute: z.string().min(1),
+  attribute: z.string().trim().min(1).refine(
+    isSupportedEligibilityAttribute,
+    'This eligibility attribute has no supported property or consented-fact capture path.',
+  ),
   operator: z.enum([
     'EQUALS',
     'NOT_EQUALS',

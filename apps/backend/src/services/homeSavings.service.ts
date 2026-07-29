@@ -34,6 +34,7 @@ import {
 import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
 import { getFinancialContextDecisions } from './financialContext/context';
+import { requestPropertySavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
 
 export type HomeSavingsCategoryStatus = 'NOT_SET_UP' | 'CONNECTED' | 'FOUND_SAVINGS';
 
@@ -637,6 +638,13 @@ export class HomeSavingsService {
           '[HOME-SAVINGS] Account saved but event-driven comparison failed; manual retry remains available',
         );
       }
+      const reevaluationQueued = await requestPropertySavingsBenefitsReevaluation(
+        propertyId,
+        `home-savings-account:${categoryKey}:updated`,
+      );
+      if (!reevaluationQueued) {
+        throw new Error('Account saved, but Savings & Benefits reevaluation could not be queued.');
+      }
       return { account: serializeAccount(account) };
     }
 
@@ -658,6 +666,13 @@ export class HomeSavingsService {
         { err, propertyId, categoryKey },
         '[HOME-SAVINGS] Account saved but event-driven comparison failed; manual retry remains available',
       );
+    }
+    const reevaluationQueued = await requestPropertySavingsBenefitsReevaluation(
+      propertyId,
+      `home-savings-account:${categoryKey}:created`,
+    );
+    if (!reevaluationQueued) {
+      throw new Error('Account saved, but Savings & Benefits reevaluation could not be queued.');
     }
     return { account: serializeAccount(account) };
   }

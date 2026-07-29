@@ -2330,6 +2330,7 @@ export interface SavingsOutcomeDocumentDTO {
 export interface HiddenAssetMatchOutcomeDTO {
   id: string;
   matchId: string;
+  actionId: string | null;
   stage: SavingsOutcomeStageValue;
   amountReceived: number | null;
   currency: string;
@@ -2349,6 +2350,7 @@ export interface HiddenAssetMatchOutcomeDTO {
 export interface HomeSavingsOpportunityOutcomeDTO {
   id: string;
   opportunityId: string;
+  actionId: string | null;
   stage: SavingsOutcomeStageValue;
   observedMonthlyValue: number | null;
   observedAnnualValue: number | null;

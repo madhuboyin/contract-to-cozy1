@@ -11,6 +11,7 @@ import {
   postSavingsBenefitHandoffRevocation,
   postSavingsBenefitPartnerComplaint,
   postSavingsBenefitsActionOutcome,
+  postSavingsBenefitsActionOutcomeRevocation,
   postSavingsBenefitsOpportunityAction,
   postSavingsBenefitsOpportunityFact,
 } from '../controllers/savingsBenefitsUnified.controller';
@@ -77,8 +78,8 @@ const actionBody = z.object({
   family: z.enum(['BENEFIT', 'RECURRING_COST']),
   actionType: z.enum([
     'SAVE', 'DISMISS', 'PREPARE', 'OFFICIAL_SOURCE_OPENED', 'QUOTE_REQUESTED',
-    'PARTNER_HANDOFF_CONSENTED', 'EXTERNALLY_SUBMITTED', 'APPROVED', 'DENIED',
-    'SWITCHED', 'RECEIVED', 'FOLLOW_UP_SCHEDULED',
+    'PARTNER_HANDOFF_CONSENTED', 'EXTERNALLY_SUBMITTED', 'SWITCHED',
+    'FOLLOW_UP_SCHEDULED',
   ]),
   externalOwner: z.string().trim().max(200).nullable().optional(),
   consent: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -133,6 +134,16 @@ router.post(
   propertyAuthMiddleware,
   validateBody(outcomeBody),
   postSavingsBenefitsActionOutcome,
+);
+
+const outcomeRevocationBody = z.object({
+  reason: z.string().trim().min(3).max(1000),
+});
+router.post(
+  '/properties/:propertyId/savings-benefits/actions/:actionId/outcomes/:outcomeId/revoke',
+  propertyAuthMiddleware,
+  validateBody(outcomeRevocationBody),
+  postSavingsBenefitsActionOutcomeRevocation,
 );
 
 const handoffRevocationBody = z.object({

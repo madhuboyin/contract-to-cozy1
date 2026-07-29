@@ -20,6 +20,7 @@ import { recordAdminAction } from './adminAudit.service';
 import { AdminCapability } from '../config/adminCapabilities';
 import { isReviewedProgramCurrent, isSourceReviewCurrent } from './hiddenAssets/sourceFreshness';
 import { requestBroadSavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
+import { isSupportedEligibilityAttribute } from './hiddenAssets/ruleEngine';
 
 export class SavingsBenefitsGovernanceError extends Error {
   code: string;
@@ -82,6 +83,7 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
       publishedAt: true,
       sourceUrl: true,
       lastVerifiedAt: true,
+      rules: { select: { attribute: true } },
       source: {
         select: {
           status: true,
@@ -120,6 +122,17 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
 
   if (input.action === 'PUBLISH') {
     const now = new Date();
+    const unsupportedAttributes = [...new Set(
+      program.rules
+        .map((rule) => rule.attribute)
+        .filter((attribute) => !isSupportedEligibilityAttribute(attribute)),
+    )];
+    if (unsupportedAttributes.length > 0) {
+      throw new SavingsBenefitsGovernanceError(
+        'UNSUPPORTED_ELIGIBILITY_ATTRIBUTE',
+        `Cannot publish because these eligibility attributes have no supported capture path: ${unsupportedAttributes.join(', ')}.`,
+      );
+    }
     if (!isSourceReviewCurrent(program.source, now)) {
       throw new SavingsBenefitsGovernanceError(
         'SOURCE_NOT_CURRENT',

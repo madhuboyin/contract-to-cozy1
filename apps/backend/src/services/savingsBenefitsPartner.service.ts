@@ -152,6 +152,7 @@ export async function upsertSavingsBenefitPartner(
         name: input.name.trim(),
         supportedJurisdictions: input.supportedJurisdictions.map((value) => value.trim().toUpperCase()),
         disclosureVersion: input.disclosureVersion.trim(),
+        compensationMayOccur: input.compensationMayOccur,
         compensationDisclosure: input.compensationDisclosure.trim(),
         rankingDisclosure: input.rankingDisclosure.trim(),
         privacyDisclosure: input.privacyDisclosure.trim(),
@@ -212,6 +213,88 @@ const HANDOFF_TRANSITIONS: Record<SavingsBenefitHandoffStatus, SavingsBenefitHan
   REVOKED: [],
 };
 
+const HANDOFF_SHARED_FIELD_NAMES = [
+  'category',
+  'opportunityFamily',
+  'opportunityId',
+  'opportunityTitle',
+] as const;
+
+function isJsonObject(value: Prisma.JsonValue | null): value is Prisma.JsonObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function assertSavingsBenefitPartnerDeliveryGovernance(
+  action: {
+    partnerId: string;
+    property: { state: string };
+    partner: {
+      id: string;
+      status: SavingsBenefitPartnerStatus;
+      supportedJurisdictions: string[];
+      disclosureVersion: string;
+      compensationMayOccur: boolean;
+      effectiveAt: Date;
+      expiresAt: Date | null;
+    };
+    consentJson: Prisma.JsonValue | null;
+    sharedFieldsJson: Prisma.JsonValue | null;
+  },
+  now = new Date(),
+): void {
+  const { partner } = action;
+  if (
+    partner.id !== action.partnerId
+    || partner.status !== SavingsBenefitPartnerStatus.ACTIVE
+    || partner.effectiveAt > now
+    || (partner.expiresAt !== null && partner.expiresAt <= now)
+  ) {
+    throw new Error('Partner approval changed after consent. Obtain fresh consent before submission.');
+  }
+
+  const jurisdiction = action.property.state.trim().toUpperCase();
+  if (
+    partner.supportedJurisdictions.length > 0
+    && (!jurisdiction || !partner.supportedJurisdictions.includes(jurisdiction))
+  ) {
+    throw new Error('The partner no longer supports this property jurisdiction.');
+  }
+
+  if (!isJsonObject(action.consentJson) || !isJsonObject(action.sharedFieldsJson)) {
+    throw new Error('The stored partner consent contract is incomplete. Obtain fresh consent.');
+  }
+  const consent = action.consentJson;
+  const previewedFields = Array.isArray(consent.sharedFieldNames)
+    ? [...new Set(consent.sharedFieldNames.filter(
+        (value): value is string => typeof value === 'string',
+      ))].sort()
+    : [];
+  const actualFields = Object.keys(action.sharedFieldsJson).sort();
+  const requiredFields = [...HANDOFF_SHARED_FIELD_NAMES];
+  if (
+    consent.partnerId !== action.partnerId
+    || consent.disclosureAcknowledged !== true
+    || consent.consentVersion !== partner.disclosureVersion
+    || typeof consent.consentedAt !== 'string'
+    || Number.isNaN(new Date(consent.consentedAt).getTime())
+    || consent.compensationMayOccur !== partner.compensationMayOccur
+    || consent.rankingInfluenced !== false
+    || !Array.isArray(consent.selectionCriteria)
+    || consent.selectionCriteria.length === 0
+    || consent.selectionCriteria.some(
+      (criterion) => typeof criterion !== 'string' || !criterion.trim(),
+    )
+    || typeof consent.nonCommercialAlternative !== 'string'
+    || !consent.nonCommercialAlternative.trim()
+    || previewedFields.length !== actualFields.length
+    || previewedFields.some((field, index) => field !== actualFields[index])
+    || actualFields.length !== requiredFields.length
+    || actualFields.some((field, index) => field !== requiredFields[index])
+  ) {
+    throw new Error('Partner terms or shared fields changed after consent. Obtain fresh consent before submission.');
+  }
+}
+
 async function reconcileTerminalHandoff(
   tx: Prisma.TransactionClient,
   action: {
@@ -269,6 +352,25 @@ export async function transitionSavingsBenefitHandoff(
       throw new Error('A delivery receipt or external submission reference is required.');
     }
     const now = new Date();
+    if (nextStatus === 'SUBMITTED') {
+      if (!action.partner) {
+        throw new Error('The requested partner is no longer available.');
+      }
+      const property = await tx.property.findUnique({
+        where: { id: action.propertyId },
+        select: { state: true },
+      });
+      if (!property) {
+        throw new Error('The property associated with this handoff no longer exists.');
+      }
+      assertSavingsBenefitPartnerDeliveryGovernance({
+        partnerId: action.partnerId,
+        property,
+        partner: action.partner,
+        consentJson: action.consentJson,
+        sharedFieldsJson: action.sharedFieldsJson,
+      }, now);
+    }
     const updated = await tx.savingsBenefitAction.updateMany({
       where: { id: action.id, handoffStatus: action.handoffStatus },
       data: {

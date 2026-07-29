@@ -326,8 +326,10 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
                   ? 'SWITCHED'
                   : 'EXTERNALLY_SUBMITTED',
         });
-      } else {
+      } else if (status === 'VIEWED') {
         await setHomeSavingsOpportunityStatus(opportunityId, status);
+      } else {
+        throw new Error('Use a canonical Savings & Benefits action for this status change.');
       }
       await loadSummary();
       await loadDetail(selectedCategory);

@@ -9,6 +9,7 @@ import {
   getCanonicalOpportunityDetail,
   recordCanonicalActionOutcome,
   recordCanonicalFact,
+  revokeCanonicalActionOutcome,
   updateCanonicalAction,
 } from '../services/savingsBenefitsCanonical.service';
 import type {
@@ -116,6 +117,25 @@ export async function postSavingsBenefitsActionOutcome(req: CustomRequest, res: 
   } catch (error: any) {
     const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 422;
     return res.status(status).json({ success: false, message: error?.message || 'Failed to record outcome.' });
+  }
+}
+
+export async function postSavingsBenefitsActionOutcomeRevocation(req: CustomRequest, res: Response) {
+  try {
+    const data = await revokeCanonicalActionOutcome(
+      req.params.propertyId,
+      req.params.actionId,
+      req.params.outcomeId,
+      requireUserId(req),
+      String(req.body.reason),
+    );
+    return res.json({ success: true, data });
+  } catch (error: any) {
+    const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 422;
+    return res.status(status).json({
+      success: false,
+      message: error?.message || 'Failed to revoke outcome.',
+    });
   }
 }
 

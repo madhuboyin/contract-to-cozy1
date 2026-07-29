@@ -31,7 +31,7 @@ export async function refreshHiddenAssetMatches(
 
 export async function updateHiddenAssetMatchStatus(
   matchId: string,
-  status: 'VIEWED' | 'DISMISSED' | 'PURSUING',
+  status: 'VIEWED',
 ): Promise<HiddenAssetMatchDTO> {
   const result = await api.updateHiddenAssetMatchStatus(matchId, status);
   if (!result) throw new Error('Status update failed');

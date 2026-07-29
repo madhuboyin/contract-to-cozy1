@@ -23,6 +23,7 @@ import type { Request } from 'express';
 import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
 import { requestBroadSavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
+import { isSupportedEligibilityAttribute } from './hiddenAssets/ruleEngine';
 
 const SOURCE_HEALTH_LEVELS = ['HEALTHY', 'DEGRADED', 'CRITICAL'] as const;
 export type SourceHealthLevel = (typeof SOURCE_HEALTH_LEVELS)[number];
@@ -86,6 +87,19 @@ export interface HiddenAssetProgramInput {
   /** Who the benefit belongs to — property or household (HSB-038). Defaults to PROPERTY. */
   beneficiaryScope?: Prisma.HiddenAssetProgramCreateInput['beneficiaryScope'];
   rules: HiddenAssetProgramRuleInput[];
+}
+
+function assertSupportedRuleAttributes(rules: HiddenAssetProgramRuleInput[]): void {
+  const unsupported = [...new Set(
+    rules
+      .map((rule) => rule.attribute.trim())
+      .filter((attribute) => !isSupportedEligibilityAttribute(attribute)),
+  )];
+  if (unsupported.length > 0) {
+    throw new Error(
+      `Unsupported eligibility attribute${unsupported.length === 1 ? '' : 's'}: ${unsupported.join(', ')}. Add a typed capture path before authoring this rule.`,
+    );
+  }
 }
 
 /**
@@ -335,6 +349,7 @@ export class SavingsBenefitsAdminService {
     req?: Pick<Request, 'ip' | 'headers'> | null,
   ) {
     assertConsistentGroupKinds(input.rules);
+    assertSupportedRuleAttributes(input.rules);
     return prisma.$transaction(async (tx) => {
       const program = await tx.hiddenAssetProgram.create({
         data: {
@@ -404,6 +419,7 @@ export class SavingsBenefitsAdminService {
     req?: Pick<Request, 'ip' | 'headers'> | null,
   ) {
     assertConsistentGroupKinds(input.rules);
+    assertSupportedRuleAttributes(input.rules);
     const existing = await prisma.hiddenAssetProgram.findUnique({ where: { id: programId } });
     if (!existing) throw new Error('Program not found');
     if (existing.reviewStatus !== 'DRAFT') {

@@ -164,7 +164,7 @@ export async function runHomeSavings(
 
 export async function setHomeSavingsOpportunityStatus(
   opportunityId: string,
-  status: HomeSavingsOpportunityStatus
+  status: 'VIEWED'
 ): Promise<{ opportunity: HomeSavingsOpportunityDTO }> {
   const res = await api.post<{ opportunity: HomeSavingsOpportunityDTO }>(
     `/api/home-savings/opportunities/${opportunityId}/status`,

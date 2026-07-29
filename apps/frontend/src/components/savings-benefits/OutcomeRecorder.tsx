@@ -146,29 +146,31 @@ export function OutcomeRecorder({
   }
 
   const submitMutation = useMutation({
-    mutationFn: (): Promise<OutcomeDTO | null> => {
+    mutationFn: async (): Promise<OutcomeDTO | null> => {
       const documentIds = documents.map((d) => d.id);
       const idempotencyKey = outcomeIdempotencyKey.current ?? crypto.randomUUID();
       outcomeIdempotencyKey.current = idempotencyKey;
-      if (family === 'BENEFIT') {
-        return api.recordHiddenAssetMatchOutcome(id, {
-          idempotencyKey,
-          stage,
-          amountReceived: stage === 'RECEIVED' && amount ? Number(amount) : undefined,
-          currency: defaultCurrency,
-          evidenceNote: evidenceNote.trim() || undefined,
-          denialReason: stage === 'DENIED' ? denialReason.trim() || undefined : undefined,
-          closureReason:
-            stage === 'WITHDRAWN' || stage === 'EXPIRED' || stage === 'NO_ACTION'
-              ? closureReason.trim() || undefined
-              : undefined,
-          documentIds,
-        });
-      }
-      return api.recordHomeSavingsOpportunityOutcome(id, {
+      const action = activeAction ?? await api.createSavingsBenefitsAction(propertyId, id, {
+        idempotencyKey: `outcome-action:${id}:${idempotencyKey}`,
+        family,
+        actionType:
+          stage === 'SUBMITTED'
+            ? 'EXTERNALLY_SUBMITTED'
+            : ['DENIED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION'].includes(stage)
+              ? 'DISMISS'
+              : 'PREPARE',
+      });
+      return api.recordSavingsBenefitsActionOutcome(propertyId, action.id, {
         idempotencyKey,
         stage,
-        observedAnnualValue: stage === 'RECEIVED' && amount ? Number(amount) : undefined,
+        amountReceived:
+          family === 'BENEFIT' && stage === 'RECEIVED' && amount
+            ? Number(amount)
+            : undefined,
+        observedAnnualValue:
+          family === 'RECURRING_COST' && stage === 'RECEIVED' && amount
+            ? Number(amount)
+            : undefined,
         currency: defaultCurrency,
         evidenceNote: evidenceNote.trim() || undefined,
         denialReason: stage === 'DENIED' ? denialReason.trim() || undefined : undefined,
@@ -178,11 +180,11 @@ export function OutcomeRecorder({
             : undefined,
         documentIds,
         observationStartedAt:
-          stage === 'RECEIVED' && observationStartedAt
+          family === 'RECURRING_COST' && stage === 'RECEIVED' && observationStartedAt
             ? new Date(`${observationStartedAt}T00:00:00.000Z`).toISOString()
             : undefined,
         observationEndedAt:
-          stage === 'RECEIVED' && observationEndedAt
+          family === 'RECURRING_COST' && stage === 'RECEIVED' && observationEndedAt
             ? new Date(`${observationEndedAt}T00:00:00.000Z`).toISOString()
             : undefined,
       });
@@ -196,19 +198,31 @@ export function OutcomeRecorder({
       setObservationStartedAt('');
       setObservationEndedAt('');
       setDocuments([]);
+      queryClient.invalidateQueries({
+        queryKey: ['savings-benefits-action-detail', propertyId, id],
+      });
       invalidate();
     },
   });
 
   const revokeMutation = useMutation({
-    mutationFn: async ({ outcomeId, reason }: { outcomeId: string; reason: string }) => {
-      if (family === 'BENEFIT') {
-        await api.revokeHiddenAssetMatchOutcome(outcomeId, reason);
-      } else {
-        await api.revokeHomeSavingsOpportunityOutcome(outcomeId, reason);
-      }
+    mutationFn: async ({
+      actionId,
+      outcomeId,
+      reason,
+    }: {
+      actionId: string;
+      outcomeId: string;
+      reason: string;
+    }) => {
+      await api.revokeSavingsBenefitsActionOutcome(propertyId, actionId, outcomeId, reason);
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['savings-benefits-action-detail', propertyId, id],
+      });
+      invalidate();
+    },
   });
 
   const actionMutation = useMutation({
@@ -410,7 +424,7 @@ export function OutcomeRecorder({
                     ))}
                   </ul>
                 ) : null}
-                {!outcome.revokedAt ? (
+                {!outcome.revokedAt && outcome.id === latest?.id && outcome.actionId ? (
                   <button
                     type="button"
                     className="mt-2 text-[11px] font-medium text-rose-700 underline-offset-2 hover:underline"
@@ -418,7 +432,11 @@ export function OutcomeRecorder({
                     onClick={() => {
                       const reason = window.prompt('Why should this recorded outcome be revoked?');
                       if (reason?.trim() && reason.trim().length >= 3) {
-                        revokeMutation.mutate({ outcomeId: outcome.id, reason: reason.trim() });
+                        revokeMutation.mutate({
+                          actionId: outcome.actionId!,
+                          outcomeId: outcome.id,
+                          reason: reason.trim(),
+                        });
                       }
                     }}
                   >

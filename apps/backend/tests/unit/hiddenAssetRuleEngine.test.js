@@ -6,6 +6,7 @@ require('ts-node/register');
 const {
   buildPropertyAttributeMap,
   evaluateProgram,
+  isSupportedEligibilityAttribute,
 } = require('../../src/services/hiddenAssets/ruleEngine.ts');
 const { deriveRegionPairs } = require('../../src/services/hiddenAssets.service.ts');
 
@@ -44,6 +45,15 @@ test('county flows from Property into region pairs and the attribute map', () =>
 test('no county on the property omits the COUNTY region pair', () => {
   const pairs = deriveRegionPairs(BASE_PROPERTY);
   assert.equal(pairs.some((p) => p.regionType === 'COUNTY'), false);
+});
+
+test('authoring only accepts attributes the evaluator can actually resolve', () => {
+  assert.equal(isSupportedEligibilityAttribute('state'), true);
+  assert.equal(isSupportedEligibilityAttribute('property.state'), true);
+  assert.equal(isSupportedEligibilityAttribute('income'), true);
+  assert.equal(isSupportedEligibilityAttribute('householdIncome'), true);
+  assert.equal(isSupportedEligibilityAttribute('hasSolarInstalled'), false);
+  assert.equal(isSupportedEligibilityAttribute('unknownFutureField'), false);
 });
 
 test('a definitively failed mandatory rule excludes the program', () => {

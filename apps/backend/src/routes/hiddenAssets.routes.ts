@@ -22,7 +22,9 @@ const router = Router();
 // ============================================================================
 
 const updateMatchStatusBodySchema = z.object({
-  status: z.enum(['VIEWED', 'DISMISSED', 'PURSUING']),
+  // VIEWED is presentation state, not an application decision. Dismiss and
+  // pursue now flow only through the canonical action endpoint.
+  status: z.literal('VIEWED'),
 });
 
 const recordMatchOutcomeBodySchema = z.object({

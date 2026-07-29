@@ -27,6 +27,7 @@
 import {
   HiddenAssetSensitiveFactKey,
   HiddenAssetSensitiveFactStatus,
+  Prisma,
   PropertyHiddenAssetMatchStatus,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -353,7 +354,7 @@ export async function declineSensitiveFact(
     where: { matchId_factKey: { matchId, factKey } },
     update: {
       status: HiddenAssetSensitiveFactStatus.DECLINED,
-      valueJson: undefined,
+      valueJson: Prisma.DbNull,
       purpose,
       consentedAt: null,
       consentVersion: null,

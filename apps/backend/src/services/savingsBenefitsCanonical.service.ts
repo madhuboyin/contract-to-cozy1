@@ -13,6 +13,8 @@ import {
   RecordHomeSavingsOpportunityOutcomeInput,
   recordHiddenAssetMatchOutcome,
   recordHomeSavingsOpportunityOutcome,
+  revokeHiddenAssetMatchOutcome,
+  revokeHomeSavingsOpportunityOutcome,
 } from './savingsOutcome.service';
 import {
   RecordSensitiveFactInput,
@@ -27,6 +29,24 @@ const hiddenAssets = new HiddenAssetService();
 const homeSavings = new HomeSavingsService();
 
 export type CanonicalOpportunityFamily = 'BENEFIT' | 'RECURRING_COST';
+
+const CANONICAL_INTENT_ACTION_TYPES = new Set<SavingsBenefitActionType>([
+  'SAVE',
+  'DISMISS',
+  'PREPARE',
+  'OFFICIAL_SOURCE_OPENED',
+  'QUOTE_REQUESTED',
+  'PARTNER_HANDOFF_CONSENTED',
+  'EXTERNALLY_SUBMITTED',
+  'SWITCHED',
+  'FOLLOW_UP_SCHEDULED',
+]);
+
+export function isCanonicalIntentActionType(
+  actionType: SavingsBenefitActionType,
+): boolean {
+  return CANONICAL_INTENT_ACTION_TYPES.has(actionType);
+}
 
 async function assertProperty(propertyId: string, userId: string) {
   const property = await prisma.property.findFirst({
@@ -55,10 +75,7 @@ export async function getCanonicalOpportunityDetail(
       savingsBenefitActions: { orderBy: { createdAt: 'desc' } },
     },
   });
-  if (
-    benefit
-    && isProgramActionableNow(benefit.program, benefit.program.source)
-  ) {
+  if (benefit) {
     return { family: 'BENEFIT' as const, opportunity: benefit };
   }
 
@@ -265,6 +282,11 @@ export async function createCanonicalAction(
   userId: string,
   input: CreateCanonicalActionInput,
 ) {
+  if (!isCanonicalIntentActionType(input.actionType)) {
+    throw new Error(
+      `${input.actionType} is an outcome stage, not a canonical action. Record it through the action outcome endpoint.`,
+    );
+  }
   const detail = await getCanonicalOpportunityDetail(propertyId, opportunityId, userId);
   if (detail.family !== input.family) {
     throw new Error('Opportunity family does not match the requested action.');
@@ -612,6 +634,9 @@ export async function recordCanonicalActionOutcome(
     where: { id: actionId, propertyId },
   });
   if (!action) throw new Error('Action not found or access denied.');
+  if (action.state === 'CANCELLED') {
+    throw new Error('A cancelled action cannot receive a new outcome.');
+  }
 
   const outcome = action.hiddenAssetMatchId
     ? await recordHiddenAssetMatchOutcome(
@@ -628,6 +653,51 @@ export async function recordCanonicalActionOutcome(
       : null;
   if (!outcome) throw new Error('Action is not linked to an opportunity.');
   return outcome;
+}
+
+export async function revokeCanonicalActionOutcome(
+  propertyId: string,
+  actionId: string,
+  outcomeId: string,
+  userId: string,
+  reason: string,
+) {
+  await assertProperty(propertyId, userId);
+  const action = await prisma.savingsBenefitAction.findFirst({
+    where: { id: actionId, propertyId },
+    select: {
+      id: true,
+      hiddenAssetMatchId: true,
+      homeSavingsOpportunityId: true,
+    },
+  });
+  if (!action) throw new Error('Action not found or access denied.');
+
+  if (action.hiddenAssetMatchId) {
+    const outcome = await prisma.hiddenAssetMatchOutcome.findFirst({
+      where: {
+        id: outcomeId,
+        actionId: action.id,
+        matchId: action.hiddenAssetMatchId,
+      },
+      select: { id: true },
+    });
+    if (!outcome) throw new Error('Outcome not found or access denied.');
+    return revokeHiddenAssetMatchOutcome(outcome.id, userId, reason);
+  }
+  if (action.homeSavingsOpportunityId) {
+    const outcome = await prisma.homeSavingsOpportunityOutcome.findFirst({
+      where: {
+        id: outcomeId,
+        actionId: action.id,
+        opportunityId: action.homeSavingsOpportunityId,
+      },
+      select: { id: true },
+    });
+    if (!outcome) throw new Error('Outcome not found or access denied.');
+    return revokeHomeSavingsOpportunityOutcome(outcome.id, userId, reason);
+  }
+  throw new Error('Action is not linked to an opportunity.');
 }
 
 export async function getCanonicalCoverage(propertyId: string, userId: string) {

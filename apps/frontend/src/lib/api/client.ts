@@ -4178,7 +4178,7 @@ class APIClient {
 
   async updateHiddenAssetMatchStatus(
     matchId: string,
-    status: 'VIEWED' | 'DISMISSED' | 'PURSUING'
+    status: 'VIEWED'
   ): Promise<import('@/types').HiddenAssetMatchDTO | null> {
     const res = await this.patch<{ match: import('@/types').HiddenAssetMatchDTO }>(
       `/api/property-hidden-asset-matches/${matchId}`,
@@ -4231,31 +4231,6 @@ class APIClient {
     return res.data ?? [];
   }
 
-  async recordHiddenAssetMatchOutcome(
-    matchId: string,
-    input: {
-      idempotencyKey: string;
-      stage: import('@/types').SavingsOutcomeStageValue;
-      amountReceived?: number | null;
-      currency?: string;
-      evidenceNote?: string | null;
-      denialReason?: string | null;
-      closureReason?: string | null;
-      documentIds?: string[];
-      supersedesOutcomeId?: string | null;
-    }
-  ): Promise<import('@/types').HiddenAssetMatchOutcomeDTO | null> {
-    const res = await this.post<import('@/types').HiddenAssetMatchOutcomeDTO>(
-      `/api/property-hidden-asset-matches/${matchId}/outcome`,
-      input
-    );
-    return res.data ?? null;
-  }
-
-  async revokeHiddenAssetMatchOutcome(outcomeId: string, reason: string): Promise<void> {
-    await this.post(`/api/property-hidden-asset-match-outcomes/${outcomeId}/revoke`, { reason });
-  }
-
   async listHomeSavingsOpportunityOutcomes(
     opportunityId: string
   ): Promise<import('@/types').HomeSavingsOpportunityOutcomeDTO[]> {
@@ -4263,34 +4238,6 @@ class APIClient {
       `/api/home-savings/opportunities/${opportunityId}/outcome`
     );
     return res.data ?? [];
-  }
-
-  async recordHomeSavingsOpportunityOutcome(
-    opportunityId: string,
-    input: {
-      idempotencyKey: string;
-      stage: import('@/types').SavingsOutcomeStageValue;
-      observedMonthlyValue?: number | null;
-      observedAnnualValue?: number | null;
-      currency?: string;
-      evidenceNote?: string | null;
-      denialReason?: string | null;
-      closureReason?: string | null;
-      documentIds?: string[];
-      observationStartedAt?: string | null;
-      observationEndedAt?: string | null;
-      supersedesOutcomeId?: string | null;
-    }
-  ): Promise<import('@/types').HomeSavingsOpportunityOutcomeDTO | null> {
-    const res = await this.post<import('@/types').HomeSavingsOpportunityOutcomeDTO>(
-      `/api/home-savings/opportunities/${opportunityId}/outcome`,
-      input
-    );
-    return res.data ?? null;
-  }
-
-  async revokeHomeSavingsOpportunityOutcome(outcomeId: string, reason: string): Promise<void> {
-    await this.post(`/api/home-savings/opportunity-outcomes/${outcomeId}/revoke`, { reason });
   }
 
   async deleteHiddenAssetSensitiveFact(
@@ -4329,10 +4276,7 @@ class APIClient {
         | 'QUOTE_REQUESTED'
         | 'PARTNER_HANDOFF_CONSENTED'
         | 'EXTERNALLY_SUBMITTED'
-        | 'APPROVED'
-        | 'DENIED'
         | 'SWITCHED'
-        | 'RECEIVED'
         | 'FOLLOW_UP_SCHEDULED';
       externalOwner?: string | null;
       consent?: Record<string, unknown> | null;
@@ -4434,6 +4378,50 @@ class APIClient {
     await this.patch(
       `/api/properties/${propertyId}/savings-benefits/actions/${actionId}`,
       input,
+    );
+  }
+
+  async recordSavingsBenefitsActionOutcome(
+    propertyId: string,
+    actionId: string,
+    input: {
+      idempotencyKey: string;
+      stage: import('@/types').SavingsOutcomeStageValue;
+      amountReceived?: number | null;
+      observedMonthlyValue?: number | null;
+      observedAnnualValue?: number | null;
+      currency?: string;
+      evidenceNote?: string | null;
+      denialReason?: string | null;
+      closureReason?: string | null;
+      documentIds?: string[];
+      observationStartedAt?: string | null;
+      observationEndedAt?: string | null;
+    },
+  ): Promise<
+    import('@/types').HiddenAssetMatchOutcomeDTO
+    | import('@/types').HomeSavingsOpportunityOutcomeDTO
+    | null
+  > {
+    const res = await this.post<
+      import('@/types').HiddenAssetMatchOutcomeDTO
+      | import('@/types').HomeSavingsOpportunityOutcomeDTO
+    >(
+      `/api/properties/${propertyId}/savings-benefits/actions/${actionId}/outcome`,
+      input,
+    );
+    return res.data ?? null;
+  }
+
+  async revokeSavingsBenefitsActionOutcome(
+    propertyId: string,
+    actionId: string,
+    outcomeId: string,
+    reason: string,
+  ): Promise<void> {
+    await this.post(
+      `/api/properties/${propertyId}/savings-benefits/actions/${actionId}/outcomes/${outcomeId}/revoke`,
+      { reason },
     );
   }
 

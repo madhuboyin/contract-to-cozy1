@@ -12,10 +12,6 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { getFinancialContextEnvelope } from '../services/financialContext/context';
 import {
   getHomeSavingsOpportunityOutcomes,
-  RecordHomeSavingsOpportunityOutcomeInput,
-  recordHomeSavingsOpportunityOutcome,
-  revokeHomeSavingsOpportunityOutcome,
-  SavingsOutcomeGovernanceError,
 } from '../services/savingsOutcome.service';
 
 const service = new HomeSavingsService();
@@ -29,23 +25,12 @@ function requireUserId(req: CustomRequest): string {
 }
 
 export async function revokeHomeSavingsOpportunityOutcomeController(req: CustomRequest, res: Response) {
-  try {
-    const userId = requireUserId(req);
-    const outcome = await revokeHomeSavingsOpportunityOutcome(
-      req.params.outcomeId,
-      userId,
-      String(req.body.reason),
-    );
-    return res.json({ success: true, data: outcome });
-  } catch (error: any) {
-    const isGovernance = error instanceof SavingsOutcomeGovernanceError;
-    const status = error?.message === 'Outcome not found or access denied.' ? 404 : isGovernance ? 422 : 500;
-    return res.status(status).json({
-      success: false,
-      code: isGovernance ? error.code : undefined,
-      message: error?.message || 'Failed to revoke opportunity outcome.',
-    });
-  }
+  return res.status(410).json({
+    success: false,
+    code: 'CANONICAL_ACTION_REQUIRED',
+    message:
+      'Outcome revocation requires its canonical Savings & Benefits action. Use the canonical action outcome-revocation endpoint.',
+  });
 }
 
 export async function listHomeSavingsCategories(req: CustomRequest, res: Response) {
@@ -267,33 +252,12 @@ export async function setHomeSavingsOpportunityStatus(req: CustomRequest, res: R
 }
 
 export async function createHomeSavingsOpportunityOutcome(req: CustomRequest, res: Response) {
-  try {
-    const userId = requireUserId(req);
-    const body = req.body as Record<string, unknown>;
-    const input: RecordHomeSavingsOpportunityOutcomeInput = {
-      ...(body as unknown as RecordHomeSavingsOpportunityOutcomeInput),
-      observationStartedAt: typeof body.observationStartedAt === 'string'
-        ? new Date(body.observationStartedAt)
-        : null,
-      observationEndedAt: typeof body.observationEndedAt === 'string'
-        ? new Date(body.observationEndedAt)
-        : null,
-    };
-
-    const outcome = await recordHomeSavingsOpportunityOutcome(req.params.id, userId, input);
-    return res.status(201).json({ success: true, data: outcome });
-  } catch (error: any) {
-    const isNotFound = error?.message === 'Opportunity not found or access denied.';
-    const isAuth = error?.message === 'Authentication required.';
-    const isGovernance = error instanceof SavingsOutcomeGovernanceError;
-    const status = isNotFound ? 404 : isAuth ? 401 : isGovernance ? 422 : 500;
-    logger.error({ err: error }, 'Error recording home savings opportunity outcome');
-    return res.status(status).json({
-      success: false,
-      code: isGovernance ? error.code : undefined,
-      message: error?.message || 'Failed to record opportunity outcome.',
-    });
-  }
+  return res.status(410).json({
+    success: false,
+    code: 'CANONICAL_ACTION_REQUIRED',
+    message:
+      'Outcome writes require a canonical Savings & Benefits action. Use /api/properties/:propertyId/savings-benefits/actions/:actionId/outcome.',
+  });
 }
 
 export async function listHomeSavingsOpportunityOutcomes(req: CustomRequest, res: Response) {
