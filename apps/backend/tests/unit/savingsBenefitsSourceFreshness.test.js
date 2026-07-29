@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const {
+  isProgramActionableNow,
   isReviewedProgramCurrent,
   isSourceReviewCurrent,
 } = require('../../src/services/hiddenAssets/sourceFreshness.ts');
@@ -26,6 +27,12 @@ function program(overrides = {}) {
   return {
     sourceUrl: 'https://agency.gov/benefits/program',
     lastVerifiedAt: new Date('2026-07-01T12:00:00.000Z'),
+    isActive: true,
+    reviewStatus: 'PUBLISHED',
+    expiresAt: null,
+    fundingStatus: 'OPEN',
+    applicationWindowOpensAt: null,
+    applicationWindowClosesAt: null,
     ...overrides,
   };
 }
@@ -54,6 +61,41 @@ test('programs require an official URL and a current verification date', () => {
       source(),
       NOW,
     ),
+    false,
+  );
+});
+
+test('homeowner actionability also requires publication, activation, availability, and an open window', () => {
+  assert.equal(isProgramActionableNow(program(), source(), NOW), true);
+  assert.equal(isProgramActionableNow(program({ reviewStatus: 'APPROVED' }), source(), NOW), false);
+  assert.equal(isProgramActionableNow(program({ isActive: false }), source(), NOW), false);
+  assert.equal(isProgramActionableNow(program({ fundingStatus: 'CLOSED' }), source(), NOW), false);
+  assert.equal(
+    isProgramActionableNow(
+      program({ expiresAt: new Date('2026-07-29T12:00:00.000Z') }),
+      source(),
+      NOW,
+    ),
+    false,
+  );
+  assert.equal(
+    isProgramActionableNow(
+      program({ applicationWindowOpensAt: new Date('2026-07-30T00:00:00.000Z') }),
+      source(),
+      NOW,
+    ),
+    false,
+  );
+  assert.equal(
+    isProgramActionableNow(
+      program({ applicationWindowClosesAt: new Date('2026-07-28T00:00:00.000Z') }),
+      source(),
+      NOW,
+    ),
+    false,
+  );
+  assert.equal(
+    isProgramActionableNow(program(), source({ version: 2, reviewedVersion: 1 }), NOW),
     false,
   );
 });

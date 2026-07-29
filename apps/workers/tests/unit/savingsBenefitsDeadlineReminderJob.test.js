@@ -68,6 +68,26 @@ function fakeDeps({
 }
 
 function match(overrides = {}) {
+  const program = {
+    name: 'Senior Freeze',
+    sourceUrl: 'https://agency.gov/senior-freeze',
+    lastVerifiedAt: new Date(),
+    isActive: true,
+    reviewStatus: 'PUBLISHED',
+    expiresAt: null,
+    fundingStatus: 'OPEN',
+    applicationWindowOpensAt: null,
+    applicationWindowClosesAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+    source: {
+      status: 'ACTIVE',
+      officialUrl: 'https://agency.gov',
+      lastReviewedAt: new Date(),
+      reviewSlaDays: 180,
+      version: 1,
+      reviewedVersion: 1,
+    },
+    ...(overrides.program ?? {}),
+  };
   return {
     id: 'match-1',
     propertyId: 'property-1',
@@ -76,13 +96,11 @@ function match(overrides = {}) {
       city: 'Trenton',
       homeownerProfile: { userId: 'user-1' },
     },
-    program: {
-      name: 'Senior Freeze',
-      applicationWindowClosesAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    },
+    program,
     estimatedValueMin: 250,
     estimatedValueMax: 500,
     ...overrides,
+    program,
   };
 }
 
@@ -135,6 +153,17 @@ test('skips a match with no homeowner', async () => {
 test('skips a match whose program has no applicationWindowClosesAt', async () => {
   const { deps, getCreateCalls } = fakeDeps({
     matches: [match({ program: { name: 'Senior Freeze', applicationWindowClosesAt: null } })],
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(result.skipped, 1);
+});
+
+test('skips a match whose reviewed program is no longer actionable', async () => {
+  const { deps, getCreateCalls } = fakeDeps({
+    matches: [match({ program: { fundingStatus: 'CLOSED' } })],
   });
 
   const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);

@@ -7,7 +7,7 @@ import {
 import { prisma } from '../lib/prisma';
 import { HiddenAssetService } from './hiddenAssets.service';
 import { HomeSavingsService } from './homeSavings.service';
-import { isReviewedProgramCurrent } from './hiddenAssets/sourceFreshness';
+import { isProgramActionableNow } from './hiddenAssets/sourceFreshness';
 import {
   RecordHiddenAssetMatchOutcomeInput,
   RecordHomeSavingsOpportunityOutcomeInput,
@@ -57,7 +57,7 @@ export async function getCanonicalOpportunityDetail(
   });
   if (
     benefit
-    && isReviewedProgramCurrent(benefit.program, benefit.program.source)
+    && isProgramActionableNow(benefit.program, benefit.program.source)
   ) {
     return { family: 'BENEFIT' as const, opportunity: benefit };
   }
@@ -341,10 +341,10 @@ export async function createCanonicalAction(
   if (
     detail.family === 'BENEFIT'
     && benefitStatus === PropertyHiddenAssetMatchStatus.PURSUING
-    && !isReviewedProgramCurrent(detail.opportunity.program, detail.opportunity.program.source)
+    && !isProgramActionableNow(detail.opportunity.program, detail.opportunity.program.source)
   ) {
     throw new Error(
-      'This program is not currently actionable because its source review is missing or overdue.',
+      'This program is not currently actionable because it is unpublished, unavailable, expired, outside its application window, or no longer current.',
     );
   }
 

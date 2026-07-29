@@ -20,7 +20,7 @@ import { asNumber, round2 } from './homeSavings/helpers';
 import { propertyTaxAppealCaseService } from './propertyTax/propertyTaxAppealCase.service';
 import { detectCoverageGaps } from './coverageGap.service';
 import { logger } from '../lib/logger';
-import { isReviewedProgramCurrent } from './hiddenAssets/sourceFreshness';
+import { isProgramActionableNow } from './hiddenAssets/sourceFreshness';
 
 export type SavingsBenefitsFamily = 'BENEFIT' | 'RECURRING_COST';
 export type SavingsBenefitsLifecycle = 'IN_PROGRESS' | 'REALIZED';
@@ -479,7 +479,7 @@ export class SavingsBenefitsUnifiedService {
     // "realized," not "in progress," even if its own status field (which
     // reflects homeowner intent, not the verified ledger) hasn't caught up.
     const currentPursuingMatches = pursuingMatches.filter((match) =>
-      isReviewedProgramCurrent(match.program, match.program.source),
+      isProgramActionableNow(match.program, match.program.source),
     );
     const receivedMatchIds = new Set(receivedMatchOutcomes.map((o) => o.matchId));
     const receivedOpportunityIds = new Set(receivedOpportunityOutcomes.map((o) => o.opportunityId));

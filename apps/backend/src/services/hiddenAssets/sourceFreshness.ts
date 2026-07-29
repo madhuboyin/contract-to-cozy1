@@ -1,4 +1,6 @@
 import {
+  HiddenAssetFundingStatus,
+  HiddenAssetProgramReviewStatus,
   HiddenAssetSourceStatus,
 } from '@prisma/client';
 
@@ -16,6 +18,15 @@ export interface ReviewedSourceFreshness {
 export interface ReviewedProgramFreshness {
   sourceUrl: string | null;
   lastVerifiedAt: Date | null;
+}
+
+export interface ActionableReviewedProgram extends ReviewedProgramFreshness {
+  isActive: boolean;
+  reviewStatus: HiddenAssetProgramReviewStatus;
+  expiresAt: Date | null;
+  fundingStatus: HiddenAssetFundingStatus;
+  applicationWindowOpensAt: Date | null;
+  applicationWindowClosesAt: Date | null;
 }
 
 export function sourceReviewDueAt(source: ReviewedSourceFreshness): Date | null {
@@ -48,4 +59,37 @@ export function isReviewedProgramCurrent(
     program.lastVerifiedAt.getTime() + source.reviewSlaDays * DAY_MS,
   );
   return programDueAt.getTime() >= now.getTime();
+}
+
+/**
+ * Complete homeowner-actionability contract for a reviewed benefit program.
+ *
+ * Review freshness alone is deliberately insufficient: an otherwise fresh
+ * program may have been unpublished, deactivated, expired, closed for
+ * funding, or moved outside its current application window. Every
+ * homeowner-facing read, action, promotion, and reminder must use this
+ * predicate rather than treating isReviewedProgramCurrent as availability.
+ */
+export function isProgramActionableNow(
+  program: ActionableReviewedProgram,
+  source: ReviewedSourceFreshness,
+  now = new Date(),
+): boolean {
+  if (!isReviewedProgramCurrent(program, source, now)) return false;
+  if (!program.isActive || program.reviewStatus !== 'PUBLISHED') return false;
+  if (program.expiresAt && program.expiresAt.getTime() <= now.getTime()) return false;
+  if (program.fundingStatus === 'CLOSED') return false;
+  if (
+    program.applicationWindowOpensAt
+    && program.applicationWindowOpensAt.getTime() > now.getTime()
+  ) {
+    return false;
+  }
+  if (
+    program.applicationWindowClosesAt
+    && program.applicationWindowClosesAt.getTime() < now.getTime()
+  ) {
+    return false;
+  }
+  return true;
 }

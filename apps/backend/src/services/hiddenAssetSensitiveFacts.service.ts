@@ -24,7 +24,11 @@
 //   every sensitive attribute unless an overlay built from PROVIDED rows
 //   here is explicitly passed in.
 
-import { HiddenAssetSensitiveFactKey, HiddenAssetSensitiveFactStatus } from '@prisma/client';
+import {
+  HiddenAssetSensitiveFactKey,
+  HiddenAssetSensitiveFactStatus,
+  PropertyHiddenAssetMatchStatus,
+} from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import {
@@ -193,19 +197,42 @@ async function reEvaluateMatchWithOverlay(
     overlay,
   );
 
+  const evaluatedAt = new Date();
   if (!result.matched || result.confidenceLevel === null) {
-    // The property no longer qualifies at all once the sensitive fact is
-    // factored in (e.g. a disqualifying rule). Leave the match row as-is
-    // rather than silently deleting it — a homeowner who declines or
-    // corrects an answer should see the match's confidence reflect that,
-    // not have the match vanish without explanation.
+    // Preserve the row and criterion history, but fail closed: once an
+    // explicit answer makes a mandatory criterion fail or a disqualifier
+    // match, the prior positive match must no longer remain actionable.
+    await prisma.$transaction(async (tx) => {
+      await tx.propertyHiddenAssetMatch.update({
+        where: { id: matchId },
+        data: {
+          status: PropertyHiddenAssetMatchStatus.INACTIVE,
+          matchedRuleCount: result.matchedRuleCount,
+          totalRuleCount: result.totalRuleCount,
+          matchReasons: result.matchReasons,
+          lastEvaluatedAt: evaluatedAt,
+          programVersionAtMatch: match.program.version,
+        },
+      });
+      await tx.propertyHiddenAssetCriterionResult.deleteMany({ where: { matchId } });
+      if (result.criterionResults.length > 0) {
+        await tx.propertyHiddenAssetCriterionResult.createMany({
+          data: result.criterionResults.map((criterion) => ({
+            matchId,
+            ruleId: criterion.ruleId,
+            result: criterion.result,
+            explanation: criterion.explanation,
+            evaluatedAt,
+          })),
+        });
+      }
+    });
     logger.info(
-      `[HiddenAssetSensitiveFacts] Re-evaluation for match ${matchId} no longer resolves to a match; leaving existing row unchanged.`,
+      `[HiddenAssetSensitiveFacts] Re-evaluation for match ${matchId} no longer resolves to a match; marked inactive.`,
     );
     return;
   }
 
-  const evaluatedAt = new Date();
   await prisma.$transaction(async (tx) => {
     await tx.propertyHiddenAssetMatch.update({
       where: { id: matchId },
@@ -216,6 +243,9 @@ async function reEvaluateMatchWithOverlay(
         matchReasons: result.matchReasons,
         lastEvaluatedAt: evaluatedAt,
         programVersionAtMatch: match.program.version,
+        ...(match.status === PropertyHiddenAssetMatchStatus.INACTIVE
+          ? { status: PropertyHiddenAssetMatchStatus.DETECTED }
+          : {}),
       },
     });
     await tx.propertyHiddenAssetCriterionResult.deleteMany({ where: { matchId } });

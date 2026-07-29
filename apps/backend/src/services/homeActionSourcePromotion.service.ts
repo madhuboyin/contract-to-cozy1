@@ -11,7 +11,7 @@ import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { findPersonalizationDefinition } from '../modules/personalization/catalog/personalizationDefinitions';
 import type { EnvironmentInsight } from './environment/environmentInsights.service';
 import { getFreshnessNote } from './hiddenAssets/ruleEngine';
-import { isReviewedProgramCurrent } from './hiddenAssets/sourceFreshness';
+import { isProgramActionableNow } from './hiddenAssets/sourceFreshness';
 import {
   resolveOwnershipCostCategoryAction,
 } from './ownershipCosts/ownershipCostDecision.service';
@@ -1709,7 +1709,22 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
                   sourceLabel: true,
                   sourceUrl: true,
                   lastVerifiedAt: true,
+                  isActive: true,
+                  reviewStatus: true,
+                  expiresAt: true,
+                  fundingStatus: true,
+                  applicationWindowOpensAt: true,
                   applicationWindowClosesAt: true,
+                  source: {
+                    select: {
+                      status: true,
+                      officialUrl: true,
+                      lastReviewedAt: true,
+                      reviewSlaDays: true,
+                      version: true,
+                      reviewedVersion: true,
+                    },
+                  },
                 },
               },
             },
@@ -1726,7 +1741,14 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
       })
     : [];
 
-  const resumableActions = startedActions.map((action) => {
+  const resumableActions = startedActions.filter((action) =>
+    !action.hiddenAssetMatch
+    || isProgramActionableNow(
+      action.hiddenAssetMatch.program,
+      action.hiddenAssetMatch.program.source,
+      now,
+    ),
+  ).map((action) => {
     const match = action.hiddenAssetMatch;
     const opportunity = action.homeSavingsOpportunity;
     const title = match?.program.name ?? opportunity?.headline ?? 'Savings & Benefits action';
@@ -1838,7 +1860,10 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
       program: {
         select: {
           name: true, regionValue: true, sourceLabel: true, sourceUrl: true,
-          lastVerifiedAt: true, applicationWindowClosesAt: true, currency: true,
+          lastVerifiedAt: true, isActive: true, reviewStatus: true,
+          expiresAt: true, fundingStatus: true,
+          applicationWindowOpensAt: true, applicationWindowClosesAt: true,
+          currency: true,
           source: {
             select: {
               status: true,
@@ -1855,7 +1880,7 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
   });
 
   const matchActions = matches.filter((match) =>
-    isReviewedProgramCurrent(match.program, match.program.source, now),
+    isProgramActionableNow(match.program, match.program.source, now),
   ).map((match) => {
     const program = match.program;
     const closesAt = program.applicationWindowClosesAt;

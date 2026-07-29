@@ -31,7 +31,10 @@ import {
 } from './hiddenAssets/types';
 import { logger } from '../lib/logger';
 import { getFinancialContextDecisions } from './financialContext/context';
-import { isReviewedProgramCurrent } from './hiddenAssets/sourceFreshness';
+import {
+  isProgramActionableNow,
+  isReviewedProgramCurrent,
+} from './hiddenAssets/sourceFreshness';
 
 // ============================================================================
 // SERIALIZERS
@@ -359,7 +362,7 @@ async function fetchCandidatePrograms(regionPairs: RegionPair[]) {
   });
 
   return programs.filter((program) =>
-    isReviewedProgramCurrent(program, program.source, now),
+    isProgramActionableNow(program, program.source, now),
   );
 }
 
@@ -402,7 +405,7 @@ async function fetchMatchesForProperty(
   });
   const now = new Date();
   return matches.filter((match) =>
-    isReviewedProgramCurrent(match.program, match.program.source, now),
+    isProgramActionableNow(match.program, match.program.source, now),
   );
 }
 
@@ -607,36 +610,38 @@ async function executePropertyScan(
       }
     }
 
-    // Mark prior matches whose programs are no longer in the active candidate set
+    // Mark prior matches whose programs are no longer in the actionable
+    // candidate set. This includes unpublish/archive, source/program
+    // staleness, closed funding, and application-window closure—not only
+    // explicit deactivation or expiry.
     let matchesExpired = 0;
     let matchesInactivated = 0;
 
     for (const existing of existingMatches) {
-      if (
-        existing.status === PropertyHiddenAssetMatchStatus.DISMISSED ||
-        existing.status === PropertyHiddenAssetMatchStatus.PURSUING
-      ) {
-        continue; // Never auto-change user-set terminal statuses
+      if (existing.status === PropertyHiddenAssetMatchStatus.DISMISSED) {
+        continue; // Preserve an explicit homeowner dismissal as history.
       }
 
       if (!matchedProgramIds.has(existing.programId)) {
         const prog = await prisma.hiddenAssetProgram.findUnique({
           where: { id: existing.programId },
-          select: { isActive: true, expiresAt: true },
+          select: { expiresAt: true },
         });
 
         if (!prog) continue;
 
         const isExpired = prog.expiresAt != null && prog.expiresAt <= now;
-        const isInactive = !prog.isActive;
-
         if (isExpired) {
           await prisma.propertyHiddenAssetMatch.update({
             where: { id: existing.id },
             data: { status: PropertyHiddenAssetMatchStatus.EXPIRED, lastEvaluatedAt: now, propertyContextVersion: financialContext.contextVersion },
           });
           matchesExpired++;
-        } else if (isInactive) {
+        } else {
+          // A previously detected match can fall out of the result set either
+          // because the program is no longer actionable or because the
+          // property's current facts no longer satisfy its rules. Both cases
+          // must retire the old positive match.
           await prisma.propertyHiddenAssetMatch.update({
             where: { id: existing.id },
             data: { status: PropertyHiddenAssetMatchStatus.INACTIVE, lastEvaluatedAt: now, propertyContextVersion: financialContext.contextVersion },
@@ -812,7 +817,7 @@ export class HiddenAssetService {
     const sourceById = new Map<string, (typeof publishedPrograms)[number]['source']>();
     const categoriesCovered = new Set<HiddenAssetCategory>();
     for (const program of publishedPrograms) {
-      if (!isReviewedProgramCurrent(program, program.source, now)) continue;
+      if (!isProgramActionableNow(program, program.source, now)) continue;
       sourceById.set(program.source.id, program.source);
       categoriesCovered.add(program.category);
     }
@@ -862,7 +867,7 @@ export class HiddenAssetService {
       include: { source: true },
     });
 
-    if (!program || !isReviewedProgramCurrent(program, program.source)) {
+    if (!program || !isProgramActionableNow(program, program.source)) {
       throw new Error('Program not found.');
     }
 
@@ -893,10 +898,10 @@ export class HiddenAssetService {
 
     if (
       input.status === PropertyHiddenAssetMatchStatus.PURSUING
-      && !isReviewedProgramCurrent(existing.program, existing.program.source)
+      && !isProgramActionableNow(existing.program, existing.program.source)
     ) {
       throw new Error(
-        'This program is not currently actionable because its source review is missing or overdue.',
+        'This program is not currently actionable because it is unpublished, unavailable, expired, outside its application window, or no longer current.',
       );
     }
 

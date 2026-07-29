@@ -41,7 +41,12 @@ import { transitionSavingsBenefitProgram } from '../services/savingsBenefitsGove
  * those once that verification happens, not this seed.
  */
 
-const SEED_ACTOR = 'SYSTEM_REVIEWED_SEED';
+// These are durable system principals rather than database User rows. They
+// intentionally remain distinct so the production seed exercises the same
+// author/reviewer/publisher separation required of the admin workflow.
+const SEED_AUTHOR = 'SYSTEM_SAVINGS_BENEFITS_SEED_AUTHOR';
+const SEED_REVIEWER = 'SYSTEM_SAVINGS_BENEFITS_SEED_REVIEWER';
+const SEED_PUBLISHER = 'SYSTEM_SAVINGS_BENEFITS_SEED_PUBLISHER';
 
 const NJ_SOURCE: HiddenAssetSourceInput = {
   name: 'New Jersey Division of Taxation',
@@ -94,10 +99,10 @@ const NJ_PROGRAMS: Omit<HiddenAssetProgramInput, 'sourceId'>[] = [
 
 async function ensureSource(): Promise<string> {
   const existing = await prisma.hiddenAssetSource.findFirst({ where: { name: NJ_SOURCE.name } });
-  const source = existing ?? await savingsBenefitsAdminService.createSource(NJ_SOURCE, SEED_ACTOR);
+  const source = existing ?? await savingsBenefitsAdminService.createSource(NJ_SOURCE, SEED_AUTHOR);
   await savingsBenefitsAdminService.reviewSource(
     source.id,
-    SEED_ACTOR,
+    SEED_REVIEWER,
     'Reviewed pilot seed against the official New Jersey Division of Taxation source.',
   );
   return source.id;
@@ -109,7 +114,7 @@ async function ensureProgramPublished(sourceId: string, input: Omit<HiddenAssetP
   if (!program) {
     const result = await savingsBenefitsAdminService.createProgram(
       { ...input, sourceId },
-      SEED_ACTOR,
+      SEED_AUTHOR,
     );
     program = result;
   }
@@ -118,7 +123,7 @@ async function ensureProgramPublished(sourceId: string, input: Omit<HiddenAssetP
   if (program.reviewStatus === 'DRAFT') {
     await transitionSavingsBenefitProgram({
       programId: program.id,
-      actorId: SEED_ACTOR,
+      actorId: SEED_AUTHOR,
       action: 'SUBMIT_FOR_REVIEW',
       reason,
     });
@@ -127,7 +132,7 @@ async function ensureProgramPublished(sourceId: string, input: Omit<HiddenAssetP
   if (afterSubmit.reviewStatus === 'IN_REVIEW') {
     await transitionSavingsBenefitProgram({
       programId: program.id,
-      actorId: SEED_ACTOR,
+      actorId: SEED_REVIEWER,
       action: 'APPROVE',
       reason,
     });
@@ -136,7 +141,7 @@ async function ensureProgramPublished(sourceId: string, input: Omit<HiddenAssetP
   if (afterApprove.reviewStatus === 'APPROVED') {
     await transitionSavingsBenefitProgram({
       programId: program.id,
-      actorId: SEED_ACTOR,
+      actorId: SEED_PUBLISHER,
       action: 'PUBLISH',
       reason,
     });

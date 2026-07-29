@@ -5,6 +5,7 @@ import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import type { WorkerRunResult } from '../lib/workerRunResult';
 import { savingsBenefitsUrl } from '../lib/deepLinks';
+import { isProgramActionableNow } from '@worker-shared/services/hiddenAssets/sourceFreshness';
 
 const REMINDER_SCAN_WINDOW_DAYS = 90;
 const REMINDER_CLAIM_LEASE_MS = 30 * 60 * 1000;
@@ -64,7 +65,17 @@ export async function savingsBenefitsDeadlineReminderJob(
       program: {
         isActive: true,
         reviewStatus: 'PUBLISHED',
+        fundingStatus: { not: 'CLOSED' },
         applicationWindowClosesAt: { gte: now, lte: windowEnd },
+        AND: [
+          { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+          {
+            OR: [
+              { applicationWindowOpensAt: null },
+              { applicationWindowOpensAt: { lte: now } },
+            ],
+          },
+        ],
       },
       ...(opts?.propertyId ? { propertyId: opts.propertyId } : {}),
     },
@@ -76,7 +87,11 @@ export async function savingsBenefitsDeadlineReminderJob(
           homeownerProfile: { select: { userId: true } },
         },
       },
-      program: { select: { name: true, applicationWindowClosesAt: true } },
+      program: {
+        include: {
+          source: true,
+        },
+      },
     },
   });
 
@@ -92,7 +107,11 @@ export async function savingsBenefitsDeadlineReminderJob(
     let claimTime: Date | null = null;
     try {
       const userId = match.property?.homeownerProfile?.userId;
-      if (!userId || !match.program?.applicationWindowClosesAt) {
+      if (
+        !userId
+        || !match.program?.applicationWindowClosesAt
+        || !isProgramActionableNow(match.program, match.program.source, now)
+      ) {
         skipped += 1;
         continue;
       }
