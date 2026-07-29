@@ -1952,6 +1952,10 @@ model User {
   seasonalChecklistItemsAssigned SeasonalChecklistItem[]   @relation("SeasonalTaskAssignee")
   homeBuyerTasksAssigned         HomeBuyerTask[]           @relation("HomeBuyerTaskAssignee")
 
+  // Home Operations — durable operational work identity (Slice 1)
+  operationalWorkItemsOwned   OperationalWorkItem[]        @relation("OperationalWorkItemOwner")
+  operationalWorkItemsWatched OperationalWorkItemWatcher[] @relation("OperationalWorkItemWatcher")
+
   // Home Improvement Financing Center
   financingScenarios FinancingScenario[]
 
@@ -2979,6 +2983,9 @@ model Property {
   ownershipCostForecasts     OwnershipCostForecast[]
   ownershipCostChanges       OwnershipCostChange[]
   ownershipCostDecisions     OwnershipCostDecision[]
+
+  // Home Operations — durable operational work identity (Slice 1)
+  operationalWorkItems OperationalWorkItem[]
 
   // Neighbourhood Trust Network
   neighbourhoodEndorsements NeighbourhoodEndorsement[]
@@ -17836,4 +17843,301 @@ model OwnershipCostDecision {
   @@index([recordedByUserId])
   @@index([supersededById])
   @@map("ownership_cost_decisions")
+}
+
+// ============================================================================
+// HOME OPERATIONS — OPERATIONAL WORK IDENTITY (Slice 1)
+// docs/product/HOME_OPERATIONS_AND_ACTION_MANAGEMENT_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
+// One durable work identity across recommendation sources and execution
+// domains. Existing tables (PropertyMaintenanceTask.actionKey, HomeAction.id)
+// are untouched — this is a new identity layer that domain records link into
+// via OperationalWorkSource/OperationalWorkExecution, not a replacement.
+// ============================================================================
+
+enum OperationalWorkItemState {
+  CANDIDATE
+  ACCEPTED
+  SCHEDULED
+  IN_PROGRESS
+  IN_GUIDANCE
+  IN_PROJECT
+  BLOCKED
+  DEFERRED
+  REPORTED_COMPLETE
+  REOPENED
+  VERIFIED
+  FOLLOW_UP_DUE
+  CLOSED
+}
+
+enum OperationalWorkItemAcceptanceState {
+  PROPOSED
+  ACCEPTED
+  DECLINED
+}
+
+// Only ever set when state = CLOSED. Null disposition + state CLOSED/VERIFIED
+// means genuine completion — completion is not a disposition value.
+enum OperationalWorkItemDisposition {
+  NOT_RELEVANT
+  DUPLICATE
+  EXPIRED
+  DISMISSED
+}
+
+enum OperationalWorkItemPriority {
+  NOW
+  SOON
+  PLAN
+  CONSIDER
+}
+
+enum OperationalWorkSubjectType {
+  INVENTORY_ITEM
+  FINDING
+  PROJECT
+  PROPERTY
+}
+
+enum OperationalObligationType {
+  MAINTENANCE_TASK
+  DECISION
+  FINDING_RESOLUTION
+  PROJECT_EXECUTION
+  INCIDENT_RESPONSE
+  COVERAGE_ACTION
+}
+
+enum OperationalWorkSourceType {
+  MAINTENANCE
+  GUIDANCE
+  PROJECT
+  INCIDENT
+  RECALL
+  COVERAGE
+  INSPECTION_FINDING
+}
+
+enum OperationalWorkSourceRole {
+  TRIGGER
+  EVIDENCE
+  EXECUTION
+  OUTCOME
+}
+
+enum OperationalWorkExecutionType {
+  MAINTENANCE_TASK
+  GUIDANCE
+  PROJECT
+  BOOKING
+}
+
+enum OperationalWorkExecutionRole {
+  PRIMARY
+  SUPPORTING
+}
+
+enum OperationalWorkEventType {
+  WORK_CANDIDATE_DETECTED
+  SOURCE_LINKED
+  SOURCE_RECONCILED
+  WORK_ACCEPTED
+  WORK_SCHEDULED
+  WORK_ASSIGNED
+  EXECUTION_STARTED
+  EXECUTION_LINKED
+  EXECUTION_BLOCKED
+  WORK_DEFERRED
+  WORK_REPORTED_COMPLETE
+  OUTCOME_EVIDENCE_ADDED
+  OUTCOME_VERIFIED
+  WORK_REOPENED
+  WORK_DISPOSITION_RECORDED
+  FOLLOW_UP_CREATED
+  WATCHER_ADDED
+  WATCHER_REMOVED
+}
+
+enum OperationalWorkActorType {
+  USER
+  SYSTEM
+}
+
+enum OperationalWorkEvidenceType {
+  PROPERTY_FACT
+  DOCUMENT
+  HOME_EVENT
+  USER_ATTESTATION
+  DOMAIN_COMPLETION_RECORD
+  SYSTEM_DERIVATION
+}
+
+enum OperationalWorkEvidenceVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model OperationalWorkItem {
+  id         String @id @default(uuid())
+  propertyId String
+
+  // Stable property-scoped identity. See workKey.ts resolver. Format:
+  // property:{propertyId}:{subjectSegment}:{obligationSlug}[:{occurrenceKey}]
+  workKey String
+
+  subjectType    OperationalWorkSubjectType
+  subjectId      String // polymorphic by subjectType; unenforced (crosses InventoryItem/InspectionFinding/ProjectRecord/Property)
+  obligationType OperationalObligationType
+
+  state           OperationalWorkItemState           @default(CANDIDATE)
+  acceptanceState OperationalWorkItemAcceptanceState @default(PROPOSED)
+  disposition     OperationalWorkItemDisposition?
+
+  priority   OperationalWorkItemPriority @default(PLAN)
+  safetyTier RecommendationSafetyTier    @default(LOW_CONSEQUENCE)
+
+  title           String
+  homeownerReason String @db.Text
+  expectedOutcome String @db.Text
+
+  dueWindowStart DateTime?
+  dueAt          DateTime?
+  dueWindowEnd   DateTime?
+
+  ownerUserId String?
+  owner       User? @relation("OperationalWorkItemOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  sourceVersion  String? // cache of the primary/trigger source's version as of last resolve
+  confidence     Float? // 0..1 ratio
+  missingContext String[] @default([])
+
+  acceptedAt          DateTime?
+  startedAt           DateTime?
+  reportedCompletedAt DateTime?
+  verifiedAt          DateTime?
+  deferredUntil       DateTime?
+  dismissedAt         DateTime?
+  closedAt            DateTime?
+
+  // Durable, reversible duplicate/supersession decision (doc rule: "deduplication
+  // decisions are durable and reversible").
+  supersededByWorkItemId String?
+  supersededBy           OperationalWorkItem?  @relation("OperationalWorkItemSupersession", fields: [supersededByWorkItemId], references: [id], onDelete: SetNull)
+  supersedes             OperationalWorkItem[] @relation("OperationalWorkItemSupersession")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property   Property                     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sources    OperationalWorkSource[]
+  executions OperationalWorkExecution[]
+  events     OperationalWorkEvent[]
+  evidence   OperationalWorkEvidence[]
+  watchers   OperationalWorkItemWatcher[]
+
+  @@unique([propertyId, workKey])
+  @@index([propertyId, state])
+  @@index([propertyId, obligationType, state])
+  @@index([propertyId, subjectType, subjectId])
+  @@index([propertyId, ownerUserId])
+  @@index([supersededByWorkItemId])
+  @@map("operational_work_items")
+}
+
+model OperationalWorkSource {
+  id         String @id @default(uuid())
+  workItemId String
+
+  sourceType     OperationalWorkSourceType
+  sourceEntityId String
+  sourceVersion  String?
+  sourceRole     OperationalWorkSourceRole
+  active         Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workItem OperationalWorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  // Same source entity may back >1 obligation (different workItemId) or
+  // contribute in >1 role to the same item — but not duplicate the same role twice.
+  @@unique([workItemId, sourceType, sourceEntityId, sourceRole])
+  @@index([sourceType, sourceEntityId])
+  @@index([workItemId, active])
+  @@map("operational_work_sources")
+}
+
+model OperationalWorkExecution {
+  id         String @id @default(uuid())
+  workItemId String
+
+  executionType     OperationalWorkExecutionType
+  executionEntityId String
+  role              OperationalWorkExecutionRole @default(PRIMARY)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workItem OperationalWorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, executionType, executionEntityId])
+  @@index([executionType, executionEntityId])
+  @@map("operational_work_executions")
+}
+
+model OperationalWorkEvent {
+  id         String @id @default(uuid())
+  workItemId String
+
+  eventType      OperationalWorkEventType
+  actorType      OperationalWorkActorType
+  actorUserId    String?
+  idempotencyKey String
+  payload        Json?
+  occurredAt     DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  workItem OperationalWorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, idempotencyKey])
+  @@index([workItemId, occurredAt(sort: Desc)])
+  @@index([eventType])
+  @@map("operational_work_events")
+}
+
+model OperationalWorkEvidence {
+  id         String @id @default(uuid())
+  workItemId String
+
+  evidenceType       OperationalWorkEvidenceType
+  evidenceEntityId   String
+  verificationStatus OperationalWorkEvidenceVerificationStatus @default(PENDING)
+  observedAt         DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workItem OperationalWorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@index([workItemId, verificationStatus])
+  @@index([evidenceType, evidenceEntityId])
+  @@map("operational_work_evidence")
+}
+
+model OperationalWorkItemWatcher {
+  id         String @id @default(uuid())
+  workItemId String
+  userId     String
+
+  addedByUserId String?
+  addedAt       DateTime @default(now())
+
+  workItem OperationalWorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User                @relation("OperationalWorkItemWatcher", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, userId])
+  @@index([userId])
+  @@map("operational_work_item_watchers")
 }

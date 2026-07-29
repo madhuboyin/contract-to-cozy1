@@ -1,0 +1,57 @@
+import type { OperationalWorkActorType, OperationalWorkEventType, OperationalWorkItemDisposition, OperationalWorkItemState } from '@prisma/client';
+import { applyTransition } from '../domain/transitions';
+import { findWorkItemById, recordWorkEvent, updateWorkItemState } from '../infrastructure/workItemRepository';
+
+/**
+ * Maps a legal state transition to the event vocabulary the parent plan
+ * names in its completion/write-back contract (section 9.2). Event-type
+ * selection is an application-layer concern (the pure domain/transitions.ts
+ * only knows about state legality), so it lives here rather than in the
+ * domain module.
+ */
+function eventTypeForTransition(to: OperationalWorkItemState, disposition: OperationalWorkItemDisposition | null): OperationalWorkEventType {
+  if (to === 'CLOSED' && disposition) return 'WORK_DISPOSITION_RECORDED';
+  switch (to) {
+    case 'ACCEPTED': return 'WORK_ACCEPTED';
+    case 'SCHEDULED': return 'WORK_SCHEDULED';
+    case 'IN_PROGRESS': return 'EXECUTION_STARTED';
+    case 'BLOCKED': return 'EXECUTION_BLOCKED';
+    case 'DEFERRED': return 'WORK_DEFERRED';
+    case 'REPORTED_COMPLETE': return 'WORK_REPORTED_COMPLETE';
+    case 'REOPENED': return 'WORK_REOPENED';
+    case 'VERIFIED': return 'OUTCOME_VERIFIED';
+    case 'FOLLOW_UP_DUE': return 'FOLLOW_UP_CREATED';
+    // IN_GUIDANCE / IN_PROJECT / CLOSED (no disposition, i.e. verified-completion close)
+    default: return 'EXECUTION_STARTED';
+  }
+}
+
+export interface TransitionWorkItemInput {
+  workItemId: string;
+  to: OperationalWorkItemState;
+  disposition?: OperationalWorkItemDisposition;
+  actorType: OperationalWorkActorType;
+  actorUserId?: string | null;
+  idempotencyKey: string;
+  payload?: Record<string, unknown> | null;
+}
+
+export async function transitionWorkItem(input: TransitionWorkItemInput) {
+  const workItem = await findWorkItemById(input.workItemId);
+  if (!workItem) throw new Error(`OperationalWorkItem ${input.workItemId} not found.`);
+
+  const result = applyTransition(workItem, input.to, { disposition: input.disposition });
+
+  const updated = await updateWorkItemState(input.workItemId, result);
+
+  await recordWorkEvent({
+    workItemId: input.workItemId,
+    eventType: eventTypeForTransition(result.state, result.disposition),
+    actorType: input.actorType,
+    actorUserId: input.actorUserId,
+    idempotencyKey: input.idempotencyKey,
+    payload: { from: workItem.state, to: result.state, disposition: result.disposition, ...(input.payload ?? {}) },
+  });
+
+  return updated;
+}
