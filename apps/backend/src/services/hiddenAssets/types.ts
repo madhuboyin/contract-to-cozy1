@@ -1,4 +1,5 @@
 import {
+  HiddenAssetBeneficiaryScope,
   HiddenAssetBenefitPeriod,
   HiddenAssetBenefitType,
   HiddenAssetCategory,
@@ -250,6 +251,9 @@ export interface HiddenAssetMatchDTO {
   // shares this program's exclusionGroupKey — surfaced so a homeowner never
   // assumes all matched benefits stack. Never used to auto-hide a match.
   mutuallyExclusiveWith: string[];
+  // Whether this benefit belongs to the property or the household (HSB-038)
+  // — labeling only, not a matching-engine change.
+  beneficiaryScope: HiddenAssetBeneficiaryScope;
 }
 
 export interface HiddenAssetMatchSummaryDTO {
@@ -297,6 +301,7 @@ export interface HiddenAssetProgramDetailDTO {
   fundingStatus: HiddenAssetFundingStatus;
   applicationWindowOpensAt: string | null;
   applicationWindowClosesAt: string | null;
+  beneficiaryScope: HiddenAssetBeneficiaryScope;
   createdAt: string;
   updatedAt: string;
 }

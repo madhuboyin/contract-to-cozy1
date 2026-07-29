@@ -100,6 +100,7 @@ const ProgramBodySchema = z.object({
   eligibilityNotes: z.string().nullable().optional(),
   expiresAt: z.coerce.date().nullable().optional(),
   exclusionGroupKey: z.string().nullable().optional(),
+  beneficiaryScope: z.enum(['PROPERTY', 'HOUSEHOLD', 'EITHER']).optional(),
   rules: z.array(RuleBodySchema).default([]),
 });
 

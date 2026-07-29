@@ -59,6 +59,14 @@ export type HomeSavingsOpportunityDTO = {
   detail: string | null;
   estimatedMonthlySavings: number | null;
   estimatedAnnualSavings: number | null;
+  /** Modeled, category-level assumption — never a real per-provider quote. */
+  estimatedSwitchingCost: number | null;
+  /** estimatedAnnualSavings net of estimatedSwitchingCost (first year only). */
+  netAnnualSavings: number | null;
+  /** EQUIVALENT only when the comparison controlled for a real matching attribute — never assumed. */
+  equivalenceState: 'EQUIVALENT' | 'NOT_EQUIVALENT' | 'UNKNOWN';
+  /** What backs the dollar figure — always BENCHMARK_ESTIMATE today; no address-qualified connector exists yet. */
+  offerSourceKind: 'BENCHMARK_ESTIMATE' | 'ADDRESS_QUALIFIED';
   currency: string;
   recommendedProviderName: string | null;
   recommendedPlanName: string | null;

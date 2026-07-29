@@ -39,6 +39,7 @@ import TrustStrip from '../../components/route-templates/TrustStrip';
 import { hiddenAssetTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import { OutcomeRecorder } from '@/components/savings-benefits/OutcomeRecorder';
 import type {
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
@@ -437,6 +438,7 @@ function SensitiveFactRow({ matchId, fact }: { matchId: string; fact: SensitiveF
                 type="button"
                 size="sm"
                 variant={draft === 'yes' ? 'default' : 'outline'}
+                aria-pressed={draft === 'yes'}
                 className="h-7 flex-1 text-[11px]"
                 onClick={() => setDraft('yes')}
               >
@@ -446,6 +448,7 @@ function SensitiveFactRow({ matchId, fact }: { matchId: string; fact: SensitiveF
                 type="button"
                 size="sm"
                 variant={draft === 'no' ? 'default' : 'outline'}
+                aria-pressed={draft === 'no'}
                 className="h-7 flex-1 text-[11px]"
                 onClick={() => setDraft('no')}
               >
@@ -458,6 +461,7 @@ function SensitiveFactRow({ matchId, fact }: { matchId: string; fact: SensitiveF
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Your answer"
+              aria-label={SENSITIVE_FACT_LABEL[fact.factKey]}
               className="h-8 w-full rounded-md border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 text-xs dark:bg-slate-900"
             />
           )}
@@ -613,6 +617,17 @@ function HiddenAssetDetailSheet({
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
               <p className="text-xs leading-snug text-amber-700">
                 This program conflicts with {match.mutuallyExclusiveWith.length === 1 ? 'another matched program' : `${match.mutuallyExclusiveWith.length} other matched programs`} — you can realistically claim only one from this group.
+              </p>
+            </div>
+          )}
+
+          {/* Who this benefit belongs to (HSB-038) */}
+          {match.beneficiaryScope !== 'PROPERTY' && (
+            <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+              <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                {match.beneficiaryScope === 'HOUSEHOLD'
+                  ? "This benefit belongs to you or your household, not specifically this property — you likely don't need to reapply separately for each property you own."
+                  : 'This benefit can apply to either the property or the household, depending on how it’s claimed — check the official criteria for which applies to you.'}
               </p>
             </div>
           )}
@@ -782,6 +797,9 @@ function HiddenAssetDetailSheet({
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
+            <div className="pt-1">
+              <OutcomeRecorder family="BENEFIT" id={match.id} propertyId={match.propertyId} defaultCurrency={match.currency} />
+            </div>
           </div>
         )}
       </SheetContent>

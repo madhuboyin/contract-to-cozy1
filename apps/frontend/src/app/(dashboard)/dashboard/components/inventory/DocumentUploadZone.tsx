@@ -75,6 +75,10 @@ export default function DocumentUploadZone({
       </div>
 
       <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        aria-label="Upload a document — drop a file or activate to browse"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -82,8 +86,15 @@ export default function DocumentUploadZone({
           if (disabled) return;
           fileInputRef.current?.click();
         }}
+        onKeyDown={(event) => {
+          if (disabled) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
         className={[
-          'cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition-all duration-150',
+          'cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2',
           disabled
             ? 'cursor-not-allowed border-gray-200 bg-gray-50/60 opacity-70'
             : isDragging
@@ -92,7 +103,7 @@ export default function DocumentUploadZone({
         ].join(' ')}
       >
         <div className="mx-auto flex w-fit items-center justify-center rounded-full bg-gray-100 p-2">
-          <Upload className={['h-5 w-5', isDragging ? 'text-teal-600' : 'text-gray-400'].join(' ')} />
+          <Upload className={['h-5 w-5', isDragging ? 'text-teal-600' : 'text-gray-400'].join(' ')} aria-hidden="true" />
         </div>
 
         <p className="mt-2 text-sm font-medium text-gray-600">

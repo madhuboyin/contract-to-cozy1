@@ -64,6 +64,14 @@ export type HomeSavingsOpportunityDTO = {
   detail: string | null;
   estimatedMonthlySavings: number | null;
   estimatedAnnualSavings: number | null;
+  /** Modeled, category-level assumption — never a real per-provider quote. See ASSUMED_SWITCHING_COST. */
+  estimatedSwitchingCost: number | null;
+  /** estimatedAnnualSavings net of estimatedSwitchingCost (first year only). Null when there's no gross estimate to net against. */
+  netAnnualSavings: number | null;
+  /** EQUIVALENT only when the comparison controlled for a real matching attribute (e.g. same speed tier) — never assumed. */
+  equivalenceState: 'EQUIVALENT' | 'NOT_EQUIVALENT' | 'UNKNOWN';
+  /** What backs the dollar figure — always BENCHMARK_ESTIMATE today; no address-qualified connector exists yet (HSB-021). */
+  offerSourceKind: 'BENCHMARK_ESTIMATE' | 'ADDRESS_QUALIFIED';
   currency: string;
   recommendedProviderName: string | null;
   recommendedPlanName: string | null;
@@ -186,6 +194,10 @@ function serializeOpportunity(opportunity: HomeSavingsOpportunity): HomeSavingsO
     detail: opportunity.detail ?? null,
     estimatedMonthlySavings: asNumber(opportunity.estimatedMonthlySavings) ?? null,
     estimatedAnnualSavings: asNumber(opportunity.estimatedAnnualSavings) ?? null,
+    estimatedSwitchingCost: asNumber(opportunity.estimatedSwitchingCost) ?? null,
+    netAnnualSavings: asNumber(opportunity.netAnnualSavings) ?? null,
+    equivalenceState: opportunity.equivalenceState,
+    offerSourceKind: opportunity.offerSourceKind,
     currency: opportunity.currency,
     recommendedProviderName: opportunity.recommendedProviderName ?? null,
     recommendedPlanName: opportunity.recommendedPlanName ?? null,
@@ -317,6 +329,44 @@ function mapCategoryModule(modules: CategoryModule[]) {
   const map = new Map<HomeSavingsCategoryKey, CategoryModule>();
   modules.forEach((module) => map.set(module.categoryKey, module));
   return map;
+}
+
+// Modeled, category-level assumption about the one-time friction cost of
+// actually switching (HSB-023) — never a real per-provider quote, since no
+// category module has access to real fee data. Kept modest and always
+// surfaced to the homeowner as an assumption, never presented as a firm fee.
+const ASSUMED_SWITCHING_COST: Record<HomeSavingsCategoryKey, number> = {
+  HOME_INSURANCE: 25, // admin/hassle cost; carriers rarely charge to switch
+  HOME_WARRANTY: 50, // typical cancellation/transfer admin fee
+  INTERNET: 75, // equipment return / self-install, when not under an ETF
+  ELECTRICITY_GAS: 0, // deregulated supplier switches are typically free
+};
+
+/**
+ * netAnnualSavings = estimatedAnnualSavings - the category's assumed
+ * one-time switching cost (first-year only — the cost doesn't recur).
+ * Null when there's no positive gross estimate to net against.
+ */
+function computeNetAnnualSavings(
+  categoryKey: HomeSavingsCategoryKey,
+  estimatedAnnualSavings: number | null | undefined,
+): { switchingCost: number; netAnnualSavings: number | null } {
+  const switchingCost = ASSUMED_SWITCHING_COST[categoryKey] ?? 0;
+  if (estimatedAnnualSavings == null) return { switchingCost, netAnnualSavings: null };
+  return { switchingCost, netAnnualSavings: round2(estimatedAnnualSavings - switchingCost) };
+}
+
+/**
+ * EQUIVALENT only when the draft itself recorded a real controlled-for
+ * comparison attribute (e.g. internet comparing the same speed tier) —
+ * never defaults to EQUIVALENT for a bare state-average benchmark
+ * (HSB-022). Conservative by design: UNKNOWN is always safe; EQUIVALENT
+ * must be earned by the draft's own rationale.
+ */
+function inferEquivalenceState(rationaleJson: Prisma.JsonValue | null | undefined): 'EQUIVALENT' | 'UNKNOWN' {
+  const rationale = toRecord(rationaleJson);
+  const hasControlledAttribute = typeof rationale.speedTier === 'string' && rationale.speedTier.trim().length > 0;
+  return hasControlledAttribute ? 'EQUIVALENT' : 'UNKNOWN';
 }
 
 export class HomeSavingsService {
@@ -553,6 +603,7 @@ export class HomeSavingsService {
 
       let createdCount = 0;
       for (const draft of drafts) {
+        const { switchingCost, netAnnualSavings } = computeNetAnnualSavings(categoryKey, draft.estimatedAnnualSavings);
         await prisma.homeSavingsOpportunity.create({
           data: {
             homeownerProfileId: property.homeownerProfileId,
@@ -569,6 +620,13 @@ export class HomeSavingsService {
                 : (draft.rationaleJson as Prisma.InputJsonValue | undefined),
             estimatedMonthlySavings: draft.estimatedMonthlySavings ?? null,
             estimatedAnnualSavings: draft.estimatedAnnualSavings ?? null,
+            estimatedSwitchingCost: switchingCost,
+            netAnnualSavings,
+            equivalenceState: inferEquivalenceState(draft.rationaleJson),
+            // Explicit, not just the schema default — every category module
+            // today only ever produces a benchmark comparison, never a real
+            // address-qualified quote (HSB-021, no such connector exists yet).
+            offerSourceKind: 'BENCHMARK_ESTIMATE',
             currency: 'USD',
             recommendedProviderName: draft.recommendedProviderName,
             recommendedPlanName: draft.recommendedPlanName,

@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HiddenAssetFinderClient from '../hidden-asset-finder/HiddenAssetFinderClient';
 import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
-import { InProgressPanel, RealizedPanel } from './SavingsBenefitsUnifiedPanels';
+import { InProgressPanel, RealizedPanel, RelatedOpportunitiesStrip } from './SavingsBenefitsUnifiedPanels';
 
 type Section = 'benefits' | 'recurring' | 'in-progress' | 'realized';
 
@@ -39,6 +39,7 @@ export default function SavingsBenefitsClient() {
         sourceLabel: 'Property profile + linked accounts + program registry',
       }}
     >
+      <RelatedOpportunitiesStrip propertyId={propertyId} />
       <Tabs value={activeSection} onValueChange={(value) => setActiveSection(value as Section)}>
         <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="benefits" className="px-2 text-xs sm:px-3 sm:text-sm">

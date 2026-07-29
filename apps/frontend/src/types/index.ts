@@ -2184,7 +2184,11 @@ export interface HiddenAssetMatchDTO {
   programVersionAtMatch: number | null;
   /** Other currently-visible match IDs sharing this program's exclusion group — never all stack. */
   mutuallyExclusiveWith: string[];
+  /** Whether this benefit belongs to the property or the household (HSB-038). */
+  beneficiaryScope: HiddenAssetBeneficiaryScope;
 }
+
+export type HiddenAssetBeneficiaryScope = 'PROPERTY' | 'HOUSEHOLD' | 'EITHER';
 
 export interface HiddenAssetMatchSummaryDTO {
   totalMatches: number;
@@ -2222,6 +2226,7 @@ export interface HiddenAssetProgramDetailDTO {
   isActive: boolean;
   expiresAt: string | null;
   lastVerifiedAt: string | null;
+  beneficiaryScope: HiddenAssetBeneficiaryScope;
   createdAt: string;
   updatedAt: string;
 }
@@ -2283,6 +2288,47 @@ export interface SensitiveFactStatusDTO {
 }
 
 // ============================================================================
+// SAVINGS OUTCOME LEDGER (application/award trail — HSB-018/019/033)
+// ============================================================================
+
+export type SavingsOutcomeStageValue = 'SUBMITTED' | 'APPROVED' | 'DENIED' | 'RECEIVED' | 'WITHDRAWN';
+
+export interface SavingsOutcomeDocumentDTO {
+  id: string;
+  name: string;
+  type: string;
+  mimeType: string;
+  fileSize: number;
+}
+
+export interface HiddenAssetMatchOutcomeDTO {
+  id: string;
+  matchId: string;
+  stage: SavingsOutcomeStageValue;
+  amountReceived: number | null;
+  currency: string;
+  evidenceNote: string | null;
+  denialReason: string | null;
+  recordedBy: string;
+  recordedAt: string;
+  documents: SavingsOutcomeDocumentDTO[];
+}
+
+export interface HomeSavingsOpportunityOutcomeDTO {
+  id: string;
+  opportunityId: string;
+  stage: SavingsOutcomeStageValue;
+  observedMonthlyValue: number | null;
+  observedAnnualValue: number | null;
+  currency: string;
+  evidenceNote: string | null;
+  denialReason: string | null;
+  recordedBy: string;
+  recordedAt: string;
+  documents: SavingsOutcomeDocumentDTO[];
+}
+
+// ============================================================================
 // SAVINGS & BENEFITS — UNIFIED READ VIEW
 // Normalizes PropertyHiddenAssetMatch (benefits) and HomeSavingsOpportunity
 // (recurring-cost) into one shape. Read-only projection; each family's own
@@ -2311,17 +2357,35 @@ export interface SavingsBenefitsUnifiedItemDTO {
   outcomeStage: 'SUBMITTED' | 'APPROVED' | 'DENIED' | 'RECEIVED' | 'WITHDRAWN' | null;
   detailHref: string;
   updatedAt: string;
+  /** Other item IDs sharing this program's exclusion group — never hides real recorded value, only flags it. */
+  mutuallyExclusiveWith: string[];
+}
+
+export interface SavingsBenefitsExclusionConflictDTO {
+  exclusionGroupKey: string;
+  itemIds: string[];
+}
+
+export type SavingsBenefitsRelatedDomain = 'PROPERTY_TAX' | 'COVERAGE' | 'REFINANCE';
+
+export interface SavingsBenefitsRelatedPointerDTO {
+  domain: SavingsBenefitsRelatedDomain;
+  summary: string;
+  detailHref: string;
+  updatedAt: string | null;
 }
 
 export interface SavingsBenefitsUnifiedResponseDTO {
   propertyId: string;
   inProgress: SavingsBenefitsUnifiedItemDTO[];
   realized: SavingsBenefitsUnifiedItemDTO[];
+  relatedOpportunities: SavingsBenefitsRelatedPointerDTO[];
   totals: {
     inProgressCount: number;
     realizedCount: number;
     realizedValueTotal: number;
     realizedValueByFamily: Record<SavingsBenefitsFamily, number>;
+    exclusionConflicts: SavingsBenefitsExclusionConflictDTO[];
   };
 }
 

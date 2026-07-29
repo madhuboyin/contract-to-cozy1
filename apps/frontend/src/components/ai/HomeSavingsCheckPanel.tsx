@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+import { OutcomeRecorder } from '@/components/savings-benefits/OutcomeRecorder';
 import {
   getHomeSavingsCategory,
   getHomeSavingsSummary,
@@ -592,19 +593,33 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
                               {opportunity.status}
                             </span>
                           </div>
+                          <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            {opportunity.offerSourceKind === 'ADDRESS_QUALIFIED' ? 'Address-qualified offer' : 'Benchmark estimate — not a quote'}
+                          </span>
                           {opportunity.detail && (
                             <p className="mt-1 text-sm text-gray-600">{opportunity.detail}</p>
                           )}
 
                           <div className="mt-2 text-xs text-gray-600 space-y-1">
                             <div>
-                              Potential savings:{' '}
+                              Gross savings:{' '}
                               <span className="font-medium text-gray-800">
                                 {money(opportunity.estimatedMonthlySavings)}/mo · {money(opportunity.estimatedAnnualSavings)}/yr
                               </span>
                             </div>
+                            {opportunity.netAnnualSavings != null && (
+                              <div>
+                                Net of ~{money(opportunity.estimatedSwitchingCost)} switching cost (est.):{' '}
+                                <span className="font-medium text-gray-800">{money(opportunity.netAnnualSavings)}/yr</span>
+                              </div>
+                            )}
                             <div className={confidenceTone(opportunity.confidence)}>
                               Confidence: {opportunity.confidence}
+                            </div>
+                            <div className="text-gray-500">
+                              {opportunity.equivalenceState === 'EQUIVALENT'
+                                ? 'Compared at the same service level'
+                                : 'Comparison basis not confirmed equivalent — verify service level before switching'}
                             </div>
                           </div>
 
@@ -635,6 +650,17 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
                               Dismiss
                             </Button>
                           </div>
+
+                          {(opportunity.status === 'APPLIED' || opportunity.status === 'SWITCHED') && (
+                            <div className="mt-3 border-t border-black/10 pt-3">
+                              <OutcomeRecorder
+                                family="RECURRING_COST"
+                                id={opportunity.id}
+                                propertyId={propertyId}
+                                defaultCurrency={opportunity.currency}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })}

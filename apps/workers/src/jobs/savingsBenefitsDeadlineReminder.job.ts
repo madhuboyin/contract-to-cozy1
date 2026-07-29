@@ -112,12 +112,15 @@ export async function savingsBenefitsDeadlineReminderJob(
         actionUrl: savingsBenefitsUrl(match.propertyId),
         entityType: 'PropertyHiddenAssetMatch',
         entityId: match.id,
-        // MATERIAL_DEADLINE / MATERIAL explicitly, not left to
+        // SAVINGS_BENEFITS / MATERIAL explicitly, not left to
         // notificationPreference.service.ts's type-string regex inference —
         // see permitInspectionReminder.job.ts for why that matters (a
         // regex-inferred category can silently downgrade a real deadline to
-        // routine, mutable-cadence chatter).
-        category: 'MATERIAL_DEADLINE',
+        // routine, mutable-cadence chatter). A dedicated category (rather
+        // than the generic MATERIAL_DEADLINE bucket shared with permits and
+        // other deadlines) lets a homeowner mute this specific reminder
+        // without silencing unrelated deadline notifications (HSB-037).
+        category: 'SAVINGS_BENEFITS',
         urgency: 'MATERIAL',
         metadata: {
           propertyId: match.propertyId,

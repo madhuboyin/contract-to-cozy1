@@ -53,6 +53,7 @@ const recordOpportunityOutcomeBodySchema = z.object({
   currency: z.string().trim().length(3).optional(),
   evidenceNote: z.string().trim().min(1).max(2000).nullable().optional(),
   denialReason: z.string().trim().min(1).max(2000).nullable().optional(),
+  documentIds: z.array(z.string().uuid()).max(10).optional(),
 });
 
 router.use(apiRateLimiter);

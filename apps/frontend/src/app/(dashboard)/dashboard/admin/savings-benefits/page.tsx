@@ -220,6 +220,7 @@ function ProgramFormDialog({
   const [sourceUrl, setSourceUrl] = useState(initial?.sourceUrl ?? '');
   const [eligibilityNotes, setEligibilityNotes] = useState(initial?.eligibilityNotes ?? '');
   const [exclusionGroupKey, setExclusionGroupKey] = useState(initial?.exclusionGroupKey ?? '');
+  const [beneficiaryScope, setBeneficiaryScope] = useState<string>(initial?.beneficiaryScope ?? 'PROPERTY');
   const [rules, setRules] = useState<AdminProgramRuleInput[]>(
     initial?.rules?.length ? initial.rules : [emptyRule()],
   );
@@ -236,6 +237,7 @@ function ProgramFormDialog({
     setSourceUrl(initial?.sourceUrl ?? '');
     setEligibilityNotes(initial?.eligibilityNotes ?? '');
     setExclusionGroupKey(initial?.exclusionGroupKey ?? '');
+    setBeneficiaryScope(initial?.beneficiaryScope ?? 'PROPERTY');
     setRules(initial?.rules?.length ? initial.rules : [emptyRule()]);
   }, [open, initial, sources]);
 
@@ -319,6 +321,22 @@ function ProgramFormDialog({
               claim only one. Leave blank if this program doesn&apos;t conflict with any other.
             </p>
           </div>
+          <div>
+            <Label>Who this benefit belongs to</Label>
+            <Select value={beneficiaryScope} onValueChange={setBeneficiaryScope}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PROPERTY">The property (default — re-evaluated per property)</SelectItem>
+                <SelectItem value="HOUSEHOLD">The household / applicant (e.g. veteran status, income)</SelectItem>
+                <SelectItem value="EITHER">Either, depending on how it's claimed</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-slate-500">
+              Prevents a household-level benefit (like an income or veteran-status credit) from being shown as
+              if it must be reapplied for on every property, or a property-level benefit from being conflated
+              with the homeowner personally.
+            </p>
+          </div>
           <div className="space-y-2 rounded-lg border border-slate-200 p-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500">
@@ -371,11 +389,12 @@ function ProgramFormDialog({
                     type="button"
                     variant="ghost"
                     size="sm"
+                    aria-label={`Remove rule ${index + 1}`}
                     className="mb-0.5 shrink-0 text-rose-600 hover:text-rose-700"
                     disabled={rules.length <= 1}
                     onClick={() => removeRule(index)}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </Button>
                 </div>
               </div>
@@ -414,6 +433,7 @@ function ProgramFormDialog({
                 sourceUrl: sourceUrl.trim() || null,
                 eligibilityNotes: eligibilityNotes.trim() || null,
                 exclusionGroupKey: exclusionGroupKey.trim() || null,
+                beneficiaryScope: beneficiaryScope as AdminProgramInput['beneficiaryScope'],
                 rules: rules.map((r, index) => ({
                   attribute: r.attribute.trim(),
                   operator: r.operator,
@@ -625,6 +645,7 @@ export default function SavingsBenefitsAdminPage() {
                     <p className="text-sm font-semibold text-slate-800">{program.name}</p>
                     <p className="text-[11px] text-slate-400">
                       {program.source.name} · {program.category} · {program.regionType}:{program.regionValue} · v{program.version}
+                      {program.beneficiaryScope !== 'PROPERTY' ? ` · scope: ${program.beneficiaryScope.toLowerCase()}` : ''}
                       {program.exclusionGroupKey ? ` · excludes: ${program.exclusionGroupKey}` : ''}
                     </p>
                   </div>

@@ -17,6 +17,9 @@
 import { HomeSavingsOpportunityStatus, Prisma, PropertyHiddenAssetMatchStatus, SavingsOutcomeStage } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { asNumber, round2 } from './homeSavings/helpers';
+import { propertyTaxAppealCaseService } from './propertyTax/propertyTaxAppealCase.service';
+import { detectCoverageGaps } from './coverageGap.service';
+import { logger } from '../lib/logger';
 
 export type SavingsBenefitsFamily = 'BENEFIT' | 'RECURRING_COST';
 export type SavingsBenefitsLifecycle = 'IN_PROGRESS' | 'REALIZED';
@@ -39,17 +42,51 @@ export interface SavingsBenefitsUnifiedItemDTO {
   outcomeStage: SavingsOutcomeStage | null;
   detailHref: string;
   updatedAt: string;
+  // Other realized item IDs sharing this program's exclusionGroupKey. A
+  // non-empty array here is a real red flag — evidence of received value on
+  // two programs that were supposed to be mutually exclusive — never used
+  // to hide or discount the recorded amount, only to surface it.
+  mutuallyExclusiveWith: string[];
+}
+
+export interface SavingsBenefitsExclusionConflictDTO {
+  exclusionGroupKey: string;
+  itemIds: string[];
+}
+
+// Read-only pointers into domains that own their own decisions per the
+// audit's §4.5 canonical responsibility map (Property Tax owns tax
+// decisions, Coverage and Premium Review owns insurance decisions,
+// Mortgage Refinance Radar owns mortgage decisions). This never duplicates
+// their logic or computes anything new — it only surfaces a one-line
+// "there's something here" summary from each domain's own already-persisted
+// state. A domain with nothing current to show is simply omitted, never
+// shown as an empty/zero entry.
+export type SavingsBenefitsRelatedDomain = 'PROPERTY_TAX' | 'COVERAGE' | 'REFINANCE';
+
+export interface SavingsBenefitsRelatedPointerDTO {
+  domain: SavingsBenefitsRelatedDomain;
+  summary: string;
+  detailHref: string;
+  updatedAt: string | null;
 }
 
 export interface SavingsBenefitsUnifiedResponseDTO {
   propertyId: string;
   inProgress: SavingsBenefitsUnifiedItemDTO[];
   realized: SavingsBenefitsUnifiedItemDTO[];
+  relatedOpportunities: SavingsBenefitsRelatedPointerDTO[];
   totals: {
     inProgressCount: number;
     realizedCount: number;
     realizedValueTotal: number;
     realizedValueByFamily: Record<SavingsBenefitsFamily, number>;
+    // Non-empty only when two-or-more realized items share an
+    // exclusionGroupKey — worth a homeowner double-checking, since the
+    // programs were flagged as normally incompatible. The totals above
+    // still include every evidenced RECEIVED amount; this never suppresses
+    // real recorded value, it only flags it for review.
+    exclusionConflicts: SavingsBenefitsExclusionConflictDTO[];
   };
 }
 
@@ -97,7 +134,7 @@ type ReceivedOpportunityOutcomeRow = Prisma.HomeSavingsOpportunityOutcomeGetPayl
   include: { opportunity: true };
 }>;
 
-function mapPursuingMatch(row: PursuingMatchRow, propertyId: string): SavingsBenefitsUnifiedItemDTO {
+function mapPursuingMatch(row: PursuingMatchRow, propertyId: string, mutuallyExclusiveWith: string[] = []): SavingsBenefitsUnifiedItemDTO {
   const program = row.program;
   const latestOutcome = row.outcomes[0] ?? null;
   return {
@@ -117,6 +154,7 @@ function mapPursuingMatch(row: PursuingMatchRow, propertyId: string): SavingsBen
     outcomeStage: latestOutcome?.stage ?? null,
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=benefits&matchId=${row.id}`,
     updatedAt: (latestOutcome?.recordedAt ?? row.lastEvaluatedAt).toISOString(),
+    mutuallyExclusiveWith,
   };
 }
 
@@ -124,6 +162,11 @@ function mapAppliedOpportunity(row: AppliedOpportunityRow, propertyId: string): 
   const latestOutcome = row.outcomes[0] ?? null;
   const annual = asNumber(row.estimatedAnnualSavings);
   const monthly = asNumber(row.estimatedMonthlySavings);
+  const grossValue = annual ?? (monthly != null ? round2(monthly * 12) : null);
+  // Net of the category's assumed switching cost (HSB-023) when available —
+  // a more honest headline than gross savings that ignores switching
+  // friction entirely.
+  const netValue = asNumber(row.netAnnualSavings);
   return {
     id: row.id,
     family: 'RECURRING_COST',
@@ -131,7 +174,7 @@ function mapAppliedOpportunity(row: AppliedOpportunityRow, propertyId: string): 
     title: row.headline,
     category: row.categoryKey,
     explanation: row.detail ?? null,
-    estimatedValue: annual ?? (monthly != null ? round2(monthly * 12) : null),
+    estimatedValue: netValue ?? grossValue,
     estimatedValueBasis: 'RECURRING',
     realizedValue: null,
     currency: row.currency,
@@ -141,10 +184,11 @@ function mapAppliedOpportunity(row: AppliedOpportunityRow, propertyId: string): 
     outcomeStage: latestOutcome?.stage ?? null,
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=recurring&categoryKey=${row.categoryKey}`,
     updatedAt: (latestOutcome?.recordedAt ?? row.updatedAt).toISOString(),
+    mutuallyExclusiveWith: [],
   };
 }
 
-function mapReceivedMatchOutcome(outcome: ReceivedMatchOutcomeRow, propertyId: string): SavingsBenefitsUnifiedItemDTO {
+function mapReceivedMatchOutcome(outcome: ReceivedMatchOutcomeRow, propertyId: string, mutuallyExclusiveWith: string[] = []): SavingsBenefitsUnifiedItemDTO {
   const match = outcome.match;
   const program = match.program;
   return {
@@ -164,6 +208,7 @@ function mapReceivedMatchOutcome(outcome: ReceivedMatchOutcomeRow, propertyId: s
     outcomeStage: outcome.stage,
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=benefits&matchId=${match.id}`,
     updatedAt: outcome.recordedAt.toISOString(),
+    mutuallyExclusiveWith,
   };
 }
 
@@ -178,7 +223,7 @@ function mapReceivedOpportunityOutcome(outcome: ReceivedOpportunityOutcomeRow, p
     title: opportunity.headline,
     category: opportunity.categoryKey,
     explanation: outcome.evidenceNote ?? null,
-    estimatedValue: asNumber(opportunity.estimatedAnnualSavings) ?? null,
+    estimatedValue: asNumber(opportunity.netAnnualSavings) ?? asNumber(opportunity.estimatedAnnualSavings) ?? null,
     estimatedValueBasis: 'RECURRING',
     realizedValue: observedAnnual ?? (observedMonthly != null ? round2(observedMonthly * 12) : null),
     currency: outcome.currency,
@@ -188,6 +233,7 @@ function mapReceivedOpportunityOutcome(outcome: ReceivedOpportunityOutcomeRow, p
     outcomeStage: outcome.stage,
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=recurring&categoryKey=${opportunity.categoryKey}`,
     updatedAt: outcome.recordedAt.toISOString(),
+    mutuallyExclusiveWith: [],
   };
 }
 
@@ -195,11 +241,114 @@ function byUpdatedAtDesc(a: SavingsBenefitsUnifiedItemDTO, b: SavingsBenefitsUni
   return b.updatedAt.localeCompare(a.updatedAt);
 }
 
+/**
+ * Groups a set of (matchId, exclusionGroupKey) pairs and returns, per
+ * matchId, the sibling matchIds sharing a non-null group key. Mirrors
+ * hiddenAssets.service.ts's computeMutualExclusions but operates on
+ * whatever subset of matches (pursuing or received) is being serialized
+ * here, since the two lists are fetched independently.
+ */
+function computeExclusionSiblings(rows: Array<{ id: string; exclusionGroupKey: string | null }>): Map<string, string[]> {
+  const byGroupKey = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!row.exclusionGroupKey) continue;
+    const ids = byGroupKey.get(row.exclusionGroupKey) ?? [];
+    ids.push(row.id);
+    byGroupKey.set(row.exclusionGroupKey, ids);
+  }
+  const result = new Map<string, string[]>();
+  for (const ids of byGroupKey.values()) {
+    if (ids.length < 2) continue;
+    for (const id of ids) {
+      result.set(id, ids.filter((other) => other !== id));
+    }
+  }
+  return result;
+}
+
+const TAX_APPEAL_TERMINAL_STATUSES = new Set(['CLOSED', 'WITHDRAWN']);
+
+function formatCurrency(cents: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(cents / 100);
+  } catch {
+    return `$${Math.round(cents / 100).toLocaleString()}`;
+  }
+}
+
+/**
+ * Cheap, read-only pointers into Property Tax, Coverage and Premium Review,
+ * and Mortgage Refinance Radar — see SavingsBenefitsRelatedPointerDTO's
+ * doc comment. Each domain is queried independently and defensively: a
+ * failure in one must never break this endpoint or hide the other two.
+ */
+async function buildRelatedOpportunities(propertyId: string, userId: string): Promise<SavingsBenefitsRelatedPointerDTO[]> {
+  const pointers: SavingsBenefitsRelatedPointerDTO[] = [];
+
+  await Promise.all([
+    (async () => {
+      try {
+        const cases = await propertyTaxAppealCaseService.list(propertyId, userId);
+        const active = cases
+          .filter((c: any) => !TAX_APPEAL_TERMINAL_STATUSES.has(c.status))
+          .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+        if (!active) return;
+        const groundLabel = String(active.ground ?? '').replace(/_/g, ' ').toLowerCase();
+        const statusLabel = String(active.status ?? '').replace(/_/g, ' ').toLowerCase();
+        pointers.push({
+          domain: 'PROPERTY_TAX',
+          summary: `${groundLabel || 'Property tax'} appeal — ${statusLabel}`,
+          detailHref: `/dashboard/properties/${propertyId}/tools/property-tax`,
+          updatedAt: active.updatedAt ?? null,
+        });
+      } catch (err) {
+        logger.error({ err, propertyId }, '[SavingsBenefitsUnified] Property Tax pointer failed — omitting, not failing the request');
+      }
+    })(),
+    (async () => {
+      try {
+        const gaps = await detectCoverageGaps(propertyId);
+        if (!gaps || gaps.length === 0) return;
+        const largest = [...gaps].sort((a, b) => b.exposureCents - a.exposureCents)[0];
+        pointers.push({
+          domain: 'COVERAGE',
+          summary: `${gaps.length} coverage gap${gaps.length === 1 ? '' : 's'} — largest exposure ${largest.itemName} (${formatCurrency(largest.exposureCents, largest.currency)})`,
+          detailHref: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,
+          updatedAt: null,
+        });
+      } catch (err) {
+        logger.error({ err, propertyId }, '[SavingsBenefitsUnified] Coverage pointer failed — omitting, not failing the request');
+      }
+    })(),
+    (async () => {
+      try {
+        const radar = await prisma.propertyRefinanceRadarState.findUnique({
+          where: { propertyId },
+          include: { currentOpportunity: true },
+        });
+        if (!radar || radar.radarState !== 'OPEN' || !radar.currentOpportunity) return;
+        const opp = radar.currentOpportunity;
+        const monthlySavings = asNumber(opp.monthlySavings) ?? 0;
+        pointers.push({
+          domain: 'REFINANCE',
+          summary: `Refinance window open — ~$${Math.round(monthlySavings)}/mo savings, break-even in ${opp.breakEvenMonths} months`,
+          detailHref: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`,
+          updatedAt: radar.lastEvaluatedAt ? radar.lastEvaluatedAt.toISOString() : null,
+        });
+      } catch (err) {
+        logger.error({ err, propertyId }, '[SavingsBenefitsUnified] Refinance pointer failed — omitting, not failing the request');
+      }
+    })(),
+  ]);
+
+  return pointers;
+}
+
 export class SavingsBenefitsUnifiedService {
   async getUnified(propertyId: string, userId: string): Promise<SavingsBenefitsUnifiedResponseDTO> {
     await assertPropertyForUser(propertyId, userId);
 
-    const [pursuingMatches, appliedOpportunities, receivedMatchOutcomes, receivedOpportunityOutcomes] = await Promise.all([
+    const [pursuingMatches, appliedOpportunities, receivedMatchOutcomes, receivedOpportunityOutcomes, relatedOpportunities] = await Promise.all([
       prisma.propertyHiddenAssetMatch.findMany({
         where: { propertyId, status: PropertyHiddenAssetMatchStatus.PURSUING },
         include: { program: true, outcomes: { orderBy: { recordedAt: 'desc' }, take: 1 } },
@@ -218,6 +367,7 @@ export class SavingsBenefitsUnifiedService {
         include: { opportunity: true },
         orderBy: { recordedAt: 'desc' },
       }),
+      buildRelatedOpportunities(propertyId, userId),
     ]);
 
     // A match/opportunity that already has a RECEIVED outcome belongs in
@@ -226,30 +376,60 @@ export class SavingsBenefitsUnifiedService {
     const receivedMatchIds = new Set(receivedMatchOutcomes.map((o) => o.matchId));
     const receivedOpportunityIds = new Set(receivedOpportunityOutcomes.map((o) => o.opportunityId));
 
+    const pursuingSiblings = computeExclusionSiblings(
+      pursuingMatches
+        .filter((m) => !receivedMatchIds.has(m.id))
+        .map((m) => ({ id: m.id, exclusionGroupKey: m.program.exclusionGroupKey })),
+    );
     const inProgress = [
-      ...pursuingMatches.filter((m) => !receivedMatchIds.has(m.id)).map((m) => mapPursuingMatch(m, propertyId)),
+      ...pursuingMatches
+        .filter((m) => !receivedMatchIds.has(m.id))
+        .map((m) => mapPursuingMatch(m, propertyId, pursuingSiblings.get(m.id) ?? [])),
       ...appliedOpportunities.filter((o) => !receivedOpportunityIds.has(o.id)).map((o) => mapAppliedOpportunity(o, propertyId)),
     ].sort(byUpdatedAtDesc);
 
+    // Only PropertyHiddenAssetMatch programs carry an exclusionGroupKey —
+    // HomeSavingsOpportunity has no equivalent concept, so this only ever
+    // groups within the benefits family.
+    const realizedSiblings = computeExclusionSiblings(
+      receivedMatchOutcomes.map((o) => ({ id: o.matchId, exclusionGroupKey: o.match.program.exclusionGroupKey })),
+    );
     const realized = [
-      ...receivedMatchOutcomes.map((o) => mapReceivedMatchOutcome(o, propertyId)),
+      ...receivedMatchOutcomes.map((o) => mapReceivedMatchOutcome(o, propertyId, realizedSiblings.get(o.matchId) ?? [])),
       ...receivedOpportunityOutcomes.map((o) => mapReceivedOpportunityOutcome(o, propertyId)),
     ].sort(byUpdatedAtDesc);
 
+    // Every evidenced RECEIVED amount is counted — exclusionGroupKey is a
+    // prospective "don't pursue both" signal, not grounds to discard real,
+    // evidence-backed money a homeowner actually received. Conflicts are
+    // surfaced for review instead of silently dropped or silently summed.
     const realizedValueByFamily: Record<SavingsBenefitsFamily, number> = { BENEFIT: 0, RECURRING_COST: 0 };
     for (const item of realized) {
       realizedValueByFamily[item.family] = round2(realizedValueByFamily[item.family] + (item.realizedValue ?? 0));
+    }
+
+    const exclusionConflicts: SavingsBenefitsExclusionConflictDTO[] = [];
+    const seenGroupKeys = new Set<string>();
+    for (const outcome of receivedMatchOutcomes) {
+      const groupKey = outcome.match.program.exclusionGroupKey;
+      if (!groupKey || seenGroupKeys.has(groupKey)) continue;
+      const memberIds = realizedSiblings.get(outcome.matchId);
+      if (!memberIds || memberIds.length === 0) continue;
+      seenGroupKeys.add(groupKey);
+      exclusionConflicts.push({ exclusionGroupKey: groupKey, itemIds: [outcome.matchId, ...memberIds] });
     }
 
     return {
       propertyId,
       inProgress,
       realized,
+      relatedOpportunities,
       totals: {
         inProgressCount: inProgress.length,
         realizedCount: realized.length,
         realizedValueTotal: round2(realizedValueByFamily.BENEFIT + realizedValueByFamily.RECURRING_COST),
         realizedValueByFamily,
+        exclusionConflicts,
       },
     };
   }

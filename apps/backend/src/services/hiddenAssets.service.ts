@@ -75,7 +75,7 @@ function buildConfidenceCalibrationSummary(row: MatchWithProgram): HiddenAssetCo
  * per matchId, the sibling matchIds sharing that group (never itself). A
  * null/empty exclusionGroupKey never groups with anything.
  */
-function computeMutualExclusions(rows: MatchWithProgram[]): Map<string, string[]> {
+export function computeMutualExclusions(rows: MatchWithProgram[]): Map<string, string[]> {
   const byGroupKey = new Map<string, string[]>();
   for (const row of rows) {
     const key = row.program.exclusionGroupKey;
@@ -131,6 +131,7 @@ function serializeMatch(row: MatchWithProgram, mutuallyExclusiveWith: string[] =
     propertyContextVersion: row.propertyContextVersion ?? null,
     programVersionAtMatch: row.programVersionAtMatch ?? null,
     mutuallyExclusiveWith,
+    beneficiaryScope: p.beneficiaryScope,
   };
 }
 
@@ -158,6 +159,7 @@ function serializeProgramDetail(
     fundingStatus: p.fundingStatus,
     applicationWindowOpensAt: p.applicationWindowOpensAt ? p.applicationWindowOpensAt.toISOString() : null,
     applicationWindowClosesAt: p.applicationWindowClosesAt ? p.applicationWindowClosesAt.toISOString() : null,
+    beneficiaryScope: p.beneficiaryScope,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   };

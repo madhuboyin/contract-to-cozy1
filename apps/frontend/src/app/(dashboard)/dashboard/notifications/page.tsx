@@ -44,6 +44,7 @@ const PREFERENCE_CATEGORIES = [
   { value: 'PROJECT', label: 'Projects' },
   { value: 'RECALL', label: 'Recalls' },
   { value: 'REFINANCE', label: 'Mortgage refinance' },
+  { value: 'SAVINGS_BENEFITS', label: 'Savings & benefits' },
   { value: 'GENERAL', label: 'General updates' },
 ] as const;
 

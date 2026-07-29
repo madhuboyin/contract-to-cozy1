@@ -60,6 +60,8 @@ export interface RecordOutcomeInput {
   stage: SavingsOutcomeStage;
   evidenceNote?: string | null;
   denialReason?: string | null;
+  /** Existing Document Vault rows to attach as evidence for this ledger entry (HSB-033). */
+  documentIds?: string[];
 }
 
 function assertStageInputIsComplete(input: RecordOutcomeInput, hasValue: boolean): void {
@@ -70,16 +72,40 @@ function assertStageInputIsComplete(input: RecordOutcomeInput, hasValue: boolean
         'A RECEIVED outcome must include the amount or value actually received.'
       );
     }
-    if (!input.evidenceNote?.trim()) {
+    // A text note or an attached document (award letter, confirmation
+    // screenshot) both count as "stated evidence" — one is not required to
+    // duplicate the other.
+    const hasNote = !!input.evidenceNote?.trim();
+    const hasDocuments = (input.documentIds?.length ?? 0) > 0;
+    if (!hasNote && !hasDocuments) {
       throw new SavingsOutcomeGovernanceError(
         'MISSING_EVIDENCE',
-        'A RECEIVED outcome must state what evidence backs it.'
+        'A RECEIVED outcome must state what evidence backs it, or attach a supporting document.'
       );
     }
   }
   if (input.stage === 'DENIED' && !input.denialReason?.trim()) {
     throw new SavingsOutcomeGovernanceError('MISSING_DENIAL_REASON', 'A DENIED outcome must include a reason.');
   }
+}
+
+/**
+ * Verifies every documentId belongs to this homeowner (via Document.uploadedBy,
+ * which stores homeownerProfile.id — see documentAuth.middleware.ts for the
+ * same pattern) before linking any of them as outcome evidence.
+ */
+async function assertDocumentsOwnedByUser(documentIds: string[] | undefined, userId: string): Promise<string[]> {
+  if (!documentIds || documentIds.length === 0) return [];
+  const homeownerProfile = await prisma.homeownerProfile.findUnique({ where: { userId }, select: { id: true } });
+  if (!homeownerProfile) throw new Error('Homeowner profile not found.');
+  const owned = await prisma.document.findMany({
+    where: { id: { in: documentIds }, uploadedBy: homeownerProfile.id },
+    select: { id: true },
+  });
+  if (owned.length !== documentIds.length) {
+    throw new SavingsOutcomeGovernanceError('DOCUMENT_NOT_FOUND', 'One or more attached documents were not found.');
+  }
+  return owned.map((d) => d.id);
 }
 
 // ============================================================================
@@ -106,6 +132,7 @@ export async function recordHiddenAssetMatchOutcome(
 ) {
   const match = await assertMatchForUser(matchId, userId);
   assertStageInputIsComplete(input, input.amountReceived != null);
+  const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId);
 
   const latest = await prisma.hiddenAssetMatchOutcome.findFirst({
     where: { matchId },
@@ -130,6 +157,12 @@ export async function recordHiddenAssetMatchOutcome(
         recordedBy: userId,
       },
     });
+    if (ownedDocumentIds.length > 0) {
+      await tx.document.updateMany({
+        where: { id: { in: ownedDocumentIds } },
+        data: { hiddenAssetMatchOutcomeId: created.id },
+      });
+    }
     // Marking PURSUING is a homeowner intent signal, not the outcome trail
     // itself — once a real outcome exists, the match should reflect it too
     // rather than staying frozen at PURSUING.
@@ -150,6 +183,7 @@ export async function getHiddenAssetMatchOutcomes(matchId: string, userId: strin
   return prisma.hiddenAssetMatchOutcome.findMany({
     where: { matchId },
     orderBy: [{ recordedAt: 'asc' }, { createdAt: 'asc' }],
+    include: { documents: { select: { id: true, name: true, type: true, mimeType: true, fileSize: true } } },
   });
 }
 
@@ -181,6 +215,7 @@ export async function recordHomeSavingsOpportunityOutcome(
     input,
     input.observedAnnualValue != null || input.observedMonthlyValue != null
   );
+  const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId);
 
   const latest = await prisma.homeSavingsOpportunityOutcome.findFirst({
     where: { opportunityId },
@@ -205,6 +240,13 @@ export async function recordHomeSavingsOpportunityOutcome(
       recordedBy: userId,
     },
   });
+
+  if (ownedDocumentIds.length > 0) {
+    await prisma.document.updateMany({
+      where: { id: { in: ownedDocumentIds } },
+      data: { homeSavingsOpportunityOutcomeId: outcome.id },
+    });
+  }
 
   if (input.stage === 'RECEIVED' && opportunity.propertyId) {
     const annualValue = input.observedAnnualValue ?? (input.observedMonthlyValue ?? 0) * 12;
@@ -232,5 +274,6 @@ export async function getHomeSavingsOpportunityOutcomes(opportunityId: string, u
   return prisma.homeSavingsOpportunityOutcome.findMany({
     where: { opportunityId },
     orderBy: [{ recordedAt: 'asc' }, { createdAt: 'asc' }],
+    include: { documents: { select: { id: true, name: true, type: true, mimeType: true, fileSize: true } } },
   });
 }

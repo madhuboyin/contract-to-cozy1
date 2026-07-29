@@ -45,6 +45,15 @@ export default function DocumentPickerModal(props: {
     refresh();
   }, [props.open, props.propertyId, refresh]);
 
+  useEffect(() => {
+    if (!props.open) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') props.onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [props.open, props.onClose]);
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return docs;

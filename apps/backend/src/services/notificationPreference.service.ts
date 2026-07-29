@@ -59,8 +59,10 @@ export function notificationPreferenceCategories(
   category: NotificationCategory,
 ): NotificationCategory[] {
   // Financial opportunities require category-specific consent. A broad
-  // "ALL routine email" preference must never opt someone into refinance.
-  return category === 'REFINANCE' ? ['REFINANCE'] : [category, 'ALL'];
+  // "ALL routine email" preference must never opt someone into refinance or
+  // savings-and-benefits reminders (HSB-037) — those need their own,
+  // independently mutable toggle so muting one never silences the other.
+  return category === 'REFINANCE' || category === 'SAVINGS_BENEFITS' ? [category] : [category, 'ALL'];
 }
 
 function isQuietNow(preference: { quietStart: string | null; quietEnd: string | null; timezone: string }, now: Date) {

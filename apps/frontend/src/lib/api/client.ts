@@ -4220,6 +4220,61 @@ class APIClient {
     return res.data?.fact ?? null;
   }
 
+  async listHiddenAssetMatchOutcomes(
+    matchId: string
+  ): Promise<import('@/types').HiddenAssetMatchOutcomeDTO[]> {
+    const res = await this.get<import('@/types').HiddenAssetMatchOutcomeDTO[]>(
+      `/api/property-hidden-asset-matches/${matchId}/outcome`
+    );
+    return res.data ?? [];
+  }
+
+  async recordHiddenAssetMatchOutcome(
+    matchId: string,
+    input: {
+      stage: import('@/types').SavingsOutcomeStageValue;
+      amountReceived?: number | null;
+      currency?: string;
+      evidenceNote?: string | null;
+      denialReason?: string | null;
+      documentIds?: string[];
+    }
+  ): Promise<import('@/types').HiddenAssetMatchOutcomeDTO | null> {
+    const res = await this.post<import('@/types').HiddenAssetMatchOutcomeDTO>(
+      `/api/property-hidden-asset-matches/${matchId}/outcome`,
+      input
+    );
+    return res.data ?? null;
+  }
+
+  async listHomeSavingsOpportunityOutcomes(
+    opportunityId: string
+  ): Promise<import('@/types').HomeSavingsOpportunityOutcomeDTO[]> {
+    const res = await this.get<import('@/types').HomeSavingsOpportunityOutcomeDTO[]>(
+      `/api/home-savings/opportunities/${opportunityId}/outcome`
+    );
+    return res.data ?? [];
+  }
+
+  async recordHomeSavingsOpportunityOutcome(
+    opportunityId: string,
+    input: {
+      stage: import('@/types').SavingsOutcomeStageValue;
+      observedMonthlyValue?: number | null;
+      observedAnnualValue?: number | null;
+      currency?: string;
+      evidenceNote?: string | null;
+      denialReason?: string | null;
+      documentIds?: string[];
+    }
+  ): Promise<import('@/types').HomeSavingsOpportunityOutcomeDTO | null> {
+    const res = await this.post<import('@/types').HomeSavingsOpportunityOutcomeDTO>(
+      `/api/home-savings/opportunities/${opportunityId}/outcome`,
+      input
+    );
+    return res.data ?? null;
+  }
+
   async deleteHiddenAssetSensitiveFact(
     matchId: string,
     factKey: import('@/types').HiddenAssetSensitiveFactKey

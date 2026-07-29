@@ -45,6 +45,44 @@ function useSavingsBenefitsUnified(propertyId: string) {
   });
 }
 
+const DOMAIN_LABEL: Record<string, string> = {
+  PROPERTY_TAX: 'Property tax',
+  COVERAGE: 'Coverage',
+  REFINANCE: 'Refinance',
+};
+
+/**
+ * Read-only pointers into Property Tax, Coverage and Premium Review, and
+ * Mortgage Refinance Radar (§4.5 of the audit) — each domain still owns its
+ * own decisions; this only surfaces that something's there, with a link to
+ * that domain's own tool. Renders nothing when there's nothing to point to.
+ */
+export function RelatedOpportunitiesStrip({ propertyId }: { propertyId: string }) {
+  const query = useSavingsBenefitsUnified(propertyId);
+  const pointers = query.data?.relatedOpportunities ?? [];
+  if (pointers.length === 0) return null;
+
+  return (
+    <div className="mb-4 space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--mobile-text-secondary))]">
+        Also worth a look
+      </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {pointers.map((pointer) => (
+          <Link
+            key={pointer.domain}
+            href={pointer.detailHref}
+            className="block rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2.5 text-xs transition-transform active:scale-[0.99] dark:bg-slate-900/40"
+          >
+            <StatusChip tone="elevated">{DOMAIN_LABEL[pointer.domain] ?? pointer.domain}</StatusChip>
+            <p className="mt-1.5 leading-snug text-[hsl(var(--mobile-text-primary))]">{pointer.summary}</p>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ItemRow({ item }: { item: SavingsBenefitsUnifiedItemDTO }) {
   const valueLabel =
     item.lifecycle === 'REALIZED'
@@ -68,6 +106,9 @@ function ItemRow({ item }: { item: SavingsBenefitsUnifiedItemDTO }) {
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip tone={FAMILY_TONE[item.family]}>{FAMILY_LABEL[item.family]}</StatusChip>
         <StatusChip tone="info">{item.statusLabel}</StatusChip>
+        {item.mutuallyExclusiveWith.length > 0 ? (
+          <StatusChip tone="elevated">Conflicts with {item.mutuallyExclusiveWith.length}</StatusChip>
+        ) : null}
       </div>
       <p className="mt-2 mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">{item.title}</p>
       {item.explanation ? (
@@ -161,6 +202,15 @@ export function RealizedPanel({ propertyId }: { propertyId: string }) {
           <span className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
             {formatMoney(totals.realizedValueTotal, 'USD')}
           </span>
+        </MobileCard>
+      ) : null}
+      {totals && totals.exclusionConflicts.length > 0 ? (
+        <MobileCard variant="compact" className="border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-900/20">
+          <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+            You have realized value recorded on {totals.exclusionConflicts.length === 1 ? 'a pair' : `${totals.exclusionConflicts.length} sets`} of
+            programs normally treated as mutually exclusive. The total above still includes every recorded amount —
+            worth double-checking with each program that both are actually valid together.
+          </p>
         </MobileCard>
       ) : null}
       <div className="space-y-2">

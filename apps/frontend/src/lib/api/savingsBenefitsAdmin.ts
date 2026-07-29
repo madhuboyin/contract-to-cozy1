@@ -80,7 +80,10 @@ export interface AdminProgramListItem {
   rules: AdminProgramRuleInput[];
   exclusionGroupKey: string | null;
   version: number;
+  beneficiaryScope: HiddenAssetBeneficiaryScope;
 }
+
+export type HiddenAssetBeneficiaryScope = 'PROPERTY' | 'HOUSEHOLD' | 'EITHER';
 
 export interface AdminProgramInput {
   sourceId: string;
@@ -102,6 +105,8 @@ export interface AdminProgramInput {
    * a homeowner can realistically claim only one from the group.
    */
   exclusionGroupKey?: string | null;
+  /** Who the benefit belongs to — property or household (HSB-038). Defaults to PROPERTY. */
+  beneficiaryScope?: HiddenAssetBeneficiaryScope;
   rules: AdminProgramRuleInput[];
 }
 

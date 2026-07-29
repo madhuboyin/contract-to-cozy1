@@ -74,6 +74,8 @@ export interface HiddenAssetProgramInput {
    * on matches as mutuallyExclusiveWith (see hiddenAssets.service.ts).
    */
   exclusionGroupKey?: string | null;
+  /** Who the benefit belongs to — property or household (HSB-038). Defaults to PROPERTY. */
+  beneficiaryScope?: Prisma.HiddenAssetProgramCreateInput['beneficiaryScope'];
   rules: HiddenAssetProgramRuleInput[];
 }
 
@@ -224,6 +226,7 @@ export class SavingsBenefitsAdminService {
           applicationWindowOpensAt: input.applicationWindowOpensAt ?? null,
           applicationWindowClosesAt: input.applicationWindowClosesAt ?? null,
           exclusionGroupKey: input.exclusionGroupKey ?? null,
+          beneficiaryScope: input.beneficiaryScope ?? 'PROPERTY',
           // "Saving must not publish it" — new programs always start DRAFT;
           // lifecycle moves only through savingsBenefitsGovernance.service.ts.
           reviewStatus: 'DRAFT',
@@ -287,6 +290,7 @@ export class SavingsBenefitsAdminService {
           applicationWindowOpensAt: input.applicationWindowOpensAt ?? null,
           applicationWindowClosesAt: input.applicationWindowClosesAt ?? null,
           exclusionGroupKey: input.exclusionGroupKey !== undefined ? input.exclusionGroupKey : existing.exclusionGroupKey,
+          beneficiaryScope: input.beneficiaryScope ?? existing.beneficiaryScope,
           version: { increment: 1 },
           // Saving content must not change lifecycle state — reviewStatus,
           // reviewedAt/By, and publishedAt/By are preserved as-is.
