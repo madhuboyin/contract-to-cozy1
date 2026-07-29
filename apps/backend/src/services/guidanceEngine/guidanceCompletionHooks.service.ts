@@ -26,6 +26,7 @@
  */
 
 import { prisma } from '../../lib/prisma';
+import { invalidateStatusForInventoryItem } from '../homeStatusBoard.service';
 
 const REPLACEMENT_VERDICTS = new Set(['REPLACE_NOW', 'REPLACE_SOON']);
 
@@ -133,4 +134,11 @@ export async function runJourneyCompletionHooks(journeyId: string): Promise<void
       },
     });
   });
+
+  // Home Operations Slice 7: Status Board's own condition model is separate
+  // from InventoryItem.condition and doesn't refresh on its own — nudge it
+  // to recompute on the next read rather than staying stale for up to 24h.
+  if (isEvidenceVerified && journey.inventoryItemId) {
+    await invalidateStatusForInventoryItem(journey.propertyId, journey.inventoryItemId);
+  }
 }

@@ -467,6 +467,56 @@ async function loadTwinInstallEvidence(
   return evidence;
 }
 
+/**
+ * Home Operations Slice 7: "distinguish unknown data, monitored condition,
+ * and actionable work" — needsInstallDateForPrediction was previously the
+ * only signal for "unknown," bolted onto the GOOD value; this makes the
+ * three states explicit for API consumers without changing the underlying
+ * HomeItemCondition enum.
+ */
+export function computeDataStatus(
+  needsInstallDateForPrediction: boolean,
+  effectiveCondition: HomeItemCondition,
+): 'UNKNOWN' | 'MONITORED' | 'ACTIONABLE' | null {
+  if (needsInstallDateForPrediction) return 'UNKNOWN';
+  if (effectiveCondition === 'MONITOR') return 'MONITORED';
+  if (effectiveCondition === 'ACTION_NEEDED') return 'ACTIONABLE';
+  return null;
+}
+
+/**
+ * Home Operations Slice 7: "condition refresh after verified outcomes" —
+ * called best-effort from the Maintenance/Guidance/Project completion hooks
+ * that already write InventoryItem.condition on verified outcomes. Resets
+ * computedAt to null rather than recomputing inline (computeStatuses works
+ * over the whole property at once, not a single item) — listBoard's
+ * existing staleness gate then forces a fresh computeStatuses on the next
+ * read instead of waiting up to 24h. Safe to call for an inventory item
+ * with no Status Board row yet (updateMany matches zero rows, no throw).
+ */
+export async function invalidateStatusForInventoryItem(propertyId: string, inventoryItemId: string): Promise<void> {
+  try {
+    const homeItem = await prisma.homeItem.findUnique({
+      where: { inventoryItemId },
+      select: { id: true, propertyId: true },
+    });
+    if (!homeItem || homeItem.propertyId !== propertyId) return;
+    await prisma.homeItemStatus.updateMany({
+      where: { homeItemId: homeItem.id },
+      data: { computedAt: null },
+    });
+  } catch (err) {
+    logSharedDataEvent({
+      event: 'status_board.condition_invalidation_failed',
+      level: 'WARN',
+      propertyId,
+      toolKey: 'STATUS_BOARD',
+      fallbackPath: 'stale-until-next-24h-window',
+      error: err,
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // computeStatuses
 // ---------------------------------------------------------------------------
@@ -823,17 +873,7 @@ export async function listBoard(propertyId: string, query: ListBoardQuery, userI
     // inventory item, if one exists — read-only, never created here.
     const workItem = item.inventoryItemId ? workItemByInventoryItemId.get(item.inventoryItemId) ?? null : null;
 
-    // "Distinguish unknown data, monitored condition, and actionable work" —
-    // needsInstallDateForPrediction was previously the only signal for
-    // "unknown," bolted onto the GOOD value; this makes the three states
-    // explicit for API consumers without changing the underlying enum.
-    const dataStatus: 'UNKNOWN' | 'MONITORED' | 'ACTIONABLE' | null = needsInstallDateForPrediction
-      ? 'UNKNOWN'
-      : effectiveCondition === 'MONITOR'
-        ? 'MONITORED'
-        : effectiveCondition === 'ACTION_NEEDED'
-          ? 'ACTIONABLE'
-          : null;
+    const dataStatus = computeDataStatus(needsInstallDateForPrediction, effectiveCondition);
 
     const deepLinks = buildDeepLinks(
       {

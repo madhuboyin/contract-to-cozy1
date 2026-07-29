@@ -36,6 +36,8 @@ export interface StatusBoardItemDTO {
   needsInstallDateForPrediction: boolean;
   deepLinks: Record<string, string>;
   inventoryItemId: string | null;
+  dataStatus: 'UNKNOWN' | 'MONITORED' | 'ACTIONABLE' | null;
+  workItem: { id: string; state: string; obligationType: string } | null;
 }
 
 export interface StatusBoardSummary {

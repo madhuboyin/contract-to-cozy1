@@ -509,6 +509,19 @@ export default function StatusBoardClient() {
     return reason.detail;
   }
 
+  // Home Operations Slice 7: "exact fact correction destinations" — the
+  // backend already builds deepLinks.viewItem; these reason codes previously
+  // had no link attached to it at all.
+  const CORRECTABLE_REASON_CODES = new Set([
+    "MISSING_INSTALL_DATE",
+    "HOME_RECORD_CONFLICT",
+    "INSTALL_DATE_FROM_HOME_RECORD",
+  ]);
+  function getReasonCorrectionHref(item: StatusBoardItemDTO, reasonCode: string): string | null {
+    if (!CORRECTABLE_REASON_CODES.has(reasonCode)) return null;
+    return item.deepLinks.viewItem ?? null;
+  }
+
   const summary = data?.summary;
   const signalSummary = data?.signalSummary;
   const items = data?.items ?? [];
@@ -829,7 +842,7 @@ export default function StatusBoardClient() {
                 </Link>
               ) : canShowMaintenance ? (
                 <Link
-                  href={buildGuidanceOverviewHref(item, 'Maintenance follow-up')}
+                  href={item.deepLinks.workItem ?? item.deepLinks.maintenance}
                   onClick={(event) => {
                     event.stopPropagation();
                     recordOperationalGuidanceProgress(item, "maintenance");
@@ -979,6 +992,14 @@ export default function StatusBoardClient() {
                             <Clock className="h-3.5 w-3.5 text-amber-500" />
                           )}
                           {getReasonDisplayText(item, r)}
+                          {getReasonCorrectionHref(item, r.code) && (
+                            <Link
+                              href={getReasonCorrectionHref(item, r.code) as string}
+                              className="ml-1 font-semibold text-sky-600 underline underline-offset-2 hover:text-sky-700 dark:text-sky-400"
+                            >
+                              Fix
+                            </Link>
+                          )}
                           {r.code === "ALL_CLEAR" && (
                             <span className="ml-1 inline-flex items-center gap-1">
                               <span className="h-1.5 w-14 overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/40">
@@ -1068,7 +1089,7 @@ export default function StatusBoardClient() {
                   ) : null}
                   {canShowMaintenance ? (
                     <Link
-                      href={buildGuidanceOverviewHref(item, 'Maintenance follow-up')}
+                      href={item.deepLinks.workItem ?? item.deepLinks.maintenance}
                       onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
                     >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
@@ -1285,7 +1306,7 @@ export default function StatusBoardClient() {
                 </Button>
               ) : canShowMaintenance ? (
                 <Link
-                  href={buildGuidanceOverviewHref(item, 'Maintenance follow-up')}
+                  href={item.deepLinks.workItem ?? item.deepLinks.maintenance}
                   onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
                 >
                   <Button className="w-full bg-teal-600 hover:bg-teal-700">Open Maintenance</Button>
@@ -1312,7 +1333,7 @@ export default function StatusBoardClient() {
                 ) : null}
                 {canShowMaintenance ? (
                   <Link
-                    href={buildGuidanceOverviewHref(item, 'Maintenance follow-up')}
+                    href={item.deepLinks.workItem ?? item.deepLinks.maintenance}
                     onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
                   >
                     <Button size="sm" variant="outline">Maintenance</Button>
