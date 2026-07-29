@@ -6,10 +6,12 @@ import {
   ProjectChangeOrderStatus,
   ProjectIssueStatus,
   ProjectIssueSeverity,
+  ProjectIssueCategory,
   ProjectPaymentTriggerType,
   InventoryItemCategory,
   ProductAnalyticsEventType,
   ServiceCategory,
+  PropertyMaintenanceTask,
 } from '@prisma/client';
 import {
   emitServiceQuoteDecisionAnalytics,
@@ -24,6 +26,9 @@ import JobQueueService from './JobQueue.service';
 import { resolveWorkKey } from '../modules/homeOperations/domain/workKey';
 import { findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
+import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
+import { maintenanceTaskSourceAdapter } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
+import { resolveInspectionFindingWorkKey, propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import type { OperationalWorkItemState } from '@prisma/client';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
@@ -121,6 +126,104 @@ export async function syncJourneyWorkItemForProjectEvent(
     }
   } catch (err) {
     logger.warn({ err, propertyId, guidanceJourneyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
+  }
+}
+
+// Home Operations Slice 6: no closer ProjectIssueCategory exists for the
+// validator's PERMIT/FUNCTIONAL exception types — both fall back to OTHER,
+// a documented imprecision, same class as prior slices' accepted mapping
+// gaps (e.g. Slice 3's deletion disposition, Slice 5's resolutionMethod).
+const EXCEPTION_TYPE_TO_ISSUE_CATEGORY: Record<string, ProjectIssueCategory> = {
+  QUALITY: 'QUALITY_CONCERN',
+  SAFETY: 'SAFETY',
+  SCOPE: 'SCOPE_DISPUTE',
+  PERMIT: 'OTHER',
+  FUNCTIONAL: 'OTHER',
+  OTHER: 'OTHER',
+};
+
+/**
+ * Preserves a confirmCompletion unresolvedException as a real, trackable
+ * ProjectIssue rather than only free text folded into a HomeEvent summary.
+ * By the time this runs, a VERIFIED_SUCCESS completion can only carry
+ * non-blocking exceptions (ConfirmCompletionSchema's superRefine rejects
+ * blocksClosure:true on VERIFIED_SUCCESS) — a non-VERIFIED_SUCCESS closure
+ * may still carry blocking ones, hence the severity mapping below.
+ */
+export function mapUnresolvedExceptionToProjectIssue(
+  projectId: string,
+  exception: { type: string; summary: string; blocksClosure: boolean },
+): Prisma.ProjectIssueCreateManyInput {
+  const severity: ProjectIssueSeverity = exception.blocksClosure ? 'BLOCKING' : 'MINOR';
+  return {
+    projectId,
+    title: exception.summary.length > 120 ? `${exception.summary.slice(0, 117)}...` : exception.summary,
+    description: exception.summary,
+    severity,
+    category: EXCEPTION_TYPE_TO_ISSUE_CATEGORY[exception.type] ?? 'OTHER',
+    status: 'OPEN' as ProjectIssueStatus,
+    blocksPayment: severity === 'BLOCKING',
+  };
+}
+
+/**
+ * Home Operations Slice 6: completes Slice 5's deliberately-deferred
+ * PROJECT-policy path — when a Project is created referencing an Inspection
+ * Finding (projectData.sourceEntityType/'sourceEntityId, an already-existing
+ * generic passthrough), hand the finding's own work item off to the project
+ * exactly like createProject already does for a linked guidance journey.
+ * Best-effort: never blocks project creation.
+ */
+export async function syncFindingWorkItemForProjectHandoff(
+  propertyId: string,
+  sourceEntityType: string | null | undefined,
+  sourceEntityId: string | null | undefined,
+  projectId: string,
+): Promise<void> {
+  if (sourceEntityType !== 'INSPECTION_FINDING' || !sourceEntityId) return;
+  try {
+    const workKey = resolveInspectionFindingWorkKey(sourceEntityId, propertyId);
+    const workItem = await findWorkItemByWorkKey(propertyId, workKey);
+    if (!workItem) return;
+    if (['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE'].includes(workItem.state)) {
+      await transitionWorkItem({
+        workItemId: workItem.id,
+        to: 'IN_PROJECT',
+        actorType: 'SYSTEM',
+        idempotencyKey: `finding-project-handoff:${workItem.id}:${projectId}`,
+      });
+    }
+    await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId });
+  } catch (err) {
+    logger.warn({ err, propertyId, sourceEntityId, projectId }, 'Home Operations work item sync failed; project creation proceeds regardless');
+  }
+}
+
+/**
+ * Home Operations Slice 6: confirmCompletion's future-care tasks are
+ * created via a raw tx.propertyMaintenanceTask.upsert (see confirmCompletion
+ * below), bypassing PropertyMaintenanceTaskService entirely — so unlike
+ * every other task creation path, they never get an OperationalWorkItem via
+ * Slice 3's syncTaskWorkItem. Called post-transaction, per task, to close
+ * that gap. Each future-care task is its own new obligation (a distinct
+ * maintenance-task-${id} workKey) — this does not touch or reopen whatever
+ * work item the just-completed project or its journey already carries.
+ */
+export async function syncFutureCareTaskWorkItem(propertyId: string, task: PropertyMaintenanceTask): Promise<void> {
+  try {
+    const proposal = maintenanceTaskSourceAdapter.propose(task, propertyId);
+    if (!proposal) return;
+    const workItem = await resolveAndUpsertWorkItem(proposal);
+    if (workItem.state === 'CANDIDATE') {
+      await transitionWorkItem({
+        workItemId: workItem.id,
+        to: 'ACCEPTED',
+        actorType: 'SYSTEM',
+        idempotencyKey: `future-care-task-accepted:${workItem.id}`,
+      });
+    }
+  } catch (err) {
+    logger.warn({ err, propertyId, taskId: task.id }, 'Home Operations work item sync failed; future-care task creation proceeds regardless');
   }
 }
 
@@ -580,6 +683,7 @@ export async function createProject(propertyId: string, data: any) {
   });
 
   await syncJourneyWorkItemForProjectEvent(propertyId, project.guidanceJourneyId, project.id, 'HANDOFF', null);
+  await syncFindingWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id);
 
   return getProjectDetail(project.id, propertyId);
 }
@@ -599,6 +703,20 @@ export async function getProjectDetail(projectId: string, propertyId: string) {
     throw new APIError('Project not found', 404, 'NOT_FOUND');
   }
   return project;
+}
+
+/**
+ * Home Operations Slice 6: the reconciliation ledger deliverable's data
+ * layer — ProjectWriteBack is already the append-only audit ledger
+ * confirmCompletion writes to on every write-back; nothing previously read
+ * it back out.
+ */
+export async function listProjectWriteBacks(projectId: string, propertyId: string) {
+  await assertProject(projectId, propertyId);
+  return prisma.projectWriteBack.findMany({
+    where: { projectId },
+    orderBy: { appliedAt: 'asc' },
+  });
 }
 
 export async function updateProject(projectId: string, propertyId: string, data: any) {
@@ -1521,6 +1639,14 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       },
     });
 
+    // Home Operations Slice 6: preserve unresolved exceptions as real,
+    // trackable ProjectIssue rows instead of only free text on the HomeEvent.
+    if (data.unresolvedExceptions.length > 0) {
+      await tx.projectIssue.createMany({
+        data: data.unresolvedExceptions.map((exception: any) => mapUnresolvedExceptionToProjectIssue(projectId, exception)),
+      });
+    }
+
     const proofDocuments = [...data.proofDocuments];
     if (data.warrantyDocumentKey && !proofDocuments.some((proof: any) => proof.proofKey === 'warranty')) {
       proofDocuments.push({ proofKey: 'warranty', type: 'OTHER', name: 'Project warranty', fileUrl: data.warrantyDocumentKey, fileSize: 0, mimeType: 'application/octet-stream', kind: 'PDF' });
@@ -1806,6 +1932,15 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
   }
   if (verifiedSuccess) {
     await syncJourneyWorkItemForProjectEvent(propertyId, result.project.guidanceJourneyId, projectId, 'VERIFIED', userId);
+    await propagateFindingResolutionFromExecution('PROJECT', projectId);
+  }
+  if (result.futureCareTaskIds?.length) {
+    const futureCareTasks = await prisma.propertyMaintenanceTask.findMany({
+      where: { id: { in: result.futureCareTaskIds } },
+    });
+    for (const task of futureCareTasks) {
+      await syncFutureCareTaskWorkItem(propertyId, task);
+    }
   }
   return result;
 }

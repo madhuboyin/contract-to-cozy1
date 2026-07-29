@@ -8,6 +8,7 @@ import {
   listProjects,
   createProject,
   getProject,
+  getReconciliationLedger,
   updateProject,
   cancelProject,
   getMilestoneTemplates,
@@ -87,6 +88,7 @@ router.get(
   getProviderExecutionReadiness,
 );
 router.get('/properties/:propertyId/projects/:projectId', propertyAuthMiddleware, getProject);
+router.get('/properties/:propertyId/projects/:projectId/reconciliation-ledger', propertyAuthMiddleware, getReconciliationLedger);
 router.patch(
   '/properties/:propertyId/projects/:projectId',
   propertyAuthMiddleware,

@@ -150,6 +150,13 @@ export async function getProject(req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 }
 
+export async function getReconciliationLedger(req: Request, res: Response, next: NextFunction) {
+  try {
+    const writeBacks = await svc.listProjectWriteBacks(req.params.projectId, req.params.propertyId);
+    res.json({ success: true, data: { writeBacks } });
+  } catch (err) { next(err); }
+}
+
 export async function updateProject(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.updateProject(req.params.projectId, req.params.propertyId, req.body);
