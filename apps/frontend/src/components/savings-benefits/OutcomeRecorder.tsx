@@ -9,7 +9,7 @@
 // and attach real Document Vault evidence, rather than just displaying
 // system-generated status.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
@@ -103,6 +103,7 @@ export function OutcomeRecorder({
   const [checklistDocumentTarget, setChecklistDocumentTarget] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const outcomeIdempotencyKey = useRef<string | null>(null);
 
   const outcomesQuery = useQuery<OutcomeDTO[]>({
     queryKey: ['savings-outcome', family, id],
@@ -147,8 +148,11 @@ export function OutcomeRecorder({
   const submitMutation = useMutation({
     mutationFn: (): Promise<OutcomeDTO | null> => {
       const documentIds = documents.map((d) => d.id);
+      const idempotencyKey = outcomeIdempotencyKey.current ?? crypto.randomUUID();
+      outcomeIdempotencyKey.current = idempotencyKey;
       if (family === 'BENEFIT') {
         return api.recordHiddenAssetMatchOutcome(id, {
+          idempotencyKey,
           stage,
           amountReceived: stage === 'RECEIVED' && amount ? Number(amount) : undefined,
           currency: defaultCurrency,
@@ -162,6 +166,7 @@ export function OutcomeRecorder({
         });
       }
       return api.recordHomeSavingsOpportunityOutcome(id, {
+        idempotencyKey,
         stage,
         observedAnnualValue: stage === 'RECEIVED' && amount ? Number(amount) : undefined,
         currency: defaultCurrency,
@@ -183,6 +188,7 @@ export function OutcomeRecorder({
       });
     },
     onSuccess: () => {
+      outcomeIdempotencyKey.current = null;
       setAmount('');
       setEvidenceNote('');
       setDenialReason('');

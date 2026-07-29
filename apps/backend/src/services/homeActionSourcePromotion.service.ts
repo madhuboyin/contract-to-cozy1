@@ -31,7 +31,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1674,12 +1674,131 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
   const now = new Date();
   const deadlineWindow = new Date(now.getTime() + SAVINGS_BENEFITS_DEADLINE_WINDOW_MS);
 
+  const startedActions = db.savingsBenefitAction
+    ? await db.savingsBenefitAction.findMany({
+        where: { propertyId, state: 'STARTED' },
+        orderBy: [{ followUpAt: 'asc' }, { updatedAt: 'desc' }],
+        take: 10,
+        include: {
+          hiddenAssetMatch: {
+            include: {
+              program: {
+                select: {
+                  name: true,
+                  regionValue: true,
+                  sourceLabel: true,
+                  sourceUrl: true,
+                  lastVerifiedAt: true,
+                  applicationWindowClosesAt: true,
+                },
+              },
+            },
+          },
+          homeSavingsOpportunity: {
+            select: {
+              headline: true,
+              detail: true,
+              categoryKey: true,
+              generatedAt: true,
+            },
+          },
+        },
+      })
+    : [];
+
+  const resumableActions = startedActions.map((action) => {
+    const match = action.hiddenAssetMatch;
+    const opportunity = action.homeSavingsOpportunity;
+    const title = match?.program.name ?? opportunity?.headline ?? 'Savings & Benefits action';
+    const dueAt = action.followUpAt ?? match?.program.applicationWindowClosesAt ?? null;
+    const dueNow = Boolean(dueAt && dueAt.getTime() <= deadlineWindow.getTime());
+    const observedAt = action.updatedAt.toISOString();
+    const actionKind = action.actionType.toLowerCase().replace(/_/g, ' ');
+    const checklist = Array.isArray(action.checklistJson) ? action.checklistJson : [];
+
+    return adaptHomeActionSource('SAVINGS_BENEFITS', {
+      id: `savings-benefit-action:${action.id}`,
+      propertyId,
+      lineageId: `savings-benefit-action:${action.id}`,
+      sourceEntityId: action.id,
+      sourceVersion: `${action.state}:${observedAt}`,
+      state: 'IN_PROGRESS',
+      priority: dueNow ? 'NOW' : 'SOON',
+      signal: dueNow
+        ? `Your "${title}" follow-up is due now.`
+        : `You have an unfinished "${title}" action.`,
+      whyItMatters:
+        'This action was already started. Resume it to preserve your checklist, evidence, and recorded decision history.',
+      recommendedAction: `Resume the ${actionKind} workflow`,
+      expectedOutcome: 'A completed or explicitly closed Savings & Benefits action with a durable outcome.',
+      timing: {
+        dueAt: dueAt?.toISOString() ?? null,
+        windowStart: action.startedAt.toISOString(),
+        windowEnd: match?.program.applicationWindowClosesAt?.toISOString() ?? null,
+        rationale: 'Started Savings & Benefits actions remain on Home until completed or cancelled.',
+      },
+      evidence: [{
+        id: action.id,
+        type: 'USER_INPUT',
+        label: checklist.length > 0 ? `${checklist.length} checklist item(s) saved` : 'Action started',
+        source: match?.program.sourceLabel ?? match?.program.sourceUrl ?? 'Savings & Benefits workspace',
+        observedAt,
+        freshness: 'CURRENT',
+        confidence: 1,
+      }],
+      assumptions: [{
+        key: 'resume-user-action',
+        label: 'This action is still relevant',
+        value: 'The action remains open because it has not been completed or cancelled.',
+        source: 'USER',
+        editable: true,
+      }],
+      options: [
+        { id: 'resume', label: 'Resume action', summary: 'Continue from the saved checklist and follow-up state.', recommended: true },
+        { id: 'close', label: 'Close action', summary: 'Cancel it or record a terminal outcome if it is no longer relevant.', recommended: false },
+      ],
+      tradeoffs: [{
+        optionId: 'resume',
+        dimension: 'EFFORT',
+        summary: 'May require documents, eligibility confirmation, or follow-up with an external organization.',
+      }],
+      confidence: { score: 1, label: 'HIGH', missing: [] },
+      governance: {
+        ...materialFinancialGovernance('savings-benefits-action-v1'),
+        jurisdictionCheck: match
+          ? {
+              status: match.program.lastVerifiedAt ? 'VERIFIED' : 'UNKNOWN',
+              jurisdiction: match.program.regionValue,
+              checkedAt: match.program.lastVerifiedAt?.toISOString() ?? null,
+              source: match.program.sourceLabel ?? match.program.sourceUrl ?? 'Reviewed program registry',
+            }
+          : {
+              status: 'NOT_REQUIRED',
+              jurisdiction: null,
+              checkedAt: null,
+              source: null,
+            },
+      },
+      primaryCta: {
+        kind: 'REVIEW',
+        label: 'Resume action',
+        href: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=in-progress&actionId=${action.id}`,
+      },
+      secondaryCtas: [],
+      feedbackControls: ['SNOOZE', 'DEFER', 'DISMISS', 'NOT_RELEVANT'],
+      relatedJourneyId: null,
+      createdAt: action.startedAt.toISOString(),
+      lastEvaluatedAt: observedAt,
+    });
+  });
+
   const matches = await db.propertyHiddenAssetMatch.findMany({
     where: {
       propertyId,
       status: { in: ['DETECTED', 'VIEWED', 'PURSUING'] },
       confidenceLevel: 'HIGH',
       outcomes: { none: {} },
+      savingsBenefitActions: { none: { state: 'STARTED' } },
       program: {
         isActive: true,
         reviewStatus: 'PUBLISHED',
@@ -1713,7 +1832,7 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
     },
   });
 
-  return matches.filter((match) =>
+  const matchActions = matches.filter((match) =>
     isReviewedProgramCurrent(match.program, match.program.source, now),
   ).map((match) => {
     const program = match.program;
@@ -1802,6 +1921,8 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
       lastEvaluatedAt: match.lastEvaluatedAt.toISOString(),
     });
   });
+
+  return [...resumableActions, ...matchActions];
 }
 
 export async function getPromotedHomeActions(

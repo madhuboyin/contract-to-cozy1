@@ -41,7 +41,6 @@ require.cache[prismaPath] = {
 };
 
 const {
-  canonicalFactsChanged,
   calculateEstimatedPaybackMonths,
   highestSingleAnnualSavings,
 } = require('../../src/services/homeSavings/helpers.ts');
@@ -51,6 +50,9 @@ const {
 const {
   warrantyHomeCategory,
 } = require('../../src/services/homeSavings/categories/warrantyHome.ts');
+const {
+  classifyHomeSavingsResultKind,
+} = require('../../src/services/homeSavings.service.ts');
 
 function decimal(value) {
   return { toNumber: () => value };
@@ -78,28 +80,31 @@ test('aggregate savings uses the highest single net annual opportunity, not an o
   assert.equal(highestSingleAnnualSavings(opportunities), 420);
 });
 
-test('canonicalFactsChanged detects a drifted amount and treats equal Decimals as unchanged', () => {
-  const cached = {
-    providerName: 'Acme',
-    planName: 'HO-3',
-    amount: decimal(1200),
-    startDate: new Date('2024-01-01'),
-    renewalDate: new Date('2025-01-01'),
-    contractEndDate: null,
-  };
+test('readiness and healthy observations are distinguished from savings opportunities', () => {
   assert.equal(
-    canonicalFactsChanged(cached, { ...cached, amount: 1200 }),
-    false,
-    'identical values should not be reported as changed'
+    classifyHomeSavingsResultKind({
+      rationaleJson: { reason: 'missing_current_bill' },
+      estimatedAnnualSavings: null,
+    }),
+    'READINESS',
   );
   assert.equal(
-    canonicalFactsChanged(cached, { ...cached, amount: 1500 }),
-    true,
-    'a different premium should be reported as changed'
+    classifyHomeSavingsResultKind({
+      rationaleJson: { reason: 'within_benchmark' },
+      estimatedAnnualSavings: 0,
+    }),
+    'OBSERVATION',
+  );
+  assert.equal(
+    classifyHomeSavingsResultKind({
+      rationaleJson: { reason: 'above_benchmark' },
+      estimatedAnnualSavings: 240,
+    }),
+    'BENCHMARK_OPPORTUNITY',
   );
 });
 
-test('insuranceHome.ensureAccount refreshes a stale cached premium from the canonical policy', async () => {
+test('insuranceHome.ensureAccount clears cached ownership fields and reads the canonical policy', async () => {
   insurancePolicy = {
     id: 'policy-1',
     carrierName: 'New Carrier',
@@ -129,13 +134,15 @@ test('insuranceHome.ensureAccount refreshes a stale cached premium from the cano
     metadata: {},
   });
 
-  assert.equal(updateCalls.length, 1, 'a drifted premium should trigger exactly one update');
+  assert.equal(updateCalls.length, 1, 'linked canonical facts should be removed from the account row');
   assert.equal(updateCalls[0].where.id, 'account-1');
-  assert.equal(updateCalls[0].data.providerName, 'New Carrier');
+  assert.equal(updateCalls[0].data.providerName, null);
+  assert.equal(updateCalls[0].data.amount, null);
   assert.equal(result.providerName, 'New Carrier');
+  assert.equal(result.amount.toNumber(), 1800);
 });
 
-test('insuranceHome.ensureAccount is a no-op when the canonical policy has not changed', async () => {
+test('insuranceHome.ensureAccount does not retain even unchanged canonical facts', async () => {
   insurancePolicy = {
     id: 'policy-1',
     carrierName: 'Acme',
@@ -165,8 +172,9 @@ test('insuranceHome.ensureAccount is a no-op when the canonical policy has not c
     metadata: {},
   });
 
-  assert.equal(updateCalls.length, 0, 'unchanged canonical facts should not trigger a write');
-  assert.equal(result, existingAccount);
+  assert.equal(updateCalls.length, 1);
+  assert.equal(updateCalls[0].data.providerName, null);
+  assert.equal(result.providerName, 'Acme');
 });
 
 test('insuranceHome.ensureAccount tolerates a deleted canonical policy', async () => {
@@ -194,7 +202,7 @@ test('insuranceHome.ensureAccount tolerates a deleted canonical policy', async (
   assert.equal(result, existingAccount);
 });
 
-test('warrantyHome.ensureAccount refreshes a stale cached cost and expiry from the canonical warranty', async () => {
+test('warrantyHome.ensureAccount clears cached ownership fields and reads the canonical warranty', async () => {
   warranty = {
     id: 'warranty-1',
     providerName: 'New Warranty Co',
@@ -223,7 +231,9 @@ test('warrantyHome.ensureAccount refreshes a stale cached cost and expiry from t
   });
 
   assert.equal(updateCalls.length, 1);
-  assert.equal(updateCalls[0].data.providerName, 'New Warranty Co');
+  assert.equal(updateCalls[0].data.providerName, null);
+  assert.equal(updateCalls[0].data.amount, null);
+  assert.equal(result.providerName, 'New Warranty Co');
   assert.equal(result.renewalDate.getTime(), new Date('2026-02-01').getTime());
 });
 

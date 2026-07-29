@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  DollarSign,
   Heart,
   Home,
   Info,
@@ -27,7 +26,6 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { getDailySnapshot } from '@/lib/api/dailySnapshotApi';
-import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
 import { getRoomInsights, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -44,7 +42,6 @@ import {
   MOBILE_AI_TOOL_CATALOG,
   MOBILE_HOME_TOOL_LINKS,
 } from '@/components/mobile/dashboard/mobileToolCatalog';
-import { MoneyImpactTrackerCard } from '@/components/mobile/dashboard/MoneyImpactTrackerCard';
 import { resolveToolIcon } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import type { LocalUpdate } from '@/types';
@@ -318,16 +315,6 @@ export default function MobileDashboardHome({
     staleTime: 5 * 60 * 1000,
   });
 
-  const savingsQuery = useQuery({
-    queryKey: ['mobile-home-savings-summary', propertyId],
-    queryFn: async () => {
-      if (!propertyId) return null;
-      return getHomeSavingsSummary(propertyId);
-    },
-    enabled: !!propertyId,
-    staleTime: 5 * 60 * 1000,
-  });
-
   const homeEquityQuery = useQuery({
     queryKey: ['mobile-home-equity-summary', propertyId],
     queryFn: async () => {
@@ -361,7 +348,6 @@ export default function MobileDashboardHome({
   const overdueCount = maintenanceStatsQuery.data?.overdue ?? 0;
   const weatherInsight = dailySnapshotQuery.data?.payload?.weatherInsight?.headline;
   const recommendedAction = homeScoreQuery.data?.nextBestAction;
-  const monthlySavings = savingsQuery.data?.potentialMonthlySavings ?? 0;
   const homeEquityDollars = Number(homeEquityQuery.data?.totalEquityWithMaintenanceCents || 0) / 100;
 
   const confidenceLabel = homeScore >= 80 ? 'High confidence' : homeScore >= 60 ? 'Medium confidence' : 'Building';
@@ -459,7 +445,7 @@ export default function MobileDashboardHome({
   const aiToolTiles = [
     {
       title: 'Repair vs Replace',
-      subtitle: monthlySavings > 0 ? `${formatCurrency(monthlySavings)}+ save` : 'Smart fix decisions',
+      subtitle: 'Compare repair and replacement paths',
       icon: React.createElement(resolveToolIcon('ai', 'replace-repair'), { className: 'h-5 w-5' }),
       trailingIcon: React.createElement(resolveToolIcon('ai', 'replace-repair'), { className: 'h-5 w-5' }),
       artworkSrc: aiToolByKey.get('replace-repair')?.artworkSrc,
@@ -521,9 +507,8 @@ export default function MobileDashboardHome({
 
   const timeOfDay = getTimeOfDay();
   const statusText = isStable ? 'Home is stable' : `${urgentActionCount + overdueCount} item${urgentActionCount + overdueCount > 1 ? 's' : ''} need attention`;
-  const savingsText = monthlySavings * 12 > 0 ? `${formatCurrencyCompact(monthlySavings * 12)} savings` : null;
   const priorityText = urgentActionCount > 0 ? `${urgentActionCount} priority` : null;
-  const greetingSubline = [priorityText, savingsText].filter(Boolean).join(' • ');
+  const greetingSubline = priorityText || '';
 
   // ── Primary action ────────────────────────────────────────────────────────
 
@@ -707,7 +692,7 @@ export default function MobileDashboardHome({
                 <span className="text-[11px] text-[hsl(var(--mobile-text-muted))]">Updated just now</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {/* Health */}
                 <Link href={healthScoreHref} className="no-brand-style block">
                   <div className="rounded-2xl border border-slate-100 bg-white p-2.5 text-center">
@@ -717,18 +702,6 @@ export default function MobileDashboardHome({
                     </p>
                     <p className="mb-0 mt-1 text-[11px] text-slate-500">Health</p>
                     <p className="mb-0 text-[11px] text-slate-400">{getScoreLabel(homeScore)}</p>
-                  </div>
-                </Link>
-
-                {/* Savings */}
-                <Link href={buildPropertyAwareHref(propertyId, 'tools/home-savings', 'tool:home-savings')} className="no-brand-style block">
-                  <div className="rounded-2xl border border-slate-100 bg-white p-2.5 text-center">
-                    <DollarSign className="mx-auto mb-1.5 h-4 w-4 text-emerald-400" />
-                    <p className="mb-0 text-[17px] font-bold leading-none text-slate-900">
-                      {formatCurrencyCompact(monthlySavings * 12)}
-                    </p>
-                    <p className="mb-0 mt-1 text-[11px] text-slate-500">Savings</p>
-                    <p className="mb-0 text-[11px] text-slate-400">Opp.</p>
                   </div>
                 </Link>
 
@@ -872,26 +845,16 @@ export default function MobileDashboardHome({
               <CollapsibleRow
                 icon={<Wallet className="h-4 w-4 text-slate-500" />}
                 title="Financial"
-                badge={monthlySavings > 0 ? `${formatCurrencyCompact(monthlySavings * 12)}/yr` : undefined}
               >
                 <div className="space-y-2">
-                  <MetricRow label="Monthly savings" value={formatCurrency(monthlySavings)} />
-                  <MetricRow label="Annual savings" value={formatCurrency(savingsQuery.data?.potentialAnnualSavings)} />
                   <MetricRow label="Risk exposure" value={formatCurrency(riskExposure)} />
                 </div>
                 <Link
-                  href={buildPropertyAwareHref(propertyId, 'tools/home-savings', 'tool:home-savings')}
+                  href={buildPropertyAwareHref(propertyId, 'tools/savings-benefits', 'tool:savings-benefits')}
                   className="no-brand-style mt-2 flex min-h-[44px] items-center justify-center rounded-xl bg-slate-50 text-[13px] font-semibold text-slate-700"
                 >
-                  Open Financial Tools
+                  Review Savings &amp; Benefits
                 </Link>
-                <MoneyImpactTrackerCard
-                  annualExposure={riskExposure}
-                  annualSavings={savingsQuery.data?.potentialAnnualSavings || 0}
-                  monthlySavings={monthlySavings}
-                  weeklyFinancialDelta={snapshotsQuery.data?.scores?.RISK?.deltaFromPreviousWeek ?? null}
-                  financialTrend={(snapshotsQuery.data?.scores?.RISK?.trend || []).map((p) => p.score)}
-                />
               </CollapsibleRow>
 
               {/* AI Tools */}

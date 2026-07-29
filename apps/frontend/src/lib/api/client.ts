@@ -4234,6 +4234,7 @@ class APIClient {
   async recordHiddenAssetMatchOutcome(
     matchId: string,
     input: {
+      idempotencyKey: string;
       stage: import('@/types').SavingsOutcomeStageValue;
       amountReceived?: number | null;
       currency?: string;
@@ -4267,6 +4268,7 @@ class APIClient {
   async recordHomeSavingsOpportunityOutcome(
     opportunityId: string,
     input: {
+      idempotencyKey: string;
       stage: import('@/types').SavingsOutcomeStageValue;
       observedMonthlyValue?: number | null;
       observedAnnualValue?: number | null;

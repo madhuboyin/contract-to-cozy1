@@ -1,4 +1,4 @@
-import { HomeSavingsAccountStatus, HomeSavingsBillingCadence, HomeSavingsConfidence } from '@prisma/client';
+import { HomeSavingsAccountStatus, HomeSavingsBillingCadence, HomeSavingsConfidence, Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import {
   CategoryEnsureAccountParams,
@@ -6,7 +6,7 @@ import {
   CategoryModule,
   CategoryOpportunityDraft,
 } from '../types';
-import { amountToAnnual, amountToMonthly, asNumber, canonicalFactsChanged, daysUntil, round2, toRecord } from '../helpers';
+import { amountToAnnual, amountToMonthly, asNumber, daysUntil, round2, toRecord } from '../helpers';
 
 const DEFAULT_BASELINE_ANNUAL = 720;
 const DEFAULT_RENEWAL_WINDOW_DAYS = 45;
@@ -17,9 +17,6 @@ async function ensureAccount({
   existingAccount,
 }: CategoryEnsureAccountParams) {
   if (existingAccount) {
-    // The account was populated once from the canonical warranty at first
-    // capture — refresh it here so a later cost/expiry edit on the real
-    // warranty isn't silently stale in Home Savings forever.
     if (!existingAccount.warrantyId) {
       return existingAccount;
     }
@@ -29,40 +26,40 @@ async function ensureAccount({
     if (!warranty) {
       return existingAccount;
     }
-    const canonical = {
+    if (
+      existingAccount.providerName !== null
+      || existingAccount.planName !== null
+      || existingAccount.accountNumberMasked !== null
+      || existingAccount.amount !== null
+      || existingAccount.startDate !== null
+      || existingAccount.renewalDate !== null
+      || existingAccount.contractEndDate !== null
+      || existingAccount.planDetailsJson !== null
+    ) {
+      await prisma.homeSavingsAccount.update({
+        where: { id: existingAccount.id },
+        data: {
+          providerName: null,
+          planName: null,
+          accountNumberMasked: null,
+          amount: null,
+          startDate: null,
+          renewalDate: null,
+          contractEndDate: null,
+          planDetailsJson: Prisma.JsonNull,
+        },
+      });
+    }
+    return {
+      ...existingAccount,
       providerName: warranty.providerName,
       planName: warranty.category,
-      amount: asNumber(warranty.cost) ?? null,
+      billingCadence: HomeSavingsBillingCadence.ANNUAL,
+      amount: warranty.cost,
       startDate: warranty.startDate,
       renewalDate: warranty.expiryDate,
       contractEndDate: warranty.expiryDate,
     };
-    if (
-      !canonicalFactsChanged(
-        {
-          providerName: existingAccount.providerName,
-          planName: existingAccount.planName,
-          amount: existingAccount.amount,
-          startDate: existingAccount.startDate,
-          renewalDate: existingAccount.renewalDate,
-          contractEndDate: existingAccount.contractEndDate,
-        },
-        canonical
-      )
-    ) {
-      return existingAccount;
-    }
-    return prisma.homeSavingsAccount.update({
-      where: { id: existingAccount.id },
-      data: {
-        providerName: canonical.providerName,
-        planName: canonical.planName,
-        amount: warranty.cost,
-        startDate: canonical.startDate,
-        renewalDate: canonical.renewalDate,
-        contractEndDate: canonical.contractEndDate,
-      },
-    });
   }
 
   const activeWarranty = await prisma.warranty.findFirst({
@@ -77,23 +74,26 @@ async function ensureAccount({
     return null;
   }
 
-  return prisma.homeSavingsAccount.create({
+  const account = await prisma.homeSavingsAccount.create({
     data: {
       homeownerProfileId,
       propertyId: property.id,
       categoryKey: 'HOME_WARRANTY',
       status: HomeSavingsAccountStatus.ACTIVE,
-      providerName: activeWarranty.providerName,
-      planName: activeWarranty.category,
       billingCadence: HomeSavingsBillingCadence.ANNUAL,
-      amount: activeWarranty.cost,
       currency: 'USD',
-      startDate: activeWarranty.startDate,
-      renewalDate: activeWarranty.expiryDate,
-      contractEndDate: activeWarranty.expiryDate,
       warrantyId: activeWarranty.id,
     },
   });
+  return {
+    ...account,
+    providerName: activeWarranty.providerName,
+    planName: activeWarranty.category,
+    amount: activeWarranty.cost,
+    startDate: activeWarranty.startDate,
+    renewalDate: activeWarranty.expiryDate,
+    contractEndDate: activeWarranty.expiryDate,
+  };
 }
 
 async function generateOpportunities({

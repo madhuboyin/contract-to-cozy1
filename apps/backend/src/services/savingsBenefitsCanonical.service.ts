@@ -7,6 +7,7 @@ import {
 import { prisma } from '../lib/prisma';
 import { HiddenAssetService } from './hiddenAssets.service';
 import { HomeSavingsService } from './homeSavings.service';
+import { isReviewedProgramCurrent } from './hiddenAssets/sourceFreshness';
 import {
   RecordHiddenAssetMatchOutcomeInput,
   RecordHomeSavingsOpportunityOutcomeInput,
@@ -53,7 +54,13 @@ export async function getCanonicalOpportunityDetail(
   if (benefit) return { family: 'BENEFIT' as const, opportunity: benefit };
 
   const recurring = await prisma.homeSavingsOpportunity.findFirst({
-    where: { id: opportunityId, propertyId },
+    where: {
+      id: opportunityId,
+      propertyId,
+      resultKind: {
+        in: ['BENCHMARK_OPPORTUNITY', 'ADDRESS_QUALIFIED_OPPORTUNITY'],
+      },
+    },
     include: {
       account: true,
       outcomes: {
@@ -263,26 +270,6 @@ export async function createCanonicalAction(
     assertPartnerHandoffGovernance(input);
   }
 
-  if (input.family === 'BENEFIT') {
-    const status =
-      input.actionType === 'DISMISS'
-        ? PropertyHiddenAssetMatchStatus.DISMISSED
-        : input.actionType === 'SAVE' || input.actionType === 'OFFICIAL_SOURCE_OPENED'
-          ? PropertyHiddenAssetMatchStatus.VIEWED
-          : PropertyHiddenAssetMatchStatus.PURSUING;
-    await hiddenAssets.updateMatchStatus(opportunityId, { status }, userId);
-  } else {
-    const status =
-      input.actionType === 'DISMISS'
-        ? HomeSavingsOpportunityStatus.DISMISSED
-        : input.actionType === 'SAVE' || input.actionType === 'FOLLOW_UP_SCHEDULED'
-          ? HomeSavingsOpportunityStatus.SAVED
-          : input.actionType === 'SWITCHED'
-            ? HomeSavingsOpportunityStatus.SWITCHED
-            : HomeSavingsOpportunityStatus.APPLIED;
-    await homeSavings.setOpportunityStatus(opportunityId, status, userId);
-  }
-
   const completedImmediately = new Set<SavingsBenefitActionType>([
     'SAVE',
     'DISMISS',
@@ -291,32 +278,113 @@ export async function createCanonicalAction(
   ]).has(input.actionType);
   const now = new Date();
   const checklist = buildActionChecklist(detail);
+  const benefitStatus =
+    input.actionType === 'DISMISS'
+      ? PropertyHiddenAssetMatchStatus.DISMISSED
+      : input.actionType === 'SAVE' || input.actionType === 'OFFICIAL_SOURCE_OPENED'
+        ? PropertyHiddenAssetMatchStatus.VIEWED
+        : PropertyHiddenAssetMatchStatus.PURSUING;
+  const recurringStatus =
+    input.actionType === 'DISMISS'
+      ? HomeSavingsOpportunityStatus.DISMISSED
+      : input.actionType === 'SAVE' || input.actionType === 'FOLLOW_UP_SCHEDULED'
+        ? HomeSavingsOpportunityStatus.SAVED
+        : input.actionType === 'SWITCHED'
+          ? HomeSavingsOpportunityStatus.SWITCHED
+          : HomeSavingsOpportunityStatus.APPLIED;
+
+  if (
+    detail.family === 'BENEFIT'
+    && benefitStatus === PropertyHiddenAssetMatchStatus.PURSUING
+    && !isReviewedProgramCurrent(detail.opportunity.program, detail.opportunity.program.source)
+  ) {
+    throw new Error(
+      'This program is not currently actionable because its source review is missing or overdue.',
+    );
+  }
+
   try {
-    return await prisma.savingsBenefitAction.create({
-      data: {
-        propertyId,
-        idempotencyKey: input.idempotencyKey,
-        hiddenAssetMatchId: input.family === 'BENEFIT' ? opportunityId : null,
-        homeSavingsOpportunityId: input.family === 'RECURRING_COST' ? opportunityId : null,
-        actionType: input.actionType,
-        state: completedImmediately ? 'COMPLETED' : 'STARTED',
-        externalOwner: input.externalOwner ?? null,
-        consentJson: input.consent
-          ? input.consent as Prisma.InputJsonValue
-          : undefined,
-        sharedFieldsJson: input.sharedFields
-          ? input.sharedFields as Prisma.InputJsonValue
-          : undefined,
-        homeActionReference:
-          input.family === 'BENEFIT'
-            ? `savings-benefit-match:${opportunityId}`
-            : `savings-benefit-recurring:${opportunityId}`,
-        checklistJson: checklist as unknown as Prisma.InputJsonValue,
-        submittedAt: input.actionType === 'EXTERNALLY_SUBMITTED' ? now : null,
-        completedAt: completedImmediately ? now : null,
-        followUpAt: input.followUpAt ?? null,
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      const racedAction = await tx.savingsBenefitAction.findUnique({
+        where: {
+          propertyId_idempotencyKey: {
+            propertyId,
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+      });
+      if (racedAction) {
+        assertIdempotentActionMatches(racedAction, opportunityId, input);
+        return racedAction;
+      }
+
+      if (input.family === 'BENEFIT') {
+        const updated = await tx.propertyHiddenAssetMatch.updateMany({
+          where: { id: opportunityId, propertyId },
+          data: {
+            status: benefitStatus,
+            dismissedAt:
+              benefitStatus === PropertyHiddenAssetMatchStatus.DISMISSED
+                ? now
+                : detail.family === 'BENEFIT'
+                  ? detail.opportunity.dismissedAt
+                  : null,
+            pursuedAt:
+              benefitStatus === PropertyHiddenAssetMatchStatus.PURSUING
+                ? now
+                : detail.family === 'BENEFIT'
+                  ? detail.opportunity.pursuedAt
+                  : null,
+          },
+        });
+        if (updated.count !== 1) throw new Error('Opportunity not found or access denied.');
+      } else {
+        const updated = await tx.homeSavingsOpportunity.updateMany({
+          where: { id: opportunityId, propertyId },
+          data: { status: recurringStatus },
+        });
+        if (updated.count !== 1) throw new Error('Opportunity not found or access denied.');
+      }
+
+      return tx.savingsBenefitAction.create({
+        data: {
+          propertyId,
+          idempotencyKey: input.idempotencyKey,
+          hiddenAssetMatchId: input.family === 'BENEFIT' ? opportunityId : null,
+          homeSavingsOpportunityId: input.family === 'RECURRING_COST' ? opportunityId : null,
+          actionType: input.actionType,
+          state: completedImmediately ? 'COMPLETED' : 'STARTED',
+          externalOwner: input.externalOwner ?? null,
+          consentJson: input.consent
+            ? input.consent as Prisma.InputJsonValue
+            : undefined,
+          sharedFieldsJson: input.sharedFields
+            ? input.sharedFields as Prisma.InputJsonValue
+            : undefined,
+          homeActionReference:
+            input.family === 'BENEFIT'
+              ? `savings-benefit-match:${opportunityId}`
+              : `savings-benefit-recurring:${opportunityId}`,
+          checklistJson: checklist as unknown as Prisma.InputJsonValue,
+          submittedAt: input.actionType === 'EXTERNALLY_SUBMITTED' ? now : null,
+          completedAt: completedImmediately ? now : null,
+          followUpAt: input.followUpAt ?? null,
+        },
+      });
     });
+
+    // This refresh is deliberately after the atomic domain write. The signal
+    // is a derived projection and must never exist without its durable action.
+    if (
+      input.family === 'RECURRING_COST'
+      && (
+        recurringStatus === HomeSavingsOpportunityStatus.APPLIED
+        || recurringStatus === HomeSavingsOpportunityStatus.SWITCHED
+      )
+    ) {
+      await homeSavings.setOpportunityStatus(opportunityId, recurringStatus, userId);
+    }
+    return created;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError

@@ -8178,6 +8178,13 @@ enum HomeSavingsOpportunityStatus {
   EXPIRED
 }
 
+enum HomeSavingsResultKind {
+  READINESS
+  OBSERVATION
+  BENCHMARK_OPPORTUNITY
+  ADDRESS_QUALIFIED_OPPORTUNITY
+}
+
 // Shared application/award trail stage for both HiddenAssetMatchOutcome and
 // HomeSavingsOpportunityOutcome. SUBMITTED/APPROVED/DENIED/WITHDRAWN/EXPIRED/
 // NO_ACTION track an in-progress or closed-without-value application; RECEIVED is the only
@@ -8293,6 +8300,7 @@ model HomeSavingsOpportunity {
   accountId   String? // the current plan this is based on
   status      HomeSavingsOpportunityStatus @default(NEW)
   confidence  HomeSavingsConfidence        @default(MEDIUM)
+  resultKind  HomeSavingsResultKind         @default(BENCHMARK_OPPORTUNITY)
 
   headline      String // "Switch to Verizon Fios and save $20/month"
   detail        String?
@@ -8355,6 +8363,7 @@ model HomeSavingsOpportunity {
 model HomeSavingsOpportunityOutcome {
   id            String @id @default(uuid())
   opportunityId String
+  idempotencyKey String
   opportunity   HomeSavingsOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
 
   stage                SavingsOutcomeStage
@@ -8383,6 +8392,7 @@ model HomeSavingsOpportunityOutcome {
   documents Document[] @relation("HomeSavingsOpportunityOutcomeDocuments")
 
   @@index([opportunityId])
+  @@unique([opportunityId, idempotencyKey])
   @@index([opportunityId, recordedAt])
   @@index([opportunityId, verificationState])
   @@map("home_savings_opportunity_outcomes")
@@ -11721,6 +11731,7 @@ model PropertyHiddenAssetCriterionResult {
 model HiddenAssetMatchOutcome {
   id      String @id @default(uuid())
   matchId String
+  idempotencyKey String
   match   PropertyHiddenAssetMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   stage          SavingsOutcomeStage
@@ -11747,6 +11758,7 @@ model HiddenAssetMatchOutcome {
   documents Document[] @relation("HiddenAssetMatchOutcomeDocuments")
 
   @@index([matchId])
+  @@unique([matchId, idempotencyKey])
   @@index([matchId, recordedAt])
   @@index([matchId, verificationState])
   @@map("hidden_asset_match_outcomes")

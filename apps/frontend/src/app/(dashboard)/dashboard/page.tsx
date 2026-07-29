@@ -49,7 +49,6 @@ const MilestoneCelebration = dynamic(
   { ssr: false },
 );
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
-import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { useQuery } from '@tanstack/react-query';
 import CommandCenterTemplate from './components/CommandCenterTemplate';
 import SupportingActionCard from './components/SupportingActionCard';
@@ -192,10 +191,6 @@ function buildIncidentBadgeLabel() {
   return 'Priority alert';
 }
 
-function buildSavingsBadgeLabel() {
-  return 'Best savings move';
-}
-
 function buildVaultBadgeLabel() {
   return 'Unlock more intelligence';
 }
@@ -227,17 +222,6 @@ function buildIncidentActionMeta(incidentTitle: string, potentialSavings: number
     'Review status',
     'Needs attention',
     62,
-  );
-}
-
-function buildSavingsActionMeta(amount: number) {
-  return buildTopCardActionMeta(
-    'Home Savings',
-    'Open Home Savings to review matched opportunities and compare next steps.',
-    `Verified annual opportunity: ${formatUsd(amount)}/yr`,
-    'Annual savings identified',
-    `${formatUsd(amount)}/yr`,
-    Math.min(100, Math.max(16, Math.round((amount / 1500) * 100))),
   );
 }
 
@@ -718,20 +702,6 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const homeSavingsSummaryQuery = useQuery({
-    queryKey: ['home-savings-summary', effectiveSelectedPropertyId],
-    queryFn: async () => {
-      if (!effectiveSelectedPropertyId) return null;
-      try {
-        return await getHomeSavingsSummary(effectiveSelectedPropertyId);
-      } catch {
-        return null;
-      }
-    },
-    enabled: Boolean(effectiveSelectedPropertyId),
-    staleTime: 5 * 60 * 1000,
-  });
-
   const applianceStatusBoardQuery = useQuery({
     queryKey: ['dashboard-appliance-priority', effectiveSelectedPropertyId],
     queryFn: async () => {
@@ -910,7 +880,6 @@ export default function DashboardPage() {
     (incident) => incident.propertyId === effectiveSelectedPropertyId
   );
 
-  const annualSavingsPotential = Math.max(0, Math.round(homeSavingsSummaryQuery.data?.potentialAnnualSavings ?? 0));
   const riskExposureGap = Math.max(0, Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0));
   const overdueMaintenanceCount = scopedUrgentActions.filter(a => a.type === 'MAINTENANCE_OVERDUE').length;
   const healthScore = typeof selectedProperty?.healthScore?.totalScore === 'number'
@@ -1106,23 +1075,7 @@ export default function DashboardPage() {
       };
     }
 
-    // 4. Savings > $200
-    if (annualSavingsPotential >= 200) {
-      const impactLabel = `${formatUsd(annualSavingsPotential)}/yr potential`;
-      const etaLabel = 'ETA 3 min';
-      return {
-        badgeLabel: buildSavingsBadgeLabel(),
-        title: `${formatUsd(annualSavingsPotential)} in potential annual savings.`,
-        subtitle: 'Chosen because this is the clearest estimated savings signal right now. Verify the comparison basis before acting.',
-        ctaLabel: 'Review the estimate',
-        href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings'),
-        impactLabel,
-        etaLabel,
-        ...buildSavingsActionMeta(annualSavingsPotential),
-      };
-    }
-
-    // 4.5 Backend signal pressure: RISK_SPIKE or COST_PRESSURE from orchestration engine
+    // 4. Backend signal pressure: RISK_SPIKE or COST_PRESSURE from orchestration engine
     // Loaded async (non-blocking) — only surfaces when local signals are all clear
     const orchestrationMove = orchestrationQuery.data?.nextBestMove ?? null;
     if (
@@ -1245,10 +1198,6 @@ export default function DashboardPage() {
     effectiveSelectedPropertyId,
     '/dashboard/fix?focus=priority-actions',
   );
-  const protectedValueHref = buildPropertyAwareDashboardHref(
-    effectiveSelectedPropertyId,
-    '/dashboard/save?focus=annual-savings',
-  );
   const primaryActionHero = (
     <div className="space-y-6">
       <PageHero
@@ -1279,7 +1228,7 @@ export default function DashboardPage() {
           />
         }
       >
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Link href={healthScoreHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
             <MetricTile
               label="Health score"
@@ -1295,15 +1244,6 @@ export default function DashboardPage() {
               value={scopedUrgentActions.slice(0, 3).length}
               hint="Top 3 ranked moves"
               tone={scopedUrgentActions.length > 0 ? 'warning' : 'success'}
-              className="h-full cursor-pointer"
-            />
-          </Link>
-          <Link href={protectedValueHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
-            <MetricTile
-              label="Annual savings estimate"
-              value={formatUsd(annualSavingsPotential)}
-              hint="Potential opportunities—verify the basis"
-              tone="brand"
               className="h-full cursor-pointer"
             />
           </Link>

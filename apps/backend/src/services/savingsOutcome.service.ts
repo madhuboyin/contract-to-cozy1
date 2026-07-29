@@ -19,6 +19,7 @@
 
 import {
   HomeSavingsOpportunityStatus,
+  Prisma,
   PropertyHiddenAssetMatchStatus,
   SavingsOutcomeStage,
 } from '@prisma/client';
@@ -67,6 +68,7 @@ export function isValidOutcomeTransition(
 }
 
 export interface RecordOutcomeInput {
+  idempotencyKey?: string;
   stage: SavingsOutcomeStage;
   evidenceNote?: string | null;
   denialReason?: string | null;
@@ -177,21 +179,34 @@ export async function recordHiddenAssetMatchOutcome(
   assertStageInputIsComplete(input, input.amountReceived != null);
   const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId, match.propertyId);
 
-  const latest = await prisma.hiddenAssetMatchOutcome.findFirst({
-    where: { matchId, revokedAt: null },
-    orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
-  });
-  if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
-    throw new SavingsOutcomeGovernanceError(
-      'INVALID_TRANSITION',
-      `Cannot record ${input.stage} after ${latest ? latest.stage : 'no prior outcome'}.`
-    );
-  }
+  let resolvedIdempotencyKey = input.idempotencyKey?.trim() || '';
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const latest = await tx.hiddenAssetMatchOutcome.findFirst({
+        where: { matchId, revokedAt: null },
+        orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
+      });
+      resolvedIdempotencyKey ||= `${input.stage}:${latest?.id ?? 'INITIAL'}`;
+      const existing = await tx.hiddenAssetMatchOutcome.findUnique?.({
+        where: {
+          matchId_idempotencyKey: {
+            matchId,
+            idempotencyKey: resolvedIdempotencyKey,
+          },
+        },
+      });
+      if (existing) return existing;
+      if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
+        throw new SavingsOutcomeGovernanceError(
+          'INVALID_TRANSITION',
+          `Cannot record ${input.stage} after ${latest ? latest.stage : 'no prior outcome'}.`
+        );
+      }
 
-  const outcome = await prisma.$transaction(async (tx) => {
-    const created = await tx.hiddenAssetMatchOutcome.create({
+      const created = await tx.hiddenAssetMatchOutcome.create({
       data: {
         matchId,
+        idempotencyKey: resolvedIdempotencyKey,
         stage: input.stage,
         amountReceived: input.stage === 'RECEIVED' ? input.amountReceived ?? null : null,
         currency: input.currency ?? 'USD',
@@ -235,10 +250,26 @@ export async function recordHiddenAssetMatchOutcome(
         data: { pursuedAt: match.pursuedAt ?? created.recordedAt },
       });
     }
-    return created;
-  });
-
-  return outcome;
+      return created;
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === 'P2002'
+      && resolvedIdempotencyKey
+    ) {
+      const raced = await prisma.hiddenAssetMatchOutcome.findUnique({
+        where: {
+          matchId_idempotencyKey: {
+            matchId,
+            idempotencyKey: resolvedIdempotencyKey,
+          },
+        },
+      });
+      if (raced) return raced;
+    }
+    throw error;
+  }
 }
 
 export async function getHiddenAssetMatchOutcomes(matchId: string, userId: string) {
@@ -256,7 +287,13 @@ export async function getHiddenAssetMatchOutcomes(matchId: string, userId: strin
 
 async function assertOpportunityForUser(opportunityId: string, userId: string) {
   const opportunity = await prisma.homeSavingsOpportunity.findFirst({
-    where: { id: opportunityId, homeownerProfile: { userId } },
+    where: {
+      id: opportunityId,
+      homeownerProfile: { userId },
+      resultKind: {
+        in: ['BENCHMARK_OPPORTUNITY', 'ADDRESS_QUALIFIED_OPPORTUNITY'],
+      },
+    },
   });
   if (!opportunity) throw new Error('Opportunity not found or access denied.');
   return opportunity;
@@ -304,64 +341,92 @@ export async function recordHomeSavingsOpportunityOutcome(
     opportunity.propertyId,
   );
 
-  const latest = await prisma.homeSavingsOpportunityOutcome.findFirst({
-    where: { opportunityId, revokedAt: null },
-    orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
-  });
-  if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
-    throw new SavingsOutcomeGovernanceError(
-      'INVALID_TRANSITION',
-      `Cannot record ${input.stage} after ${latest ? latest.stage : 'no prior outcome'}.`
-    );
-  }
+  let resolvedIdempotencyKey = input.idempotencyKey?.trim() || '';
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const latest = await tx.homeSavingsOpportunityOutcome.findFirst({
+        where: { opportunityId, revokedAt: null },
+        orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
+      });
+      resolvedIdempotencyKey ||= `${input.stage}:${latest?.id ?? 'INITIAL'}`;
+      const existing = await tx.homeSavingsOpportunityOutcome.findUnique?.({
+        where: {
+          opportunityId_idempotencyKey: {
+            opportunityId,
+            idempotencyKey: resolvedIdempotencyKey,
+          },
+        },
+      });
+      if (existing) return existing;
+      if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
+        throw new SavingsOutcomeGovernanceError(
+          'INVALID_TRANSITION',
+          `Cannot record ${input.stage} after ${latest ? latest.stage : 'no prior outcome'}.`
+        );
+      }
 
-  const outcome = await prisma.homeSavingsOpportunityOutcome.create({
-    data: {
-      opportunityId,
-      stage: input.stage,
-      observedMonthlyValue: input.stage === 'RECEIVED' ? input.observedMonthlyValue ?? null : null,
-      observedAnnualValue: input.stage === 'RECEIVED' ? input.observedAnnualValue ?? null : null,
-      currency: input.currency ?? opportunity.currency,
-      evidenceNote: input.evidenceNote ?? null,
-      denialReason: input.stage === 'DENIED' ? input.denialReason ?? null : null,
-      closureReason:
-        input.stage === 'WITHDRAWN' || input.stage === 'EXPIRED' || input.stage === 'NO_ACTION'
-          ? input.closureReason ?? null
-          : null,
-      verificationState: ownedDocumentIds.length > 0 ? 'EVIDENCE_ATTACHED' : 'SELF_REPORTED',
-      observationStartedAt: input.stage === 'RECEIVED' ? input.observationStartedAt ?? null : null,
-      observationEndedAt: input.stage === 'RECEIVED' ? input.observationEndedAt ?? null : null,
-      supersedesOutcomeId: input.supersedesOutcomeId ?? null,
-      recordedBy: userId,
-    },
-  });
-
-  if (ownedDocumentIds.length > 0) {
-    await prisma.document.updateMany({
-      where: { id: { in: ownedDocumentIds } },
-      data: { homeSavingsOpportunityOutcomeId: outcome.id },
+      const outcome = await tx.homeSavingsOpportunityOutcome.create({
+        data: {
+          opportunityId,
+          idempotencyKey: resolvedIdempotencyKey,
+          stage: input.stage,
+          observedMonthlyValue: input.stage === 'RECEIVED' ? input.observedMonthlyValue ?? null : null,
+          observedAnnualValue: input.stage === 'RECEIVED' ? input.observedAnnualValue ?? null : null,
+          currency: input.currency ?? opportunity.currency,
+          evidenceNote: input.evidenceNote ?? null,
+          denialReason: input.stage === 'DENIED' ? input.denialReason ?? null : null,
+          closureReason:
+            input.stage === 'WITHDRAWN' || input.stage === 'EXPIRED' || input.stage === 'NO_ACTION'
+              ? input.closureReason ?? null
+              : null,
+          verificationState: ownedDocumentIds.length > 0 ? 'EVIDENCE_ATTACHED' : 'SELF_REPORTED',
+          observationStartedAt: input.stage === 'RECEIVED' ? input.observationStartedAt ?? null : null,
+          observationEndedAt: input.stage === 'RECEIVED' ? input.observationEndedAt ?? null : null,
+          supersedesOutcomeId: input.supersedesOutcomeId ?? null,
+          recordedBy: userId,
+        },
+      });
+      if (ownedDocumentIds.length > 0) {
+        await tx.document.updateMany({
+          where: { id: { in: ownedDocumentIds } },
+          data: { homeSavingsOpportunityOutcomeId: outcome.id },
+        });
+      }
+      if (input.stage === 'EXPIRED') {
+        await tx.homeSavingsOpportunity.update({
+          where: { id: opportunityId },
+          data: { status: HomeSavingsOpportunityStatus.EXPIRED },
+        });
+      } else if (
+        input.stage === 'DENIED'
+        || input.stage === 'WITHDRAWN'
+        || input.stage === 'NO_ACTION'
+      ) {
+        await tx.homeSavingsOpportunity.update({
+          where: { id: opportunityId },
+          data: { status: HomeSavingsOpportunityStatus.DISMISSED },
+        });
+      }
+      return outcome;
     });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === 'P2002'
+      && resolvedIdempotencyKey
+    ) {
+      const raced = await prisma.homeSavingsOpportunityOutcome.findUnique({
+        where: {
+          opportunityId_idempotencyKey: {
+            opportunityId,
+            idempotencyKey: resolvedIdempotencyKey,
+          },
+        },
+      });
+      if (raced) return raced;
+    }
+    throw error;
   }
-  if (input.stage === 'EXPIRED') {
-    await prisma.homeSavingsOpportunity.update({
-      where: { id: opportunityId },
-      data: { status: HomeSavingsOpportunityStatus.EXPIRED },
-    });
-  } else if (
-    input.stage === 'DENIED'
-    || input.stage === 'WITHDRAWN'
-    || input.stage === 'NO_ACTION'
-  ) {
-    await prisma.homeSavingsOpportunity.update({
-      where: { id: opportunityId },
-      data: { status: HomeSavingsOpportunityStatus.DISMISSED },
-    });
-  }
-
-  // Homeowner-recorded outcomes remain SELF_REPORTED or EVIDENCE_ATTACHED.
-  // They do not publish the platform's verified SAVINGS_REALIZATION signal.
-
-  return outcome;
 }
 
 export async function getHomeSavingsOpportunityOutcomes(opportunityId: string, userId: string) {

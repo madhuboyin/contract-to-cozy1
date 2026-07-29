@@ -369,6 +369,9 @@ export class SavingsBenefitsUnifiedService {
       prisma.homeSavingsOpportunity.findMany({
         where: {
           propertyId,
+          resultKind: {
+            in: ['BENCHMARK_OPPORTUNITY', 'ADDRESS_QUALIFIED_OPPORTUNITY'],
+          },
           status: {
             in: [
               HomeSavingsOpportunityStatus.SAVED,
@@ -394,7 +397,12 @@ export class SavingsBenefitsUnifiedService {
           stage: SavingsOutcomeStage.RECEIVED,
           revokedAt: null,
           verificationState: { not: SavingsOutcomeVerificationState.REVOKED },
-          opportunity: { propertyId },
+          opportunity: {
+            propertyId,
+            resultKind: {
+              in: ['BENCHMARK_OPPORTUNITY', 'ADDRESS_QUALIFIED_OPPORTUNITY'],
+            },
+          },
         },
         include: { opportunity: true },
         orderBy: { recordedAt: 'desc' },

@@ -53,6 +53,10 @@ require.cache[prismaPath] = {
         },
       },
       hiddenAssetMatchOutcome: {
+        findUnique: async ({ where }) =>
+          matchOutcomes.find((row) =>
+            row.matchId === where.matchId_idempotencyKey.matchId
+            && row.idempotencyKey === where.matchId_idempotencyKey.idempotencyKey) ?? null,
         findFirst: async ({ where }) => {
           const rows = matchOutcomes
             .filter((row) => row.matchId === where.matchId)
@@ -83,6 +87,10 @@ require.cache[prismaPath] = {
         },
       },
       homeSavingsOpportunityOutcome: {
+        findUnique: async ({ where }) =>
+          opportunityOutcomes.find((row) =>
+            row.opportunityId === where.opportunityId_idempotencyKey.opportunityId
+            && row.idempotencyKey === where.opportunityId_idempotencyKey.idempotencyKey) ?? null,
         findFirst: async ({ where }) => {
           if (where.id) {
             const row = opportunityOutcomes.find((candidate) => candidate.id === where.id);
@@ -144,6 +152,7 @@ require.cache[prismaPath] = {
         fn({
           hiddenAssetMatchOutcome: require.cache[prismaPath].exports.prisma.hiddenAssetMatchOutcome,
           propertyHiddenAssetMatch: require.cache[prismaPath].exports.prisma.propertyHiddenAssetMatch,
+          homeSavingsOpportunity: require.cache[prismaPath].exports.prisma.homeSavingsOpportunity,
           homeSavingsOpportunityOutcome: require.cache[prismaPath].exports.prisma.homeSavingsOpportunityOutcome,
           document: require.cache[prismaPath].exports.prisma.document,
           signal: require.cache[prismaPath].exports.prisma.signal,
@@ -281,6 +290,14 @@ test('recordHiddenAssetMatchOutcome records SUBMITTED then APPROVED then RECEIVE
   const history = await getHiddenAssetMatchOutcomes('match-1', 'user-1');
   assert.deepEqual(history.map((row) => row.stage), ['SUBMITTED', 'APPROVED', 'RECEIVED']);
   assert.ok(matches.get('match-1').pursuedAt, 'pursuedAt should be backfilled from a PURSUING match');
+});
+
+test('recording the same outcome idempotency key returns the durable first write', async () => {
+  const input = { idempotencyKey: 'submit-attempt-1', stage: 'SUBMITTED' };
+  const first = await recordHiddenAssetMatchOutcome('match-1', 'user-1', input);
+  const retry = await recordHiddenAssetMatchOutcome('match-1', 'user-1', input);
+  assert.equal(retry.id, first.id);
+  assert.equal(matchOutcomes.length, 1);
 });
 
 test('recordHiddenAssetMatchOutcome rejects RECEIVED coming directly after SUBMITTED', async () => {

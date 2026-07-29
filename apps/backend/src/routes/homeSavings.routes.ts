@@ -48,6 +48,7 @@ const setOpportunityStatusBodySchema = z.object({
 });
 
 const recordOpportunityOutcomeBodySchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(160),
   stage: z.enum(['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION']),
   observedMonthlyValue: z.number().nonnegative().nullable().optional(),
   observedAnnualValue: z.number().nonnegative().nullable().optional(),

@@ -4,9 +4,12 @@ import {
   HomeSavingsBillingCadence,
   HomeSavingsConfidence,
   HomeSavingsOpportunity,
+  HomeSavingsResultKind,
   HomeSavingsOpportunityStatus,
   HomeSavingsRunTrigger,
+  InsurancePolicy,
   Prisma,
+  Warranty,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ALL_HOME_SAVINGS_CATEGORY_MODULES, getCategoryModule } from './homeSavings/homeSavings.categories';
@@ -68,6 +71,7 @@ export type HomeSavingsOpportunityDTO = {
   accountId: string | null;
   status: HomeSavingsOpportunityStatus;
   confidence: HomeSavingsConfidence;
+  resultKind: HomeSavingsResultKind;
   headline: string;
   detail: string | null;
   estimatedMonthlySavings: number | null;
@@ -169,28 +173,81 @@ function serializeCategory(category: {
   };
 }
 
-function serializeAccount(account: HomeSavingsAccount): HomeSavingsAccountDTO {
-  const amount = asNumber(account.amount) ?? null;
-  const monthlyAmount = amount !== null ? amountToMonthly(amount, account.billingCadence) ?? null : null;
-  const annualAmount = amount !== null ? amountToAnnual(amount, account.billingCadence) ?? null : null;
+type HomeSavingsAccountWithCanonical = HomeSavingsAccount & {
+  insurancePolicy?: InsurancePolicy | null;
+  warranty?: Warranty | null;
+};
+
+function effectiveAccountFacts(account: HomeSavingsAccountWithCanonical) {
+  if (account.insurancePolicyId && account.insurancePolicy) {
+    const policy = account.insurancePolicy;
+    return {
+      providerName: policy.carrierName,
+      planName: policy.coverageType ?? 'Home insurance policy',
+      accountNumberMasked:
+        policy.policyNumber.length > 4 ? `••••${policy.policyNumber.slice(-4)}` : policy.policyNumber,
+      billingCadence: HomeSavingsBillingCadence.ANNUAL,
+      amount: asNumber(policy.premiumAmount) ?? null,
+      startDate: policy.startDate,
+      renewalDate: policy.expiryDate,
+      contractEndDate: null,
+      planDetailsJson: {
+        policyId: policy.id,
+        deductibleAmount: asNumber(policy.deductibleAmount) ?? null,
+        coverageType: policy.coverageType,
+      } as Prisma.JsonValue,
+    };
+  }
+  if (account.warrantyId && account.warranty) {
+    const warranty = account.warranty;
+    return {
+      providerName: warranty.providerName,
+      planName: warranty.category,
+      accountNumberMasked: null,
+      billingCadence: HomeSavingsBillingCadence.ANNUAL,
+      amount: asNumber(warranty.cost) ?? null,
+      startDate: warranty.startDate,
+      renewalDate: warranty.expiryDate,
+      contractEndDate: warranty.expiryDate,
+      planDetailsJson: null,
+    };
+  }
+  return {
+    providerName: account.providerName,
+    planName: account.planName,
+    accountNumberMasked: account.accountNumberMasked,
+    billingCadence: account.billingCadence,
+    amount: asNumber(account.amount) ?? null,
+    startDate: account.startDate,
+    renewalDate: account.renewalDate,
+    contractEndDate: account.contractEndDate,
+    planDetailsJson: account.planDetailsJson,
+  };
+}
+
+function serializeAccount(account: HomeSavingsAccountWithCanonical): HomeSavingsAccountDTO {
+  const facts = effectiveAccountFacts(account);
+  const amount = facts.amount;
+  const monthlyAmount = amount !== null ? amountToMonthly(amount, facts.billingCadence) ?? null : null;
+  const annualAmount = amount !== null ? amountToAnnual(amount, facts.billingCadence) ?? null : null;
 
   return {
     id: account.id,
     categoryKey: normalizeCategoryKey(account.categoryKey),
     status: account.status,
-    providerName: account.providerName ?? null,
-    planName: account.planName ?? null,
-    accountNumberMasked: account.accountNumberMasked ?? null,
-    billingCadence: account.billingCadence,
+    providerName: facts.providerName ?? null,
+    planName: facts.planName ?? null,
+    accountNumberMasked: facts.accountNumberMasked ?? null,
+    billingCadence: facts.billingCadence,
     amount,
     monthlyAmount,
     annualAmount,
     currency: account.currency,
-    startDate: account.startDate ? account.startDate.toISOString() : null,
-    renewalDate: account.renewalDate ? account.renewalDate.toISOString() : null,
-    contractEndDate: account.contractEndDate ? account.contractEndDate.toISOString() : null,
+    startDate: facts.startDate ? facts.startDate.toISOString() : null,
+    renewalDate: facts.renewalDate ? facts.renewalDate.toISOString() : null,
+    contractEndDate: facts.contractEndDate ? facts.contractEndDate.toISOString() : null,
     usageJson: account.usageJson ?? null,
-    planDetailsJson: account.planDetailsJson ?? null,
+    planDetailsJson: facts.planDetailsJson ?? null,
   };
 }
 
@@ -209,6 +266,7 @@ function serializeOpportunity(opportunity: HomeSavingsOpportunity): HomeSavingsO
     accountId: opportunity.accountId ?? null,
     status: opportunity.status,
     confidence: opportunity.confidence,
+    resultKind: opportunity.resultKind,
     headline: opportunity.headline,
     detail: opportunity.detail ?? null,
     estimatedMonthlySavings,
@@ -229,10 +287,10 @@ function serializeOpportunity(opportunity: HomeSavingsOpportunity): HomeSavingsO
 }
 
 function computeCategoryStatus(
-  account: HomeSavingsAccount | null,
+  account: HomeSavingsAccountWithCanonical | null,
   opportunities: HomeSavingsOpportunity[]
 ): HomeSavingsCategoryStatus {
-  const hasAccountAmount = account && asNumber(account.amount) !== undefined;
+  const hasAccountAmount = account && effectiveAccountFacts(account).amount !== null;
   if (!hasAccountAmount) {
     return 'NOT_SET_UP';
   }
@@ -244,6 +302,21 @@ function computeCategoryStatus(
   });
 
   return hasSavings ? 'FOUND_SAVINGS' : 'CONNECTED';
+}
+
+export function classifyHomeSavingsResultKind(
+  draft: import('./homeSavings/types').CategoryOpportunityDraft,
+): HomeSavingsResultKind {
+  const rationale = toRecord(draft.rationaleJson ?? null);
+  const reason = typeof rationale.reason === 'string' ? rationale.reason : '';
+  if (reason.startsWith('missing_') || reason.startsWith('needs_')) {
+    return HomeSavingsResultKind.READINESS;
+  }
+  const monthly = draft.estimatedMonthlySavings ?? 0;
+  const annual = draft.estimatedAnnualSavings ?? 0;
+  return monthly > 0 || annual > 0
+    ? HomeSavingsResultKind.BENCHMARK_OPPORTUNITY
+    : HomeSavingsResultKind.OBSERVATION;
 }
 
 async function assertPropertyForUser(propertyId: string, userId: string) {
@@ -308,6 +381,7 @@ async function getLatestAccountByCategory(homeownerProfileId: string, propertyId
       propertyId,
       categoryKey,
     },
+    include: { insurancePolicy: true, warranty: true },
     orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
   });
 }
@@ -635,6 +709,7 @@ export class HomeSavingsService {
             accountId: account?.id ?? null,
             status: HomeSavingsOpportunityStatus.NEW,
             confidence: draft.confidence,
+            resultKind: classifyHomeSavingsResultKind(draft),
             headline: draft.headline,
             detail: draft.detail,
             rationaleJson:
@@ -712,6 +787,12 @@ export class HomeSavingsService {
 
     if (!existing) {
       throw new Error('Opportunity not found or access denied.');
+    }
+    if (
+      existing.resultKind !== HomeSavingsResultKind.BENCHMARK_OPPORTUNITY
+      && existing.resultKind !== HomeSavingsResultKind.ADDRESS_QUALIFIED_OPPORTUNITY
+    ) {
+      throw new Error('Readiness prompts and observations cannot be acted on as savings opportunities.');
     }
 
     const opportunity = await prisma.homeSavingsOpportunity.update({

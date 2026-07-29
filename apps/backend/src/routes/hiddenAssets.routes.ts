@@ -26,6 +26,7 @@ const updateMatchStatusBodySchema = z.object({
 });
 
 const recordMatchOutcomeBodySchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(160),
   stage: z.enum(['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION']),
   amountReceived: z.number().nonnegative().nullable().optional(),
   currency: z.string().trim().length(3).optional(),

@@ -105,6 +105,41 @@ test('produces no savings-benefits action when there are no qualifying matches',
   assert.equal(result.actions.filter((a) => a.source.kind === 'SAVINGS_BENEFITS').length, 0);
 });
 
+test('promotes a started canonical action so the homeowner can resume it', async () => {
+  const now = new Date();
+  const db = emptyDb({
+    propertyHiddenAssetMatch: { findMany: async () => [] },
+    savingsBenefitAction: {
+      findMany: async () => [{
+        id: 'action-1',
+        actionType: 'PREPARE',
+        state: 'STARTED',
+        checklistJson: [{ key: 'proof', completedAt: null }],
+        startedAt: new Date(now.getTime() - 60_000),
+        updatedAt: now,
+        followUpAt: null,
+        hiddenAssetMatch: {
+          program: {
+            name: 'Energy rebate',
+            regionValue: 'NJ',
+            sourceLabel: 'State energy office',
+            sourceUrl: 'https://example.gov/rebate',
+            lastVerifiedAt: now,
+            applicationWindowClosesAt: null,
+          },
+        },
+        homeSavingsOpportunity: null,
+      }],
+    },
+  });
+
+  const result = await getPromotedHomeActions('property-1', db);
+  const action = result.actions.find((candidate) => candidate.id === 'savings-benefit-action:action-1');
+  assert.ok(action);
+  assert.equal(action.state, 'IN_PROGRESS');
+  assert.match(action.primaryCta.href, /section=in-progress/);
+});
+
 test('suppresses a stale-source match instead of promoting it to Home', async () => {
   const db = emptyDb({
     propertyHiddenAssetMatch: {

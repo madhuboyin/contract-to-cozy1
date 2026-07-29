@@ -2,6 +2,7 @@ import {
   HomeSavingsAccountStatus,
   HomeSavingsBillingCadence,
   HomeSavingsConfidence,
+  Prisma,
 } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import {
@@ -10,7 +11,7 @@ import {
   CategoryModule,
   CategoryOpportunityDraft,
 } from '../types';
-import { amountToAnnual, amountToMonthly, asNumber, canonicalFactsChanged, daysUntil, pickStateValue, round2, toRecord } from '../helpers';
+import { amountToAnnual, amountToMonthly, asNumber, daysUntil, pickStateValue, round2, toRecord } from '../helpers';
 
 const DEFAULT_BASELINE_ANNUAL = 1900;
 const DEFAULT_RENEWAL_WINDOW_DAYS = 45;
@@ -21,9 +22,6 @@ async function ensureAccount({
   existingAccount,
 }: CategoryEnsureAccountParams) {
   if (existingAccount) {
-    // The account was populated once from the canonical policy at first
-    // capture — refresh it here so a later premium/renewal/deductible edit
-    // on the real policy isn't silently stale in Home Savings forever.
     if (!existingAccount.insurancePolicyId) {
       return existingAccount;
     }
@@ -33,48 +31,49 @@ async function ensureAccount({
     if (!policy) {
       return existingAccount;
     }
-    const canonical = {
+    if (
+      existingAccount.providerName !== null
+      || existingAccount.planName !== null
+      || existingAccount.accountNumberMasked !== null
+      || existingAccount.amount !== null
+      || existingAccount.startDate !== null
+      || existingAccount.renewalDate !== null
+      || existingAccount.contractEndDate !== null
+      || existingAccount.planDetailsJson !== null
+    ) {
+      await prisma.homeSavingsAccount.update({
+        where: { id: existingAccount.id },
+        data: {
+          providerName: null,
+          planName: null,
+          accountNumberMasked: null,
+          amount: null,
+          startDate: null,
+          renewalDate: null,
+          contractEndDate: null,
+          planDetailsJson: Prisma.JsonNull,
+        },
+      });
+    }
+    return {
+      ...existingAccount,
       providerName: policy.carrierName,
       planName: policy.coverageType ?? 'Home insurance policy',
-      amount: asNumber(policy.premiumAmount) ?? null,
+      accountNumberMasked:
+        policy.policyNumber.length > 4
+          ? `••••${policy.policyNumber.slice(-4)}`
+          : policy.policyNumber,
+      billingCadence: HomeSavingsBillingCadence.ANNUAL,
+      amount: policy.premiumAmount,
       startDate: policy.startDate,
       renewalDate: policy.expiryDate,
       contractEndDate: null,
-    };
-    if (
-      !canonicalFactsChanged(
-        {
-          providerName: existingAccount.providerName,
-          planName: existingAccount.planName,
-          amount: existingAccount.amount,
-          startDate: existingAccount.startDate,
-          renewalDate: existingAccount.renewalDate,
-          contractEndDate: existingAccount.contractEndDate,
-        },
-        canonical
-      )
-    ) {
-      return existingAccount;
-    }
-    return prisma.homeSavingsAccount.update({
-      where: { id: existingAccount.id },
-      data: {
-        providerName: canonical.providerName,
-        planName: canonical.planName,
-        accountNumberMasked:
-          policy.policyNumber.length > 4
-            ? `••••${policy.policyNumber.slice(-4)}`
-            : policy.policyNumber,
-        amount: policy.premiumAmount,
-        startDate: canonical.startDate,
-        renewalDate: canonical.renewalDate,
-        planDetailsJson: {
-          policyId: policy.id,
-          deductibleAmount: policy.deductibleAmount,
-          coverageType: policy.coverageType,
-        },
+      planDetailsJson: {
+        policyId: policy.id,
+        deductibleAmount: asNumber(policy.deductibleAmount) ?? null,
+        coverageType: policy.coverageType,
       },
-    });
+    };
   }
 
   const latestPolicy = await prisma.insurancePolicy.findFirst({
@@ -89,31 +88,34 @@ async function ensureAccount({
     return null;
   }
 
-  return prisma.homeSavingsAccount.create({
+  const account = await prisma.homeSavingsAccount.create({
     data: {
       homeownerProfileId,
       propertyId: property.id,
       categoryKey: 'HOME_INSURANCE',
       status: HomeSavingsAccountStatus.ACTIVE,
-      providerName: latestPolicy.carrierName,
-      planName: latestPolicy.coverageType ?? 'Home insurance policy',
-      accountNumberMasked:
-        latestPolicy.policyNumber.length > 4
-          ? `••••${latestPolicy.policyNumber.slice(-4)}`
-          : latestPolicy.policyNumber,
       billingCadence: HomeSavingsBillingCadence.ANNUAL,
-      amount: latestPolicy.premiumAmount,
       currency: 'USD',
-      startDate: latestPolicy.startDate,
-      renewalDate: latestPolicy.expiryDate,
       insurancePolicyId: latestPolicy.id,
-      planDetailsJson: {
-        policyId: latestPolicy.id,
-        deductibleAmount: latestPolicy.deductibleAmount,
-        coverageType: latestPolicy.coverageType,
-      },
     },
   });
+  return {
+    ...account,
+    providerName: latestPolicy.carrierName,
+    planName: latestPolicy.coverageType ?? 'Home insurance policy',
+    accountNumberMasked:
+      latestPolicy.policyNumber.length > 4
+        ? `••••${latestPolicy.policyNumber.slice(-4)}`
+        : latestPolicy.policyNumber,
+    amount: latestPolicy.premiumAmount,
+    startDate: latestPolicy.startDate,
+    renewalDate: latestPolicy.expiryDate,
+    planDetailsJson: {
+      policyId: latestPolicy.id,
+      deductibleAmount: asNumber(latestPolicy.deductibleAmount) ?? null,
+      coverageType: latestPolicy.coverageType,
+    },
+  };
 }
 
 async function generateOpportunities({
