@@ -19,7 +19,6 @@
 
 import { PropertyHiddenAssetMatchStatus, SavingsOutcomeStage } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { signalService } from './signal.service';
 
 export class SavingsOutcomeGovernanceError extends Error {
   code: string;
@@ -42,16 +41,15 @@ const ALLOWED_NEXT_STAGES: Record<SavingsOutcomeStage, SavingsOutcomeStage[]> = 
 
 /**
  * True when recording `to` is a legal next stage given the current latest
- * stage (`from`, or null if no outcome has been recorded yet). A null
- * `from` accepts any stage — a homeowner recording their real history for
- * the first time shouldn't have to fabricate a SUBMITTED entry before they
- * can record that they already received the benefit.
+ * stage (`from`, or null if no outcome has been recorded yet). New trails
+ * start at SUBMITTED so application intent, approval, and receipt cannot be
+ * collapsed into one unchecked status change.
  */
 export function isValidOutcomeTransition(
   from: SavingsOutcomeStage | null,
   to: SavingsOutcomeStage
 ): boolean {
-  if (from === null) return true;
+  if (from === null) return to === 'SUBMITTED';
   if (TERMINAL_STAGES.includes(from)) return false;
   return ALLOWED_NEXT_STAGES[from].includes(to);
 }
@@ -62,6 +60,7 @@ export interface RecordOutcomeInput {
   denialReason?: string | null;
   /** Existing Document Vault rows to attach as evidence for this ledger entry (HSB-033). */
   documentIds?: string[];
+  supersedesOutcomeId?: string | null;
 }
 
 function assertStageInputIsComplete(input: RecordOutcomeInput, hasValue: boolean): void {
@@ -135,7 +134,7 @@ export async function recordHiddenAssetMatchOutcome(
   const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId);
 
   const latest = await prisma.hiddenAssetMatchOutcome.findFirst({
-    where: { matchId },
+    where: { matchId, revokedAt: null },
     orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
   });
   if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
@@ -154,6 +153,8 @@ export async function recordHiddenAssetMatchOutcome(
         currency: input.currency ?? 'USD',
         evidenceNote: input.evidenceNote ?? null,
         denialReason: input.stage === 'DENIED' ? input.denialReason ?? null : null,
+        verificationState: ownedDocumentIds.length > 0 ? 'EVIDENCE_ATTACHED' : 'SELF_REPORTED',
+        supersedesOutcomeId: input.supersedesOutcomeId ?? null,
         recordedBy: userId,
       },
     });
@@ -203,6 +204,25 @@ export interface RecordHomeSavingsOpportunityOutcomeInput extends RecordOutcomeI
   observedMonthlyValue?: number | null;
   observedAnnualValue?: number | null;
   currency?: string;
+  observationStartedAt?: Date | null;
+  observationEndedAt?: Date | null;
+}
+
+function assertRecurringObservationWindow(input: RecordHomeSavingsOpportunityOutcomeInput): void {
+  if (input.stage !== 'RECEIVED') return;
+  if (!input.observationStartedAt || !input.observationEndedAt) {
+    throw new SavingsOutcomeGovernanceError(
+      'MISSING_OBSERVATION_WINDOW',
+      'A recurring RECEIVED outcome requires the start and end dates of the observed billing period.',
+    );
+  }
+  const durationMs = input.observationEndedAt.getTime() - input.observationStartedAt.getTime();
+  if (durationMs < 28 * 24 * 60 * 60 * 1000) {
+    throw new SavingsOutcomeGovernanceError(
+      'OBSERVATION_WINDOW_TOO_SHORT',
+      'Recurring savings must be observed for at least 28 days before being recorded as received.',
+    );
+  }
 }
 
 export async function recordHomeSavingsOpportunityOutcome(
@@ -215,10 +235,11 @@ export async function recordHomeSavingsOpportunityOutcome(
     input,
     input.observedAnnualValue != null || input.observedMonthlyValue != null
   );
+  assertRecurringObservationWindow(input);
   const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId);
 
   const latest = await prisma.homeSavingsOpportunityOutcome.findFirst({
-    where: { opportunityId },
+    where: { opportunityId, revokedAt: null },
     orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
   });
   if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
@@ -237,6 +258,10 @@ export async function recordHomeSavingsOpportunityOutcome(
       currency: input.currency ?? opportunity.currency,
       evidenceNote: input.evidenceNote ?? null,
       denialReason: input.stage === 'DENIED' ? input.denialReason ?? null : null,
+      verificationState: ownedDocumentIds.length > 0 ? 'EVIDENCE_ATTACHED' : 'SELF_REPORTED',
+      observationStartedAt: input.stage === 'RECEIVED' ? input.observationStartedAt ?? null : null,
+      observationEndedAt: input.stage === 'RECEIVED' ? input.observationEndedAt ?? null : null,
+      supersedesOutcomeId: input.supersedesOutcomeId ?? null,
       recordedBy: userId,
     },
   });
@@ -248,23 +273,8 @@ export async function recordHomeSavingsOpportunityOutcome(
     });
   }
 
-  if (input.stage === 'RECEIVED' && opportunity.propertyId) {
-    const annualValue = input.observedAnnualValue ?? (input.observedMonthlyValue ?? 0) * 12;
-    try {
-      await signalService.publishSavingsRealizationSignal({
-        propertyId: opportunity.propertyId,
-        opportunityId: opportunity.id,
-        observedAnnualValue: annualValue,
-        observedMonthlyValue: input.observedMonthlyValue ?? null,
-        currency: outcome.currency,
-        evidenceNote: input.evidenceNote?.trim() ?? '',
-      });
-    } catch {
-      // A signal-publish failure must never fail the outcome recording
-      // itself — the ledger row above is the durable record; the shared
-      // signal is a downstream projection of it.
-    }
-  }
+  // Homeowner-recorded outcomes remain SELF_REPORTED or EVIDENCE_ATTACHED.
+  // They do not publish the platform's verified SAVINGS_REALIZATION signal.
 
   return outcome;
 }
@@ -275,5 +285,51 @@ export async function getHomeSavingsOpportunityOutcomes(opportunityId: string, u
     where: { opportunityId },
     orderBy: [{ recordedAt: 'asc' }, { createdAt: 'asc' }],
     include: { documents: { select: { id: true, name: true, type: true, mimeType: true, fileSize: true } } },
+  });
+}
+
+export async function revokeHiddenAssetMatchOutcome(
+  outcomeId: string,
+  userId: string,
+  reason: string,
+) {
+  const outcome = await prisma.hiddenAssetMatchOutcome.findFirst({
+    where: { id: outcomeId, match: { property: { homeownerProfile: { userId } } } },
+  });
+  if (!outcome) throw new Error('Outcome not found or access denied.');
+  if (outcome.revokedAt) {
+    throw new SavingsOutcomeGovernanceError('ALREADY_REVOKED', 'This outcome is already revoked.');
+  }
+  return prisma.hiddenAssetMatchOutcome.update({
+    where: { id: outcomeId },
+    data: {
+      verificationState: 'REVOKED',
+      revokedAt: new Date(),
+      revokedBy: userId,
+      revocationReason: reason,
+    },
+  });
+}
+
+export async function revokeHomeSavingsOpportunityOutcome(
+  outcomeId: string,
+  userId: string,
+  reason: string,
+) {
+  const outcome = await prisma.homeSavingsOpportunityOutcome.findFirst({
+    where: { id: outcomeId, opportunity: { homeownerProfile: { userId } } },
+  });
+  if (!outcome) throw new Error('Outcome not found or access denied.');
+  if (outcome.revokedAt) {
+    throw new SavingsOutcomeGovernanceError('ALREADY_REVOKED', 'This outcome is already revoked.');
+  }
+  return prisma.homeSavingsOpportunityOutcome.update({
+    where: { id: outcomeId },
+    data: {
+      verificationState: 'REVOKED',
+      revokedAt: new Date(),
+      revokedBy: userId,
+      revocationReason: reason,
+    },
   });
 }

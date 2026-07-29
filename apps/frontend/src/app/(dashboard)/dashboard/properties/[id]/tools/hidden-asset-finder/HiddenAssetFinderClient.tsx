@@ -40,6 +40,7 @@ import { hiddenAssetTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { OutcomeRecorder } from '@/components/savings-benefits/OutcomeRecorder';
+import { api } from '@/lib/api/client';
 import type {
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
@@ -948,7 +949,13 @@ export default function HiddenAssetFinderClient() {
     }: {
       matchId: string;
       status: 'VIEWED' | 'DISMISSED' | 'PURSUING';
-    }) => updateHiddenAssetMatchStatus(matchId, status),
+    }) => {
+      if (status === 'VIEWED') return updateHiddenAssetMatchStatus(matchId, status);
+      return api.createSavingsBenefitsAction(propertyId, matchId, {
+        family: 'BENEFIT',
+        actionType: status === 'DISMISSED' ? 'DISMISS' : 'PREPARE',
+      });
+    },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['hidden-assets', propertyId] });
       if (variables.status === 'PURSUING') {

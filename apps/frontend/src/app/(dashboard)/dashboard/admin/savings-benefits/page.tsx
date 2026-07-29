@@ -90,7 +90,18 @@ const RULE_OPERATORS = [
 const RULE_KINDS = ['MANDATORY', 'OPTIONAL', 'DISQUALIFYING'] as const;
 
 function emptyRule(): AdminProgramRuleInput {
-  return { attribute: '', operator: 'EQUALS', value: '', kind: 'MANDATORY', groupKey: null };
+  return {
+    attribute: '',
+    operator: 'EQUALS',
+    value: '',
+    kind: 'MANDATORY',
+    groupKey: null,
+    evidenceRequirement: null,
+    homeownerExplanation: null,
+    isSensitive: false,
+    requiresExternalVerification: false,
+    unknownHandling: 'HOLD_CANDIDATE',
+  };
 }
 
 const HEALTH_TONE: Record<string, string> = {
@@ -397,6 +408,52 @@ function ProgramFormDialog({
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </Button>
                 </div>
+                <div className="col-span-2 sm:col-span-2">
+                  <Label className="text-[11px]">Unknown handling</Label>
+                  <Select
+                    value={rule.unknownHandling ?? 'HOLD_CANDIDATE'}
+                    onValueChange={(value) => updateRule(index, { unknownHandling: value as AdminProgramRuleInput['unknownHandling'] })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="HOLD_CANDIDATE">Hold as candidate</SelectItem>
+                      <SelectItem value="EXCLUDE">Exclude when unknown</SelectItem>
+                      <SelectItem value="EXTERNAL_VERIFICATION">External verification</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2 sm:col-span-2">
+                  <Label className="text-[11px]">Evidence requirement</Label>
+                  <Input
+                    value={rule.evidenceRequirement ?? ''}
+                    onChange={(e) => updateRule(index, { evidenceRequirement: e.target.value || null })}
+                    placeholder="e.g. current award letter"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-2">
+                  <Label className="text-[11px]">Homeowner explanation</Label>
+                  <Input
+                    value={rule.homeownerExplanation ?? ''}
+                    onChange={(e) => updateRule(index, { homeownerExplanation: e.target.value || null })}
+                    placeholder="Why this criterion matters"
+                  />
+                </div>
+                <label className="col-span-1 flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={rule.isSensitive ?? false}
+                    onChange={(e) => updateRule(index, { isSensitive: e.target.checked })}
+                  />
+                  Sensitive
+                </label>
+                <label className="col-span-1 flex items-center gap-2 text-xs text-slate-600 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={rule.requiresExternalVerification ?? false}
+                    onChange={(e) => updateRule(index, { requiresExternalVerification: e.target.checked })}
+                  />
+                  Must be externally verified
+                </label>
               </div>
             ))}
           </div>
@@ -441,6 +498,11 @@ function ProgramFormDialog({
                   sortOrder: index,
                   kind: r.kind ?? 'MANDATORY',
                   groupKey: r.groupKey || null,
+                  evidenceRequirement: r.evidenceRequirement || null,
+                  homeownerExplanation: r.homeownerExplanation || null,
+                  isSensitive: r.isSensitive ?? false,
+                  requiresExternalVerification: r.requiresExternalVerification ?? false,
+                  unknownHandling: r.unknownHandling ?? 'HOLD_CANDIDATE',
                 })),
               })
             }
@@ -650,7 +712,24 @@ export default function SavingsBenefitsAdminPage() {
                     </p>
                   </div>
                   <Badge variant="outline" className="text-[10px]">{program.reviewStatus}</Badge>
-                  <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setProgramDialog({ open: true, item: program })}>
+                  {program.reviewStatus === 'PUBLISHED' ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={() => setTarget({ item: program, action: 'UNPUBLISH' })}
+                    >
+                      Unpublish to edit
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    disabled={program.reviewStatus === 'PUBLISHED'}
+                    title={program.reviewStatus === 'PUBLISHED' ? 'Unpublish and return to draft before editing.' : undefined}
+                    onClick={() => setProgramDialog({ open: true, item: program })}
+                  >
                     Edit
                   </Button>
                 </div>
@@ -680,7 +759,7 @@ export default function SavingsBenefitsAdminPage() {
                 title="Awaiting publish"
                 emptyText="No approved programs are waiting to be published."
                 items={queuesQ.data.approvedQueue}
-                actions={['PUBLISH', 'ARCHIVE']}
+                actions={['PUBLISH', 'RETURN_TO_DRAFT', 'ARCHIVE']}
                 onAction={(item, action) => setTarget({ item, action })}
               />
             </div>

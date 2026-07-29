@@ -52,8 +52,6 @@ const ALLOWED_NEXT_STAGES: Record<SavingsOutcomeStageValue, SavingsOutcomeStageV
   RECEIVED: [],
   WITHDRAWN: [],
 };
-const ALL_STAGES: SavingsOutcomeStageValue[] = ['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN'];
-
 function formatMoney(value: number | null, currency: string): string | null {
   if (value == null) return null;
   try {
@@ -91,6 +89,8 @@ export function OutcomeRecorder({
   const [amount, setAmount] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
   const [denialReason, setDenialReason] = useState('');
+  const [observationStartedAt, setObservationStartedAt] = useState('');
+  const [observationEndedAt, setObservationEndedAt] = useState('');
   const [documents, setDocuments] = useState<Array<{ id: string; name: string }>>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -106,8 +106,8 @@ export function OutcomeRecorder({
   });
 
   const outcomes: OutcomeDTO[] = outcomesQuery.data ?? [];
-  const latest = outcomes[outcomes.length - 1] ?? null;
-  const allowedStages: SavingsOutcomeStageValue[] = latest ? ALLOWED_NEXT_STAGES[latest.stage] : ALL_STAGES;
+  const latest = [...outcomes].reverse().find((outcome) => !outcome.revokedAt) ?? null;
+  const allowedStages: SavingsOutcomeStageValue[] = latest ? ALLOWED_NEXT_STAGES[latest.stage] : ['SUBMITTED'];
   const isTerminal = latest != null && allowedStages.length === 0;
 
   useMemo(() => {
@@ -144,15 +144,36 @@ export function OutcomeRecorder({
         evidenceNote: evidenceNote.trim() || undefined,
         denialReason: stage === 'DENIED' ? denialReason.trim() || undefined : undefined,
         documentIds,
+        observationStartedAt:
+          stage === 'RECEIVED' && observationStartedAt
+            ? new Date(`${observationStartedAt}T00:00:00.000Z`).toISOString()
+            : undefined,
+        observationEndedAt:
+          stage === 'RECEIVED' && observationEndedAt
+            ? new Date(`${observationEndedAt}T00:00:00.000Z`).toISOString()
+            : undefined,
       });
     },
     onSuccess: () => {
       setAmount('');
       setEvidenceNote('');
       setDenialReason('');
+      setObservationStartedAt('');
+      setObservationEndedAt('');
       setDocuments([]);
       invalidate();
     },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async ({ outcomeId, reason }: { outcomeId: string; reason: string }) => {
+      if (family === 'BENEFIT') {
+        await api.revokeHiddenAssetMatchOutcome(outcomeId, reason);
+      } else {
+        await api.revokeHomeSavingsOpportunityOutcome(outcomeId, reason);
+      }
+    },
+    onSuccess: invalidate,
   });
 
   async function handleUpload(file: File) {
@@ -175,11 +196,20 @@ export function OutcomeRecorder({
   const needsAmount = stage === 'RECEIVED';
   const needsDenialReason = stage === 'DENIED';
   const needsEvidence = stage === 'RECEIVED';
+  const needsObservationWindow = family === 'RECURRING_COST' && stage === 'RECEIVED';
+  const observationWindowIsSufficient = (() => {
+    if (!needsObservationWindow) return true;
+    if (!observationStartedAt || !observationEndedAt) return false;
+    const started = new Date(`${observationStartedAt}T00:00:00.000Z`).getTime();
+    const ended = new Date(`${observationEndedAt}T00:00:00.000Z`).getTime();
+    return ended - started >= 28 * 24 * 60 * 60 * 1000;
+  })();
   const canSubmit =
     !submitMutation.isPending &&
     (!needsAmount || amount.trim().length > 0) &&
     (!needsDenialReason || denialReason.trim().length > 0) &&
-    (!needsEvidence || evidenceNote.trim().length > 0 || documents.length > 0);
+    (!needsEvidence || evidenceNote.trim().length > 0 || documents.length > 0) &&
+    observationWindowIsSufficient;
 
   return (
     <div className="space-y-3">
@@ -203,6 +233,15 @@ export function OutcomeRecorder({
                   <span className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">{formatDate(outcome.recordedAt)}</span>
                 </div>
                 {value ? <p className="mt-1.5 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">{value}</p> : null}
+                <p className="mt-1 text-[11px] text-[hsl(var(--mobile-text-secondary))]">
+                  {outcome.verificationState === 'VERIFIED'
+                    ? 'Independently verified'
+                    : outcome.verificationState === 'EVIDENCE_ATTACHED'
+                      ? 'Evidence attached — not independently verified'
+                      : outcome.verificationState === 'REVOKED'
+                        ? 'Revoked'
+                        : 'Self-reported'}
+                </p>
                 {outcome.evidenceNote ? (
                   <p className="mt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">{outcome.evidenceNote}</p>
                 ) : null}
@@ -215,6 +254,21 @@ export function OutcomeRecorder({
                       <li key={d.id} className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">📄 {d.name}</li>
                     ))}
                   </ul>
+                ) : null}
+                {!outcome.revokedAt ? (
+                  <button
+                    type="button"
+                    className="mt-2 text-[11px] font-medium text-rose-700 underline-offset-2 hover:underline"
+                    disabled={revokeMutation.isPending}
+                    onClick={() => {
+                      const reason = window.prompt('Why should this recorded outcome be revoked?');
+                      if (reason?.trim() && reason.trim().length >= 3) {
+                        revokeMutation.mutate({ outcomeId: outcome.id, reason: reason.trim() });
+                      }
+                    }}
+                  >
+                    Revoke or correct this entry
+                  </button>
                 ) : null}
               </div>
             );
@@ -270,6 +324,34 @@ export function OutcomeRecorder({
               aria-label="Reason given for the denial"
               className="h-8 w-full rounded-md border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 text-xs dark:bg-slate-900"
             />
+          ) : null}
+
+          {needsObservationWindow ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">
+                Observation started
+                <input
+                  type="date"
+                  value={observationStartedAt}
+                  onChange={(e) => setObservationStartedAt(e.target.value)}
+                  className="mt-1 h-8 w-full rounded-md border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 text-xs dark:bg-slate-900"
+                />
+              </label>
+              <label className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">
+                Observation ended
+                <input
+                  type="date"
+                  value={observationEndedAt}
+                  onChange={(e) => setObservationEndedAt(e.target.value)}
+                  className="mt-1 h-8 w-full rounded-md border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 text-xs dark:bg-slate-900"
+                />
+              </label>
+              {!observationWindowIsSufficient ? (
+                <p className="text-[11px] text-amber-700 sm:col-span-2">
+                  Use at least 28 days of observed bills before recording recurring value.
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           <textarea

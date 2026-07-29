@@ -8,6 +8,8 @@ import {
   HiddenAssetRegionType,
   HiddenAssetRuleKind,
   HiddenAssetRuleOperator,
+  HiddenAssetUnknownHandling,
+  HiddenAssetCriterionResultStatus,
   PropertyHiddenAssetMatchStatus,
 } from '@prisma/client';
 
@@ -135,6 +137,11 @@ export interface ProgramEvalResult {
   estimatedValue: number | null;
   estimatedValueMin: number | null;
   estimatedValueMax: number | null;
+  criterionResults: Array<{
+    ruleId: string;
+    result: HiddenAssetCriterionResultStatus;
+    explanation: string;
+  }>;
 }
 
 export interface RuleEngineProgramInput {
@@ -149,6 +156,9 @@ export interface RuleEngineProgramInput {
     sortOrder: number;
     kind: HiddenAssetRuleKind;
     groupKey: string | null;
+    requiresExternalVerification: boolean;
+    unknownHandling: HiddenAssetUnknownHandling;
+    homeownerExplanation: string | null;
   }>;
 }
 

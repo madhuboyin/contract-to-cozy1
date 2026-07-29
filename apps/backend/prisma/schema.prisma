@@ -8181,6 +8181,34 @@ enum SavingsOutcomeStage {
   WITHDRAWN
 }
 
+enum SavingsOutcomeVerificationState {
+  SELF_REPORTED
+  EVIDENCE_ATTACHED
+  VERIFIED
+  REVOKED
+}
+
+enum SavingsBenefitActionType {
+  SAVE
+  DISMISS
+  PREPARE
+  OFFICIAL_SOURCE_OPENED
+  QUOTE_REQUESTED
+  PARTNER_HANDOFF_CONSENTED
+  EXTERNALLY_SUBMITTED
+  APPROVED
+  DENIED
+  SWITCHED
+  RECEIVED
+  FOLLOW_UP_SCHEDULED
+}
+
+enum SavingsBenefitActionState {
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
 enum HomeSavingsConfidence {
   HIGH
   MEDIUM
@@ -8294,6 +8322,7 @@ model HomeSavingsOpportunity {
 
   documents Document[] @relation("HomeSavingsOpportunityDocuments")
   outcomes  HomeSavingsOpportunityOutcome[]
+  savingsBenefitActions SavingsBenefitAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -8323,6 +8352,15 @@ model HomeSavingsOpportunityOutcome {
   // switching providers." Required for RECEIVED.
   evidenceNote         String?
   denialReason         String? // set only when stage = DENIED
+  verificationState   SavingsOutcomeVerificationState @default(SELF_REPORTED)
+  observationStartedAt DateTime?
+  observationEndedAt   DateTime?
+  verifiedAt            DateTime?
+  verifiedBy            String?
+  revokedAt             DateTime?
+  revokedBy             String?
+  revocationReason      String?
+  supersedesOutcomeId   String?
 
   recordedBy String
   recordedAt DateTime @default(now())
@@ -8332,6 +8370,7 @@ model HomeSavingsOpportunityOutcome {
 
   @@index([opportunityId])
   @@index([opportunityId, recordedAt])
+  @@index([opportunityId, verificationState])
   @@map("home_savings_opportunity_outcomes")
 }
 
@@ -11251,6 +11290,19 @@ enum HiddenAssetRuleKind {
   DISQUALIFYING
 }
 
+enum HiddenAssetUnknownHandling {
+  HOLD_CANDIDATE
+  EXCLUDE
+  EXTERNAL_VERIFICATION
+}
+
+enum HiddenAssetCriterionResultStatus {
+  MET
+  NOT_MET
+  UNKNOWN
+  EXTERNAL_VERIFICATION
+}
+
 enum HiddenAssetBenefitType {
   TAX_SAVINGS
   TAX_CREDIT
@@ -11532,11 +11584,17 @@ model HiddenAssetProgramRule {
   kind      HiddenAssetRuleKind @default(MANDATORY)
   sortOrder Int                 @default(0)
   groupKey  String?
+  evidenceRequirement        String?
+  homeownerExplanation       String?
+  isSensitive                Boolean                    @default(false)
+  requiresExternalVerification Boolean                  @default(false)
+  unknownHandling            HiddenAssetUnknownHandling @default(HOLD_CANDIDATE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   program HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  criterionResults PropertyHiddenAssetCriterionResult[]
 
   @@index([programId])
   @@index([programId, sortOrder])
@@ -11581,6 +11639,8 @@ model PropertyHiddenAssetMatch {
   program        HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
   outcomes       HiddenAssetMatchOutcome[]
   sensitiveFacts PropertyHiddenAssetSensitiveFact[]
+  criterionResults PropertyHiddenAssetCriterionResult[]
+  savingsBenefitActions SavingsBenefitAction[]
 
   @@unique([propertyId, programId])
   @@index([propertyId])
@@ -11590,6 +11650,51 @@ model PropertyHiddenAssetMatch {
   @@index([lastEvaluatedAt])
   @@index([propertyId, status, confidenceLevel])
   @@map("property_hidden_asset_matches")
+}
+
+model SavingsBenefitAction {
+  id                     String @id @default(uuid())
+  propertyId             String
+  hiddenAssetMatchId     String?
+  homeSavingsOpportunityId String?
+  actionType             SavingsBenefitActionType
+  state                  SavingsBenefitActionState @default(STARTED)
+  externalOwner          String?
+  consentJson            Json?
+  sharedFieldsJson       Json?
+  homeActionReference    String?
+  startedAt              DateTime @default(now())
+  submittedAt            DateTime?
+  completedAt            DateTime?
+  followUpAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  hiddenAssetMatch       PropertyHiddenAssetMatch? @relation(fields: [hiddenAssetMatchId], references: [id], onDelete: Cascade)
+  homeSavingsOpportunity HomeSavingsOpportunity?   @relation(fields: [homeSavingsOpportunityId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, state])
+  @@index([hiddenAssetMatchId])
+  @@index([homeSavingsOpportunityId])
+  @@map("savings_benefit_actions")
+}
+
+model PropertyHiddenAssetCriterionResult {
+  id        String @id @default(uuid())
+  matchId   String
+  ruleId    String
+  result    HiddenAssetCriterionResultStatus
+  explanation String?
+  factReference String?
+  evidenceReference String?
+  evaluatedAt DateTime @default(now())
+
+  match PropertyHiddenAssetMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  rule  HiddenAssetProgramRule   @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, ruleId])
+  @@index([matchId, result])
+  @@map("property_hidden_asset_criterion_results")
 }
 
 // Application/award trail for a benefit match, once a homeowner has moved
@@ -11609,6 +11714,13 @@ model HiddenAssetMatchOutcome {
   // realized-value claim always has a stated basis, not just a status flip.
   evidenceNote   String?
   denialReason   String? // set only when stage = DENIED
+  verificationState SavingsOutcomeVerificationState @default(SELF_REPORTED)
+  verifiedAt          DateTime?
+  verifiedBy          String?
+  revokedAt           DateTime?
+  revokedBy           String?
+  revocationReason    String?
+  supersedesOutcomeId String?
 
   recordedBy String
   recordedAt DateTime @default(now())
@@ -11618,6 +11730,7 @@ model HiddenAssetMatchOutcome {
 
   @@index([matchId])
   @@index([matchId, recordedAt])
+  @@index([matchId, verificationState])
   @@map("hidden_asset_match_outcomes")
 }
 

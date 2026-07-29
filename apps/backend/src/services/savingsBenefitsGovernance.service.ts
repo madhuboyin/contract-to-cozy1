@@ -18,6 +18,7 @@ import { HiddenAssetProgramReviewStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
 import { AdminCapability } from '../config/adminCapabilities';
+import { isReviewedProgramCurrent, isSourceReviewCurrent } from './hiddenAssets/sourceFreshness';
 
 export class SavingsBenefitsGovernanceError extends Error {
   code: string;
@@ -46,7 +47,7 @@ const TRANSITIONS: Record<AuthorAction | ReviewDecision | PublishAction, Transit
   SUBMIT_FOR_REVIEW: { from: ['DRAFT'], to: 'IN_REVIEW', capability: 'SAVINGS_BENEFITS_AUTHOR' },
   REVIVE_TO_DRAFT: { from: ['ARCHIVED'], to: 'DRAFT', capability: 'SAVINGS_BENEFITS_AUTHOR' },
   APPROVE: { from: ['IN_REVIEW'], to: 'APPROVED', capability: 'SAVINGS_BENEFITS_REVIEW' },
-  RETURN_TO_DRAFT: { from: ['IN_REVIEW'], to: 'DRAFT', capability: 'SAVINGS_BENEFITS_REVIEW' },
+  RETURN_TO_DRAFT: { from: ['IN_REVIEW', 'APPROVED'], to: 'DRAFT', capability: 'SAVINGS_BENEFITS_REVIEW' },
   PUBLISH: { from: ['APPROVED'], to: 'PUBLISHED', capability: 'SAVINGS_BENEFITS_PUBLISH' },
   // UNPUBLISH keeps publishedAt as last-publish history — fetchCandidatePrograms
   // filters on reviewStatus, so the program stops matching immediately.
@@ -69,7 +70,22 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
 
   const program = await prisma.hiddenAssetProgram.findUnique({
     where: { id: input.programId },
-    select: { id: true, name: true, reviewStatus: true, publishedAt: true },
+    select: {
+      id: true,
+      name: true,
+      reviewStatus: true,
+      publishedAt: true,
+      sourceUrl: true,
+      lastVerifiedAt: true,
+      source: {
+        select: {
+          status: true,
+          officialUrl: true,
+          lastReviewedAt: true,
+          reviewSlaDays: true,
+        },
+      },
+    },
   });
   if (!program) {
     throw new SavingsBenefitsGovernanceError('PROGRAM_NOT_FOUND', `No program with id "${input.programId}".`);
@@ -82,12 +98,41 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
     );
   }
 
+  if (input.action === 'PUBLISH') {
+    const now = new Date();
+    if (!isSourceReviewCurrent(program.source, now)) {
+      throw new SavingsBenefitsGovernanceError(
+        'SOURCE_NOT_CURRENT',
+        'Cannot publish while the owning source is paused, unreviewed, or past its review SLA.',
+      );
+    }
+    if (!program.sourceUrl?.trim()) {
+      throw new SavingsBenefitsGovernanceError(
+        'OFFICIAL_SOURCE_REQUIRED',
+        'Cannot publish a program without an official source URL.',
+      );
+    }
+    // APPROVE stamps lastVerifiedAt below. This defensive check also protects
+    // older rows that reached APPROVED before freshness became fail-closed.
+    if (!isReviewedProgramCurrent(program, program.source, now)) {
+      throw new SavingsBenefitsGovernanceError(
+        'PROGRAM_NOT_CURRENT',
+        'Cannot publish a program whose criteria have not been freshly reviewed.',
+      );
+    }
+  }
+
+  const transitionedAt = new Date();
   await prisma.hiddenAssetProgram.update({
     where: { id: input.programId },
     data: {
       reviewStatus: spec.to,
       ...(input.action === 'APPROVE'
-        ? { reviewedAt: new Date(), reviewedBy: input.actorId }
+        ? {
+            reviewedAt: transitionedAt,
+            reviewedBy: input.actorId,
+            lastVerifiedAt: transitionedAt,
+          }
         : {}),
       ...(input.action === 'PUBLISH'
         ? { publishedAt: program.publishedAt ?? new Date(), publishedBy: input.actorId }

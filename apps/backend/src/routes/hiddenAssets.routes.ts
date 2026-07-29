@@ -12,6 +12,7 @@ import {
   listHiddenAssetMatchOutcomes,
   refreshHiddenAssetsForProperty,
   updateHiddenAssetMatchStatus,
+  revokeHiddenAssetMatchOutcomeController,
 } from '../controllers/hiddenAssets.controller';
 
 const router = Router();
@@ -31,6 +32,10 @@ const recordMatchOutcomeBodySchema = z.object({
   evidenceNote: z.string().trim().min(1).max(2000).nullable().optional(),
   denialReason: z.string().trim().min(1).max(2000).nullable().optional(),
   documentIds: z.array(z.string().uuid()).max(10).optional(),
+  supersedesOutcomeId: z.string().uuid().nullable().optional(),
+});
+const revokeOutcomeBodySchema = z.object({
+  reason: z.string().trim().min(3).max(1000),
 });
 
 // ============================================================================
@@ -61,6 +66,12 @@ router.get(
   '/properties/:propertyId/hidden-assets',
   propertyAuthMiddleware,
   getHiddenAssetsForProperty,
+);
+
+router.post(
+  '/property-hidden-asset-match-outcomes/:outcomeId/revoke',
+  validateBody(revokeOutcomeBodySchema),
+  revokeHiddenAssetMatchOutcomeController,
 );
 
 /**

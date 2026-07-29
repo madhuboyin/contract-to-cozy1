@@ -205,16 +205,31 @@ async function reEvaluateMatchWithOverlay(
     return;
   }
 
-  await prisma.propertyHiddenAssetMatch.update({
-    where: { id: matchId },
-    data: {
-      confidenceLevel: result.confidenceLevel,
-      matchedRuleCount: result.matchedRuleCount,
-      totalRuleCount: result.totalRuleCount,
-      matchReasons: result.matchReasons,
-      lastEvaluatedAt: new Date(),
-      programVersionAtMatch: match.program.version,
-    },
+  const evaluatedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.propertyHiddenAssetMatch.update({
+      where: { id: matchId },
+      data: {
+        confidenceLevel: result.confidenceLevel!,
+        matchedRuleCount: result.matchedRuleCount,
+        totalRuleCount: result.totalRuleCount,
+        matchReasons: result.matchReasons,
+        lastEvaluatedAt: evaluatedAt,
+        programVersionAtMatch: match.program.version,
+      },
+    });
+    await tx.propertyHiddenAssetCriterionResult.deleteMany({ where: { matchId } });
+    if (result.criterionResults.length > 0) {
+      await tx.propertyHiddenAssetCriterionResult.createMany({
+        data: result.criterionResults.map((criterion) => ({
+          matchId,
+          ruleId: criterion.ruleId,
+          result: criterion.result,
+          explanation: criterion.explanation,
+          evaluatedAt,
+        })),
+      });
+    }
   });
 }
 

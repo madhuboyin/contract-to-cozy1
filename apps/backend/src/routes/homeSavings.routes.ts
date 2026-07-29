@@ -13,6 +13,7 @@ import {
   runHomeSavingsComparison,
   setHomeSavingsOpportunityStatus,
   upsertHomeSavingsAccount,
+  revokeHomeSavingsOpportunityOutcomeController,
 } from '../controllers/homeSavings.controller';
 import { HOME_SAVINGS_CATEGORY_KEYS } from '../services/homeSavings/types';
 
@@ -54,6 +55,12 @@ const recordOpportunityOutcomeBodySchema = z.object({
   evidenceNote: z.string().trim().min(1).max(2000).nullable().optional(),
   denialReason: z.string().trim().min(1).max(2000).nullable().optional(),
   documentIds: z.array(z.string().uuid()).max(10).optional(),
+  observationStartedAt: z.string().datetime().nullable().optional(),
+  observationEndedAt: z.string().datetime().nullable().optional(),
+  supersedesOutcomeId: z.string().uuid().nullable().optional(),
+});
+const revokeOutcomeBodySchema = z.object({
+  reason: z.string().trim().min(3).max(1000),
 });
 
 router.use(apiRateLimiter);
@@ -105,5 +112,11 @@ router.post(
  * Returns the full outcome history for an opportunity, oldest first.
  */
 router.get('/home-savings/opportunities/:id/outcome', listHomeSavingsOpportunityOutcomes);
+
+router.post(
+  '/home-savings/opportunity-outcomes/:outcomeId/revoke',
+  validateBody(revokeOutcomeBodySchema),
+  revokeHomeSavingsOpportunityOutcomeController,
+);
 
 export default router;

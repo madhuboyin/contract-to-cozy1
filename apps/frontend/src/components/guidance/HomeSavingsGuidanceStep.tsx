@@ -40,6 +40,12 @@ function summarizeSavings(summary: HomeSavingsSummaryDTO) {
     connectedCount: summary.categories.filter((category) => category.account).length,
     opportunityCount: opportunities.length,
     topOpportunity,
+    decidedOpportunity: opportunities
+      .map((category) => category.topOpportunity)
+      .find((opportunity) =>
+        opportunity
+        && ['SAVED', 'DISMISSED', 'APPLIED', 'SWITCHED'].includes(opportunity.status),
+      ) ?? null,
   };
 }
 
@@ -75,12 +81,12 @@ export function HomeSavingsGuidanceStep({
   }
 
   async function handleComplete() {
-    if (!summary || !derivedSummary) return;
+    if (!summary || !derivedSummary?.decidedOpportunity) return;
     setCompleting(true);
     try {
       await completeGuidanceStep(propertyId, stepId, {
-        proofType: 'home_savings_summary_reviewed',
-        proofId: `${journeyId}:${stepKey}:${summary.updatedAt}`,
+        proofType: 'savings_benefit_decision_recorded',
+        proofId: derivedSummary.decidedOpportunity.id,
         journeyId,
         stepKey,
         sourceToolKey: 'home-savings',
@@ -90,6 +96,8 @@ export function HomeSavingsGuidanceStep({
         opportunityCount: derivedSummary.opportunityCount,
         topOpportunityId: derivedSummary.topOpportunity?.id ?? null,
         topOpportunityHeadline: derivedSummary.topOpportunity?.headline ?? null,
+        decisionOpportunityId: derivedSummary.decidedOpportunity.id,
+        decisionStatus: derivedSummary.decidedOpportunity.status,
         updatedAt: summary.updatedAt,
       });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
@@ -183,15 +191,25 @@ export function HomeSavingsGuidanceStep({
       )}
 
       <div className="flex flex-wrap gap-3">
-        <Button type="button" className="rounded-xl" disabled={completing} onClick={handleComplete}>
+        <Button
+          type="button"
+          className="rounded-xl"
+          disabled={completing || !derivedSummary.decidedOpportunity}
+          onClick={handleComplete}
+        >
           <CheckCircle2 className="mr-2 h-4 w-4" />
-          {completing ? 'Saving…' : 'Use this summary & continue'}
+          {completing ? 'Saving…' : 'Continue with recorded decision'}
         </Button>
         <Button type="button" variant="outline" className="rounded-xl" disabled={running} onClick={handleRun}>
           <PiggyBank className="mr-2 h-4 w-4" />
           {running ? 'Refreshing…' : 'Refresh savings summary'}
         </Button>
       </div>
+      {!derivedSummary.decidedOpportunity ? (
+        <p className="mb-0 text-xs text-slate-600">
+          Reviewing this generated summary does not complete the step. Save, dismiss, apply to, or otherwise record a decision on an opportunity first.
+        </p>
+      ) : null}
     </div>
   );
 }

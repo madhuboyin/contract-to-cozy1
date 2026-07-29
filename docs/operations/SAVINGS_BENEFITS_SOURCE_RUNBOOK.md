@@ -50,18 +50,11 @@ from the backend image).
 2. In the admin console (`/dashboard/admin/savings-benefits`, Sources tab),
    record the source's kind, official URL, and review SLA (how often it must
    be re-reviewed).
-3. Add each program under **Programs**: category, region, benefit type, the
-   machine-evaluable rule(s) the rule engine can actually check today
-   (property-level attributes only — state/city/county/zip; **not** income,
-   age, or residency duration, which the rule engine does not model as of
-   this writing), and `eligibilityNotes` spelling out every criterion the
-   rule engine cannot evaluate, for the homeowner to verify themselves. The
-   admin console currently authors a single MANDATORY, EQUALS-only rule per
-   program; `HiddenAssetProgramRuleInput.kind` (MANDATORY/OPTIONAL/
-   DISQUALIFYING) and `groupKey` (OR-grouping rules that share a key) exist
-   in the service layer for richer programs but have no console UI yet —
-   use `savingsBenefitsAdminService.createProgram`/`updateProgram` directly
-   for those until the console catches up. See
+3. Add each program under **Programs**: category, region, benefit type, and
+   every reviewed criterion. The admin console supports multiple mandatory,
+   optional, and disqualifying rules, OR groups, explicit unknown handling,
+   sensitive-data classification, external-verification requirements,
+   evidence requirements, and homeowner explanations. See
    `apps/backend/src/services/hiddenAssets/ruleEngine.ts` for exactly how a
    program's groups are combined into a match decision and confidence
    level. Also set `benefitPeriod` (ONE_TIME/MONTHLY/ANNUAL, default
@@ -98,23 +91,18 @@ fields yet — set them via `savingsBenefitsAdminService.createProgram`/
 ### Handling a stale or failed source
 
 A source is `DEGRADED` once its `lastReviewedAt` passes its own
-`reviewSlaDays` (shown in the admin console's Sources tab). A stale source's
-published programs remain visible to homeowners (there is no automatic
-un-publish on staleness in this slice) — an admin must actively re-review
-and re-save the source (which stamps a fresh `lastReviewedAt`), or
-`UNPUBLISH`/`ARCHIVE` its programs if the underlying program details are no
-longer trustworthy.
+`reviewSlaDays` (shown in the admin console's Sources tab). Stale, paused,
+retired, or never-reviewed sources fail closed: their programs are excluded
+from scans, coverage claims, action transitions, and Home promotion. Re-review
+and save the source, then independently review the affected program before
+making it actionable again.
 
 ### Correcting an incorrect program
 
-Editing a program's fields (admin console → Programs → Edit) never changes
-its `reviewStatus` — a live `PUBLISHED` program can be corrected in place
-without an unpublish/republish round-trip, but the edit is not itself
-reviewed. For any correction that changes eligibility criteria, benefit
-amount, or region, the safer path is: `UNPUBLISH` → edit → `SUBMIT_FOR_REVIEW`
-→ `APPROVE` (by someone other than the editor) → `PUBLISH` again, so every
-live program's current content has been reviewed by someone other than its
-author.
+Published programs are immutable. To correct one, use `UNPUBLISH`, return it
+to `DRAFT`, edit it, then complete `SUBMIT_FOR_REVIEW` → `APPROVE` →
+`PUBLISH` again. Approval stamps a new program verification time, and publish
+is rejected unless the owning source and program verification are current.
 
 ### Retiring a program
 
@@ -133,27 +121,19 @@ Slice 7) instead of stopping there:
 `SUBMITTED → APPROVED → RECEIVED`, or `→ DENIED` / `→ WITHDRAWN` at any
 non-terminal point. Each stage is its own append-only row (
 `HiddenAssetMatchOutcome` / `HomeSavingsOpportunityOutcome`) so the full
-history is preserved, not overwritten. `RECEIVED` requires an amount/observed
-value and an `evidenceNote` — there is no way to record realized value
-without stating what backs it. The first outcome ever recorded for a match
-or opportunity may be any stage (a homeowner catching up on real history
-isn't forced to fabricate a `SUBMITTED` entry first); after that, transitions
-are enforced (`isValidOutcomeTransition`).
+history is preserved, not overwritten. A new trail must begin at `SUBMITTED`.
+`RECEIVED` requires an amount/observed value and evidence; recurring value
+also requires an observation window of at least 28 days.
 
 API: `POST`/`GET /api/property-hidden-asset-matches/:matchId/outcome` and
-`POST`/`GET /api/home-savings/opportunities/:id/outcome`. No homeowner or
-admin UI exists for these yet — this slice is backend + tests only.
+`POST`/`GET /api/home-savings/opportunities/:id/outcome`. The canonical
+workspace exposes this trail, evidence attachment, and revocation/correction
+controls.
 
-A `RECEIVED` outcome on the recurring-cost side is the only thing that
-publishes a real `SAVINGS_REALIZATION` signal (`signal.service.ts`); marking
-`APPLIED`/`SWITCHED` alone no longer does (it still refreshes
-`FINANCIAL_DISCIPLINE`, a separate pattern about savings-action behavior).
-A `RECEIVED` outcome on the benefits side does **not** publish that signal —
-`SAVINGS_REALIZATION`'s ownership is pinned to `HomeSavingsService`
-(`SIGNAL_OWNER_BY_KEY`) and existing downstream consumers
-(`financialAssumption.service.ts`, `doNothingSimulator.service.ts`) were
-built assuming that ownership. Widening it to cover benefit outcomes too is
-a deliberate future change, not something this slice does as a side effect.
+Homeowner entries are explicitly `SELF_REPORTED` or `EVIDENCE_ATTACHED`.
+Neither state publishes the platform's verified `SAVINGS_REALIZATION`
+signal. Only a separate verification workflow may mark an entry `VERIFIED`
+and project it into verified downstream totals.
 
 ## 4. Known limitations (by design, not oversight)
 
@@ -164,14 +144,8 @@ a deliberate future change, not something this slice does as a side effect.
   admin console or the pilot seed script; see the audit's Slice 2 write-up
   for why (recall ingestion's zero-review model was explicitly rejected as
   the wrong precedent here).
-- No income/age/household eligibility modeling yet. The rule engine now
-  distinguishes mandatory, optional, and disqualifying criteria and supports
-  OR expression groups (Slice 3), but sensitive facts like income, age,
-  disability, and veteran status still have no consented capture path —
-  those criteria live in `eligibilityNotes` as homeowner-facing text, not
-  machine-evaluated rules, until a dedicated consented eligibility-fact
-  store is built (see section 9.6 of the audit).
-- County is resolvable (`Property.county` feeds both region matching and the
-  rule engine's `county` attribute), but utility, hazard-zone, and
-  historic-district geography still resolve to `null` — `Property` has no
-  fields for them yet.
+- Sensitive income/age/household criteria are captured only through the
+  consented, opportunity-scoped fact API. They are never inferred from broad
+  profile data.
+- County, utility, hazard-zone, and historic-district geography resolve from
+  explicit Property fields; unknown values remain unknown.

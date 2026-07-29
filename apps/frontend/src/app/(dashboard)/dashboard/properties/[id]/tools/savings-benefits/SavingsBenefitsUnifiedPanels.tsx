@@ -189,7 +189,7 @@ export function RealizedPanel({ propertyId }: { propertyId: string }) {
     return (
       <EmptyStateCard
         title="Nothing realized yet"
-        description="Once you record a received benefit or a confirmed recurring-cost switch with evidence, it'll appear here with its verified value. Estimates shown elsewhere aren't counted until confirmed."
+        description="Once you record a received benefit or a recurring-cost result with supporting evidence, it'll appear here as recorded value. Estimates shown elsewhere aren't counted."
       />
     );
   }
@@ -198,7 +198,7 @@ export function RealizedPanel({ propertyId }: { propertyId: string }) {
     <div className="space-y-3">
       {totals ? (
         <MobileCard variant="compact" className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs text-[hsl(var(--mobile-text-secondary))]">Verified value realized</span>
+          <span className="text-xs text-[hsl(var(--mobile-text-secondary))]">Recorded value realized</span>
           <span className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
             {formatMoney(totals.realizedValueTotal, 'USD')}
           </span>

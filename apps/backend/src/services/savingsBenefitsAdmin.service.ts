@@ -16,6 +16,7 @@ import {
   HiddenAssetRuleOperator,
   HiddenAssetSourceKind,
   HiddenAssetSourceStatus,
+  HiddenAssetUnknownHandling,
   Prisma,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -45,6 +46,11 @@ export interface HiddenAssetProgramRuleInput {
    */
   kind?: HiddenAssetRuleKind;
   groupKey?: string | null;
+  evidenceRequirement?: string | null;
+  homeownerExplanation?: string | null;
+  isSensitive?: boolean;
+  requiresExternalVerification?: boolean;
+  unknownHandling?: HiddenAssetUnknownHandling;
 }
 
 export interface HiddenAssetProgramInput {
@@ -242,6 +248,11 @@ export class SavingsBenefitsAdminService {
           sortOrder: rule.sortOrder ?? index,
           kind: rule.kind ?? 'MANDATORY',
           groupKey: rule.groupKey ?? null,
+          evidenceRequirement: rule.evidenceRequirement ?? null,
+          homeownerExplanation: rule.homeownerExplanation ?? null,
+          isSensitive: rule.isSensitive ?? false,
+          requiresExternalVerification: rule.requiresExternalVerification ?? false,
+          unknownHandling: rule.unknownHandling ?? 'HOLD_CANDIDATE',
         })),
       });
       return this.getProgram(program.id, tx);
@@ -252,6 +263,11 @@ export class SavingsBenefitsAdminService {
     assertConsistentGroupKinds(input.rules);
     const existing = await prisma.hiddenAssetProgram.findUnique({ where: { id: programId } });
     if (!existing) throw new Error('Program not found');
+    if (existing.reviewStatus === 'PUBLISHED') {
+      throw new Error(
+        'Published programs are immutable. Unpublish and return the program to DRAFT before editing.',
+      );
+    }
 
     return prisma.$transaction(async (tx) => {
       // Rule rows are destructively deleted/recreated below, which would
@@ -307,6 +323,11 @@ export class SavingsBenefitsAdminService {
           sortOrder: rule.sortOrder ?? index,
           kind: rule.kind ?? 'MANDATORY',
           groupKey: rule.groupKey ?? null,
+          evidenceRequirement: rule.evidenceRequirement ?? null,
+          homeownerExplanation: rule.homeownerExplanation ?? null,
+          isSensitive: rule.isSensitive ?? false,
+          requiresExternalVerification: rule.requiresExternalVerification ?? false,
+          unknownHandling: rule.unknownHandling ?? 'HOLD_CANDIDATE',
         })),
       });
       return this.getProgram(programId, tx);

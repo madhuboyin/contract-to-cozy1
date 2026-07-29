@@ -3,6 +3,7 @@ import {
   HiddenAssetConfidenceLevel,
   HiddenAssetRuleKind,
   HiddenAssetRuleOperator,
+  HiddenAssetCriterionResultStatus,
 } from '@prisma/client';
 import {
   applyConfidenceCaps,
@@ -799,6 +800,7 @@ export function evaluateProgram(
       estimatedValue: null,
       estimatedValueMin: program.benefitEstimateMin,
       estimatedValueMax: program.benefitEstimateMax,
+      criterionResults: [],
     };
   }
 
@@ -809,7 +811,13 @@ export function evaluateProgram(
 
   for (const rule of rules) {
     const sensitive = isSensitiveAttribute(rule.attribute);
-    const result = evaluateRule(attrs, rule, sensitiveOverlay);
+    const evaluated = rule.requiresExternalVerification
+      ? { matched: false, attributeMissing: true }
+      : evaluateRule(attrs, rule, sensitiveOverlay);
+    const result =
+      evaluated.attributeMissing && rule.unknownHandling === 'EXCLUDE'
+        ? { matched: false, attributeMissing: false }
+        : evaluated;
     perRule.push(result);
 
     if (result.attributeMissing) {
@@ -839,6 +847,33 @@ export function evaluateProgram(
   // Stage 1: base confidence from mandatory/optional/disqualifying groups
   const groups = evaluateGroups(rules, perRule);
   const decision = decideProgramMatch(groups);
+  const criterionResults = rules.map((rule, index) => {
+    const result = perRule[index];
+    let status: HiddenAssetCriterionResultStatus;
+    if (rule.requiresExternalVerification || (
+      result.attributeMissing && rule.unknownHandling === 'EXTERNAL_VERIFICATION'
+    )) {
+      status = HiddenAssetCriterionResultStatus.EXTERNAL_VERIFICATION;
+    } else if (result.attributeMissing) {
+      status = HiddenAssetCriterionResultStatus.UNKNOWN;
+    } else {
+      status = result.matched
+        ? HiddenAssetCriterionResultStatus.MET
+        : HiddenAssetCriterionResultStatus.NOT_MET;
+    }
+    return {
+      ruleId: rule.id,
+      result: status,
+      explanation: rule.homeownerExplanation
+        ?? (status === HiddenAssetCriterionResultStatus.MET
+          ? 'This criterion matches the current property context.'
+          : status === HiddenAssetCriterionResultStatus.NOT_MET
+            ? 'This criterion does not match the current property context.'
+            : status === HiddenAssetCriterionResultStatus.EXTERNAL_VERIFICATION
+              ? 'This criterion must be verified by the program administrator or another official source.'
+              : 'More information is needed to evaluate this criterion.'),
+    };
+  });
 
   if (!decision.included || decision.baseLevel === null) {
     return {
@@ -851,6 +886,7 @@ export function evaluateProgram(
       estimatedValue: null,
       estimatedValueMin: program.benefitEstimateMin,
       estimatedValueMax: program.benefitEstimateMax,
+      criterionResults,
     };
   }
 
@@ -877,6 +913,7 @@ export function evaluateProgram(
     estimatedValue: null,
     estimatedValueMin: program.benefitEstimateMin,
     estimatedValueMax: program.benefitEstimateMax,
+    criterionResults,
   };
 }
 

@@ -14,6 +14,7 @@ import {
   getHomeSavingsOpportunityOutcomes,
   RecordHomeSavingsOpportunityOutcomeInput,
   recordHomeSavingsOpportunityOutcome,
+  revokeHomeSavingsOpportunityOutcome,
   SavingsOutcomeGovernanceError,
 } from '../services/savingsOutcome.service';
 
@@ -25,6 +26,26 @@ function requireUserId(req: CustomRequest): string {
     throw new Error('Authentication required.');
   }
   return userId;
+}
+
+export async function revokeHomeSavingsOpportunityOutcomeController(req: CustomRequest, res: Response) {
+  try {
+    const userId = requireUserId(req);
+    const outcome = await revokeHomeSavingsOpportunityOutcome(
+      req.params.outcomeId,
+      userId,
+      String(req.body.reason),
+    );
+    return res.json({ success: true, data: outcome });
+  } catch (error: any) {
+    const isGovernance = error instanceof SavingsOutcomeGovernanceError;
+    const status = error?.message === 'Outcome not found or access denied.' ? 404 : isGovernance ? 422 : 500;
+    return res.status(status).json({
+      success: false,
+      code: isGovernance ? error.code : undefined,
+      message: error?.message || 'Failed to revoke opportunity outcome.',
+    });
+  }
 }
 
 export async function listHomeSavingsCategories(req: CustomRequest, res: Response) {
@@ -164,10 +185,14 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
       const categoriesReviewed = result.summary.categories.filter(
         (entry) => entry.account !== null,
       ).length;
-      // A run that only produced missing-input prompts (no connected
-      // accounts, no savings found) hasn't reviewed anything real yet — it
-      // should not silently complete the guidance step.
-      const hasMeaningfulReview = categoriesWithSavings > 0 || categoriesReviewed > 0;
+      const decisionStatuses = new Set(['SAVED', 'DISMISSED', 'APPLIED', 'SWITCHED']);
+      const decidedOpportunity = result.summary.categories
+        .map((entry) => entry.topOpportunity)
+        .find((opportunity) => opportunity && decisionStatuses.has(opportunity.status));
+      // Generated output, a connected account, or a benchmark flag is not
+      // completion. Only a durable homeowner decision/action may complete
+      // the Guidance step.
+      const hasRecordedDecision = Boolean(decidedOpportunity);
 
       await guidanceJourneyService.recordToolCompletion({
         propertyId: req.params.propertyId,
@@ -180,11 +205,11 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
         sourceEntityType: 'HOME_SAVINGS_RUN',
         sourceEntityId: result.runId,
         stepKey: guidanceStepKey ?? 'evaluate_savings_funding',
-        status: hasMeaningfulReview ? 'COMPLETED' : 'IN_PROGRESS',
-        reasonCode: hasMeaningfulReview ? null : 'no_accounts_connected',
-        reasonMessage: hasMeaningfulReview
+        status: hasRecordedDecision ? 'COMPLETED' : 'IN_PROGRESS',
+        reasonCode: hasRecordedDecision ? null : 'decision_required',
+        reasonMessage: hasRecordedDecision
           ? null
-          : 'No recurring-cost accounts were connected yet — add a bill or policy to complete this step.',
+          : 'Review an opportunity and save, dismiss, apply, or record another durable decision to complete this step.',
         producedData: {
           proofType: 'savings_analysis',
           proofId: result.runId,
@@ -193,6 +218,8 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
           potentialAnnualSavings: result.summary.potentialAnnualSavings,
           categoriesWithSavings,
           categoriesReviewed,
+          decisionOpportunityId: decidedOpportunity?.id ?? null,
+          decisionStatus: decidedOpportunity?.status ?? null,
         },
       });
     } catch (guidanceError) {
@@ -242,7 +269,16 @@ export async function setHomeSavingsOpportunityStatus(req: CustomRequest, res: R
 export async function createHomeSavingsOpportunityOutcome(req: CustomRequest, res: Response) {
   try {
     const userId = requireUserId(req);
-    const input = req.body as RecordHomeSavingsOpportunityOutcomeInput;
+    const body = req.body as Record<string, unknown>;
+    const input: RecordHomeSavingsOpportunityOutcomeInput = {
+      ...(body as unknown as RecordHomeSavingsOpportunityOutcomeInput),
+      observationStartedAt: typeof body.observationStartedAt === 'string'
+        ? new Date(body.observationStartedAt)
+        : null,
+      observationEndedAt: typeof body.observationEndedAt === 'string'
+        ? new Date(body.observationEndedAt)
+        : null,
+    };
 
     const outcome = await recordHomeSavingsOpportunityOutcome(req.params.id, userId, input);
     return res.status(201).json({ success: true, data: outcome });

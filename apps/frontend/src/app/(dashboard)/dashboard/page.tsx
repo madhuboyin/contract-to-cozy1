@@ -1113,8 +1113,8 @@ export default function DashboardPage() {
       return {
         badgeLabel: buildSavingsBadgeLabel(),
         title: `${formatUsd(annualSavingsPotential)} in potential annual savings.`,
-        subtitle: 'Chosen because this is the clearest verified savings opportunity right now.',
-        ctaLabel: 'See your savings',
+        subtitle: 'Chosen because this is the clearest estimated savings signal right now. Verify the comparison basis before acting.',
+        ctaLabel: 'Review the estimate',
         href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings'),
         impactLabel,
         etaLabel,
@@ -1300,9 +1300,9 @@ export default function DashboardPage() {
           </Link>
           <Link href={protectedValueHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
             <MetricTile
-              label="Annual savings found"
+              label="Annual savings estimate"
               value={formatUsd(annualSavingsPotential)}
-              hint="Verified savings opportunities"
+              hint="Potential opportunities—verify the basis"
               tone="brand"
               className="h-full cursor-pointer"
             />

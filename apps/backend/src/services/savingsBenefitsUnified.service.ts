@@ -14,7 +14,7 @@
 // two here would reintroduce the estimate-as-realized problem this
 // capability's audit already fixed once.
 
-import { HomeSavingsOpportunityStatus, Prisma, PropertyHiddenAssetMatchStatus, SavingsOutcomeStage } from '@prisma/client';
+import { HomeSavingsOpportunityStatus, Prisma, PropertyHiddenAssetMatchStatus, SavingsOutcomeStage, SavingsOutcomeVerificationState } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { asNumber, round2 } from './homeSavings/helpers';
 import { propertyTaxAppealCaseService } from './propertyTax/propertyTaxAppealCase.service';
@@ -40,6 +40,7 @@ export interface SavingsBenefitsUnifiedItemDTO {
   sourceLabel: string | null;
   statusLabel: string;
   outcomeStage: SavingsOutcomeStage | null;
+  verificationState: SavingsOutcomeVerificationState | null;
   detailHref: string;
   updatedAt: string;
   // Other realized item IDs sharing this program's exclusionGroupKey. A
@@ -152,6 +153,7 @@ function mapPursuingMatch(row: PursuingMatchRow, propertyId: string, mutuallyExc
     sourceLabel: program.sourceLabel ?? null,
     statusLabel: 'Pursuing',
     outcomeStage: latestOutcome?.stage ?? null,
+    verificationState: latestOutcome?.verificationState ?? null,
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=benefits&matchId=${row.id}`,
     updatedAt: (latestOutcome?.recordedAt ?? row.lastEvaluatedAt).toISOString(),
     mutuallyExclusiveWith,
@@ -180,8 +182,14 @@ function mapAppliedOpportunity(row: AppliedOpportunityRow, propertyId: string): 
     currency: row.currency,
     deadline: row.expiresAt ? row.expiresAt.toISOString() : null,
     sourceLabel: row.recommendedProviderName ?? null,
-    statusLabel: 'Applied',
+    statusLabel:
+      row.status === HomeSavingsOpportunityStatus.SWITCHED
+        ? 'Switch recorded'
+        : row.status === HomeSavingsOpportunityStatus.SAVED
+          ? 'Saved'
+          : 'Submitted externally',
     outcomeStage: latestOutcome?.stage ?? null,
+    verificationState: latestOutcome?.verificationState ?? null,
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=recurring&categoryKey=${row.categoryKey}`,
     updatedAt: (latestOutcome?.recordedAt ?? row.updatedAt).toISOString(),
     mutuallyExclusiveWith: [],
@@ -206,6 +214,7 @@ function mapReceivedMatchOutcome(outcome: ReceivedMatchOutcomeRow, propertyId: s
     sourceLabel: program.sourceLabel ?? null,
     statusLabel: 'Received',
     outcomeStage: outcome.stage,
+    verificationState: outcome.verificationState,
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=benefits&matchId=${match.id}`,
     updatedAt: outcome.recordedAt.toISOString(),
     mutuallyExclusiveWith,
@@ -231,6 +240,7 @@ function mapReceivedOpportunityOutcome(outcome: ReceivedOpportunityOutcomeRow, p
     sourceLabel: opportunity.recommendedProviderName ?? null,
     statusLabel: 'Switched',
     outcomeStage: outcome.stage,
+    verificationState: outcome.verificationState,
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=recurring&categoryKey=${opportunity.categoryKey}`,
     updatedAt: outcome.recordedAt.toISOString(),
     mutuallyExclusiveWith: [],
@@ -354,16 +364,35 @@ export class SavingsBenefitsUnifiedService {
         include: { program: true, outcomes: { orderBy: { recordedAt: 'desc' }, take: 1 } },
       }),
       prisma.homeSavingsOpportunity.findMany({
-        where: { propertyId, status: HomeSavingsOpportunityStatus.APPLIED },
+        where: {
+          propertyId,
+          status: {
+            in: [
+              HomeSavingsOpportunityStatus.SAVED,
+              HomeSavingsOpportunityStatus.APPLIED,
+              HomeSavingsOpportunityStatus.SWITCHED,
+            ],
+          },
+        },
         include: { outcomes: { orderBy: { recordedAt: 'desc' }, take: 1 } },
       }),
       prisma.hiddenAssetMatchOutcome.findMany({
-        where: { stage: SavingsOutcomeStage.RECEIVED, match: { propertyId } },
+        where: {
+          stage: SavingsOutcomeStage.RECEIVED,
+          revokedAt: null,
+          verificationState: { not: SavingsOutcomeVerificationState.REVOKED },
+          match: { propertyId },
+        },
         include: { match: { include: { program: true } } },
         orderBy: { recordedAt: 'desc' },
       }),
       prisma.homeSavingsOpportunityOutcome.findMany({
-        where: { stage: SavingsOutcomeStage.RECEIVED, opportunity: { propertyId } },
+        where: {
+          stage: SavingsOutcomeStage.RECEIVED,
+          revokedAt: null,
+          verificationState: { not: SavingsOutcomeVerificationState.REVOKED },
+          opportunity: { propertyId },
+        },
         include: { opportunity: true },
         orderBy: { recordedAt: 'desc' },
       }),

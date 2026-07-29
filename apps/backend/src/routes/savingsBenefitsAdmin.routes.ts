@@ -64,6 +64,11 @@ const RuleBodySchema = z.object({
   sortOrder: z.number().int().optional(),
   kind: z.enum(['MANDATORY', 'OPTIONAL', 'DISQUALIFYING']).optional(),
   groupKey: z.string().nullable().optional(),
+  evidenceRequirement: z.string().trim().max(1000).nullable().optional(),
+  homeownerExplanation: z.string().trim().max(1000).nullable().optional(),
+  isSensitive: z.boolean().optional(),
+  requiresExternalVerification: z.boolean().optional(),
+  unknownHandling: z.enum(['HOLD_CANDIDATE', 'EXCLUDE', 'EXTERNAL_VERIFICATION']).optional(),
 });
 
 const ProgramBodySchema = z.object({
@@ -94,11 +99,15 @@ const ProgramBodySchema = z.object({
   benefitType: z.enum(['TAX_SAVINGS', 'TAX_CREDIT', 'REBATE', 'DISCOUNT', 'GRANT', 'CREDIT', 'OTHER']),
   benefitEstimateMin: z.number().nonnegative().nullable().optional(),
   benefitEstimateMax: z.number().nonnegative().nullable().optional(),
+  benefitPeriod: z.enum(['UNKNOWN', 'ONE_TIME', 'MONTHLY', 'ANNUAL']).optional(),
   currency: z.string().length(3).optional(),
   sourceUrl: z.string().url().nullable().optional(),
   sourceLabel: z.string().nullable().optional(),
   eligibilityNotes: z.string().nullable().optional(),
   expiresAt: z.coerce.date().nullable().optional(),
+  fundingStatus: z.enum(['UNKNOWN', 'OPEN', 'CLOSED']).optional(),
+  applicationWindowOpensAt: z.coerce.date().nullable().optional(),
+  applicationWindowClosesAt: z.coerce.date().nullable().optional(),
   exclusionGroupKey: z.string().nullable().optional(),
   beneficiaryScope: z.enum(['PROPERTY', 'HOUSEHOLD', 'EITHER']).optional(),
   rules: z.array(RuleBodySchema).default([]),

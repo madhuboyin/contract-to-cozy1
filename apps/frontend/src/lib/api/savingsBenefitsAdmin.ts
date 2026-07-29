@@ -61,6 +61,11 @@ export interface AdminProgramRuleInput {
    */
   kind?: HiddenAssetRuleKind;
   groupKey?: string | null;
+  evidenceRequirement?: string | null;
+  homeownerExplanation?: string | null;
+  isSensitive?: boolean;
+  requiresExternalVerification?: boolean;
+  unknownHandling?: 'HOLD_CANDIDATE' | 'EXCLUDE' | 'EXTERNAL_VERIFICATION';
 }
 
 export interface AdminProgramListItem {

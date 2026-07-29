@@ -44,6 +44,12 @@ function match(overrides = {}) {
       lastVerifiedAt: new Date(),
       applicationWindowClosesAt: null,
       currency: 'USD',
+      source: {
+        status: 'ACTIVE',
+        officialUrl: 'https://www.nj.gov/treasury/taxation/relief.shtml',
+        lastReviewedAt: new Date(),
+        reviewSlaDays: 180,
+      },
     },
     ...overrides,
   };
@@ -99,7 +105,7 @@ test('produces no savings-benefits action when there are no qualifying matches',
   assert.equal(result.actions.filter((a) => a.source.kind === 'SAVINGS_BENEFITS').length, 0);
 });
 
-test('marks a stale-source match UNKNOWN in the jurisdiction check instead of VERIFIED', async () => {
+test('suppresses a stale-source match instead of promoting it to Home', async () => {
   const db = emptyDb({
     propertyHiddenAssetMatch: {
       findMany: async () => [
@@ -110,5 +116,5 @@ test('marks a stale-source match UNKNOWN in the jurisdiction check instead of VE
 
   const result = await getPromotedHomeActions('property-1', db);
   const savingsActions = result.actions.filter((a) => a.source.kind === 'SAVINGS_BENEFITS');
-  assert.equal(savingsActions[0].governance.jurisdictionCheck.status, 'UNKNOWN');
+  assert.equal(savingsActions.length, 0);
 });

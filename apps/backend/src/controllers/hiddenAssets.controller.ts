@@ -16,6 +16,7 @@ import {
   getHiddenAssetMatchOutcomes,
   RecordHiddenAssetMatchOutcomeInput,
   recordHiddenAssetMatchOutcome,
+  revokeHiddenAssetMatchOutcome,
   SavingsOutcomeGovernanceError,
 } from '../services/savingsOutcome.service';
 
@@ -25,6 +26,26 @@ function requireUserId(req: CustomRequest): string {
   const userId = req.user?.userId;
   if (!userId) throw new Error('Authentication required.');
   return userId;
+}
+
+export async function revokeHiddenAssetMatchOutcomeController(req: CustomRequest, res: Response) {
+  try {
+    const userId = requireUserId(req);
+    const outcome = await revokeHiddenAssetMatchOutcome(
+      req.params.outcomeId,
+      userId,
+      String(req.body.reason),
+    );
+    return res.json({ success: true, data: outcome });
+  } catch (error: any) {
+    const isGovernance = error instanceof SavingsOutcomeGovernanceError;
+    const status = error?.message === 'Outcome not found or access denied.' ? 404 : isGovernance ? 422 : 500;
+    return res.status(status).json({
+      success: false,
+      code: isGovernance ? error.code : undefined,
+      message: error?.message || 'Failed to revoke match outcome.',
+    });
+  }
 }
 
 // ============================================================================
@@ -153,7 +174,8 @@ export async function updateHiddenAssetMatchStatus(req: CustomRequest, res: Resp
   } catch (error: any) {
     const isNotFound = error?.message === 'Match not found or access denied.';
     const isAuth = error?.message === 'Authentication required.';
-    const status = isNotFound ? 404 : isAuth ? 401 : 500;
+    const isNotActionable = error?.message?.includes('not currently actionable');
+    const status = isNotFound ? 404 : isAuth ? 401 : isNotActionable ? 422 : 500;
     logger.error({ err: error }, '[HiddenAssets] updateHiddenAssetMatchStatus error');
     return res.status(status).json({
       success: false,

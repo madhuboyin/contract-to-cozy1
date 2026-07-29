@@ -4238,6 +4238,7 @@ class APIClient {
       evidenceNote?: string | null;
       denialReason?: string | null;
       documentIds?: string[];
+      supersedesOutcomeId?: string | null;
     }
   ): Promise<import('@/types').HiddenAssetMatchOutcomeDTO | null> {
     const res = await this.post<import('@/types').HiddenAssetMatchOutcomeDTO>(
@@ -4245,6 +4246,10 @@ class APIClient {
       input
     );
     return res.data ?? null;
+  }
+
+  async revokeHiddenAssetMatchOutcome(outcomeId: string, reason: string): Promise<void> {
+    await this.post(`/api/property-hidden-asset-match-outcomes/${outcomeId}/revoke`, { reason });
   }
 
   async listHomeSavingsOpportunityOutcomes(
@@ -4266,6 +4271,9 @@ class APIClient {
       evidenceNote?: string | null;
       denialReason?: string | null;
       documentIds?: string[];
+      observationStartedAt?: string | null;
+      observationEndedAt?: string | null;
+      supersedesOutcomeId?: string | null;
     }
   ): Promise<import('@/types').HomeSavingsOpportunityOutcomeDTO | null> {
     const res = await this.post<import('@/types').HomeSavingsOpportunityOutcomeDTO>(
@@ -4273,6 +4281,10 @@ class APIClient {
       input
     );
     return res.data ?? null;
+  }
+
+  async revokeHomeSavingsOpportunityOutcome(outcomeId: string, reason: string): Promise<void> {
+    await this.post(`/api/home-savings/opportunity-outcomes/${outcomeId}/revoke`, { reason });
   }
 
   async deleteHiddenAssetSensitiveFact(
@@ -4295,6 +4307,37 @@ class APIClient {
       `/api/properties/${propertyId}/savings-benefits`
     );
     return res.data ?? null;
+  }
+
+  async createSavingsBenefitsAction(
+    propertyId: string,
+    opportunityId: string,
+    input: {
+      family: 'BENEFIT' | 'RECURRING_COST';
+      actionType:
+        | 'SAVE'
+        | 'DISMISS'
+        | 'PREPARE'
+        | 'OFFICIAL_SOURCE_OPENED'
+        | 'QUOTE_REQUESTED'
+        | 'PARTNER_HANDOFF_CONSENTED'
+        | 'EXTERNALLY_SUBMITTED'
+        | 'APPROVED'
+        | 'DENIED'
+        | 'SWITCHED'
+        | 'RECEIVED'
+        | 'FOLLOW_UP_SCHEDULED';
+      externalOwner?: string | null;
+      consent?: Record<string, unknown> | null;
+      sharedFields?: Record<string, unknown> | null;
+      followUpAt?: string | null;
+    },
+  ): Promise<{ id: string }> {
+    const res = await this.post<{ id: string }>(
+      `/api/properties/${propertyId}/savings-benefits/opportunities/${opportunityId}/actions`,
+      input,
+    );
+    return res.data;
   }
 
   // ==========================================================================

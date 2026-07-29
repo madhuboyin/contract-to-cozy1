@@ -31,6 +31,7 @@ import {
 } from './hiddenAssets/types';
 import { logger } from '../lib/logger';
 import { getFinancialContextDecisions } from './financialContext/context';
+import { isReviewedProgramCurrent } from './hiddenAssets/sourceFreshness';
 
 // ============================================================================
 // SERIALIZERS
@@ -319,13 +320,19 @@ async function fetchCandidatePrograms(regionPairs: RegionPair[]) {
 
   const now = new Date();
 
-  return prisma.hiddenAssetProgram.findMany({
+  const programs = await prisma.hiddenAssetProgram.findMany({
     where: {
       isActive: true,
       // Fail closed: a DRAFT/IN_REVIEW/APPROVED-but-not-yet-published
       // program has not cleared editorial review and must never be
       // evaluated against a homeowner's property.
       reviewStatus: 'PUBLISHED',
+      sourceUrl: { not: null },
+      lastVerifiedAt: { not: null },
+      source: {
+        status: 'ACTIVE',
+        lastReviewedAt: { not: null },
+      },
       AND: [
         {
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
@@ -344,8 +351,13 @@ async function fetchCandidatePrograms(regionPairs: RegionPair[]) {
     },
     include: {
       rules: { orderBy: { sortOrder: 'asc' } },
+      source: true,
     },
   });
+
+  return programs.filter((program) =>
+    isReviewedProgramCurrent(program, program.source, now),
+  );
 }
 
 // ============================================================================
@@ -534,7 +546,7 @@ async function executePropertyScan(
         existing?.status === PropertyHiddenAssetMatchStatus.PURSUING;
       const programVersionAtMatch = candidateProgramById.get(result.programId)?.version ?? null;
 
-      await prisma.propertyHiddenAssetMatch.upsert({
+      const savedMatch = await prisma.propertyHiddenAssetMatch.upsert({
         where: {
           propertyId_programId: {
             propertyId,
@@ -572,6 +584,20 @@ async function executePropertyScan(
           programVersionAtMatch,
         },
       });
+      await prisma.propertyHiddenAssetCriterionResult.deleteMany({
+        where: { matchId: savedMatch.id },
+      });
+      if (result.criterionResults.length > 0) {
+        await prisma.propertyHiddenAssetCriterionResult.createMany({
+          data: result.criterionResults.map((criterion) => ({
+            matchId: savedMatch.id,
+            ruleId: criterion.ruleId,
+            result: criterion.result,
+            explanation: criterion.explanation,
+            evaluatedAt: now,
+          })),
+        });
+      }
     }
 
     // Mark prior matches whose programs are no longer in the active candidate set
@@ -762,6 +788,12 @@ export class HiddenAssetService {
       where: {
         isActive: true,
         reviewStatus: 'PUBLISHED',
+        sourceUrl: { not: null },
+        lastVerifiedAt: { not: null },
+        source: {
+          status: 'ACTIVE',
+          lastReviewedAt: { not: null },
+        },
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         AND: regionPairs.length > 0
           ? [{ OR: regionPairs.map(({ regionType, regionValue }) => ({ regionType, regionValue })) }]
@@ -773,6 +805,7 @@ export class HiddenAssetService {
     const sourceById = new Map<string, (typeof publishedPrograms)[number]['source']>();
     const categoriesCovered = new Set<HiddenAssetCategory>();
     for (const program of publishedPrograms) {
+      if (!isReviewedProgramCurrent(program, program.source, now)) continue;
       sourceById.set(program.source.id, program.source);
       categoriesCovered.add(program.category);
     }
@@ -835,11 +868,20 @@ export class HiddenAssetService {
         id: matchId,
         property: { homeownerProfile: { userId } },
       },
-      include: { program: true },
+      include: { program: { include: { source: true } } },
     });
 
     if (!existing) {
       throw new Error('Match not found or access denied.');
+    }
+
+    if (
+      input.status === PropertyHiddenAssetMatchStatus.PURSUING
+      && !isReviewedProgramCurrent(existing.program, existing.program.source)
+    ) {
+      throw new Error(
+        'This program is not currently actionable because its source review is missing or overdue.',
+      );
     }
 
     const now = new Date();

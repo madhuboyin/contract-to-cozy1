@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, Loader2, PiggyBank, RefreshCw } from 'lucide
 import { Button } from '@/components/ui/button';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { OutcomeRecorder } from '@/components/savings-benefits/OutcomeRecorder';
+import { api } from '@/lib/api/client';
 import {
   getHomeSavingsCategory,
   getHomeSavingsSummary,
@@ -309,7 +310,21 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
       // Marking an opportunity APPLIED reflects application intent, not
       // confirmed savings — do not emit savings_verified here. Verified
       // savings require an observed/received outcome with evidence.
-      await setHomeSavingsOpportunityStatus(opportunityId, status);
+      if (status === 'SAVED' || status === 'DISMISSED' || status === 'APPLIED' || status === 'SWITCHED') {
+        await api.createSavingsBenefitsAction(propertyId, opportunityId, {
+          family: 'RECURRING_COST',
+          actionType:
+            status === 'SAVED'
+              ? 'SAVE'
+              : status === 'DISMISSED'
+                ? 'DISMISS'
+                : status === 'SWITCHED'
+                  ? 'SWITCHED'
+                  : 'EXTERNALLY_SUBMITTED',
+        });
+      } else {
+        await setHomeSavingsOpportunityStatus(opportunityId, status);
+      }
       await loadSummary();
       await loadDetail(selectedCategory);
     } catch (err: any) {
@@ -331,6 +346,13 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
   const potentialMonthlySavings = summary?.potentialMonthlySavings ?? null;
   const potentialAnnualSavings = summary?.potentialAnnualSavings ?? null;
   const hasSavings = Number(potentialMonthlySavings ?? 0) > 0;
+  const hasAddressQualifiedSavings = Boolean(
+    summary?.categories.some(
+      (entry) =>
+        entry.topOpportunity?.offerSourceKind === 'ADDRESS_QUALIFIED'
+        && Number(entry.topOpportunity.estimatedAnnualSavings ?? 0) > 0,
+    ),
+  );
 
   return (
     <div className="space-y-4">
@@ -346,8 +368,20 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
         eyebrow="Savings Snapshot"
         title="Home Savings Check"
         value={`${money(potentialMonthlySavings)}/month`}
-        status={<StatusChip tone={hasSavings ? 'good' : 'info'}>{hasSavings ? 'Savings found' : 'No major flags'}</StatusChip>}
-        summary={`About ${money(potentialAnnualSavings)}/year across active categories.`}
+        status={
+          <StatusChip tone={hasAddressQualifiedSavings ? 'good' : 'info'}>
+            {hasAddressQualifiedSavings
+              ? 'Address-qualified savings'
+              : hasSavings
+                ? 'Broad benchmark flags'
+                : 'No major flags'}
+          </StatusChip>
+        }
+        summary={
+          hasSavings
+            ? `Broad benchmarks indicate up to ${money(potentialAnnualSavings)}/year to investigate. These are not offers or found savings.`
+            : 'No material benchmark difference is currently indicated.'
+        }
         highlights={[
           'Insurance, warranty, internet, and utility checks',
           'Plan-aware savings suggestions',
@@ -398,7 +432,9 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
                       {entry.status === 'NOT_SET_UP'
                         ? 'Not set up'
                         : entry.status === 'FOUND_SAVINGS'
-                        ? 'Found savings'
+                        ? entry.topOpportunity?.offerSourceKind === 'ADDRESS_QUALIFIED'
+                          ? 'Qualified option'
+                          : 'Benchmark flag'
                         : 'Connected'}
                     </StatusChip>
                   }
@@ -631,7 +667,7 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
                               onClick={() => updateOpportunityStatus(opportunity.id, 'APPLIED')}
                             >
                               {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
-                              Mark as done
+                              Mark as applied
                             </Button>
                             <Button
                               size="sm"
