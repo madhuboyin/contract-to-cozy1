@@ -26,9 +26,10 @@ export type CanonicalOpportunityFamily = 'BENEFIT' | 'RECURRING_COST';
 async function assertProperty(propertyId: string, userId: string) {
   const property = await prisma.property.findFirst({
     where: { id: propertyId, homeownerProfile: { userId } },
-    select: { id: true },
+    select: { id: true, homeownerProfileId: true },
   });
   if (!property) throw new Error('Property not found or access denied.');
+  return property;
 }
 
 export async function getCanonicalOpportunityDetail(
@@ -357,7 +358,7 @@ export async function updateCanonicalAction(
   userId: string,
   input: UpdateCanonicalActionInput,
 ) {
-  await assertProperty(propertyId, userId);
+  const property = await assertProperty(propertyId, userId);
   const action = await prisma.savingsBenefitAction.findFirst({
     where: { id: actionId, propertyId },
   });
@@ -377,7 +378,11 @@ export async function updateCanonicalAction(
     )];
     if (requestedDocumentIds.length > 0) {
       const ownedDocuments = await prisma.document.findMany({
-        where: { id: { in: requestedDocumentIds }, uploadedBy: userId, propertyId },
+        where: {
+          id: { in: requestedDocumentIds },
+          uploadedBy: property.homeownerProfileId,
+          propertyId,
+        },
         select: { id: true },
       });
       if (ownedDocuments.length !== requestedDocumentIds.length) {

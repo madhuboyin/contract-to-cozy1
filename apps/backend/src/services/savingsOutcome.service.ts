@@ -127,8 +127,22 @@ async function assertDocumentsOwnedByUser(
       'Evidence can only be attached to a property-scoped savings opportunity.',
     );
   }
+  const homeownerProfile = await prisma.homeownerProfile.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!homeownerProfile) {
+    throw new SavingsOutcomeGovernanceError(
+      'HOMEOWNER_PROFILE_NOT_FOUND',
+      'A homeowner profile is required to attach Document Vault evidence.',
+    );
+  }
   const owned = await prisma.document.findMany({
-    where: { id: { in: documentIds }, uploadedBy: userId, propertyId },
+    where: {
+      id: { in: documentIds },
+      uploadedBy: homeownerProfile.id,
+      propertyId,
+    },
     select: { id: true },
   });
   if (owned.length !== documentIds.length) {
@@ -389,18 +403,35 @@ export async function revokeHomeSavingsOpportunityOutcome(
 ) {
   const outcome = await prisma.homeSavingsOpportunityOutcome.findFirst({
     where: { id: outcomeId, opportunity: { homeownerProfile: { userId } } },
+    include: { opportunity: { select: { propertyId: true } } },
   });
   if (!outcome) throw new Error('Outcome not found or access denied.');
   if (outcome.revokedAt) {
     throw new SavingsOutcomeGovernanceError('ALREADY_REVOKED', 'This outcome is already revoked.');
   }
-  return prisma.homeSavingsOpportunityOutcome.update({
-    where: { id: outcomeId },
-    data: {
-      verificationState: 'REVOKED',
-      revokedAt: new Date(),
-      revokedBy: userId,
-      revocationReason: reason,
-    },
+  const revokedAt = new Date();
+  return prisma.$transaction(async (tx) => {
+    const revoked = await tx.homeSavingsOpportunityOutcome.update({
+      where: { id: outcomeId },
+      data: {
+        verificationState: 'REVOKED',
+        revokedAt,
+        revokedBy: userId,
+        revocationReason: reason,
+      },
+    });
+    if (outcome.opportunity.propertyId) {
+      await tx.signal.updateMany({
+        where: {
+          propertyId: outcome.opportunity.propertyId,
+          signalKey: 'SAVINGS_REALIZATION',
+          sourceModel: 'HomeSavingsService',
+          sourceId: outcome.opportunityId,
+          OR: [{ validUntil: null }, { validUntil: { gt: revokedAt } }],
+        },
+        data: { validUntil: revokedAt },
+      });
+    }
+    return revoked;
   });
 }

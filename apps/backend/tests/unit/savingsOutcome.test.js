@@ -12,7 +12,9 @@ let matchOutcomes = [];
 let opportunities = new Map();
 let opportunityOutcomes = [];
 let documents = [];
+let signals = [];
 const documentOwnershipQueries = [];
+const signalExpiryQueries = [];
 const publishSavingsRealizationSignalCalls = [];
 let publishSavingsRealizationSignalImpl = async () => ({ id: 'signal-1' });
 
@@ -33,6 +35,10 @@ require.cache[prismaPath] = {
   loaded: true,
   exports: {
     prisma: {
+      homeownerProfile: {
+        findUnique: async ({ where }) =>
+          where.userId === 'user-1' ? { id: 'profile-1' } : null,
+      },
       propertyHiddenAssetMatch: {
         findFirst: async ({ where }) => {
           const match = matches.get(where.id);
@@ -78,6 +84,12 @@ require.cache[prismaPath] = {
       },
       homeSavingsOpportunityOutcome: {
         findFirst: async ({ where }) => {
+          if (where.id) {
+            const row = opportunityOutcomes.find((candidate) => candidate.id === where.id);
+            if (!row || where.opportunity?.homeownerProfile?.userId !== 'user-1') return null;
+            const opportunity = opportunities.get(row.opportunityId);
+            return { ...row, opportunity: { propertyId: opportunity?.propertyId ?? null } };
+          }
           const rows = opportunityOutcomes
             .filter((row) => row.opportunityId === where.opportunityId)
             .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
@@ -90,6 +102,11 @@ require.cache[prismaPath] = {
         create: async ({ data }) => {
           const row = { id: `opp-outcome-${opportunityOutcomes.length + 1}`, recordedAt: nextRecordedAt(), createdAt: new Date(), ...data };
           opportunityOutcomes.push(row);
+          return row;
+        },
+        update: async ({ where, data }) => {
+          const row = opportunityOutcomes.find((candidate) => candidate.id === where.id);
+          Object.assign(row, data);
           return row;
         },
       },
@@ -105,11 +122,31 @@ require.cache[prismaPath] = {
         },
         updateMany: async () => ({ count: 1 }),
       },
+      signal: {
+        updateMany: async ({ where, data }) => {
+          signalExpiryQueries.push(where);
+          let count = 0;
+          for (const signal of signals) {
+            if (
+              signal.propertyId === where.propertyId
+              && signal.signalKey === where.signalKey
+              && signal.sourceModel === where.sourceModel
+              && signal.sourceId === where.sourceId
+            ) {
+              signal.validUntil = data.validUntil;
+              count += 1;
+            }
+          }
+          return { count };
+        },
+      },
       $transaction: async (fn) =>
         fn({
           hiddenAssetMatchOutcome: require.cache[prismaPath].exports.prisma.hiddenAssetMatchOutcome,
           propertyHiddenAssetMatch: require.cache[prismaPath].exports.prisma.propertyHiddenAssetMatch,
+          homeSavingsOpportunityOutcome: require.cache[prismaPath].exports.prisma.homeSavingsOpportunityOutcome,
           document: require.cache[prismaPath].exports.prisma.document,
+          signal: require.cache[prismaPath].exports.prisma.signal,
         }),
     },
   },
@@ -136,6 +173,7 @@ const {
   getHiddenAssetMatchOutcomes,
   recordHomeSavingsOpportunityOutcome,
   getHomeSavingsOpportunityOutcomes,
+  revokeHomeSavingsOpportunityOutcome,
   SavingsOutcomeGovernanceError,
 } = require('../../src/services/savingsOutcome.service.ts');
 
@@ -145,11 +183,13 @@ test.beforeEach(() => {
   ]);
   matchOutcomes = [];
   opportunities = new Map([
-    ['opp-1', { id: 'opp-1', userId: 'user-1', propertyId: 'property-1', currency: 'USD' }],
+    ['opp-1', { id: 'opp-1', userId: 'user-1', homeownerProfileId: 'profile-1', propertyId: 'property-1', currency: 'USD' }],
   ]);
   opportunityOutcomes = [];
   documents = [];
+  signals = [];
   documentOwnershipQueries.length = 0;
+  signalExpiryQueries.length = 0;
   publishSavingsRealizationSignalCalls.length = 0;
   publishSavingsRealizationSignalImpl = async () => ({ id: 'signal-1' });
   recordedAtSequence = 0;
@@ -263,18 +303,18 @@ test('recordHiddenAssetMatchOutcome rejects a mismatched owner', async () => {
 });
 
 test('outcome evidence must belong to the authenticated user and the same property', async () => {
-  documents = [{ id: 'document-1', uploadedBy: 'user-1', propertyId: 'property-1' }];
+  documents = [{ id: 'document-1', uploadedBy: 'profile-1', propertyId: 'property-1' }];
   await recordHiddenAssetMatchOutcome('match-1', 'user-1', {
     stage: 'SUBMITTED',
     documentIds: ['document-1'],
   });
   assert.deepEqual(documentOwnershipQueries[0], {
     id: { in: ['document-1'] },
-    uploadedBy: 'user-1',
+    uploadedBy: 'profile-1',
     propertyId: 'property-1',
   });
 
-  documents = [{ id: 'other-property-document', uploadedBy: 'user-1', propertyId: 'property-2' }];
+  documents = [{ id: 'other-property-document', uploadedBy: 'profile-1', propertyId: 'property-2' }];
   await assert.rejects(
     () => recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', {
       stage: 'SUBMITTED',
@@ -338,4 +378,27 @@ test('recordHomeSavingsOpportunityOutcome rejects RECEIVED without an observed v
     () => recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', { stage: 'RECEIVED', evidenceNote: 'note' }),
     SavingsOutcomeGovernanceError
   );
+});
+
+test('revoking a recurring outcome expires its shared realization signal atomically', async () => {
+  await recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', { stage: 'SUBMITTED' });
+  const outcome = opportunityOutcomes[0];
+  signals = [{
+    propertyId: 'property-1',
+    signalKey: 'SAVINGS_REALIZATION',
+    sourceModel: 'HomeSavingsService',
+    sourceId: 'opp-1',
+    validUntil: new Date('2027-01-01T00:00:00.000Z'),
+  }];
+
+  const revoked = await revokeHomeSavingsOpportunityOutcome(
+    outcome.id,
+    'user-1',
+    'The recorded result was incorrect.',
+  );
+
+  assert.equal(revoked.verificationState, 'REVOKED');
+  assert.ok(revoked.revokedAt instanceof Date);
+  assert.equal(signalExpiryQueries.length, 1);
+  assert.equal(signals[0].validUntil.getTime(), revoked.revokedAt.getTime());
 });

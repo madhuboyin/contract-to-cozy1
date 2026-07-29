@@ -11,7 +11,11 @@ import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from './coverageGap.service';
 import { normalizeFinancialAssumptionInput } from './financialAssumption.service';
-import { SharedSignalKey, signalService } from './signal.service';
+import {
+  SharedSignalKey,
+  signalService,
+  verifiedSavingsOutcomeWhere,
+} from './signal.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
 
 const BACKFILL_VERSION = 1;
@@ -1561,14 +1565,11 @@ export class SharedDataBackfillService {
       orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    // SAVINGS_REALIZATION now requires a real, evidence-backed RECEIVED
-    // outcome (savingsOutcome.service.ts) — an opportunity merely marked
-    // APPLIED/SWITCHED no longer qualifies (Slice 7).
     const latestReceivedOutcome = await prisma.homeSavingsOpportunityOutcome.findFirst({
-      where: {
-        stage: 'RECEIVED',
-        opportunity: { propertyId },
-      },
+      // Backfill is held to the same fail-closed policy as live refresh:
+      // self-reported, evidence-attached, and revoked outcomes never become
+      // shared realization signals.
+      where: verifiedSavingsOutcomeWhere(propertyId),
       select: {
         opportunityId: true,
         observedMonthlyValue: true,
@@ -1650,6 +1651,7 @@ export class SharedDataBackfillService {
         });
       }
 
+      await signalService.expireSavingsRealizationSignals({ propertyId });
       if (latestReceivedOutcome) {
         try {
           const observedMonthly = asFinite(latestReceivedOutcome.observedMonthlyValue) ?? null;

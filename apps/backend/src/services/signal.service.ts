@@ -183,6 +183,18 @@ export type SignalRefreshSummary = {
   interactionCount: number;
 };
 
+export function verifiedSavingsOutcomeWhere(
+  propertyId: string,
+): Prisma.HomeSavingsOpportunityOutcomeWhereInput {
+  return {
+    stage: 'RECEIVED',
+    verificationState: 'VERIFIED',
+    verifiedAt: { not: null },
+    revokedAt: null,
+    opportunity: { propertyId },
+  };
+}
+
 function clamp01(value: number | null | undefined): number {
   if (value === null || value === undefined || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
@@ -1070,6 +1082,25 @@ export class SignalService {
     });
   }
 
+  async expireSavingsRealizationSignals(params: {
+    propertyId: string;
+    opportunityId?: string;
+    expiredAt?: Date;
+  }): Promise<number> {
+    const expiredAt = params.expiredAt ?? new Date();
+    const result = await prisma.signal.updateMany({
+      where: {
+        propertyId: params.propertyId,
+        signalKey: 'SAVINGS_REALIZATION',
+        sourceModel: 'HomeSavingsService',
+        ...(params.opportunityId ? { sourceId: params.opportunityId } : {}),
+        OR: [{ validUntil: null }, { validUntil: { gt: expiredAt } }],
+      },
+      data: { validUntil: expiredAt },
+    });
+    return result.count;
+  }
+
   /**
    * Public entry point for refreshing the FINANCIAL_DISCIPLINE pattern
    * signal from outside this service — used when an opportunity is marked
@@ -1600,14 +1631,11 @@ export class SignalService {
         orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
       }),
       detectCoverageGaps(propertyId),
-      // SAVINGS_REALIZATION now requires a real, evidence-backed RECEIVED
-      // outcome (savingsOutcome.service.ts) — an opportunity merely marked
-      // APPLIED/SWITCHED no longer qualifies (Slice 7).
       prisma.homeSavingsOpportunityOutcome.findFirst({
-        where: {
-          stage: 'RECEIVED',
-          opportunity: { propertyId },
-        },
+        // Only independently verified, non-revoked received value may enter
+        // the shared signal layer. Self-reported/evidence-attached outcomes
+        // remain visible in the Savings workspace but fail closed here.
+        where: verifiedSavingsOutcomeWhere(propertyId),
         orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
         select: {
           opportunityId: true,
@@ -1634,6 +1662,11 @@ export class SignalService {
       verdict: 'SITUATIONAL',
     });
     if (coverageSignal) refreshedSignals.push('COVERAGE_GAP');
+
+    // Expire every prior projection first. If no verified outcome remains
+    // (including after revocation), downstream readers immediately stop
+    // treating an older realization signal as current.
+    await this.expireSavingsRealizationSignals({ propertyId });
 
     const observedMonthly = asFinite(latestReceivedOutcome?.observedMonthlyValue);
     const observedAnnual = asFinite(latestReceivedOutcome?.observedAnnualValue) ?? (observedMonthly !== null ? observedMonthly * 12 : null);
