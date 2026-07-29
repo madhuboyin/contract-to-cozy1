@@ -21,6 +21,10 @@ import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
 import JobQueueService from './JobQueue.service';
+import { resolveWorkKey } from '../modules/homeOperations/domain/workKey';
+import { findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
+import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
+import type { OperationalWorkItemState } from '@prisma/client';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +37,91 @@ async function assertProject(projectId: string, propertyId: string) {
     throw new APIError('Project not found', 404, 'NOT_FOUND');
   }
   return project;
+}
+
+// ── Home Operations work-item reconciliation (Slice 4) ──────────────────────
+//
+// A Project spawned from a guidance journey shares that journey's own
+// OperationalWorkItem (see homeActionWorkItem.adapter.ts's Slice 4 comment —
+// PROJECT actions with a relatedJourneyId resolve to the same
+// `guidance-${journeyId}` obligation, PROPERTY subject). This helper
+// resolves that same workKey directly, without going through a HomeAction,
+// so project-lifecycle events (handoff, verified completion, cancellation)
+// can transition it. Best-effort throughout: a sync failure must never
+// block the actual project mutation (Slice 2/3 precedent).
+export function resolveJourneyWorkKey(propertyId: string, journeyId: string): string {
+  return resolveWorkKey({
+    propertyId,
+    subject: { type: 'PROPERTY', id: propertyId },
+    obligationType: 'DECISION',
+    occurrence: { obligationSlug: `guidance-${journeyId}` },
+  });
+}
+
+export async function syncJourneyWorkItemForProjectEvent(
+  propertyId: string,
+  guidanceJourneyId: string | null | undefined,
+  projectId: string,
+  event: 'HANDOFF' | 'VERIFIED' | 'CANCELLED',
+  actorUserId: string | null,
+): Promise<void> {
+  if (!guidanceJourneyId) return;
+  const actorType = actorUserId ? 'USER' : 'SYSTEM';
+  try {
+    const workKey = resolveJourneyWorkKey(propertyId, guidanceJourneyId);
+    const workItem = await findWorkItemByWorkKey(propertyId, workKey);
+    if (!workItem) return;
+
+    if (event === 'HANDOFF') {
+      if (['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE'].includes(workItem.state)) {
+        await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'IN_PROJECT',
+          actorType,
+          actorUserId,
+          idempotencyKey: `project-handoff:${workItem.id}:${projectId}`,
+        });
+      }
+      await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId });
+      return;
+    }
+
+    if (event === 'VERIFIED') {
+      let state: OperationalWorkItemState = workItem.state;
+      if (state !== 'REPORTED_COMPLETE' && state !== 'VERIFIED') {
+        const reported = await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'REPORTED_COMPLETE',
+          actorType,
+          actorUserId,
+          idempotencyKey: `project-verified-reported:${workItem.id}:${projectId}`,
+        });
+        state = reported.state;
+      }
+      if (state === 'REPORTED_COMPLETE') {
+        await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'VERIFIED',
+          actorType: 'SYSTEM',
+          idempotencyKey: `project-verified:${workItem.id}:${projectId}`,
+        });
+      }
+      return;
+    }
+
+    // CANCELLED
+    if (workItem.state === 'IN_PROJECT' || workItem.state === 'IN_PROGRESS') {
+      await transitionWorkItem({
+        workItemId: workItem.id,
+        to: 'ACCEPTED',
+        actorType,
+        actorUserId,
+        idempotencyKey: `project-cancelled-reconciled:${workItem.id}:${projectId}`,
+      });
+    }
+  } catch (err) {
+    logger.warn({ err, propertyId, guidanceJourneyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
+  }
 }
 
 async function assertMilestone(milestoneId: string, projectId: string) {
@@ -490,6 +579,8 @@ export async function createProject(propertyId: string, data: any) {
     return created;
   });
 
+  await syncJourneyWorkItemForProjectEvent(propertyId, project.guidanceJourneyId, project.id, 'HANDOFF', null);
+
   return getProjectDetail(project.id, propertyId);
 }
 
@@ -533,10 +624,12 @@ export async function updateProject(projectId: string, propertyId: string, data:
 
 export async function cancelProject(projectId: string, propertyId: string) {
   await assertProject(projectId, propertyId);
-  return prisma.projectRecord.update({
+  const cancelled = await prisma.projectRecord.update({
     where: { id: projectId },
     data: { status: 'CANCELLED' },
   });
+  await syncJourneyWorkItemForProjectEvent(propertyId, cancelled.guidanceJourneyId, projectId, 'CANCELLED', null);
+  return cancelled;
 }
 
 // ── Milestones ────────────────────────────────────────────────────────────────
@@ -1710,6 +1803,9 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       'Verified project completion updated canonical home facts.',
       inventoryItemId ? { sourceReferenceIds: [inventoryItemId] } : undefined,
     ).catch((err) => logger.error({ err }, '[PROJECT_COMPLETION] Twin refresh enqueue failed'));
+  }
+  if (verifiedSuccess) {
+    await syncJourneyWorkItemForProjectEvent(propertyId, result.project.guidanceJourneyId, projectId, 'VERIFIED', userId);
   }
   return result;
 }

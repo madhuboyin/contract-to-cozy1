@@ -334,11 +334,30 @@ export function adaptEnvironmentInsightsToHomeActions(
     });
 }
 
-async function loadGuidanceActions(
+export async function loadGuidanceActions(
   propertyId: string,
   db: HomeActionSourceDb,
   activeWeatherIncidentIds: Set<string> = new Set(),
 ): Promise<HomeAction[]> {
+  // Home Operations Slice 4: once a Project has taken over a journey
+  // (project.guidanceJourneyId), the journey stops being its own competing
+  // Home action — the Project's action (see loadProjectActions) is the one
+  // active major-moment presentation, and the shared work item transitions
+  // to IN_PROJECT (projectTracker.service.ts's createProject). Cancelling
+  // the Project un-suppresses the journey automatically since CANCELLED is
+  // outside this active-status set.
+  const activeProjectsWithJourney = await db.projectRecord.findMany({
+    where: {
+      propertyId,
+      guidanceJourneyId: { not: null },
+      status: { in: ['PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'] },
+    },
+    select: { guidanceJourneyId: true },
+  });
+  const journeyIdsWithActiveProject = new Set(
+    activeProjectsWithJourney.map((project) => project.guidanceJourneyId).filter((id): id is string => Boolean(id)),
+  );
+
   const journeys = await db.guidanceJourney.findMany({
     where: { propertyId, status: { in: ['NOT_STARTED', 'ACTIVE'] } },
     orderBy: { updatedAt: 'desc' },
@@ -371,6 +390,7 @@ async function loadGuidanceActions(
   });
 
   return journeys
+    .filter((journey) => !journeyIdsWithActiveProject.has(journey.id))
     .filter((journey) => {
       const incidentDerivedWeather = journey.issueDomain === 'WEATHER' &&
         String(journey.primarySignal?.sourceEntityType ?? '').toUpperCase() === 'INCIDENT';

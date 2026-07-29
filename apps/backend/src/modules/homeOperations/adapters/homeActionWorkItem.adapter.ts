@@ -59,6 +59,18 @@ function isCoverageShaped(action: HomeAction): boolean {
  */
 function resolveSubject(action: HomeAction, propertyId: string): WorkSubject {
   if (action.source.kind === 'PROJECT') {
+    // Home Operations Slice 4: a Project spawned from a guidance journey
+    // (action.relatedJourneyId) is a handoff of the SAME obligation, not a
+    // new one — resolve to the journey's own subject (see resolveObligation
+    // below for the matching obligationSlug) so the two never mint separate
+    // work items. Falls back to PROPERTY rather than re-deriving the
+    // journey's own coverage-shaped subject (which would need the journey's
+    // inventoryItemId/journeyTypeKey, not yet threaded through the Project
+    // loader) — a documented, accepted simplification, same class of gap as
+    // Slice 3's recommendation->task subject-fidelity note.
+    if (action.relatedJourneyId) {
+      return { type: 'PROPERTY', id: propertyId };
+    }
     return { type: 'PROJECT', id: action.source.entityId };
   }
   if (isCoverageShaped(action)) {
@@ -69,6 +81,11 @@ function resolveSubject(action: HomeAction, propertyId: string): WorkSubject {
 
 function resolveObligation(action: HomeAction): { obligationType: OperationalObligationType; obligationSlug: string } {
   if (action.source.kind === 'PROJECT') {
+    // Same obligation as the originating GUIDANCE action below — see
+    // resolveSubject's Slice 4 comment.
+    if (action.relatedJourneyId) {
+      return { obligationType: 'DECISION', obligationSlug: `guidance-${action.relatedJourneyId}` };
+    }
     return { obligationType: 'PROJECT_EXECUTION', obligationSlug: 'execution' };
   }
   if (isCoverageShaped(action)) {

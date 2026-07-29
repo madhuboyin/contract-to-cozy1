@@ -26,9 +26,15 @@ export const LEGAL_TRANSITIONS: Record<OperationalWorkItemState, OperationalWork
   CANDIDATE: ['ACCEPTED', 'CLOSED'],
   ACCEPTED: ['SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
   SCHEDULED: ['IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
-  IN_PROGRESS: ['BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
+  // ACCEPTED here too, same Slice 4 cancel-project reconciliation edge —
+  // work may have already started under IN_PROJECT before cancellation.
+  IN_PROGRESS: ['BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'ACCEPTED', 'CLOSED'],
   IN_GUIDANCE: ['IN_PROGRESS', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
-  IN_PROJECT: ['IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
+  // ACCEPTED here too (Home Operations Slice 4): cancelling a Project that
+  // took over a guidance journey's work item must be able to hand the same
+  // item back to the active backlog rather than leave it stuck showing
+  // IN_PROJECT for a project that no longer exists.
+  IN_PROJECT: ['IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'ACCEPTED', 'CLOSED'],
   BLOCKED: ['SCHEDULED', 'IN_PROGRESS', 'DEFERRED', 'CLOSED'],
   DEFERRED: ['SCHEDULED', 'IN_PROGRESS', 'CLOSED'],
   REPORTED_COMPLETE: ['VERIFIED', 'REOPENED', 'CLOSED'],
