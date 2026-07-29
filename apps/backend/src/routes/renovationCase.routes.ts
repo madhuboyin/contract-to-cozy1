@@ -16,6 +16,11 @@ import {
   TransitionRenovationCaseSchema,
   UpdateRenovationCaseSchema,
 } from '../validators/renovationCase.validators';
+import {
+  ConvertRenovationOptionSchema,
+  CreateRenovationExplorationSchema,
+  UpdateRenovationOptionDispositionSchema,
+} from '../validators/renovationExplore.validators';
 
 const router = Router();
 const canContribute = requireHouseholdRole('CONTRIBUTOR');
@@ -23,6 +28,33 @@ const ownerOnly = requireHouseholdRole('OWNER');
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+router.post(
+  '/properties/:propertyId/renovation-explorations',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(CreateRenovationExplorationSchema),
+  controller.createExploration,
+);
+router.get(
+  '/properties/:propertyId/renovation-explorations/:explorationId',
+  propertyAuthMiddleware,
+  controller.getExploration,
+);
+router.patch(
+  '/properties/:propertyId/renovation-explorations/:explorationId/options/:optionId',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(UpdateRenovationOptionDispositionSchema),
+  controller.updateOptionDisposition,
+);
+router.post(
+  '/properties/:propertyId/renovation-explorations/:explorationId/options/:optionId/create-case',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(ConvertRenovationOptionSchema),
+  controller.convertOptionToCase,
+);
 
 router.get('/properties/:propertyId/renovation-cases', propertyAuthMiddleware, controller.listCases);
 router.post(

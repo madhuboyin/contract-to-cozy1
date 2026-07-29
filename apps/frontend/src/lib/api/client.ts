@@ -2431,6 +2431,33 @@ class APIClient {
       body: JSON.stringify({ propertyId, userNeeds }),
     });
   }
+  async createRenovationExploration(propertyId: string, input: Record<string, unknown>): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/renovation-explorations`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+  async updateRenovationOption(
+    propertyId: string,
+    explorationId: string,
+    optionId: string,
+    input: { status: 'SAVED' | 'REJECTED'; reason?: string },
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-explorations/${explorationId}/options/${optionId}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    );
+  }
+  async createRenovationCaseFromOption(
+    propertyId: string,
+    explorationId: string,
+    optionId: string,
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-explorations/${explorationId}/options/${optionId}/create-case`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+  }
   async getPropertyAppreciation(propertyId: string, purchasePrice?: number, purchaseDate?: string): Promise<APIResponse<any>> {
     return this.request(`/api/appreciation/analyze/${propertyId}`, {
       method: 'POST',

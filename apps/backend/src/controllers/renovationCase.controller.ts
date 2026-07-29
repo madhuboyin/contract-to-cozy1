@@ -1,6 +1,53 @@
 import type { NextFunction, Response } from 'express';
 import type { CustomRequest as Request } from '../types';
 import * as service from '../services/renovationCase.service';
+import * as exploreService from '../services/renovationExplore.service';
+
+export async function createExploration(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await exploreService.createExploration(
+      req.params.propertyId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function getExploration(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await exploreService.getExploration(
+      req.params.propertyId,
+      req.params.explorationId,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function updateOptionDisposition(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await exploreService.updateOptionDisposition(
+      req.params.propertyId,
+      req.params.explorationId,
+      req.params.optionId,
+      req.body,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function convertOptionToCase(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await exploreService.convertOptionToCase(
+      req.params.propertyId,
+      req.params.explorationId,
+      req.params.optionId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
 
 export async function listCases(req: Request, res: Response, next: NextFunction) {
   try {

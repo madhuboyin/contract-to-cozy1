@@ -1931,6 +1931,7 @@ model User {
   renovationCaseParticipants RenovationCaseParticipant[]
   renovationCaseLinksCreated RenovationCaseLink[] @relation("RenovationCaseLinkCreatedBy")
   renovationCaseEvents RenovationCaseEvent[] @relation("RenovationCaseEventActor")
+  renovationExplorations RenovationExploration[] @relation("RenovationExplorationCreatedBy")
 
   // Incident Lifecycle Management
   incidentUserPreferences             IncidentUserPreference[]
@@ -2929,6 +2930,7 @@ model Property {
   renovationCases RenovationCase[]
   renovationCaseLinks RenovationCaseLink[]
   renovationCaseEvents RenovationCaseEvent[]
+  renovationExplorations RenovationExploration[]
 
   // Mortgage Refinance Radar
   refinanceOpportunities    RefinanceOpportunity[]
@@ -13156,12 +13158,97 @@ model RenovationCase {
   participants        RenovationCaseParticipant[]
   links               RenovationCaseLink[]
   events              RenovationCaseEvent[]
+  sourceUpgradeOption RenovationUpgradeOption?
 
   @@unique([propertyId, idempotencyKey])
   @@index([propertyId, lifecycle])
   @@index([propertyId, updatedAt(sort: Desc)])
   @@index([createdByUserId])
   @@map("renovation_cases")
+}
+
+enum RenovationExplorationStatus {
+  ACTIVE
+  CONVERTED
+  ARCHIVED
+}
+
+enum RenovationUpgradeOptionStatus {
+  GENERATED
+  SAVED
+  REJECTED
+  SELECTED
+}
+
+model RenovationExploration {
+  id              String @id @default(uuid())
+  propertyId      String
+  createdByUserId String?
+  idempotencyKey  String?
+  status          RenovationExplorationStatus @default(ACTIVE)
+
+  goals                    String[]
+  constraints              Json?
+  responsibilityContext    RenovationResponsibilityContext @default(UNKNOWN)
+  spacesAffected           String[] @default([])
+  systemsAffected          String[] @default([])
+  budgetMinCents           Int?
+  budgetMaxCents           Int?
+  targetTiming             String?
+  accessibilityPreferences String[] @default([])
+  resiliencePreferences    String[] @default([])
+  efficiencyPreferences    String[] @default([])
+  maintenancePreferences   String[] @default([])
+  propertyContextSnapshot  Json
+  missingFacts             Json
+  generatedAt              DateTime @default(now())
+  archivedAt               DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("RenovationExplorationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  options   RenovationUpgradeOption[]
+
+  @@unique([propertyId, idempotencyKey])
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([createdByUserId])
+  @@map("renovation_explorations")
+}
+
+model RenovationUpgradeOption {
+  id                    String @id @default(uuid())
+  explorationId         String
+  renovationCaseId      String? @unique
+  status                RenovationUpgradeOptionStatus @default(GENERATED)
+  position              Int
+  title                 String
+  category              String
+  description           String @db.Text
+  costMinCents          Int
+  costMaxCents          Int
+  currency              String @default("USD")
+  timeline              String
+  benefits              String[]
+  whyThisFits           String @db.Text
+  professionalToConsult String
+  permitGuidance        String
+  evidenceSource        String
+  confidence            String?
+  assumptions           String[]
+  validationEvidence    Json
+  missingFactBenefits   Json
+  dispositionReason     String?
+  dispositionAt         DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  exploration    RenovationExploration @relation(fields: [explorationId], references: [id], onDelete: Cascade)
+  renovationCase RenovationCase? @relation(fields: [renovationCaseId], references: [id], onDelete: SetNull)
+
+  @@unique([explorationId, position])
+  @@index([explorationId, status])
+  @@map("renovation_upgrade_options")
 }
 
 model RenovationScopeVersion {

@@ -6,12 +6,16 @@ import {
   Clock,
   Loader2,
   Lightbulb,
-  AlertCircle
+  AlertCircle,
+  Bookmark,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
 import {
   ActionPriorityRow,
@@ -22,19 +26,23 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface ModificationRecommendation {
+  id: string;
+  status: 'GENERATED' | 'SAVED' | 'REJECTED' | 'SELECTED';
   title: string;
   category: 'ACCESSIBILITY' | 'AGING_IN_PLACE' | 'FAMILY' | 'RESALE' | 'ENERGY' | 'SAFETY';
-  costRange: { min: number; max: number; currency: 'USD' };
+  costMinCents: number;
+  costMaxCents: number;
+  currency: 'USD';
   timeline: string;
   description: string;
   benefits: string[];
   whyThisFits: string;
   professionalToConsult: string;
   permitGuidance: 'VERIFY_WITH_LOCAL_AUTHORITY';
-  source: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
+  evidenceSource: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
   confidence?: 'LOW' | 'MEDIUM';
   assumptions: string[];
-  validation: {
+  validationEvidence: {
     costModel: 'STATE_MULTIPLIER_BASELINE_V1';
     stateCostMultiplier: number;
     costRangeWasAdjusted: boolean;
@@ -43,22 +51,12 @@ interface ModificationRecommendation {
 }
 
 interface ModificationReport {
+  id: string;
   propertyId: string;
   propertyAddress: string;
-  userNeeds: string[];
-  propertyAge: number | null;
-  applicability: {
-    feature: { status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN'; reasonCodes: string[] };
-    outdoor: { status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN'; reasonCodes: string[]; missingFactKeys: string[] };
-  };
-  recommendations: ModificationRecommendation[];
-  meta?: {
-    classification: 'EDUCATIONAL_ESTIMATE';
-    regionalCostModel: 'STATE_MULTIPLIER_BASELINE_V1';
-    financialPlanningSafe: false;
-    selectionRequired: true;
-    disclaimer: string;
-  };
+  goals: string[];
+  options: ModificationRecommendation[];
+  missingFacts: Array<{ factKey: string; benefit: string; correctionAction: string }>;
   generatedAt: string;
 }
 
@@ -75,13 +73,22 @@ const NEED_OPTIONS = [
   { id: 'safety', label: 'Safety and security upgrades' },
   { id: 'modern', label: 'Modernize outdated features' },
   { id: 'outdoor', label: 'Outdoor living spaces' },
+  { id: 'resilience', label: 'Improve resilience to weather or outages' },
+  { id: 'maintenance', label: 'Reduce ongoing maintenance burden' },
 ];
 
 export default function HomeModificationAdvisor({ propertyId }: HomeModificationAdvisorProps) {
   const [selectedNeeds, setSelectedNeeds] = useState<string[]>([]);
   const [report, setReport] = useState<ModificationReport | null>(null);
   const [loading, setLoading] = useState(false);
+  const [optionActionId, setOptionActionId] = useState<string | null>(null);
+  const [comparedOptionIds, setComparedOptionIds] = useState<string[]>([]);
+  const [createdCase, setCreatedCase] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState('');
+  const [spaceText, setSpaceText] = useState('');
+  const [budgetMax, setBudgetMax] = useState('');
+  const [targetTiming, setTargetTiming] = useState('');
+  const [responsibilityContext, setResponsibilityContext] = useState('UNKNOWN');
 
   const toggleNeed = (needId: string) => {
     setSelectedNeeds(prev => 
@@ -105,7 +112,17 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
         NEED_OPTIONS.find(opt => opt.id === id)?.label || id
       );
 
-      const response = await api.getHomeModifications(propertyId, needsText);
+      const response = await api.createRenovationExploration(propertyId, {
+        goals: needsText,
+        responsibilityContext,
+        spacesAffected: spaceText.split(',').map(value => value.trim()).filter(Boolean),
+        budgetMaxCents: budgetMax ? Math.round(Number(budgetMax) * 100) : undefined,
+        targetTiming: targetTiming || undefined,
+        accessibilityPreferences: selectedNeeds.includes('accessibility') ? ['ACCESSIBILITY'] : [],
+        resiliencePreferences: selectedNeeds.includes('resilience') ? ['RESILIENCE'] : [],
+        efficiencyPreferences: selectedNeeds.includes('energy') ? ['ENERGY_EFFICIENCY'] : [],
+        maintenancePreferences: selectedNeeds.includes('maintenance') ? ['LOW_MAINTENANCE'] : [],
+      });
       
       if (response.success && response.data) {
         setReport(response.data);
@@ -117,6 +134,49 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateOption = async (optionId: string, status: 'SAVED' | 'REJECTED') => {
+    if (!report) return;
+    setOptionActionId(optionId);
+    setError('');
+    try {
+      const response = await api.updateRenovationOption(propertyId, report.id, optionId, { status });
+      if (!response.success) throw new Error(response.message || 'Failed to update option');
+      setReport(current => current ? {
+        ...current,
+        options: current.options.map(option => option.id === optionId ? { ...option, status } : option),
+      } : current);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update option');
+    } finally {
+      setOptionActionId(null);
+    }
+  };
+
+  const createPlan = async (optionId: string) => {
+    if (!report) return;
+    setOptionActionId(optionId);
+    setError('');
+    try {
+      const response = await api.createRenovationCaseFromOption(propertyId, report.id, optionId);
+      if (!response.success || !response.data) throw new Error(response.message || 'Failed to create renovation plan');
+      setCreatedCase({ id: response.data.id, name: response.data.name });
+      setReport(current => current ? {
+        ...current,
+        options: current.options.map(option => option.id === optionId ? { ...option, status: 'SELECTED' } : option),
+      } : current);
+    } catch (err: any) {
+      setError(err.message || 'Failed to create renovation plan');
+    } finally {
+      setOptionActionId(null);
+    }
+  };
+
+  const toggleCompare = (optionId: string) => {
+    setComparedOptionIds(current => current.includes(optionId)
+      ? current.filter(id => id !== optionId)
+      : current.length < 3 ? [...current, optionId] : current);
   };
 
   const getCategoryIcon = (category: string) => {
@@ -177,6 +237,35 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
               </Label>
             </div>
           ))}
+          <div className="grid gap-3 pt-2 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="upgrade-spaces">Affected spaces</Label>
+              <Input id="upgrade-spaces" value={spaceText} onChange={event => setSpaceText(event.target.value)} placeholder="Kitchen, primary bath" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="upgrade-budget">Maximum budget</Label>
+              <Input id="upgrade-budget" type="number" min="0" value={budgetMax} onChange={event => setBudgetMax(event.target.value)} placeholder="25000" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="upgrade-timing">Target timing</Label>
+              <Input id="upgrade-timing" value={targetTiming} onChange={event => setTargetTiming(event.target.value)} placeholder="Within 12 months" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="upgrade-responsibility">Responsibility</Label>
+              <select
+                id="upgrade-responsibility"
+                value={responsibilityContext}
+                onChange={event => setResponsibilityContext(event.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="UNKNOWN">Not confirmed</option>
+                <option value="HOMEOWNER">Homeowner</option>
+                <option value="ASSOCIATION">Association</option>
+                <option value="SHARED">Shared</option>
+                <option value="LANDLORD">Landlord</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         {error && (
@@ -192,7 +281,7 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
     <div className="space-y-6">
       <ResultHeroCard
         title="Explore Upgrade Options"
-        value={`${report.recommendations.length} options`}
+        value={`${report.options.length} options`}
         status={<StatusChip tone="info">Educational options</StatusChip>}
         summary="Independent ideas matched to your goals and known property context. Select an option before treating it as a renovation plan."
       />
@@ -201,38 +290,60 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
         title="Exploration Snapshot"
         columns={2}
         items={[
-          { label: 'Goals considered', value: report.userNeeds.length },
-          { label: 'Property age', value: report.propertyAge === null ? 'Unknown' : `${report.propertyAge} years` },
-          { label: 'Options to compare', value: report.recommendations.length },
+          { label: 'Goals considered', value: report.goals.length },
+          { label: 'Options to compare', value: report.options.length },
+          { label: 'Saved options', value: report.options.filter(option => option.status === 'SAVED').length },
           { label: 'Generated', value: new Date(report.generatedAt).toLocaleDateString() },
         ]}
       />
 
-      {report.applicability.outdoor.status !== 'APPLICABLE' ? (
+      {report.missingFacts.length > 0 ? (
         <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="p-4 text-sm text-amber-900">
-            Outdoor projects were omitted because the selected property either has no owner-managed private outdoor space or still needs those property details completed.
+          <CardContent className="space-y-2 p-4 text-sm text-amber-900">
+            <p className="font-semibold">Add property details for better matches</p>
+            {report.missingFacts.map(fact => (
+              <div key={fact.factKey}>
+                <p>{fact.benefit}</p>
+                <a className="text-xs font-medium underline" href={fact.correctionAction}>Update {fact.factKey}</a>
+              </div>
+            ))}
           </CardContent>
         </Card>
       ) : null}
 
-      {report.meta?.disclaimer ? (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="p-4">
-            <p className="text-sm font-semibold text-amber-900">Educational Estimate</p>
-            <p className="mt-1 text-sm text-amber-800">{report.meta.disclaimer}</p>
-            <p className="mt-2 text-xs text-amber-700">
-              Cost model: {report.meta.regionalCostModel}
-            </p>
+      {createdCase ? (
+        <Card className="border-emerald-200 bg-emerald-50">
+          <CardContent className="flex items-start gap-2 p-4 text-sm text-emerald-900">
+            <CheckCircle2 className="h-5 w-5 shrink-0" />
+            <div><p className="font-semibold">Renovation plan created</p><p>{createdCase.name} now has a durable case and versioned starting scope.</p></div>
           </CardContent>
         </Card>
       ) : null}
 
       <div>
         <h3 className="mb-3 text-xl font-bold text-gray-900">Options to Compare</h3>
+        {comparedOptionIds.length > 1 ? (
+          <Card className="mb-4 border-indigo-200 bg-indigo-50">
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold text-indigo-900">Side-by-side comparison</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {report.options.filter(option => comparedOptionIds.includes(option.id)).map(option => (
+                  <div key={option.id} className="rounded-lg bg-white p-3 text-sm">
+                    <p className="font-semibold text-slate-900">{option.title}</p>
+                    <p className="mt-1 text-slate-600">
+                      ${(option.costMinCents / 100).toLocaleString()}–${(option.costMaxCents / 100).toLocaleString()}
+                    </p>
+                    <p className="text-slate-600">{option.timeline}</p>
+                    <p className="mt-2 text-xs text-slate-500">{option.whyThisFits}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
         <div className="space-y-4">
-          {report.recommendations.map((rec, index) => (
-            <Card key={index} className="border border-slate-200">
+          {report.options.map((rec) => (
+            <Card key={rec.id} className={`border ${rec.status === 'REJECTED' ? 'opacity-60' : 'border-slate-200'}`}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
@@ -243,7 +354,7 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
                         <p className="text-sm text-gray-600">{rec.description}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                           <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                            {rec.source === 'AI_ESTIMATE' ? 'AI estimate' : 'Baseline heuristic'}
+                            {rec.evidenceSource === 'AI_ESTIMATE' ? 'AI estimate' : 'Baseline heuristic'}
                           </span>
                           {rec.confidence ? (
                             <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
@@ -265,7 +376,7 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
                   <div>
                     <p className="text-xs text-gray-600">Broad cost range</p>
                     <p className="font-bold text-gray-900">
-                      ${rec.costRange.min.toLocaleString()}–${rec.costRange.max.toLocaleString()}
+                      ${(rec.costMinCents / 100).toLocaleString()}–${(rec.costMaxCents / 100).toLocaleString()}
                     </p>
                   </div>
                   <div>
@@ -300,11 +411,11 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
                   <span>Permit applicability is unknown. Verify the defined scope with the local authority before work starts.</span>
                 </div>
 
-                {rec.assumptions.length > 0 || rec.validation.notes.length > 0 ? (
+                {rec.assumptions.length > 0 || rec.validationEvidence.notes.length > 0 ? (
                   <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
                     <p className="text-xs font-semibold text-slate-700">Assumptions and evidence limits</p>
                     <ul className="mt-1 space-y-0.5">
-                      {[...rec.assumptions, ...rec.validation.notes].map((note, noteIndex) => (
+                      {[...rec.assumptions, ...rec.validationEvidence.notes].map((note, noteIndex) => (
                         <li key={noteIndex} className="text-xs text-slate-600">
                           • {note}
                         </li>
@@ -312,6 +423,40 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
                     </ul>
                   </div>
                 ) : null}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={comparedOptionIds.includes(rec.id) ? 'secondary' : 'outline'}
+                    disabled={!comparedOptionIds.includes(rec.id) && comparedOptionIds.length >= 3}
+                    onClick={() => toggleCompare(rec.id)}
+                  >
+                    {comparedOptionIds.includes(rec.id) ? 'Comparing' : 'Compare'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={optionActionId === rec.id || rec.status === 'SELECTED'}
+                    onClick={() => updateOption(rec.id, 'SAVED')}
+                  >
+                    <Bookmark className="mr-1.5 h-4 w-4" /> {rec.status === 'SAVED' ? 'Saved' : 'Save'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={optionActionId === rec.id || rec.status === 'SELECTED'}
+                    onClick={() => updateOption(rec.id, 'REJECTED')}
+                  >
+                    <XCircle className="mr-1.5 h-4 w-4" /> Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={optionActionId === rec.id || rec.status === 'REJECTED' || rec.status === 'SELECTED'}
+                    onClick={() => createPlan(rec.id)}
+                  >
+                    {optionActionId === rec.id ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-4 w-4" />}
+                    {rec.status === 'SELECTED' ? 'Plan created' : 'Create renovation plan'}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}

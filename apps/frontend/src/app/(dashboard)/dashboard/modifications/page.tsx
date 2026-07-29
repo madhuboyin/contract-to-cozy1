@@ -3,7 +3,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import HomeModificationAdvisor from '@/components/HomeModificationAdvisor';
 import { ArrowLeft, Home, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -27,6 +26,11 @@ function ModificationContent() {
   useEffect(() => {
     loadProperties();
   }, []);
+  useEffect(() => {
+    if (!loading && selectedPropertyId) {
+      router.replace(`/dashboard/properties/${selectedPropertyId}/renovations/explore`);
+    }
+  }, [loading, router, selectedPropertyId]);
   const loadProperties = async () => {
     try {
       const response = await api.getProperties();
@@ -66,8 +70,8 @@ function ModificationContent() {
         </Button>
       )}
       <MobilePageIntro
-        title="Home Modification Advisor"
-        subtitle="AI-powered recommendations for home improvements."
+        title="Explore Home Upgrades"
+        subtitle="Compare property-aware options, then create a renovation plan only when you select one."
         action={
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-2.5 text-indigo-700">
             <Home className="h-5 w-5" />
@@ -96,13 +100,16 @@ function ModificationContent() {
         </MobileFilterSurface>
       )}
 
-      {/* Modification Advisor Component */}
+      {/* Legacy route: property selection redirects into the scoped case journey. */}
       {selectedPropertyId ? (
-        <HomeModificationAdvisor propertyId={selectedPropertyId} />
+        <div className="flex items-center justify-center py-12 text-sm text-slate-600">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          Opening property-scoped upgrade exploration…
+        </div>
       ) : (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <Home className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">Select a property to get modification recommendations</p>
+          <p className="text-gray-600">Select a property to explore upgrade options</p>
         </div>
       )}
     </div>

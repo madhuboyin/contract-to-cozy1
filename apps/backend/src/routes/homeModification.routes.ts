@@ -4,10 +4,9 @@ import { Router } from 'express';
 import { Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
-import { homeModificationAdvisorService } from '../services/homeModificationAdvisor.service';
 import { logger } from '../lib/logger';
-import { getPropertyContext, PropertyContextAccessDeniedError } from '../modules/propertyContext';
-import { evaluateHomeModificationApplicability } from '../services/homeModification/applicabilityPolicy';
+import { PropertyContextAccessDeniedError } from '../modules/propertyContext';
+import { createExploration } from '../services/renovationExplore.service';
 
 const router = Router();
 
@@ -48,23 +47,20 @@ router.post('/recommend', authenticate, async (req: AuthRequest, res: Response) 
       });
     }
 
-    logger.info({ propertyId }, '[HOME-MODIFICATION] Generating recommendations for');
+    logger.info({ propertyId }, '[HOME-MODIFICATION] Redirecting legacy recommendation request to durable exploration');
+    const report = await createExploration(propertyId, userId, {
+      goals: userNeeds,
+      responsibilityContext: 'UNKNOWN',
+      spacesAffected: [],
+      systemsAffected: [],
+      accessibilityPreferences: [],
+      resiliencePreferences: [],
+      efficiencyPreferences: [],
+      maintenancePreferences: [],
+    });
 
-    const context = await getPropertyContext(
-      String(propertyId),
-      { userId },
-      { scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY'] },
-    );
-    const applicability = evaluateHomeModificationApplicability(context);
-
-    const report = await homeModificationAdvisorService.generateModificationReport(
-      propertyId,
-      userId,
-      userNeeds,
-      context,
-      applicability,
-    );
-
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', `</api/properties/${propertyId}/renovation-explorations>; rel="successor-version"`);
     res.json({
       success: true,
       data: report

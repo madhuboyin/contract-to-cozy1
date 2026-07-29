@@ -369,12 +369,13 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   {
     key: 'modifications',
     title: 'Home Upgrades',
-    description: 'Track improvements and ROI impact',
+    description: 'Explore and compare options before creating a renovation plan',
     href: '/dashboard/modifications',
     icon: resolveToolIcon('ai', 'modifications'),
     emoji: '🏗️',
     group: 'planning',
-    isActive: (pathname) => /^\/dashboard\/modifications(\/|$)/.test(pathname),
+    isActive: (pathname) => /^\/dashboard\/modifications(\/|$)/.test(pathname)
+      || /^\/dashboard\/properties\/[^/]+\/renovations\/explore(\/|$)/.test(pathname),
   },
   {
     key: 'oracle',
