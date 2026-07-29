@@ -247,6 +247,59 @@ export interface AdminPhase6PilotResponse {
   };
 }
 
+export interface AdminServiceQuoteDecisionResponse {
+  metricVersion: 'service-quote-decision-v1';
+  period: { from: string; to: string };
+  funnel: {
+    activeDecisions: number;
+    quoteIntakes: number;
+    confirmedQuotes: number;
+    comparisonReadyQuotes: number;
+    comparisonReached: number;
+    explicitDecisions: number;
+    accepted: number;
+    booked: number;
+    completedWork: number;
+    decisionRate: number | null;
+    completionRate: number | null;
+  };
+  decisionQuality: {
+    clarificationRequests: number;
+    clarificationResolutions: number;
+    scopeChangesAfterWarnings: number;
+    comparisonEligibilityRate: number | null;
+    recommendationOverrides: number;
+    disputeSignals: number;
+  };
+  evidence: {
+    totalChecks: number;
+    qualifiedChecks: number;
+    qualifiedCoverageRate: number | null;
+    byCategory: Array<{
+      serviceCategory: string;
+      total: number;
+      qualified: number;
+      coverageRate: number | null;
+    }>;
+    sources: { total: number; activeQualified: number; degraded: number };
+  };
+  consent: {
+    completedWork: number;
+    consentedCompletedWork: number;
+    consentRate: number | null;
+    verifiedFinalPriceCaptures: number;
+    consentedChangeOrderCaptures: number;
+  };
+  governedLearning: {
+    eligibleForInternalBenchmarkDerivation: boolean;
+    verifiedObservationCount: number;
+    distinctPropertyCount: number;
+    minimumObservationCount: number;
+    minimumDistinctProperties: number;
+    rules: string[];
+  };
+}
+
 // ============================================================================
 // API FUNCTIONS
 // ============================================================================
@@ -351,6 +404,16 @@ export async function fetchAdminAnalyticsPhase1Pilot(
 
 export async function fetchAdminAnalyticsPhase6Pilot(filters: AdminAnalyticsFilters): Promise<AdminPhase6PilotResponse> {
   const response = await api.get<AdminPhase6PilotResponse>('/api/admin/analytics/phase6-pilot', { params: buildParams(filters) });
+  return response.data;
+}
+
+export async function fetchAdminServiceQuoteDecisionMetrics(
+  filters: AdminAnalyticsFilters,
+): Promise<AdminServiceQuoteDecisionResponse> {
+  const response = await api.get<AdminServiceQuoteDecisionResponse>(
+    '/api/admin/analytics/service-quote-decisions',
+    { params: buildParams(filters) },
+  );
   return response.data;
 }
 

@@ -246,6 +246,13 @@ export type QuoteComparisonWorkspaceSummary = {
   status: 'DRAFT' | 'SHORTLISTED' | 'DECIDED' | 'ARCHIVED';
   journeyStage: ServiceQuoteDecisionStage;
   outcome: ServiceQuoteDecisionOutcome;
+  outcomeMeasurementConsentJson?: {
+    finalPrice?: boolean;
+    changeOrders?: boolean;
+    policyVersion?: string;
+  } | null;
+  outcomeMeasurementConsentedAt?: string | null;
+  outcomeMeasurementConsentRevokedAt?: string | null;
   serviceCategory: ServiceRadarCategory | null;
   inventoryItemId: string | null;
   selectedQuoteId?: string | null;
@@ -593,6 +600,23 @@ export async function transitionServiceQuoteDecision(
   const res = await api.post<{ workspace: QuoteComparisonWorkspaceSummary }>(
     `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/transitions`,
     input
+  );
+  return res.data.workspace;
+}
+
+export async function updateServiceQuoteOutcomeConsent(
+  propertyId: string,
+  workspaceId: string,
+  input: {
+    consented: boolean;
+    finalPrice: boolean;
+    changeOrders: boolean;
+    policyVersion: 'service-quote-outcomes-v1';
+  },
+): Promise<QuoteComparisonWorkspaceSummary> {
+  const res = await api.post<{ workspace: QuoteComparisonWorkspaceSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/outcome-measurement-consent`,
+    input,
   );
   return res.data.workspace;
 }

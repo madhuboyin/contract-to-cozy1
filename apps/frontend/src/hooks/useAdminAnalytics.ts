@@ -13,6 +13,7 @@ import {
   fetchAdminAnalyticsPhase1Pilot,
   fetchAdminAnalyticsPhase6Pilot,
   fetchAdminToolLifecycleFunnel,
+  fetchAdminServiceQuoteDecisionMetrics,
 } from '@/lib/api/adminAnalytics';
 import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
 
@@ -103,6 +104,18 @@ export function useAdminAnalyticsPhase6Pilot(filters: AdminAnalyticsFilters, ena
   return useQuery({
     queryKey: ['admin-analytics-phase6-pilot', filters.from, filters.to],
     queryFn: () => fetchAdminAnalyticsPhase6Pilot(filters),
+    staleTime: STALE,
+    enabled,
+  });
+}
+
+export function useAdminServiceQuoteDecisionMetrics(
+  filters: AdminAnalyticsFilters,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['admin-service-quote-decisions', filters.from, filters.to],
+    queryFn: () => fetchAdminServiceQuoteDecisionMetrics(filters),
     staleTime: STALE,
     enabled,
   });

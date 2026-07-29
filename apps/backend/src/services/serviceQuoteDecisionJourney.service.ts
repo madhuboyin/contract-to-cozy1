@@ -8,6 +8,12 @@ import type {
   ServiceQuoteDecisionOutcome,
   ServiceQuoteDecisionStage,
 } from './serviceQuoteDecisionTransitions';
+import {
+  emitServiceQuoteDecisionAnalytics,
+  outcomeConsentAllows,
+  ServiceQuoteDecisionEvent,
+} from './serviceQuoteDecisionAnalytics.service';
+import { ProductAnalyticsEventType } from '@prisma/client';
 
 export { canTransitionServiceQuoteDecision } from './serviceQuoteDecisionTransitions';
 export type {
@@ -86,7 +92,8 @@ function homeTimelineDescriptor(
 }
 
 export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDecisionInput) {
-  return database.$transaction(async (tx: any) => {
+  let transitionRecorded = false;
+  const result = await database.$transaction(async (tx: any) => {
     const workspace = await tx.quoteComparisonWorkspace.findFirst({
       where: { id: input.workspaceId, propertyId: input.propertyId },
       select: {
@@ -95,6 +102,9 @@ export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDeci
         outcome: true,
         inventoryItemId: true,
         guidanceJourneyId: true,
+        outcomeMeasurementConsentJson: true,
+        outcomeMeasurementConsentedAt: true,
+        outcomeMeasurementConsentRevokedAt: true,
       },
     });
     if (!workspace) {
@@ -115,6 +125,14 @@ export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDeci
       );
     }
     validateStageOutcome(input.toStage, nextOutcome);
+    const transitionMetadata = { ...(input.metadataJson ?? {}) };
+    if (!outcomeConsentAllows(workspace, 'finalPrice')) {
+      delete transitionMetadata.finalPrice;
+    }
+    if (!outcomeConsentAllows(workspace, 'changeOrders')) {
+      delete transitionMetadata.changeOrders;
+      delete transitionMetadata.changeOrderAmount;
+    }
 
     if (fromStage === input.toStage && workspace.outcome === nextOutcome) {
       return tx.quoteComparisonWorkspace.findUnique({
@@ -152,10 +170,11 @@ export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDeci
         reason: input.reason?.trim() || null,
         relatedEntityType: input.relatedEntityType ?? null,
         relatedEntityId: input.relatedEntityId ?? null,
-        metadataJson: input.metadataJson ?? null,
+        metadataJson: Object.keys(transitionMetadata).length ? transitionMetadata : null,
         actorUserId: input.actorUserId ?? null,
       },
     });
+    transitionRecorded = true;
     if (input.relatedEntityType && input.relatedEntityId) {
       await tx.serviceQuoteDecisionContextLink.upsert({
         where: {
@@ -170,7 +189,11 @@ export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDeci
           entityType: input.relatedEntityType,
           entityId: input.relatedEntityId,
         },
-        update: { metadataJson: input.metadataJson ?? undefined },
+        update: {
+          metadataJson: Object.keys(transitionMetadata).length
+            ? transitionMetadata
+            : undefined,
+        },
       });
     }
 
@@ -216,6 +239,59 @@ export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDeci
       },
     });
   });
+
+  const finalPriceAllowed = outcomeConsentAllows(result, 'finalPrice');
+  const suppliedFinalPrice = Number(input.metadataJson?.finalPrice);
+  const finalPrice = finalPriceAllowed && Number.isFinite(suppliedFinalPrice)
+    ? suppliedFinalPrice
+    : null;
+  const event =
+    input.toStage === 'COMPLETED' && nextOutcome(result) === 'COMPLETED'
+      ? {
+          eventName: ServiceQuoteDecisionEvent.WORK_COMPLETED,
+          eventType: ProductAnalyticsEventType.HOME_ACTION_OUTCOME_VERIFIED,
+        }
+      : input.toStage === 'BOOKING' && nextOutcome(result) === 'BOOKED'
+        ? {
+            eventName: ServiceQuoteDecisionEvent.BOOKING_RECORDED,
+            eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+          }
+        : input.toStage === 'FINALIZATION' && nextOutcome(result) === 'ACCEPTED'
+          ? {
+              eventName: ServiceQuoteDecisionEvent.FINALIZATION_RECORDED,
+              eventType: ProductAnalyticsEventType.DECISION_GUIDED,
+            }
+          : input.toStage === 'CLOSED'
+            ? {
+                eventName: ServiceQuoteDecisionEvent.DECISION_RECORDED,
+                eventType: ProductAnalyticsEventType.DECISION_GUIDED,
+              }
+            : input.toStage === 'COMPARISON'
+              ? {
+                  eventName: ServiceQuoteDecisionEvent.COMPARISON_REACHED,
+                  eventType: ProductAnalyticsEventType.TOOL_USED,
+                }
+              : null;
+
+  if (event && transitionRecorded) {
+    emitServiceQuoteDecisionAnalytics({
+      ...event,
+      userId: input.actorUserId,
+      propertyId: input.propertyId,
+      workspaceId: input.workspaceId,
+      metadata: {
+        stage: input.toStage,
+        outcome: nextOutcome(result),
+        finalPriceCapturedWithConsent: finalPrice !== null,
+      },
+      valueNumeric: finalPrice,
+    });
+  }
+  return result;
+}
+
+function nextOutcome(result: any): ServiceQuoteDecisionOutcome {
+  return String(result?.outcome ?? 'OPEN') as ServiceQuoteDecisionOutcome;
 }
 
 export async function linkServiceQuoteDecisionContext(input: {

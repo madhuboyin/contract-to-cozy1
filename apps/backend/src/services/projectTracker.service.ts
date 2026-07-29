@@ -8,8 +8,14 @@ import {
   ProjectIssueSeverity,
   ProjectPaymentTriggerType,
   InventoryItemCategory,
+  ProductAnalyticsEventType,
   ServiceCategory,
 } from '@prisma/client';
+import {
+  emitServiceQuoteDecisionAnalytics,
+  outcomeConsentAllows,
+  ServiceQuoteDecisionEvent,
+} from './serviceQuoteDecisionAnalytics.service';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
@@ -818,6 +824,45 @@ export async function approveChangeOrder(
   });
 
   await recalcProjectTotals(projectId);
+  const database = prisma as any;
+  const project = await database.projectRecord.findUnique({
+    where: { id: projectId },
+    select: { bookingId: true, priceFinalizationId: true },
+  });
+  const workspace = await database.quoteComparisonWorkspace.findFirst({
+    where: {
+      propertyId,
+      OR: [
+        { contextLinks: { some: { entityType: 'PROJECT', entityId: projectId } } },
+        ...(project?.bookingId ? [{ booking: { id: project.bookingId } }] : []),
+        ...(project?.priceFinalizationId
+          ? [{ priceFinalization: { id: project.priceFinalizationId } }]
+          : []),
+      ],
+    },
+    select: {
+      id: true,
+      outcomeMeasurementConsentJson: true,
+      outcomeMeasurementConsentedAt: true,
+      outcomeMeasurementConsentRevokedAt: true,
+    },
+  });
+  if (workspace && outcomeConsentAllows(workspace, 'changeOrders')) {
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.CHANGE_ORDER_APPROVED,
+      eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      workspaceId: workspace.id,
+      metadata: {
+        projectId,
+        changeOrderId,
+        category: updated.category,
+        capturedWithConsent: true,
+      },
+      valueNumeric: updated.costDeltaCents / 100,
+    });
+  }
   return updated;
 }
 

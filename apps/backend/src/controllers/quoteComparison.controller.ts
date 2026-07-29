@@ -15,7 +15,13 @@ import {
   deleteQuoteProposal,
   resolveQuoteClarification,
   setQuoteProposalDisposition,
+  setServiceQuoteOutcomeMeasurementConsent,
 } from '../services/quoteComparison.service';
+import {
+  emitServiceQuoteDecisionAnalytics,
+  ServiceQuoteDecisionEvent,
+} from '../services/serviceQuoteDecisionAnalytics.service';
+import { ProductAnalyticsEventType } from '@prisma/client';
 import {
   assertProjectComplianceDecisionsApplicable,
   getProjectComplianceEnvelope,
@@ -47,6 +53,18 @@ export async function getOrCreateWorkspace(req: CustomRequest, res: Response, ne
       req.user!.userId,
       req.body,
     );
+    if (!result.reused) {
+      emitServiceQuoteDecisionAnalytics({
+        eventName: ServiceQuoteDecisionEvent.INTAKE_RECORDED,
+        userId: req.user!.userId,
+        propertyId: req.params.propertyId,
+        workspaceId: result.workspace.id,
+        metadata: {
+          intakeType: 'workspace_created',
+          serviceCategory: req.body.serviceCategory ?? null,
+        },
+      });
+    }
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
       req.user!.userId,
@@ -79,6 +97,18 @@ export async function addQuoteProposal(req: CustomRequest, res: Response, next: 
       req.body.serviceCategory,
     );
     const quote = await createQuoteProposal(req.params.propertyId, req.params.workspaceId, req.body);
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.INTAKE_RECORDED,
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      workspaceId: req.params.workspaceId,
+      metadata: {
+        intakeType: 'manual_quote',
+        readinessStage: quote.readinessStage,
+        readinessScore: quote.readinessScore,
+        missingFactCount: Array.isArray(quote.missingFactsJson) ? quote.missingFactsJson.length : 0,
+      },
+    });
     res.status(201).json({ success: true, data: { quote } });
   } catch (error) {
     next(error);
@@ -96,6 +126,7 @@ export async function updateQuote(req: CustomRequest, res: Response, next: NextF
       req.params.propertyId,
       req.params.workspaceId,
       req.params.quoteId,
+      req.user!.userId,
       req.body,
     );
     res.json({ success: true, data: { quote } });
@@ -113,6 +144,18 @@ export async function addQuoteFromDocument(req: CustomRequest, res: Response, ne
       req.user!.userId,
       req.body.documentId,
     );
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.INTAKE_RECORDED,
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      workspaceId: req.params.workspaceId,
+      metadata: {
+        intakeType: 'document_extraction',
+        readinessStage: quote.readinessStage,
+        readinessScore: quote.readinessScore,
+        missingFactCount: Array.isArray(quote.missingFactsJson) ? quote.missingFactsJson.length : 0,
+      },
+    });
     res.status(201).json({ success: true, data: { quote } });
   } catch (error) {
     next(error);
@@ -128,6 +171,20 @@ export async function confirmQuote(req: CustomRequest, res: Response, next: Next
       req.params.quoteId,
       req.user!.userId,
     );
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.READINESS_ASSESSED,
+      eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      workspaceId: req.params.workspaceId,
+      metadata: {
+        readinessStage: quote.readinessStage,
+        readinessScore: quote.readinessScore,
+        missingFactCount: Array.isArray(quote.missingFactsJson) ? quote.missingFactsJson.length : 0,
+        ambiguityCount: Array.isArray(quote.ambiguitiesJson) ? quote.ambiguitiesJson.length : 0,
+        homeownerConfirmed: true,
+      },
+    });
     res.json({ success: true, data: { quote } });
   } catch (error) {
     next(error);
@@ -228,6 +285,14 @@ export async function addClarification(req: CustomRequest, res: Response, next: 
       req.user!.userId,
       req.body.question,
     );
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.CLARIFICATION_REQUESTED,
+      eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      workspaceId: req.params.workspaceId,
+      metadata: { quoteId: req.params.quoteId, clarificationId: clarification.id },
+    });
     res.status(201).json({ success: true, data: { clarification } });
   } catch (error) {
     next(error);
@@ -245,7 +310,34 @@ export async function resolveClarification(req: CustomRequest, res: Response, ne
       req.user!.userId,
       req.body.response,
     );
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.CLARIFICATION_RESOLVED,
+      eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+      userId: req.user!.userId,
+      propertyId: req.params.propertyId,
+      workspaceId: req.params.workspaceId,
+      metadata: { quoteId: req.params.quoteId, clarificationId: clarification.id },
+    });
     res.json({ success: true, data: { clarification } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateOutcomeMeasurementConsent(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    const workspace = await setServiceQuoteOutcomeMeasurementConsent(
+      req.params.propertyId,
+      req.params.workspaceId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data: { workspace } });
   } catch (error) {
     next(error);
   }

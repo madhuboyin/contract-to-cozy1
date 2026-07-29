@@ -42,6 +42,7 @@ import {
   useAdminAnalyticsPhase1Pilot,
   useAdminAnalyticsPhase6Pilot,
   useAdminToolLifecycleFunnel,
+  useAdminServiceQuoteDecisionMetrics,
 } from '@/hooks/useAdminAnalytics';
 import AdminAnalyticsLineChart from '@/components/admin-analytics/AdminAnalyticsLineChart';
 import {
@@ -67,6 +68,72 @@ function num(v: number | null | undefined) {
   if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
   if (v >= 1_000) return (v / 1_000).toFixed(1) + 'k';
   return String(Math.round(v));
+}
+
+function ServiceQuoteDecisionSection({
+  filters,
+  enabled,
+}: {
+  filters: AdminAnalyticsFilters;
+  enabled: boolean;
+}) {
+  const query = useAdminServiceQuoteDecisionMetrics(filters, enabled);
+  if (query.isLoading) return <TableSkeleton rows={4} />;
+  if (query.isError) {
+    return (
+      <AdminRouteState
+        state="error"
+        title="Service quote outcomes unavailable"
+        description="The evidence and decision report could not be loaded."
+      />
+    );
+  }
+  if (!query.data) return null;
+  const data = query.data;
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base">Service Quote Decision outcomes</CardTitle>
+        <CardDescription>
+          Verified journey outcomes, evidence coverage, and privacy-governed learning readiness.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <OverviewCard label="Active decisions" value={num(data.funnel.activeDecisions)} sub={`${pct(data.funnel.decisionRate)} decided`} />
+          <OverviewCard label="Completed work" value={num(data.funnel.completedWork)} sub={`${pct(data.funnel.completionRate)} completion rate`} />
+          <OverviewCard label="Qualified evidence" value={pct(data.evidence.qualifiedCoverageRate)} sub={`${num(data.evidence.qualifiedChecks)} of ${num(data.evidence.totalChecks)} checks`} />
+          <OverviewCard label="Consented outcomes" value={num(data.consent.verifiedFinalPriceCaptures)} sub={`${pct(data.consent.consentRate)} of completed work`} />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 p-4">
+            <p className="mb-2 text-sm font-semibold text-slate-900">Decision quality</p>
+            <dl className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+              <div><dt>Clarifications</dt><dd className="text-lg font-semibold text-slate-900">{num(data.decisionQuality.clarificationRequests)}</dd></div>
+              <div><dt>Scope changes after warning</dt><dd className="text-lg font-semibold text-slate-900">{num(data.decisionQuality.scopeChangesAfterWarnings)}</dd></div>
+              <div><dt>Comparison eligible</dt><dd className="text-lg font-semibold text-slate-900">{pct(data.decisionQuality.comparisonEligibilityRate)}</dd></div>
+              <div><dt>Dispute signals</dt><dd className="text-lg font-semibold text-slate-900">{num(data.decisionQuality.disputeSignals)}</dd></div>
+            </dl>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="mb-0 text-sm font-semibold text-slate-900">Internal benchmark gate</p>
+              <Badge variant={data.governedLearning.eligibleForInternalBenchmarkDerivation ? 'default' : 'outline'}>
+                {data.governedLearning.eligibleForInternalBenchmarkDerivation ? 'Eligible for review' : 'Suppressed'}
+              </Badge>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              {num(data.governedLearning.verifiedObservationCount)} verified observations across{' '}
+              {num(data.governedLearning.distinctPropertyCount)} properties. Minimums:{' '}
+              {num(data.governedLearning.minimumObservationCount)} observations and{' '}
+              {num(data.governedLearning.minimumDistinctProperties)} properties.
+            </p>
+            <p className="mb-0 text-xs text-slate-500">Manual review is required; this report never activates benchmark data.</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function dec(v: number | null | undefined, places = 1) {
@@ -1472,6 +1539,12 @@ export default function AnalyticsAdminPage() {
             description="Adjust date range or module filter to load analytics data."
           />
         )}
+
+        <ServiceQuoteDecisionSection
+          filters={filters}
+          enabled={isAdmin}
+          key={`service-quote-decisions-${refreshKey}`}
+        />
 
         {/* ── Phase 1 Pilot ── */}
         <Phase1PilotSection

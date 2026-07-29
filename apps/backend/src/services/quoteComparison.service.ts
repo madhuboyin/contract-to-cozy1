@@ -1,4 +1,8 @@
-import { QuoteComparisonWorkspaceStatus, ServiceCategory } from '@prisma/client';
+import {
+  ProductAnalyticsEventType,
+  QuoteComparisonWorkspaceStatus,
+  ServiceCategory,
+} from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -16,6 +20,10 @@ import {
   ServiceQuoteDecisionOutcome,
   ServiceQuoteDecisionStage,
 } from './serviceQuoteDecisionJourney.service';
+import {
+  emitServiceQuoteDecisionAnalytics,
+  ServiceQuoteDecisionEvent,
+} from './serviceQuoteDecisionAnalytics.service';
 
 const OPEN_WORKSPACE_STATUSES: QuoteComparisonWorkspaceStatus[] = ['DRAFT', 'SHORTLISTED'];
 
@@ -314,6 +322,7 @@ export async function updateQuoteProposal(
   propertyId: string,
   workspaceId: string,
   quoteId: string,
+  userId: string,
   input: UpdateQuoteProposalInput,
 ) {
   const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
@@ -430,6 +439,27 @@ export async function updateQuoteProposal(
     toStage: 'SCOPE_REVIEW',
     reason: 'Proposal facts changed and comparison eligibility must be reviewed again.',
   });
+  const previousMissingCount = Array.isArray(current.missingFactsJson)
+    ? current.missingFactsJson.length
+    : 0;
+  const currentMissingCount = Array.isArray(updated.missingFactsJson)
+    ? updated.missingFactsJson.length
+    : 0;
+  if (currentMissingCount < previousMissingCount) {
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.SCOPE_CHANGED_AFTER_WARNING,
+      eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+      userId,
+      propertyId,
+      workspaceId,
+      metadata: {
+        quoteId,
+        previousMissingFactCount: previousMissingCount,
+        currentMissingFactCount: currentMissingCount,
+        resolvedMissingFactCount: previousMissingCount - currentMissingCount,
+      },
+    });
+  }
   return updated;
 }
 
@@ -946,4 +976,51 @@ export async function resolveQuoteClarification(
       resolvedAt: new Date(),
     },
   });
+}
+
+export async function setServiceQuoteOutcomeMeasurementConsent(
+  propertyId: string,
+  workspaceId: string,
+  userId: string,
+  input: {
+    consented: boolean;
+    finalPrice: boolean;
+    changeOrders: boolean;
+    policyVersion: 'service-quote-outcomes-v1';
+  },
+) {
+  await getWorkspaceOrThrow(propertyId, workspaceId);
+  const now = new Date();
+  await database.quoteComparisonWorkspace.update({
+    where: { id: workspaceId },
+    data: input.consented
+      ? {
+          outcomeMeasurementConsentJson: {
+            finalPrice: input.finalPrice,
+            changeOrders: input.changeOrders,
+            policyVersion: input.policyVersion,
+          },
+          outcomeMeasurementConsentedAt: now,
+          outcomeMeasurementConsentedByUserId: userId,
+          outcomeMeasurementConsentRevokedAt: null,
+        }
+      : {
+          outcomeMeasurementConsentJson: null,
+          outcomeMeasurementConsentRevokedAt: now,
+        },
+  });
+  emitServiceQuoteDecisionAnalytics({
+    eventName: ServiceQuoteDecisionEvent.CONSENT_UPDATED,
+    eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+    userId,
+    propertyId,
+    workspaceId,
+    metadata: {
+      consented: input.consented,
+      finalPrice: input.consented && input.finalPrice,
+      changeOrders: input.consented && input.changeOrders,
+      policyVersion: input.policyVersion,
+    },
+  });
+  return getQuoteComparisonWorkspace(propertyId, workspaceId);
 }

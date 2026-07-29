@@ -12,6 +12,10 @@ import {
   assertProjectComplianceApplicable,
   getProjectComplianceEnvelope,
 } from '../services/projectCompliance/context';
+import {
+  emitServiceQuoteDecisionAnalytics,
+  ServiceQuoteDecisionEvent,
+} from '../services/serviceQuoteDecisionAnalytics.service';
 
 const service = new ServicePriceRadarService();
 
@@ -63,6 +67,31 @@ export async function createServicePriceRadarCheck(
         outcomeCompleted: false,
         verdict: result.check.verdict,
         confidenceScore: result.check.confidenceScore,
+      },
+    });
+    const pricingFactors =
+      result.check.pricingFactorsJson
+      && typeof result.check.pricingFactorsJson === 'object'
+      && !Array.isArray(result.check.pricingFactorsJson)
+        ? result.check.pricingFactorsJson as Record<string, unknown>
+        : {};
+    const benchmark =
+      pricingFactors.benchmark
+      && typeof pricingFactors.benchmark === 'object'
+      && !Array.isArray(pricingFactors.benchmark)
+        ? pricingFactors.benchmark as Record<string, unknown>
+        : {};
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.EVIDENCE_ASSESSED,
+      userId,
+      propertyId: req.params.propertyId,
+      metadata: {
+        evidenceLevel: typeof benchmark.evidenceLevel === 'string'
+          ? benchmark.evidenceLevel
+          : 'UNKNOWN',
+        benchmarkQualified: benchmark.qualified === true,
+        serviceCategory: result.check.serviceCategory,
+        verdict: result.check.verdict,
       },
     });
 

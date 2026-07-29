@@ -133,3 +133,23 @@ export const createQuoteClarificationSchema = z.object({
 export const resolveQuoteClarificationSchema = z.object({
   response: z.string().trim().min(1).max(4000),
 });
+
+export const serviceQuoteOutcomeConsentSchema = z.object({
+  consented: z.boolean(),
+  finalPrice: z.boolean().default(false),
+  changeOrders: z.boolean().default(false),
+  policyVersion: z.literal('service-quote-outcomes-v1'),
+}).superRefine((value, ctx) => {
+  if (value.consented && !value.finalPrice && !value.changeOrders) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Select at least one outcome data type when granting consent.',
+    });
+  }
+  if (!value.consented && (value.finalPrice || value.changeOrders)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Outcome data types must be false when revoking consent.',
+    });
+  }
+});

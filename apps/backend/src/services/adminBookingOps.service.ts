@@ -8,10 +8,14 @@
 // no provider internalNotes, property location is city/state only.
 // Governed mutations (BOOKING_OPERATE) are deliberately not in this slice.
 
-import { AdminCaseSeverity, Prisma } from '@prisma/client';
+import { AdminCaseSeverity, Prisma, ProductAnalyticsEventType } from '@prisma/client';
 import { Request } from 'express';
 import { prisma } from '../lib/prisma';
 import { createCase } from './adminCase.service';
+import {
+  emitServiceQuoteDecisionAnalytics,
+  ServiceQuoteDecisionEvent,
+} from './serviceQuoteDecisionAnalytics.service';
 
 export class AdminBookingOpsError extends Error {
   code: string;
@@ -186,7 +190,13 @@ export async function openDisputeCase(
 ) {
   const booking = await prisma.booking.findUnique({
     where: { id: input.bookingId },
-    select: { id: true, bookingNumber: true, status: true },
+    select: {
+      id: true,
+      bookingNumber: true,
+      status: true,
+      propertyId: true,
+      quoteDecisionWorkspaceId: true,
+    },
   });
   if (!booking) {
     throw new AdminBookingOpsError('BOOKING_NOT_FOUND', `No booking with id "${input.bookingId}".`);
@@ -207,7 +217,7 @@ export async function openDisputeCase(
     );
   }
 
-  return createCase(
+  const disputeCase = await createCase(
     {
       actorId: input.actorId,
       type: 'DISPUTE',
@@ -221,4 +231,18 @@ export async function openDisputeCase(
     },
     ctx
   );
+  if (booking.quoteDecisionWorkspaceId) {
+    emitServiceQuoteDecisionAnalytics({
+      eventName: ServiceQuoteDecisionEvent.DISPUTE_REPORTED,
+      eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+      userId: input.actorId,
+      propertyId: booking.propertyId,
+      workspaceId: booking.quoteDecisionWorkspaceId,
+      metadata: {
+        bookingId: booking.id,
+        severity: input.severity ?? 'HIGH',
+      },
+    });
+  }
+  return disputeCase;
 }

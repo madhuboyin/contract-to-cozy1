@@ -34,6 +34,7 @@ import {
   selectQuoteForDecision,
   transitionServiceQuoteDecision,
   updateQuoteProposal,
+  updateServiceQuoteOutcomeConsent,
 } from '../service-price-radar/servicePriceRadarApi';
 import { api } from '@/lib/api/client';
 import { createNegotiationShieldCase } from '../negotiation-shield/negotiationShieldApi';
@@ -258,6 +259,7 @@ export default function QuoteComparisonWorkspaceClient() {
   const [comparability, setComparability] = React.useState<QuoteComparabilityResult | null>(null);
   const [decisionWorkspace, setDecisionWorkspace] = React.useState<QuoteComparisonWorkspaceSummary | null>(null);
   const [journeyActionPending, setJourneyActionPending] = React.useState(false);
+  const [consentPending, setConsentPending] = React.useState(false);
   const [editingQuote, setEditingQuote] = React.useState<QuoteProposalSummary | null>(null);
   const [editForm, setEditForm] = React.useState<QuoteEditForm | null>(null);
   const [clarificationDrafts, setClarificationDrafts] = React.useState<Record<string, string>>({});
@@ -717,6 +719,34 @@ export default function QuoteComparisonWorkspaceClient() {
       setError(closeError?.message || 'Unable to close this decision.');
     } finally {
       setJourneyActionPending(false);
+    }
+  };
+
+  const outcomeMeasurementConsented = Boolean(
+    decisionWorkspace?.outcomeMeasurementConsentedAt
+    && !decisionWorkspace.outcomeMeasurementConsentRevokedAt,
+  );
+
+  const setOutcomeMeasurementConsent = async (consented: boolean) => {
+    if (!workspaceId) return;
+    setConsentPending(true);
+    setError(null);
+    try {
+      const workspace = await updateServiceQuoteOutcomeConsent(
+        propertyId,
+        workspaceId,
+        {
+          consented,
+          finalPrice: consented,
+          changeOrders: consented,
+          policyVersion: 'service-quote-outcomes-v1',
+        },
+      );
+      setDecisionWorkspace(workspace);
+    } catch (consentError: any) {
+      setError(consentError?.message || 'Unable to update outcome-sharing consent.');
+    } finally {
+      setConsentPending(false);
     }
   };
 
@@ -1320,6 +1350,22 @@ export default function QuoteComparisonWorkspaceClient() {
               <p className="mb-0"><strong className="text-slate-900">Not assumed:</strong> manual or extracted facts are not treated as verified market evidence.</p>
               <p className="mb-0"><strong className="text-slate-900">Your controls:</strong> edit, delete, reject, restore, defer, or close before final terms lock the proposal.</p>
             </div>
+            <label className="mt-4 flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-slate-300"
+                checked={outcomeMeasurementConsented}
+                disabled={consentPending || !workspaceId}
+                onChange={(event) => void setOutcomeMeasurementConsent(event.target.checked)}
+              />
+              <span>
+                <strong className="block text-slate-900">Help improve future price guidance</strong>
+                Voluntarily share the final price and material change-order totals after completed work.
+                Estimates, contractor notes, and quote text are never included. You can turn this off at any
+                time to stop future capture; this choice does not affect recommendations or booking.
+                {consentPending ? <span className="mt-1 block text-xs">Saving your choice…</span> : null}
+              </span>
+            </label>
           </ScenarioInputCard>
 
           {error ? (

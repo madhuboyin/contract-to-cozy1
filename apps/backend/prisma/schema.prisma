@@ -8631,6 +8631,13 @@ model QuoteComparisonWorkspace {
   decisionRecordedAt  DateTime?
   closedAt            DateTime?
 
+  // Voluntary outcome-learning consent. Capture is opt-in and independently
+  // scoped to final price and change-order data.
+  outcomeMeasurementConsentJson       Json?
+  outcomeMeasurementConsentedAt       DateTime?
+  outcomeMeasurementConsentedByUserId String?
+  outcomeMeasurementConsentRevokedAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

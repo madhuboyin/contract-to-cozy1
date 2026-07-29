@@ -14,6 +14,7 @@ import {
   deleteQuote,
   resolveClarification,
   setQuoteDisposition,
+  updateOutcomeMeasurementConsent,
 } from '../controllers/quoteComparison.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
@@ -30,6 +31,7 @@ import {
   createQuoteClarificationSchema,
   quoteDispositionSchema,
   resolveQuoteClarificationSchema,
+  serviceQuoteOutcomeConsentSchema,
 } from '../validators/quoteComparison.validators';
 
 const router = Router();
@@ -47,6 +49,13 @@ router.get(
   '/properties/:propertyId/quote-comparison/workspaces/:workspaceId',
   propertyAuthMiddleware,
   getWorkspace,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/outcome-measurement-consent',
+  propertyAuthMiddleware,
+  validateBody(serviceQuoteOutcomeConsentSchema),
+  updateOutcomeMeasurementConsent,
 );
 
 router.post(

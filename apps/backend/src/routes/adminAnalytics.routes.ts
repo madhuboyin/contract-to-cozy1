@@ -29,6 +29,7 @@ import {
   getTopToolsHandler,
   getToolLifecycleFunnelHandler,
   getRefinanceRadarMetricsHandler,
+  getServiceQuoteDecisionMetricsHandler,
   getHomeDigitalTwinDiagnosticsHandler,
 } from '../controllers/adminAnalytics.controller';
 
@@ -256,6 +257,12 @@ router.get(
   '/admin/analytics/refinance-radar',
   validate(OverviewQuerySchema),
   getRefinanceRadarMetricsHandler,
+);
+
+router.get(
+  '/admin/analytics/service-quote-decisions',
+  validate(OverviewQuerySchema),
+  getServiceQuoteDecisionMetricsHandler,
 );
 
 /**
