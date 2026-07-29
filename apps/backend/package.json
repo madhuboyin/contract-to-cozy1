@@ -19,6 +19,7 @@
     "test:capability-registry": "node --test tests/unit/capabilityRegistryParity.test.js tests/unit/knowledgeHubCapabilityProjection.test.js",
     "test:product-framework": "node --test tests/unit/productFrameworkContracts.test.js tests/unit/toolCapabilityContracts.test.js tests/unit/capabilityRegistryParity.test.js tests/unit/capabilityCatalog.test.js tests/unit/knowledgeHubCapabilityProjection.test.js tests/unit/toolCapabilityRecommendation.test.js tests/unit/toolCapabilityRelated.test.js tests/unit/capabilityGoldenRanking.test.js tests/unit/capabilityLaunchReview.test.js tests/unit/capabilityGovernanceReview.test.js tests/unit/capabilityGovernanceDefinition.test.js tests/unit/capabilitySmokeCheck.test.js",
     "test:coverage-launch-gate": "node --test tests/unit/coverage*.test.js tests/unit/insurance*.test.js tests/unit/inventoryCoverageState.test.js",
+    "test:service-price-radar:acceptance": "node --test tests/unit/servicePriceRadarDecisionQualityAcceptance.test.js tests/unit/servicePriceBenchmarkQualification.test.js tests/unit/servicePriceRadarContainment.test.js tests/unit/quoteComparability.test.js tests/unit/serviceQuoteDecisionJourney.test.js tests/unit/serviceQuoteDecisionControls.test.js",
     "test:integration": "node --test $(find tests/integration -type f -name '*.test.js')",
     "test:e2e": "node --test $(find tests/e2e -type f -name '*.test.js')",
     "test:watch": "node --test --watch $(find tests -type f -name '*.test.js')",

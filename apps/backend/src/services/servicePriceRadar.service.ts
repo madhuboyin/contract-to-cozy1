@@ -704,6 +704,67 @@ export function scoreBenchmark(
   return score;
 }
 
+export function selectBestQualifiedBenchmark(
+  candidates: ServicePriceBenchmarkRecord[],
+  property: PropertyContext,
+  serviceSubcategory: string | null,
+  evaluatedAt = new Date(),
+): BenchmarkMatch {
+  let best: ServicePriceBenchmarkRecord | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let ambiguousBestMatch = false;
+  const qualificationReasons = new Set<string>();
+
+  for (const candidate of candidates) {
+    const qualification = qualifyServicePriceBenchmark(candidate, evaluatedAt);
+    if (!qualification.qualified) {
+      qualification.reasons.forEach((reason) => qualificationReasons.add(reason));
+      continue;
+    }
+
+    const score = scoreBenchmark(candidate, property, serviceSubcategory);
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+      ambiguousBestMatch = false;
+    } else if (
+      score === bestScore
+      && score !== Number.NEGATIVE_INFINITY
+      && best
+      && candidate.id !== best.id
+    ) {
+      ambiguousBestMatch = true;
+    }
+  }
+
+  if (ambiguousBestMatch) {
+    return {
+      matched: false,
+      qualified: false,
+      benchmark: null,
+      qualificationReasons: ['AMBIGUOUS_BENCHMARK_MATCH'],
+    };
+  }
+
+  if (!best || bestScore === Number.NEGATIVE_INFINITY) {
+    return {
+      matched: false,
+      qualified: false,
+      benchmark: null,
+      qualificationReasons: qualificationReasons.size
+        ? Array.from(qualificationReasons).sort()
+        : ['NO_MATCHING_BENCHMARK'],
+    };
+  }
+
+  return {
+    matched: true,
+    qualified: true,
+    benchmark: best,
+    qualificationReasons: [],
+  };
+}
+
 async function findBestBenchmark(
   property: PropertyContext,
   serviceCategory: ServiceCategoryValue,
@@ -786,9 +847,7 @@ async function findBestBenchmark(
       },
     });
 
-    let best: ServicePriceBenchmarkRecord | null = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-    const qualificationReasons = new Set<string>();
+    const candidates: ServicePriceBenchmarkRecord[] = [];
 
     for (const row of rows as any[]) {
       const candidate: ServicePriceBenchmarkRecord = {
@@ -845,37 +904,15 @@ async function findBestBenchmark(
         importRunStatus: String(row.release?.importRun?.status ?? ''),
         importChecksumSha256: String(row.release?.importRun?.checksumSha256 ?? ''),
       };
-
-      const qualification = qualifyServicePriceBenchmark(candidate, evaluatedAt);
-      if (!qualification.qualified) {
-        qualification.reasons.forEach((reason) => qualificationReasons.add(reason));
-        continue;
-      }
-
-      const score = scoreBenchmark(candidate, property, serviceSubcategory);
-      if (score > bestScore) {
-        best = candidate;
-        bestScore = score;
-      }
+      candidates.push(candidate);
     }
 
-    if (!best || bestScore === Number.NEGATIVE_INFINITY) {
-      return {
-        matched: false,
-        qualified: false,
-        benchmark: null,
-        qualificationReasons: qualificationReasons.size
-          ? Array.from(qualificationReasons).sort()
-          : ['NO_MATCHING_BENCHMARK'],
-      };
-    }
-
-    return {
-      matched: true,
-      qualified: true,
-      benchmark: best,
-      qualificationReasons: [],
-    };
+    return selectBestQualifiedBenchmark(
+      candidates,
+      property,
+      serviceSubcategory,
+      evaluatedAt,
+    );
   } catch (error) {
     logger.warn({ err: error }, 'Service Price Radar benchmark lookup skipped');
     return {

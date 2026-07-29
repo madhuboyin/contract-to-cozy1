@@ -1,0 +1,32 @@
+[
+  {
+    "id": "property-only",
+    "contextType": "PROPERTY",
+    "signalIntentFamilies": [],
+    "expectedCandidate": false
+  },
+  {
+    "id": "maintenance-finding-without-quote-intent",
+    "contextType": "ISSUE",
+    "signalIntentFamilies": ["MAINTENANCE_DUE"],
+    "expectedCandidate": false
+  },
+  {
+    "id": "explicit-service-quote-decision",
+    "contextType": "SERVICE",
+    "signalIntentFamilies": ["SERVICE_DECISION_ACTIVE"],
+    "expectedCandidate": true
+  },
+  {
+    "id": "quote-document-ready",
+    "contextType": "DOCUMENT",
+    "signalIntentFamilies": ["SERVICE_DECISION_ACTIVE"],
+    "expectedCandidate": true
+  },
+  {
+    "id": "project-requesting-quotes",
+    "contextType": "PROJECT",
+    "signalIntentFamilies": ["SERVICE_DECISION_ACTIVE"],
+    "expectedCandidate": true
+  }
+]

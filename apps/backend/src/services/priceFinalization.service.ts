@@ -368,7 +368,7 @@ export class PriceFinalizationService {
                   : term.type === 'ALLOWANCE'
                     ? 'MATERIALS'
                     : 'OTHER',
-        label: term.label || String(term.type).replaceAll('_', ' ').toLowerCase(),
+        label: term.label || String(term.type).replace(/_/g, ' ').toLowerCase(),
         value: term.value,
         sortOrder: index,
         isAccepted: true,

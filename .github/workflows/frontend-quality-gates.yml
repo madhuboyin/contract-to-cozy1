@@ -47,6 +47,9 @@ jobs:
       - name: Ownership Cost accessibility and responsive acceptance
         run: npm run test:ownership-cost:e2e
 
+      - name: Service Quote Decision safety and accessibility acceptance
+        run: npm run test:service-quote-decision:e2e
+
       - name: Upload Ownership Cost target-build evidence
         if: always()
         uses: actions/upload-artifact@v4
