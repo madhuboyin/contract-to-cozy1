@@ -1926,6 +1926,11 @@ model User {
 
   // Home Renovation Risk Advisor
   renovationAdvisorSessions HomeRenovationAdvisorSession[] @relation("RenovationAdvisorSessionCreatedBy")
+  renovationCasesCreated RenovationCase[] @relation("RenovationCaseCreatedBy")
+  renovationScopeVersionsCreated RenovationScopeVersion[] @relation("RenovationScopeVersionCreatedBy")
+  renovationCaseParticipants RenovationCaseParticipant[]
+  renovationCaseLinksCreated RenovationCaseLink[] @relation("RenovationCaseLinkCreatedBy")
+  renovationCaseEvents RenovationCaseEvent[] @relation("RenovationCaseEventActor")
 
   // Incident Lifecycle Management
   incidentUserPreferences             IncidentUserPreference[]
@@ -2921,6 +2926,9 @@ model Property {
 
   // Home Renovation Risk Advisor
   renovationAdvisorSessions HomeRenovationAdvisorSession[]
+  renovationCases RenovationCase[]
+  renovationCaseLinks RenovationCaseLink[]
+  renovationCaseEvents RenovationCaseEvent[]
 
   // Mortgage Refinance Radar
   refinanceOpportunities    RefinanceOpportunity[]
@@ -13005,6 +13013,258 @@ model PropertyHabitPreference {
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_habit_preferences")
+}
+
+// ============================================================================
+// RENOVATION CASE
+// ============================================================================
+
+enum RenovationCaseLifecycle {
+  IDEA
+  FEASIBILITY
+  SCOPE_DEFINITION
+  REQUIREMENTS_RESEARCH
+  APPROVALS_IN_PROGRESS
+  PREPARING_TO_START
+  READY_TO_START
+  IN_EXECUTION
+  INSPECTION_AND_CLOSEOUT
+  VERIFIED_COMPLETE
+  ON_HOLD
+  CANCELLED
+  COMPLETED_WITH_OPEN_ITEMS
+  HISTORICAL_RESEARCH
+}
+
+enum RenovationCaseOutcomeStatus {
+  OPEN
+  VERIFIED_SUCCESS
+  COMPLETED_WITH_OPEN_ITEMS
+  CANCELLED
+  UNKNOWN
+}
+
+enum RenovationCaseType {
+  REMODEL
+  ADDITION
+  CONVERSION
+  REPAIR
+  REPLACEMENT
+  ENERGY_UPGRADE
+  ACCESSIBILITY
+  LANDSCAPING
+  HISTORICAL_RESEARCH
+  OTHER
+}
+
+enum RenovationGovernanceTier {
+  LOW_CONSEQUENCE
+  MATERIAL_FINANCIAL
+  COMPLIANCE_SENSITIVE
+  SAFETY_SENSITIVE
+  EMERGENCY
+}
+
+enum RenovationResponsibilityContext {
+  UNKNOWN
+  HOMEOWNER
+  ASSOCIATION
+  SHARED
+  LANDLORD
+  OTHER
+}
+
+enum RenovationScopeApprovalStatus {
+  DRAFT
+  PROPOSED
+  APPROVED
+  SUPERSEDED
+  REJECTED
+}
+
+enum RenovationCaseParticipantRole {
+  OWNER
+  COORDINATOR
+  CONTRIBUTOR
+  CONTRACTOR
+  DESIGNER
+  ARCHITECT
+  ENGINEER
+  OTHER
+}
+
+enum RenovationCaseLinkType {
+  PROJECT
+  ADVISOR_SESSION
+  PERMIT
+  HOA_APPROVAL
+  MATERIAL_SPEC
+  DOCUMENT
+  INSPECTION_FINDING
+  QUOTE_WORKSPACE
+  CAPITAL_SCENARIO
+}
+
+enum RenovationCaseEventType {
+  CASE_CREATED
+  CASE_UPDATED
+  LIFECYCLE_CHANGED
+  SCOPE_VERSION_CREATED
+  SCOPE_APPROVED
+  CONTRIBUTOR_LINKED
+  CONTRIBUTOR_UNLINKED
+  PARTICIPANT_ADDED
+  PARTICIPANT_REMOVED
+  CASE_ARCHIVED
+}
+
+model RenovationCase {
+  id             String @id @default(uuid())
+  propertyId     String
+  createdByUserId String?
+  idempotencyKey String?
+
+  name                 String
+  objective            String? @db.Text
+  caseType              RenovationCaseType
+  lifecycle             RenovationCaseLifecycle @default(IDEA)
+  outcomeStatus         RenovationCaseOutcomeStatus @default(OPEN)
+  governanceTier        RenovationGovernanceTier @default(LOW_CONSEQUENCE)
+  responsibilityContext RenovationResponsibilityContext @default(UNKNOWN)
+  currentScopeVersionId String? @unique
+
+  spacesAffected    String[] @default([])
+  systemsAffected   String[] @default([])
+  targetBudgetCents Int?
+  targetStartDate   DateTime? @db.Date
+  targetEndDate     DateTime? @db.Date
+  entryPoint        String?
+  sourceType        String?
+  sourceId          String?
+  readinessSummary  Json?
+  archivedAt        DateTime?
+  archiveReason     String?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  property            Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy           User? @relation("RenovationCaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  currentScopeVersion RenovationScopeVersion? @relation("CurrentRenovationScope", fields: [currentScopeVersionId], references: [id], onDelete: SetNull)
+  scopeVersions       RenovationScopeVersion[] @relation("RenovationScopeVersions")
+  participants        RenovationCaseParticipant[]
+  links               RenovationCaseLink[]
+  events              RenovationCaseEvent[]
+
+  @@unique([propertyId, idempotencyKey])
+  @@index([propertyId, lifecycle])
+  @@index([propertyId, updatedAt(sort: Desc)])
+  @@index([createdByUserId])
+  @@map("renovation_cases")
+}
+
+model RenovationScopeVersion {
+  id               String @id @default(uuid())
+  renovationCaseId String
+  createdByUserId  String?
+  idempotencyKey   String?
+  version          Int
+  effectiveAt      DateTime @default(now())
+  changeReason     String
+
+  summary                  String? @db.Text
+  workItems                Json
+  spacesAffected           String[] @default([])
+  systemsAffected          String[] @default([])
+  intendedUse              String?
+  dimensions               Json?
+  structuralEffects        Boolean @default(false)
+  exteriorEffects          Boolean @default(false)
+  drawingDocumentIds       String[] @default([])
+  specificationDocumentIds String[] @default([])
+  estimatedCostCents       Int?
+  contractCostCents        Int?
+  comparisonToPrior        Json?
+  approvalStatus           RenovationScopeApprovalStatus @default(DRAFT)
+  downstreamInvalidation   Json?
+  createdAt                DateTime @default(now())
+
+  renovationCase RenovationCase @relation("RenovationScopeVersions", fields: [renovationCaseId], references: [id], onDelete: Cascade)
+  currentForCase  RenovationCase? @relation("CurrentRenovationScope")
+  createdBy       User? @relation("RenovationScopeVersionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  links           RenovationCaseLink[]
+
+  @@unique([renovationCaseId, version])
+  @@unique([renovationCaseId, idempotencyKey])
+  @@index([renovationCaseId, createdAt(sort: Desc)])
+  @@index([createdByUserId])
+  @@map("renovation_scope_versions")
+}
+
+model RenovationCaseParticipant {
+  id               String @id @default(uuid())
+  renovationCaseId String
+  userId           String
+  role             RenovationCaseParticipantRole
+  displayName      String?
+  organizationName String?
+  isActive         Boolean @default(true)
+  addedAt          DateTime @default(now())
+  removedAt        DateTime?
+
+  renovationCase RenovationCase @relation(fields: [renovationCaseId], references: [id], onDelete: Cascade)
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([renovationCaseId, userId])
+  @@index([userId, isActive])
+  @@map("renovation_case_participants")
+}
+
+model RenovationCaseLink {
+  id               String @id @default(uuid())
+  renovationCaseId String
+  propertyId       String
+  scopeVersionId   String?
+  linkType         RenovationCaseLinkType
+  targetId         String
+  metadata         Json?
+  createdByUserId  String?
+  createdAt        DateTime @default(now())
+
+  renovationCase RenovationCase @relation(fields: [renovationCaseId], references: [id], onDelete: Cascade)
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  scopeVersion   RenovationScopeVersion? @relation(fields: [scopeVersionId], references: [id], onDelete: SetNull)
+  createdBy      User? @relation("RenovationCaseLinkCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([linkType, targetId])
+  @@index([renovationCaseId, linkType])
+  @@index([propertyId, linkType])
+  @@index([scopeVersionId])
+  @@map("renovation_case_links")
+}
+
+model RenovationCaseEvent {
+  id               String @id @default(uuid())
+  renovationCaseId String
+  propertyId       String
+  actorUserId      String?
+  idempotencyKey   String?
+  eventType        RenovationCaseEventType
+  fromLifecycle    RenovationCaseLifecycle?
+  toLifecycle      RenovationCaseLifecycle?
+  scopeVersionId   String?
+  payload          Json?
+  occurredAt       DateTime @default(now())
+
+  renovationCase RenovationCase @relation(fields: [renovationCaseId], references: [id], onDelete: Cascade)
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  actor          User? @relation("RenovationCaseEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@unique([renovationCaseId, idempotencyKey])
+  @@index([renovationCaseId, occurredAt])
+  @@index([propertyId, occurredAt])
+  @@map("renovation_case_events")
 }
 
 // ============================================================================
