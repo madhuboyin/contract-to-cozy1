@@ -26,6 +26,13 @@ import {
   GenerateRenovationRequirementsSchema,
   UpsertRenovationAuthorityProfileSchema,
 } from '../validators/renovationRequirement.validators';
+import {
+  AttachRenovationComplianceRecordSchema,
+  CreateHoaDocumentReviewSchema,
+  CreateRenovationComplianceConditionSchema,
+  ReviewHoaDocumentExtractionSchema,
+  UpdateRenovationComplianceConditionSchema,
+} from '../validators/renovationComplianceWorkflow.validators';
 
 const router = Router();
 const canContribute = requireHouseholdRole('CONTRIBUTOR');
@@ -73,6 +80,46 @@ router.get(
   '/properties/:propertyId/renovation-cases/:caseId',
   propertyAuthMiddleware,
   controller.getCase,
+);
+router.get(
+  '/properties/:propertyId/renovation-cases/:caseId/compliance-workflow',
+  propertyAuthMiddleware,
+  controller.getComplianceWorkflow,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/:caseId/compliance-records',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(AttachRenovationComplianceRecordSchema),
+  controller.attachComplianceRecord,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/:caseId/compliance-conditions',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(CreateRenovationComplianceConditionSchema),
+  controller.createComplianceCondition,
+);
+router.patch(
+  '/properties/:propertyId/renovation-cases/:caseId/compliance-conditions/:conditionId',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(UpdateRenovationComplianceConditionSchema),
+  controller.updateComplianceCondition,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/:caseId/hoa-document-reviews',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(CreateHoaDocumentReviewSchema),
+  controller.createHoaDocumentReview,
+);
+router.patch(
+  '/properties/:propertyId/renovation-cases/:caseId/hoa-document-reviews/:reviewId',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(ReviewHoaDocumentExtractionSchema),
+  controller.reviewHoaDocumentExtraction,
 );
 router.get(
   '/properties/:propertyId/renovation-cases/:caseId/requirements',

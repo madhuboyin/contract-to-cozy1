@@ -155,7 +155,26 @@ export class PermitFetchService {
           await prisma.propertyPermitRecord.upsert({
             where: { dedupeKey: record.dedupeKey },
             create: record as any,
-            update: {},
+            update: {
+              permitNumber: record.permitNumber,
+              category: record.category,
+              workTypes: record.workTypes,
+              description: record.description,
+              status: record.status,
+              applicantName: record.applicantName,
+              contractorName: record.contractorName,
+              contractorLicense: record.contractorLicense,
+              applicationDate: record.applicationDate,
+              issueDate: record.issueDate,
+              expirationDate: record.expirationDate,
+              finaledDate: record.finaledDate,
+              estimatedCostCents: record.estimatedCostCents,
+              rawDataJson: record.rawDataJson as any,
+              officialTruthLayer: record.officialTruthLayer,
+              officialSourceType: record.officialSourceType,
+              officialSourceReference: record.officialSourceReference,
+              officialObservedAt: record.officialObservedAt,
+            },
           });
           inserted++;
         } catch (err) {

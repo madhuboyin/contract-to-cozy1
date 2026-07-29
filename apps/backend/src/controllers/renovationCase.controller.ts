@@ -3,6 +3,75 @@ import type { CustomRequest as Request } from '../types';
 import * as service from '../services/renovationCase.service';
 import * as exploreService from '../services/renovationExplore.service';
 import * as requirementService from '../services/renovationRequirement.service';
+import * as complianceService from '../services/renovationComplianceWorkflow.service';
+
+export async function getComplianceWorkflow(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await complianceService.getComplianceWorkflow(req.params.propertyId, req.params.caseId);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function attachComplianceRecord(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await complianceService.attachComplianceRecord(
+      req.params.propertyId,
+      req.params.caseId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function createComplianceCondition(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await complianceService.createCondition(
+      req.params.propertyId,
+      req.params.caseId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function updateComplianceCondition(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await complianceService.updateCondition(
+      req.params.propertyId,
+      req.params.caseId,
+      req.params.conditionId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function createHoaDocumentReview(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await complianceService.createHoaDocumentReview(
+      req.params.propertyId,
+      req.params.caseId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function reviewHoaDocumentExtraction(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await complianceService.reviewHoaDocumentExtraction(
+      req.params.propertyId,
+      req.params.caseId,
+      req.params.reviewId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
 
 export async function generateRequirements(req: Request, res: Response, next: NextFunction) {
   try {

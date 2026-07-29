@@ -2495,6 +2495,66 @@ class APIClient {
       body: JSON.stringify(input),
     });
   }
+  async getRenovationComplianceWorkflow(
+    propertyId: string,
+    caseId: string,
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/compliance-workflow`,
+    );
+  }
+  async attachRenovationComplianceRecord(
+    propertyId: string,
+    caseId: string,
+    input: { subjectType: 'PERMIT' | 'HOA_APPROVAL'; subjectId: string },
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/compliance-records`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
+  async updateRenovationComplianceCondition(
+    propertyId: string,
+    caseId: string,
+    conditionId: string,
+    input: { status: string; verificationNotes: string; sourceDocumentId?: string },
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/compliance-conditions/${conditionId}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    );
+  }
+  async createHoaDocumentReview(
+    propertyId: string,
+    caseId: string,
+    input: Record<string, unknown>,
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/hoa-document-reviews`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
+  async reviewHoaDocumentExtraction(
+    propertyId: string,
+    caseId: string,
+    reviewId: string,
+    input: { status: 'CONFIRMED' | 'REJECTED'; reviewNotes: string; selectedConditionIndexes?: number[] },
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/hoa-document-reviews/${reviewId}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    );
+  }
+  async recordOfficialPermitStatus(
+    propertyId: string,
+    permitId: string,
+    input: Record<string, unknown>,
+  ): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/permits/${permitId}/official-status`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
   async getPropertyAppreciation(propertyId: string, purchasePrice?: number, purchaseDate?: string): Promise<APIResponse<any>> {
     return this.request(`/api/appreciation/analyze/${propertyId}`, {
       method: 'POST',

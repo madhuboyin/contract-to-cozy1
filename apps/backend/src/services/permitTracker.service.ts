@@ -4,7 +4,8 @@ type PermitRecordCategory =
   | 'BUILDING' | 'ELECTRICAL' | 'PLUMBING' | 'MECHANICAL' | 'STRUCTURAL'
   | 'ROOFING' | 'ZONING' | 'DEMOLITION' | 'GRADING' | 'FIRE' | 'OTHER';
 type PermitRecordStatus =
-  | 'APPLIED' | 'ISSUED' | 'INSPECTION_PENDING' | 'INSPECTION_FAILED'
+  | 'APPLIED' | 'UNDER_REVIEW' | 'CORRECTION_REQUESTED' | 'RESUBMITTED'
+  | 'ISSUED' | 'INSPECTION_PENDING' | 'INSPECTION_FAILED'
   | 'FINALED' | 'EXPIRED' | 'VOIDED' | 'UNKNOWN';
 type PermitInspectionStatus =
   | 'NOT_SCHEDULED' | 'SCHEDULED' | 'PASSED' | 'FAILED' | 'PARTIAL' | 'CANCELLED';
@@ -168,7 +169,7 @@ export class PermitTrackerService {
     };
   }
 
-  async createManualPermit(propertyId: string, payload: any) {
+  async createManualPermit(propertyId: string, userId: string, payload: any) {
     const record = await prisma.propertyPermitRecord.create({
       data: {
         propertyId,
@@ -177,7 +178,10 @@ export class PermitTrackerService {
         category: payload.category,
         workTypes: payload.workTypes,
         description: payload.description,
-        status: payload.status,
+        status: 'UNKNOWN',
+        reportedStatus: payload.reportedStatus ?? 'DRAFT',
+        reportedAt: new Date(),
+        reportedByUserId: userId,
         applicantName: payload.applicantName,
         contractorName: payload.contractorName,
         contractorLicense: payload.contractorLicense,
@@ -196,10 +200,6 @@ export class PermitTrackerService {
         sourceJourneyId: payload.sourceJourneyId,
       },
     });
-
-    if (ACTIVE_STATUSES.includes(record.status as PermitRecordStatus)) {
-      await this.generateInspectionMilestones(record.id, propertyId, record.category as PermitRecordCategory);
-    }
 
     return this.getPermitDetail(record.id, propertyId);
   }
@@ -234,7 +234,7 @@ export class PermitTrackerService {
     };
   }
 
-  async updatePermit(permitId: string, propertyId: string, patch: any) {
+  async updatePermit(permitId: string, propertyId: string, userId: string, patch: any) {
     const existing = await prisma.propertyPermitRecord.findFirst({
       where: { id: permitId, propertyId, isActive: true },
     });
@@ -245,7 +245,9 @@ export class PermitTrackerService {
     const data: Prisma.PropertyPermitRecordUpdateInput = isApiSourced
       ? {
           notes: patch.notes,
-          isVerified: patch.isVerified,
+          reportedStatus: patch.reportedStatus,
+          reportedAt: patch.reportedStatus !== undefined ? new Date() : undefined,
+          reportedByUserId: patch.reportedStatus !== undefined ? userId : undefined,
           ...(patch.documentIds && { documentIds: patch.documentIds }),
         }
       : {
@@ -253,7 +255,9 @@ export class PermitTrackerService {
           category: patch.category,
           workTypes: patch.workTypes,
           description: patch.description,
-          status: patch.status,
+          reportedStatus: patch.reportedStatus,
+          reportedAt: patch.reportedStatus !== undefined ? new Date() : undefined,
+          reportedByUserId: patch.reportedStatus !== undefined ? userId : undefined,
           applicantName: patch.applicantName,
           contractorName: patch.contractorName,
           contractorLicense: patch.contractorLicense,
@@ -266,10 +270,50 @@ export class PermitTrackerService {
           finalCostCents: patch.finalCostCents,
           documentIds: patch.documentIds,
           notes: patch.notes,
-          isVerified: patch.isVerified,
         };
 
     await prisma.propertyPermitRecord.update({ where: { id: permitId }, data });
+    return this.getPermitDetail(permitId, propertyId);
+  }
+
+  async recordOfficialStatus(permitId: string, propertyId: string, userId: string, payload: any) {
+    const existing = await prisma.propertyPermitRecord.findFirst({
+      where: { id: permitId, propertyId, isActive: true },
+    });
+    if (!existing) throw new APIError('Permit not found', 404, 'NOT_FOUND');
+    if (payload.evidenceDocumentId) {
+      const evidence = await prisma.document.findFirst({
+        where: { id: payload.evidenceDocumentId, propertyId },
+        select: { id: true },
+      });
+      if (!evidence) {
+        throw new APIError(
+          'Official permit evidence must belong to the same property.',
+          409,
+          'PERMIT_EVIDENCE_SCOPE_MISMATCH',
+        );
+      }
+    }
+    await prisma.propertyPermitRecord.update({
+      where: { id: permitId },
+      data: {
+        status: payload.status,
+        officialTruthLayer: payload.truthLayer,
+        officialSourceType: payload.sourceType,
+        officialSourceReference: payload.sourceReference,
+        officialEvidenceDocumentId: payload.evidenceDocumentId,
+        officialObservedAt: new Date(payload.observedAt),
+        officialRecordedByUserId: userId,
+        authorityReferenceNumber: payload.authorityReferenceNumber,
+        issueDate: payload.issueDate ? new Date(payload.issueDate) : undefined,
+        expirationDate: payload.expirationDate ? new Date(payload.expirationDate) : undefined,
+        finaledDate: payload.finaledDate ? new Date(payload.finaledDate) : undefined,
+        isVerified: true,
+      },
+    });
+    if (ACTIVE_STATUSES.includes(payload.status as PermitRecordStatus)) {
+      await this.generateInspectionMilestones(permitId, propertyId, existing.category as PermitRecordCategory);
+    }
     return this.getPermitDetail(permitId, propertyId);
   }
 

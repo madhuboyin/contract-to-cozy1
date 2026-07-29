@@ -92,7 +92,11 @@ export async function createManualPermit(req: Request, res: Response, next: Next
       { permitWorkTypes: operationInput.workTypes },
       'permitTracking',
     );
-    const permit = await permitTrackerService.createManualPermit(req.params.propertyId, req.body);
+    const permit = await permitTrackerService.createManualPermit(
+      req.params.propertyId,
+      req.user!.userId,
+      req.body,
+    );
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
       req.user!.userId,
@@ -139,6 +143,7 @@ export async function updatePermit(req: Request, res: Response, next: NextFuncti
     const permit = await permitTrackerService.updatePermit(
       req.params.permitId,
       req.params.propertyId,
+      req.user!.userId,
       req.body,
     );
 
@@ -151,6 +156,18 @@ export async function updatePermit(req: Request, res: Response, next: NextFuncti
       metadataJson: { actionType: 'update_permit', permitId: req.params.permitId },
     });
 
+    res.json({ success: true, data: { permit } });
+  } catch (err) { next(err); }
+}
+
+export async function recordOfficialPermitStatus(req: Request, res: Response, next: NextFunction) {
+  try {
+    const permit = await permitTrackerService.recordOfficialStatus(
+      req.params.permitId,
+      req.params.propertyId,
+      req.user!.userId,
+      req.body,
+    );
     res.json({ success: true, data: { permit } });
   } catch (err) { next(err); }
 }

@@ -1,8 +1,8 @@
 'use client';
 import { forwardRef, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { CreatePermitPayload, PermitRecordCategory, PermitWorkType, PermitRecordStatus } from '@/types';
-import { CATEGORY_LABELS, WORK_TYPE_LABELS, STATUS_LABELS } from './PermitUtils';
+import type { CreatePermitPayload, PermitRecordCategory, PermitWorkType, PermitReportedWorkflowStatus } from '@/types';
+import { CATEGORY_LABELS, WORK_TYPE_LABELS } from './PermitUtils';
 
 interface Props {
   onSubmit: (payload: CreatePermitPayload) => Promise<void>;
@@ -24,9 +24,11 @@ const WORK_TYPES: PermitWorkType[] = [
   'DEMOLITION', 'GRADING_DRAINAGE', 'OTHER',
 ];
 
-const STATUSES: PermitRecordStatus[] = [
-  'APPLIED', 'ISSUED', 'INSPECTION_PENDING', 'INSPECTION_FAILED',
-  'FINALED', 'EXPIRED', 'VOIDED', 'UNKNOWN',
+const REPORTED_STATUSES: PermitReportedWorkflowStatus[] = [
+  'DRAFT', 'PREPARING_APPLICATION', 'SUBMITTED', 'UNDER_REVIEW',
+  'CORRECTION_REQUESTED', 'RESUBMITTED', 'ISSUED_REPORTED',
+  'INSPECTIONS_IN_PROGRESS', 'CLOSEOUT_REQUESTED', 'COMPLETED_REPORTED',
+  'EXPIRED_REPORTED', 'WITHDRAWN',
 ];
 
 const AddPermitForm = forwardRef<HTMLFormElement, Props>(function AddPermitForm(
@@ -39,7 +41,7 @@ const AddPermitForm = forwardRef<HTMLFormElement, Props>(function AddPermitForm(
     category: PermitRecordCategory;
     workTypes: PermitWorkType[];
     description: string;
-    status: PermitRecordStatus;
+    reportedStatus: PermitReportedWorkflowStatus;
     contractorName: string;
     contractorLicense: string;
     applicationDate: string;
@@ -52,7 +54,7 @@ const AddPermitForm = forwardRef<HTMLFormElement, Props>(function AddPermitForm(
     category: 'BUILDING',
     workTypes: ['OTHER'],
     description: '',
-    status: 'ISSUED',
+    reportedStatus: 'DRAFT',
     contractorName: '',
     contractorLicense: '',
     applicationDate: '',
@@ -85,7 +87,7 @@ const AddPermitForm = forwardRef<HTMLFormElement, Props>(function AddPermitForm(
         category: form.category,
         workTypes: form.workTypes,
         ...(form.description && { description: form.description }),
-        status: form.status,
+        reportedStatus: form.reportedStatus,
         ...(form.contractorName && { contractorName: form.contractorName }),
         ...(form.contractorLicense && { contractorLicense: form.contractorLicense }),
         ...(form.applicationDate && { applicationDate: new Date(form.applicationDate).toISOString() }),
@@ -120,17 +122,20 @@ const AddPermitForm = forwardRef<HTMLFormElement, Props>(function AddPermitForm(
       </div>
 
       <div>
-        <label className={label}>Status *</label>
+        <label className={label}>Your workflow progress *</label>
         <select
-          value={form.status}
-          onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as PermitRecordStatus }))}
+          value={form.reportedStatus}
+          onChange={(e) => setForm((f) => ({ ...f, reportedStatus: e.target.value as PermitReportedWorkflowStatus }))}
           className={field}
           required
         >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+          {REPORTED_STATUSES.map((status) => (
+            <option key={status} value={status}>{status.replace(/_/g, ' ').toLowerCase()}</option>
           ))}
         </select>
+        <p className="mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
+          This tracks your progress only. An authority source establishes the official permit status.
+        </p>
       </div>
 
       <div>

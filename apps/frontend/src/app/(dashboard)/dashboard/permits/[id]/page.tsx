@@ -4,7 +4,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ShieldCheck, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { PermitDetail, InspectionMilestone, PermitInspectionStatus } from '@/types';
+import type { PermitDetail, InspectionMilestone, PermitInspectionStatus, PermitRecordStatus } from '@/types';
 import PermitStatusBadge from '@/components/features/permits/PermitStatusBadge';
 import InspectionMilestoneList from '@/components/features/permits/InspectionMilestoneList';
 import InspectionReadinessModal from '@/components/features/permits/InspectionReadinessModal';
@@ -14,7 +14,6 @@ import {
 } from '@/components/features/permits/PermitUtils';
 
 const INSPECTION_STATUSES: PermitRecordStatus[] = ['ISSUED', 'INSPECTION_PENDING', 'INSPECTION_FAILED'];
-type PermitRecordStatus = 'APPLIED' | 'ISSUED' | 'INSPECTION_PENDING' | 'INSPECTION_FAILED' | 'FINALED' | 'EXPIRED' | 'VOIDED' | 'UNKNOWN';
 
 export default function PermitDetailPage() {
   const params = useParams<{ id: string }>();
@@ -59,17 +58,6 @@ export default function PermitDetailPage() {
       ...p,
       inspectionMilestones: p.inspectionMilestones.filter((m) => m.id !== milestoneId),
     } : p);
-  }
-
-  async function handleVerifyToggle() {
-    if (!permit) return;
-    setSaving(true);
-    try {
-      const updated = await api.updatePermit(propertyId, permitId, { isVerified: !permit.isVerified });
-      setPermit(updated);
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function handleSaveNotes() {
@@ -268,27 +256,26 @@ export default function PermitDetailPage() {
         )}
       </div>
 
-      {/* Verified toggle */}
-      <button
-        onClick={handleVerifyToggle}
-        disabled={saving}
+      {/* Official status provenance */}
+      <div
         className={`w-full flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors ${
-          permit.isVerified
+          permit.officialTruthLayer
             ? 'border-emerald-200 bg-emerald-50'
             : 'border-neutral-200 bg-[hsl(var(--mobile-card-bg))]'
         }`}
       >
-        <ShieldCheck className={`h-5 w-5 shrink-0 ${permit.isVerified ? 'text-emerald-500' : 'text-neutral-300'}`} />
+        <ShieldCheck className={`h-5 w-5 shrink-0 ${permit.officialTruthLayer ? 'text-emerald-500' : 'text-neutral-300'}`} />
         <div className="flex-1">
           <p className="text-sm font-medium">
-            {permit.isVerified ? 'Verified — record confirmed accurate' : 'Mark as verified'}
+            {permit.officialTruthLayer ? 'Official status evidence recorded' : 'Official status not established'}
           </p>
           <p className="text-xs text-[hsl(var(--mobile-text-muted))] mt-0.5">
-            Confirm this permit record is accurate
+            {permit.officialTruthLayer
+              ? `${permit.officialTruthLayer.replace(/_/g, ' ').toLowerCase()} · ${permit.officialSourceReference || 'property document evidence'}`
+              : 'Your workflow progress cannot change the authority status.'}
           </p>
         </div>
-        {saving && <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />}
-      </button>
+      </div>
     </div>
   );
 }

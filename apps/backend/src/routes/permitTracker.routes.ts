@@ -15,6 +15,7 @@ import {
   createManualPermit,
   getPermitDetail,
   updatePermit,
+  recordOfficialPermitStatus,
   deletePermit,
   getPermitSummary,
   listInspectionMilestones,
@@ -45,6 +46,7 @@ import {
 import {
   CreateManualPermitSchema,
   UpdatePermitSchema,
+  RecordOfficialPermitStatusSchema,
   AddInspectionMilestoneSchema,
   UpdateInspectionMilestoneSchema,
   UpdateFlagSchema,
@@ -107,6 +109,12 @@ router.patch(
   propertyAuthMiddleware,
   validateBody(UpdatePermitSchema),
   updatePermit,
+);
+router.post(
+  '/properties/:propertyId/permits/:permitId/official-status',
+  propertyAuthMiddleware,
+  validateBody(RecordOfficialPermitStatusSchema),
+  recordOfficialPermitStatus,
 );
 router.delete('/properties/:propertyId/permits/:permitId', propertyAuthMiddleware, deletePermit);
 

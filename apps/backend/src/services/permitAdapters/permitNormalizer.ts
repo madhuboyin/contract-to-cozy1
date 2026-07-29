@@ -14,13 +14,15 @@ type PermitWorkType =
   | 'DEMOLITION' | 'GRADING_DRAINAGE' | 'OTHER';
 
 type PermitRecordStatus =
-  | 'APPLIED' | 'ISSUED' | 'INSPECTION_PENDING' | 'INSPECTION_FAILED'
+  | 'APPLIED' | 'UNDER_REVIEW' | 'CORRECTION_REQUESTED' | 'RESUBMITTED'
+  | 'ISSUED' | 'INSPECTION_PENDING' | 'INSPECTION_FAILED'
   | 'FINALED' | 'EXPIRED' | 'VOIDED' | 'UNKNOWN';
 
 type PermitRecordSource = 'OPEN_DATA_API' | 'MANUAL_ENTRY' | 'DOCUMENT_UPLOAD';
 
 export interface PermitDataSource {
   id: string;
+  name: string;
   fieldMappingJson: unknown;
   queryFilterJson: unknown;
   apiKeyEnvVar: string | null;
@@ -62,6 +64,10 @@ export interface NormalizedPermitRecord {
   workTypes: PermitWorkType[];
   description?: string;
   status: PermitRecordStatus;
+  officialTruthLayer: 'SOURCE_OBSERVED';
+  officialSourceType: 'AUTHORITY_OPEN_DATA';
+  officialSourceReference: string;
+  officialObservedAt: Date;
   applicantName?: string;
   contractorName?: string;
   contractorLicense?: string;
@@ -124,6 +130,9 @@ const STATUS_MAP: Record<string, PermitRecordStatus> = {
   applied: 'APPLIED',
   application: 'APPLIED',
   pending: 'APPLIED',
+  review: 'UNDER_REVIEW',
+  correction: 'CORRECTION_REQUESTED',
+  resubmit: 'RESUBMITTED',
   final: 'FINALED',
   finaled: 'FINALED',
   completed: 'FINALED',
@@ -194,6 +203,10 @@ export class PermitNormalizer {
       workTypes,
       description: raw.description,
       status: inferStatus(raw.statusRaw),
+      officialTruthLayer: 'SOURCE_OBSERVED',
+      officialSourceType: 'AUTHORITY_OPEN_DATA',
+      officialSourceReference: `${dataSource.name}:${raw.externalId}`,
+      officialObservedAt: new Date(),
       applicantName: raw.applicantName,
       contractorName: raw.contractorName,
       contractorLicense: raw.contractorLicense,

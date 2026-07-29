@@ -22,20 +22,26 @@ export const APPROVAL_STATUS_LABELS: Record<HoaApprovalStatus, string> = {
   NOT_SUBMITTED: 'Not Submitted',
   SUBMITTED: 'Submitted',
   UNDER_REVIEW: 'Under Review',
+  CORRECTION_REQUESTED: 'Correction Requested',
+  RESUBMITTED: 'Resubmitted',
   APPROVED: 'Approved',
   APPROVED_WITH_CONDITIONS: 'Approved (Conditions)',
   DENIED: 'Denied',
   EXPIRED: 'Expired',
+  WITHDRAWN: 'Withdrawn',
 };
 
 export const APPROVAL_STATUS_COLOR: Record<HoaApprovalStatus, string> = {
   NOT_SUBMITTED: 'bg-neutral-100 text-neutral-500',
   SUBMITTED: 'bg-blue-50 text-blue-700',
   UNDER_REVIEW: 'bg-amber-50 text-amber-700',
+  CORRECTION_REQUESTED: 'bg-orange-50 text-orange-700',
+  RESUBMITTED: 'bg-blue-50 text-blue-700',
   APPROVED: 'bg-emerald-50 text-emerald-700',
   APPROVED_WITH_CONDITIONS: 'bg-emerald-50 text-emerald-700',
   DENIED: 'bg-red-50 text-red-700',
   EXPIRED: 'bg-neutral-100 text-neutral-500',
+  WITHDRAWN: 'bg-neutral-100 text-neutral-500',
 };
 
 export const DUES_FREQUENCY_LABELS: Record<HoaDuesFrequency, string> = {

@@ -15,8 +15,20 @@ const permitWorkType = z.enum([
 ]);
 
 const permitRecordStatus = z.enum([
-  'APPLIED', 'ISSUED', 'INSPECTION_PENDING', 'INSPECTION_FAILED',
+  'APPLIED', 'UNDER_REVIEW', 'CORRECTION_REQUESTED', 'RESUBMITTED',
+  'ISSUED', 'INSPECTION_PENDING', 'INSPECTION_FAILED',
   'FINALED', 'EXPIRED', 'VOIDED', 'UNKNOWN',
+]);
+const permitReportedStatus = z.enum([
+  'DRAFT', 'PREPARING_APPLICATION', 'SUBMITTED', 'UNDER_REVIEW',
+  'CORRECTION_REQUESTED', 'RESUBMITTED', 'ISSUED_REPORTED',
+  'INSPECTIONS_IN_PROGRESS', 'CLOSEOUT_REQUESTED', 'COMPLETED_REPORTED',
+  'EXPIRED_REPORTED', 'WITHDRAWN',
+]);
+const permitOfficialTruthLayer = z.enum(['SOURCE_OBSERVED', 'AUTHORITY_CONFIRMED']);
+const permitOfficialSourceType = z.enum([
+  'AUTHORITY_OPEN_DATA', 'AUTHORITY_PORTAL', 'AUTHORITY_DOCUMENT',
+  'AUTHORITY_EMAIL', 'AUTHORITY_REPRESENTATIVE', 'OTHER',
 ]);
 
 const permitInspectionStatus = z.enum([
@@ -51,7 +63,7 @@ export const CreateManualPermitSchema = z.object({
   category: permitRecordCategory,
   workTypes: z.array(permitWorkType).min(1),
   description: z.string().optional(),
-  status: permitRecordStatus,
+  reportedStatus: permitReportedStatus.default('DRAFT'),
   applicantName: z.string().optional(),
   contractorName: z.string().optional(),
   contractorLicense: z.string().optional(),
@@ -76,7 +88,7 @@ export const UpdatePermitSchema = z.object({
   category: permitRecordCategory.optional(),
   workTypes: z.array(permitWorkType).min(1).optional(),
   description: z.string().optional(),
-  status: permitRecordStatus.optional(),
+  reportedStatus: permitReportedStatus.optional(),
   applicantName: z.string().optional(),
   contractorName: z.string().optional(),
   contractorLicense: z.string().optional(),
@@ -89,7 +101,26 @@ export const UpdatePermitSchema = z.object({
   finalCostCents: z.number().int().min(0).optional(),
   documentIds: z.array(z.string()).optional(),
   notes: z.string().optional(),
-  isVerified: z.boolean().optional(),
+});
+
+export const RecordOfficialPermitStatusSchema = z.object({
+  status: permitRecordStatus,
+  truthLayer: permitOfficialTruthLayer,
+  sourceType: permitOfficialSourceType,
+  sourceReference: z.string().trim().min(1).max(1000),
+  evidenceDocumentId: z.string().trim().min(1).optional(),
+  observedAt: z.string().datetime(),
+  authorityReferenceNumber: z.string().trim().min(1).max(240).optional(),
+  issueDate: z.string().datetime().optional(),
+  expirationDate: z.string().datetime().optional(),
+  finaledDate: z.string().datetime().optional(),
+}).superRefine((value, ctx) => {
+  if (value.status === 'FINALED' && !value.finaledDate) {
+    ctx.addIssue({ code: 'custom', path: ['finaledDate'], message: 'Official finalization requires the authority finaled date.' });
+  }
+  if (value.status === 'ISSUED' && !value.issueDate) {
+    ctx.addIssue({ code: 'custom', path: ['issueDate'], message: 'Official issuance requires the authority issue date.' });
+  }
 });
 
 export const AddInspectionMilestoneSchema = z.object({

@@ -1936,6 +1936,8 @@ model User {
   renovationRequirementsOwned RenovationRequirement[] @relation("RenovationRequirementOwner")
   renovationRequirementsDetermined RenovationRequirement[] @relation("RenovationRequirementDeterminedBy")
   renovationRequirementEvents RenovationRequirementEvent[] @relation("RenovationRequirementEventActor")
+  renovationComplianceConditionsOwned RenovationComplianceCondition[] @relation("RenovationComplianceConditionOwner")
+  renovationComplianceConditionsVerified RenovationComplianceCondition[] @relation("RenovationComplianceConditionVerifiedBy")
 
   // Incident Lifecycle Management
   incidentUserPreferences             IncidentUserPreference[]
@@ -2938,6 +2940,7 @@ model Property {
   renovationAuthorityProfiles RenovationAuthorityProfile[]
   renovationRequirements RenovationRequirement[]
   renovationRequirementEvents RenovationRequirementEvent[]
+  renovationComplianceConditions RenovationComplianceCondition[]
 
   // Mortgage Refinance Radar
   refinanceOpportunities    RefinanceOpportunity[]
@@ -3642,6 +3645,8 @@ model Document {
   propertyTaxIntake          PropertyTaxDocumentIntake?
   renovationRequirementEvidence RenovationRequirement[]
   renovationAuthorityProfileSources RenovationAuthorityProfile[]
+  permitOfficialStatusEvidence PropertyPermitRecord[] @relation("PermitOfficialStatusEvidence")
+  renovationConditionEvidence RenovationComplianceCondition[]
   propertyTaxAppealEvidence  PropertyTaxAppealEvidence[]   @relation("PropertyTaxAppealEvidenceDocument")
   propertyTaxAppealComparables PropertyTaxAppealComparable[] @relation("PropertyTaxAppealComparableDocument")
   propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[] @relation("PropertyTaxAppealFilingConfirmation")
@@ -13171,6 +13176,7 @@ model RenovationCase {
   authorityProfiles    RenovationAuthorityProfile[]
   requirements        RenovationRequirement[]
   requirementEvents   RenovationRequirementEvent[]
+  complianceConditions RenovationComplianceCondition[]
 
   @@unique([propertyId, idempotencyKey])
   @@index([propertyId, lifecycle])
@@ -13339,6 +13345,90 @@ enum RenovationRequirementEventType {
   INVALIDATED_BY_SCOPE
 }
 
+enum RenovationComplianceSubjectType {
+  PERMIT
+  HOA_APPROVAL
+}
+
+enum RenovationComplianceConditionStatus {
+  OPEN
+  SATISFIED
+  WAIVED_WITH_ACKNOWLEDGMENT
+  EXPIRED
+}
+
+enum HoaDocumentReviewStatus {
+  NEEDS_REVIEW
+  CONFIRMED
+  REJECTED
+}
+
+model HoaApprovalDocumentReview {
+  id                      String @id @default(uuid())
+  renovationCaseId        String
+  propertyId              String
+  scopeVersionId          String
+  hoaApprovalId           String
+  documentId              String
+  extractedDecisionStatus HoaDecisionStatus?
+  extractedConditions     Json
+  extractedExpirationDate DateTime?
+  extractedReferenceNumber String?
+  extractionMethod        String
+  parserVersion           String?
+  status                  HoaDocumentReviewStatus @default(NEEDS_REVIEW)
+  reviewNotes             String?
+  reviewedByUserId        String?
+  reviewedAt              DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([renovationCaseId, scopeVersionId, hoaApprovalId, documentId])
+  @@index([renovationCaseId, status])
+  @@index([propertyId, documentId])
+  @@map("hoa_approval_document_reviews")
+}
+
+model RenovationComplianceCondition {
+  id               String @id @default(uuid())
+  renovationCaseId String
+  propertyId       String
+  scopeVersionId   String
+  subjectType      RenovationComplianceSubjectType
+  subjectId        String
+  permitRecordId   String?
+  hoaApprovalId    String?
+  title            String
+  description      String @db.Text
+  sourceReference  String?
+  sourceDocumentId String?
+  status           RenovationComplianceConditionStatus @default(OPEN)
+  isBlocking       Boolean @default(true)
+  ownerUserId      String?
+  dueAt            DateTime?
+  expiresAt        DateTime?
+  satisfiedAt      DateTime?
+  verifiedByUserId String?
+  verificationNotes String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  renovationCase RenovationCase @relation(fields: [renovationCaseId], references: [id], onDelete: Cascade)
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  scopeVersion   RenovationScopeVersion @relation(fields: [scopeVersionId], references: [id], onDelete: Cascade)
+  permitRecord   PropertyPermitRecord? @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
+  hoaApproval    HoaApprovalRecord? @relation(fields: [hoaApprovalId], references: [id], onDelete: Cascade)
+  sourceDocument Document? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  owner          User? @relation("RenovationComplianceConditionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  verifiedBy     User? @relation("RenovationComplianceConditionVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([renovationCaseId, scopeVersionId, subjectType, subjectId, title])
+  @@index([renovationCaseId, status, isBlocking])
+  @@index([propertyId, dueAt])
+  @@index([expiresAt])
+  @@map("renovation_compliance_conditions")
+}
+
 model RenovationAuthorityProfile {
   id                String @id @default(uuid())
   renovationCaseId  String
@@ -13494,6 +13584,7 @@ model RenovationScopeVersion {
   links           RenovationCaseLink[]
   authorityProfiles RenovationAuthorityProfile[]
   requirements RenovationRequirement[]
+  complianceConditions RenovationComplianceCondition[]
 
   @@unique([renovationCaseId, version])
   @@unique([renovationCaseId, idempotencyKey])
@@ -15408,6 +15499,9 @@ enum PermitWorkType {
 
 enum PermitRecordStatus {
   APPLIED
+  UNDER_REVIEW
+  CORRECTION_REQUESTED
+  RESUBMITTED
   ISSUED
   INSPECTION_PENDING
   INSPECTION_FAILED
@@ -15415,6 +15509,36 @@ enum PermitRecordStatus {
   EXPIRED
   VOIDED
   UNKNOWN
+}
+
+enum PermitReportedWorkflowStatus {
+  DRAFT
+  PREPARING_APPLICATION
+  SUBMITTED
+  UNDER_REVIEW
+  CORRECTION_REQUESTED
+  RESUBMITTED
+  ISSUED_REPORTED
+  INSPECTIONS_IN_PROGRESS
+  CLOSEOUT_REQUESTED
+  COMPLETED_REPORTED
+  EXPIRED_REPORTED
+  WITHDRAWN
+}
+
+enum PermitStatusTruthLayer {
+  DOCUMENTED
+  SOURCE_OBSERVED
+  AUTHORITY_CONFIRMED
+}
+
+enum PermitStatusSourceType {
+  AUTHORITY_OPEN_DATA
+  AUTHORITY_PORTAL
+  AUTHORITY_DOCUMENT
+  AUTHORITY_EMAIL
+  AUTHORITY_REPRESENTATIVE
+  OTHER
 }
 
 enum PermitRecordSource {
@@ -15572,7 +15696,19 @@ model PropertyPermitRecord {
   category     PermitRecordCategory
   workTypes    PermitWorkType[]
   description  String?
-  status       PermitRecordStatus
+  // Official authority status. Homeowner/contractor progress is stored in
+  // reportedStatus and can never mutate this field.
+  status       PermitRecordStatus @default(UNKNOWN)
+  reportedStatus PermitReportedWorkflowStatus @default(DRAFT)
+  reportedAt DateTime?
+  reportedByUserId String?
+  officialTruthLayer PermitStatusTruthLayer?
+  officialSourceType PermitStatusSourceType?
+  officialSourceReference String?
+  officialEvidenceDocumentId String?
+  officialObservedAt DateTime?
+  officialRecordedByUserId String?
+  authorityReferenceNumber String?
 
   applicantName     String?
   contractorName    String?
@@ -15610,15 +15746,19 @@ model PropertyPermitRecord {
   property                 Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   dataSource               PermitDataSource?             @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
   renovationAdvisorSession HomeRenovationAdvisorSession? @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
+  officialEvidenceDocument Document? @relation("PermitOfficialStatusEvidence", fields: [officialEvidenceDocumentId], references: [id], onDelete: SetNull)
 
   inspectionMilestones      PermitInspectionMilestone[]
   unpermittedFlags          PermitUnpermittedFlag[]     @relation("ResolvedByPermit")
   inspectionReadinessChecks InspectionReadinessCheck[]
   renovationRequirements    RenovationRequirement[]
+  complianceConditions      RenovationComplianceCondition[]
 
   @@index([propertyId])
   @@index([category])
   @@index([status])
+  @@index([reportedStatus])
+  @@index([officialEvidenceDocumentId])
   @@index([source])
   @@index([issueDate])
   @@index([sourceEntityType, sourceEntityId])
@@ -15807,10 +15947,13 @@ enum HoaApprovalStatus {
   NOT_SUBMITTED
   SUBMITTED
   UNDER_REVIEW
+  CORRECTION_REQUESTED
+  RESUBMITTED
   APPROVED
   APPROVED_WITH_CONDITIONS
   DENIED
   EXPIRED
+  WITHDRAWN
 }
 
 enum HoaDecisionStatus {
@@ -15908,6 +16051,7 @@ model HoaApprovalRecord {
   renovationAdvisorSession HomeRenovationAdvisorSession? @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
   decisionEvidenceDocument Document?                      @relation("HoaApprovalDecisionEvidence", fields: [decisionEvidenceDocumentId], references: [id], onDelete: SetNull)
   renovationRequirements    RenovationRequirement[]
+  complianceConditions      RenovationComplianceCondition[]
 
   @@index([propertyId])
   @@index([hoaAssociationId, reportedStatus])

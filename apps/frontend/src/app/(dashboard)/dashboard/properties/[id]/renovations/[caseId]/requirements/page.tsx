@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Search } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
@@ -141,6 +142,13 @@ export default function RenovationRequirementsPage() {
         subtitle="Advisor results are research candidates. Only sourced authority or professional evidence establishes a requirement."
         action={<StatusChip tone={unresolved ? 'needsAction' : 'good'}>{unresolved} unresolved</StatusChip>}
       />
+      <div>
+        <Button asChild variant="outline">
+          <Link href={`/dashboard/properties/${propertyId}/renovations/${caseId}/compliance`}>
+            Open permit and HOA workflow
+          </Link>
+        </Button>
+      </div>
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
       {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div> : null}

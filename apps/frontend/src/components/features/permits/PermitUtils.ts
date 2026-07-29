@@ -58,6 +58,9 @@ export const WORK_TYPE_LABELS: Record<PermitWorkType, string> = {
 
 export const STATUS_LABELS: Record<PermitRecordStatus, string> = {
   APPLIED: 'Applied',
+  UNDER_REVIEW: 'Under Review',
+  CORRECTION_REQUESTED: 'Correction Requested',
+  RESUBMITTED: 'Resubmitted',
   ISSUED: 'Issued',
   INSPECTION_PENDING: 'Inspection Pending',
   INSPECTION_FAILED: 'Inspection Failed',
@@ -69,6 +72,9 @@ export const STATUS_LABELS: Record<PermitRecordStatus, string> = {
 
 export const STATUS_COLOR: Record<PermitRecordStatus, string> = {
   APPLIED: 'bg-blue-50 text-blue-700',
+  UNDER_REVIEW: 'bg-amber-50 text-amber-700',
+  CORRECTION_REQUESTED: 'bg-orange-50 text-orange-700',
+  RESUBMITTED: 'bg-blue-50 text-blue-700',
   ISSUED: 'bg-emerald-50 text-emerald-700',
   INSPECTION_PENDING: 'bg-amber-50 text-amber-700',
   INSPECTION_FAILED: 'bg-red-50 text-red-700',

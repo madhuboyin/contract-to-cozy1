@@ -5433,8 +5433,21 @@ export type PermitWorkType =
   | 'DEMOLITION' | 'GRADING_DRAINAGE' | 'OTHER';
 
 export type PermitRecordStatus =
-  | 'APPLIED' | 'ISSUED' | 'INSPECTION_PENDING' | 'INSPECTION_FAILED'
+  | 'APPLIED' | 'UNDER_REVIEW' | 'CORRECTION_REQUESTED' | 'RESUBMITTED'
+  | 'ISSUED' | 'INSPECTION_PENDING' | 'INSPECTION_FAILED'
   | 'FINALED' | 'EXPIRED' | 'VOIDED' | 'UNKNOWN';
+
+export type PermitReportedWorkflowStatus =
+  | 'DRAFT' | 'PREPARING_APPLICATION' | 'SUBMITTED' | 'UNDER_REVIEW'
+  | 'CORRECTION_REQUESTED' | 'RESUBMITTED' | 'ISSUED_REPORTED'
+  | 'INSPECTIONS_IN_PROGRESS' | 'CLOSEOUT_REQUESTED' | 'COMPLETED_REPORTED'
+  | 'EXPIRED_REPORTED' | 'WITHDRAWN';
+
+export type PermitStatusTruthLayer = 'DOCUMENTED' | 'SOURCE_OBSERVED' | 'AUTHORITY_CONFIRMED';
+
+export type PermitStatusSourceType =
+  | 'AUTHORITY_OPEN_DATA' | 'AUTHORITY_PORTAL' | 'AUTHORITY_DOCUMENT'
+  | 'AUTHORITY_EMAIL' | 'AUTHORITY_REPRESENTATIVE' | 'OTHER';
 
 export type PermitRecordSource = 'OPEN_DATA_API' | 'MANUAL_ENTRY' | 'DOCUMENT_UPLOAD';
 
@@ -5468,6 +5481,13 @@ export interface PermitSummary {
   workTypes: PermitWorkType[];
   description?: string;
   status: PermitRecordStatus;
+  reportedStatus: PermitReportedWorkflowStatus;
+  officialTruthLayer?: PermitStatusTruthLayer;
+  officialSourceType?: PermitStatusSourceType;
+  officialSourceReference?: string;
+  officialEvidenceDocumentId?: string;
+  officialObservedAt?: string;
+  authorityReferenceNumber?: string;
   source: PermitRecordSource;
   issueDate?: string;
   finaledDate?: string;
@@ -5537,8 +5557,9 @@ export type HoaWorkType =
   | 'POOL' | 'SATELLITE_ANTENNA' | 'OTHER';
 
 export type HoaApprovalStatus =
-  | 'NOT_SUBMITTED' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED'
-  | 'APPROVED_WITH_CONDITIONS' | 'DENIED' | 'EXPIRED';
+  | 'NOT_SUBMITTED' | 'SUBMITTED' | 'UNDER_REVIEW' | 'CORRECTION_REQUESTED'
+  | 'RESUBMITTED' | 'APPROVED' | 'APPROVED_WITH_CONDITIONS' | 'DENIED'
+  | 'EXPIRED' | 'WITHDRAWN';
 
 export type HoaDecisionStatus =
   | 'APPROVED' | 'APPROVED_WITH_CONDITIONS' | 'DENIED' | 'EXPIRED';
@@ -5741,7 +5762,7 @@ export interface CreatePermitPayload {
   category: PermitRecordCategory;
   workTypes: PermitWorkType[];
   description?: string;
-  status: PermitRecordStatus;
+  reportedStatus: PermitReportedWorkflowStatus;
   applicantName?: string;
   contractorName?: string;
   contractorLicense?: string;
@@ -5765,10 +5786,9 @@ export interface UpdatePermitPayload {
   category?: PermitRecordCategory;
   workTypes?: PermitWorkType[];
   description?: string;
-  status?: PermitRecordStatus;
+  reportedStatus?: PermitReportedWorkflowStatus;
   contractorName?: string;
   notes?: string;
-  isVerified?: boolean;
 }
 
 export interface AddMilestonePayload {
