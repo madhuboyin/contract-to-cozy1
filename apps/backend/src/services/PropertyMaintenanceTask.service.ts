@@ -532,60 +532,60 @@ import {
     /**
      * Update task status.
      */
-    static async updateTaskStatus(
-      userId: string,
-      taskId: string,
+    /**
+     * Build the Prisma update payload for a status transition, including the
+     * completion-only fields (lastCompletedDate, project-follow-up metadata,
+     * recurring nextDueDate). Shared by updateTaskStatus and updateTask so
+     * both mutation paths write identical completion data.
+     */
+    private static buildStatusUpdateData(
+      task: Pick<PropertyMaintenanceTask, 'actionKey' | 'isRecurring' | 'frequency'>,
       status: MaintenanceTaskStatus,
+      userId: string,
       actualCost?: number,
       outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
-    ): Promise<PropertyMaintenanceTask> {
-      // Verify access (CONTRIBUTOR+ required to mutate tasks)
-      await this.getTask(userId, taskId, 'CONTRIBUTOR');
+    ): Record<string, unknown> {
+      const updateData: Record<string, unknown> = { status };
+      if (status !== 'COMPLETED') return updateData;
 
-      // Get current task state before update (need to check previous status)
-      const task = await prisma.propertyMaintenanceTask.findUnique({
-        where: { id: taskId },
-      });
-    
-      if (!task) {
-        throw new Error('Task not found.');
+      updateData.lastCompletedDate = new Date();
+      if (actualCost !== undefined) {
+        updateData.actualCost = actualCost;
       }
-    
-      const wasCompleted = task.status === 'COMPLETED';
-      const isNowCompleted = status === 'COMPLETED';
-    
-      const updateData: any = {
-        status,
-      };
-    
-      if (isNowCompleted) {
-        updateData.lastCompletedDate = new Date();
-    
-        if (actualCost !== undefined) {
-          updateData.actualCost = actualCost;
-        }
 
-        const projectFollowUpMatch = task.actionKey?.match(/^project:([^:]+):follow-up$/);
-        if (projectFollowUpMatch) {
-          updateData.completionMetadata = {
-            kind: 'PROJECT_OUTCOME_FOLLOW_UP',
-            projectId: projectFollowUpMatch[1],
-            outcomeHealth: outcomeHealth ?? 'CONFIRMED_HEALTHY',
-            recordedByUserId: userId,
-          };
-        }
-    
-        // If recurring, calculate next due date
-        if (task.isRecurring && task.frequency) {
-          updateData.nextDueDate = this.calculateNextDueDate(task.frequency);
-        }
+      const projectFollowUpMatch = task.actionKey?.match(/^project:([^:]+):follow-up$/);
+      if (projectFollowUpMatch) {
+        updateData.completionMetadata = {
+          kind: 'PROJECT_OUTCOME_FOLLOW_UP',
+          projectId: projectFollowUpMatch[1],
+          outcomeHealth: outcomeHealth ?? 'CONFIRMED_HEALTHY',
+          recordedByUserId: userId,
+        };
       }
-    
-      const updatedTask = await prisma.propertyMaintenanceTask.update({
-        where: { id: taskId },
-        data: updateData,
-      });
 
+      if (task.isRecurring && task.frequency) {
+        updateData.nextDueDate = this.calculateNextDueDate(task.frequency);
+      }
+
+      return updateData;
+    }
+
+    /**
+     * Run every side effect a maintenance task status transition must
+     * produce (project follow-up remediation, analytics, seasonal sync,
+     * Radar reconciliation, adherence signal), regardless of which mutation
+     * path (updateTaskStatus or updateTask) triggered the transition. Prior
+     * to this helper, updateTask's generic field-patch bypassed all of this
+     * — see the Home Operations Slice 0 completion-endpoint matrix.
+     */
+    private static async applyTaskCompletionSideEffects(
+      userId: string,
+      task: PropertyMaintenanceTask,
+      updatedTask: PropertyMaintenanceTask,
+      wasCompleted: boolean,
+      isNowCompleted: boolean,
+      outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
+    ): Promise<void> {
       const projectFollowUpMatch = task.actionKey?.match(/^project:([^:]+):follow-up$/);
       if (!wasCompleted && isNowCompleted && projectFollowUpMatch) {
         const projectId = projectFollowUpMatch[1];
@@ -655,7 +655,6 @@ import {
 
       // Sync to seasonal checklist if this task is linked to one
       if (task.seasonalChecklistItemId) {
-        // Fetch once, use for both update and getting checklistId
         const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
           where: { id: task.seasonalChecklistItemId },
         });
@@ -716,7 +715,39 @@ import {
           logger.warn({ signalError }, 'Maintenance adherence signal publish failed (task status update)');
         }
       }
-    
+    }
+
+    static async updateTaskStatus(
+      userId: string,
+      taskId: string,
+      status: MaintenanceTaskStatus,
+      actualCost?: number,
+      outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
+    ): Promise<PropertyMaintenanceTask> {
+      // Verify access (CONTRIBUTOR+ required to mutate tasks)
+      await this.getTask(userId, taskId, 'CONTRIBUTOR');
+
+      // Get current task state before update (need to check previous status)
+      const task = await prisma.propertyMaintenanceTask.findUnique({
+        where: { id: taskId },
+      });
+
+      if (!task) {
+        throw new Error('Task not found.');
+      }
+
+      const wasCompleted = task.status === 'COMPLETED';
+      const isNowCompleted = status === 'COMPLETED';
+
+      const updateData = this.buildStatusUpdateData(task, status, userId, actualCost, outcomeHealth);
+
+      const updatedTask = await prisma.propertyMaintenanceTask.update({
+        where: { id: taskId },
+        data: updateData,
+      });
+
+      await this.applyTaskCompletionSideEffects(userId, task, updatedTask, wasCompleted, isNowCompleted, outcomeHealth);
+
       return updatedTask;
     }
   
@@ -747,18 +778,22 @@ import {
         await this.validateServiceCategory(data.serviceCategory);
       }
   
+      // When status changes, route through the same buildStatusUpdateData
+      // used by updateTaskStatus so both mutation paths write identical
+      // completion fields (lastCompletedDate, project follow-up metadata,
+      // recurring nextDueDate).
+      const wasCompleted = existingTask.status === 'COMPLETED';
+      const statusUpdateData = data.status !== undefined
+        ? this.buildStatusUpdateData(existingTask, data.status, userId, data.actualCost)
+        : {};
+
       const updatedTask = await prisma.propertyMaintenanceTask.update({
         where: { id: taskId },
         data: {
           ...(data.title !== undefined && { title: data.title }),
           ...(data.description !== undefined && { description: data.description }),
           ...(data.priority !== undefined && { priority: data.priority }),
-          ...(data.status !== undefined && {
-            status: data.status,
-            ...(data.status === 'COMPLETED' && {
-              lastCompletedDate: new Date(),
-            }),
-          }),
+          ...statusUpdateData,
           ...(data.estimatedCost !== undefined && { estimatedCost: data.estimatedCost }),
           ...(data.actualCost !== undefined && { actualCost: data.actualCost }),
           ...(data.isRecurring !== undefined && {
@@ -776,20 +811,11 @@ import {
         },
       });
 
-      if (
-        data.status !== undefined
-        && (existingTask.status === 'COMPLETED')
-          !== (updatedTask.status === 'COMPLETED')
-      ) {
-        await requestRadarPropertyReconciliation({
-          propertyId: updatedTask.propertyId,
-          reasons: ['mitigation_changed'],
-          changeToken: updatedTask.updatedAt.toISOString(),
-          correlationId:
-            `maintenance-task:${updatedTask.id}:${updatedTask.updatedAt.toISOString()}`,
-        });
+      if (data.status !== undefined) {
+        const isNowCompleted = updatedTask.status === 'COMPLETED';
+        await this.applyTaskCompletionSideEffects(userId, existingTask, updatedTask, wasCompleted, isNowCompleted);
       }
-  
+
       return updatedTask;
     }
   

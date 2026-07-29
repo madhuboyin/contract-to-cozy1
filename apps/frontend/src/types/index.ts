@@ -283,7 +283,9 @@ export type HomeActionCommand =
   | 'ALREADY_DONE'
   | 'NOT_RELEVANT'
   | 'NO_MORTGAGE'
-  | 'CORRECT_FACT';
+  | 'CORRECT_FACT'
+  | 'ACKNOWLEDGE'
+  | 'REMOVE_FROM_HOME';
 
 export type RankedHomeActionDTO = ActivationHomeActionDTO & {
   lineageId: string;
@@ -2292,6 +2294,7 @@ export interface SensitiveFactStatusDTO {
 // ============================================================================
 
 export type SavingsOutcomeStageValue = 'SUBMITTED' | 'APPROVED' | 'DENIED' | 'RECEIVED' | 'WITHDRAWN';
+export type SavingsOutcomeVerificationState = 'SELF_REPORTED' | 'EVIDENCE_ATTACHED' | 'VERIFIED' | 'REVOKED';
 
 export interface SavingsOutcomeDocumentDTO {
   id: string;
@@ -2309,6 +2312,11 @@ export interface HiddenAssetMatchOutcomeDTO {
   currency: string;
   evidenceNote: string | null;
   denialReason: string | null;
+  verificationState: SavingsOutcomeVerificationState;
+  verifiedAt: string | null;
+  revokedAt: string | null;
+  revocationReason: string | null;
+  supersedesOutcomeId: string | null;
   recordedBy: string;
   recordedAt: string;
   documents: SavingsOutcomeDocumentDTO[];
@@ -2323,6 +2331,13 @@ export interface HomeSavingsOpportunityOutcomeDTO {
   currency: string;
   evidenceNote: string | null;
   denialReason: string | null;
+  verificationState: SavingsOutcomeVerificationState;
+  observationStartedAt: string | null;
+  observationEndedAt: string | null;
+  verifiedAt: string | null;
+  revokedAt: string | null;
+  revocationReason: string | null;
+  supersedesOutcomeId: string | null;
   recordedBy: string;
   recordedAt: string;
   documents: SavingsOutcomeDocumentDTO[];
@@ -2355,6 +2370,7 @@ export interface SavingsBenefitsUnifiedItemDTO {
   sourceLabel: string | null;
   statusLabel: string;
   outcomeStage: 'SUBMITTED' | 'APPROVED' | 'DENIED' | 'RECEIVED' | 'WITHDRAWN' | null;
+  verificationState: SavingsOutcomeVerificationState | null;
   detailHref: string;
   updatedAt: string;
   /** Other item IDs sharing this program's exclusion group — never hides real recorded value, only flags it. */

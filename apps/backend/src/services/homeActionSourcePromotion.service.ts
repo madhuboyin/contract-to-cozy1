@@ -11,12 +11,21 @@ import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { findPersonalizationDefinition } from '../modules/personalization/catalog/personalizationDefinitions';
 import type { EnvironmentInsight } from './environment/environmentInsights.service';
 import { getFreshnessNote } from './hiddenAssets/ruleEngine';
+import { isReviewedProgramCurrent } from './hiddenAssets/sourceFreshness';
 import {
   resolveOwnershipCostCategoryAction,
 } from './ownershipCosts/ownershipCostDecision.service';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
+];
+
+// For sources with no authoritative domain completion adapter behind
+// COMPLETE/ALREADY_DONE (see SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER in
+// homeActions.service.ts), offer ACKNOWLEDGE instead so the control is
+// honest about what it does: hide the recommendation, not certify work.
+const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
+  'ACKNOWLEDGE', 'DEFER', 'SNOOZE', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT',
 ];
 
 export type HomeActionSourceDb = Pick<typeof prisma,
@@ -57,6 +66,34 @@ function materialFinancialGovernance(policyVersion: string): HomeAction['governa
 function guidanceGovernance(step: any, policyVersion: string): HomeAction['governance'] {
   const parsed = RecommendationGovernanceSchema.safeParse(step?.governanceJson);
   return parsed.success ? parsed.data : lowConsequenceGovernance(policyVersion);
+}
+
+function projectGovernance(
+  project: { safetyCheckResult: string | null; fundingMode: string | null; contractAmountCents: number | null; paidToDateCents: number | null },
+  issue: { category: string; severity: string } | undefined,
+): HomeAction['governance'] {
+  const hasSafetyIssue = issue?.category === 'SAFETY' || issue?.severity === 'BLOCKING';
+  const safetyCheckFailed = project.safetyCheckResult === 'FAILED';
+  if (hasSafetyIssue || safetyCheckFailed) {
+    return {
+      ...lowConsequenceGovernance('project-tracker-v1'),
+      safetyTier: 'SAFETY_EMERGENCY',
+      professionalBoundary: 'This project has an open safety issue or a failed safety check. Confirm the concern is resolved with a qualified professional before continuing work.',
+      conservativeFallback: 'If there is immediate danger, active damage, fire, gas, or electrical risk, leave the area and contact emergency services or the appropriate utility.',
+      emergencyEscalation: 'Pause work and confirm the safety concern is resolved with a qualified professional before continuing the project.',
+    };
+  }
+  // A signed contract, coverage-dependent funding, or money already paid are
+  // all "material quote, contract, payment, financing, or replacement
+  // decision" per the governance table — none of them are backed by a
+  // verified jurisdiction check, so this stops short of REGULATED_COVERAGE
+  // rather than fabricate one.
+  const isMaterialFinancial = project.fundingMode === 'COVERED' || project.fundingMode === 'MIXED' ||
+    (project.contractAmountCents ?? 0) > 0 || (project.paidToDateCents ?? 0) > 0;
+  if (isMaterialFinancial) {
+    return materialFinancialGovernance('project-tracker-v1');
+  }
+  return lowConsequenceGovernance('project-tracker-v1');
 }
 
 function guidanceDecisionContract(governance: HomeAction['governance']) {
@@ -289,7 +326,7 @@ export function adaptEnvironmentInsightsToHomeActions(
           label: 'View environment report',
           href: reportHref,
         }],
-        feedbackControls: DEFAULT_FEEDBACK,
+        feedbackControls: RECOMMENDATION_FEEDBACK,
         relatedJourneyId: null,
         createdAt: evaluatedAtIso,
         lastEvaluatedAt: evaluatedAtIso,
@@ -449,7 +486,7 @@ async function loadGuidanceActions(
             }]
           : []),
       ],
-      feedbackControls: DEFAULT_FEEDBACK,
+      feedbackControls: RECOMMENDATION_FEEDBACK,
       relatedJourneyId: journey.id,
       createdAt: journey.createdAt.toISOString(),
       lastEvaluatedAt: journey.updatedAt.toISOString(),
@@ -535,7 +572,7 @@ async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): 
       governance,
       primaryCta: { kind: critical ? 'ESCALATE' : 'REVIEW', label: isWeather ? 'Review weather alert' : proposed?.ctaLabel ?? 'Review incident', href },
       secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Correct incident context', href: `/dashboard/properties/${propertyId}/incidents/${incident.id}` }],
-      feedbackControls: critical && isWeather ? ['ALREADY_DONE', 'CORRECT_FACT'] : critical ? ['COMPLETE', 'ALREADY_DONE', 'CORRECT_FACT'] : DEFAULT_FEEDBACK,
+      feedbackControls: critical ? ['ACKNOWLEDGE', 'CORRECT_FACT'] : RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,
       createdAt: incident.createdAt.toISOString(),
       lastEvaluatedAt: (incident.lastEvaluatedAt ?? incident.updatedAt).toISOString(),
@@ -678,7 +715,7 @@ async function loadRecallActions(propertyId: string, db: HomeActionSourceDb): Pr
       governance,
       primaryCta: { kind: critical ? 'ESCALATE' : 'REVIEW', label: 'Review recall', href: `/dashboard/properties/${propertyId}/recalls` },
       secondaryCtas: match.recall.remedyUrl ? [{ kind: 'REVIEW', label: 'View official remedy', href: match.recall.remedyUrl }] : [],
-      feedbackControls: critical ? ['COMPLETE', 'ALREADY_DONE', 'CORRECT_FACT'] : DEFAULT_FEEDBACK,
+      feedbackControls: critical ? ['ACKNOWLEDGE', 'CORRECT_FACT'] : RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,
       createdAt: match.createdAt.toISOString(), lastEvaluatedAt: match.updatedAt.toISOString(),
     });
@@ -781,7 +818,7 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
       },
       primaryCta: { kind: 'REVIEW', label: 'Review question', href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?stage=questions` },
       secondaryCtas: [{ kind: 'CORRECT_FACT', label: 'Correct policy facts', href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence` }],
-      feedbackControls: DEFAULT_FEEDBACK, relatedJourneyId: null,
+      feedbackControls: RECOMMENDATION_FEEDBACK, relatedJourneyId: null,
       createdAt: review.createdAt.toISOString(),
       lastEvaluatedAt: review.updatedAt.toISOString(),
     });
@@ -934,21 +971,28 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
   return projects.map((project) => {
     const milestone = project.milestones[0];
     const issue = project.issues[0];
+    const governance = projectGovernance(project, issue);
+    const isSafetyEmergency = governance.safetyTier === 'SAFETY_EMERGENCY';
     return adaptHomeActionSource('PROJECT', {
       id: `project:${project.id}`, propertyId,
       lineageId: project.guidanceJourneyId ?? `project:${project.id}`, sourceEntityId: project.id,
       sourceVersion: project.updatedAt.toISOString(), job: 'MAJOR_MOMENT', state: project.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
-      priority: project.status === 'DISPUTED' || issue?.status === 'ESCALATED' ? 'NOW' : project.status === 'PAUSED' || issue ? 'SOON' : 'PLAN',
+      priority: isSafetyEmergency || project.status === 'DISPUTED' || issue?.status === 'ESCALATED' ? 'NOW' : project.status === 'PAUSED' || issue ? 'SOON' : 'PLAN',
       signal: issue ? `${project.name}: ${issue.description}` : `${project.name}: ${milestone?.name ?? 'review project status'}`,
       whyItMatters: issue?.description ?? project.description ?? 'The active project has an incomplete milestone or decision.',
       recommendedAction: issue ? 'Review the open project issue' : milestone?.name ?? 'Review project status',
       expectedOutcome: 'Advance the project with scope, schedule, cost, and evidence context preserved.',
       timing: { dueAt: project.expectedEndDate?.toISOString() ?? null, windowStart: project.startDate.toISOString(), windowEnd: project.expectedEndDate?.toISOString() ?? null, rationale: issue ? 'An open issue may block the next project milestone.' : 'This is the next incomplete milestone in an active project.' },
       evidence: [{ id: project.id, type: 'SYSTEM_DERIVATION', label: project.name, source: 'Project tracker', observedAt: project.updatedAt.toISOString(), freshness: 'CURRENT', confidence: 1 }],
-      assumptions: [], options: [], tradeoffs: [], confidence: { score: 1, label: 'HIGH', missing: [] },
-      governance: lowConsequenceGovernance(),
-      primaryCta: { kind: 'REVIEW', label: issue ? 'Review project issue' : 'Open project', href: `/dashboard/properties/${propertyId}/projects/${project.id}` },
-      secondaryCtas: [], feedbackControls: DEFAULT_FEEDBACK,
+      ...guidanceDecisionContract(governance),
+      confidence: { score: 1, label: 'HIGH', missing: [] },
+      governance,
+      primaryCta: {
+        kind: isSafetyEmergency ? 'ESCALATE' : 'REVIEW',
+        label: isSafetyEmergency ? 'Review safety issue' : issue ? 'Review project issue' : 'Open project',
+        href: `/dashboard/properties/${propertyId}/projects/${project.id}`,
+      },
+      secondaryCtas: [], feedbackControls: RECOMMENDATION_FEEDBACK,
       relatedJourneyId: project.guidanceJourneyId ?? null,
       createdAt: project.createdAt.toISOString(), lastEvaluatedAt: project.updatedAt.toISOString(),
     });
@@ -1636,7 +1680,13 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
       status: { in: ['DETECTED', 'VIEWED', 'PURSUING'] },
       confidenceLevel: 'HIGH',
       outcomes: { none: {} },
-      program: { isActive: true, reviewStatus: 'PUBLISHED' },
+      program: {
+        isActive: true,
+        reviewStatus: 'PUBLISHED',
+        sourceUrl: { not: null },
+        lastVerifiedAt: { not: null },
+        source: { status: 'ACTIVE', lastReviewedAt: { not: null } },
+      },
       OR: [
         { estimatedValueMax: { not: null } },
         { estimatedValueMin: { not: null } },
@@ -1650,12 +1700,22 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
         select: {
           name: true, regionValue: true, sourceLabel: true, sourceUrl: true,
           lastVerifiedAt: true, applicationWindowClosesAt: true, currency: true,
+          source: {
+            select: {
+              status: true,
+              officialUrl: true,
+              lastReviewedAt: true,
+              reviewSlaDays: true,
+            },
+          },
         },
       },
     },
   });
 
-  return matches.map((match) => {
+  return matches.filter((match) =>
+    isReviewedProgramCurrent(match.program, match.program.source, now),
+  ).map((match) => {
     const program = match.program;
     const closesAt = program.applicationWindowClosesAt;
     const closingSoon = Boolean(closesAt && closesAt.getTime() <= deadlineWindow.getTime());
@@ -1736,7 +1796,7 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
         href: `/dashboard/properties/${propertyId}/tools/savings-benefits`,
       },
       secondaryCtas: [],
-      feedbackControls: DEFAULT_FEEDBACK,
+      feedbackControls: RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,
       createdAt: match.firstDetectedAt.toISOString(),
       lastEvaluatedAt: match.lastEvaluatedAt.toISOString(),

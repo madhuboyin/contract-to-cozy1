@@ -481,7 +481,13 @@ export function adaptOrchestratedActionToHomeAction(
       href: coverageHref ?? serviceHref ?? `/dashboard/actions?propertyId=${encodeURIComponent(action.propertyId)}`,
     },
     secondaryCtas: [],
-    feedbackControls: ['COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT'],
+    // No source kind adapted here (MAINTENANCE checklist items, orchestrated
+    // COVERAGE gaps, SYSTEM signals) has an authoritative domain completion
+    // adapter — a matching PropertyMaintenanceTask would suppress this action
+    // entirely rather than let it reach Home (see orchestrationSuppression
+    // .service.ts), so COMPLETE/ALREADY_DONE here would only ever record an
+    // orchestration event with no domain effect. Offer ACKNOWLEDGE instead.
+    feedbackControls: ['ACKNOWLEDGE', 'DEFER', 'SNOOZE', 'DISMISS', 'NOT_RELEVANT', 'CORRECT_FACT'],
     relatedJourneyId: null,
     createdAt: observedAt,
     lastEvaluatedAt: evaluatedAt.toISOString(),

@@ -185,6 +185,7 @@ export function EnvironmentActionCard({
   const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
   const windowLabel = formattedEnvironmentWindow(action);
   const canComplete = action.feedbackControls.includes('COMPLETE');
+  const canAcknowledge = !canComplete && action.feedbackControls.includes('ACKNOWLEDGE');
   const windowEndMs = action.timing.windowEnd ? new Date(action.timing.windowEnd).getTime() : Number.NaN;
   const canDefer = (action.feedbackControls.includes('DEFER') || action.feedbackControls.includes('SNOOZE')) &&
     (Number.isNaN(windowEndMs) || windowEndMs > Date.now() + 2 * 60 * 60 * 1000);
@@ -205,7 +206,13 @@ export function EnvironmentActionCard({
         consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(command),
       });
       if (!response.success) throw new Error(response.message || 'Unable to update this action.');
-      toast({ title: command === 'COMPLETE' ? 'Preparation marked complete' : 'Weather action updated' });
+      toast({
+        title: command === 'COMPLETE'
+          ? 'Preparation marked complete'
+          : command === 'ACKNOWLEDGE'
+            ? 'Acknowledged'
+            : 'Weather action updated',
+      });
       await onChanged();
     } catch (error) {
       toast({
@@ -244,6 +251,11 @@ export function EnvironmentActionCard({
             {canComplete && (
               <Button size="sm" variant="outline" className="rounded-full bg-white" disabled={Boolean(pending)} onClick={() => execute('COMPLETE')}>
                 <Check className="mr-1 h-3.5 w-3.5" />Mark prepared
+              </Button>
+            )}
+            {canAcknowledge && (
+              <Button size="sm" variant="outline" className="rounded-full bg-white" disabled={Boolean(pending)} onClick={() => execute('ACKNOWLEDGE')}>
+                <Check className="mr-1 h-3.5 w-3.5" />Acknowledge
               </Button>
             )}
             {canDefer && (
@@ -413,7 +425,13 @@ export function ActionCard({
         consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(command),
       });
       if (!response.success) throw new Error(response.message || 'Unable to update this action.');
-      toast({ title: command === 'COMPLETE' ? 'Action completed' : 'Action updated' });
+      toast({
+        title: command === 'COMPLETE'
+          ? 'Action completed'
+          : command === 'ACKNOWLEDGE'
+            ? 'Acknowledged'
+            : 'Action updated',
+      });
       await onChanged();
     } catch (error) {
       toast({
@@ -478,6 +496,11 @@ export function ActionCard({
         {action.feedbackControls.includes('COMPLETE') && (
           <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute('COMPLETE')}>
             <Check className="mr-1 h-3.5 w-3.5" />Mark done
+          </Button>
+        )}
+        {!action.feedbackControls.includes('COMPLETE') && action.feedbackControls.includes('ACKNOWLEDGE') && (
+          <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute('ACKNOWLEDGE')}>
+            <Check className="mr-1 h-3.5 w-3.5" />Acknowledge
           </Button>
         )}
         {canDefer && (

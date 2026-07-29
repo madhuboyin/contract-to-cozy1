@@ -58,7 +58,25 @@ export const HOME_ACTION_COMMANDS = [
   'NOT_RELEVANT',
   'NO_MORTGAGE',
   'CORRECT_FACT',
+  'ACKNOWLEDGE',
+  'REMOVE_FROM_HOME',
 ] as const;
+
+// Source kinds with no authoritative domain completion adapter today. For
+// these, COMPLETE/ALREADY_DONE would only write an orchestration event with
+// no effect on the underlying record — so the feed must not offer them, and
+// this command handler must not honor them even if requested directly
+// against the API.
+const SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER = new Set<HomeAction['source']['kind']>([
+  'GUIDANCE',
+  'MAINTENANCE',
+  'INCIDENT',
+  'RECALL',
+  'COVERAGE',
+  'PROJECT',
+  'SYSTEM',
+  'SAVINGS_BENEFITS',
+]);
 
 export const HomeActionCommandSchema = z.object({
   command: z.enum(HOME_ACTION_COMMANDS),
@@ -74,7 +92,7 @@ export const HomeActionCommandSchema = z.object({
     });
   }
   if (
-    ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(value.command) &&
+    ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE', 'REMOVE_FROM_HOME'].includes(value.command) &&
     !value.consequenceAcknowledged
   ) {
     ctx.addIssue({
@@ -433,6 +451,18 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
         evaluatedCount: personalization?.evaluated ?? 0,
         activeCount: personalization?.active ?? 0,
       },
+      // Truth containment: a bare suppressedCount cannot answer "why isn't
+      // this on Home?" — the homeowner (or support) needs to see that the
+      // work is already tracked elsewhere, not silently dropped. Capped to
+      // keep the payload bounded; suppressedCount above remains the total.
+      hiddenBecauseTrackedElsewhere: orchestration.suppressedActions.slice(0, 20).map((action) => ({
+        title: action.title,
+        reasons: action.suppression.reasons.map((entry) => ({
+          reason: entry.reason,
+          message: entry.message,
+          relatedType: entry.relatedType ?? null,
+        })),
+      })),
     },
   };
 }
@@ -649,6 +679,7 @@ function validateNextTriggerAt(value: string | null | undefined): Date {
 function resolutionDisposition(command: HomeActionCommandInput['command']) {
   if (command === 'COMPLETE' || command === 'ALREADY_DONE') return 'COMPLETED' as const;
   if (command === 'DEFER' || command === 'SNOOZE') return 'INTENTIONALLY_DEFERRED' as const;
+  if (command === 'ACKNOWLEDGE') return 'ACKNOWLEDGED' as const;
   return 'DELIBERATELY_DISMISSED' as const;
 }
 
@@ -664,6 +695,19 @@ export async function executeHomeActionCommand(
   if (!action) throw new Error('Home action was not found or is no longer actionable.');
   if (!action.feedbackControls.includes(input.command)) {
     throw new Error(`${input.command} is not supported for this home action.`);
+  }
+  if (
+    ['COMPLETE', 'ALREADY_DONE'].includes(input.command) &&
+    SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER.has(action.source.kind) &&
+    // ownership-cost-change and activation actions are promoted with a
+    // SYSTEM source.kind but are routed to a real completion adapter below
+    // by id prefix — they are not part of the untracked-source guard.
+    !action.id.startsWith('ownership-cost-change:') &&
+    !action.id.startsWith('activation:')
+  ) {
+    throw new Error(
+      `${input.command} is not supported for this home action; use ACKNOWLEDGE instead.`,
+    );
   }
   if (action.governance.safetyTier === 'SAFETY_EMERGENCY' &&
     ['DEFER', 'DISMISS', 'NOT_RELEVANT'].includes(input.command)) {
@@ -802,7 +846,13 @@ export async function executeHomeActionCommand(
   return {
     actionId,
     command: input.command,
-    state: nextTriggerAt ? 'SNOOZED' : disposition === 'COMPLETED' ? 'COMPLETED' : 'DISMISSED',
+    state: nextTriggerAt
+      ? 'SNOOZED'
+      : disposition === 'COMPLETED'
+        ? 'COMPLETED'
+        : disposition === 'ACKNOWLEDGED'
+          ? 'ACKNOWLEDGED'
+          : 'DISMISSED',
     nextTriggerAt: nextTriggerAt?.toISOString() ?? null,
     recordedAt: resolvedAt.toISOString(),
   };

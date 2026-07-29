@@ -37,6 +37,13 @@ export const HOME_ACTION_FEEDBACK_CONTROLS = [
   'NOT_RELEVANT',
   'NO_MORTGAGE',
   'CORRECT_FACT',
+  // ACKNOWLEDGE: for recommendations with no authoritative domain completion
+  // adapter — records that the homeowner saw this without claiming the
+  // underlying work was done. REMOVE_FROM_HOME: hides the action from Home
+  // without asserting completion or irrelevance (e.g. it is now tracked
+  // elsewhere, such as inside a project or guidance journey).
+  'ACKNOWLEDGE',
+  'REMOVE_FROM_HOME',
 ] as const;
 
 export const HOME_ACTION_CTA_KINDS = [

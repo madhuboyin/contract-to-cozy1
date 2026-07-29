@@ -26,6 +26,11 @@ export const ACTION_RESOLUTION_DISPOSITIONS = [
   'INTENTIONALLY_DEFERRED',
   'DELIBERATELY_DISMISSED',
   'SAFE_ESCALATION',
+  // The homeowner saw a recommendation with no authoritative domain
+  // completion adapter and dismissed it from Home without claiming the
+  // underlying work was done. Distinct from COMPLETED (real work finished)
+  // and DELIBERATELY_DISMISSED (irrelevant/not applicable).
+  'ACKNOWLEDGED',
 ] as const;
 
 export const NORTH_STAR_METRIC_DEFINITION = {
