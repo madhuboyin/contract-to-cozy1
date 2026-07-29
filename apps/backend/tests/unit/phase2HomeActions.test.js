@@ -533,8 +533,15 @@ test('unified Home uses one five-section responsive surface and five homeowner d
     path.resolve(__dirname, '../../../frontend/src/components/home/UnifiedHomeSurface.tsx'),
     'utf8',
   );
+  // Home Operations Slice 2 renamed/redesigned the action-plan page; the
+  // flat-list rendering it used to do directly now lives in the sibling
+  // HomeOperationsTabs.tsx (tab classifier + entry rendering).
   const actionPlan = fs.readFileSync(
-    path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/action-plan/page.tsx'),
+    path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/home-operations/page.tsx'),
+    'utf8',
+  );
+  const homeOperationsTabs = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/home-operations/HomeOperationsTabs.tsx'),
     'utf8',
   );
   const homeService = fs.readFileSync(
@@ -580,10 +587,10 @@ test('unified Home uses one five-section responsive surface and five homeowner d
   assert.match(genericActionCardSource, /Mark done/);
   assert.match(homeSurface, /View full action plan/);
   assert.match(actionPlan, /api\.getHomeActions\(propertyId\)/);
-  assert.match(actionPlan, /Ranked actions and supporting details/);
-  assert.match(actionPlan, /showSupportingDetails/);
+  assert.match(actionPlan, /Home Operations/);
+  assert.match(homeOperationsTabs, /showSupportingDetails/);
   assert.match(actionPlan, /Open Resolution Center/);
-  assert.match(homeService, /\/dashboard\/properties\/\$\{propertyId\}\/action-plan/);
+  assert.match(homeService, /\/dashboard\/properties\/\$\{propertyId\}\/home-operations/);
   for (const destination of ['recordHref', 'systemsHref', 'coverageHref', 'workHref']) {
     assert.match(homeSurface, new RegExp(destination));
   }
