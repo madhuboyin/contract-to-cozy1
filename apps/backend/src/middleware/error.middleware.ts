@@ -172,12 +172,11 @@ export const errorHandler = (
       ...(isProd ? {} : { params: req.params, stack: error.stack }),
     }, 'Prisma validation error');
 
-    res.status(400).json({
+    res.status(500).json({
       success: false,
       error: {
-        message: 'Invalid data provided',
-        code: 'VALIDATION_ERROR',
-        details: isProd ? conciseMessage : error.message,
+        message: 'A database query could not be completed',
+        code: 'DATABASE_QUERY_INVALID',
       },
     });
     return;

@@ -133,6 +133,15 @@ function statusLabel(category: OwnershipCostReadModelCategory) {
   return category.evidenceStatus === 'BENCHMARK' ? 'Benchmark estimate' : 'Estimated';
 }
 
+function isMissingOptionalOwnershipCostRoute(
+  cause: unknown,
+  routeName: string,
+) {
+  return cause instanceof Error
+    && cause.message.toLowerCase().includes(`ownership-costs/${routeName}`)
+    && cause.message.toLowerCase().includes('not found');
+}
+
 const FORECAST_HORIZONS = [1, 3, 5, 10] as const;
 
 function rateLabel(value: number) {
@@ -1058,11 +1067,13 @@ export default function OwnershipCostsClient() {
         setDecisionData(await getOwnershipCostDecisions(propertyId));
       } catch (decisionCause) {
         setDecisionData(null);
-        setDecisionError(
-          decisionCause instanceof Error
-            ? decisionCause.message
-            : 'Action decisions are temporarily unavailable.',
-        );
+        if (!isMissingOptionalOwnershipCostRoute(decisionCause, 'decisions')) {
+          setDecisionError(
+            decisionCause instanceof Error
+              ? decisionCause.message
+              : 'Action decisions are temporarily unavailable.',
+          );
+        }
       }
     } catch (cause: unknown) {
       setError(

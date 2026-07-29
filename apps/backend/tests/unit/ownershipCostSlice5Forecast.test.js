@@ -282,6 +282,61 @@ test('forecast persistence is explicit and idempotent', async () => {
   assert.equal(result.forecastId, 'forecast-1');
 });
 
+test('future observations are annualized from persisted amount and recurrence', async () => {
+  let observationQuery;
+  const db = {
+    ownershipCostSnapshot: {
+      findFirst: async () => snapshot({ lines: [] }),
+    },
+    ownershipCostObservation: {
+      findMany: async (args) => {
+        observationQuery = args;
+        return [{
+          category: 'UTILITIES',
+          amountCents: 10000,
+          recurrence: 'MONTHLY',
+          applicability: 'APPLICABLE',
+          evidenceStatus: 'FORECAST',
+          temporalKind: 'FORECAST_PERIOD',
+          assumptionsJson: [],
+          sourceFingerprint: 'future-utility-1',
+        }];
+      },
+    },
+    ownershipCostForecast: {
+      findUnique: async () => null,
+      create: async () => ({ id: 'forecast-1' }),
+    },
+    ownershipCostScenario: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      create: async () => assert.fail('create scenario should not run'),
+      update: async () => assert.fail('update should not run'),
+      delete: async () => assert.fail('delete should not run'),
+    },
+  };
+  const service = new OwnershipCostForecastService(db, async () => true);
+  const result = await service.getForecast(
+    'property-1',
+    'user-1',
+    'OPERATING_EXPENSE',
+    1,
+  );
+
+  assert.deepEqual(observationQuery.select, {
+    category: true,
+    amountCents: true,
+    recurrence: true,
+    applicability: true,
+    evidenceStatus: true,
+    temporalKind: true,
+    assumptionsJson: true,
+    sourceFingerprint: true,
+  });
+  assert.equal(result.baseSnapshot.annualCents, 0);
+  assert.equal(result.drivers[0].baseAnnualCents, 0);
+});
+
 test('scenario lifecycle creates, renames, archives, and deletes retained inputs', async () => {
   const base = snapshot();
   let row;

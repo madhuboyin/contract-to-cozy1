@@ -9,6 +9,9 @@ import {
   type OwnershipCostLens,
 } from './ownershipCost.contract';
 import {
+  normalizeOwnershipCostAmount,
+} from './ownershipCostAdapters';
+import {
   type OwnershipCostCurrentLens,
 } from './ownershipCostReadModel.service';
 import { OwnershipCostAccessDeniedError } from './ownershipCostObservation.service';
@@ -162,7 +165,15 @@ type ForecastDb = {
   ownershipCostObservation?: {
     findMany: (args: unknown) => Promise<Array<{
       category: OwnershipCostCategory;
-      annualizedAmountCents: number | null;
+      amountCents: number | null;
+      recurrence:
+        | 'ONE_TIME'
+        | 'WEEKLY'
+        | 'MONTHLY'
+        | 'QUARTERLY'
+        | 'SEMIANNUAL'
+        | 'ANNUAL'
+        | 'IRREGULAR';
       applicability: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
       evidenceStatus: OwnershipCostEvidenceStatus | null;
       temporalKind: 'FORECAST_PERIOD';
@@ -571,7 +582,9 @@ export function buildOwnershipCostForecast(
     };
   });
   const baseAnnual = snapshot.lines
-    .filter((line) => line.includedLenses.includes(lens))
+    .filter((line) =>
+      line.includedLenses.includes(lens)
+      && line.temporalKind !== 'FORECAST_PERIOD')
     .reduce((total, line) =>
       total + (
         line.applicability === 'APPLICABLE'
@@ -724,7 +737,8 @@ export class OwnershipCostForecastService {
         orderBy: [{ periodStart: 'asc' }, { sourceFingerprint: 'asc' }],
         select: {
           category: true,
-          annualizedAmountCents: true,
+          amountCents: true,
+          recurrence: true,
           applicability: true,
           evidenceStatus: true,
           temporalKind: true,
@@ -745,7 +759,10 @@ export class OwnershipCostForecastService {
         ...snapshot.lines,
         ...futureObservations.map((observation) => ({
           category: observation.category,
-          annualizedAmountCents: observation.annualizedAmountCents,
+          annualizedAmountCents: normalizeOwnershipCostAmount(
+            observation.amountCents,
+            observation.recurrence,
+          ).annualizedAmountCents,
           applicability: observation.applicability,
           evidenceStatus: observation.evidenceStatus,
           temporalKind: observation.temporalKind,

@@ -163,7 +163,7 @@ function calendarPeriod(asOf: Date): { start: string; end: string } {
   };
 }
 
-function normalizeAmount(
+export function normalizeOwnershipCostAmount(
   amountCents: number | null | undefined,
   recurrence: OwnershipCostRecurrence,
 ): { amountCents: number | null; annualizedAmountCents: number | null } {
@@ -207,7 +207,10 @@ function adapt(
     const applicability = input.applicability ?? 'APPLICABLE';
     const missingDependencies = [...new Set(input.missingDependencies ?? [])].sort();
     const evidenceStatus = input.evidenceStatus ?? null;
-    const amount = normalizeAmount(input.amountCents, input.recurrence);
+    const amount = normalizeOwnershipCostAmount(
+      input.amountCents,
+      input.recurrence,
+    );
     if (
       applicability === 'APPLICABLE'
       && amount.amountCents == null

@@ -208,10 +208,19 @@ test('routes and Home Actions share the Slice 7 lifecycle contract', () => {
     path.join(__dirname, '../../src/services/homeActionSourcePromotion.service.ts'),
     'utf8',
   );
+  const client = fs.readFileSync(
+    path.join(
+      __dirname,
+      '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/ownership-costs/OwnershipCostsClient.tsx',
+    ),
+    'utf8',
+  );
 
   assert.match(routes, /ownership-costs\/decisions/);
   assert.match(routes, /ownership-costs\/notification-preferences/);
   assert.match(homeActions, /ownershipCostDecisionService\.record/);
   assert.match(promotion, /resolveOwnershipCostCategoryAction/);
   assert.doesNotMatch(promotion, /recommendedAction: 'Find generic savings'/);
+  assert.match(client, /isMissingOptionalOwnershipCostRoute/);
+  assert.match(client, /ownership-costs\/\$\{routeName\}/);
 });
