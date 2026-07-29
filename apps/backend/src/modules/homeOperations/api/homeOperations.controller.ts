@@ -1,7 +1,14 @@
+import crypto from 'crypto';
 import { Response } from 'express';
 import { CustomRequest } from '../../../types';
 import { listWorkItems } from '../application/listWorkItems.usecase';
 import { getWorkItem as loadWorkItem } from '../application/getWorkItem.usecase';
+import { assignWorkItemOwner } from '../application/assignOwner.usecase';
+import { addWatcher, removeWatcher } from '../application/watchers.usecase';
+import { transitionWorkItem } from '../application/transitionWorkItem.usecase';
+import { recordDuplicateDecision } from '../application/recordDuplicateDecision.usecase';
+import { recordEvidence } from '../application/recordEvidence.usecase';
+import { IllegalWorkItemTransitionError } from '../domain/transitions';
 import { ListWorkItemsQuerySchema } from './homeOperations.validators';
 
 function homeOperationsContext(req: CustomRequest, res: Response): { propertyId: string } | null {
@@ -36,4 +43,144 @@ export async function getWorkItemHandler(req: CustomRequest, res: Response) {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Work item was not found for this property.' } });
   }
   return res.json({ success: true, data: item });
+}
+
+// ── Home Operations Slice 8: write API ──────────────────────────────────────
+
+/**
+ * Shared existence/ownership check every mutation handler below needs
+ * before acting — never leaks cross-property existence (404, not 403, for a
+ * work item that belongs to a different property).
+ */
+async function loadWorkItemForMutation(req: CustomRequest, res: Response, context: { propertyId: string }) {
+  const item = await loadWorkItem(req.params.workItemId);
+  if (!item || item.propertyId !== context.propertyId) {
+    res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Work item was not found for this property.' } });
+    return null;
+  }
+  return item;
+}
+
+function handleWorkItemMutationError(err: unknown, res: Response) {
+  if (err instanceof IllegalWorkItemTransitionError) {
+    return res.status(409).json({ success: false, error: { code: 'ILLEGAL_TRANSITION', message: err.message } });
+  }
+  throw err;
+}
+
+export async function assignOwnerHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+
+    await assignWorkItemOwner({
+      workItemId: item.id,
+      ownerUserId: req.body.ownerUserId,
+      actorUserId: req.user!.userId,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const updated = await loadWorkItem(item.id);
+    return res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+export async function addWatcherHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+
+    await addWatcher({
+      workItemId: item.id,
+      userId: req.body.userId,
+      addedByUserId: req.user!.userId,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const updated = await loadWorkItem(item.id);
+    return res.status(201).json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+export async function removeWatcherHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+
+    await removeWatcher({
+      workItemId: item.id,
+      userId: req.params.userId,
+      actorUserId: req.user!.userId,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const updated = await loadWorkItem(item.id);
+    return res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+export async function transitionWorkItemHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+
+    try {
+      await transitionWorkItem({
+        workItemId: item.id,
+        to: req.body.to,
+        disposition: req.body.disposition,
+        actorType: 'USER',
+        actorUserId: req.user!.userId,
+        idempotencyKey: crypto.randomUUID(),
+      });
+    } catch (err) {
+      return handleWorkItemMutationError(err, res);
+    }
+    const updated = await loadWorkItem(item.id);
+    return res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+export async function recordDuplicateDecisionHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+
+    await recordDuplicateDecision({
+      workItemId: item.id,
+      supersededByWorkItemId: req.body.supersededByWorkItemId,
+      actorUserId: req.user!.userId,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const updated = await loadWorkItem(item.id);
+    return res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+export async function recordEvidenceHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+
+    await recordEvidence({
+      workItemId: item.id,
+      evidenceType: req.body.evidenceType,
+      evidenceEntityId: req.body.evidenceEntityId,
+      verificationStatus: req.body.verificationStatus,
+      observedAt: req.body.observedAt ? new Date(req.body.observedAt) : new Date(),
+      actorUserId: req.user!.userId,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const updated = await loadWorkItem(item.id);
+    return res.status(201).json({ success: true, data: updated });
+  } catch (err) { next(err); }
 }

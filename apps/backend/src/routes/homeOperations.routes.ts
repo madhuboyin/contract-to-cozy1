@@ -1,15 +1,30 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
-import { getWorkItemHandler, listWorkItemsHandler } from '../modules/homeOperations/api/homeOperations.controller';
+import { validateBody } from '../middleware/validate.middleware';
+import {
+  getWorkItemHandler,
+  listWorkItemsHandler,
+  assignOwnerHandler,
+  addWatcherHandler,
+  removeWatcherHandler,
+  transitionWorkItemHandler,
+  recordDuplicateDecisionHandler,
+  recordEvidenceHandler,
+} from '../modules/homeOperations/api/homeOperations.controller';
+import {
+  AssignOwnerSchema,
+  AddWatcherSchema,
+  TransitionWorkItemSchema,
+  RecordDuplicateDecisionSchema,
+  RecordEvidenceSchema,
+} from '../modules/homeOperations/api/homeOperations.validators';
 
-// Home Operations — durable operational work identity (Slice 1). Read-only
-// for now: any household member (VIEWER+) may read, so no extra capability
-// gate beyond propertyAuthMiddleware is needed. Writes (accept/schedule/
-// assign/watch) are usecase functions only in this slice — no route yet;
-// nothing besides internal callers can mutate a work item until a later
-// slice wires a domain source into resolveAndUpsertWorkItem.
+// Home Operations — durable operational work identity (Slice 1), write API
+// (Slice 8). Reads: any household member (VIEWER+). Writes (assign/watch/
+// transition/duplicate/evidence) require CONTRIBUTOR+, matching every other
+// mutating route in this codebase.
 
 const router = Router();
 router.use(apiRateLimiter);
@@ -18,5 +33,41 @@ router.use('/properties/:propertyId/home-operations', propertyAuthMiddleware);
 
 router.get('/properties/:propertyId/home-operations/work-items', listWorkItemsHandler);
 router.get('/properties/:propertyId/home-operations/work-items/:workItemId', getWorkItemHandler);
+
+router.post(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/assign',
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(AssignOwnerSchema),
+  assignOwnerHandler,
+);
+router.post(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/watchers',
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(AddWatcherSchema),
+  addWatcherHandler,
+);
+router.delete(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/watchers/:userId',
+  requireHouseholdRole('CONTRIBUTOR'),
+  removeWatcherHandler,
+);
+router.post(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/transition',
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(TransitionWorkItemSchema),
+  transitionWorkItemHandler,
+);
+router.post(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/duplicate',
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(RecordDuplicateDecisionSchema),
+  recordDuplicateDecisionHandler,
+);
+router.post(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/evidence',
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(RecordEvidenceSchema),
+  recordEvidenceHandler,
+);
 
 export default router;
