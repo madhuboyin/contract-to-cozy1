@@ -2458,6 +2458,43 @@ class APIClient {
       { method: 'POST', body: JSON.stringify({}) },
     );
   }
+  async getRenovationCase(propertyId: string, caseId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}`);
+  }
+  async listRenovationRequirements(propertyId: string, caseId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}/requirements`);
+  }
+  async generateRenovationRequirements(
+    propertyId: string,
+    caseId: string,
+    input: { advisorSessionId?: string; ownerUserId?: string; dueAt?: string } = {},
+  ): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}/requirements/generate`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+  async determineRenovationRequirement(
+    propertyId: string,
+    caseId: string,
+    requirementId: string,
+    input: Record<string, unknown>,
+  ): Promise<APIResponse<any>> {
+    return this.request(
+      `/api/properties/${propertyId}/renovation-cases/${caseId}/requirements/${requirementId}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    );
+  }
+  async createRenovationAuthorityProfile(
+    propertyId: string,
+    caseId: string,
+    input: Record<string, unknown>,
+  ): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}/authority-profiles`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
   async getPropertyAppreciation(propertyId: string, purchasePrice?: number, purchaseDate?: string): Promise<APIResponse<any>> {
     return this.request(`/api/appreciation/analyze/${propertyId}`, {
       method: 'POST',

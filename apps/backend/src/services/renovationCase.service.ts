@@ -381,6 +381,42 @@ export async function createScopeVersion(
         data: { approvalStatus: 'SUPERSEDED' },
       });
     }
+    if (comparison.invalidates.includes('REQUIREMENTS')) {
+      const invalidatedRequirements = await tx.renovationRequirement.findMany({
+        where: { renovationCaseId, recordStatus: 'CURRENT' },
+        select: { id: true, applicability: true, determination: true, truthLayer: true },
+      });
+      await tx.renovationRequirement.updateMany({
+        where: { renovationCaseId, recordStatus: 'CURRENT' },
+        data: { recordStatus: 'STALE_SCOPE' },
+      });
+      await tx.renovationAuthorityProfile.updateMany({
+        where: { renovationCaseId, status: 'CONFIRMED' },
+        data: { status: 'STALE' },
+      });
+      if (invalidatedRequirements.length > 0) {
+        await tx.renovationRequirementEvent.createMany({
+          data: invalidatedRequirements.map((requirement) => ({
+            renovationCaseId,
+            propertyId,
+            requirementId: requirement.id,
+            actorUserId,
+            eventType: 'INVALIDATED_BY_SCOPE',
+            priorApplicability: requirement.applicability,
+            nextApplicability: requirement.applicability,
+            priorDetermination: requirement.determination,
+            nextDetermination: requirement.determination,
+            priorTruthLayer: requirement.truthLayer,
+            nextTruthLayer: requirement.truthLayer,
+            payload: {
+              priorScopeVersionId: previous.id,
+              nextScopeVersionId: scope.id,
+              invalidatedFamilies: comparison.invalidates,
+            },
+          })),
+        });
+      }
+    }
     await tx.renovationCase.update({
       where: { id: renovationCaseId },
       data: {

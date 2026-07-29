@@ -315,7 +315,16 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
         <Card className="border-emerald-200 bg-emerald-50">
           <CardContent className="flex items-start gap-2 p-4 text-sm text-emerald-900">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
-            <div><p className="font-semibold">Renovation plan created</p><p>{createdCase.name} now has a durable case and versioned starting scope.</p></div>
+            <div>
+              <p className="font-semibold">Renovation plan created</p>
+              <p>{createdCase.name} now has a durable case and versioned starting scope.</p>
+              <a
+                className="mt-1 inline-block font-medium underline"
+                href={`/dashboard/properties/${propertyId}/renovations/${createdCase.id}/requirements`}
+              >
+                Continue to requirements research
+              </a>
+            </div>
           </CardContent>
         </Card>
       ) : null}

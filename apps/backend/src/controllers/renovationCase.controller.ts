@@ -2,6 +2,61 @@ import type { NextFunction, Response } from 'express';
 import type { CustomRequest as Request } from '../types';
 import * as service from '../services/renovationCase.service';
 import * as exploreService from '../services/renovationExplore.service';
+import * as requirementService from '../services/renovationRequirement.service';
+
+export async function generateRequirements(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await requirementService.generateRequirementCandidates(
+      req.params.propertyId,
+      req.params.caseId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function listRequirements(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await requirementService.listRequirements(req.params.propertyId, req.params.caseId);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function determineRequirement(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await requirementService.determineRequirement(
+      req.params.propertyId,
+      req.params.caseId,
+      req.params.requirementId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function createAuthorityProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await requirementService.upsertAuthorityProfile(
+      req.params.propertyId,
+      req.params.caseId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function listAuthorityProfiles(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await requirementService.listAuthorityProfiles(
+      req.params.propertyId,
+      req.params.caseId,
+    );
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
 
 export async function createExploration(req: Request, res: Response, next: NextFunction) {
   try {

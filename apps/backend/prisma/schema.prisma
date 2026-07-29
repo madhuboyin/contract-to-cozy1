@@ -1932,6 +1932,10 @@ model User {
   renovationCaseLinksCreated RenovationCaseLink[] @relation("RenovationCaseLinkCreatedBy")
   renovationCaseEvents RenovationCaseEvent[] @relation("RenovationCaseEventActor")
   renovationExplorations RenovationExploration[] @relation("RenovationExplorationCreatedBy")
+  renovationAuthorityProfilesConfirmed RenovationAuthorityProfile[] @relation("RenovationAuthorityProfileConfirmedBy")
+  renovationRequirementsOwned RenovationRequirement[] @relation("RenovationRequirementOwner")
+  renovationRequirementsDetermined RenovationRequirement[] @relation("RenovationRequirementDeterminedBy")
+  renovationRequirementEvents RenovationRequirementEvent[] @relation("RenovationRequirementEventActor")
 
   // Incident Lifecycle Management
   incidentUserPreferences             IncidentUserPreference[]
@@ -2931,6 +2935,9 @@ model Property {
   renovationCaseLinks RenovationCaseLink[]
   renovationCaseEvents RenovationCaseEvent[]
   renovationExplorations RenovationExploration[]
+  renovationAuthorityProfiles RenovationAuthorityProfile[]
+  renovationRequirements RenovationRequirement[]
+  renovationRequirementEvents RenovationRequirementEvent[]
 
   // Mortgage Refinance Radar
   refinanceOpportunities    RefinanceOpportunity[]
@@ -3633,6 +3640,8 @@ model Document {
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
   propertyTaxIntake          PropertyTaxDocumentIntake?
+  renovationRequirementEvidence RenovationRequirement[]
+  renovationAuthorityProfileSources RenovationAuthorityProfile[]
   propertyTaxAppealEvidence  PropertyTaxAppealEvidence[]   @relation("PropertyTaxAppealEvidenceDocument")
   propertyTaxAppealComparables PropertyTaxAppealComparable[] @relation("PropertyTaxAppealComparableDocument")
   propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[] @relation("PropertyTaxAppealFilingConfirmation")
@@ -13159,6 +13168,9 @@ model RenovationCase {
   links               RenovationCaseLink[]
   events              RenovationCaseEvent[]
   sourceUpgradeOption RenovationUpgradeOption?
+  authorityProfiles    RenovationAuthorityProfile[]
+  requirements        RenovationRequirement[]
+  requirementEvents   RenovationRequirementEvent[]
 
   @@unique([propertyId, idempotencyKey])
   @@index([propertyId, lifecycle])
@@ -13251,6 +13263,205 @@ model RenovationUpgradeOption {
   @@map("renovation_upgrade_options")
 }
 
+enum RenovationRequirementFamily {
+  PERMIT
+  ZONING
+  HOA
+  PROFESSIONAL
+  CONTRACTOR
+  INSURANCE
+  LENDER
+  UTILITY
+  SAFETY
+  HAZARD
+  OVERLAY
+  OTHER
+}
+
+enum RenovationAdvisoryLikelihood {
+  LIKELY_APPLIES
+  POSSIBLY_APPLIES
+  LIKELY_DOES_NOT_APPLY
+  UNKNOWN
+  DATA_UNAVAILABLE
+}
+
+enum RenovationRequirementApplicability {
+  UNKNOWN
+  APPLICABLE
+  NOT_APPLICABLE
+}
+
+enum RenovationRequirementDetermination {
+  UNDETERMINED
+  APPLIES
+  DOES_NOT_APPLY
+  CONDITIONAL
+}
+
+enum RenovationRequirementTruthLayer {
+  ADVISORY
+  REPORTED
+  DOCUMENTED
+  SOURCE_OBSERVED
+  AUTHORITY_CONFIRMED
+  PROFESSIONAL_CONFIRMED
+}
+
+enum RenovationRequirementSourceType {
+  ADVISOR_RULE
+  AUTHORITY_WEBSITE
+  AUTHORITY_RECORD
+  ASSOCIATION_DOCUMENT
+  PROFESSIONAL_STATEMENT
+  USER_DOCUMENT
+  OTHER
+  UNKNOWN
+}
+
+enum RenovationRequirementRecordStatus {
+  CURRENT
+  STALE_SCOPE
+  SUPERSEDED
+}
+
+enum RenovationAuthorityProfileStatus {
+  DRAFT
+  CONFIRMED
+  STALE
+}
+
+enum RenovationRequirementEventType {
+  CANDIDATE_GENERATED
+  RESEARCH_ASSIGNED
+  DETERMINATION_RECORDED
+  SOURCE_UPDATED
+  INVALIDATED_BY_SCOPE
+}
+
+model RenovationAuthorityProfile {
+  id                String @id @default(uuid())
+  renovationCaseId  String
+  propertyId        String
+  scopeVersionId    String
+  version           Int
+  status            RenovationAuthorityProfileStatus @default(DRAFT)
+  countryCode       String @default("US")
+  state             String?
+  county            String?
+  municipality      String?
+  postalCode        String?
+  authorityName     String?
+  authorityType     String?
+  authorityWebsite  String?
+  sourceType        RenovationRequirementSourceType @default(UNKNOWN)
+  sourceReference   String?
+  sourceDocumentId  String?
+  confirmedByName   String?
+  confirmedByOrg    String?
+  confirmedByUserId String?
+  confirmedAt       DateTime?
+  effectiveAt       DateTime?
+  expiresAt         DateTime?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  renovationCase RenovationCase @relation(fields: [renovationCaseId], references: [id], onDelete: Cascade)
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  scopeVersion   RenovationScopeVersion @relation(fields: [scopeVersionId], references: [id], onDelete: Cascade)
+  confirmedBy    User? @relation("RenovationAuthorityProfileConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  sourceDocument Document? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([renovationCaseId, version])
+  @@index([propertyId, status])
+  @@index([scopeVersionId])
+  @@map("renovation_authority_profiles")
+}
+
+model RenovationRequirement {
+  id                   String @id @default(uuid())
+  renovationCaseId     String
+  propertyId           String
+  scopeVersionId       String
+  requirementKey       String
+  family               RenovationRequirementFamily
+  question             String
+  recordStatus         RenovationRequirementRecordStatus @default(CURRENT)
+  applicability        RenovationRequirementApplicability @default(UNKNOWN)
+  determination        RenovationRequirementDetermination @default(UNDETERMINED)
+  truthLayer           RenovationRequirementTruthLayer @default(ADVISORY)
+  advisoryLikelihood   RenovationAdvisoryLikelihood @default(UNKNOWN)
+  confidence           AdvisorConfidenceLevel @default(UNAVAILABLE)
+  limitation           String?
+  exactNextAction      String
+  ownerUserId          String?
+  dueAt                DateTime?
+  isBlocking           Boolean @default(true)
+  authorityName        String?
+  authorityType        String?
+  confirmedByName      String?
+  confirmedByOrg       String?
+  determinedByUserId   String?
+  determinedAt         DateTime?
+  sourceType           RenovationRequirementSourceType @default(UNKNOWN)
+  sourceUrl            String?
+  sourceSection        String?
+  sourceDocumentId     String?
+  sourceObservedAt     DateTime?
+  sourceFreshUntil     DateTime?
+  evidenceNotes        String?
+  expiresAt            DateTime?
+  advisorSessionId     String?
+  relatedPermitId      String?
+  relatedHoaApprovalId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  renovationCase RenovationCase @relation(fields: [renovationCaseId], references: [id], onDelete: Cascade)
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  scopeVersion   RenovationScopeVersion @relation(fields: [scopeVersionId], references: [id], onDelete: Cascade)
+  owner          User? @relation("RenovationRequirementOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  determinedBy   User? @relation("RenovationRequirementDeterminedBy", fields: [determinedByUserId], references: [id], onDelete: SetNull)
+  sourceDocument Document? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  advisorSession HomeRenovationAdvisorSession? @relation(fields: [advisorSessionId], references: [id], onDelete: SetNull)
+  relatedPermit PropertyPermitRecord? @relation(fields: [relatedPermitId], references: [id], onDelete: SetNull)
+  relatedHoaApproval HoaApprovalRecord? @relation(fields: [relatedHoaApprovalId], references: [id], onDelete: SetNull)
+  events         RenovationRequirementEvent[]
+
+  @@unique([renovationCaseId, scopeVersionId, requirementKey])
+  @@index([propertyId, recordStatus])
+  @@index([renovationCaseId, family, recordStatus])
+  @@index([ownerUserId, dueAt])
+  @@map("renovation_requirements")
+}
+
+model RenovationRequirementEvent {
+  id                    String @id @default(uuid())
+  renovationCaseId      String
+  propertyId            String
+  requirementId         String
+  actorUserId           String?
+  eventType             RenovationRequirementEventType
+  priorApplicability    RenovationRequirementApplicability?
+  nextApplicability     RenovationRequirementApplicability?
+  priorDetermination    RenovationRequirementDetermination?
+  nextDetermination     RenovationRequirementDetermination?
+  priorTruthLayer       RenovationRequirementTruthLayer?
+  nextTruthLayer        RenovationRequirementTruthLayer?
+  payload               Json?
+  occurredAt            DateTime @default(now())
+
+  renovationCase RenovationCase @relation(fields: [renovationCaseId], references: [id], onDelete: Cascade)
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  requirement    RenovationRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  actor          User? @relation("RenovationRequirementEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([requirementId, occurredAt])
+  @@index([renovationCaseId, occurredAt])
+  @@map("renovation_requirement_events")
+}
+
 model RenovationScopeVersion {
   id               String @id @default(uuid())
   renovationCaseId String
@@ -13281,6 +13492,8 @@ model RenovationScopeVersion {
   currentForCase  RenovationCase? @relation("CurrentRenovationScope")
   createdBy       User? @relation("RenovationScopeVersionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   links           RenovationCaseLink[]
+  authorityProfiles RenovationAuthorityProfile[]
+  requirements RenovationRequirement[]
 
   @@unique([renovationCaseId, version])
   @@unique([renovationCaseId, idempotencyKey])
@@ -13591,6 +13804,7 @@ model HomeRenovationAdvisorSession {
   complianceChecklist HomeRenovationComplianceChecklist?
   permitRecords       PropertyPermitRecord[]
   hoaApprovalRecords  HoaApprovalRecord[]
+  renovationRequirements RenovationRequirement[]
 
   @@index([propertyId, createdAt])
   @@index([propertyId, renovationType])
@@ -15400,6 +15614,7 @@ model PropertyPermitRecord {
   inspectionMilestones      PermitInspectionMilestone[]
   unpermittedFlags          PermitUnpermittedFlag[]     @relation("ResolvedByPermit")
   inspectionReadinessChecks InspectionReadinessCheck[]
+  renovationRequirements    RenovationRequirement[]
 
   @@index([propertyId])
   @@index([category])
@@ -15692,6 +15907,7 @@ model HoaApprovalRecord {
   hoaAssociation           HoaAssociation                @relation(fields: [hoaAssociationId], references: [id], onDelete: Cascade)
   renovationAdvisorSession HomeRenovationAdvisorSession? @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
   decisionEvidenceDocument Document?                      @relation("HoaApprovalDecisionEvidence", fields: [decisionEvidenceDocumentId], references: [id], onDelete: SetNull)
+  renovationRequirements    RenovationRequirement[]
 
   @@index([propertyId])
   @@index([hoaAssociationId, reportedStatus])

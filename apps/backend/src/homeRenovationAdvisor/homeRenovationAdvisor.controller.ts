@@ -40,7 +40,17 @@ export class HomeRenovationAdvisorController {
         'RENOVATION_ADVISOR',
         { projectType: input.renovationType },
       );
-      res.status(201).json({ success: true, data: { session, propertyContext } });
+      res.setHeader('Deprecation', 'true');
+      res.setHeader('Link', `</api/properties/${input.propertyId}/renovation-cases>; rel="successor-version"`);
+      res.status(201).json({
+        success: true,
+        data: {
+          session,
+          propertyContext,
+          advisoryOnly: true,
+          nextStep: 'Attach this session to a Renovation Case to generate scope-specific requirement candidates.',
+        },
+      });
     } catch (err) {
       next(err);
     }
@@ -80,7 +90,17 @@ export class HomeRenovationAdvisorController {
         'RENOVATION_ADVISOR',
         { projectType: (session as any).renovationType },
       );
-      res.json({ success: true, data: { session, propertyContext } });
+      res.setHeader('Deprecation', 'true');
+      res.setHeader('Link', `</api/properties/${(session as any).propertyId}/renovation-cases>; rel="successor-version"`);
+      res.json({
+        success: true,
+        data: {
+          session,
+          propertyContext,
+          advisoryOnly: true,
+          nextStep: 'Use this evaluation as a candidate source inside the Renovation Case requirements workflow.',
+        },
+      });
     } catch (err) {
       next(err);
     }

@@ -21,6 +21,11 @@ import {
   CreateRenovationExplorationSchema,
   UpdateRenovationOptionDispositionSchema,
 } from '../validators/renovationExplore.validators';
+import {
+  DetermineRenovationRequirementSchema,
+  GenerateRenovationRequirementsSchema,
+  UpsertRenovationAuthorityProfileSchema,
+} from '../validators/renovationRequirement.validators';
 
 const router = Router();
 const canContribute = requireHouseholdRole('CONTRIBUTOR');
@@ -68,6 +73,37 @@ router.get(
   '/properties/:propertyId/renovation-cases/:caseId',
   propertyAuthMiddleware,
   controller.getCase,
+);
+router.get(
+  '/properties/:propertyId/renovation-cases/:caseId/requirements',
+  propertyAuthMiddleware,
+  controller.listRequirements,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/:caseId/requirements/generate',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(GenerateRenovationRequirementsSchema),
+  controller.generateRequirements,
+);
+router.patch(
+  '/properties/:propertyId/renovation-cases/:caseId/requirements/:requirementId',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(DetermineRenovationRequirementSchema),
+  controller.determineRequirement,
+);
+router.get(
+  '/properties/:propertyId/renovation-cases/:caseId/authority-profiles',
+  propertyAuthMiddleware,
+  controller.listAuthorityProfiles,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/:caseId/authority-profiles',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(UpsertRenovationAuthorityProfileSchema),
+  controller.createAuthorityProfile,
 );
 router.patch(
   '/properties/:propertyId/renovation-cases/:caseId',
