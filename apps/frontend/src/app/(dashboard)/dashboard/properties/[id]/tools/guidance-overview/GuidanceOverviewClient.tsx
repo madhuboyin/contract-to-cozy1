@@ -1153,8 +1153,8 @@ export default function GuidanceOverviewClient() {
         body: 'Store the follow-up timing and top option so this plan is easy to resume later.',
       },
       'quote-comparison': {
-        headline: 'See which quote balances cost, scope, and risk best',
-        body: null,
+        headline: 'Understand what each quote includes before comparing prices',
+        body: 'See missing scope, exclusions, warranty, payment terms, freshness, and open questions without an unsupported “best quote” claim.',
       },
     };
     if (toolKey === 'negotiation-shield') {
@@ -1165,8 +1165,8 @@ export default function GuidanceOverviewClient() {
     }
     if (toolKey === 'service-price-radar') {
       return {
-        headline: `Check whether this quote is ${formatCurrency(ovLow)}–${formatCurrency(ovHigh)} too high`,
-        body: "We'll compare the quote against local market patterns so you can decide whether to push back before hiring.",
+        headline: 'Review the evidence behind this service quote',
+        body: "See whether a qualified benchmark is available, what scope is missing, and which facts to verify before comparing or hiring.",
       };
     }
     return toolKey ? (STEP_COPY[toolKey] ?? { headline: null, body: null }) : { headline: null, body: null };

@@ -323,15 +323,61 @@ export type QuoteProposalSummary = {
   currency: string;
   serviceCategory: ServiceRadarCategory | null;
   serviceLabelRaw: string | null;
+  quoteDate: string | null;
+  expirationDate: string | null;
+  serviceLocation: string | null;
+  scopeKind: 'REPAIR' | 'REPLACEMENT' | 'INSTALLATION' | 'MAINTENANCE' | 'INSPECTION' | 'OTHER' | 'UNKNOWN';
+  scopeSummary: string | null;
+  notes: string | null;
   sourceType: ServiceRadarQuoteSource;
   sourceReferenceId: string | null;
+  decision: 'UNDECIDED' | 'SHORTLISTED' | 'ACCEPTED' | 'REJECTED';
+  isSelected: boolean;
   readinessStage: QuoteProposalReadinessStage;
   readinessScore: number;
   missingFactsJson: Array<{ key: string; label: string; whyItMatters: string }> | null;
   ambiguitiesJson: Array<{ key: string; message: string }> | null;
   homeownerConfirmedAt: string | null;
   createdAt: string;
-  extractions?: Array<{ id: string; status: string; document: { id: string; name: string } }>;
+  updatedAt: string;
+  lineItems?: Array<{
+    id: string;
+    kind: string;
+    description: string;
+    quantity: number | null;
+    unit: string | null;
+    unitPrice: number | null;
+    total: number | null;
+    confirmationStatus: string;
+  }>;
+  terms?: Array<{
+    id: string;
+    type: string;
+    label: string | null;
+    value: string;
+    included: boolean | null;
+    confirmationStatus: string;
+  }>;
+  extractions?: Array<{
+    id: string;
+    status: string;
+    provider: string | null;
+    model: string | null;
+    schemaVersion: string;
+    completedAt: string | null;
+    confirmedAt: string | null;
+    document: { id: string; name: string; fileUrl?: string; mimeType?: string };
+  }>;
+  clarifications?: QuoteClarification[];
+};
+
+export type QuoteClarification = {
+  id: string;
+  question: string;
+  status: 'OPEN' | 'RESOLVED' | 'DISMISSED';
+  response: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
 };
 
 export type QuoteComparabilityResult = {
@@ -426,6 +472,91 @@ export async function confirmQuoteProposal(
     {}
   );
   return res.data.quote;
+}
+
+export async function updateQuoteProposal(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  input: {
+    vendorName?: string;
+    quoteAmount?: number;
+    quoteDate?: string | null;
+    expirationDate?: string | null;
+    serviceLocation?: string | null;
+    scopeKind?: 'REPAIR' | 'REPLACEMENT' | 'INSTALLATION' | 'MAINTENANCE' | 'INSPECTION' | 'OTHER' | 'UNKNOWN';
+    scopeSummary?: string | null;
+    notes?: string | null;
+    lineItems?: Array<{
+      kind?: 'LABOR' | 'MATERIAL' | 'EQUIPMENT' | 'PERMIT' | 'DISPOSAL' | 'TAX' | 'ALLOWANCE' | 'OTHER';
+      description: string;
+      quantity?: number | null;
+      unit?: string | null;
+      unitPrice?: number | null;
+      total?: number | null;
+    }>;
+    terms?: Array<{
+      type: 'INCLUSION' | 'EXCLUSION' | 'ALLOWANCE' | 'PERMIT' | 'DISPOSAL' | 'CLEANUP' | 'WARRANTY' | 'PAYMENT' | 'SCHEDULE' | 'EXPIRATION' | 'LICENSE' | 'INSURANCE' | 'CHANGE_ORDER' | 'OTHER';
+      value: string;
+      included?: boolean | null;
+    }>;
+  }
+): Promise<QuoteProposalSummary> {
+  const res = await api.patch<{ quote: QuoteProposalSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/${quoteId}`,
+    input
+  );
+  return res.data.quote;
+}
+
+export async function deleteQuoteProposal(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string
+): Promise<void> {
+  await api.delete(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/${quoteId}`
+  );
+}
+
+export async function setQuoteDisposition(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  decision: 'REJECTED' | 'UNDECIDED'
+): Promise<QuoteComparisonWorkspaceSummary> {
+  const res = await api.post<{ workspace: QuoteComparisonWorkspaceSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/${quoteId}/disposition`,
+    { decision }
+  );
+  return res.data.workspace;
+}
+
+export async function createQuoteClarification(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  question: string
+): Promise<QuoteClarification> {
+  const res = await api.post<{ clarification: QuoteClarification }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/${quoteId}/clarifications`,
+    { question }
+  );
+  return res.data.clarification;
+}
+
+export async function resolveQuoteClarification(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  clarificationId: string,
+  response: string
+): Promise<QuoteClarification> {
+  const res = await api.post<{ clarification: QuoteClarification }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/${quoteId}/clarifications/${clarificationId}/resolve`,
+    { response }
+  );
+  return res.data.clarification;
 }
 
 export async function getQuoteComparability(

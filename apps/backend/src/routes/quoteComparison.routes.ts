@@ -10,6 +10,10 @@ import {
   selectQuote,
   transitionDecision,
   updateQuote,
+  addClarification,
+  deleteQuote,
+  resolveClarification,
+  setQuoteDisposition,
 } from '../controllers/quoteComparison.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
@@ -23,6 +27,9 @@ import {
   quoteDecisionContextLinkSchema,
   selectQuoteSchema,
   transitionQuoteDecisionSchema,
+  createQuoteClarificationSchema,
+  quoteDispositionSchema,
+  resolveQuoteClarificationSchema,
 } from '../validators/quoteComparison.validators';
 
 const router = Router();
@@ -54,6 +61,33 @@ router.patch(
   propertyAuthMiddleware,
   validateBody(updateQuoteProposalSchema),
   updateQuote,
+);
+
+router.delete(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/:quoteId',
+  propertyAuthMiddleware,
+  deleteQuote,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/:quoteId/disposition',
+  propertyAuthMiddleware,
+  validateBody(quoteDispositionSchema),
+  setQuoteDisposition,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/:quoteId/clarifications',
+  propertyAuthMiddleware,
+  validateBody(createQuoteClarificationSchema),
+  addClarification,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/:quoteId/clarifications/:clarificationId/resolve',
+  propertyAuthMiddleware,
+  validateBody(resolveQuoteClarificationSchema),
+  resolveClarification,
 );
 
 router.post(

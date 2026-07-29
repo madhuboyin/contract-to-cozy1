@@ -358,8 +358,8 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   },
   {
     key: 'quote-comparison',
-    title: 'Quote Comparison',
-    description: 'Compare vendor quotes side by side',
+    title: 'Service Quote Decision',
+    description: 'Review scope, compare proposals, and track your decision',
     href: '/dashboard/quote-comparison',
     icon: resolveToolIcon('home', 'quote-comparison'),
     emoji: '⚖️',
@@ -599,9 +599,9 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'quote-comparison',
     group: 'negotiation',
-    name: 'Quote Comparison',
-    description: "Compare vendor quotes side by side",
-    desktopDescription: "Review multiple vendor quotes together so you can shortlist the best option with context.",
+    name: 'Service Quote Decision',
+    description: "Review scope, compare proposals, and decide",
+    desktopDescription: "Upload or enter proposals, identify missing scope, ask questions, record your choice, and keep final terms and booking linked.",
     workflowOnly: true,
     hrefSuffix: 'tools/quote-comparison',
     navTarget: 'tool:quote-comparison',

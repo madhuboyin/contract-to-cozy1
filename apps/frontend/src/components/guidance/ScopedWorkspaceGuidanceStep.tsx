@@ -30,12 +30,12 @@ type WorkspaceBridgeConfig = {
 
 const WORKSPACE_BRIDGE_CONFIG: Record<string, WorkspaceBridgeConfig> = {
   'quote-comparison': {
-    actionLabel: 'Open quote comparison',
-    summary: 'Compare provider options side by side before you decide which quote to accept.',
+    actionLabel: 'Open service quote decision',
+    summary: 'Understand what each provider includes, resolve missing facts, and record the option you choose.',
     bullets: [
-      'Bring competing quotes into one view to compare scope, timing, and price.',
-      'Keep this journey attached while you review and decide.',
-      'Return here once you are ready to move to final pricing or booking.',
+      'Upload or enter proposals and review extracted facts before relying on them.',
+      'Compare only when scope, units, exclusions, warranty, and payment terms align.',
+      'Keep clarification, final terms, and booking attached to one resumable decision.',
     ],
   },
   'price-finalization': {

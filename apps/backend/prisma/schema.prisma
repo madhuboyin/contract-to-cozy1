@@ -1630,6 +1630,12 @@ enum QuoteFactConfirmationStatus {
   NOT_APPLICABLE
 }
 
+enum QuoteClarificationStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
 enum QuoteScopeKind {
   REPAIR
   REPLACEMENT
@@ -8696,12 +8702,32 @@ model QuoteComparisonQuote {
   terms            QuoteComparisonTerm[]
   extractions      QuoteComparisonExtraction[]
   factConfirmations QuoteComparisonFactConfirmation[]
+  clarifications   QuoteComparisonClarification[]
 
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([workspaceId, decision])
   @@index([workspaceId, readinessStage])
   @@index([comparabilityKey])
   @@map("quote_comparison_quotes")
+}
+
+model QuoteComparisonClarification {
+  id      String @id @default(uuid())
+  quoteId String
+
+  question   String
+  status     QuoteClarificationStatus @default(OPEN)
+  response   String?
+  requestedByUserId String?
+  resolvedByUserId  String?
+  resolvedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  quote QuoteComparisonQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, status, createdAt(sort: Desc)])
+  @@map("quote_comparison_clarifications")
 }
 
 model ServiceQuoteDecisionTransition {

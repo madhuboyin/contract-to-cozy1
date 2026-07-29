@@ -14,6 +14,7 @@ import {
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
   confirmQuoteProposal,
+  createQuoteClarification,
   createQuoteProposal,
   createQuoteProposalFromDocument,
   getQuoteComparability,
@@ -21,6 +22,9 @@ import {
   listServicePriceRadarChecks,
   getProjectComplianceContext,
   getOrCreateQuoteComparisonWorkspace,
+  deleteQuoteProposal,
+  resolveQuoteClarification,
+  setQuoteDisposition,
   type QuoteComparabilityResult,
   type QuoteComparisonWorkspaceSummary,
   type QuoteProposalReadinessStage,
@@ -29,6 +33,7 @@ import {
   type ServiceRadarVerdict,
   selectQuoteForDecision,
   transitionServiceQuoteDecision,
+  updateQuoteProposal,
 } from '../service-price-radar/servicePriceRadarApi';
 import { api } from '@/lib/api/client';
 import { createNegotiationShieldCase } from '../negotiation-shield/negotiationShieldApi';
@@ -41,6 +46,17 @@ import { track } from '@/lib/analytics/events';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import { CapabilityDiscoveryAnchor } from '@/features/tools/CapabilityDiscoveryAnchor';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
+import { buildKnownFacts, buildProposalEvidence, isProposalStale } from './quoteDecisionUi';
 
 type SearchParamSource = { get(name: string): string | null };
 
@@ -63,6 +79,19 @@ type QuoteCandidate = {
   persisted: boolean;
   extracted: boolean;
   homeownerConfirmed: boolean;
+  proposal: QuoteProposalSummary | null;
+  decision: 'UNDECIDED' | 'SHORTLISTED' | 'ACCEPTED' | 'REJECTED';
+};
+
+type QuoteEditForm = {
+  vendorName: string;
+  quoteAmount: string;
+  quoteDate: string;
+  expirationDate: string;
+  serviceLocation: string;
+  scopeKind: QuoteProposalSummary['scopeKind'];
+  scopeSummary: string;
+  notes: string;
 };
 
 const CONTEXT_KEYS = [
@@ -91,6 +120,12 @@ function formatMoney(amount: number, currency = 'USD'): string {
     currency,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function toDateInput(value: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 }
 
 function buildContextQuery(searchParams: SearchParamSource): string {
@@ -126,6 +161,8 @@ function mapRadarCheckToQuote(check: ServicePriceRadarCheckSummary): QuoteCandid
     persisted: false,
     extracted: false,
     homeownerConfirmed: false,
+    proposal: null,
+    decision: 'UNDECIDED',
   };
 }
 
@@ -150,6 +187,8 @@ function mapProposalToQuote(proposal: QuoteProposalSummary): QuoteCandidate {
     persisted: true,
     extracted: Boolean(proposal.extractions?.length),
     homeownerConfirmed: Boolean(proposal.homeownerConfirmedAt),
+    proposal,
+    decision: proposal.decision,
   };
 }
 
@@ -219,6 +258,10 @@ export default function QuoteComparisonWorkspaceClient() {
   const [comparability, setComparability] = React.useState<QuoteComparabilityResult | null>(null);
   const [decisionWorkspace, setDecisionWorkspace] = React.useState<QuoteComparisonWorkspaceSummary | null>(null);
   const [journeyActionPending, setJourneyActionPending] = React.useState(false);
+  const [editingQuote, setEditingQuote] = React.useState<QuoteProposalSummary | null>(null);
+  const [editForm, setEditForm] = React.useState<QuoteEditForm | null>(null);
+  const [clarificationDrafts, setClarificationDrafts] = React.useState<Record<string, string>>({});
+  const [clarificationResponses, setClarificationResponses] = React.useState<Record<string, string>>({});
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(
     searchParams.get('quoteComparisonWorkspaceId')
   );
@@ -245,6 +288,8 @@ export default function QuoteComparisonWorkspaceClient() {
       persisted: false,
       extracted: false,
       homeownerConfirmed: false,
+      proposal: null,
+      decision: 'UNDECIDED',
     };
   }, [defaultCategory, defaultQuoteAmount, defaultVendorName]);
 
@@ -416,6 +461,9 @@ export default function QuoteComparisonWorkspaceClient() {
     setManualInputError(null);
     try {
       const analyzed = await api.analyzeDocument(file, propertyId, false);
+      if (!analyzed.success) {
+        throw new Error(analyzed.error?.message || analyzed.message || 'Document analysis failed.');
+      }
       const documentId = analyzed.data?.document?.id;
       if (!documentId) throw new Error('Document analysis did not return a saved document.');
       const proposal = await createQuoteProposalFromDocument(propertyId, workspaceId, documentId);
@@ -439,6 +487,129 @@ export default function QuoteComparisonWorkspaceClient() {
       setComparability(await getQuoteComparability(propertyId, workspaceId));
     } catch (confirmError: any) {
       setError(confirmError?.message || 'Unable to confirm extracted facts.');
+    }
+  };
+
+  const openQuoteEditor = (proposal: QuoteProposalSummary) => {
+    setEditingQuote(proposal);
+    setEditForm({
+      vendorName: proposal.vendorName,
+      quoteAmount: String(Number(proposal.quoteAmount)),
+      quoteDate: toDateInput(proposal.quoteDate),
+      expirationDate: toDateInput(proposal.expirationDate),
+      serviceLocation: proposal.serviceLocation ?? '',
+      scopeKind: proposal.scopeKind,
+      scopeSummary: proposal.scopeSummary ?? '',
+      notes: proposal.notes ?? '',
+    });
+  };
+
+  const saveQuoteEdits = async () => {
+    if (!workspaceId || !editingQuote || !editForm) return;
+    const amount = toNumberOrNull(editForm.quoteAmount);
+    if (!editForm.vendorName.trim() || !amount) {
+      setError('Provider name and a valid total are required.');
+      return;
+    }
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await updateQuoteProposal(propertyId, workspaceId, editingQuote.id, {
+        vendorName: editForm.vendorName.trim(),
+        quoteAmount: amount,
+        quoteDate: editForm.quoteDate ? new Date(`${editForm.quoteDate}T12:00:00Z`).toISOString() : null,
+        expirationDate: editForm.expirationDate
+          ? new Date(`${editForm.expirationDate}T12:00:00Z`).toISOString()
+          : null,
+        serviceLocation: editForm.serviceLocation.trim() || null,
+        scopeKind: editForm.scopeKind,
+        scopeSummary: editForm.scopeSummary.trim() || null,
+        notes: editForm.notes.trim() || null,
+      });
+      setEditingQuote(null);
+      setEditForm(null);
+      await loadQuotes();
+    } catch (editError: any) {
+      setError(editError?.message || 'Unable to update this proposal.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
+  const removeQuote = async (quote: QuoteCandidate) => {
+    if (!workspaceId || !quote.persisted) return;
+    if (!window.confirm(`Delete ${quote.vendorName}'s proposal and its extracted facts? This cannot be undone.`)) {
+      return;
+    }
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await deleteQuoteProposal(propertyId, workspaceId, quote.id);
+      await loadQuotes();
+    } catch (deleteError: any) {
+      setError(deleteError?.message || 'Unable to delete this proposal.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
+  const changeDisposition = async (
+    quote: QuoteCandidate,
+    decision: 'REJECTED' | 'UNDECIDED',
+  ) => {
+    if (!workspaceId) return;
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await setQuoteDisposition(propertyId, workspaceId, quote.id, decision);
+      await loadQuotes();
+    } catch (dispositionError: any) {
+      setError(dispositionError?.message || 'Unable to update this proposal decision.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
+  const askForClarification = async (quoteId: string) => {
+    if (!workspaceId) return;
+    const question = clarificationDrafts[quoteId]?.trim();
+    if (!question) return;
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await createQuoteClarification(propertyId, workspaceId, quoteId, question);
+      setClarificationDrafts((current) => ({ ...current, [quoteId]: '' }));
+      await loadQuotes();
+    } catch (clarificationError: any) {
+      setError(clarificationError?.message || 'Unable to save this clarification.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
+  const answerClarification = async (
+    quoteId: string,
+    clarificationId: string,
+  ) => {
+    if (!workspaceId) return;
+    const response = clarificationResponses[clarificationId]?.trim();
+    if (!response) return;
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await resolveQuoteClarification(
+        propertyId,
+        workspaceId,
+        quoteId,
+        clarificationId,
+        response,
+      );
+      setClarificationResponses((current) => ({ ...current, [clarificationId]: '' }));
+      await loadQuotes();
+    } catch (clarificationError: any) {
+      setError(clarificationError?.message || 'Unable to resolve this clarification.');
+    } finally {
+      setJourneyActionPending(false);
     }
   };
 
@@ -563,8 +734,18 @@ export default function QuoteComparisonWorkspaceClient() {
     freshnessLabel: 'Updates as new Service Price Radar checks are created',
     sourceLabel: 'Saved proposals + quote-document extraction provenance + Service Price Radar history',
   });
+  const decisionOpen = !decisionWorkspace || decisionWorkspace.outcome === 'OPEN';
+  const proposalControlsLocked =
+    !decisionOpen ||
+    Boolean(
+      decisionWorkspace &&
+      ['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'].includes(
+        decisionWorkspace.journeyStage
+      )
+    );
 
   return (
+    <>
     <CompareTemplate
       backHref={backHref}
       backLabel={isGuidanceContext ? 'Back to guidance' : 'Back to property'}
@@ -645,6 +826,57 @@ export default function QuoteComparisonWorkspaceClient() {
       }
       compareContent={
         <div className="space-y-4">
+          {decisionWorkspace && (decisionWorkspace.transitions?.length ?? 0) > 1 ? (
+            <div
+              className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"
+              role="status"
+            >
+              <p className="mb-1 font-semibold">Welcome back to this quote decision</p>
+              <p className="mb-0">
+                Your proposals, questions, selected option, and linked next steps were saved.
+                Continue at {formatEnumLabel(decisionWorkspace.journeyStage).toLowerCase()}.
+              </p>
+            </div>
+          ) : null}
+
+          {['INSURANCE', 'ATTORNEY', 'FINANCE'].includes(defaultCategory ?? '') ? (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="alert">
+              This generic service-quote workflow does not evaluate regulated insurance, legal, or financial advice.
+              Use the appropriate specialist workflow instead.
+            </div>
+          ) : null}
+
+          {!decisionOpen ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" role="status">
+              This decision is closed. Its proposals and evidence remain available as a read-only record.
+            </div>
+          ) : null}
+
+          {decisionOpen ? (
+          <ScenarioInputCard
+            title="How would you like to start?"
+            subtitle="Choose the path that matches what you have. You can add another proposal later."
+          >
+            <div className="grid gap-3 md:grid-cols-3">
+              <a href="#upload-quote" className="rounded-xl border border-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-black">
+                <span className="block font-semibold">Upload a quote</span>
+                <span className="mt-1 block text-xs text-slate-600">Use a PDF or photo when you have one. Extracted facts stay reviewable.</span>
+              </a>
+              <a href="#manual-quote" className="rounded-xl border border-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-black">
+                <span className="block font-semibold">Enter a quote</span>
+                <span className="mt-1 block text-xs text-slate-600">Record provider, price, scope, exclusions, warranty, and payment terms.</span>
+              </a>
+              <Link
+                href={`/dashboard/properties/${propertyId}/tools/service-price-radar${contextQuery}`}
+                className="rounded-xl border border-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-black"
+              >
+                <span className="block font-semibold">Plan a budget</span>
+                <span className="mt-1 block text-xs text-slate-600">Use a planning range when you do not have a provider quote yet.</span>
+              </Link>
+            </div>
+          </ScenarioInputCard>
+          ) : null}
+
           <ScenarioInputCard
             title="Candidate Quotes"
             subtitle="Select up to 3 proposals. Price is contextual only until scope and terms are comparison ready."
@@ -653,28 +885,31 @@ export default function QuoteComparisonWorkspaceClient() {
             {loading ? (
               <p className="mb-0 text-sm text-slate-600">Loading quote candidates...</p>
             ) : quotes.length === 0 ? (
-              <div className="space-y-2">
-                <p className="mb-0 text-sm text-slate-600">
-                  No quotes found yet. Run Service Price Radar first, then compare here.
-                </p>
-                <ActionPriorityRow
-                  primaryAction={
-                    <Link
-                      href={`/dashboard/properties/${propertyId}/tools/service-price-radar${contextQuery}`}
-                      className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black bg-black px-3 text-sm text-white hover:bg-black/90"
-                    >
-                      Run Service Price Radar
-                    </Link>
-                  }
-                />
-              </div>
+              <p className="mb-0 text-sm text-slate-600">
+                No proposals are saved yet. Choose upload, manual entry, or budget planning above.
+              </p>
             ) : (
               <div className="space-y-2.5">
                 {quotes.map((quote) => {
                   const isSelected = selectedQuoteIds.includes(quote.id);
-                  const disableSelection = !isSelected && selectedQuoteIds.length >= 3;
+                  const disableSelection =
+                    proposalControlsLocked ||
+                    quote.decision === 'REJECTED' ||
+                    (!isSelected && selectedQuoteIds.length >= 3);
+                  const proposal = quote.proposal;
+                  const evidence = proposal ? buildProposalEvidence(proposal) : [];
+                  const knownFacts = proposal ? buildKnownFacts(proposal) : [];
+                  const openClarifications = proposal?.clarifications?.filter(
+                    (clarification) => clarification.status === 'OPEN'
+                  ) ?? [];
                   return (
-                    <div key={quote.id} className="rounded-xl border border-black/10 p-2.5">
+                    <article
+                      key={quote.id}
+                      className={`rounded-xl border p-3 ${
+                        quote.decision === 'REJECTED' ? 'border-slate-200 bg-slate-50 opacity-80' : 'border-black/10'
+                      }`}
+                      aria-label={`${quote.vendorName} proposal`}
+                    >
                       <CompactEntityRow
                         title={quote.vendorName}
                         subtitle={`${formatMoney(quote.quoteAmount, quote.currency)} · ${quote.sourceLabel}`}
@@ -698,9 +933,10 @@ export default function QuoteComparisonWorkspaceClient() {
                             {quote.persisted && !quote.homeownerConfirmed ? (
                               <Button
                                 type="button"
-                                variant="outline"
-                                className="min-h-[36px] px-3 text-xs"
-                                onClick={() => confirmExtractedQuote(quote.id)}
+                              variant="outline"
+                              className="min-h-[36px] px-3 text-xs"
+                              disabled={proposalControlsLocked || journeyActionPending}
+                              onClick={() => confirmExtractedQuote(quote.id)}
                               >
                                 Review and confirm
                               </Button>
@@ -710,34 +946,169 @@ export default function QuoteComparisonWorkspaceClient() {
                                 type="button"
                                 variant="outline"
                                 className="min-h-[36px] px-3 text-xs"
-                                disabled={journeyActionPending}
+                                disabled={proposalControlsLocked || journeyActionPending}
                                 onClick={() => addCandidateToDecision(quote)}
                               >
                                 Add to decision
                               </Button>
                             ) : null}
                             {quote.persisted &&
+                            quote.decision !== 'REJECTED' &&
                             quote.readinessStage === 'COMPARISON_READY' &&
                             comparability?.status === 'COMPARABLE' ? (
                               <Button
                                 type="button"
                                 variant={decisionWorkspace?.selectedQuoteId === quote.id ? 'default' : 'outline'}
                                 className="min-h-[36px] px-3 text-xs"
-                                disabled={journeyActionPending}
+                                disabled={proposalControlsLocked || journeyActionPending}
                                 onClick={() => chooseProposal(quote.id)}
                               >
-                                {decisionWorkspace?.selectedQuoteId === quote.id ? 'Chosen proposal' : 'Choose proposal'}
+                                {decisionWorkspace?.selectedQuoteId === quote.id ? 'Accepted for review' : 'Accept for final review'}
                               </Button>
                             ) : null}
                           </div>
                         }
                       />
-                      {quote.missingFacts.length > 0 ? (
+                      {proposal ? (
+                        <div className="mt-3 space-y-3 border-t border-black/5 pt-3">
+                          {isProposalStale(proposal) ? (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900" role="status">
+                              This quote may be stale or expired. Reconfirm the price and terms before accepting it.
+                            </div>
+                          ) : null}
+
+                          <div>
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className="font-medium">Quote readiness</span>
+                              <span>{proposal.readinessScore}%</span>
+                            </div>
+                            <Progress value={proposal.readinessScore} aria-label={`${proposal.vendorName} quote readiness`} />
+                          </div>
+
+                          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="Evidence dimensions">
+                            {evidence.map((dimension) => (
+                              <div key={dimension.key} className="rounded-lg border border-black/10 p-2">
+                                <p className="mb-0 text-[11px] font-medium uppercase tracking-wide text-slate-500">{dimension.label}</p>
+                                <p className="mb-0 text-sm font-semibold">{dimension.value}</p>
+                                <p className="mb-0 mt-1 text-xs text-slate-600">{dimension.detail}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <section aria-labelledby={`known-${quote.id}`}>
+                              <h3 id={`known-${quote.id}`} className="text-sm font-semibold">What we know</h3>
+                              {knownFacts.length ? (
+                                <ul className="mt-1 space-y-1 pl-4 text-xs text-slate-600">
+                                  {knownFacts.map((fact) => <li key={fact}>{fact}</li>)}
+                                </ul>
+                              ) : (
+                                <p className="mb-0 mt-1 text-xs text-slate-600">Only a planning amount is recorded.</p>
+                              )}
+                            </section>
+                            <section aria-labelledby={`missing-${quote.id}`}>
+                              <h3 id={`missing-${quote.id}`} className="text-sm font-semibold">What is missing</h3>
+                              {quote.missingFacts.length ? (
+                                <ul className="mt-1 space-y-1 pl-4 text-xs text-slate-600">
+                                  {quote.missingFacts.map((fact) => <li key={fact.key}>{fact.label}</li>)}
+                                </ul>
+                              ) : (
+                                <p className="mb-0 mt-1 text-xs text-slate-600">No required comparison facts are missing.</p>
+                              )}
+                            </section>
+                            <section aria-labelledby={`why-${quote.id}`}>
+                              <h3 id={`why-${quote.id}`} className="text-sm font-semibold">Why it matters</h3>
+                              {quote.missingFacts.length ? (
+                                <ul className="mt-1 space-y-1 pl-4 text-xs text-slate-600">
+                                  {quote.missingFacts.map((fact) => <li key={fact.key}>{fact.whyItMatters}</li>)}
+                                </ul>
+                              ) : (
+                                <p className="mb-0 mt-1 text-xs text-slate-600">Complete scope helps prevent a cheaper-looking quote from hiding omitted work.</p>
+                              )}
+                            </section>
+                          </div>
+
+                          {openClarifications.length ? (
+                            <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-2">
+                              <p className="mb-0 text-xs font-semibold text-blue-950">Open clarification questions</p>
+                              {openClarifications.map((clarification) => (
+                                <div key={clarification.id} className="space-y-1">
+                                  <p className="mb-0 text-xs text-blue-900">{clarification.question}</p>
+                                  <div className="flex flex-col gap-1 sm:flex-row">
+                                    <input
+                                      aria-label={`Answer: ${clarification.question}`}
+                                      value={clarificationResponses[clarification.id] ?? ''}
+                                      onChange={(event) => setClarificationResponses((current) => ({
+                                        ...current,
+                                        [clarification.id]: event.target.value,
+                                      }))}
+                                      placeholder="Record the provider's answer"
+                                      className="h-9 flex-1 rounded-lg border border-blue-200 bg-white px-2 text-xs"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="min-h-[36px] text-xs"
+                                      disabled={proposalControlsLocked || journeyActionPending || !(clarificationResponses[clarification.id]?.trim())}
+                                      onClick={() => answerClarification(quote.id, clarification.id)}
+                                    >
+                                      Resolve
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          <div className="space-y-1">
+                            <label htmlFor={`clarify-${quote.id}`} className="text-xs font-medium">
+                              Ask for clarification
+                            </label>
+                            <div className="flex flex-col gap-1 sm:flex-row">
+                              <Textarea
+                                id={`clarify-${quote.id}`}
+                                value={clarificationDrafts[quote.id] ?? ''}
+                                onChange={(event) => setClarificationDrafts((current) => ({
+                                  ...current,
+                                  [quote.id]: event.target.value,
+                                }))}
+                                placeholder="Example: Does this include permits, disposal, and cleanup?"
+                                className="min-h-[72px] flex-1 text-xs"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={proposalControlsLocked || journeyActionPending || !(clarificationDrafts[quote.id]?.trim())}
+                                onClick={() => askForClarification(quote.id)}
+                              >
+                                Save question
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2" aria-label={`${proposal.vendorName} proposal controls`}>
+                            <Button type="button" variant="outline" disabled={proposalControlsLocked || journeyActionPending} onClick={() => openQuoteEditor(proposal)}>
+                              Edit facts
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={proposalControlsLocked || journeyActionPending}
+                              onClick={() => changeDisposition(quote, quote.decision === 'REJECTED' ? 'UNDECIDED' : 'REJECTED')}
+                            >
+                              {quote.decision === 'REJECTED' ? 'Restore proposal' : 'Reject proposal'}
+                            </Button>
+                            <Button type="button" variant="outline" disabled={proposalControlsLocked || journeyActionPending} onClick={() => removeQuote(quote)}>
+                              Delete proposal
+                            </Button>
+                          </div>
+                        </div>
+                      ) : quote.missingFacts.length > 0 ? (
                         <p className="mb-0 mt-2 text-xs text-slate-500">
                           Needed next: {quote.missingFacts.slice(0, 3).map((fact) => fact.label).join(', ')}
                         </p>
                       ) : null}
-                    </div>
+                    </article>
                   );
                 })}
                 {selectedQuoteIds.length >= 3 ? (
@@ -798,6 +1169,9 @@ export default function QuoteComparisonWorkspaceClient() {
             </ScenarioInputCard>
           ) : null}
 
+          {decisionOpen ? (
+          <>
+          <div id="upload-quote" className="scroll-mt-24">
           <ScenarioInputCard
             title="Upload a Quote Document"
             subtitle="Analyze a PDF or image, keep extraction provenance, then confirm the extracted facts."
@@ -813,7 +1187,9 @@ export default function QuoteComparisonWorkspaceClient() {
               />
             </label>
           </ScenarioInputCard>
+          </div>
 
+          <div id="manual-quote" className="scroll-mt-24">
           <ScenarioInputCard
             title="Add Quote Manually"
             subtitle="Vendor and total create an incomplete proposal. Add scope and terms before comparison."
@@ -931,9 +1307,23 @@ export default function QuoteComparisonWorkspaceClient() {
               <p className="mb-0 text-xs text-rose-600">{manualInputError}</p>
             ) : null}
           </ScenarioInputCard>
+          </div>
+          </>
+          ) : null}
+
+          <ScenarioInputCard
+            title="Your data and privacy"
+            subtitle="You control the proposals and questions stored in this decision."
+          >
+            <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+              <p className="mb-0"><strong className="text-slate-900">Saved:</strong> quote facts, uploaded-document links, confirmations, questions, and decision history.</p>
+              <p className="mb-0"><strong className="text-slate-900">Not assumed:</strong> manual or extracted facts are not treated as verified market evidence.</p>
+              <p className="mb-0"><strong className="text-slate-900">Your controls:</strong> edit, delete, reject, restore, defer, or close before final terms lock the proposal.</p>
+            </div>
+          </ScenarioInputCard>
 
           {error ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" role="alert" aria-live="assertive">
               {error}
             </div>
           ) : null}
@@ -967,5 +1357,106 @@ export default function QuoteComparisonWorkspaceClient() {
       }
       footer={null}
     />
+    <Dialog
+      open={Boolean(editingQuote)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setEditingQuote(null);
+          setEditForm(null);
+        }
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Edit quote facts</DialogTitle>
+          <DialogDescription>
+            Changes invalidate prior confirmation and comparison readiness so the updated facts can be reviewed again.
+          </DialogDescription>
+        </DialogHeader>
+        {editForm ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Provider name</span>
+              <input
+                autoFocus
+                value={editForm.vendorName}
+                onChange={(event) => setEditForm({ ...editForm, vendorName: event.target.value })}
+                className="h-10 w-full rounded-lg border border-black/10 px-3"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Quote total</span>
+              <input
+                inputMode="decimal"
+                value={editForm.quoteAmount}
+                onChange={(event) => setEditForm({ ...editForm, quoteAmount: event.target.value })}
+                className="h-10 w-full rounded-lg border border-black/10 px-3"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Quote date</span>
+              <input
+                type="date"
+                value={editForm.quoteDate}
+                onChange={(event) => setEditForm({ ...editForm, quoteDate: event.target.value })}
+                className="h-10 w-full rounded-lg border border-black/10 px-3"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Expiration date</span>
+              <input
+                type="date"
+                value={editForm.expirationDate}
+                onChange={(event) => setEditForm({ ...editForm, expirationDate: event.target.value })}
+                className="h-10 w-full rounded-lg border border-black/10 px-3"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Work type</span>
+              <select
+                value={editForm.scopeKind}
+                onChange={(event) => setEditForm({ ...editForm, scopeKind: event.target.value as QuoteProposalSummary['scopeKind'] })}
+                className="h-10 w-full rounded-lg border border-black/10 bg-white px-3"
+              >
+                {['UNKNOWN', 'REPAIR', 'REPLACEMENT', 'INSTALLATION', 'MAINTENANCE', 'INSPECTION', 'OTHER'].map((kind) => (
+                  <option key={kind} value={kind}>{formatEnumLabel(kind)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Service location</span>
+              <input
+                value={editForm.serviceLocation}
+                onChange={(event) => setEditForm({ ...editForm, serviceLocation: event.target.value })}
+                className="h-10 w-full rounded-lg border border-black/10 px-3"
+              />
+            </label>
+            <label className="space-y-1 text-sm sm:col-span-2">
+              <span className="font-medium">Scope summary</span>
+              <Textarea
+                value={editForm.scopeSummary}
+                onChange={(event) => setEditForm({ ...editForm, scopeSummary: event.target.value })}
+              />
+            </label>
+            <label className="space-y-1 text-sm sm:col-span-2">
+              <span className="font-medium">Notes</span>
+              <Textarea
+                value={editForm.notes}
+                onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
+              />
+            </label>
+          </div>
+        ) : null}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => { setEditingQuote(null); setEditForm(null); }}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={proposalControlsLocked || journeyActionPending} onClick={saveQuoteEdits}>
+            {journeyActionPending ? 'Saving…' : 'Save and re-check'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

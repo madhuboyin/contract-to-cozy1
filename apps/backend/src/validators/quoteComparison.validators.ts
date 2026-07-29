@@ -121,3 +121,15 @@ export const quoteDecisionContextLinkSchema = z.object({
   label: nullableText(300),
   metadataJson: z.record(z.string(), z.unknown()).optional().nullable(),
 });
+
+export const quoteDispositionSchema = z.object({
+  decision: z.enum(['REJECTED', 'UNDECIDED']),
+});
+
+export const createQuoteClarificationSchema = z.object({
+  question: z.string().trim().min(3).max(2000),
+});
+
+export const resolveQuoteClarificationSchema = z.object({
+  response: z.string().trim().min(1).max(4000),
+});

@@ -70,6 +70,7 @@ const quoteInclude = {
     include: { document: { select: { id: true, name: true, fileUrl: true, mimeType: true } } },
   },
   factConfirmations: { orderBy: { fieldKey: 'asc' } },
+  clarifications: { orderBy: { createdAt: 'desc' } },
 } as const;
 
 const database = prisma as any;
@@ -90,6 +91,17 @@ function assertOpenWorkspace(workspace: any) {
       'This service quote decision is closed. Start a new decision to evaluate revised proposals.',
       409,
       'SERVICE_QUOTE_DECISION_CLOSED',
+    );
+  }
+}
+
+function assertReviewMutable(workspace: any) {
+  assertOpenWorkspace(workspace);
+  if (['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'].includes(workspace.journeyStage)) {
+    throw new APIError(
+      'Proposal controls are locked after final-term review begins.',
+      409,
+      'SERVICE_QUOTE_PROPOSALS_LOCKED',
     );
   }
 }
@@ -773,4 +785,165 @@ export async function addQuoteDecisionContextLink(
   },
 ) {
   return linkServiceQuoteDecisionContext({ propertyId, workspaceId, ...input });
+}
+
+async function assertQuoteCanChangeDecision(workspaceId: string) {
+  const workspace = await database.quoteComparisonWorkspace.findUnique({
+    where: { id: workspaceId },
+    select: {
+      selectedQuoteId: true,
+      priceFinalization: { select: { id: true, status: true } },
+    },
+  });
+  if (workspace?.priceFinalization) {
+    throw new APIError(
+      'This proposal is linked to final terms. Close or revise that decision before changing the proposal.',
+      409,
+      'QUOTE_LINKED_TO_FINALIZATION',
+    );
+  }
+  return workspace;
+}
+
+export async function deleteQuoteProposal(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  userId: string,
+) {
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertReviewMutable(workspace);
+  const quote = await database.quoteComparisonQuote.findFirst({
+    where: { id: quoteId, workspaceId },
+    select: { id: true },
+  });
+  if (!quote) throw new APIError('Quote proposal not found.', 404, 'QUOTE_NOT_FOUND');
+  const decision = await assertQuoteCanChangeDecision(workspaceId);
+
+  await database.$transaction(async (tx: any) => {
+    await tx.quoteComparisonQuote.delete({ where: { id: quoteId } });
+    if (decision?.selectedQuoteId === quoteId) {
+      await tx.quoteComparisonWorkspace.update({
+        where: { id: workspaceId },
+        data: {
+          selectedQuoteId: null,
+          selectedVendorName: null,
+          selectedQuoteAmount: null,
+          status: 'DRAFT',
+        },
+      });
+    }
+  });
+  await advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    actorUserId: userId,
+    toStage: 'SCOPE_REVIEW',
+    reason: 'A proposal was removed and the remaining scope must be reviewed.',
+    metadataJson: { deletedQuoteId: quoteId },
+  });
+}
+
+export async function setQuoteProposalDisposition(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  userId: string,
+  decision: 'REJECTED' | 'UNDECIDED',
+) {
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertReviewMutable(workspace);
+  const quote = await database.quoteComparisonQuote.findFirst({
+    where: { id: quoteId, workspaceId },
+    select: { id: true },
+  });
+  if (!quote) throw new APIError('Quote proposal not found.', 404, 'QUOTE_NOT_FOUND');
+  const current = await assertQuoteCanChangeDecision(workspaceId);
+  await database.$transaction(async (tx: any) => {
+    await tx.quoteComparisonQuote.update({
+      where: { id: quoteId },
+      data: { decision, isSelected: false },
+    });
+    if (current?.selectedQuoteId === quoteId) {
+      await tx.quoteComparisonWorkspace.update({
+        where: { id: workspaceId },
+        data: {
+          selectedQuoteId: null,
+          selectedVendorName: null,
+          selectedQuoteAmount: null,
+          status: 'DRAFT',
+        },
+      });
+    }
+  });
+  await advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    actorUserId: userId,
+    toStage: 'SCOPE_REVIEW',
+    reason: decision === 'REJECTED'
+      ? 'The homeowner rejected a proposal.'
+      : 'The homeowner returned a proposal to consideration.',
+    metadataJson: { quoteId, decision },
+  });
+  return getQuoteComparisonWorkspace(propertyId, workspaceId);
+}
+
+export async function createQuoteClarification(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  userId: string,
+  question: string,
+) {
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertReviewMutable(workspace);
+  const quote = await database.quoteComparisonQuote.findFirst({
+    where: { id: quoteId, workspaceId },
+    select: { id: true },
+  });
+  if (!quote) throw new APIError('Quote proposal not found.', 404, 'QUOTE_NOT_FOUND');
+  const normalizedQuestion = question.trim();
+  const existing = await database.quoteComparisonClarification.findFirst({
+    where: { quoteId, status: 'OPEN', question: normalizedQuestion },
+  });
+  const clarification = existing ?? await database.quoteComparisonClarification.create({
+    data: { quoteId, question: normalizedQuestion, requestedByUserId: userId },
+  });
+  await advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    actorUserId: userId,
+    toStage: 'SCOPE_REVIEW',
+    reason: 'A material quote clarification is awaiting an answer.',
+    metadataJson: { quoteId, clarificationId: clarification.id },
+  });
+  return clarification;
+}
+
+export async function resolveQuoteClarification(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  clarificationId: string,
+  userId: string,
+  response: string,
+) {
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertReviewMutable(workspace);
+  const clarification = await database.quoteComparisonClarification.findFirst({
+    where: { id: clarificationId, quoteId, quote: { workspaceId } },
+  });
+  if (!clarification) {
+    throw new APIError('Quote clarification not found.', 404, 'QUOTE_CLARIFICATION_NOT_FOUND');
+  }
+  return database.quoteComparisonClarification.update({
+    where: { id: clarificationId },
+    data: {
+      status: 'RESOLVED',
+      response: response.trim(),
+      resolvedByUserId: userId,
+      resolvedAt: new Date(),
+    },
+  });
 }

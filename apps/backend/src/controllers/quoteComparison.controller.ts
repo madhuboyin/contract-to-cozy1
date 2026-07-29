@@ -11,6 +11,10 @@ import {
   selectQuoteForDecision,
   transitionQuoteDecision,
   updateQuoteProposal,
+  createQuoteClarification,
+  deleteQuoteProposal,
+  resolveQuoteClarification,
+  setQuoteProposalDisposition,
 } from '../services/quoteComparison.service';
 import {
   assertProjectComplianceDecisionsApplicable,
@@ -178,6 +182,70 @@ export async function addContextLink(req: CustomRequest, res: Response, next: Ne
       req.body,
     );
     res.status(201).json({ success: true, data: { contextLink } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteQuote(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    await deleteQuoteProposal(
+      req.params.propertyId,
+      req.params.workspaceId,
+      req.params.quoteId,
+      req.user!.userId,
+    );
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function setQuoteDisposition(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    const workspace = await setQuoteProposalDisposition(
+      req.params.propertyId,
+      req.params.workspaceId,
+      req.params.quoteId,
+      req.user!.userId,
+      req.body.decision,
+    );
+    res.json({ success: true, data: { workspace } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function addClarification(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    const clarification = await createQuoteClarification(
+      req.params.propertyId,
+      req.params.workspaceId,
+      req.params.quoteId,
+      req.user!.userId,
+      req.body.question,
+    );
+    res.status(201).json({ success: true, data: { clarification } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function resolveClarification(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    const clarification = await resolveQuoteClarification(
+      req.params.propertyId,
+      req.params.workspaceId,
+      req.params.quoteId,
+      req.params.clarificationId,
+      req.user!.userId,
+      req.body.response,
+    );
+    res.json({ success: true, data: { clarification } });
   } catch (error) {
     next(error);
   }
