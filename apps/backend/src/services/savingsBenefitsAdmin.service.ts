@@ -19,7 +19,9 @@ import {
   HiddenAssetUnknownHandling,
   Prisma,
 } from '@prisma/client';
+import type { Request } from 'express';
 import { prisma } from '../lib/prisma';
+import { recordAdminAction } from './adminAudit.service';
 
 const SOURCE_HEALTH_LEVELS = ['HEALTHY', 'DEGRADED', 'CRITICAL'] as const;
 export type SourceHealthLevel = (typeof SOURCE_HEALTH_LEVELS)[number];
@@ -154,7 +156,7 @@ export class SavingsBenefitsAdminService {
     return source;
   }
 
-  async createSource(input: HiddenAssetSourceInput, actorUserId: string) {
+  async createSource(input: HiddenAssetSourceInput) {
     return prisma.hiddenAssetSource.create({
       data: {
         name: input.name.trim(),
@@ -162,13 +164,13 @@ export class SavingsBenefitsAdminService {
         officialUrl: input.officialUrl.trim(),
         reviewSlaDays: input.reviewSlaDays ?? 180,
         status: input.status ?? 'ACTIVE',
-        lastReviewedAt: new Date(),
-        lastReviewedBy: actorUserId,
+        lastReviewedAt: null,
+        lastReviewedBy: null,
       },
     });
   }
 
-  async updateSource(sourceId: string, input: HiddenAssetSourceInput, actorUserId: string) {
+  async updateSource(sourceId: string, input: HiddenAssetSourceInput) {
     const existing = await prisma.hiddenAssetSource.findUnique({ where: { id: sourceId } });
     if (!existing) throw new Error('Source not found');
     return prisma.hiddenAssetSource.update({
@@ -179,11 +181,48 @@ export class SavingsBenefitsAdminService {
         officialUrl: input.officialUrl.trim(),
         reviewSlaDays: input.reviewSlaDays ?? existing.reviewSlaDays,
         status: input.status ?? existing.status,
-        // Re-saving the source's own details counts as a fresh human review
-        // of that source's continued accuracy.
-        lastReviewedAt: new Date(),
-        lastReviewedBy: actorUserId,
       },
+    });
+  }
+
+  async reviewSource(
+    sourceId: string,
+    actorUserId: string,
+    reason: string,
+    req?: Pick<Request, 'ip' | 'headers'> | null,
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const source = await tx.hiddenAssetSource.findUnique({ where: { id: sourceId } });
+      if (!source) throw new Error('Source not found');
+
+      const reviewedAt = new Date();
+      const reviewed = await tx.hiddenAssetSource.update({
+        where: { id: sourceId },
+        data: {
+          lastReviewedAt: reviewedAt,
+          lastReviewedBy: actorUserId,
+        },
+      });
+      await recordAdminAction({
+        actorId: actorUserId,
+        action: 'ADMIN_SAVINGS_BENEFITS_SOURCE_REVIEW',
+        entityType: 'HIDDEN_ASSET_SOURCE',
+        entityId: sourceId,
+        capability: 'SAVINGS_BENEFITS_REVIEW',
+        reason,
+        disposition: 'REVIEW_ATTESTED',
+        oldValues: {
+          lastReviewedAt: source.lastReviewedAt?.toISOString() ?? null,
+          lastReviewedBy: source.lastReviewedBy,
+        },
+        newValues: {
+          lastReviewedAt: reviewedAt.toISOString(),
+          lastReviewedBy: actorUserId,
+        },
+        relatedRefs: { name: source.name, officialUrl: source.officialUrl },
+        req,
+      }, tx);
+      return reviewed;
     });
   }
 

@@ -11655,6 +11655,9 @@ model PropertyHiddenAssetMatch {
   // applicationWindowClosesAt reminder for this match — idempotency guard,
   // mirroring PermitInspectionMilestone.notificationSentAt.
   notificationSentAt DateTime?
+  // Short-lived worker lease. Prevents concurrent reminder sweeps from both
+  // sending before notificationSentAt is persisted; stale leases are retried.
+  notificationClaimedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11673,6 +11676,7 @@ model PropertyHiddenAssetMatch {
   @@index([status])
   @@index([lastEvaluatedAt])
   @@index([propertyId, status, confidenceLevel])
+  @@index([notificationSentAt, notificationClaimedAt])
   @@map("property_hidden_asset_matches")
 }
 

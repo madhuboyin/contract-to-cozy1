@@ -1,6 +1,7 @@
 import { NotificationChannel, NotificationCadence, NotificationOutcomeType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import {
+  NotificationCategorySchema,
   notificationScopeKey,
   type NotificationCadence as Cadence,
   type NotificationCategory,
@@ -34,6 +35,7 @@ export function inferNotificationCategory(type: string): NotificationCategory {
   const normalized = type.toUpperCase();
   if (/CRITICAL|EMERGENCY|FIRE|GAS|FREEZE|SEVERE_WEATHER/.test(normalized)) return 'SAFETY';
   if (/INCIDENT|LEAK|DAMAGE/.test(normalized)) return 'ACTIVE_DAMAGE';
+  if (/SAVINGS_BENEFIT/.test(normalized)) return 'SAVINGS_BENEFITS';
   if (/DEADLINE|EXPIR|DUE|LAPSE/.test(normalized)) return 'MATERIAL_DEADLINE';
   if (/BOOKING|CLAIM|WORKFLOW|ACTION_CREATED|CANCELLED|CONFIRMED/.test(normalized)) return 'WORKFLOW';
   if (/RECALL/.test(normalized)) return 'RECALL';
@@ -43,6 +45,14 @@ export function inferNotificationCategory(type: string): NotificationCategory {
   if (/MAINTENANCE|SEASONAL|HABIT/.test(normalized)) return 'MAINTENANCE';
   if (/ACCOUNT|SECURITY|PASSWORD|EMAIL/.test(normalized)) return 'ACCOUNT';
   return 'GENERAL';
+}
+
+export function resolveMuteNotificationCategory(
+  type: string,
+  metadataCategory: unknown,
+): NotificationCategory {
+  const parsed = NotificationCategorySchema.safeParse(metadataCategory);
+  return parsed.success ? parsed.data : inferNotificationCategory(type);
 }
 
 export function inferNotificationUrgency(type: string, metadata?: Record<string, unknown>): NotificationUrgency {
@@ -182,7 +192,7 @@ export async function recordNotificationOutcome(userId: string, notificationId: 
     // Scope by the notification type's stable category rather than urgency:
     // a maintenance reminder near its due date may use MATERIAL_DEADLINE for
     // delivery timing, but muting it must not suppress every material deadline.
-    const muteCategory = inferNotificationCategory(notification.type);
+    const muteCategory = resolveMuteNotificationCategory(notification.type, category);
     await upsertNotificationPreference(userId, {
       propertyId,
       category: muteCategory,

@@ -33,10 +33,13 @@ export interface RecordAdminActionInput {
   req?: Pick<Request, 'ip' | 'headers'> | null;
 }
 
-export async function recordAdminAction(input: RecordAdminActionInput): Promise<void> {
+export async function recordAdminAction(
+  input: RecordAdminActionInput,
+  client: Pick<Prisma.TransactionClient, 'auditLog'> | typeof prisma = prisma,
+): Promise<void> {
   const userAgent = input.req?.headers?.['user-agent'];
 
-  await prisma.auditLog.create({
+  await client.auditLog.create({
     data: {
       userId: input.actorId,
       action: input.action,

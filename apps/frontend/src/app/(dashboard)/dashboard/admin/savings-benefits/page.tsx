@@ -33,6 +33,7 @@ import {
   useCreateSavingsBenefitsSource,
   useSavingsBenefitsPrograms,
   useSavingsBenefitsQueues,
+  useReviewSavingsBenefitsSource,
   useSavingsBenefitsSources,
   useTransitionSavingsBenefitsProgram,
   useUpdateSavingsBenefitsProgram,
@@ -158,7 +159,7 @@ function SourceFormDialog({
         <DialogHeader>
           <DialogTitle>{initial ? 'Edit source' : 'Add source'}</DialogTitle>
           <DialogDescription>
-            A reviewed organization that owns one or more benefit programs. Re-saving stamps a fresh review.
+            An organization that owns one or more benefit programs. Editing metadata does not renew its review SLA.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -643,6 +644,53 @@ function ReasonConfirmDialog({
   );
 }
 
+function SourceReviewDialog({
+  source,
+  onOpenChange,
+  pending,
+  onConfirm,
+}: {
+  source: AdminSourceListItem | null;
+  onOpenChange: (open: boolean) => void;
+  pending: boolean;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <Dialog
+      open={source !== null}
+      onOpenChange={(next) => {
+        if (!next) setReason('');
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Attest source review: {source?.name}</DialogTitle>
+          <DialogDescription>
+            Confirm that the official source remains active and accurate. This renews the source review SLA and is recorded in the audit log.
+          </DialogDescription>
+        </DialogHeader>
+        <Label htmlFor="source-review-reason">Review evidence or reason</Label>
+        <Textarea
+          id="source-review-reason"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="What was checked, including the official page or publication date"
+          className="min-h-[80px]"
+        />
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
+          <Button size="sm" disabled={pending || !reason.trim()} onClick={() => onConfirm(reason.trim())}>
+            {pending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Record review
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function QueueSection({
   title,
   emptyText,
@@ -702,11 +750,13 @@ export default function SavingsBenefitsAdminPage() {
   const queuesQ = useSavingsBenefitsQueues();
   const createSourceM = useCreateSavingsBenefitsSource();
   const updateSourceM = useUpdateSavingsBenefitsSource();
+  const reviewSourceM = useReviewSavingsBenefitsSource();
   const createProgramM = useCreateSavingsBenefitsProgram();
   const updateProgramM = useUpdateSavingsBenefitsProgram();
   const transitionM = useTransitionSavingsBenefitsProgram();
 
   const [sourceDialog, setSourceDialog] = useState<{ open: boolean; item: AdminSourceListItem | null }>({ open: false, item: null });
+  const [sourceReviewTarget, setSourceReviewTarget] = useState<AdminSourceListItem | null>(null);
   const [programDialog, setProgramDialog] = useState<{ open: boolean; item: AdminProgramListItem | null }>({ open: false, item: null });
   const [target, setTarget] = useState<{ item: EditorialQueueItem; action: LifecycleAction } | null>(null);
 
@@ -753,6 +803,9 @@ export default function SavingsBenefitsAdminPage() {
                     </p>
                   </div>
                   <Badge className={`text-[10px] ${HEALTH_TONE[source.health]}`}>{source.health}</Badge>
+                  <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setSourceReviewTarget(source)}>
+                    Record review
+                  </Button>
                   <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setSourceDialog({ open: true, item: source })}>
                     Edit
                   </Button>
@@ -859,6 +912,30 @@ export default function SavingsBenefitsAdminPage() {
           };
           if (sourceDialog.item) updateSourceM.mutate({ sourceId: sourceDialog.item.id, input }, opts);
           else createSourceM.mutate(input, opts);
+        }}
+      />
+      <SourceReviewDialog
+        source={sourceReviewTarget}
+        onOpenChange={(open) => {
+          if (!open) setSourceReviewTarget(null);
+        }}
+        pending={reviewSourceM.isPending}
+        onConfirm={(reason) => {
+          if (!sourceReviewTarget) return;
+          reviewSourceM.mutate(
+            { sourceId: sourceReviewTarget.id, reason },
+            {
+              onSuccess: () => {
+                setSourceReviewTarget(null);
+                toast({ title: 'Source review recorded' });
+              },
+              onError: (error) => toast({
+                title: 'Could not record source review',
+                description: error instanceof Error ? error.message : undefined,
+                variant: 'destructive',
+              }),
+            },
+          );
         }}
       />
 

@@ -15,6 +15,7 @@ const {
   inferNotificationCategory,
   inferNotificationUrgency,
   notificationPreferenceCategories,
+  resolveMuteNotificationCategory,
 } = require('../../src/services/notificationPreference.service.ts');
 const { goldenTestHomes } = require('../fixtures/productFramework/goldenTestHomes.js');
 
@@ -44,6 +45,11 @@ test('canonical notification policy supports scope, cadence, quiet hours, and ur
   assert.equal(notificationScopeKey({ propertyId: 'p1', memberUserId: 'u2' }), 'PROPERTY:p1:MEMBER:u2');
   assert.equal(inferNotificationCategory('SEVERE_WEATHER_ALERT'), 'SAFETY');
   assert.equal(inferNotificationCategory('REFINANCE_OPPORTUNITY_OPENED'), 'REFINANCE');
+  assert.equal(inferNotificationCategory('SAVINGS_BENEFIT_DEADLINE_REMINDER'), 'SAVINGS_BENEFITS');
+  assert.equal(
+    resolveMuteNotificationCategory('GENERIC_DEADLINE', 'SAVINGS_BENEFITS'),
+    'SAVINGS_BENEFITS',
+  );
   assert.deepEqual(notificationPreferenceCategories('REFINANCE'), ['REFINANCE']);
   assert.deepEqual(notificationPreferenceCategories('SAVINGS_BENEFITS'), ['SAVINGS_BENEFITS']);
   assert.deepEqual(notificationPreferenceCategories('MAINTENANCE'), ['MAINTENANCE', 'ALL']);

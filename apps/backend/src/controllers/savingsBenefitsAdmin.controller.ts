@@ -44,7 +44,7 @@ export async function getSource(req: AuthRequest, res: Response): Promise<void> 
 
 export async function createSource(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const source = await savingsBenefitsAdminService.createSource(req.body, req.user!.userId);
+    const source = await savingsBenefitsAdminService.createSource(req.body);
     res.status(201).json({ success: true, data: { source } });
   } catch (err: any) {
     logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to create source');
@@ -54,12 +54,28 @@ export async function createSource(req: AuthRequest, res: Response): Promise<voi
 
 export async function updateSource(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const source = await savingsBenefitsAdminService.updateSource(req.params.sourceId, req.body, req.user!.userId);
+    const source = await savingsBenefitsAdminService.updateSource(req.params.sourceId, req.body);
     res.json({ success: true, data: { source } });
   } catch (err: any) {
     if (handleClientError(err, res)) return;
     logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to update source');
     res.status(500).json({ success: false, error: { message: 'Failed to update source' } });
+  }
+}
+
+export async function reviewSource(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const source = await savingsBenefitsAdminService.reviewSource(
+      req.params.sourceId,
+      req.user!.userId,
+      req.body.reason,
+      req,
+    );
+    res.json({ success: true, data: { source } });
+  } catch (err: any) {
+    if (handleClientError(err, res)) return;
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to review source');
+    res.status(500).json({ success: false, error: { message: 'Failed to review source' } });
   }
 }
 

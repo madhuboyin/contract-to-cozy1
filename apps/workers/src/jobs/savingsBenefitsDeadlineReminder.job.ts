@@ -7,9 +7,10 @@ import type { WorkerRunResult } from '../lib/workerRunResult';
 import { savingsBenefitsUrl } from '../lib/deepLinks';
 
 const REMINDER_SCAN_WINDOW_DAYS = 90;
+const REMINDER_CLAIM_LEASE_MS = 30 * 60 * 1000;
 
 export interface SavingsBenefitsDeadlineReminderDeps {
-  prisma: Pick<typeof prisma, 'propertyHiddenAssetMatch' | 'notificationPreference'>;
+  prisma: Pick<typeof prisma, 'propertyHiddenAssetMatch' | 'notificationPreference' | 'notification'>;
   notificationService: Pick<typeof NotificationService, 'create'>;
   logger: AppLogger;
 }
@@ -55,6 +56,10 @@ export async function savingsBenefitsDeadlineReminderJob(
     where: {
       status: { in: ['DETECTED', 'VIEWED', 'PURSUING'] },
       notificationSentAt: null,
+      OR: [
+        { notificationClaimedAt: null },
+        { notificationClaimedAt: { lt: new Date(now.getTime() - REMINDER_CLAIM_LEASE_MS) } },
+      ],
       outcomes: { none: {} },
       program: {
         isActive: true,
@@ -84,6 +89,7 @@ export async function savingsBenefitsDeadlineReminderJob(
   let failed = 0;
 
   for (const match of matches) {
+    let claimTime: Date | null = null;
     try {
       const userId = match.property?.homeownerProfile?.userId;
       if (!userId || !match.program?.applicationWindowClosesAt) {
@@ -134,6 +140,56 @@ export async function savingsBenefitsDeadlineReminderJob(
         continue;
       }
 
+      claimTime = new Date();
+      const claim = await (prisma as any).propertyHiddenAssetMatch.updateMany({
+        where: {
+          id: match.id,
+          notificationSentAt: null,
+          OR: [
+            { notificationClaimedAt: null },
+            {
+              notificationClaimedAt: {
+                lt: new Date(claimTime.getTime() - REMINDER_CLAIM_LEASE_MS),
+              },
+            },
+          ],
+        },
+        data: { notificationClaimedAt: claimTime },
+      });
+      if (claim.count !== 1) {
+        skipped += 1;
+        continue;
+      }
+
+      // A previous worker may have created the durable notification and
+      // crashed before it could finalize notificationSentAt. Reconcile that
+      // state after acquiring the lease instead of sending a duplicate.
+      const existingNotification = await (prisma as any).notification.findFirst({
+        where: {
+          userId,
+          type: 'SAVINGS_BENEFIT_DEADLINE_REMINDER',
+          entityType: 'PropertyHiddenAssetMatch',
+          entityId: match.id,
+        },
+        select: { id: true },
+      });
+      if (existingNotification) {
+        await (prisma as any).propertyHiddenAssetMatch.updateMany({
+          where: {
+            id: match.id,
+            notificationSentAt: null,
+            notificationClaimedAt: claimTime,
+          },
+          data: {
+            notificationSentAt: new Date(),
+            notificationClaimedAt: null,
+          },
+        });
+        claimTime = null;
+        skipped += 1;
+        continue;
+      }
+
       const notification = await notificationService.create({
         userId,
         type: 'SAVINGS_BENEFIT_DEADLINE_REMINDER',
@@ -158,6 +214,15 @@ export async function savingsBenefitsDeadlineReminderJob(
         },
       });
       if (!notification) {
+        await (prisma as any).propertyHiddenAssetMatch.updateMany({
+          where: {
+            id: match.id,
+            notificationSentAt: null,
+            notificationClaimedAt: claimTime,
+          },
+          data: { notificationClaimedAt: null },
+        });
+        claimTime = null;
         skipped += 1;
         logger.info(
           `[SavingsBenefitsDeadlineReminder] Notification policy/context suppressed match ${match.id}; leaving it retryable`,
@@ -165,14 +230,39 @@ export async function savingsBenefitsDeadlineReminderJob(
         continue;
       }
 
-      await (prisma as any).propertyHiddenAssetMatch.update({
-        where: { id: match.id },
-        data: { notificationSentAt: new Date() },
+      await (prisma as any).propertyHiddenAssetMatch.updateMany({
+        where: {
+          id: match.id,
+          notificationSentAt: null,
+          notificationClaimedAt: claimTime,
+        },
+        data: {
+          notificationSentAt: new Date(),
+          notificationClaimedAt: null,
+        },
       });
+      claimTime = null;
 
       notified += 1;
       logger.info(`[SavingsBenefitsDeadlineReminder] Sent reminder for match ${match.id} (user ${userId})`);
     } catch (err) {
+      if (claimTime) {
+        try {
+          await (prisma as any).propertyHiddenAssetMatch.updateMany({
+            where: {
+              id: match.id,
+              notificationSentAt: null,
+              notificationClaimedAt: claimTime,
+            },
+            data: { notificationClaimedAt: null },
+          });
+        } catch (releaseError) {
+          logger.error(
+            { err: releaseError, matchId: match.id },
+            '[SavingsBenefitsDeadlineReminder] Failed to release reminder claim',
+          );
+        }
+      }
       failed += 1;
       logger.error({ err, matchId: match.id }, '[SavingsBenefitsDeadlineReminder] Failed to send reminder');
     }

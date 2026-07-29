@@ -188,6 +188,17 @@ export async function updateSource(
   return res.data;
 }
 
+export async function reviewSource(
+  sourceId: string,
+  reason: string,
+): Promise<{ source: AdminSourceListItem }> {
+  const res = await api.post<{ source: AdminSourceListItem }>(
+    `/api/admin/savings-benefits/sources/${sourceId}/review`,
+    { reason },
+  );
+  return res.data;
+}
+
 export async function fetchPrograms(): Promise<{ programs: AdminProgramListItem[] }> {
   const res = await api.get<{ programs: AdminProgramListItem[] }>('/api/admin/savings-benefits/programs');
   return res.data;

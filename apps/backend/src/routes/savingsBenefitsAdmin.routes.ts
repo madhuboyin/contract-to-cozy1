@@ -21,6 +21,7 @@ import {
   listPrograms,
   listSources,
   makeTransitionHandler,
+  reviewSource,
   updateProgram,
   updateSource,
 } from '../controllers/savingsBenefitsAdmin.controller';
@@ -42,6 +43,10 @@ const SourceBodySchema = z.object({
   officialUrl: z.string().url(),
   reviewSlaDays: z.number().int().positive().optional(),
   status: z.enum(['ACTIVE', 'PAUSED', 'RETIRED']).optional(),
+});
+
+const SourceReviewBodySchema = z.object({
+  reason: z.string().trim().min(1, 'reason is required').max(2000),
 });
 
 const RuleBodySchema = z.object({
@@ -166,6 +171,12 @@ router.put(
   requireCapability('SAVINGS_BENEFITS_AUTHOR'),
   validateBody(SourceBodySchema),
   updateSource
+);
+router.post(
+  '/admin/savings-benefits/sources/:sourceId/review',
+  requireCapability('SAVINGS_BENEFITS_REVIEW'),
+  validateBody(SourceReviewBodySchema),
+  reviewSource,
 );
 
 // ─── Programs (CRUD — always saved as/preserving DRAFT-or-current status) ──

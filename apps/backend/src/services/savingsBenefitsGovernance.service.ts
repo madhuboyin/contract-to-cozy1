@@ -123,35 +123,46 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
   }
 
   const transitionedAt = new Date();
-  await prisma.hiddenAssetProgram.update({
-    where: { id: input.programId },
-    data: {
-      reviewStatus: spec.to,
-      ...(input.action === 'APPROVE'
-        ? {
-            reviewedAt: transitionedAt,
-            reviewedBy: input.actorId,
-            lastVerifiedAt: transitionedAt,
-          }
-        : {}),
-      ...(input.action === 'PUBLISH'
-        ? { publishedAt: program.publishedAt ?? new Date(), publishedBy: input.actorId }
-        : {}),
-    },
-  });
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.hiddenAssetProgram.updateMany({
+      where: {
+        id: input.programId,
+        reviewStatus: program.reviewStatus,
+      },
+      data: {
+        reviewStatus: spec.to,
+        ...(input.action === 'APPROVE'
+          ? {
+              reviewedAt: transitionedAt,
+              reviewedBy: input.actorId,
+              lastVerifiedAt: transitionedAt,
+            }
+          : {}),
+        ...(input.action === 'PUBLISH'
+          ? { publishedAt: program.publishedAt ?? transitionedAt, publishedBy: input.actorId }
+          : {}),
+      },
+    });
+    if (updated.count !== 1) {
+      throw new SavingsBenefitsGovernanceError(
+        'CONCURRENT_TRANSITION',
+        'This program changed while the lifecycle action was being recorded. Refresh and try again.',
+      );
+    }
 
-  await recordAdminAction({
-    actorId: input.actorId,
-    action: 'ADMIN_SAVINGS_BENEFITS_LIFECYCLE',
-    entityType: 'HIDDEN_ASSET_PROGRAM',
-    entityId: input.programId,
-    capability: spec.capability,
-    reason: input.reason,
-    disposition: input.action,
-    oldValues: { reviewStatus: program.reviewStatus } as Prisma.InputJsonValue,
-    newValues: { reviewStatus: spec.to } as Prisma.InputJsonValue,
-    relatedRefs: { name: program.name },
-    req: ctx.req,
+    await recordAdminAction({
+      actorId: input.actorId,
+      action: 'ADMIN_SAVINGS_BENEFITS_LIFECYCLE',
+      entityType: 'HIDDEN_ASSET_PROGRAM',
+      entityId: input.programId,
+      capability: spec.capability,
+      reason: input.reason,
+      disposition: input.action,
+      oldValues: { reviewStatus: program.reviewStatus } as Prisma.InputJsonValue,
+      newValues: { reviewStatus: spec.to } as Prisma.InputJsonValue,
+      relatedRefs: { name: program.name },
+      req: ctx.req,
+    }, tx);
   });
 
   return { previousStatus: program.reviewStatus, status: spec.to, action: input.action };

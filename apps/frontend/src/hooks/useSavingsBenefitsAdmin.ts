@@ -13,6 +13,7 @@ import {
   fetchPrograms,
   fetchSources,
   LifecycleAction,
+  reviewSource,
   transitionProgram,
   updateProgram,
   updateSource,
@@ -47,6 +48,15 @@ export function useUpdateSavingsBenefitsSource() {
   return useMutation({
     mutationFn: ({ sourceId, input }: { sourceId: string; input: AdminSourceInput }) =>
       updateSource(sourceId, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SOURCES_KEY }),
+  });
+}
+
+export function useReviewSavingsBenefitsSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceId, reason }: { sourceId: string; reason: string }) =>
+      reviewSource(sourceId, reason),
     onSuccess: () => qc.invalidateQueries({ queryKey: SOURCES_KEY }),
   });
 }

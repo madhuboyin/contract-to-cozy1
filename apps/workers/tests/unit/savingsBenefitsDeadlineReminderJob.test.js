@@ -11,6 +11,8 @@ function fakeDeps({
   matches,
   throwsForEntityId = null,
   suppressesEntityId = null,
+  unclaimableEntityIds = [],
+  existingNotificationEntityIds = [],
   preferences = [{
     scopeKey: 'GLOBAL',
     enabled: true,
@@ -24,14 +26,26 @@ function fakeDeps({
 
   const deps = {
     prisma: {
+      notification: {
+        findFirst: async ({ where }) =>
+          existingNotificationEntityIds.includes(where.entityId)
+            ? { id: `existing-${where.entityId}` }
+            : null,
+      },
       notificationPreference: {
         findMany: async () => preferences,
       },
       propertyHiddenAssetMatch: {
         findMany: async () => matches,
-        update: async (args) => {
+        updateMany: async (args) => {
           updateCalls.push(args);
-          return {};
+          if (
+            args.data.notificationClaimedAt instanceof Date
+            && unclaimableEntityIds.includes(args.where.id)
+          ) {
+            return { count: 0 };
+          }
+          return { count: 1 };
         },
       },
     },
@@ -84,8 +98,10 @@ test('sends the reminder with category-specific consent and MATERIAL urgency, th
   assert.equal(calls[0].entityType, 'PropertyHiddenAssetMatch');
   assert.equal(calls[0].entityId, 'match-1');
   assert.match(calls[0].actionUrl, /\/tools\/savings-benefits$/);
-  assert.equal(getUpdateCalls().length, 1);
-  assert.equal(getUpdateCalls()[0].data.notificationSentAt instanceof Date, true);
+  assert.equal(getUpdateCalls().length, 2);
+  assert.equal(getUpdateCalls()[0].data.notificationClaimedAt instanceof Date, true);
+  assert.equal(getUpdateCalls()[1].data.notificationSentAt instanceof Date, true);
+  assert.equal(getUpdateCalls()[1].data.notificationClaimedAt, null);
   assert.equal(result.notified, 1);
 });
 
@@ -146,7 +162,8 @@ test('a context-suppressed notification stays retryable and is not marked sent',
   const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
 
   assert.equal(getCreateCalls().length, 0);
-  assert.equal(getUpdateCalls().length, 0);
+  assert.equal(getUpdateCalls().length, 2, 'a suppressed notification releases its claim');
+  assert.equal(getUpdateCalls()[1].data.notificationClaimedAt, null);
   assert.equal(result.notified, 0);
   assert.equal(result.skipped, 1);
 });
@@ -161,6 +178,33 @@ test('does not send without an explicit Savings & Benefits reminder preference',
 
   assert.equal(getCreateCalls().length, 0);
   assert.equal(getUpdateCalls().length, 0);
+  assert.equal(result.skipped, 1);
+});
+
+test('a concurrent worker that cannot acquire the reminder claim does not send', async () => {
+  const { deps, getCreateCalls, getUpdateCalls } = fakeDeps({
+    matches: [match()],
+    unclaimableEntityIds: ['match-1'],
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(getUpdateCalls().length, 1);
+  assert.equal(result.skipped, 1);
+});
+
+test('reconciles a notification created before a prior worker crashed instead of sending again', async () => {
+  const { deps, getCreateCalls, getUpdateCalls } = fakeDeps({
+    matches: [match()],
+    existingNotificationEntityIds: ['match-1'],
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(getUpdateCalls().length, 2);
+  assert.equal(getUpdateCalls()[1].data.notificationSentAt instanceof Date, true);
   assert.equal(result.skipped, 1);
 });
 

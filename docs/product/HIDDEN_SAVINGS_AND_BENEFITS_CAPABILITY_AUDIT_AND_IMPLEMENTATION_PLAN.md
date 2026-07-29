@@ -1190,6 +1190,23 @@ The family should route:
 | HSB-039 | Implemented | Exact `ONE_TIME` / `MONTHLY` / `ANNUAL` / `UNKNOWN` monetary periods |
 | HSB-040 | Implemented | Approved-recipient allowlist, disclosure/ranking contract, exact field preview, consent persistence, and fail-closed handoff |
 
+### 10.2 P2 operational-integrity hardening — July 29, 2026
+
+The implementation follow-up closed four defects beneath the P2 feature-level
+checks:
+
+- source metadata edits no longer renew source freshness; a reviewer must use
+  the explicit, reasoned source-review attestation action;
+- source-review attestations and program lifecycle transitions commit in the
+  same transaction as their business audit rows, with compare-and-set
+  protection against concurrent transitions;
+- deadline reminders acquire a time-bounded database lease before delivery,
+  preventing concurrent worker sweeps from sending duplicates while allowing
+  failed or abandoned claims to be retried;
+- muting a Savings and Benefits reminder remains scoped to
+  `SAVINGS_BENEFITS`, rather than muting the broader material-deadline
+  category.
+
 ---
 
 ## 11. Best-in-Class Target Experience
