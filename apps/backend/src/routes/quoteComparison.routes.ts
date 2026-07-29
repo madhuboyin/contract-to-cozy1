@@ -6,6 +6,9 @@ import {
   getComparability,
   getOrCreateWorkspace,
   getWorkspace,
+  addContextLink,
+  selectQuote,
+  transitionDecision,
   updateQuote,
 } from '../controllers/quoteComparison.controller';
 import { authenticate } from '../middleware/auth.middleware';
@@ -17,6 +20,9 @@ import {
   createQuoteProposalSchema,
   getOrCreateQuoteWorkspaceSchema,
   updateQuoteProposalSchema,
+  quoteDecisionContextLinkSchema,
+  selectQuoteSchema,
+  transitionQuoteDecisionSchema,
 } from '../validators/quoteComparison.validators';
 
 const router = Router();
@@ -67,6 +73,27 @@ router.get(
   '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/comparability',
   propertyAuthMiddleware,
   getComparability,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/selection',
+  propertyAuthMiddleware,
+  validateBody(selectQuoteSchema),
+  selectQuote,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/transitions',
+  propertyAuthMiddleware,
+  validateBody(transitionQuoteDecisionSchema),
+  transitionDecision,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/context-links',
+  propertyAuthMiddleware,
+  validateBody(quoteDecisionContextLinkSchema),
+  addContextLink,
 );
 
 export default router;

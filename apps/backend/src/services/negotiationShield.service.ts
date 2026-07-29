@@ -26,6 +26,7 @@ import { generateContractorUrgencyPressureAnalysis } from './negotiationShieldCo
 import { parseNegotiationShieldDocument } from './negotiationShieldDocumentParsing.service';
 import { generateInsuranceClaimSettlementAnalysis } from './negotiationShieldInsuranceClaimSettlement.service';
 import { generateInsurancePremiumIncreaseAnalysis } from './negotiationShieldInsurancePremium.service';
+import { advanceServiceQuoteDecision } from './serviceQuoteDecisionJourney.service';
 
 const PARSED_DOCUMENT_INPUT_ORIGIN = 'PARSED_DOCUMENT';
 
@@ -175,6 +176,7 @@ export class NegotiationShieldService {
       sourceType: record.sourceType,
       analysisVersion: record.analysisVersion ?? null,
       latestAnalysisAt: asIsoString(record.latestAnalysisAt),
+      quoteDecisionWorkspaceId: record.quoteDecisionWorkspaceId ?? null,
       createdAt: asIsoString(record.createdAt) as string,
       updatedAt: asIsoString(record.updatedAt) as string,
     };
@@ -1236,6 +1238,24 @@ export class NegotiationShieldService {
     createdByUserId: string,
     input: CreateNegotiationShieldCaseInput
   ): Promise<NegotiationShieldCaseDetailDTO> {
+    if (input.quoteDecisionWorkspaceId) {
+      const workspace = await (prisma as any).quoteComparisonWorkspace.findFirst({
+        where: { id: input.quoteDecisionWorkspaceId, propertyId },
+        select: { id: true },
+      });
+      if (!workspace) {
+        throw new APIError(
+          'Service quote decision workspace not found for this property.',
+          400,
+          'NEGOTIATION_INVALID_QUOTE_WORKSPACE',
+        );
+      }
+      const existing = await this.models.caseModel.findFirst({
+        where: { quoteDecisionWorkspaceId: input.quoteDecisionWorkspaceId },
+        select: { id: true },
+      });
+      if (existing) return this.getCaseDetail(propertyId, existing.id);
+    }
     const hasInitialInput = !!input.initialInput;
     const sourceType = resolveSourceType({
       hasInputs: hasInitialInput,
@@ -1253,6 +1273,7 @@ export class NegotiationShieldService {
           title: input.title.trim(),
           description: input.description?.trim() || null,
           sourceType,
+          quoteDecisionWorkspaceId: input.quoteDecisionWorkspaceId ?? null,
         },
         select: { id: true },
       });
@@ -1284,6 +1305,17 @@ export class NegotiationShieldService {
       },
     });
 
+    if (input.quoteDecisionWorkspaceId) {
+      await advanceServiceQuoteDecision({
+        propertyId,
+        workspaceId: input.quoteDecisionWorkspaceId,
+        actorUserId: createdByUserId,
+        toStage: 'NEGOTIATION',
+        relatedEntityType: 'NEGOTIATION_CASE',
+        relatedEntityId: created.id,
+        reason: 'Negotiation preparation started for the selected quote.',
+      });
+    }
     return this.getCaseDetail(propertyId, created.id);
   }
 

@@ -12,6 +12,7 @@ import {
   PriceFinalizationUpdateInput,
 } from './priceFinalization.types';
 import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
+import { advanceServiceQuoteDecision } from './serviceQuoteDecisionJourney.service';
 
 const prismaAny = prisma as any;
 
@@ -330,7 +331,49 @@ export class PriceFinalizationService {
     await ensurePropertyAccess(propertyId, userId);
     await assertScopedReferences(propertyId, input);
 
-    const normalizedTerms = normalizeTerms(input.terms);
+    const workspaceContext = input.quoteComparisonWorkspaceId
+      ? await prismaAny.quoteComparisonWorkspace.findFirst({
+          where: { id: input.quoteComparisonWorkspaceId, propertyId },
+          include: {
+            selectedQuote: {
+              include: {
+                terms: true,
+              },
+            },
+            negotiationCase: { select: { id: true } },
+          },
+        })
+      : null;
+    if (input.quoteComparisonWorkspaceId && !workspaceContext?.selectedQuote) {
+      throw new APIError(
+        'Select a comparison-ready quote before starting finalization.',
+        409,
+        'PRICE_FINALIZATION_QUOTE_SELECTION_REQUIRED',
+      );
+    }
+    const selectedQuote = workspaceContext?.selectedQuote ?? null;
+    const quoteTerm = (type: string) =>
+      selectedQuote?.terms?.find((term: any) => String(term.type) === type)?.value ?? null;
+    const normalizedTerms = normalizeTerms(
+      input.terms ?? selectedQuote?.terms?.map((term: any, index: number) => ({
+        termType:
+          term.type === 'PAYMENT'
+            ? 'PAYMENT'
+            : term.type === 'WARRANTY'
+              ? 'WARRANTY'
+              : term.type === 'SCHEDULE' || term.type === 'EXPIRATION'
+                ? 'TIMELINE'
+                : term.type === 'INCLUSION' || term.type === 'EXCLUSION'
+                  ? 'SCOPE'
+                  : term.type === 'ALLOWANCE'
+                    ? 'MATERIALS'
+                    : 'OTHER',
+        label: term.label || String(term.type).replaceAll('_', ' ').toLowerCase(),
+        value: term.value,
+        sortOrder: index,
+        isAccepted: true,
+      })),
+    );
     const scopeCandidates: Record<string, unknown>[] = [
       ...(input.quoteComparisonWorkspaceId
         ? [{ quoteComparisonWorkspaceId: input.quoteComparisonWorkspaceId }]
@@ -356,18 +399,18 @@ export class PriceFinalizationService {
       guidanceStepKey: input.guidanceStepKey ?? null,
       guidanceSignalIntentFamily: input.guidanceSignalIntentFamily ?? null,
 
-      sourceType: input.sourceType ?? 'MANUAL',
+      sourceType: input.sourceType ?? (selectedQuote ? 'QUOTE_COMPARISON' : 'MANUAL'),
       status: 'DRAFT',
 
-      serviceCategory: input.serviceCategory ?? null,
-      vendorName: input.vendorName ?? null,
+      serviceCategory: input.serviceCategory ?? selectedQuote?.serviceCategory ?? workspaceContext?.serviceCategory ?? null,
+      vendorName: input.vendorName ?? selectedQuote?.vendorName ?? null,
       acceptedPrice: input.acceptedPrice ?? null,
-      quotePrice: input.quotePrice ?? null,
-      currency: normalizeCurrency(input.currency),
+      quotePrice: input.quotePrice ?? (selectedQuote ? asNumber(selectedQuote.quoteAmount) : null),
+      currency: normalizeCurrency(input.currency ?? selectedQuote?.currency),
 
-      scopeSummary: input.scopeSummary ?? null,
-      paymentTerms: input.paymentTerms ?? null,
-      warrantyTerms: input.warrantyTerms ?? null,
+      scopeSummary: input.scopeSummary ?? selectedQuote?.scopeSummary ?? null,
+      paymentTerms: input.paymentTerms ?? quoteTerm('PAYMENT'),
+      warrantyTerms: input.warrantyTerms ?? quoteTerm('WARRANTY'),
       timelineTerms: input.timelineTerms ?? null,
       notes: input.notes ?? null,
 
@@ -376,7 +419,7 @@ export class PriceFinalizationService {
         ? { ...(input.metadataJson ?? {}), _actualSpendCents: input.actualSpendCents }
         : (input.metadataJson ?? null),
 
-      negotiationShieldCaseId: input.negotiationShieldCaseId ?? null,
+      negotiationShieldCaseId: input.negotiationShieldCaseId ?? workspaceContext?.negotiationCase?.id ?? null,
       serviceRadarCheckId: input.serviceRadarCheckId ?? null,
       quoteComparisonWorkspaceId: input.quoteComparisonWorkspaceId ?? null,
     };
@@ -409,6 +452,17 @@ export class PriceFinalizationService {
     });
 
     const full = await loadDetailOrThrow(propertyId, created.id);
+    if (input.quoteComparisonWorkspaceId) {
+      await advanceServiceQuoteDecision({
+        propertyId,
+        workspaceId: input.quoteComparisonWorkspaceId,
+        actorUserId: userId,
+        toStage: 'FINALIZATION',
+        relatedEntityType: 'PRICE_FINALIZATION',
+        relatedEntityId: full.id,
+        reason: 'Accepted price and terms are being finalized.',
+      });
+    }
     return mapDetail(full);
   }
 
@@ -519,6 +573,39 @@ export class PriceFinalizationService {
     });
 
     const full = await loadDetailOrThrow(propertyId, finalizationId);
+    if (full.quoteComparisonWorkspaceId) {
+      await prismaAny.$transaction(async (tx: any) => {
+        const workspace = await tx.quoteComparisonWorkspace.findUnique({
+          where: { id: full.quoteComparisonWorkspaceId },
+          select: { selectedQuoteId: true },
+        });
+        if (workspace?.selectedQuoteId) {
+          await tx.quoteComparisonQuote.updateMany({
+            where: { workspaceId: full.quoteComparisonWorkspaceId },
+            data: { decision: 'REJECTED', isSelected: false },
+          });
+          await tx.quoteComparisonQuote.update({
+            where: { id: workspace.selectedQuoteId },
+            data: { decision: 'ACCEPTED', isSelected: true },
+          });
+        }
+      });
+      await advanceServiceQuoteDecision({
+        propertyId,
+        workspaceId: full.quoteComparisonWorkspaceId,
+        actorUserId: userId,
+        toStage: 'FINALIZATION',
+        outcome: 'ACCEPTED',
+        relatedEntityType: 'PRICE_FINALIZATION',
+        relatedEntityId: finalizationId,
+        reason: 'The homeowner recorded the selected quote and accepted terms.',
+        metadataJson: {
+          acceptedPrice: nextAcceptedPrice,
+          currency: full.currency,
+          vendorName: full.vendorName,
+        },
+      });
+    }
     return mapDetail(full);
   }
 
@@ -536,6 +623,7 @@ export class PriceFinalizationService {
         id: true,
         status: true,
         bookingId: true,
+        quoteComparisonWorkspaceId: true,
       },
     });
 
@@ -559,14 +647,29 @@ export class PriceFinalizationService {
       );
     }
 
-    await prismaAny.priceFinalization.update({
-      where: {
-        id: params.finalizationId,
-      },
-      data: {
-        bookingId: params.bookingId,
-      },
-    });
+    await prismaAny.$transaction([
+      prismaAny.priceFinalization.update({
+        where: { id: params.finalizationId },
+        data: { bookingId: params.bookingId },
+      }),
+      ...(record.quoteComparisonWorkspaceId
+        ? [prismaAny.booking.update({
+            where: { id: params.bookingId },
+            data: { quoteDecisionWorkspaceId: record.quoteComparisonWorkspaceId },
+          })]
+        : []),
+    ]);
+    if (record.quoteComparisonWorkspaceId) {
+      await advanceServiceQuoteDecision({
+        propertyId: params.propertyId,
+        workspaceId: record.quoteComparisonWorkspaceId,
+        toStage: 'BOOKING',
+        outcome: 'BOOKED',
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: params.bookingId,
+        reason: 'The accepted service quote moved into booking.',
+      });
+    }
   }
 }
 

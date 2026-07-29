@@ -33,6 +33,7 @@ import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service
 import { bookingEligibilityService } from './bookingEligibility.service';
 import { logger } from '../lib/logger';
 import { assertProjectComplianceApplicable } from './projectCompliance/context';
+import { advanceServiceQuoteDecision } from './serviceQuoteDecisionJourney.service';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -804,6 +805,19 @@ export class BookingService {
       },
     });
 
+    const quoteDecisionWorkspaceId = (booking as any).quoteDecisionWorkspaceId as string | null;
+    if (quoteDecisionWorkspaceId) {
+      await advanceServiceQuoteDecision({
+        propertyId: booking.propertyId,
+        workspaceId: quoteDecisionWorkspaceId,
+        actorUserId: providerId,
+        toStage: 'SCHEDULED',
+        outcome: 'BOOKED',
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: bookingId,
+        reason: 'The provider confirmed the service booking.',
+      });
+    }
     return this.formatBookingResponse(updated);
   }
 
@@ -1011,6 +1025,20 @@ export class BookingService {
         );
     }
 
+    const quoteDecisionWorkspaceId = (booking as any).quoteDecisionWorkspaceId as string | null;
+    if (quoteDecisionWorkspaceId) {
+      await advanceServiceQuoteDecision({
+        propertyId: booking.propertyId,
+        workspaceId: quoteDecisionWorkspaceId,
+        actorUserId: providerId,
+        toStage: 'COMPLETED',
+        outcome: 'COMPLETED',
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: bookingId,
+        reason: 'The booked service was marked complete.',
+        metadataJson: { finalPrice: input.finalPrice },
+      });
+    }
     return this.formatBookingResponse(updated);
   }
 
@@ -1098,6 +1126,20 @@ export class BookingService {
       entityType: 'BOOKING',
       entityId: updated.id,
     });
+
+    const quoteDecisionWorkspaceId = (booking as any).quoteDecisionWorkspaceId as string | null;
+    if (quoteDecisionWorkspaceId) {
+      await advanceServiceQuoteDecision({
+        propertyId: booking.propertyId,
+        workspaceId: quoteDecisionWorkspaceId,
+        actorUserId: userId,
+        toStage: 'CLOSED',
+        outcome: 'CANCELLED',
+        relatedEntityType: 'BOOKING',
+        relatedEntityId: bookingId,
+        reason: input.reason,
+      });
+    }
     
     return this.formatBookingResponse(updated);
   }

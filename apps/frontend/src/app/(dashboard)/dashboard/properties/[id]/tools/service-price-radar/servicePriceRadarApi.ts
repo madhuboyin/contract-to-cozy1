@@ -244,9 +244,70 @@ export async function getProjectComplianceContext(
 export type QuoteComparisonWorkspaceSummary = {
   id: string;
   status: 'DRAFT' | 'SHORTLISTED' | 'DECIDED' | 'ARCHIVED';
+  journeyStage: ServiceQuoteDecisionStage;
+  outcome: ServiceQuoteDecisionOutcome;
   serviceCategory: ServiceRadarCategory | null;
   inventoryItemId: string | null;
+  selectedQuoteId?: string | null;
+  selectedQuote?: QuoteProposalSummary | null;
+  negotiationCase?: { id: string; status: string; title: string; latestAnalysisAt: string | null } | null;
+  priceFinalization?: {
+    id: string;
+    status: 'DRAFT' | 'FINALIZED' | 'ARCHIVED';
+    vendorName: string | null;
+    acceptedPrice: number | null;
+    finalizedAt: string | null;
+    bookingId: string | null;
+  } | null;
+  booking?: {
+    id: string;
+    bookingNumber: string;
+    status: string;
+    scheduledDate: string | null;
+    completedAt: string | null;
+  } | null;
+  transitions?: ServiceQuoteDecisionTransition[];
+  contextLinks?: ServiceQuoteDecisionContextLink[];
   quotes?: QuoteProposalSummary[];
+};
+
+export type ServiceQuoteDecisionStage =
+  | 'QUOTE_INTAKE'
+  | 'PRICE_REVIEW'
+  | 'SCOPE_REVIEW'
+  | 'COMPARISON'
+  | 'NEGOTIATION'
+  | 'FINALIZATION'
+  | 'BOOKING'
+  | 'SCHEDULED'
+  | 'COMPLETED'
+  | 'CLOSED';
+
+export type ServiceQuoteDecisionOutcome =
+  | 'OPEN'
+  | 'ACCEPTED'
+  | 'DECLINED'
+  | 'DEFERRED'
+  | 'BOOKED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type ServiceQuoteDecisionTransition = {
+  id: string;
+  fromStage: ServiceQuoteDecisionStage;
+  toStage: ServiceQuoteDecisionStage;
+  outcome: ServiceQuoteDecisionOutcome;
+  reason: string | null;
+  relatedEntityType: string | null;
+  relatedEntityId: string | null;
+  createdAt: string;
+};
+
+export type ServiceQuoteDecisionContextLink = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  label: string | null;
 };
 
 export type QuoteProposalReadinessStage =
@@ -375,4 +436,32 @@ export async function getQuoteComparability(
     `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/comparability`
   );
   return res.data.comparability;
+}
+
+export async function selectQuoteForDecision(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string
+): Promise<QuoteComparisonWorkspaceSummary> {
+  const res = await api.post<{ workspace: QuoteComparisonWorkspaceSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/selection`,
+    { quoteId }
+  );
+  return res.data.workspace;
+}
+
+export async function transitionServiceQuoteDecision(
+  propertyId: string,
+  workspaceId: string,
+  input: {
+    toStage: ServiceQuoteDecisionStage;
+    outcome?: ServiceQuoteDecisionOutcome;
+    reason?: string | null;
+  }
+): Promise<QuoteComparisonWorkspaceSummary> {
+  const res = await api.post<{ workspace: QuoteComparisonWorkspaceSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/transitions`,
+    input
+  );
+  return res.data.workspace;
 }

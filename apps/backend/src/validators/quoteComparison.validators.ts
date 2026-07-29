@@ -59,13 +59,65 @@ export const createQuoteProposalSchema = z.object({
   providerInsuranceVerified: z.boolean().optional().nullable(),
   lineItems: z.array(quoteLineItemSchema).max(200).optional(),
   terms: z.array(quoteTermSchema).max(100).optional(),
-});
+}).refine(
+  (value) => value.sourceType !== 'SYSTEM_LINKED' || Boolean(value.sourceReferenceId),
+  { message: 'sourceReferenceId is required for a system-linked quote.', path: ['sourceReferenceId'] },
+);
 
-export const updateQuoteProposalSchema = createQuoteProposalSchema.partial().refine(
+export const updateQuoteProposalSchema = z.object({
+  vendorName: z.string().trim().min(1).max(300),
+  quoteAmount: z.number().nonnegative().finite(),
+  currency: z.string().trim().length(3),
+  quoteDate: z.string().datetime().nullable(),
+  expirationDate: z.string().datetime().nullable(),
+  serviceLabelRaw: z.string().trim().max(300).nullable(),
+  serviceCategory: z.nativeEnum(ServiceCategory).nullable(),
+  serviceLocation: z.string().trim().max(300).nullable(),
+  scopeKind: z.enum(['REPAIR', 'REPLACEMENT', 'INSTALLATION', 'MAINTENANCE', 'INSPECTION', 'OTHER', 'UNKNOWN']).nullable(),
+  scopeSummary: z.string().trim().max(4000).nullable(),
+  notes: z.string().trim().max(4000).nullable(),
+  sourceType: z.enum(['MANUAL', 'PASTED_TEXT', 'UPLOADED_QUOTE', 'SYSTEM_LINKED']),
+  sourceReferenceId: z.string().trim().max(300).nullable(),
+  providerLicenseNumber: z.string().trim().max(200).nullable(),
+  providerLicenseVerified: z.boolean().nullable(),
+  providerInsuranceVerified: z.boolean().nullable(),
+  lineItems: z.array(quoteLineItemSchema).max(200),
+  terms: z.array(quoteTermSchema).max(100),
+}).partial().refine(
   (value) => Object.keys(value).length > 0,
   { message: 'At least one proposal field must be provided.' },
 );
 
 export const createQuoteFromDocumentSchema = z.object({
   documentId: z.string().uuid(),
+});
+
+export const selectQuoteSchema = z.object({
+  quoteId: z.string().uuid(),
+});
+
+export const transitionQuoteDecisionSchema = z.object({
+  toStage: z.literal('CLOSED'),
+  outcome: z.enum(['DECLINED', 'DEFERRED']),
+  reason: nullableText(1000),
+  relatedEntityType: z.enum([
+    'INVENTORY_ITEM', 'DOCUMENT', 'INCIDENT', 'SERVICE_RADAR_CHECK',
+    'GUIDANCE_JOURNEY', 'NEGOTIATION_CASE', 'PRICE_FINALIZATION',
+    'BOOKING', 'PROJECT', 'OTHER',
+  ]).optional().nullable(),
+  relatedEntityId: z.string().max(300).optional().nullable(),
+}).refine(
+  (value) => Boolean(value.relatedEntityType) === Boolean(value.relatedEntityId),
+  { message: 'relatedEntityType and relatedEntityId must be provided together.' },
+);
+
+export const quoteDecisionContextLinkSchema = z.object({
+  entityType: z.enum([
+    'INVENTORY_ITEM', 'DOCUMENT', 'INCIDENT', 'SERVICE_RADAR_CHECK',
+    'GUIDANCE_JOURNEY', 'NEGOTIATION_CASE', 'PRICE_FINALIZATION',
+    'BOOKING', 'PROJECT', 'OTHER',
+  ]),
+  entityId: z.string().min(1).max(300),
+  label: nullableText(300),
+  metadataJson: z.record(z.string(), z.unknown()).optional().nullable(),
 });

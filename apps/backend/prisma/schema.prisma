@@ -1566,6 +1566,42 @@ enum QuoteComparisonWorkspaceStatus {
   ARCHIVED
 }
 
+enum ServiceQuoteDecisionStage {
+  QUOTE_INTAKE
+  PRICE_REVIEW
+  SCOPE_REVIEW
+  COMPARISON
+  NEGOTIATION
+  FINALIZATION
+  BOOKING
+  SCHEDULED
+  COMPLETED
+  CLOSED
+}
+
+enum ServiceQuoteDecisionOutcome {
+  OPEN
+  ACCEPTED
+  DECLINED
+  DEFERRED
+  BOOKED
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceQuoteDecisionEntityType {
+  INVENTORY_ITEM
+  DOCUMENT
+  INCIDENT
+  SERVICE_RADAR_CHECK
+  GUIDANCE_JOURNEY
+  NEGOTIATION_CASE
+  PRICE_FINALIZATION
+  BOOKING
+  PROJECT
+  OTHER
+}
+
 enum QuoteComparisonQuoteDecision {
   UNDECIDED
   SHORTLISTED
@@ -3408,6 +3444,8 @@ model Booking {
   inventoryItemId          String?
   inventoryItem            InventoryItem?            @relation(fields: [inventoryItemId], references: [id])
   priceFinalization        PriceFinalization?
+  quoteDecisionWorkspaceId String?                    @unique
+  quoteDecisionWorkspace   QuoteComparisonWorkspace?  @relation(fields: [quoteDecisionWorkspaceId], references: [id], onDelete: SetNull)
   projectRecords           ProjectRecord[]           @relation("ProjectFromBooking")
   neighbourhoodEndorsement NeighbourhoodEndorsement?
 
@@ -3448,6 +3486,7 @@ model Booking {
   @@index([sourceIncidentId])
   @@index([propertyId, executionScopeType, executionScopeKey])
   @@index([propertyId, activeExecutionScopeKey])
+  @@index([quoteDecisionWorkspaceId])
   @@map("bookings")
 }
 
@@ -6973,12 +7012,14 @@ model NegotiationShieldCase {
 
   analysisVersion  String?
   latestAnalysisAt DateTime?
+  quoteDecisionWorkspaceId String?                   @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   createdBy User?    @relation("NegotiationShieldCaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  quoteDecisionWorkspace QuoteComparisonWorkspace? @relation(fields: [quoteDecisionWorkspaceId], references: [id], onDelete: SetNull)
 
   inputs             NegotiationShieldInput[]
   documents          NegotiationShieldDocument[]
@@ -6990,6 +7031,7 @@ model NegotiationShieldCase {
   @@index([propertyId, status])
   @@index([propertyId, scenarioType])
   @@index([createdByUserId])
+  @@index([quoteDecisionWorkspaceId])
   @@map("negotiation_shield_cases")
 }
 
@@ -8569,6 +8611,8 @@ model QuoteComparisonWorkspace {
   guidanceSignalIntentFamily String?
 
   status          QuoteComparisonWorkspaceStatus @default(DRAFT)
+  journeyStage    ServiceQuoteDecisionStage       @default(QUOTE_INTAKE)
+  outcome         ServiceQuoteDecisionOutcome     @default(OPEN)
   serviceCategory ServiceCategory?
   scopeSummary    String?
   notes           String?
@@ -8576,7 +8620,10 @@ model QuoteComparisonWorkspace {
 
   selectedVendorName  String?
   selectedQuoteAmount Decimal? @db.Decimal(12, 2)
+  selectedQuoteId     String?  @unique
   currency            String   @default("USD")
+  decisionRecordedAt  DateTime?
+  closedAt            DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -8585,13 +8632,20 @@ model QuoteComparisonWorkspace {
   createdBy     User?          @relation("QuoteComparisonWorkspaceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
-  quotes             QuoteComparisonQuote[]
-  priceFinalizations PriceFinalization[]
+  quotes             QuoteComparisonQuote[]       @relation("QuoteWorkspaceQuotes")
+  selectedQuote      QuoteComparisonQuote?         @relation("QuoteWorkspaceSelectedQuote", fields: [selectedQuoteId], references: [id], onDelete: SetNull)
+  negotiationCase    NegotiationShieldCase?
+  priceFinalization  PriceFinalization?
+  booking            Booking?
+  transitions        ServiceQuoteDecisionTransition[]
+  contextLinks       ServiceQuoteDecisionContextLink[]
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([propertyId, status])
   @@index([createdByUserId])
   @@index([inventoryItemId])
+  @@index([journeyStage, outcome])
+  @@index([selectedQuoteId])
   @@map("quote_comparison_workspaces")
 }
 
@@ -8636,7 +8690,8 @@ model QuoteComparisonQuote {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace        QuoteComparisonWorkspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace        QuoteComparisonWorkspace       @relation("QuoteWorkspaceQuotes", fields: [workspaceId], references: [id], onDelete: Cascade)
+  selectedByWorkspace QuoteComparisonWorkspace?   @relation("QuoteWorkspaceSelectedQuote")
   lineItems        QuoteComparisonLineItem[]
   terms            QuoteComparisonTerm[]
   extractions      QuoteComparisonExtraction[]
@@ -8647,6 +8702,45 @@ model QuoteComparisonQuote {
   @@index([workspaceId, readinessStage])
   @@index([comparabilityKey])
   @@map("quote_comparison_quotes")
+}
+
+model ServiceQuoteDecisionTransition {
+  id          String @id @default(uuid())
+  workspaceId String
+
+  fromStage ServiceQuoteDecisionStage
+  toStage   ServiceQuoteDecisionStage
+  outcome   ServiceQuoteDecisionOutcome
+  reason    String?
+
+  relatedEntityType ServiceQuoteDecisionEntityType?
+  relatedEntityId   String?
+  metadataJson      Json?
+  actorUserId       String?
+  createdAt         DateTime @default(now())
+
+  workspace QuoteComparisonWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([relatedEntityType, relatedEntityId])
+  @@map("service_quote_decision_transitions")
+}
+
+model ServiceQuoteDecisionContextLink {
+  id          String @id @default(uuid())
+  workspaceId String
+
+  entityType ServiceQuoteDecisionEntityType
+  entityId   String
+  label      String?
+  metadataJson Json?
+  createdAt  DateTime @default(now())
+
+  workspace QuoteComparisonWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, entityType, entityId])
+  @@index([entityType, entityId])
+  @@map("service_quote_decision_context_links")
 }
 
 model QuoteComparisonLineItem {
@@ -8779,7 +8873,7 @@ model PriceFinalization {
 
   negotiationShieldCaseId    String?
   serviceRadarCheckId        String?
-  quoteComparisonWorkspaceId String?
+  quoteComparisonWorkspaceId String? @unique
 
   finalizedAt DateTime?
   bookingId   String?   @unique

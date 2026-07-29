@@ -22,12 +22,17 @@ import {
   getProjectComplianceContext,
   getOrCreateQuoteComparisonWorkspace,
   type QuoteComparabilityResult,
+  type QuoteComparisonWorkspaceSummary,
   type QuoteProposalReadinessStage,
   type QuoteProposalSummary,
   type ServicePriceRadarCheckSummary,
   type ServiceRadarVerdict,
+  selectQuoteForDecision,
+  transitionServiceQuoteDecision,
 } from '../service-price-radar/servicePriceRadarApi';
 import { api } from '@/lib/api/client';
+import { createNegotiationShieldCase } from '../negotiation-shield/negotiationShieldApi';
+import { createPriceFinalizationDraft } from '@/lib/api/priceFinalizationApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
@@ -212,6 +217,8 @@ export default function QuoteComparisonWorkspaceClient() {
   const [uploadingQuote, setUploadingQuote] = React.useState(false);
   const [propertyContext, setPropertyContext] = React.useState<PropertyContextEnvelope | null>(null);
   const [comparability, setComparability] = React.useState<QuoteComparabilityResult | null>(null);
+  const [decisionWorkspace, setDecisionWorkspace] = React.useState<QuoteComparisonWorkspaceSummary | null>(null);
+  const [journeyActionPending, setJourneyActionPending] = React.useState(false);
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(
     searchParams.get('quoteComparisonWorkspaceId')
   );
@@ -263,6 +270,7 @@ export default function QuoteComparisonWorkspaceClient() {
         getQuoteComparability(propertyId, workspaceResult.workspace.id),
       ]);
       setComparability(comparisonResult);
+      setDecisionWorkspace(savedWorkspace);
 
       const mappedChecks = checks.map(mapRadarCheckToQuote);
       const savedQuotes = (savedWorkspace.quotes ?? []).map(mapProposalToQuote);
@@ -282,6 +290,7 @@ export default function QuoteComparisonWorkspaceClient() {
       setQuotes(prefilledQuote ? [prefilledQuote] : []);
       setPropertyContext(null);
       setComparability(null);
+      setDecisionWorkspace(null);
     } finally {
       setLoading(false);
     }
@@ -433,6 +442,113 @@ export default function QuoteComparisonWorkspaceClient() {
     }
   };
 
+  const addCandidateToDecision = async (quote: QuoteCandidate) => {
+    if (!workspaceId) return;
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await createQuoteProposal(propertyId, workspaceId, {
+        vendorName: quote.vendorName,
+        quoteAmount: quote.quoteAmount,
+        serviceCategory: quote.serviceCategory as ServicePriceRadarCheckSummary['serviceCategory'] | null,
+        quoteDate: quote.createdAt,
+        sourceType: quote.serviceRadarCheckId ? 'SYSTEM_LINKED' : 'MANUAL',
+        sourceReferenceId: quote.serviceRadarCheckId,
+      });
+      await loadQuotes();
+    } catch (candidateError: any) {
+      setError(candidateError?.message || 'Unable to add this quote to the decision.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
+  const chooseProposal = async (quoteId: string) => {
+    if (!workspaceId) return;
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      const workspace = await selectQuoteForDecision(propertyId, workspaceId, quoteId);
+      setDecisionWorkspace(workspace);
+      await loadQuotes();
+    } catch (selectionError: any) {
+      setError(selectionError?.message || 'Unable to select this proposal.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
+  const beginNegotiation = async () => {
+    const selected = decisionWorkspace?.selectedQuote;
+    if (!workspaceId || !selected) return;
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await createNegotiationShieldCase(propertyId, {
+        scenarioType: 'CONTRACTOR_QUOTE_REVIEW',
+        title: `Review ${selected.vendorName} proposal`,
+        description: selected.serviceLabelRaw || 'Negotiation preparation for the selected service quote.',
+        sourceType: 'MANUAL',
+        quoteDecisionWorkspaceId: workspaceId,
+        initialInput: {
+          inputType: 'CONTRACTOR_QUOTE',
+          structuredData: {
+            vendorName: selected.vendorName,
+            quoteAmount: Number(selected.quoteAmount),
+            currency: selected.currency,
+            serviceCategory: selected.serviceCategory,
+            quoteComparisonWorkspaceId: workspaceId,
+          },
+        },
+      });
+      await loadQuotes();
+    } catch (negotiationError: any) {
+      setError(negotiationError?.message || 'Unable to start negotiation preparation.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
+  const prepareFinalTerms = async () => {
+    if (!workspaceId || !decisionWorkspace?.selectedQuote) return;
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await createPriceFinalizationDraft(propertyId, {
+        quoteComparisonWorkspaceId: workspaceId,
+        sourceType: 'QUOTE_COMPARISON',
+        guidanceJourneyId,
+        guidanceStepKey,
+        guidanceSignalIntentFamily,
+      });
+      await loadQuotes();
+    } catch (finalizationError: any) {
+      setError(finalizationError?.message || 'Unable to prepare final terms.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
+  const closeDecision = async (outcome: 'DECLINED' | 'DEFERRED') => {
+    if (!workspaceId) return;
+    setJourneyActionPending(true);
+    setError(null);
+    try {
+      await transitionServiceQuoteDecision(propertyId, workspaceId, {
+        toStage: 'CLOSED',
+        outcome,
+        reason: outcome === 'DECLINED'
+          ? 'The homeowner declined the current proposals.'
+          : 'The homeowner deferred this service quote decision.',
+      });
+      await loadQuotes();
+    } catch (closeError: any) {
+      setError(closeError?.message || 'Unable to close this decision.');
+    } finally {
+      setJourneyActionPending(false);
+    }
+  };
+
   const backHref = isGuidanceContext
     ? buildGuidanceOverviewHref({
         propertyId,
@@ -452,14 +568,55 @@ export default function QuoteComparisonWorkspaceClient() {
     <CompareTemplate
       backHref={backHref}
       backLabel={isGuidanceContext ? 'Back to guidance' : 'Back to property'}
-      title="Quote Comparison Workspace"
-      subtitle="Normalize proposal scope and terms before treating prices as comparable."
+      title="Service Quote Decision"
+      subtitle="Review, compare, negotiate, record final terms, and track booking in one decision."
       rail={<HomeToolsRail propertyId={propertyId} context="quote-comparison" currentToolId="quote-comparison" />}
       trust={trust}
       priorityAction={undefined}
       summary={
         <div className="space-y-3">
           <PropertyContextStatusNotice context={propertyContext} title="Quote comparison context" />
+          {decisionWorkspace ? (
+            <ScenarioInputCard
+              title="Decision journey"
+              subtitle="One workspace identity is preserved across every stage."
+              badge={
+                <StatusChip tone={decisionWorkspace.outcome === 'OPEN' ? 'info' : 'good'}>
+                  {formatEnumLabel(decisionWorkspace.outcome)}
+                </StatusChip>
+              }
+            >
+              <div className="flex flex-wrap gap-2">
+                {[
+                  'QUOTE_INTAKE',
+                  'PRICE_REVIEW',
+                  'SCOPE_REVIEW',
+                  'COMPARISON',
+                  'NEGOTIATION',
+                  'FINALIZATION',
+                  'BOOKING',
+                  'COMPLETED',
+                  'CLOSED',
+                ].map((stage) => (
+                  <span
+                    key={stage}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                      decisionWorkspace.journeyStage === stage
+                        ? 'border-black bg-black text-white'
+                        : 'border-black/10 bg-white text-slate-500'
+                    }`}
+                  >
+                    {formatEnumLabel(stage)}
+                  </span>
+                ))}
+              </div>
+              {decisionWorkspace.transitions?.length ? (
+                <p className="mb-0 text-xs text-slate-500">
+                  Latest: {decisionWorkspace.transitions.at(-1)?.reason || formatEnumLabel(decisionWorkspace.journeyStage)}
+                </p>
+              ) : null}
+            </ScenarioInputCard>
+          ) : null}
           {selectedQuotes[0] ? (
             <CapabilityDiscoveryAnchor
               anchor="QUOTE_ANALYSIS_RESULT"
@@ -548,6 +705,30 @@ export default function QuoteComparisonWorkspaceClient() {
                                 Review and confirm
                               </Button>
                             ) : null}
+                            {!quote.persisted ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="min-h-[36px] px-3 text-xs"
+                                disabled={journeyActionPending}
+                                onClick={() => addCandidateToDecision(quote)}
+                              >
+                                Add to decision
+                              </Button>
+                            ) : null}
+                            {quote.persisted &&
+                            quote.readinessStage === 'COMPARISON_READY' &&
+                            comparability?.status === 'COMPARABLE' ? (
+                              <Button
+                                type="button"
+                                variant={decisionWorkspace?.selectedQuoteId === quote.id ? 'default' : 'outline'}
+                                className="min-h-[36px] px-3 text-xs"
+                                disabled={journeyActionPending}
+                                onClick={() => chooseProposal(quote.id)}
+                              >
+                                {decisionWorkspace?.selectedQuoteId === quote.id ? 'Chosen proposal' : 'Choose proposal'}
+                              </Button>
+                            ) : null}
                           </div>
                         }
                       />
@@ -567,6 +748,55 @@ export default function QuoteComparisonWorkspaceClient() {
               </div>
             )}
           </ScenarioInputCard>
+
+          {decisionWorkspace?.selectedQuote ? (
+            <ScenarioInputCard
+              title="Continue this decision"
+              subtitle={`${decisionWorkspace.selectedQuote.vendorName} is selected. Each next stage remains linked to workspace ${decisionWorkspace.id.slice(0, 8)}.`}
+              badge={<StatusChip tone="good">{formatEnumLabel(decisionWorkspace.journeyStage)}</StatusChip>}
+            >
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={journeyActionPending || Boolean(decisionWorkspace.negotiationCase)}
+                  onClick={beginNegotiation}
+                >
+                  {decisionWorkspace.negotiationCase ? 'Negotiation linked' : 'Prepare negotiation'}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={journeyActionPending || Boolean(decisionWorkspace.priceFinalization)}
+                  onClick={prepareFinalTerms}
+                >
+                  {decisionWorkspace.priceFinalization ? 'Final terms linked' : 'Prepare final terms'}
+                </Button>
+              </div>
+              {decisionWorkspace.negotiationCase ? (
+                <p className="mb-0 text-xs text-slate-600">
+                  Negotiation: {decisionWorkspace.negotiationCase.title} · {formatEnumLabel(decisionWorkspace.negotiationCase.status)}
+                </p>
+              ) : null}
+              {decisionWorkspace.priceFinalization ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                  <span>
+                    Final terms: {formatEnumLabel(decisionWorkspace.priceFinalization.status)}
+                  </span>
+                  <Link
+                    href={`/dashboard/properties/${propertyId}/tools/price-finalization?quoteComparisonWorkspaceId=${workspaceId}&priceFinalizationId=${decisionWorkspace.priceFinalization.id}`}
+                    className="font-medium underline"
+                  >
+                    Review linked terms
+                  </Link>
+                </div>
+              ) : null}
+              {decisionWorkspace.booking ? (
+                <p className="mb-0 text-xs text-slate-600">
+                  Booking {decisionWorkspace.booking.bookingNumber}: {formatEnumLabel(decisionWorkspace.booking.status)}
+                </p>
+              ) : null}
+            </ScenarioInputCard>
+          ) : null}
 
           <ScenarioInputCard
             title="Upload a Quote Document"
@@ -720,6 +950,16 @@ export default function QuoteComparisonWorkspaceClient() {
                 >
                   Check another quote
                 </Link>
+                {decisionWorkspace?.outcome === 'OPEN' ? (
+                  <>
+                    <Button type="button" variant="outline" disabled={journeyActionPending} onClick={() => closeDecision('DEFERRED')}>
+                      Defer decision
+                    </Button>
+                    <Button type="button" variant="outline" disabled={journeyActionPending} onClick={() => closeDecision('DECLINED')}>
+                      Decline proposals
+                    </Button>
+                  </>
+                ) : null}
               </div>
             }
           />

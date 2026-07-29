@@ -7,6 +7,9 @@ import {
   getOrCreateQuoteComparisonWorkspace,
   getQuoteComparisonWorkspace,
   getWorkspaceComparability,
+  addQuoteDecisionContextLink,
+  selectQuoteForDecision,
+  transitionQuoteDecision,
   updateQuoteProposal,
 } from '../services/quoteComparison.service';
 import {
@@ -131,6 +134,50 @@ export async function getComparability(req: CustomRequest, res: Response, next: 
   try {
     const comparability = await getWorkspaceComparability(req.params.propertyId, req.params.workspaceId);
     res.json({ success: true, data: { comparability } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function selectQuote(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    const workspace = await selectQuoteForDecision(
+      req.params.propertyId,
+      req.params.workspaceId,
+      req.body.quoteId,
+      req.user!.userId,
+    );
+    res.json({ success: true, data: { workspace } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function transitionDecision(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    const workspace = await transitionQuoteDecision(
+      req.params.propertyId,
+      req.params.workspaceId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data: { workspace } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function addContextLink(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    const contextLink = await addQuoteDecisionContextLink(
+      req.params.propertyId,
+      req.params.workspaceId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data: { contextLink } });
   } catch (error) {
     next(error);
   }

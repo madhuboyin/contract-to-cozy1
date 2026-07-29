@@ -88,6 +88,7 @@ export type NegotiationShieldCaseSummary = {
   sourceType: NegotiationShieldSourceType;
   analysisVersion: string | null;
   latestAnalysisAt: string | null;
+  quoteDecisionWorkspaceId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -155,6 +156,12 @@ export type CreateNegotiationShieldCasePayload = {
   title: string;
   description?: string | null;
   sourceType: NegotiationShieldSourceType;
+  quoteDecisionWorkspaceId?: string | null;
+  initialInput?: {
+    inputType: NegotiationShieldInputType;
+    rawText?: string | null;
+    structuredData?: Record<string, unknown>;
+  };
 };
 
 export type SaveNegotiationShieldInputPayload = {

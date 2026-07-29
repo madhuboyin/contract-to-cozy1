@@ -162,6 +162,7 @@ export type NegotiationShieldCaseSummaryDTO = {
   sourceType: NegotiationShieldSourceType;
   analysisVersion: string | null;
   latestAnalysisAt: string | null;
+  quoteDecisionWorkspaceId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -230,6 +231,7 @@ export type CreateNegotiationShieldCaseInput = {
   title: string;
   description?: string | null;
   sourceType: NegotiationShieldSourceType;
+  quoteDecisionWorkspaceId?: string | null;
   initialInput?: {
     inputType: NegotiationShieldInputType;
     rawText?: string | null;

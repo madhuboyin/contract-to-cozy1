@@ -41,6 +41,7 @@ export const createNegotiationShieldCaseBodySchema = z.object({
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(4000).optional().nullable(),
   sourceType: z.enum(NEGOTIATION_SHIELD_SOURCE_TYPES),
+  quoteDecisionWorkspaceId: uuidSchema.optional().nullable(),
   initialInput: z.object({
     inputType: z.enum(NEGOTIATION_SHIELD_INPUT_TYPES),
     rawText: z.string().trim().max(20000).optional().nullable(),

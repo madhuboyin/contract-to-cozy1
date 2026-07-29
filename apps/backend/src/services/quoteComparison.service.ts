@@ -9,6 +9,13 @@ import {
   QuoteTermInput,
 } from './quoteComparability.service';
 import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
+import {
+  advanceServiceQuoteDecision,
+  linkServiceQuoteDecisionContext,
+  ServiceQuoteDecisionEntityType,
+  ServiceQuoteDecisionOutcome,
+  ServiceQuoteDecisionStage,
+} from './serviceQuoteDecisionJourney.service';
 
 const OPEN_WORKSPACE_STATUSES: QuoteComparisonWorkspaceStatus[] = ['DRAFT', 'SHORTLISTED'];
 
@@ -75,6 +82,16 @@ async function getWorkspaceOrThrow(propertyId: string, workspaceId: string) {
     throw new APIError('Quote comparison workspace not found for this property.', 404, 'QUOTE_WORKSPACE_NOT_FOUND');
   }
   return workspace;
+}
+
+function assertOpenWorkspace(workspace: any) {
+  if (workspace.outcome !== 'OPEN') {
+    throw new APIError(
+      'This service quote decision is closed. Start a new decision to evaluate revised proposals.',
+      409,
+      'SERVICE_QUOTE_DECISION_CLOSED',
+    );
+  }
 }
 
 function toFacts(input: QuoteProposalInput, homeownerConfirmedAt?: Date | null): QuoteProposalFacts {
@@ -196,6 +213,25 @@ export async function getOrCreateQuoteComparisonWorkspace(
         guidanceSignalIntentFamily: input.guidanceSignalIntentFamily ?? null,
         scopeSummary: input.scopeSummary?.trim() || null,
         status: 'DRAFT',
+        transitions: {
+          create: {
+            fromStage: 'QUOTE_INTAKE',
+            toStage: 'QUOTE_INTAKE',
+            outcome: 'OPEN',
+            reason: 'Service quote decision workspace created.',
+            actorUserId: userId,
+          },
+        },
+        contextLinks: {
+          create: [
+            ...(input.inventoryItemId
+              ? [{ entityType: 'INVENTORY_ITEM' as const, entityId: input.inventoryItemId }]
+              : []),
+            ...(input.guidanceJourneyId
+              ? [{ entityType: 'GUIDANCE_JOURNEY' as const, entityId: input.guidanceJourneyId }]
+              : []),
+          ],
+        },
       },
     });
     return { workspace, reused: false };
@@ -206,7 +242,17 @@ export async function getQuoteComparisonWorkspace(propertyId: string, workspaceI
   await getWorkspaceOrThrow(propertyId, workspaceId);
   return database.quoteComparisonWorkspace.findUnique({
     where: { id: workspaceId },
-    include: { quotes: { orderBy: { createdAt: 'desc' }, include: quoteInclude } },
+    include: {
+      quotes: { orderBy: { createdAt: 'desc' }, include: quoteInclude },
+      selectedQuote: { include: quoteInclude },
+      negotiationCase: { select: { id: true, status: true, title: true, latestAnalysisAt: true } },
+      priceFinalization: {
+        select: { id: true, status: true, vendorName: true, acceptedPrice: true, finalizedAt: true, bookingId: true },
+      },
+      booking: { select: { id: true, bookingNumber: true, status: true, scheduledDate: true, completedAt: true } },
+      transitions: { orderBy: { createdAt: 'asc' } },
+      contextLinks: { orderBy: { createdAt: 'asc' } },
+    },
   });
 }
 
@@ -215,11 +261,41 @@ export async function createQuoteProposal(
   workspaceId: string,
   input: QuoteProposalInput,
 ) {
-  await getWorkspaceOrThrow(propertyId, workspaceId);
-  return database.quoteComparisonQuote.create({
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertOpenWorkspace(workspace);
+  if (input.sourceType === 'SYSTEM_LINKED') {
+    if (!input.sourceReferenceId) {
+      throw new APIError(
+        'A system-linked quote requires a source reference.',
+        400,
+        'QUOTE_SOURCE_REFERENCE_REQUIRED',
+      );
+    }
+    const sourceCheck = await database.serviceRadarCheck.findFirst({
+      where: { id: input.sourceReferenceId, propertyId },
+      select: { id: true },
+    });
+    if (!sourceCheck) {
+      throw new APIError(
+        'The linked Service Price Radar check does not belong to this property.',
+        400,
+        'QUOTE_SOURCE_SCOPE_MISMATCH',
+      );
+    }
+  }
+  const quote = await database.quoteComparisonQuote.create({
     data: { workspaceId, ...proposalCreateData(input) },
     include: quoteInclude,
   });
+  await advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    toStage: input.sourceType === 'SYSTEM_LINKED' ? 'PRICE_REVIEW' : 'SCOPE_REVIEW',
+    relatedEntityType: input.sourceType === 'SYSTEM_LINKED' ? 'SERVICE_RADAR_CHECK' : null,
+    relatedEntityId: input.sourceType === 'SYSTEM_LINKED' ? input.sourceReferenceId : null,
+    reason: 'A quote proposal was added to the decision.',
+  });
+  return quote;
 }
 
 export async function updateQuoteProposal(
@@ -228,7 +304,8 @@ export async function updateQuoteProposal(
   quoteId: string,
   input: UpdateQuoteProposalInput,
 ) {
-  await getWorkspaceOrThrow(propertyId, workspaceId);
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertOpenWorkspace(workspace);
   const current = await database.quoteComparisonQuote.findFirst({
     where: { id: quoteId, workspaceId },
     include: { lineItems: { orderBy: { sortOrder: 'asc' } }, terms: true },
@@ -283,10 +360,25 @@ export async function updateQuoteProposal(
       sourcePage: term.sourcePage,
     })),
   };
+  if (merged.sourceType === 'SYSTEM_LINKED') {
+    const sourceCheck = merged.sourceReferenceId
+      ? await database.serviceRadarCheck.findFirst({
+          where: { id: merged.sourceReferenceId, propertyId },
+          select: { id: true },
+        })
+      : null;
+    if (!sourceCheck) {
+      throw new APIError(
+        'The linked Service Price Radar check does not belong to this property.',
+        400,
+        'QUOTE_SOURCE_SCOPE_MISMATCH',
+      );
+    }
+  }
   const fullData = proposalCreateData(merged);
   const { lineItems, terms, ...scalarData } = fullData;
 
-  return database.$transaction(async (tx: any) => {
+  const updated = await database.$transaction(async (tx: any) => {
     if (input.lineItems) await tx.quoteComparisonLineItem.deleteMany({ where: { quoteId } });
     if (input.terms) await tx.quoteComparisonTerm.deleteMany({ where: { quoteId } });
     await tx.quoteComparisonFactConfirmation.updateMany({
@@ -305,6 +397,28 @@ export async function updateQuoteProposal(
       include: quoteInclude,
     });
   });
+  await database.$transaction([
+    database.quoteComparisonQuote.updateMany({
+      where: { workspaceId },
+      data: { decision: 'UNDECIDED', isSelected: false },
+    }),
+    database.quoteComparisonWorkspace.update({
+      where: { id: workspaceId },
+      data: {
+        selectedQuoteId: null,
+        selectedVendorName: null,
+        selectedQuoteAmount: null,
+        status: 'DRAFT',
+      },
+    }),
+  ]);
+  await advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    toStage: 'SCOPE_REVIEW',
+    reason: 'Proposal facts changed and comparison eligibility must be reviewed again.',
+  });
+  return updated;
 }
 
 function primitive(value: unknown): string | number | boolean | null {
@@ -399,7 +513,8 @@ export async function createQuoteProposalFromDocument(
   userId: string,
   documentId: string,
 ) {
-  await getWorkspaceOrThrow(propertyId, workspaceId);
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertOpenWorkspace(workspace);
   const document = await database.document.findFirst({
     where: { id: documentId, propertyId },
     select: { id: true, name: true, metadata: true, parserVersion: true },
@@ -417,7 +532,7 @@ export async function createQuoteProposalFromDocument(
     scopeSummary: proposal.scopeSummary,
   };
 
-  return database.quoteComparisonQuote.create({
+  const quote = await database.quoteComparisonQuote.create({
     data: {
       workspaceId,
       ...proposalCreateData(proposal),
@@ -442,6 +557,23 @@ export async function createQuoteProposalFromDocument(
     },
     include: quoteInclude,
   });
+  await linkServiceQuoteDecisionContext({
+    propertyId,
+    workspaceId,
+    entityType: 'DOCUMENT',
+    entityId: documentId,
+    label: document.name,
+  });
+  await advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    actorUserId: userId,
+    toStage: 'SCOPE_REVIEW',
+    relatedEntityType: 'DOCUMENT',
+    relatedEntityId: documentId,
+    reason: 'A quote document was extracted for homeowner review.',
+  });
+  return quote;
 }
 
 function quoteToFacts(quote: any): QuoteProposalFacts {
@@ -473,7 +605,8 @@ export async function confirmQuoteProposal(
   quoteId: string,
   userId: string,
 ) {
-  await getWorkspaceOrThrow(propertyId, workspaceId);
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertOpenWorkspace(workspace);
   const quote = await database.quoteComparisonQuote.findFirst({
     where: { id: quoteId, workspaceId },
     include: quoteInclude,
@@ -483,7 +616,7 @@ export async function confirmQuoteProposal(
   const confirmedAt = new Date();
   const facts = quoteToFacts({ ...quote, homeownerConfirmedAt: confirmedAt });
   const readiness = evaluateQuoteReadiness(facts);
-  return database.$transaction(async (tx: any) => {
+  const confirmed = await database.$transaction(async (tx: any) => {
     await tx.quoteComparisonLineItem.updateMany({
       where: { quoteId, confirmationStatus: 'EXTRACTED_UNCONFIRMED' },
       data: { confirmationStatus: 'HOMEOWNER_CONFIRMED' },
@@ -514,6 +647,19 @@ export async function confirmQuoteProposal(
       include: quoteInclude,
     });
   });
+  const comparability = await getWorkspaceComparability(propertyId, workspaceId);
+  await advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    actorUserId: userId,
+    toStage: comparability.status === 'COMPARABLE' ? 'COMPARISON' : 'SCOPE_REVIEW',
+    reason:
+      comparability.status === 'COMPARABLE'
+        ? 'At least two confirmed proposals are scope comparable.'
+        : 'Quote facts were confirmed; more comparable scope may still be needed.',
+    metadataJson: { comparabilityStatus: comparability.status },
+  });
+  return confirmed;
 }
 
 export async function getWorkspaceComparability(propertyId: string, workspaceId: string) {
@@ -524,4 +670,107 @@ export async function getWorkspaceComparability(propertyId: string, workspaceId:
     orderBy: { createdAt: 'asc' },
   });
   return evaluateQuoteComparability(quotes.map(quoteToFacts));
+}
+
+export async function selectQuoteForDecision(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string,
+  userId: string,
+) {
+  const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
+  assertOpenWorkspace(workspace);
+  const quote = await database.quoteComparisonQuote.findFirst({
+    where: { id: quoteId, workspaceId, readinessStage: 'COMPARISON_READY' },
+    include: quoteInclude,
+  });
+  if (!quote) {
+    throw new APIError(
+      'Only a comparison-ready proposal can be selected.',
+      409,
+      'QUOTE_NOT_COMPARISON_READY',
+    );
+  }
+  const comparability = await getWorkspaceComparability(propertyId, workspaceId);
+  if (comparability.status !== 'COMPARABLE' || !comparability.eligibleQuoteIds.includes(quoteId)) {
+    throw new APIError(
+      'This proposal is not part of a comparable proposal set.',
+      409,
+      'QUOTE_NOT_COMPARABLE',
+    );
+  }
+
+  await database.$transaction([
+    database.quoteComparisonQuote.updateMany({
+      where: { workspaceId },
+      data: { isSelected: false, decision: 'UNDECIDED' },
+    }),
+    database.quoteComparisonQuote.update({
+      where: { id: quoteId },
+      data: { isSelected: true, decision: 'SHORTLISTED' },
+    }),
+    database.quoteComparisonWorkspace.update({
+      where: { id: workspace.id },
+      data: {
+        selectedQuoteId: quoteId,
+        selectedVendorName: quote.vendorName,
+        selectedQuoteAmount: quote.quoteAmount,
+        currency: quote.currency,
+        status: 'SHORTLISTED',
+      },
+    }),
+  ]);
+  await advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    actorUserId: userId,
+    toStage: 'COMPARISON',
+    reason: 'The homeowner selected a proposal for the next decision stage.',
+    metadataJson: { selectedQuoteId: quoteId },
+  });
+  return getQuoteComparisonWorkspace(propertyId, workspaceId);
+}
+
+export async function transitionQuoteDecision(
+  propertyId: string,
+  workspaceId: string,
+  userId: string,
+  input: {
+    toStage: ServiceQuoteDecisionStage;
+    outcome?: ServiceQuoteDecisionOutcome;
+    reason?: string | null;
+    relatedEntityType?: ServiceQuoteDecisionEntityType | null;
+    relatedEntityId?: string | null;
+  },
+) {
+  if (
+    input.toStage !== 'CLOSED' ||
+    !input.outcome ||
+    !['DECLINED', 'DEFERRED'].includes(input.outcome)
+  ) {
+    throw new APIError(
+      'Homeowner transitions may only close an open decision as declined or deferred. Linked records advance other stages.',
+      400,
+      'SERVICE_QUOTE_MANUAL_TRANSITION_NOT_ALLOWED',
+    );
+  }
+  return advanceServiceQuoteDecision({
+    propertyId,
+    workspaceId,
+    actorUserId: userId,
+    ...input,
+  });
+}
+
+export async function addQuoteDecisionContextLink(
+  propertyId: string,
+  workspaceId: string,
+  input: {
+    entityType: ServiceQuoteDecisionEntityType;
+    entityId: string;
+    label?: string | null;
+    metadataJson?: Record<string, unknown> | null;
+  },
+) {
+  return linkServiceQuoteDecisionContext({ propertyId, workspaceId, ...input });
 }
