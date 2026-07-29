@@ -241,6 +241,7 @@ COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \
      apps/backend/src/services/hiddenAssets/categoryConfig.ts \
      apps/backend/src/services/hiddenAssets/types.ts \
      apps/backend/src/services/hiddenAssets/fundingWindow.ts \
+     apps/backend/src/services/hiddenAssets/sourceFreshness.ts \
      src/shared/backend/services/hiddenAssets/
 # Copy homeHabitCoach service files needed by habitGeneration.job.ts
 COPY apps/backend/src/services/homeHabitCoach/habitGenerationEngine.ts \
