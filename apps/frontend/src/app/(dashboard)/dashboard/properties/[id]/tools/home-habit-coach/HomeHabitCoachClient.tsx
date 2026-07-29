@@ -47,6 +47,7 @@ import {
 import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dashboard/mobileDesignTokens';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
+  adoptHabit,
   completeHabit,
   dismissHabit,
   generateHabits,
@@ -247,6 +248,17 @@ function HabitDetailSheet({
     onMutated();
   }, [qc, propertyId, onMutated]);
 
+  const adoptMut = useMutation({
+    mutationFn: () => adoptHabit(propertyId, habit!.id),
+    onSuccess: () => {
+      toast({ title: 'Added to your routine' });
+      invalidate();
+      track('action_completed', { tool: 'home-habit-coach', actionType: 'adopt_habit', propertyId });
+    },
+    onError: () =>
+      toast({ title: getHabitActionErrorMessage('adopt'), variant: 'destructive' }),
+  });
+
   const completeMut = useMutation({
     mutationFn: () => completeHabit(propertyId, habit!.id),
     onSuccess: () => {
@@ -306,6 +318,7 @@ function HabitDetailSheet({
   });
 
   const isBusy =
+    adoptMut.isPending ||
     completeMut.isPending ||
     snoozeMut.isPending ||
     skipMut.isPending ||
@@ -420,6 +433,29 @@ function HabitDetailSheet({
         </div>
 
         <SheetFooter className="flex-col gap-2 pb-safe pt-2">
+          {!snoozeMode ? (
+            habit.linkedMaintenanceTaskId ? (
+              <div className="flex w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5 text-sm font-medium text-teal-800">
+                <RefreshCw className="h-4 w-4" />
+                In your routine
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                className="w-full border-teal-300 text-teal-700 hover:bg-teal-50"
+                disabled={isBusy}
+                onClick={() => adoptMut.mutate()}
+              >
+                {adoptMut.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Add to my routine
+              </Button>
+            )
+          ) : null}
+
           {isActionable && !snoozeMode ? (
             <>
               <Button

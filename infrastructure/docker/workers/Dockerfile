@@ -80,6 +80,10 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/modules/propertyContext/catalog \
              src/shared/backend/modules/propertyContext/infrastructure \
              src/shared/backend/modules/propertyContext/policies \
+             src/shared/backend/modules/homeOperations/adapters \
+             src/shared/backend/modules/homeOperations/application \
+             src/shared/backend/modules/homeOperations/domain \
+             src/shared/backend/modules/homeOperations/infrastructure \
              src/shared/backend/neighborhoodIntelligence \
              src/shared/backend/refinanceRadar/engine \
              src/shared/backend/refinanceRadar/config \
@@ -235,6 +239,18 @@ COPY apps/backend/src/modules/propertyContext/domain/contracts.ts \
      src/shared/backend/modules/propertyContext/domain/
 COPY apps/backend/src/modules/propertyContext/infrastructure/prismaAssemblers.ts src/shared/backend/modules/propertyContext/infrastructure/
 COPY apps/backend/src/modules/propertyContext/policies/featurePolicy.ts src/shared/backend/modules/propertyContext/policies/
+# Canonical maintenance work-item projection used by PropertyMaintenanceTask.service.ts.
+COPY apps/backend/src/modules/homeOperations/adapters/maintenanceTask.adapter.ts \
+     src/shared/backend/modules/homeOperations/adapters/
+COPY apps/backend/src/modules/homeOperations/application/resolveWorkItem.usecase.ts \
+     apps/backend/src/modules/homeOperations/application/transitionWorkItem.usecase.ts \
+     src/shared/backend/modules/homeOperations/application/
+COPY apps/backend/src/modules/homeOperations/domain/sourceAdapter.ts \
+     apps/backend/src/modules/homeOperations/domain/transitions.ts \
+     apps/backend/src/modules/homeOperations/domain/workKey.ts \
+     src/shared/backend/modules/homeOperations/domain/
+COPY apps/backend/src/modules/homeOperations/infrastructure/workItemRepository.ts \
+     src/shared/backend/modules/homeOperations/infrastructure/
 # Stub: breaks the JobQueue.service ↔ RiskAssessment.service circular import
 COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueue.service.ts
 COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts \

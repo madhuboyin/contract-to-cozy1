@@ -76,7 +76,9 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
       name: true,
       reviewStatus: true,
       version: true,
+      authoredBy: true,
       approvedVersion: true,
+      reviewedBy: true,
       publishedAt: true,
       sourceUrl: true,
       lastVerifiedAt: true,
@@ -100,6 +102,19 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
     throw new SavingsBenefitsGovernanceError(
       'INVALID_TRANSITION',
       `Cannot ${input.action} a ${program.reviewStatus} program.`
+    );
+  }
+
+  if (input.action === 'APPROVE' && program.authoredBy === input.actorId) {
+    throw new SavingsBenefitsGovernanceError(
+      'AUTHOR_REVIEWER_SEPARATION_REQUIRED',
+      'Program approval must be performed by a different administrator than the current author.',
+    );
+  }
+  if (input.action === 'PUBLISH' && program.reviewedBy === input.actorId) {
+    throw new SavingsBenefitsGovernanceError(
+      'REVIEWER_PUBLISHER_SEPARATION_REQUIRED',
+      'Program publication must be performed by a different administrator than the reviewer.',
     );
   }
 
@@ -202,9 +217,15 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
   });
 
   if (input.action === 'PUBLISH' || input.action === 'UNPUBLISH' || input.action === 'ARCHIVE') {
-    await requestBroadSavingsBenefitsReevaluation(
+    const queued = await requestBroadSavingsBenefitsReevaluation(
       `program:${input.programId}:${input.action.toLowerCase()}`,
     );
+    if (!queued) {
+      throw new SavingsBenefitsGovernanceError(
+        'REEVALUATION_NOT_QUEUED',
+        'The lifecycle transition committed, but property reevaluation could not be queued.',
+      );
+    }
   }
 
   return { previousStatus: program.reviewStatus, status: spec.to, action: input.action };

@@ -18,6 +18,23 @@ jobs:
   integration-smoke:
     name: Backend Integration Smoke
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: contract_to_cozy_acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d contract_to_cozy_acceptance"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/contract_to_cozy_acceptance
+      SAVINGS_BENEFITS_ACCEPTANCE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/contract_to_cozy_acceptance
     defaults:
       run:
         working-directory: apps/backend
@@ -35,6 +52,16 @@ jobs:
 
       - name: Generate Prisma Client
         run: npm run prisma:generate
+
+      - name: Enable PostGIS in acceptance database
+        run: PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d contract_to_cozy_acceptance -c 'CREATE EXTENSION IF NOT EXISTS postgis'
+
+      # The historical repository migration set predates the current baseline
+      # schema and cannot bootstrap an empty database by itself. db push is the
+      # explicit clean-schema rehearsal used by this acceptance job; production
+      # migration deployment remains a separate release operation.
+      - name: Apply owner schema to clean acceptance database
+        run: npx prisma db push --skip-generate --schema=./prisma/schema.prisma
 
       - name: Unit tests
         run: npm run test:unit

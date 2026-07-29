@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api } from '@/lib/api/client';
 import type { SavingsBenefitsUnifiedItemDTO } from '@/types';
 import {
@@ -10,6 +11,18 @@ import {
   StatusChip,
   type StatusChipTone,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 const FAMILY_LABEL: Record<SavingsBenefitsUnifiedItemDTO['family'], string> = {
   BENEFIT: 'Benefit',
@@ -83,7 +96,201 @@ export function RelatedOpportunitiesStrip({ propertyId }: { propertyId: string }
   );
 }
 
-function ItemRow({ item }: { item: SavingsBenefitsUnifiedItemDTO }) {
+function PartnerHandoffControls({
+  propertyId,
+  item,
+}: {
+  propertyId: string;
+  item: SavingsBenefitsUnifiedItemDTO;
+}) {
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<'consent' | 'revoke' | 'complaint' | null>(null);
+  const [partnerId, setPartnerId] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [reason, setReason] = useState('');
+  const [category, setCategory] = useState('SERVICE');
+  const partnersQ = useQuery({
+    queryKey: ['savings-benefits-eligible-partners', propertyId],
+    queryFn: () => api.getSavingsBenefitsEligiblePartners(propertyId),
+    enabled: mode === 'consent',
+    staleTime: 60_000,
+  });
+  const selectedPartner = partnersQ.data?.find((partner) => partner.id === partnerId) ?? null;
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['savings-benefits-unified', propertyId] });
+  const handoffM = useMutation({
+    mutationFn: async () => {
+      if (!selectedPartner) throw new Error('Select an approved partner.');
+      const sharedFields = {
+        opportunityId: item.id,
+        opportunityFamily: item.family,
+        opportunityTitle: item.title,
+        category: item.category,
+      };
+      await api.createSavingsBenefitsAction(propertyId, item.id, {
+        idempotencyKey: `partner-handoff:${item.id}:${selectedPartner.id}:${crypto.randomUUID()}`,
+        family: item.family,
+        actionType: 'PARTNER_HANDOFF_CONSENTED',
+        externalOwner: selectedPartner.id,
+        sharedFields,
+        consent: {
+          partnerId: selectedPartner.id,
+          disclosureAcknowledged: true,
+          consentVersion: selectedPartner.disclosureVersion,
+          consentedAt: new Date().toISOString(),
+          compensationMayOccur: selectedPartner.compensationMayOccur,
+          rankingInfluenced: false,
+          selectionCriteria: ['Jurisdiction support', 'Program or recurring-cost category fit'],
+          nonCommercialAlternative: 'Continue independently using the official source or provider.',
+          sharedFieldNames: Object.keys(sharedFields),
+        },
+      });
+    },
+    onSuccess: async () => {
+      setMode(null);
+      setAcknowledged(false);
+      setPartnerId('');
+      await refresh();
+    },
+  });
+  const revokeM = useMutation({
+    mutationFn: () => api.revokeSavingsBenefitsPartnerHandoff(propertyId, item.canonicalAction!.id, reason.trim()),
+    onSuccess: async () => {
+      setMode(null);
+      setReason('');
+      await refresh();
+    },
+  });
+  const complaintM = useMutation({
+    mutationFn: () => api.reportSavingsBenefitsPartnerComplaint(
+      propertyId,
+      item.canonicalAction!.id,
+      { category, description: reason.trim() },
+    ),
+    onSuccess: () => {
+      setMode(null);
+      setReason('');
+    },
+  });
+  const handoffStatus = item.canonicalAction?.handoffStatus ?? null;
+  const activeHandoff = handoffStatus && !['FULFILLED', 'FAILED', 'REVOKED'].includes(handoffStatus);
+  const canStart = item.canonicalAction?.state === 'STARTED' && !handoffStatus;
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
+      {handoffStatus ? (
+        <StatusChip tone={activeHandoff ? 'info' : 'elevated'}>
+          Partner: {item.canonicalAction?.partner?.name ?? 'approved partner'} · {handoffStatus.toLowerCase()}
+        </StatusChip>
+      ) : null}
+      {canStart ? <Button size="sm" variant="outline" onClick={() => setMode('consent')}>Get partner help</Button> : null}
+      {activeHandoff ? (
+        <Button size="sm" variant="outline" onClick={() => setMode('revoke')}>Revoke consent</Button>
+      ) : null}
+      {handoffStatus ? (
+        <Button size="sm" variant="outline" onClick={() => setMode('complaint')}>Report a problem</Button>
+      ) : null}
+
+      <Dialog open={mode === 'consent'} onOpenChange={(open) => !open && setMode(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Share this opportunity with an approved partner</DialogTitle>
+            <DialogDescription>
+              Review the recipient, commercial disclosures, ranking policy, privacy terms, and exact fields before consenting.
+            </DialogDescription>
+          </DialogHeader>
+          <Label htmlFor={`partner-${item.id}`}>Partner</Label>
+          <Select value={partnerId} onValueChange={setPartnerId}>
+            <SelectTrigger id={`partner-${item.id}`}><SelectValue placeholder="Select an eligible partner" /></SelectTrigger>
+            <SelectContent>
+              {(partnersQ.data ?? []).map((partner) => (
+                <SelectItem key={partner.id} value={partner.id}>{partner.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedPartner ? (
+            <div className="space-y-3 rounded-lg border p-3 text-sm">
+              <div><p className="font-semibold">Compensation</p><p>{selectedPartner.compensationDisclosure}</p></div>
+              <div><p className="font-semibold">Ranking</p><p>{selectedPartner.rankingDisclosure}</p></div>
+              <div><p className="font-semibold">Privacy</p><p>{selectedPartner.privacyDisclosure}</p></div>
+              <div>
+                <p className="font-semibold">Fields shared</p>
+                <ul className="list-disc pl-5">
+                  <li>Opportunity identifier and family</li>
+                  <li>Opportunity title</li>
+                  <li>Category</li>
+                </ul>
+              </div>
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={acknowledged}
+                  onChange={(event) => setAcknowledged(event.target.checked)}
+                />
+                <span>I consent to sharing these exact fields with {selectedPartner.name} under disclosure version {selectedPartner.disclosureVersion}.</span>
+              </label>
+            </div>
+          ) : null}
+          {handoffM.error ? <p role="alert" className="text-sm text-red-600">{handoffM.error.message}</p> : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMode(null)}>Cancel</Button>
+            <Button disabled={!selectedPartner || !acknowledged || handoffM.isPending} onClick={() => handoffM.mutate()}>
+              Consent and share
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={mode === 'revoke' || mode === 'complaint'} onOpenChange={(open) => !open && setMode(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{mode === 'revoke' ? 'Revoke partner consent' : 'Report a partner problem'}</DialogTitle>
+            <DialogDescription>
+              {mode === 'revoke'
+                ? 'Revocation stops this handoff and returns the opportunity to your saved work.'
+                : 'Your report is added to the partner-governance review queue.'}
+            </DialogDescription>
+          </DialogHeader>
+          {mode === 'complaint' ? (
+            <>
+              <Label htmlFor={`complaint-category-${item.id}`}>Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger id={`complaint-category-${item.id}`}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SERVICE">Service</SelectItem>
+                  <SelectItem value="PRIVACY">Privacy</SelectItem>
+                  <SelectItem value="DISCLOSURE">Disclosure</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          ) : null}
+          <Label htmlFor={`partner-reason-${item.id}`}>{mode === 'revoke' ? 'Reason' : 'What happened?'}</Label>
+          <Textarea
+            id={`partner-reason-${item.id}`}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            className="min-h-[96px]"
+          />
+          {(revokeM.error || complaintM.error) ? (
+            <p role="alert" className="text-sm text-red-600">{(revokeM.error ?? complaintM.error)?.message}</p>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMode(null)}>Cancel</Button>
+            <Button
+              variant={mode === 'revoke' ? 'destructive' : 'default'}
+              disabled={reason.trim().length < 3 || revokeM.isPending || complaintM.isPending}
+              onClick={() => mode === 'revoke' ? revokeM.mutate() : complaintM.mutate()}
+            >
+              {mode === 'revoke' ? 'Revoke consent' : 'Submit report'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ItemRow({ item, propertyId }: { item: SavingsBenefitsUnifiedItemDTO; propertyId: string }) {
   const valueLabel =
     item.lifecycle === 'REALIZED'
       ? formatMoney(item.realizedValue, item.currency)
@@ -101,10 +308,8 @@ function ItemRow({ item }: { item: SavingsBenefitsUnifiedItemDTO }) {
   const deadlineLabel = formatDate(item.deadline);
 
   return (
-    <Link
-      href={item.detailHref}
-      className="block rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 transition-transform active:scale-[0.99] dark:bg-slate-900/40"
-    >
+    <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 dark:bg-slate-900/40">
+      <Link href={item.detailHref} className="block transition-transform active:scale-[0.99]">
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip tone={FAMILY_TONE[item.family]}>{FAMILY_LABEL[item.family]}</StatusChip>
         <StatusChip tone="info">{item.statusLabel}</StatusChip>
@@ -136,7 +341,9 @@ function ItemRow({ item }: { item: SavingsBenefitsUnifiedItemDTO }) {
         {deadlineLabel ? <span>Deadline: {deadlineLabel}</span> : null}
         {item.sourceLabel ? <span>{item.sourceLabel}</span> : null}
       </div>
-    </Link>
+      </Link>
+      {item.lifecycle === 'IN_PROGRESS' ? <PartnerHandoffControls propertyId={propertyId} item={item} /> : null}
+    </div>
   );
 }
 
@@ -181,7 +388,7 @@ export function InProgressPanel({ propertyId }: { propertyId: string }) {
   return (
     <MobileCard variant="compact" className="space-y-2 bg-transparent p-0 shadow-none">
       {items.map((item) => (
-        <ItemRow key={`${item.family}-${item.id}`} item={item} />
+        <ItemRow key={`${item.family}-${item.id}`} item={item} propertyId={propertyId} />
       ))}
     </MobileCard>
   );
@@ -237,7 +444,7 @@ export function RealizedPanel({ propertyId }: { propertyId: string }) {
       ) : null}
       <div className="space-y-2">
         {items.map((item) => (
-          <ItemRow key={`${item.family}-${item.id}`} item={item} />
+          <ItemRow key={`${item.family}-${item.id}`} item={item} propertyId={propertyId} />
         ))}
       </div>
     </div>

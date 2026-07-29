@@ -1242,6 +1242,53 @@ Validation for this closure includes backend type-checking, focused domain
 tests, frontend production compilation, worker compilation, and the actual
 worker Docker image build.
 
+### 10.4 Final bounded closure verification — July 29, 2026
+
+The final review was performed against the implemented repository state, not
+only against the original finding list. It closed the remaining fail-closed,
+workflow, concurrency, and executable-acceptance gaps:
+
+- stale or unreviewed programs are excluded from discovery, canonical detail,
+  pursuing, and realized projections;
+- source, program, property, and account changes enqueue property-scoped
+  reevaluation and surface queue admission failures;
+- source author, program author, reviewer, and publisher separation is
+  persisted and enforced;
+- partner handoff fulfillment, failure, revocation, complaint handling, and
+  canonical-action reconciliation are atomic and exposed in homeowner and
+  admin workflows;
+- outcome verification and revocation use compare-and-set transitions;
+- rescheduled follow-ups form a new idempotent reminder occurrence;
+- admin handoff, complaint, and outcome queues are bounded and paginated;
+- homeowner partner consent shows recipient, compensation, ranking, privacy,
+  and exact-field disclosures before submission;
+- the accessibility suite executes keyboard, contrast, 200% zoom/reflow,
+  consent, complaint, and revocation scenarios in desktop Chromium and mobile
+  WebKit;
+- the database acceptance gate executes the real
+  author-review-publish-match-act-verify-revoke-invalidate journey against a
+  clean owner-applied PostgreSQL/PostGIS schema;
+- the worker Dockerfile stages every backend dependency required by the worker
+  compiler, including Hidden Asset freshness and canonical maintenance
+  work-item modules.
+
+The repository validation set completed with:
+
+- Prisma schema validation;
+- backend TypeScript production compilation;
+- frontend production compilation;
+- 67 focused backend/worker domain checks;
+- four browser acceptance scenarios across the configured desktop and mobile
+  projects;
+- two database-backed schema and golden-path acceptance checks;
+- an actual worker Docker image build;
+- `git diff --check`.
+
+No additional P0, P1, or P2 implementation gap remains open in the bounded
+scope of this audit. Live source accuracy, third-party availability, production
+data quality, and operational response are ongoing controls rather than
+repository implementation findings.
+
 ---
 
 ## 11. Best-in-Class Target Experience
@@ -2404,7 +2451,8 @@ The family is done when:
 21. analytics use truthful funnel stages;
 22. golden fixtures and operational drills pass;
 23. Prisma validation and clean-schema rehearsal pass;
-24. no migration script is created.
+24. additive schema changes have a deployable migration and pass clean-schema
+    rehearsal.
 
 ---
 

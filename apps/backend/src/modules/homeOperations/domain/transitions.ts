@@ -33,8 +33,13 @@ export const LEGAL_TRANSITIONS: Record<OperationalWorkItemState, OperationalWork
   DEFERRED: ['SCHEDULED', 'IN_PROGRESS', 'CLOSED'],
   REPORTED_COMPLETE: ['VERIFIED', 'REOPENED', 'CLOSED'],
   REOPENED: ['SCHEDULED', 'IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'CLOSED'],
-  VERIFIED: ['FOLLOW_UP_DUE', 'CLOSED'],
-  FOLLOW_UP_DUE: ['ACCEPTED', 'SCHEDULED', 'CLOSED'],
+  // REOPENED here too: verified/follow-up-due work must be reversible when a
+  // reported completion turns out to be wrong (Home Operations Slice 3 —
+  // uncompleting a maintenance task that was already verified needs this
+  // edge; the doc's own control table implies reopen is a general capability
+  // on completed/verified work, not only on not-yet-verified REPORTED_COMPLETE).
+  VERIFIED: ['FOLLOW_UP_DUE', 'REOPENED', 'CLOSED'],
+  FOLLOW_UP_DUE: ['ACCEPTED', 'SCHEDULED', 'REOPENED', 'CLOSED'],
   CLOSED: [],
 };
 

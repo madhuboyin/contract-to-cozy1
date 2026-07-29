@@ -62,6 +62,7 @@ const PartnerBodySchema = z.object({
   status: z.enum(['ACTIVE', 'PAUSED', 'RETIRED']).optional(),
   supportedJurisdictions: z.array(z.string().trim().min(2).max(32)).max(100),
   disclosureVersion: z.string().trim().min(1).max(80),
+  compensationMayOccur: z.boolean(),
   compensationDisclosure: z.string().trim().min(1).max(2000),
   rankingDisclosure: z.string().trim().min(1).max(2000),
   privacyDisclosure: z.string().trim().min(1).max(2000),

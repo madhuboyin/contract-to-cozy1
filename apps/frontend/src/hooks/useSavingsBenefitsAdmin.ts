@@ -48,10 +48,10 @@ export function useSavingsBenefitsQueues() {
   return useQuery({ queryKey: QUEUES_KEY, queryFn: fetchEditorialQueues, staleTime: 15_000 });
 }
 
-export function useSavingsBenefitsOutcomeVerificationQueue() {
+export function useSavingsBenefitsOutcomeVerificationQueue(offset = 0, limit = 50) {
   return useQuery({
-    queryKey: OUTCOME_VERIFICATION_KEY,
-    queryFn: fetchOutcomeVerificationQueue,
+    queryKey: [...OUTCOME_VERIFICATION_KEY, offset, limit],
+    queryFn: () => fetchOutcomeVerificationQueue(offset, limit),
     staleTime: 15_000,
   });
 }
@@ -85,18 +85,18 @@ export function useUpsertSavingsBenefitPartner() {
   });
 }
 
-export function useSavingsBenefitPartnerComplaints() {
+export function useSavingsBenefitPartnerComplaints(offset = 0, limit = 50) {
   return useQuery({
-    queryKey: PARTNER_COMPLAINTS_KEY,
-    queryFn: fetchSavingsBenefitPartnerComplaints,
+    queryKey: [...PARTNER_COMPLAINTS_KEY, offset, limit],
+    queryFn: () => fetchSavingsBenefitPartnerComplaints(offset, limit),
     staleTime: 15_000,
   });
 }
 
-export function useSavingsBenefitPartnerHandoffs() {
+export function useSavingsBenefitPartnerHandoffs(offset = 0, limit = 50) {
   return useQuery({
-    queryKey: PARTNER_HANDOFFS_KEY,
-    queryFn: fetchSavingsBenefitPartnerHandoffs,
+    queryKey: [...PARTNER_HANDOFFS_KEY, offset, limit],
+    queryFn: () => fetchSavingsBenefitPartnerHandoffs(offset, limit),
     staleTime: 15_000,
   });
 }

@@ -47,6 +47,9 @@ jobs:
       - name: Ownership Cost accessibility and responsive acceptance
         run: npm run test:ownership-cost:e2e
 
+      - name: Savings and Benefits accessibility, responsive, and partner-governance acceptance
+        run: npm run test:savings-benefits:e2e
+
       - name: Service Quote Decision safety and accessibility acceptance
         run: npm run test:service-quote-decision:e2e
 
@@ -56,4 +59,12 @@ jobs:
         with:
           name: ownership-cost-target-build-evidence
           path: apps/frontend/test-results/ownership-cost-evidence.json
+          if-no-files-found: error
+
+      - name: Upload Savings and Benefits target-build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: savings-benefits-target-build-evidence
+          path: apps/frontend/test-results/savings-benefits-evidence.json
           if-no-files-found: error

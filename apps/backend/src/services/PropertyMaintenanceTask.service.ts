@@ -27,6 +27,10 @@ import {
 import {
   requestRadarPropertyReconciliation,
 } from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
+import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
+import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
+import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
+import { findWorkItemByWorkKey } from '../modules/homeOperations/infrastructure/workItemRepository';
 
   /**
    * Service for managing property maintenance tasks.
@@ -197,7 +201,7 @@ import {
           where: { propertyId_actionKey: { propertyId, actionKey: maintenanceTemplateActionKey(template.id) } },
         });
         if (existing) {
-          return prisma.propertyMaintenanceTask.update({
+          const reactivated = await prisma.propertyMaintenanceTask.update({
             where: { id: existing.id },
             data: {
               title: data.title,
@@ -212,9 +216,11 @@ import {
               nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : this.calculateNextDueDate(template.defaultFrequency),
             },
           });
+          await this.syncTaskWorkItem(userId, reactivated, false, reactivated.status === 'COMPLETED');
+          return reactivated;
         }
       }
-  
+
       const task = await prisma.propertyMaintenanceTask.create({
         data: {
           propertyId,
@@ -246,6 +252,7 @@ import {
         },
       });
 
+      await this.syncTaskWorkItem(userId, task, false, task.status === 'COMPLETED');
       return task;
     }
   
@@ -326,6 +333,7 @@ import {
           title: task.title,
         }, '✅ Created PropertyMaintenanceTask with actionKey');
 
+        await this.syncTaskWorkItem(userId, task, false, false);
         return { task, deduped: false };
       } catch (err: any) {
         // Handle unique constraint race condition
@@ -462,6 +470,9 @@ import {
         },
       });
 
+      // No acting user — this runs from both the user-facing
+      // createFromSeasonalItem and system-triggered generation/self-heal.
+      await this.syncTaskWorkItem(null, task, false, false);
       return task;
     } catch (error) {
       // 🔧 FIX: Better error logging
@@ -715,6 +726,114 @@ import {
           logger.warn({ signalError }, 'Maintenance adherence signal publish failed (task status update)');
         }
       }
+
+      await this.syncTaskWorkItem(userId, updatedTask, wasCompleted, isNowCompleted);
+    }
+
+    /**
+     * Home Operations Slice 3: keeps the task's OperationalWorkItem in step
+     * with every create/status transition. Best-effort — a sync failure must
+     * never block the actual maintenance-task mutation (same resilience
+     * pattern Slice 2 used for Home Action feed resolution).
+     *
+     * Known simplification: a recurring task's work item cycles back through
+     * FOLLOW_UP_DUE -> ACCEPTED for its next occurrence rather than minting a
+     * new work item, but its presentation fields (including dueAt) are not
+     * refreshed at that point — canRefreshFromSource() only allows silent
+     * refresh while still CANDIDATE, by design, to protect homeowner-visible
+     * state from being rewritten out from under them. A recurring task's
+     * genuinely-new due date is therefore not reflected until a dedicated
+     * refresh path is added — a follow-up, not solved here.
+     */
+    private static async syncTaskWorkItem(
+      actorUserId: string | null,
+      updatedTask: PropertyMaintenanceTask,
+      wasCompleted: boolean,
+      isNowCompleted: boolean,
+    ): Promise<void> {
+      const actorType = actorUserId ? 'USER' : 'SYSTEM';
+      try {
+        if (updatedTask.status === 'CANCELLED') {
+          const workKey = resolveMaintenanceTaskWorkKey(updatedTask, updatedTask.propertyId);
+          const existing = await findWorkItemByWorkKey(updatedTask.propertyId, workKey);
+          if (existing && existing.state !== 'CLOSED') {
+            await transitionWorkItem({
+              workItemId: existing.id,
+              to: 'CLOSED',
+              disposition: 'NOT_RELEVANT',
+              actorType,
+              actorUserId,
+              idempotencyKey: `maintenance-task-cancelled:${updatedTask.id}:${updatedTask.updatedAt.toISOString()}`,
+            });
+          }
+          return;
+        }
+
+        const proposal = maintenanceTaskSourceAdapter.propose(updatedTask, updatedTask.propertyId);
+        if (!proposal) return;
+        let workItem = await resolveAndUpsertWorkItem(proposal);
+
+        // Creating a task is itself an acceptance act — nothing separately
+        // "recommended" it as a candidate distinct from its own existence.
+        if (workItem.state === 'CANDIDATE') {
+          workItem = await transitionWorkItem({
+            workItemId: workItem.id,
+            to: 'ACCEPTED',
+            actorType,
+            actorUserId,
+            idempotencyKey: `maintenance-task-accepted:${workItem.id}`,
+          });
+        }
+
+        if (!wasCompleted && isNowCompleted) {
+          if (workItem.state !== 'REPORTED_COMPLETE' && workItem.state !== 'VERIFIED') {
+            workItem = await transitionWorkItem({
+              workItemId: workItem.id,
+              to: 'REPORTED_COMPLETE',
+              actorType,
+              actorUserId,
+              idempotencyKey: `maintenance-task-reported-complete:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+            });
+          }
+          if (workItem.state === 'REPORTED_COMPLETE') {
+            // A plain maintenance task's homeowner-reported completion is
+            // its own verification — matches the doc's completion-authority
+            // table ("Simple homeowner task | Maintenance | Homeowner
+            // evidence or low-risk self-attestation").
+            workItem = await transitionWorkItem({
+              workItemId: workItem.id,
+              to: 'VERIFIED',
+              actorType: 'SYSTEM',
+              idempotencyKey: `maintenance-task-verified:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+            });
+          }
+          if (updatedTask.isRecurring && workItem.state === 'VERIFIED') {
+            workItem = await transitionWorkItem({
+              workItemId: workItem.id,
+              to: 'FOLLOW_UP_DUE',
+              actorType: 'SYSTEM',
+              idempotencyKey: `maintenance-task-follow-up-due:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+            });
+            await transitionWorkItem({
+              workItemId: workItem.id,
+              to: 'ACCEPTED',
+              actorType: 'SYSTEM',
+              idempotencyKey: `maintenance-task-next-occurrence:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+            });
+          }
+        } else if (wasCompleted && !isNowCompleted &&
+          (workItem.state === 'VERIFIED' || workItem.state === 'FOLLOW_UP_DUE')) {
+          await transitionWorkItem({
+            workItemId: workItem.id,
+            to: 'REOPENED',
+            actorType,
+            actorUserId,
+            idempotencyKey: `maintenance-task-reopened:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+          });
+        }
+      } catch (err) {
+        logger.warn({ err, taskId: updatedTask.id }, 'Home Operations work item sync failed; maintenance task mutation proceeds regardless');
+      }
     }
 
     static async updateTaskStatus(
@@ -832,7 +951,29 @@ import {
           'Action Center tasks cannot be deleted. Use status CANCELLED instead.'
         );
       }
-  
+
+      // OperationalWorkItem links to the task by sourceEntityId string, not
+      // a FK, so it is not cascade-deleted with the task — close it first or
+      // it dangles as an orphaned ACCEPTED item forever. "Not relevant" is
+      // an imprecise fit for "deleted" (no disposition value means exactly
+      // that), but it is the closest of the four available.
+      try {
+        const workKey = resolveMaintenanceTaskWorkKey(task, task.propertyId);
+        const existing = await findWorkItemByWorkKey(task.propertyId, workKey);
+        if (existing && existing.state !== 'CLOSED') {
+          await transitionWorkItem({
+            workItemId: existing.id,
+            to: 'CLOSED',
+            disposition: 'NOT_RELEVANT',
+            actorType: 'USER',
+            actorUserId: userId,
+            idempotencyKey: `maintenance-task-deleted:${taskId}`,
+          });
+        }
+      } catch (err) {
+        logger.warn({ err, taskId }, 'Home Operations work item close-on-delete failed; task deletion proceeds regardless');
+      }
+
       await prisma.propertyMaintenanceTask.delete({
         where: { id: taskId },
       });
@@ -983,6 +1124,10 @@ import {
     private static calculateNextDueDate(frequency: RecurrenceFrequency): Date {
       const now = new Date();
       switch (frequency) {
+        case 'DAILY':
+          return new Date(now.setDate(now.getDate() + 1));
+        case 'WEEKLY':
+          return new Date(now.setDate(now.getDate() + 7));
         case 'MONTHLY':
           return new Date(now.setMonth(now.getMonth() + 1));
         case 'QUARTERLY':

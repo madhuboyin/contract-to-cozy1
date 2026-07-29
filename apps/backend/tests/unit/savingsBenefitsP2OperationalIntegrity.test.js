@@ -89,6 +89,7 @@ test.beforeEach(() => {
     status: 'ACTIVE',
     lastReviewedAt: new Date('2026-01-01T00:00:00.000Z'),
     lastReviewedBy: 'reviewer-old',
+    lastAuthoredBy: 'author-1',
     version: 1,
     reviewedVersion: 1,
   };
@@ -98,6 +99,8 @@ test.beforeEach(() => {
     reviewStatus: 'IN_REVIEW',
     version: 1,
     approvedVersion: null,
+    authoredBy: 'author-1',
+    reviewedBy: null,
     publishedAt: null,
     sourceUrl: 'https://example.gov/programs/benefit',
     lastVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -152,6 +155,17 @@ test('source review attestation and its audit row share one transaction', async 
   );
 });
 
+test('the current source author cannot attest their own review', async () => {
+  await assert.rejects(
+    () => savingsBenefitsAdminService.reviewSource(
+      'source-1',
+      'author-1',
+      'Self review must be rejected.',
+    ),
+    /different administrator/,
+  );
+});
+
 test('program lifecycle transition and its audit row are atomic and compare-and-set guarded', async () => {
   const result = await transitionSavingsBenefitProgram({
     programId: 'program-1',
@@ -165,4 +179,32 @@ test('program lifecycle transition and its audit row are atomic and compare-and-
   assert.equal(programUpdates[0].inTransaction, true);
   assert.equal(auditCreates[0].inTransaction, true);
   assert.equal(auditCreates[0].data.action, 'ADMIN_SAVINGS_BENEFITS_LIFECYCLE');
+});
+
+test('program author, reviewer, and publisher separation is enforced', async () => {
+  await assert.rejects(
+    () => transitionSavingsBenefitProgram({
+      programId: 'program-1',
+      actorId: 'author-1',
+      action: 'APPROVE',
+      reason: 'Self approval must be rejected.',
+    }),
+    /different administrator/,
+  );
+
+  programRow = {
+    ...programRow,
+    reviewStatus: 'APPROVED',
+    approvedVersion: 1,
+    reviewedBy: 'reviewer-1',
+  };
+  await assert.rejects(
+    () => transitionSavingsBenefitProgram({
+      programId: 'program-1',
+      actorId: 'reviewer-1',
+      action: 'PUBLISH',
+      reason: 'Reviewer publication must be rejected.',
+    }),
+    /different administrator/,
+  );
 });

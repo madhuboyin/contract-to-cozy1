@@ -12,6 +12,7 @@ import {
   getHabitHistory,
   getHabitDetail,
   generateHabits,
+  adoptHabit,
   completeHabit,
   snoozeHabit,
   skipHabit,
@@ -81,6 +82,12 @@ router.post(
 );
 
 // ── Actions ───────────────────────────────────────────────────────────────────
+
+router.post(
+  '/properties/:propertyId/home-habits/:habitId/adopt',
+  propertyAuthMiddleware,
+  adoptHabit,
+);
 
 router.post(
   '/properties/:propertyId/home-habits/:habitId/complete',

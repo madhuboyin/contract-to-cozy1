@@ -116,13 +116,15 @@ export function formatEffortLabel(minutes: number | null | undefined): string | 
 
 // ─── Error messages ───────────────────────────────────────────────────────────
 
-type HabitAction = 'complete' | 'snooze' | 'skip' | 'dismiss' | 'reopen' | 'generate';
+type HabitAction = 'adopt' | 'complete' | 'snooze' | 'skip' | 'dismiss' | 'reopen' | 'generate';
 
 /**
  * Returns a user-facing error message for a failed habit mutation.
  */
 export function getHabitActionErrorMessage(action: HabitAction): string {
   switch (action) {
+    case 'adopt':
+      return 'Could not add this habit to your routine. Please try again.';
     case 'complete':
       return 'Could not mark habit complete. Please try again.';
     case 'snooze':

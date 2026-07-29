@@ -173,6 +173,7 @@ export class SavingsBenefitsAdminService {
           lastReviewedAt: null,
           lastReviewedBy: null,
           reviewedVersion: null,
+          lastAuthoredBy: actorUserId,
         },
       });
       await recordAdminAction({
@@ -205,7 +206,7 @@ export class SavingsBenefitsAdminService {
       || existing.officialUrl !== input.officialUrl.trim()
       || existing.reviewSlaDays !== nextReviewSlaDays;
 
-    return prisma.$transaction(async (tx) => {
+    const source = await prisma.$transaction(async (tx) => {
       const updated = await tx.hiddenAssetSource.updateMany({
         where: { id: sourceId, version: existing.version },
         data: {
@@ -214,6 +215,7 @@ export class SavingsBenefitsAdminService {
           officialUrl: input.officialUrl.trim(),
           reviewSlaDays: nextReviewSlaDays,
           status: input.status ?? existing.status,
+          lastAuthoredBy: actorUserId,
           ...(materialChange
             ? {
                 version: { increment: 1 },
@@ -244,6 +246,15 @@ export class SavingsBenefitsAdminService {
       }, tx);
       return source;
     });
+    if (materialChange || source.status !== existing.status) {
+      const queued = await requestBroadSavingsBenefitsReevaluation(
+        `source:${sourceId}:${materialChange ? 'review-invalidated' : `status-${source.status.toLowerCase()}`}`,
+      );
+      if (!queued) {
+        throw new Error('Source updated, but Savings & Benefits reevaluation could not be queued.');
+      }
+    }
+    return source;
   }
 
   async reviewSource(
@@ -255,6 +266,9 @@ export class SavingsBenefitsAdminService {
     const reviewed = await prisma.$transaction(async (tx) => {
       const source = await tx.hiddenAssetSource.findUnique({ where: { id: sourceId } });
       if (!source) throw new Error('Source not found');
+      if (source.lastAuthoredBy === actorUserId) {
+        throw new Error('Source review must be performed by a different administrator than the current author.');
+      }
 
       const reviewedAt = new Date();
       const reviewedSource = await tx.hiddenAssetSource.update({
@@ -287,7 +301,10 @@ export class SavingsBenefitsAdminService {
       }, tx);
       return reviewedSource;
     });
-    await requestBroadSavingsBenefitsReevaluation(`source:${sourceId}:reviewed`);
+    const queued = await requestBroadSavingsBenefitsReevaluation(`source:${sourceId}:reviewed`);
+    if (!queued) {
+      throw new Error('Source review was recorded, but Savings & Benefits reevaluation could not be queued.');
+    }
     return reviewed;
   }
 
@@ -341,6 +358,7 @@ export class SavingsBenefitsAdminService {
           applicationWindowClosesAt: input.applicationWindowClosesAt ?? null,
           exclusionGroupKey: input.exclusionGroupKey ?? null,
           beneficiaryScope: input.beneficiaryScope ?? 'PROPERTY',
+          authoredBy: actorUserId,
           // "Saving must not publish it" — new programs always start DRAFT;
           // lifecycle moves only through savingsBenefitsGovernance.service.ts.
           reviewStatus: 'DRAFT',
@@ -432,6 +450,7 @@ export class SavingsBenefitsAdminService {
           applicationWindowClosesAt: input.applicationWindowClosesAt ?? null,
           exclusionGroupKey: input.exclusionGroupKey !== undefined ? input.exclusionGroupKey : existing.exclusionGroupKey,
           beneficiaryScope: input.beneficiaryScope ?? existing.beneficiaryScope,
+          authoredBy: actorUserId,
           version: { increment: 1 },
           approvedVersion: null,
           reviewedAt: null,

@@ -390,16 +390,20 @@ async function fetchMatchesForProperty(
     ? { status: filters.status }
     : { status: { in: statusFilter } };
 
-  return prisma.propertyHiddenAssetMatch.findMany({
+  const matches = await prisma.propertyHiddenAssetMatch.findMany({
     where: {
       propertyId,
       ...statusCondition,
       ...(filters.confidenceLevel ? { confidenceLevel: filters.confidenceLevel } : {}),
       ...(filters.category ? { program: { category: filters.category } } : {}),
     },
-    include: { program: true },
+    include: { program: { include: { source: true } } },
     orderBy: [{ confidenceLevel: 'asc' }, { lastEvaluatedAt: 'desc' }],
   });
+  const now = new Date();
+  return matches.filter((match) =>
+    isReviewedProgramCurrent(match.program, match.program.source, now),
+  );
 }
 
 // ============================================================================
@@ -855,9 +859,10 @@ export class HiddenAssetService {
   async getProgramDetail(programId: string): Promise<{ program: HiddenAssetProgramDetailDTO }> {
     const program = await prisma.hiddenAssetProgram.findUnique({
       where: { id: programId },
+      include: { source: true },
     });
 
-    if (!program) {
+    if (!program || !isReviewedProgramCurrent(program, program.source)) {
       throw new Error('Program not found.');
     }
 

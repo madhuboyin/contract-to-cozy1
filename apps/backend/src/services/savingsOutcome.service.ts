@@ -505,8 +505,8 @@ export async function revokeHiddenAssetMatchOutcome(
         'Revoke the latest outcome before correcting an earlier stage.',
       );
     }
-    const revoked = await tx.hiddenAssetMatchOutcome.update({
-      where: { id: outcomeId },
+    const revokedWrite = await tx.hiddenAssetMatchOutcome.updateMany({
+      where: { id: outcomeId, revokedAt: null },
       data: {
         verificationState: 'REVOKED',
         revokedAt: new Date(),
@@ -514,6 +514,13 @@ export async function revokeHiddenAssetMatchOutcome(
         revocationReason: reason,
       },
     });
+    if (revokedWrite.count !== 1) {
+      throw new SavingsOutcomeGovernanceError(
+        'OUTCOME_CHANGED_CONCURRENTLY',
+        'This outcome changed concurrently. Refresh and try again.',
+      );
+    }
+    const revoked = await tx.hiddenAssetMatchOutcome.findUniqueOrThrow({ where: { id: outcomeId } });
     const previous = await tx.hiddenAssetMatchOutcome.findFirst({
       where: { matchId: outcome.matchId, revokedAt: null },
       orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
@@ -565,8 +572,8 @@ export async function revokeHomeSavingsOpportunityOutcome(
         'Revoke the latest outcome before correcting an earlier stage.',
       );
     }
-    const revoked = await tx.homeSavingsOpportunityOutcome.update({
-      where: { id: outcomeId },
+    const revokedWrite = await tx.homeSavingsOpportunityOutcome.updateMany({
+      where: { id: outcomeId, revokedAt: null },
       data: {
         verificationState: 'REVOKED',
         revokedAt,
@@ -574,6 +581,13 @@ export async function revokeHomeSavingsOpportunityOutcome(
         revocationReason: reason,
       },
     });
+    if (revokedWrite.count !== 1) {
+      throw new SavingsOutcomeGovernanceError(
+        'OUTCOME_CHANGED_CONCURRENTLY',
+        'This outcome changed concurrently. Refresh and try again.',
+      );
+    }
+    const revoked = await tx.homeSavingsOpportunityOutcome.findUniqueOrThrow({ where: { id: outcomeId } });
     const previous = await tx.homeSavingsOpportunityOutcome.findFirst({
       where: { opportunityId: outcome.opportunityId, revokedAt: null },
       orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
@@ -645,10 +659,23 @@ export async function verifySavingsBenefitOutcome(
         );
       }
       propertyId = outcome.match.propertyId;
-      const updated = await tx.hiddenAssetMatchOutcome.update({
-        where: { id: outcome.id },
-        data: { verificationState: 'VERIFIED', verifiedAt: new Date(), verifiedBy: actorId },
+      const verifiedAt = new Date();
+      const verifiedWrite = await tx.hiddenAssetMatchOutcome.updateMany({
+        where: {
+          id: outcome.id,
+          stage: 'RECEIVED',
+          revokedAt: null,
+          verificationState: outcome.verificationState,
+        },
+        data: { verificationState: 'VERIFIED', verifiedAt, verifiedBy: actorId },
       });
+      if (verifiedWrite.count !== 1) {
+        throw new SavingsOutcomeGovernanceError(
+          'OUTCOME_CHANGED_CONCURRENTLY',
+          'This outcome changed concurrently. Refresh the verification queue and try again.',
+        );
+      }
+      const updated = await tx.hiddenAssetMatchOutcome.findUniqueOrThrow({ where: { id: outcome.id } });
       await recordAdminAction({
         actorId,
         action: 'ADMIN_SAVINGS_BENEFITS_OUTCOME_VERIFY',
@@ -692,10 +719,23 @@ export async function verifySavingsBenefitOutcome(
       );
     }
     propertyId = outcome.opportunity.propertyId;
-    const updated = await tx.homeSavingsOpportunityOutcome.update({
-      where: { id: outcome.id },
-      data: { verificationState: 'VERIFIED', verifiedAt: new Date(), verifiedBy: actorId },
+    const verifiedAt = new Date();
+    const verifiedWrite = await tx.homeSavingsOpportunityOutcome.updateMany({
+      where: {
+        id: outcome.id,
+        stage: 'RECEIVED',
+        revokedAt: null,
+        verificationState: outcome.verificationState,
+      },
+      data: { verificationState: 'VERIFIED', verifiedAt, verifiedBy: actorId },
     });
+    if (verifiedWrite.count !== 1) {
+      throw new SavingsOutcomeGovernanceError(
+        'OUTCOME_CHANGED_CONCURRENTLY',
+        'This outcome changed concurrently. Refresh the verification queue and try again.',
+      );
+    }
+    const updated = await tx.homeSavingsOpportunityOutcome.findUniqueOrThrow({ where: { id: outcome.id } });
     await recordAdminAction({
       actorId,
       action: 'ADMIN_SAVINGS_BENEFITS_OUTCOME_VERIFY',
@@ -720,36 +760,44 @@ export async function verifySavingsBenefitOutcome(
   return verified;
 }
 
-export async function listSavingsBenefitOutcomeVerificationQueue() {
-  const [benefits, recurring] = await Promise.all([
+export async function listSavingsBenefitOutcomeVerificationQueue(
+  options: { offset?: number; limit?: number } = {},
+) {
+  const offset = Math.max(0, options.offset ?? 0);
+  const limit = Math.min(100, Math.max(1, options.limit ?? 50));
+  const benefitWhere: Prisma.HiddenAssetMatchOutcomeWhereInput = {
+    stage: 'RECEIVED',
+    revokedAt: null,
+    verificationState: { in: ['SELF_REPORTED', 'EVIDENCE_ATTACHED'] },
+  };
+  const recurringWhere: Prisma.HomeSavingsOpportunityOutcomeWhereInput = {
+    stage: 'RECEIVED',
+    revokedAt: null,
+    verificationState: { in: ['SELF_REPORTED', 'EVIDENCE_ATTACHED'] },
+  };
+  const [benefits, recurring, benefitCount, recurringCount] = await Promise.all([
     prisma.hiddenAssetMatchOutcome.findMany({
-      where: {
-        stage: 'RECEIVED',
-        revokedAt: null,
-        verificationState: { in: ['SELF_REPORTED', 'EVIDENCE_ATTACHED'] },
-      },
+      where: benefitWhere,
       include: {
         documents: { select: { id: true, name: true } },
         match: { include: { program: { select: { name: true } } } },
       },
       orderBy: { recordedAt: 'asc' },
-      take: 200,
+      take: offset + limit,
     }),
     prisma.homeSavingsOpportunityOutcome.findMany({
-      where: {
-        stage: 'RECEIVED',
-        revokedAt: null,
-        verificationState: { in: ['SELF_REPORTED', 'EVIDENCE_ATTACHED'] },
-      },
+      where: recurringWhere,
       include: {
         documents: { select: { id: true, name: true } },
         opportunity: { select: { headline: true } },
       },
       orderBy: { recordedAt: 'asc' },
-      take: 200,
+      take: offset + limit,
     }),
+    prisma.hiddenAssetMatchOutcome.count({ where: benefitWhere }),
+    prisma.homeSavingsOpportunityOutcome.count({ where: recurringWhere }),
   ]);
-  return [
+  const outcomes = [
     ...benefits.map((outcome) => ({
       family: 'BENEFIT' as const,
       id: outcome.id,
@@ -775,5 +823,10 @@ export async function listSavingsBenefitOutcomeVerificationQueue() {
       documents: outcome.documents,
       recordedAt: outcome.recordedAt,
     })),
-  ].sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
+  ]
+    .sort((a, b) =>
+      a.recordedAt.getTime() - b.recordedAt.getTime()
+      || a.id.localeCompare(b.id))
+    .slice(offset, offset + limit);
+  return { outcomes, total: benefitCount + recurringCount, offset, limit };
 }

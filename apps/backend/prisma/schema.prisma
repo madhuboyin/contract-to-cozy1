@@ -2641,6 +2641,9 @@ model PropertyMaintenanceTask {
   // Relations
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
+  // Home Operations Slice 3: reverse side of PropertyHabit.linkedMaintenanceTaskId
+  adoptedByHabit PropertyHabit?
+
   recallMatchId String?      @unique
   recallMatch   RecallMatch?
 
@@ -3695,6 +3698,10 @@ model Message {
 
 // Add new enum for frequency
 enum RecurrenceFrequency {
+  // Home Operations Slice 3: supports Home Habit Coach cadences that don't
+  // fit the existing quarterly-oriented set (see HabitCadence).
+  DAILY
+  WEEKLY
   MONTHLY
   QUARTERLY
   SEMI_ANNUALLY
@@ -11455,6 +11462,9 @@ model HiddenAssetSource {
 
   lastReviewedAt DateTime?
   lastReviewedBy String?
+  // Actor responsible for the current source content/status version. Review
+  // must be performed by a different administrator.
+  lastAuthoredBy String?
   // Material edits increment version and invalidate the attestation. A
   // source is current only when reviewedVersion exactly matches version.
   version         Int @default(1)
@@ -11502,6 +11512,9 @@ model HiddenAssetProgram {
   // ever evaluated against a homeowner's property — see
   // fetchCandidatePrograms in hiddenAssets.service.ts.
   reviewStatus HiddenAssetProgramReviewStatus @default(DRAFT)
+  // Actor responsible for the current editable content version. Approval
+  // must be performed by a different administrator.
+  authoredBy   String?
   reviewedAt   DateTime?
   reviewedBy   String?
   // Approval is bound to the exact content/rule version reviewed. Publishing
@@ -11762,6 +11775,7 @@ model SavingsBenefitPartner {
   status                 SavingsBenefitPartnerStatus @default(ACTIVE)
   supportedJurisdictions String[]
   disclosureVersion      String
+  compensationMayOccur   Boolean  @default(true)
   compensationDisclosure String
   rankingDisclosure      String
   privacyDisclosure      String
@@ -12918,6 +12932,14 @@ model PropertyHabit {
   reasonSummary String? // short human-readable "why this was suggested"
   reasonJson    Json? // structured engine output: rules matched, signals, weights
   contextJson   Json? // seasonal/property/climate context snapshot at generation time
+
+  // Home Operations Slice 3: set when the homeowner adopts this habit into an
+  // ongoing routine. Not a HabitAssignmentStatus value — adoption isn't
+  // completion-shaped (the recommendation stops needing action without the
+  // routine itself ending), it's an ongoing link, checked by presence. Also
+  // what makes adoption idempotent on retry.
+  linkedMaintenanceTaskId String?                  @unique
+  linkedMaintenanceTask   PropertyMaintenanceTask? @relation(fields: [linkedMaintenanceTaskId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

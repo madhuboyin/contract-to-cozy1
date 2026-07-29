@@ -63,8 +63,16 @@ test('enqueuePropertyIntelligenceJobs enqueues all three jobs when the policy al
     });
 
     const service = new mod.JobQueueService();
-    await service.enqueuePropertyIntelligenceJobs('property-1');
+    service.enqueueHomeDigitalTwinRefresh = async (propertyId) => {
+      await mod.getPropertyIntelligenceQueue().add(
+        'REFRESH_HOME_DIGITAL_TWIN',
+        { propertyId, jobType: 'REFRESH_HOME_DIGITAL_TWIN' },
+        { jobId: `${propertyId}-HOME-DIGITAL-TWIN` },
+      );
+    };
+    const queued = await service.enqueuePropertyIntelligenceJobs('property-1');
 
+    assert.equal(queued, true);
     assert.equal(added.length, 3);
   });
 });
@@ -82,8 +90,9 @@ test('enqueuePropertyIntelligenceJobs skips (does not throw) when policy-disable
     });
 
     const service = new mod.JobQueueService();
-    await assert.doesNotReject(() => service.enqueuePropertyIntelligenceJobs('property-1'));
+    const queued = await service.enqueuePropertyIntelligenceJobs('property-1');
 
+    assert.equal(queued, false);
     assert.equal(added.length, 0, 'a background side-effect must not enqueue when policy-disabled');
   });
 });

@@ -48,6 +48,11 @@ export async function savingsBenefitsFollowUpReminderJob(
   for (const action of actions) {
     let claimTime: Date | null = null;
     try {
+      const followUpAt = action.followUpAt;
+      if (!followUpAt) {
+        skipped += 1;
+        continue;
+      }
       const property = await deps.prisma.property.findUnique({
         where: { id: action.propertyId },
         select: { homeownerProfile: { select: { userId: true } } },
@@ -101,6 +106,10 @@ export async function savingsBenefitsFollowUpReminderJob(
           type: 'SAVINGS_BENEFIT_ACTION_FOLLOW_UP',
           entityType: 'SavingsBenefitAction',
           entityId: action.id,
+          metadata: {
+            path: ['followUpAt'],
+            equals: followUpAt.toISOString(),
+          },
         },
         select: { id: true },
       });
@@ -115,7 +124,10 @@ export async function savingsBenefitsFollowUpReminderJob(
           entityId: action.id,
           category: 'SAVINGS_BENEFITS',
           urgency: 'ROUTINE',
-          metadata: { propertyId: action.propertyId },
+          metadata: {
+            propertyId: action.propertyId,
+            followUpAt: followUpAt.toISOString(),
+          },
         });
         if (!created) {
           await deps.prisma.savingsBenefitAction.updateMany({

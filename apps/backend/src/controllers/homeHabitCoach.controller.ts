@@ -91,6 +91,26 @@ export async function generateHabits(req: CustomRequest, res: Response, next: Ne
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 
+export async function adoptHabit(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { propertyId, habitId } = req.params;
+    const result = await service.adoptHabit(propertyId, habitId, req.user!.userId);
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId,
+      moduleKey: AnalyticsModule.MAINTENANCE,
+      featureKey: AnalyticsFeature.HOME_HABIT_COACH,
+      metadataJson: { actionType: 'adopt_habit', habitId },
+    });
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function completeHabit(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { propertyId, habitId } = req.params;

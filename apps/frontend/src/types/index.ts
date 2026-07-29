@@ -2400,6 +2400,13 @@ export interface SavingsBenefitsUnifiedItemDTO {
   updatedAt: string;
   /** Other item IDs sharing this program's exclusion group — never hides real recorded value, only flags it. */
   mutuallyExclusiveWith: string[];
+  canonicalAction: {
+    id: string;
+    actionType: string;
+    state: 'STARTED' | 'COMPLETED' | 'CANCELLED';
+    handoffStatus: 'CONSENTED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'FULFILLED' | 'FAILED' | 'REVOKED' | null;
+    partner: { id: string; name: string } | null;
+  } | null;
 }
 
 export interface SavingsBenefitsExclusionConflictDTO {

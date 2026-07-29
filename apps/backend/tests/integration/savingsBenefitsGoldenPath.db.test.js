@@ -15,8 +15,9 @@ test('owner-applied database enforces Savings & Benefits editorial and operation
   const client = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
   try {
     const requiredColumns = {
-      hidden_asset_sources: ['version', 'reviewedVersion'],
-      hidden_asset_programs: ['version', 'approvedVersion'],
+      hidden_asset_sources: ['version', 'reviewedVersion', 'lastAuthoredBy'],
+      hidden_asset_programs: ['version', 'approvedVersion', 'authoredBy'],
+      savings_benefit_partners: ['compensationMayOccur'],
       savings_benefit_actions: [
         'partnerId',
         'handoffStatus',
@@ -92,35 +93,50 @@ test('real services persist the reviewed-source author-review-publish golden pat
   const {
     isReviewedProgramCurrent,
   } = require('../../src/services/hiddenAssets/sourceFreshness.ts');
+  const { HiddenAssetService } = require('../../src/services/hiddenAssets.service.ts');
+  const {
+    createCanonicalAction,
+    recordCanonicalActionOutcome,
+  } = require('../../src/services/savingsBenefitsCanonical.service.ts');
+  const {
+    revokeHiddenAssetMatchOutcome,
+    verifySavingsBenefitOutcome,
+  } = require('../../src/services/savingsOutcome.service.ts');
+  const {
+    savingsBenefitsUnifiedService,
+  } = require('../../src/services/savingsBenefitsUnified.service.ts');
 
   const runId = `savings-benefits-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  let userId;
+  const userIds = [];
   let sourceId;
   let programId;
+  let evidenceDocumentId;
   try {
-    const admin = await prisma.user.create({
-      data: {
-        email: `${runId}@example.invalid`,
-        firstName: 'Savings',
-        lastName: 'Benefits Acceptance',
-        role: 'ADMIN',
-        passwordHash: 'acceptance-only-not-a-login',
-      },
-    });
-    userId = admin.id;
+    const [author, reviewer, publisher] = await Promise.all(
+      ['author', 'reviewer', 'publisher'].map((persona) => prisma.user.create({
+        data: {
+          email: `${runId}-${persona}@example.invalid`,
+          firstName: 'Savings',
+          lastName: `Benefits ${persona}`,
+          role: 'ADMIN',
+          passwordHash: 'acceptance-only-not-a-login',
+        },
+      })),
+    );
+    userIds.push(author.id, reviewer.id, publisher.id);
 
     const source = await savingsBenefitsAdminService.createSource({
       name: `Official acceptance source ${runId}`,
       sourceKind: 'OFFICIAL_GOVERNMENT',
       officialUrl: `https://example.gov/${runId}`,
       reviewSlaDays: 180,
-    }, userId);
+    }, author.id);
     sourceId = source.id;
     assert.equal(source.lastReviewedAt, null);
 
     const reviewed = await savingsBenefitsAdminService.reviewSource(
       source.id,
-      userId,
+      reviewer.id,
       'Acceptance reviewer checked the controlling publication.',
     );
     assert.equal(reviewed.reviewedVersion, reviewed.version);
@@ -143,24 +159,24 @@ test('real services persist the reviewed-source author-review-publish golden pat
         value: 'NJ',
         kind: 'MANDATORY',
       }],
-    }, userId);
+    }, author.id);
     programId = program.id;
 
     await transitionSavingsBenefitProgram({
       programId: program.id,
-      actorId: userId,
+      actorId: author.id,
       action: 'SUBMIT_FOR_REVIEW',
       reason: 'Acceptance author submitted the exact content version.',
     });
     await transitionSavingsBenefitProgram({
       programId: program.id,
-      actorId: userId,
+      actorId: reviewer.id,
       action: 'APPROVE',
       reason: 'Acceptance reviewer approved the official criteria.',
     });
     await transitionSavingsBenefitProgram({
       programId: program.id,
-      actorId: userId,
+      actorId: publisher.id,
       action: 'PUBLISH',
       reason: 'Acceptance publisher released the approved version.',
     });
@@ -173,13 +189,97 @@ test('real services persist the reviewed-source author-review-publish golden pat
     assert.equal(published.approvedVersion, published.version);
     assert.equal(isReviewedProgramCurrent(published, published.source), true);
 
+    const homeowner = await prisma.user.create({
+      data: {
+        email: `${runId}-homeowner@example.invalid`,
+        firstName: 'Golden',
+        lastName: 'Homeowner',
+        role: 'HOMEOWNER',
+        passwordHash: 'acceptance-only-not-a-login',
+        homeownerProfile: {
+          create: {
+            properties: {
+              create: {
+                name: 'Golden path home',
+                address: '1 Acceptance Way',
+                city: 'Trenton',
+                state: 'NJ',
+                zipCode: '08608',
+              },
+            },
+          },
+        },
+      },
+      include: { homeownerProfile: { include: { properties: true } } },
+    });
+    userIds.push(homeowner.id);
+    const property = homeowner.homeownerProfile.properties[0];
+    const scan = await new HiddenAssetService().refreshMatchesInternal(property.id);
+    assert.ok(scan.matchesFound >= 1, 'Reviewed program did not produce a property match');
+    const match = await prisma.propertyHiddenAssetMatch.findFirstOrThrow({
+      where: { propertyId: property.id, programId: program.id },
+    });
+    const action = await createCanonicalAction(property.id, match.id, homeowner.id, {
+      idempotencyKey: `${runId}:prepare`,
+      family: 'BENEFIT',
+      actionType: 'PREPARE',
+    });
+    await recordCanonicalActionOutcome(property.id, action.id, homeowner.id, {
+      idempotencyKey: `${runId}:submitted`,
+      stage: 'SUBMITTED',
+    });
+    await recordCanonicalActionOutcome(property.id, action.id, homeowner.id, {
+      idempotencyKey: `${runId}:approved`,
+      stage: 'APPROVED',
+    });
+    const evidence = await prisma.document.create({
+      data: {
+        propertyId: property.id,
+        // Document Vault authorization stores the homeownerProfile id in uploadedBy.
+        uploadedBy: homeowner.homeownerProfile.id,
+        type: 'OTHER',
+        name: 'Golden award letter',
+        fileUrl: `acceptance://${runId}/award`,
+        fileSize: 256,
+        mimeType: 'application/pdf',
+      },
+    });
+    evidenceDocumentId = evidence.id;
+    const received = await recordCanonicalActionOutcome(property.id, action.id, homeowner.id, {
+      idempotencyKey: `${runId}:received`,
+      stage: 'RECEIVED',
+      amountReceived: 500,
+      currency: 'USD',
+      evidenceNote: 'Award letter received.',
+      documentIds: [evidence.id],
+    });
+    await verifySavingsBenefitOutcome(
+      'BENEFIT',
+      received.id,
+      reviewer.id,
+      'Acceptance reviewer independently checked the award letter.',
+    );
+    const realized = await savingsBenefitsUnifiedService.getUnified(property.id, homeowner.id);
+    assert.equal(realized.realized.length, 1);
+    assert.equal(realized.realized[0].verificationState, 'VERIFIED');
+    assert.equal(realized.totals.verifiedValueByCurrency.USD, 500);
+
+    await revokeHiddenAssetMatchOutcome(
+      received.id,
+      homeowner.id,
+      'Acceptance correction: the award was reversed.',
+    );
+    const corrected = await savingsBenefitsUnifiedService.getUnified(property.id, homeowner.id);
+    assert.equal(corrected.realized.length, 0);
+    assert.equal(corrected.totals.verifiedValueByCurrency.USD, undefined);
+
     await savingsBenefitsAdminService.updateSource(source.id, {
       name: `${source.name} materially changed`,
       sourceKind: source.sourceKind,
       officialUrl: source.officialUrl,
       reviewSlaDays: source.reviewSlaDays,
       status: source.status,
-    }, userId);
+    }, author.id);
     const invalidatedSource = await prisma.hiddenAssetSource.findUniqueOrThrow({
       where: { id: source.id },
     });
@@ -189,17 +289,18 @@ test('real services persist the reviewed-source author-review-publish golden pat
 
     const audited = await prisma.auditLog.count({
       where: {
-        userId,
+        userId: { in: userIds },
         entityId: { in: [source.id, program.id] },
       },
     });
     assert.ok(audited >= 7, `Expected the full workflow to be audited, found ${audited} records`);
   } finally {
+    if (evidenceDocumentId) await prisma.document.deleteMany({ where: { id: evidenceDocumentId } });
     if (programId) await prisma.hiddenAssetProgram.deleteMany({ where: { id: programId } });
     if (sourceId) await prisma.hiddenAssetSource.deleteMany({ where: { id: sourceId } });
-    if (userId) {
-      await prisma.auditLog.deleteMany({ where: { userId } });
-      await prisma.user.deleteMany({ where: { id: userId } });
+    if (userIds.length > 0) {
+      await prisma.auditLog.deleteMany({ where: { userId: { in: userIds } } });
+      await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     }
   }
 });

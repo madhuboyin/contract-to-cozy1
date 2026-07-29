@@ -33,6 +33,15 @@ function handleClientError(err: unknown, res: Response): boolean {
   return false;
 }
 
+function paginationFromQuery(req: AuthRequest) {
+  const rawOffset = Number(req.query.offset ?? 0);
+  const rawLimit = Number(req.query.limit ?? 50);
+  return {
+    offset: Number.isSafeInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0,
+    limit: Number.isSafeInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50,
+  };
+}
+
 export async function listSources(_req: AuthRequest, res: Response): Promise<void> {
   try {
     const sources = await savingsBenefitsAdminService.listSources();
@@ -207,10 +216,10 @@ export async function verifyOutcome(req: AuthRequest, res: Response): Promise<vo
   }
 }
 
-export async function listOutcomeVerificationQueue(_req: AuthRequest, res: Response): Promise<void> {
+export async function listOutcomeVerificationQueue(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const outcomes = await listSavingsBenefitOutcomeVerificationQueue();
-    res.json({ success: true, data: { outcomes } });
+    const page = await listSavingsBenefitOutcomeVerificationQueue(paginationFromQuery(req));
+    res.json({ success: true, data: page });
   } catch (err: any) {
     logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to list verification queue');
     res.status(500).json({ success: false, error: { message: 'Failed to list verification queue' } });
@@ -245,9 +254,9 @@ export async function upsertPartner(req: AuthRequest, res: Response): Promise<vo
   }
 }
 
-export async function listPartnerHandoffs(_req: AuthRequest, res: Response): Promise<void> {
+export async function listPartnerHandoffs(req: AuthRequest, res: Response): Promise<void> {
   try {
-    res.json({ success: true, data: { handoffs: await listSavingsBenefitHandoffs() } });
+    res.json({ success: true, data: await listSavingsBenefitHandoffs(paginationFromQuery(req)) });
   } catch (err: any) {
     logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to list partner handoffs');
     res.status(500).json({ success: false, error: { message: 'Failed to list partner handoffs' } });
@@ -272,8 +281,11 @@ export async function transitionHandoff(req: AuthRequest, res: Response): Promis
 
 export async function listPartnerComplaints(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const complaints = await listSavingsBenefitPartnerComplaints(req.query.status as any);
-    res.json({ success: true, data: { complaints } });
+    const page = await listSavingsBenefitPartnerComplaints(
+      req.query.status as any,
+      paginationFromQuery(req),
+    );
+    res.json({ success: true, data: page });
   } catch (err: any) {
     logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to list complaints');
     res.status(500).json({ success: false, error: { message: 'Failed to list complaints' } });

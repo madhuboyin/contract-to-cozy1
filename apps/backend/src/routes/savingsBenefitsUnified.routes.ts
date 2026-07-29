@@ -5,6 +5,7 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { getSavingsBenefitsUnifiedForProperty } from '../controllers/savingsBenefitsUnified.controller';
 import {
   getSavingsBenefitsCoverage,
+  getSavingsBenefitsEligiblePartners,
   getSavingsBenefitsOpportunityDetail,
   patchSavingsBenefitsAction,
   postSavingsBenefitHandoffRevocation,
@@ -40,6 +41,12 @@ router.get(
   '/properties/:propertyId/savings-benefits/coverage',
   propertyAuthMiddleware,
   getSavingsBenefitsCoverage,
+);
+
+router.get(
+  '/properties/:propertyId/savings-benefits/partners',
+  propertyAuthMiddleware,
+  getSavingsBenefitsEligiblePartners,
 );
 
 router.get(

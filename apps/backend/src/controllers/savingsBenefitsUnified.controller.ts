@@ -17,6 +17,7 @@ import type {
 } from '../services/savingsOutcome.service';
 import {
   createSavingsBenefitPartnerComplaint,
+  listEligibleSavingsBenefitPartnersForProperty,
   revokeSavingsBenefitHandoff,
 } from '../services/savingsBenefitsPartner.service';
 
@@ -125,6 +126,22 @@ export async function getSavingsBenefitsCoverage(req: CustomRequest, res: Respon
   } catch (error: any) {
     const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 500;
     return res.status(status).json({ success: false, message: error?.message || 'Failed to fetch coverage.' });
+  }
+}
+
+export async function getSavingsBenefitsEligiblePartners(req: CustomRequest, res: Response) {
+  try {
+    const partners = await listEligibleSavingsBenefitPartnersForProperty(
+      req.params.propertyId,
+      requireUserId(req),
+    );
+    return res.json({ success: true, data: { partners } });
+  } catch (error: any) {
+    const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      message: error?.message || 'Failed to fetch eligible partners.',
+    });
   }
 }
 

@@ -175,6 +175,7 @@ export interface SavingsBenefitPartnerItem {
   status: 'ACTIVE' | 'PAUSED' | 'RETIRED';
   supportedJurisdictions: string[];
   disclosureVersion: string;
+  compensationMayOccur: boolean;
   compensationDisclosure: string;
   rankingDisclosure: string;
   privacyDisclosure: string;
@@ -307,9 +308,17 @@ export async function transitionProgram(
   return res.data;
 }
 
-export async function fetchOutcomeVerificationQueue(): Promise<{ outcomes: OutcomeVerificationQueueItem[] }> {
-  const res = await api.get<{ outcomes: OutcomeVerificationQueueItem[] }>(
-    '/api/admin/savings-benefits/outcome-verification-queue',
+export interface AdminQueuePage {
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export async function fetchOutcomeVerificationQueue(offset = 0, limit = 50): Promise<{
+  outcomes: OutcomeVerificationQueueItem[];
+} & AdminQueuePage> {
+  const res = await api.get<{ outcomes: OutcomeVerificationQueueItem[] } & AdminQueuePage>(
+    `/api/admin/savings-benefits/outcome-verification-queue?offset=${offset}&limit=${limit}`,
   );
   return res.data;
 }
@@ -327,11 +336,11 @@ export async function fetchSavingsBenefitPartners(): Promise<{ partners: Savings
   return res.data;
 }
 
-export async function fetchSavingsBenefitPartnerHandoffs(): Promise<{
+export async function fetchSavingsBenefitPartnerHandoffs(offset = 0, limit = 50): Promise<{
   handoffs: SavingsBenefitPartnerHandoffItem[];
-}> {
-  const res = await api.get<{ handoffs: SavingsBenefitPartnerHandoffItem[] }>(
-    '/api/admin/savings-benefits/handoffs',
+} & AdminQueuePage> {
+  const res = await api.get<{ handoffs: SavingsBenefitPartnerHandoffItem[] } & AdminQueuePage>(
+    `/api/admin/savings-benefits/handoffs?offset=${offset}&limit=${limit}`,
   );
   return res.data;
 }
@@ -351,11 +360,11 @@ export async function upsertSavingsBenefitPartner(
   await api.put(`/api/admin/savings-benefits/partners/${partnerId}`, input);
 }
 
-export async function fetchSavingsBenefitPartnerComplaints(): Promise<{
+export async function fetchSavingsBenefitPartnerComplaints(offset = 0, limit = 50): Promise<{
   complaints: SavingsBenefitPartnerComplaintItem[];
-}> {
-  const res = await api.get<{ complaints: SavingsBenefitPartnerComplaintItem[] }>(
-    '/api/admin/savings-benefits/partner-complaints?status=OPEN',
+} & AdminQueuePage> {
+  const res = await api.get<{ complaints: SavingsBenefitPartnerComplaintItem[] } & AdminQueuePage>(
+    `/api/admin/savings-benefits/partner-complaints?status=OPEN&offset=${offset}&limit=${limit}`,
   );
   return res.data;
 }

@@ -20,6 +20,7 @@ import { asNumber, round2 } from './homeSavings/helpers';
 import { propertyTaxAppealCaseService } from './propertyTax/propertyTaxAppealCase.service';
 import { detectCoverageGaps } from './coverageGap.service';
 import { logger } from '../lib/logger';
+import { isReviewedProgramCurrent } from './hiddenAssets/sourceFreshness';
 
 export type SavingsBenefitsFamily = 'BENEFIT' | 'RECURRING_COST';
 export type SavingsBenefitsLifecycle = 'IN_PROGRESS' | 'REALIZED';
@@ -48,6 +49,13 @@ export interface SavingsBenefitsUnifiedItemDTO {
   // two programs that were supposed to be mutually exclusive — never used
   // to hide or discount the recorded amount, only to surface it.
   mutuallyExclusiveWith: string[];
+  canonicalAction: {
+    id: string;
+    actionType: string;
+    state: 'STARTED' | 'COMPLETED' | 'CANCELLED';
+    handoffStatus: 'CONSENTED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'FULFILLED' | 'FAILED' | 'REVOKED' | null;
+    partner: { id: string; name: string } | null;
+  } | null;
 }
 
 export interface SavingsBenefitsExclusionConflictDTO {
@@ -126,11 +134,26 @@ async function assertPropertyForUser(propertyId: string, userId: string) {
 }
 
 type PursuingMatchRow = Prisma.PropertyHiddenAssetMatchGetPayload<{
-  include: { program: true; outcomes: { orderBy: { recordedAt: 'desc' }; take: 1 } };
+  include: {
+    program: { include: { source: true } };
+    outcomes: { orderBy: { recordedAt: 'desc' }; take: 1 };
+    savingsBenefitActions: {
+      orderBy: { createdAt: 'desc' };
+      take: 1;
+      include: { partner: true };
+    };
+  };
 }>;
 
 type AppliedOpportunityRow = Prisma.HomeSavingsOpportunityGetPayload<{
-  include: { outcomes: { orderBy: { recordedAt: 'desc' }; take: 1 } };
+  include: {
+    outcomes: { orderBy: { recordedAt: 'desc' }; take: 1 };
+    savingsBenefitActions: {
+      orderBy: { createdAt: 'desc' };
+      take: 1;
+      include: { partner: true };
+    };
+  };
 }>;
 
 type ReceivedMatchOutcomeRow = Prisma.HiddenAssetMatchOutcomeGetPayload<{
@@ -144,6 +167,7 @@ type ReceivedOpportunityOutcomeRow = Prisma.HomeSavingsOpportunityOutcomeGetPayl
 function mapPursuingMatch(row: PursuingMatchRow, propertyId: string, mutuallyExclusiveWith: string[] = []): SavingsBenefitsUnifiedItemDTO {
   const program = row.program;
   const latestOutcome = row.outcomes[0] ?? null;
+  const action = row.savingsBenefitActions[0] ?? null;
   return {
     id: row.id,
     family: 'BENEFIT',
@@ -165,11 +189,21 @@ function mapPursuingMatch(row: PursuingMatchRow, propertyId: string, mutuallyExc
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=benefits&matchId=${row.id}`,
     updatedAt: (latestOutcome?.recordedAt ?? row.lastEvaluatedAt).toISOString(),
     mutuallyExclusiveWith,
+    canonicalAction: action
+      ? {
+          id: action.id,
+          actionType: action.actionType,
+          state: action.state,
+          handoffStatus: action.handoffStatus,
+          partner: action.partner ? { id: action.partner.id, name: action.partner.name } : null,
+        }
+      : null,
   };
 }
 
 function mapAppliedOpportunity(row: AppliedOpportunityRow, propertyId: string): SavingsBenefitsUnifiedItemDTO {
   const latestOutcome = row.outcomes[0] ?? null;
+  const action = row.savingsBenefitActions[0] ?? null;
   const annual = asNumber(row.estimatedAnnualSavings);
   const monthly = asNumber(row.estimatedMonthlySavings);
   const grossValue = annual ?? (monthly != null ? round2(monthly * 12) : null);
@@ -201,6 +235,15 @@ function mapAppliedOpportunity(row: AppliedOpportunityRow, propertyId: string): 
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=recurring&categoryKey=${row.categoryKey}`,
     updatedAt: (latestOutcome?.recordedAt ?? row.updatedAt).toISOString(),
     mutuallyExclusiveWith: [],
+    canonicalAction: action
+      ? {
+          id: action.id,
+          actionType: action.actionType,
+          state: action.state,
+          handoffStatus: action.handoffStatus,
+          partner: action.partner ? { id: action.partner.id, name: action.partner.name } : null,
+        }
+      : null,
   };
 }
 
@@ -226,6 +269,7 @@ function mapReceivedMatchOutcome(outcome: ReceivedMatchOutcomeRow, propertyId: s
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=benefits&matchId=${match.id}`,
     updatedAt: outcome.recordedAt.toISOString(),
     mutuallyExclusiveWith,
+    canonicalAction: null,
   };
 }
 
@@ -252,6 +296,7 @@ function mapReceivedOpportunityOutcome(outcome: ReceivedOpportunityOutcomeRow, p
     detailHref: `/dashboard/properties/${propertyId}/tools/savings-benefits?section=recurring&categoryKey=${opportunity.categoryKey}`,
     updatedAt: outcome.recordedAt.toISOString(),
     mutuallyExclusiveWith: [],
+    canonicalAction: null,
   };
 }
 
@@ -369,7 +414,15 @@ export class SavingsBenefitsUnifiedService {
     const [pursuingMatches, appliedOpportunities, receivedMatchOutcomes, receivedOpportunityOutcomes, relatedOpportunities] = await Promise.all([
       prisma.propertyHiddenAssetMatch.findMany({
         where: { propertyId, status: PropertyHiddenAssetMatchStatus.PURSUING },
-        include: { program: true, outcomes: { orderBy: { recordedAt: 'desc' }, take: 1 } },
+        include: {
+          program: { include: { source: true } },
+          outcomes: { orderBy: { recordedAt: 'desc' }, take: 1 },
+          savingsBenefitActions: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: { partner: true },
+          },
+        },
       }),
       prisma.homeSavingsOpportunity.findMany({
         where: {
@@ -385,7 +438,14 @@ export class SavingsBenefitsUnifiedService {
             ],
           },
         },
-        include: { outcomes: { orderBy: { recordedAt: 'desc' }, take: 1 } },
+        include: {
+          outcomes: { orderBy: { recordedAt: 'desc' }, take: 1 },
+          savingsBenefitActions: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: { partner: true },
+          },
+        },
       }),
       prisma.hiddenAssetMatchOutcome.findMany({
         where: {
@@ -418,16 +478,19 @@ export class SavingsBenefitsUnifiedService {
     // A match/opportunity that already has a RECEIVED outcome belongs in
     // "realized," not "in progress," even if its own status field (which
     // reflects homeowner intent, not the verified ledger) hasn't caught up.
+    const currentPursuingMatches = pursuingMatches.filter((match) =>
+      isReviewedProgramCurrent(match.program, match.program.source),
+    );
     const receivedMatchIds = new Set(receivedMatchOutcomes.map((o) => o.matchId));
     const receivedOpportunityIds = new Set(receivedOpportunityOutcomes.map((o) => o.opportunityId));
 
     const pursuingSiblings = computeExclusionSiblings(
-      pursuingMatches
+      currentPursuingMatches
         .filter((m) => !receivedMatchIds.has(m.id))
         .map((m) => ({ id: m.id, exclusionGroupKey: m.program.exclusionGroupKey })),
     );
     const inProgress = [
-      ...pursuingMatches
+      ...currentPursuingMatches
         .filter((m) => !receivedMatchIds.has(m.id))
         .map((m) => mapPursuingMatch(m, propertyId, pursuingSiblings.get(m.id) ?? [])),
       ...appliedOpportunities.filter((o) => !receivedOpportunityIds.has(o.id)).map((o) => mapAppliedOpportunity(o, propertyId)),

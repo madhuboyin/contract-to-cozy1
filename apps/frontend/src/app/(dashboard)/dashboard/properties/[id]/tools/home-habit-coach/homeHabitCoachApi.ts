@@ -54,6 +54,16 @@ export async function getHabitDetail(
   return res.data.habit;
 }
 
+export async function adoptHabit(
+  propertyId: string,
+  habitId: string,
+): Promise<PropertyHabit> {
+  const res = await api.post<{ habit: PropertyHabit }>(
+    `${base(propertyId)}/${habitId}/adopt`,
+  );
+  return res.data.habit;
+}
+
 export async function completeHabit(
   propertyId: string,
   habitId: string,

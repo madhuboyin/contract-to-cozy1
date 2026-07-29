@@ -138,6 +138,47 @@ function fmtDate(value: string | null): string {
   return new Date(value).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+function QueuePager({
+  offset,
+  limit,
+  total,
+  onOffsetChange,
+}: {
+  offset: number;
+  limit: number;
+  total: number;
+  onOffsetChange: (offset: number) => void;
+}) {
+  if (total <= limit) return null;
+  return (
+    <nav aria-label="Queue pagination" className="flex items-center justify-between gap-3 pt-2">
+      <p className="text-xs text-slate-500">
+        {offset + 1}–{Math.min(offset + limit, total)} of {total}
+      </p>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={offset === 0}
+          onClick={() => onOffsetChange(Math.max(0, offset - limit))}
+        >
+          Previous
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={offset + limit >= total}
+          onClick={() => onOffsetChange(offset + limit)}
+        >
+          Next
+        </Button>
+      </div>
+    </nav>
+  );
+}
+
 function SourceFormDialog({
   open,
   onOpenChange,
@@ -655,6 +696,61 @@ function ReasonConfirmDialog({
   );
 }
 
+function OperationalReasonDialog({
+  open,
+  title,
+  description,
+  pending,
+  destructive = false,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  pending: boolean;
+  destructive?: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setReason('');
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <Label htmlFor="operational-reason">Reason</Label>
+        <Textarea
+          id="operational-reason"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          className="min-h-[96px]"
+          placeholder="Required audit and resolution notes"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
+          <Button
+            variant={destructive ? 'destructive' : 'default'}
+            disabled={pending || reason.trim().length < 3}
+            onClick={() => onConfirm(reason.trim())}
+          >
+            {pending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Confirm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function SourceReviewDialog({
   source,
   onOpenChange,
@@ -766,6 +862,7 @@ function PartnerFormDialog({
   const [name, setName] = useState('');
   const [jurisdictions, setJurisdictions] = useState('');
   const [disclosureVersion, setDisclosureVersion] = useState('');
+  const [compensationMayOccur, setCompensationMayOccur] = useState(true);
   const [compensationDisclosure, setCompensationDisclosure] = useState('');
   const [rankingDisclosure, setRankingDisclosure] = useState('');
   const [privacyDisclosure, setPrivacyDisclosure] = useState('');
@@ -780,6 +877,7 @@ function PartnerFormDialog({
     setName(initial?.name ?? '');
     setJurisdictions(initial?.supportedJurisdictions.join(', ') ?? '');
     setDisclosureVersion(initial?.disclosureVersion ?? '');
+    setCompensationMayOccur(initial?.compensationMayOccur ?? true);
     setCompensationDisclosure(initial?.compensationDisclosure ?? '');
     setRankingDisclosure(initial?.rankingDisclosure ?? '');
     setPrivacyDisclosure(initial?.privacyDisclosure ?? '');
@@ -830,6 +928,14 @@ function PartnerFormDialog({
           <div><Label htmlFor="partner-effective-at">Effective at</Label><Input id="partner-effective-at" type="datetime-local" value={effectiveAt} onChange={(e) => setEffectiveAt(e.target.value)} /></div>
           <div><Label htmlFor="partner-expires-at">Expires at (optional)</Label><Input id="partner-expires-at" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} /></div>
           <div className="sm:col-span-2"><Label htmlFor="partner-compensation">Compensation disclosure</Label><Textarea id="partner-compensation" value={compensationDisclosure} onChange={(e) => setCompensationDisclosure(e.target.value)} /></div>
+          <label className="sm:col-span-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={compensationMayOccur}
+              onChange={(event) => setCompensationMayOccur(event.target.checked)}
+            />
+            Contract to Cozy may receive compensation from this partner
+          </label>
           <div className="sm:col-span-2"><Label htmlFor="partner-ranking">Ranking disclosure</Label><Textarea id="partner-ranking" value={rankingDisclosure} onChange={(e) => setRankingDisclosure(e.target.value)} /></div>
           <div className="sm:col-span-2"><Label htmlFor="partner-privacy">Privacy disclosure</Label><Textarea id="partner-privacy" value={privacyDisclosure} onChange={(e) => setPrivacyDisclosure(e.target.value)} /></div>
         </div>
@@ -842,6 +948,7 @@ function PartnerFormDialog({
               status,
               supportedJurisdictions: jurisdictions.split(',').map((value) => value.trim()).filter(Boolean),
               disclosureVersion: disclosureVersion.trim(),
+              compensationMayOccur,
               compensationDisclosure: compensationDisclosure.trim(),
               rankingDisclosure: rankingDisclosure.trim(),
               privacyDisclosure: privacyDisclosure.trim(),
@@ -912,14 +1019,18 @@ export default function SavingsBenefitsAdminPage() {
     title: 'Savings and Benefits',
     subtitle: 'Reviewed source registry: sources, programs, and the review/publish workflow.',
   });
+  const queuePageSize = 50;
+  const [verificationOffset, setVerificationOffset] = useState(0);
+  const [complaintOffset, setComplaintOffset] = useState(0);
+  const [handoffOffset, setHandoffOffset] = useState(0);
 
   const sourcesQ = useSavingsBenefitsSources();
   const programsQ = useSavingsBenefitsPrograms();
   const queuesQ = useSavingsBenefitsQueues();
-  const outcomeVerificationQ = useSavingsBenefitsOutcomeVerificationQueue();
+  const outcomeVerificationQ = useSavingsBenefitsOutcomeVerificationQueue(verificationOffset, queuePageSize);
   const partnersQ = useSavingsBenefitPartners();
-  const partnerComplaintsQ = useSavingsBenefitPartnerComplaints();
-  const partnerHandoffsQ = useSavingsBenefitPartnerHandoffs();
+  const partnerComplaintsQ = useSavingsBenefitPartnerComplaints(complaintOffset, queuePageSize);
+  const partnerHandoffsQ = useSavingsBenefitPartnerHandoffs(handoffOffset, queuePageSize);
   const createSourceM = useCreateSavingsBenefitsSource();
   const updateSourceM = useUpdateSavingsBenefitsSource();
   const reviewSourceM = useReviewSavingsBenefitsSource();
@@ -937,6 +1048,16 @@ export default function SavingsBenefitsAdminPage() {
   const [target, setTarget] = useState<{ item: EditorialQueueItem; action: LifecycleAction } | null>(null);
   const [verificationTarget, setVerificationTarget] = useState<OutcomeVerificationQueueItem | null>(null);
   const [partnerDialog, setPartnerDialog] = useState<{ open: boolean; item: SavingsBenefitPartnerItem | null }>({ open: false, item: null });
+  const [handoffDecision, setHandoffDecision] = useState<{
+    actionId: string;
+    status: 'FAILED' | 'REVOKED';
+    partnerName: string;
+  } | null>(null);
+  const [complaintDecision, setComplaintDecision] = useState<{
+    complaintId: string;
+    partnerName: string;
+    status: 'RESOLVED' | 'DISMISSED';
+  } | null>(null);
 
   if (guard.status !== 'ready') return guard.node;
 
@@ -1104,6 +1225,12 @@ export default function SavingsBenefitsAdminPage() {
               {(outcomeVerificationQ.data?.outcomes ?? []).length === 0 ? (
                 <p className="text-xs text-slate-400">No received outcomes are waiting for verification.</p>
               ) : null}
+              <QueuePager
+                offset={verificationOffset}
+                limit={queuePageSize}
+                total={outcomeVerificationQ.data?.total ?? 0}
+                onOffsetChange={setVerificationOffset}
+              />
             </div>
           )}
         </TabsContent>
@@ -1140,22 +1267,35 @@ export default function SavingsBenefitsAdminPage() {
                 <Button
                   size="sm"
                   disabled={resolveComplaintM.isPending}
-                  onClick={() => {
-                    const resolution = window.prompt('Resolution notes');
-                    if (resolution?.trim() && resolution.trim().length >= 3) {
-                      resolveComplaintM.mutate({
-                        complaintId: complaint.id,
-                        status: 'RESOLVED',
-                        resolution: resolution.trim(),
-                      });
-                    }
-                  }}
+                  onClick={() => setComplaintDecision({
+                    complaintId: complaint.id,
+                    partnerName: complaint.action.partner?.name ?? 'Unknown partner',
+                    status: 'RESOLVED',
+                  })}
                 >
                   Resolve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={resolveComplaintM.isPending}
+                  onClick={() => setComplaintDecision({
+                    complaintId: complaint.id,
+                    partnerName: complaint.action.partner?.name ?? 'Unknown partner',
+                    status: 'DISMISSED',
+                  })}
+                >
+                  Dismiss
                 </Button>
               </div>
             ))}
             {(partnerComplaintsQ.data?.complaints ?? []).length === 0 ? <p className="text-xs text-slate-400">No open complaints.</p> : null}
+            <QueuePager
+              offset={complaintOffset}
+              limit={queuePageSize}
+              total={partnerComplaintsQ.data?.total ?? 0}
+              onOffsetChange={setComplaintOffset}
+            />
           </section>
           <section aria-labelledby="partner-handoffs-heading" className="space-y-2">
             <h3 id="partner-handoffs-heading" className="text-sm font-semibold">Partner handoffs and SLA</h3>
@@ -1219,9 +1359,43 @@ export default function SavingsBenefitsAdminPage() {
                     Mark fulfilled
                   </Button>
                 ) : null}
+                {['SUBMITTED', 'ACKNOWLEDGED'].includes(handoff.handoffStatus) ? (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={transitionHandoffM.isPending}
+                    onClick={() => setHandoffDecision({
+                      actionId: handoff.id,
+                      status: 'FAILED',
+                      partnerName: handoff.partner?.name ?? 'Unknown partner',
+                    })}
+                  >
+                    Mark failed
+                  </Button>
+                ) : null}
+                {['CONSENTED', 'SUBMITTED', 'ACKNOWLEDGED'].includes(handoff.handoffStatus) ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={transitionHandoffM.isPending}
+                    onClick={() => setHandoffDecision({
+                      actionId: handoff.id,
+                      status: 'REVOKED',
+                      partnerName: handoff.partner?.name ?? 'Unknown partner',
+                    })}
+                  >
+                    Revoke
+                  </Button>
+                ) : null}
               </div>
             ))}
             {(partnerHandoffsQ.data?.handoffs ?? []).length === 0 ? <p className="text-xs text-slate-400">No partner handoffs.</p> : null}
+            <QueuePager
+              offset={handoffOffset}
+              limit={queuePageSize}
+              total={partnerHandoffsQ.data?.total ?? 0}
+              onOffsetChange={setHandoffOffset}
+            />
           </section>
         </TabsContent>
       </Tabs>
@@ -1310,6 +1484,68 @@ export default function SavingsBenefitsAdminPage() {
               },
               onError: (error) => toast({
                 title: 'Could not save partner',
+                description: error instanceof Error ? error.message : undefined,
+                variant: 'destructive',
+              }),
+            },
+          );
+        }}
+      />
+      <OperationalReasonDialog
+        open={handoffDecision !== null}
+        title={`${handoffDecision?.status === 'FAILED' ? 'Mark failed' : 'Revoke handoff'}: ${handoffDecision?.partnerName ?? ''}`}
+        description="This terminal transition reconciles the canonical action and is recorded in the administrative audit log."
+        pending={transitionHandoffM.isPending}
+        destructive
+        onOpenChange={(open) => {
+          if (!open) setHandoffDecision(null);
+        }}
+        onConfirm={(reason) => {
+          if (!handoffDecision) return;
+          transitionHandoffM.mutate(
+            {
+              actionId: handoffDecision.actionId,
+              status: handoffDecision.status,
+              reason,
+            },
+            {
+              onSuccess: () => {
+                setHandoffDecision(null);
+                toast({ title: 'Handoff updated' });
+              },
+              onError: (error) => toast({
+                title: 'Could not update handoff',
+                description: error instanceof Error ? error.message : undefined,
+                variant: 'destructive',
+              }),
+            },
+          );
+        }}
+      />
+      <OperationalReasonDialog
+        open={complaintDecision !== null}
+        title={`${complaintDecision?.status === 'RESOLVED' ? 'Resolve' : 'Dismiss'} complaint: ${complaintDecision?.partnerName ?? ''}`}
+        description="Record the investigation outcome for the homeowner complaint."
+        pending={resolveComplaintM.isPending}
+        destructive={complaintDecision?.status === 'DISMISSED'}
+        onOpenChange={(open) => {
+          if (!open) setComplaintDecision(null);
+        }}
+        onConfirm={(resolution) => {
+          if (!complaintDecision) return;
+          resolveComplaintM.mutate(
+            {
+              complaintId: complaintDecision.complaintId,
+              status: complaintDecision.status,
+              resolution,
+            },
+            {
+              onSuccess: () => {
+                setComplaintDecision(null);
+                toast({ title: 'Complaint updated' });
+              },
+              onError: (error) => toast({
+                title: 'Could not update complaint',
                 description: error instanceof Error ? error.message : undefined,
                 variant: 'destructive',
               }),

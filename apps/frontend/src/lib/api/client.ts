@@ -4347,6 +4347,29 @@ class APIClient {
     return res.data;
   }
 
+  async getSavingsBenefitsEligiblePartners(propertyId: string): Promise<Array<{
+    id: string;
+    name: string;
+    disclosureVersion: string;
+    compensationMayOccur: boolean;
+    compensationDisclosure: string;
+    rankingDisclosure: string;
+    privacyDisclosure: string;
+  }>> {
+    const res = await this.get<{
+      partners: Array<{
+        id: string;
+        name: string;
+        disclosureVersion: string;
+        compensationMayOccur: boolean;
+        compensationDisclosure: string;
+        rankingDisclosure: string;
+        privacyDisclosure: string;
+      }>;
+    }>(`/api/properties/${propertyId}/savings-benefits/partners`);
+    return res.data.partners;
+  }
+
   async getSavingsBenefitsOpportunityDetail(
     propertyId: string,
     opportunityId: string,

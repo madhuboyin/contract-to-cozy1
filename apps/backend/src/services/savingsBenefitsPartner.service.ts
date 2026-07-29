@@ -14,6 +14,7 @@ export interface SavingsBenefitPartnerInput {
   status?: SavingsBenefitPartnerStatus;
   supportedJurisdictions: string[];
   disclosureVersion: string;
+  compensationMayOccur: boolean;
   compensationDisclosure: string;
   rankingDisclosure: string;
   privacyDisclosure: string;
@@ -26,9 +27,47 @@ export async function listSavingsBenefitPartners() {
   return prisma.savingsBenefitPartner.findMany({ orderBy: [{ status: 'asc' }, { name: 'asc' }] });
 }
 
-export async function listSavingsBenefitHandoffs(now = new Date()) {
-  const actions = await prisma.savingsBenefitAction.findMany({
-    where: { partnerId: { not: null }, handoffStatus: { not: null } },
+export async function listEligibleSavingsBenefitPartnersForProperty(
+  propertyId: string,
+  userId: string,
+  now = new Date(),
+) {
+  const property = await prisma.property.findFirst({
+    where: { id: propertyId, homeownerProfile: { userId } },
+    select: { state: true },
+  });
+  if (!property) throw new Error('Property not found or access denied.');
+  const jurisdiction = property.state?.trim().toUpperCase();
+  return prisma.savingsBenefitPartner.findMany({
+    where: {
+      status: 'ACTIVE',
+      effectiveAt: { lte: now },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      ...(jurisdiction
+        ? {
+            AND: [{
+              OR: [
+                { supportedJurisdictions: { isEmpty: true } },
+                { supportedJurisdictions: { has: jurisdiction } },
+              ],
+            }],
+          }
+        : { supportedJurisdictions: { isEmpty: true } }),
+    },
+    orderBy: { name: 'asc' },
+  });
+}
+
+export async function listSavingsBenefitHandoffs(
+  options: { offset?: number; limit?: number; now?: Date } = {},
+) {
+  const offset = Math.max(0, options.offset ?? 0);
+  const limit = Math.min(100, Math.max(1, options.limit ?? 50));
+  const now = options.now ?? new Date();
+  const where = { partnerId: { not: null }, handoffStatus: { not: null } } as const;
+  const [actions, total] = await Promise.all([
+    prisma.savingsBenefitAction.findMany({
+    where,
     include: {
       partner: true,
       hiddenAssetOutcomes: {
@@ -44,9 +83,13 @@ export async function listSavingsBenefitHandoffs(now = new Date()) {
       complaints: { where: { status: 'OPEN' }, select: { id: true } },
     },
     orderBy: { startedAt: 'asc' },
-  });
+    skip: offset,
+    take: limit,
+  }),
+    prisma.savingsBenefitAction.count({ where }),
+  ]);
 
-  return actions.map((action) => {
+  const handoffs = actions.map((action) => {
     const slaStartedAt = action.handoffSubmittedAt ?? action.startedAt;
     const dueAt = action.partner
       ? new Date(slaStartedAt.getTime() + action.partner.fulfillmentSlaHours * 60 * 60 * 1000)
@@ -76,6 +119,7 @@ export async function listSavingsBenefitHandoffs(now = new Date()) {
         : null,
     };
   });
+  return { handoffs, total, offset, limit };
 }
 
 export async function upsertSavingsBenefitPartner(
@@ -161,6 +205,39 @@ const HANDOFF_TRANSITIONS: Record<SavingsBenefitHandoffStatus, SavingsBenefitHan
   REVOKED: [],
 };
 
+async function reconcileTerminalHandoff(
+  tx: Prisma.TransactionClient,
+  action: {
+    id: string;
+    hiddenAssetMatchId: string | null;
+    homeSavingsOpportunityId: string | null;
+  },
+  nextStatus: SavingsBenefitHandoffStatus,
+  now: Date,
+) {
+  if (!['FULFILLED', 'FAILED', 'REVOKED'].includes(nextStatus)) return;
+  const completed = nextStatus === 'FULFILLED';
+  await tx.savingsBenefitAction.update({
+    where: { id: action.id },
+    data: {
+      state: completed ? 'COMPLETED' : 'CANCELLED',
+      completedAt: completed ? now : null,
+      followUpNotificationClaimedAt: null,
+    },
+  });
+  if (!completed && action.hiddenAssetMatchId) {
+    await tx.propertyHiddenAssetMatch.updateMany({
+      where: { id: action.hiddenAssetMatchId },
+      data: { status: 'VIEWED' },
+    });
+  } else if (!completed && action.homeSavingsOpportunityId) {
+    await tx.homeSavingsOpportunity.updateMany({
+      where: { id: action.homeSavingsOpportunityId },
+      data: { status: 'SAVED' },
+    });
+  }
+}
+
 export async function transitionSavingsBenefitHandoff(
   actionId: string,
   nextStatus: SavingsBenefitHandoffStatus,
@@ -193,6 +270,7 @@ export async function transitionSavingsBenefitHandoff(
       },
     });
     if (updated.count !== 1) throw new Error('Handoff changed concurrently. Refresh and try again.');
+    await reconcileTerminalHandoff(tx, action, nextStatus, now);
     await recordAdminAction({
       actorId,
       action: 'ADMIN_SAVINGS_BENEFITS_HANDOFF_TRANSITION',
@@ -232,13 +310,21 @@ export async function revokeSavingsBenefitHandoff(
   if (!HANDOFF_TRANSITIONS[action.handoffStatus].includes('REVOKED')) {
     throw new Error(`Cannot revoke a ${action.handoffStatus} handoff.`);
   }
-  return prisma.savingsBenefitAction.updateMany({
-    where: { id: action.id, handoffStatus: action.handoffStatus },
-    data: {
-      handoffStatus: 'REVOKED',
-      handoffRevokedAt: new Date(),
-      handoffRevocationReason: reason,
-    },
+  return prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const revoked = await tx.savingsBenefitAction.updateMany({
+      where: { id: action.id, handoffStatus: action.handoffStatus },
+      data: {
+        handoffStatus: 'REVOKED',
+        handoffRevokedAt: now,
+        handoffRevocationReason: reason,
+      },
+    });
+    if (revoked.count !== 1) {
+      throw new Error('Handoff changed concurrently. Refresh and try again.');
+    }
+    await reconcileTerminalHandoff(tx, action, 'REVOKED', now);
+    return tx.savingsBenefitAction.findUniqueOrThrow({ where: { id: action.id } });
   });
 }
 
@@ -263,12 +349,22 @@ export async function createSavingsBenefitPartnerComplaint(
 
 export async function listSavingsBenefitPartnerComplaints(
   status?: SavingsBenefitPartnerComplaintStatus,
+  options: { offset?: number; limit?: number } = {},
 ) {
-  return prisma.savingsBenefitPartnerComplaint.findMany({
-    where: status ? { status } : {},
-    include: { action: { include: { partner: true } } },
-    orderBy: { createdAt: 'asc' },
-  });
+  const offset = Math.max(0, options.offset ?? 0);
+  const limit = Math.min(100, Math.max(1, options.limit ?? 50));
+  const where = status ? { status } : {};
+  const [complaints, total] = await Promise.all([
+    prisma.savingsBenefitPartnerComplaint.findMany({
+      where,
+      include: { action: { include: { partner: true } } },
+      orderBy: { createdAt: 'asc' },
+      skip: offset,
+      take: limit,
+    }),
+    prisma.savingsBenefitPartnerComplaint.count({ where }),
+  ]);
+  return { complaints, total, offset, limit };
 }
 
 export async function resolveSavingsBenefitPartnerComplaint(

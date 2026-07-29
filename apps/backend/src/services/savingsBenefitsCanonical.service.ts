@@ -55,7 +55,12 @@ export async function getCanonicalOpportunityDetail(
       savingsBenefitActions: { orderBy: { createdAt: 'desc' } },
     },
   });
-  if (benefit) return { family: 'BENEFIT' as const, opportunity: benefit };
+  if (
+    benefit
+    && isReviewedProgramCurrent(benefit.program, benefit.program.source)
+  ) {
+    return { family: 'BENEFIT' as const, opportunity: benefit };
+  }
 
   const recurring = await prisma.homeSavingsOpportunity.findFirst({
     where: {
@@ -512,6 +517,9 @@ export async function updateCanonicalAction(
   }
 
   const nextState = input.state ?? action.state;
+  const followUpChanged =
+    input.followUpAt !== undefined
+    && (input.followUpAt?.getTime() ?? null) !== (action.followUpAt?.getTime() ?? null);
   return prisma.$transaction(async (tx) => {
     if (input.state === 'CANCELLED' && action.state !== 'CANCELLED') {
       if (action.hiddenAssetMatchId) {
@@ -533,6 +541,12 @@ export async function updateCanonicalAction(
       data: {
         state: nextState,
         followUpAt: input.followUpAt === undefined ? action.followUpAt : input.followUpAt,
+        ...(followUpChanged
+          ? {
+              followUpNotificationSentAt: null,
+              followUpNotificationClaimedAt: null,
+            }
+          : {}),
         checklistJson: checklist as unknown as Prisma.InputJsonValue,
         completedAt: nextState === 'COMPLETED' ? action.completedAt ?? new Date() : null,
       },

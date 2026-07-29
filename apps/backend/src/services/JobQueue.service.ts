@@ -136,6 +136,41 @@ export const getGeneratePermitDisclosureQueue = createLazyQueue<GeneratePermitDi
 // -----------------------------------------------------------------------------
 export class JobQueueService {
   /**
+   * Queue the reviewed-program scan for one property as an automatic domain
+   * event. This is intentionally separate from the broad scheduled sweep:
+   * editorial/property changes must not be routed through the manual-trigger
+   * or mutating-sweep launch gates.
+   */
+  public async enqueueHiddenAssetRefresh(propertyId: string): Promise<boolean> {
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === 'property-intelligence');
+    const decision = registryEntry
+      ? evaluateWorkerExecution('property-intelligence', 'scheduled', registryEntry)
+      : { allowed: false, reason: 'missing registry entry' };
+    if (!decision.allowed) {
+      logger.warn(
+        { propertyId, reason: decision.reason },
+        '[QUEUE-MANAGER] event-driven hidden-asset refresh blocked by worker execution policy',
+      );
+      return false;
+    }
+
+    await getPropertyIntelligenceQueue().add(
+      PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS,
+      {
+        propertyId,
+        jobType: PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS,
+      },
+      {
+        jobId: `${propertyId}-HIDDEN-ASSETS`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      },
+    );
+    return true;
+  }
+
+  /**
    * Mark existing outputs stale immediately, then enqueue one deduplicated
    * refresh. Completed jobs are removed so a later canonical edit can reuse
    * the stable property-scoped job id.
@@ -266,7 +301,7 @@ export class JobQueueService {
    */
   public async enqueuePropertyIntelligenceJobs(
     propertyId: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     // Cross-cutting W4 fix: this on-demand enqueue (called from property
     // create/update, booking, warranty edits, financial reports) previously
     // bypassed evaluateWorkerExecution entirely, so a
@@ -276,14 +311,14 @@ export class JobQueueService {
     // action itself, so it must not fail property creation/booking/etc.
     const registryEntry = JOB_REGISTRY.find((j) => j.key === 'property-intelligence');
     const decision = registryEntry
-      ? evaluateWorkerExecution('property-intelligence', 'manual', registryEntry)
+      ? evaluateWorkerExecution('property-intelligence', 'scheduled', registryEntry)
       : { allowed: false, reason: 'missing registry entry' };
     if (!decision.allowed) {
       logger.info(
         { propertyId, reason: decision.reason },
         '[QUEUE-MANAGER] property-intelligence enqueue skipped by worker execution policy',
       );
-      return;
+      return false;
     }
 
     logger.info(
@@ -329,6 +364,7 @@ export class JobQueueService {
     logger.info(
       `[QUEUE-MANAGER] Risk + FES + HiddenAssets jobs enqueued for property ${propertyId}`
     );
+    return true;
   }
 
   /**

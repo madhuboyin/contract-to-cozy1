@@ -92,6 +92,15 @@ export interface PropertyHabit {
   createdAt: string;
   updatedAt: string;
   habitTemplate: HabitTemplate;
+  // Home Operations Slice 3: presence means "adopted into an ongoing
+  // routine" — checked by presence, not a HabitAssignmentStatus value.
+  linkedMaintenanceTaskId: string | null;
+  routineAdherence?: {
+    linkedTaskId: string;
+    linkedTaskStatus: string | null;
+    lastCompletedDate: string | null;
+    nextDueDate: string | null;
+  } | null;
   // Only in detail view
   availableFrom?: string | null;
   reasonJson?: unknown;
