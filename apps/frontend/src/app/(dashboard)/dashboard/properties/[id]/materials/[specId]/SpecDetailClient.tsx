@@ -20,7 +20,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/use-toast';
-import { deletePhoto, deleteSpec, getSpec } from '../materialSpecApi';
+import {
+  deletePhoto,
+  deleteSpec,
+  getSpec,
+  reviewMaterialExtraction,
+} from '../materialSpecApi';
 import { SpecForm } from '../MaterialSpecsClient';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -120,6 +125,26 @@ export default function SpecDetailClient() {
     toast({ title: 'Saved', description: 'Material spec updated.' });
   }
 
+  async function handleExtractionReview(
+    reviewId: string,
+    status: 'CONFIRMED' | 'REJECTED',
+    candidateFields: Record<string, unknown>,
+  ) {
+    try {
+      await reviewMaterialExtraction(propertyId, specId, reviewId, {
+        status,
+        reviewedFields: status === 'CONFIRMED' ? candidateFields : undefined,
+        reviewNotes: status === 'CONFIRMED'
+          ? 'Homeowner confirmed extracted material identity.'
+          : 'Homeowner rejected extracted material identity.',
+      });
+      setSpec(await getSpec(propertyId, specId));
+      toast({ title: status === 'CONFIRMED' ? 'Extraction applied' : 'Extraction rejected' });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to review extracted fields.', variant: 'destructive' });
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -156,6 +181,9 @@ export default function SpecDetailClient() {
               <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${spec.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
                 {spec.isActive ? 'Active' : 'Archived'}
               </span>
+              <span className="inline-flex items-center rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">
+                {spec.lifecycleStatus.replace('_', ' ')} · {spec.verificationConfidence}
+              </span>
             </div>
             <h1 className="text-xl font-semibold text-gray-900 mt-1">{spec.label}</h1>
             {spec.room && (
@@ -167,9 +195,11 @@ export default function SpecDetailClient() {
               <Edit2 className="w-4 h-4 mr-1" />
               Edit
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(true)} className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300">
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {spec.lifecycleStatus === 'PROPOSED' && (
+              <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(true)} className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -200,6 +230,26 @@ export default function SpecDetailClient() {
           </div>
         </div>
 
+        {spec.lifecycleStatus === 'AS_BUILT' && (
+          <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+            <h2 className="text-sm font-semibold text-emerald-900">Repair and reorder record</h2>
+            <p className="mt-1 text-xs text-emerald-800">
+              Verified identity: {[spec.manufacturer, spec.productName, spec.sku ?? spec.colorCode ?? spec.lotBatch].filter(Boolean).join(' · ')}
+            </p>
+            <p className="mt-1 text-xs text-emerald-800">
+              Remaining: {spec.quantityRemaining ?? 'Unknown'}
+              {spec.remainingStorageLocation ? ` · Stored at ${spec.remainingStorageLocation}` : ''}
+            </p>
+            {spec.supplierUrl && (
+              <Button size="sm" variant="outline" className="mt-3 h-8 border-emerald-300 bg-white text-xs" asChild>
+                <a href={spec.supplierUrl} target="_blank" rel="noreferrer">
+                  Open supplier <ExternalLink className="ml-1 h-3 w-3" />
+                </a>
+              </Button>
+            )}
+          </div>
+        )}
+
         <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Sourcing</h2>
           <div className="grid grid-cols-2 gap-4">
@@ -208,7 +258,31 @@ export default function SpecDetailClient() {
             <DetailRow label="Purchase Date" value={spec.purchaseDate?.slice(0, 10)} />
             <DetailRow label="Quantity Purchased" value={spec.quantityPurchased} />
             <DetailRow label="Lot / Batch" value={spec.lotBatch} />
+            <DetailRow label="Installed Quantity" value={spec.quantityInstalled} />
+            <DetailRow label="Remaining Quantity" value={spec.quantityRemaining} />
+            <DetailRow label="Remaining Material Location" value={spec.remainingStorageLocation} />
+            <DetailRow label="Installed By" value={spec.installedByName} />
           </div>
+          {spec.lifecycleStatus === 'AS_BUILT' && (
+            <>
+              <Separator className="my-4" />
+              <div className="grid grid-cols-2 gap-4">
+                <DetailRow label="Receipt Document" value={spec.receiptDocumentId} />
+                <DetailRow label="Warranty Document" value={spec.warrantyDocumentId} />
+                <DetailRow label="Manual Document" value={spec.manualDocumentId} />
+                <DetailRow label="Verified At" value={spec.verifiedAt?.slice(0, 10)} />
+              </div>
+            </>
+          )}
+          {spec.careInstructions && (
+            <>
+              <Separator className="my-4" />
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs text-muted-foreground">Care instructions</p>
+                <p className="whitespace-pre-wrap text-sm text-gray-900">{spec.careInstructions}</p>
+              </div>
+            </>
+          )}
           {spec.notes && (
             <>
               <Separator className="my-4" />
@@ -247,6 +321,59 @@ export default function SpecDetailClient() {
                   </div>
                 ))}
             </div>
+          </div>
+        )}
+
+        {spec.extractionReviews?.some(review => review.status === 'NEEDS_REVIEW') && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-5">
+            <h2 className="mb-1 text-sm font-semibold text-amber-900">Extracted details need review</h2>
+            <p className="mb-3 text-xs text-amber-800">
+              Photo and document extraction is never applied until you confirm it.
+            </p>
+            <div className="space-y-3">
+              {spec.extractionReviews
+                .filter(review => review.status === 'NEEDS_REVIEW')
+                .map(review => (
+                  <div key={review.id} className="rounded-md border border-amber-200 bg-white p-3">
+                    <dl className="grid grid-cols-2 gap-2 text-xs">
+                      {Object.entries(review.candidateFields).map(([key, value]) => (
+                        <div key={key}>
+                          <dt className="text-gray-500">{key}</dt>
+                          <dd className="font-medium text-gray-900">{String(value ?? '—')}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <div className="mt-3 flex gap-2">
+                      <Button size="sm" className="h-8 text-xs" onClick={() => handleExtractionReview(review.id, 'CONFIRMED', review.candidateFields)}>
+                        Confirm and apply
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleExtractionReview(review.id, 'REJECTED', review.candidateFields)}>
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {spec.lifecycleEvents && spec.lifecycleEvents.length > 0 && (
+          <div className="mb-4 rounded-lg border border-gray-200 bg-white p-5">
+            <h2 className="mb-3 text-sm font-semibold text-gray-700">Lifecycle history</h2>
+            <ol className="space-y-3">
+              {spec.lifecycleEvents.map(event => (
+                <li key={event.id} className="border-l-2 border-indigo-200 pl-3">
+                  <p className="text-sm font-medium text-gray-900">{event.eventType.replaceAll('_', ' ')}</p>
+                  <p className="text-xs text-gray-500">
+                    {new Date(event.occurredAt).toLocaleString()} · {event.toStatus.replace('_', ' ')}
+                  </p>
+                  {event.notes && <p className="mt-1 text-xs text-gray-600">{event.notes}</p>}
+                  {event.evidenceDocumentIds.length > 0 && (
+                    <p className="mt-1 text-xs text-indigo-700">{event.evidenceDocumentIds.length} evidence document(s)</p>
+                  )}
+                </li>
+              ))}
+            </ol>
           </div>
         )}
       </div>

@@ -1,4 +1,10 @@
-import { MaterialCategory, MaterialScopeLevel, MaterialSpecExportStatus, Prisma } from '@prisma/client';
+import {
+  MaterialCategory,
+  MaterialLifecycleStatus,
+  MaterialScopeLevel,
+  MaterialSpecExportStatus,
+  Prisma,
+} from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { presignGetObject } from './storage/presign';
@@ -54,16 +60,450 @@ function buildPresignedPhotoUrl(fileKey: string): Promise<string | null> {
   return presignGetObject({ bucket, key: fileKey, expiresInSeconds: 3600 }).catch(() => null);
 }
 
+export function canTransitionMaterialLifecycle(
+  from: MaterialLifecycleStatus,
+  to: MaterialLifecycleStatus,
+) {
+  const allowed: Record<MaterialLifecycleStatus, MaterialLifecycleStatus[]> = {
+    PROPOSED: ['APPROVED', 'SUBSTITUTED'],
+    APPROVED: ['SUBSTITUTED', 'INSTALLED'],
+    SUBSTITUTED: [],
+    INSTALLED: ['AS_BUILT'],
+    AS_BUILT: [],
+  };
+  return allowed[from].includes(to);
+}
+
+function complianceCheckPassed(spec: {
+  complianceRelevance: unknown;
+  permitAttributeCheck: string;
+  hoaAttributeCheck: string;
+}) {
+  const relevance = (spec.complianceRelevance ?? {}) as {
+    permitRelevant?: boolean;
+    hoaRelevant?: boolean;
+  };
+  return {
+    permitPassed: !relevance.permitRelevant || spec.permitAttributeCheck === 'PASSED',
+    hoaPassed: !relevance.hoaRelevant || spec.hoaAttributeCheck === 'PASSED',
+  };
+}
+
 export class MaterialSpecService {
   // ── Guards ────────────────────────────────────────────────────────────────
 
   private async assertSpecBelongs(propertyId: string, specId: string) {
     const spec = await prisma.materialSpec.findFirst({
       where: { id: specId, propertyId },
-      select: { id: true },
+      include: {
+        room: { select: { id: true, name: true } },
+      },
     });
     if (!spec) throw new APIError('Material spec not found', 404, 'SPEC_NOT_FOUND');
     return spec;
+  }
+
+  async transitionLifecycle(
+    propertyId: string,
+    specId: string,
+    actorUserId: string,
+    payload: {
+      toStatus: MaterialLifecycleStatus;
+      evidenceDocumentIds: string[];
+      notes: string;
+      approvalDocumentIds?: string[];
+      submittalDocumentIds?: string[];
+      receiptDocumentId?: string | null;
+      warrantyDocumentId?: string | null;
+      manualDocumentId?: string | null;
+      quantityInstalled?: string | null;
+      quantityRemaining?: string | null;
+      remainingStorageLocation?: string | null;
+      installedByName?: string | null;
+      installedAt?: string | null;
+      permitAttributeCheck?: 'NOT_CONFIGURED' | 'REVIEW_REQUIRED' | 'PASSED' | 'FAILED';
+      hoaAttributeCheck?: 'NOT_CONFIGURED' | 'REVIEW_REQUIRED' | 'PASSED' | 'FAILED';
+    },
+  ) {
+    const spec = await this.assertSpecBelongs(propertyId, specId);
+    if (!canTransitionMaterialLifecycle(spec.lifecycleStatus, payload.toStatus)) {
+      throw new APIError(
+        `Material cannot transition from ${spec.lifecycleStatus} to ${payload.toStatus}.`,
+        409,
+        'INVALID_MATERIAL_LIFECYCLE_TRANSITION',
+      );
+    }
+
+    const allEvidenceIds = [
+      ...(payload.evidenceDocumentIds ?? []),
+      ...(payload.approvalDocumentIds ?? []),
+      ...(payload.submittalDocumentIds ?? []),
+      ...[payload.receiptDocumentId, payload.warrantyDocumentId, payload.manualDocumentId]
+        .filter((id): id is string => Boolean(id)),
+    ];
+    await this.assertDocumentsBelong(propertyId, allEvidenceIds);
+
+    const permitAttributeCheck = payload.permitAttributeCheck ?? spec.permitAttributeCheck;
+    const hoaAttributeCheck = payload.hoaAttributeCheck ?? spec.hoaAttributeCheck;
+    const checks = complianceCheckPassed({
+      complianceRelevance: spec.complianceRelevance,
+      permitAttributeCheck,
+      hoaAttributeCheck,
+    });
+    if (!checks.permitPassed || !checks.hoaPassed) {
+      throw new APIError(
+        'Permit and HOA-relevant material attributes must pass review before approval or installation.',
+        409,
+        'MATERIAL_COMPLIANCE_CHECK_REQUIRED',
+        checks,
+      );
+    }
+
+    if (payload.toStatus === 'APPROVED') {
+      if (
+        (payload.submittalDocumentIds ?? spec.submittalDocumentIds).length === 0
+        || (payload.approvalDocumentIds ?? []).length === 0
+      ) {
+        throw new APIError(
+          'Approval requires both submittal and approval evidence.',
+          409,
+          'MATERIAL_APPROVAL_EVIDENCE_REQUIRED',
+        );
+      }
+    }
+    if (payload.toStatus === 'INSTALLED') {
+      if (payload.evidenceDocumentIds.length === 0 || !payload.quantityInstalled?.trim()) {
+        throw new APIError(
+          'Installation requires evidence and installed quantity.',
+          409,
+          'MATERIAL_INSTALLATION_EVIDENCE_REQUIRED',
+        );
+      }
+    }
+    if (payload.toStatus === 'AS_BUILT') {
+      const exactIdentityKnown = Boolean(
+        spec.manufacturer?.trim()
+        && spec.productName?.trim()
+        && (spec.sku?.trim() || spec.colorCode?.trim() || spec.lotBatch?.trim()),
+      );
+      if (
+        !exactIdentityKnown
+        || payload.evidenceDocumentIds.length === 0
+        || !payload.receiptDocumentId
+        || payload.quantityRemaining == null
+      ) {
+        throw new APIError(
+          'As-built verification requires exact product identity, installation evidence, receipt, and an explicit remaining-material record.',
+          409,
+          'MATERIAL_AS_BUILT_EVIDENCE_REQUIRED',
+        );
+      }
+    }
+
+    const eventType = payload.toStatus === 'AS_BUILT'
+      ? 'AS_BUILT_VERIFIED'
+      : payload.toStatus;
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.materialSpec.update({
+        where: { id: specId },
+        data: {
+          lifecycleStatus: payload.toStatus,
+          permitAttributeCheck,
+          hoaAttributeCheck,
+          approvalDocumentIds: payload.approvalDocumentIds ?? spec.approvalDocumentIds,
+          submittalDocumentIds: payload.submittalDocumentIds ?? spec.submittalDocumentIds,
+          receiptDocumentId: payload.receiptDocumentId ?? spec.receiptDocumentId,
+          warrantyDocumentId: payload.warrantyDocumentId ?? spec.warrantyDocumentId,
+          manualDocumentId: payload.manualDocumentId ?? spec.manualDocumentId,
+          quantityInstalled: payload.quantityInstalled ?? spec.quantityInstalled,
+          quantityRemaining: payload.quantityRemaining ?? spec.quantityRemaining,
+          remainingStorageLocation: payload.remainingStorageLocation ?? spec.remainingStorageLocation,
+          installedByName: payload.installedByName ?? spec.installedByName,
+          installedAt: payload.toStatus === 'INSTALLED'
+            ? new Date(payload.installedAt ?? Date.now())
+            : spec.installedAt,
+          verificationConfidence: payload.toStatus === 'AS_BUILT' ? 'VERIFIED' : 'DOCUMENTED',
+          verifiedAt: payload.toStatus === 'AS_BUILT' ? new Date() : spec.verifiedAt,
+          verifiedByUserId: payload.toStatus === 'AS_BUILT' ? actorUserId : spec.verifiedByUserId,
+        },
+        include: {
+          photos: { orderBy: { sortOrder: 'asc' } },
+          room: { select: { id: true, name: true } },
+        },
+      });
+      await tx.materialLifecycleEvent.create({
+        data: {
+          materialSpecId: specId,
+          propertyId,
+          projectId: spec.projectId,
+          eventType,
+          fromStatus: spec.lifecycleStatus,
+          toStatus: payload.toStatus,
+          actorUserId,
+          evidenceDocumentIds: payload.evidenceDocumentIds,
+          notes: payload.notes,
+        },
+      });
+      return updated;
+    });
+  }
+
+  async substituteSpec(
+    propertyId: string,
+    specId: string,
+    actorUserId: string,
+    payload: {
+      replacement: Record<string, unknown>;
+      comparison: Prisma.InputJsonValue;
+      complianceImpact: Prisma.InputJsonValue;
+      evidenceDocumentIds: string[];
+      sourceChangeOrderId?: string | null;
+      notes: string;
+    },
+  ) {
+    const original = await this.assertSpecBelongs(propertyId, specId);
+    if (!['PROPOSED', 'APPROVED'].includes(original.lifecycleStatus)) {
+      throw new APIError(
+        'Only proposed or approved material can be substituted.',
+        409,
+        'MATERIAL_NOT_SUBSTITUTABLE',
+      );
+    }
+    await this.assertDocumentsBelong(propertyId, payload.evidenceDocumentIds);
+
+    const impact = payload.complianceImpact as {
+      permitRelevant?: boolean;
+      hoaRelevant?: boolean;
+    };
+    if ((impact.permitRelevant || impact.hoaRelevant) && !payload.sourceChangeOrderId) {
+      throw new APIError(
+        'A permit or HOA-relevant substitution requires a compliance-reviewed change order.',
+        409,
+        'MATERIAL_SUBSTITUTION_CHANGE_ORDER_REQUIRED',
+      );
+    }
+    if (payload.sourceChangeOrderId) {
+      const changeOrder = await prisma.projectChangeOrder.findFirst({
+        where: {
+          id: payload.sourceChangeOrderId,
+          projectId: original.projectId ?? undefined,
+          project: { propertyId },
+        },
+        select: { id: true, complianceStatus: true },
+      });
+      if (
+        !changeOrder
+        || !['NO_RECHECK_REQUIRED', 'RECHECK_COMPLETE'].includes(changeOrder.complianceStatus)
+      ) {
+        throw new APIError(
+          'The linked change order must complete compliance review first.',
+          409,
+          'MATERIAL_SUBSTITUTION_COMPLIANCE_REVIEW_REQUIRED',
+        );
+      }
+    }
+
+    const replacement = payload.replacement as any;
+    return prisma.$transaction(async (tx) => {
+      const substitute = await tx.materialSpec.create({
+        data: {
+          propertyId,
+          projectId: original.projectId,
+          scopeVersionId: original.scopeVersionId,
+          roomId: replacement.roomId ?? original.roomId,
+          scopeLevel: replacement.scopeLevel ?? original.scopeLevel,
+          category: replacement.category ?? original.category,
+          surface: replacement.surface ?? original.surface,
+          label: replacement.label ?? `${original.label} substitute`,
+          manufacturer: replacement.manufacturer ?? null,
+          productLine: replacement.productLine ?? null,
+          productName: replacement.productName ?? null,
+          sku: replacement.sku ?? null,
+          colorCode: replacement.colorCode ?? null,
+          colorHex: replacement.colorHex ?? null,
+          finish: replacement.finish ?? null,
+          dimensions: replacement.dimensions ?? null,
+          material: replacement.material ?? null,
+          supplier: replacement.supplier ?? null,
+          supplierUrl: replacement.supplierUrl ?? null,
+          quantityPurchased: replacement.quantityPurchased ?? null,
+          lotBatch: replacement.lotBatch ?? null,
+          notes: replacement.notes ?? payload.notes,
+          lifecycleStatus: 'PROPOSED',
+          verificationConfidence: 'DOCUMENTED',
+          complianceRelevance: payload.complianceImpact,
+          permitAttributeCheck: impact.permitRelevant ? 'REVIEW_REQUIRED' : 'NOT_CONFIGURED',
+          hoaAttributeCheck: impact.hoaRelevant ? 'REVIEW_REQUIRED' : 'NOT_CONFIGURED',
+          submittalDocumentIds: payload.evidenceDocumentIds,
+          substitutedFromId: original.id,
+          sourceChangeOrderId: payload.sourceChangeOrderId,
+        },
+      });
+      await tx.materialSpec.update({
+        where: { id: original.id },
+        data: { lifecycleStatus: 'SUBSTITUTED', isActive: false },
+      });
+      await tx.materialLifecycleEvent.createMany({
+        data: [
+          {
+            materialSpecId: original.id,
+            propertyId,
+            projectId: original.projectId,
+            eventType: 'SUBSTITUTED',
+            fromStatus: original.lifecycleStatus,
+            toStatus: 'SUBSTITUTED',
+            actorUserId,
+            evidenceDocumentIds: payload.evidenceDocumentIds,
+            comparison: payload.comparison,
+            complianceImpact: payload.complianceImpact,
+            notes: payload.notes,
+          },
+          {
+            materialSpecId: substitute.id,
+            propertyId,
+            projectId: original.projectId,
+            eventType: 'PROPOSED',
+            toStatus: 'PROPOSED',
+            actorUserId,
+            evidenceDocumentIds: payload.evidenceDocumentIds,
+            comparison: payload.comparison,
+            complianceImpact: payload.complianceImpact,
+            notes: payload.notes,
+          },
+        ],
+      });
+      return tx.materialSpec.findUnique({
+        where: { id: substitute.id },
+        include: {
+          photos: { orderBy: { sortOrder: 'asc' } },
+          room: { select: { id: true, name: true } },
+        },
+      });
+    });
+  }
+
+  async createExtractionReview(
+    propertyId: string,
+    specId: string,
+    payload: {
+      sourceDocumentId?: string | null;
+      sourcePhotoKey?: string | null;
+      extractionMethod: string;
+      parserVersion?: string | null;
+      candidateFields: Prisma.InputJsonValue;
+      confidence?: Prisma.InputJsonValue | null;
+    },
+  ) {
+    await this.assertSpecBelongs(propertyId, specId);
+    await this.assertDocumentsBelong(
+      propertyId,
+      payload.sourceDocumentId ? [payload.sourceDocumentId] : [],
+    );
+    return prisma.materialExtractionReview.create({
+      data: {
+        materialSpecId: specId,
+        propertyId,
+        sourceDocumentId: payload.sourceDocumentId,
+        sourcePhotoKey: payload.sourcePhotoKey,
+        extractionMethod: payload.extractionMethod,
+        parserVersion: payload.parserVersion,
+        candidateFields: payload.candidateFields,
+        confidence: payload.confidence ?? undefined,
+      },
+    });
+  }
+
+  async reviewExtraction(
+    propertyId: string,
+    specId: string,
+    reviewId: string,
+    actorUserId: string,
+    payload: {
+      status: 'CONFIRMED' | 'REJECTED';
+      reviewedFields?: Record<string, unknown>;
+      reviewNotes: string;
+    },
+  ) {
+    const spec = await this.assertSpecBelongs(propertyId, specId);
+    const review = await prisma.materialExtractionReview.findFirst({
+      where: { id: reviewId, materialSpecId: specId, propertyId, status: 'NEEDS_REVIEW' },
+    });
+    if (!review) throw new APIError('Extraction review not found', 404, 'EXTRACTION_REVIEW_NOT_FOUND');
+
+    const allowed = new Set([
+      'manufacturer', 'productLine', 'productName', 'sku', 'colorCode',
+      'finish', 'dimensions', 'material', 'supplier', 'supplierUrl',
+      'quantityPurchased', 'lotBatch', 'careInstructions',
+    ]);
+    const reviewedFields = payload.reviewedFields ?? {};
+    const appliedFields = Object.fromEntries(
+      Object.entries(reviewedFields).filter(
+        ([key, value]) => allowed.has(key) && (typeof value === 'string' || value === null),
+      ),
+    );
+    return prisma.$transaction(async (tx) => {
+      if (payload.status === 'CONFIRMED') {
+        await tx.materialSpec.update({
+          where: { id: specId },
+          data: appliedFields as Prisma.MaterialSpecUpdateInput,
+        });
+        await tx.materialLifecycleEvent.create({
+          data: {
+            materialSpecId: specId,
+            propertyId,
+            projectId: spec.projectId,
+            eventType: 'EXTRACTION_CONFIRMED',
+            fromStatus: spec.lifecycleStatus,
+            toStatus: spec.lifecycleStatus,
+            actorUserId,
+            evidenceDocumentIds: review.sourceDocumentId ? [review.sourceDocumentId] : [],
+            notes: payload.reviewNotes,
+          },
+        });
+      }
+      return tx.materialExtractionReview.update({
+        where: { id: reviewId },
+        data: {
+          status: payload.status,
+          reviewedFields: appliedFields as Prisma.InputJsonValue,
+          reviewNotes: payload.reviewNotes,
+          reviewedByUserId: actorUserId,
+          reviewedAt: new Date(),
+        },
+      });
+    });
+  }
+
+  async getRepairReorderRecord(propertyId: string, specId: string) {
+    const spec = await this.assertSpecBelongs(propertyId, specId);
+    if (spec.lifecycleStatus !== 'AS_BUILT') {
+      throw new APIError(
+        'Repair and reorder details are available only from a verified as-built record.',
+        409,
+        'MATERIAL_AS_BUILT_REQUIRED',
+      );
+    }
+    return {
+      materialSpecId: spec.id,
+      label: spec.label,
+      location: spec.room?.name ?? 'Property-wide',
+      manufacturer: spec.manufacturer,
+      productLine: spec.productLine,
+      productName: spec.productName,
+      sku: spec.sku,
+      colorCode: spec.colorCode,
+      lotBatch: spec.lotBatch,
+      supplier: spec.supplier,
+      supplierUrl: spec.supplierUrl,
+      quantityRemaining: spec.quantityRemaining,
+      remainingStorageLocation: spec.remainingStorageLocation,
+      careInstructions: spec.careInstructions,
+      receiptDocumentId: spec.receiptDocumentId,
+      warrantyDocumentId: spec.warrantyDocumentId,
+      manualDocumentId: spec.manualDocumentId,
+      confidence: spec.verificationConfidence,
+      verifiedAt: spec.verifiedAt,
+    };
   }
 
   private async assertRoomBelongs(propertyId: string, roomId?: string | null) {
@@ -93,6 +533,29 @@ export class MaterialSpecService {
     if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
 
+  private async assertScopeVersionBelongs(propertyId: string, scopeVersionId?: string | null) {
+    if (!scopeVersionId) return;
+    const scope = await prisma.renovationScopeVersion.findFirst({
+      where: { id: scopeVersionId, renovationCase: { propertyId } },
+      select: { id: true },
+    });
+    if (!scope) throw new APIError('Scope version not found', 404, 'SCOPE_VERSION_NOT_FOUND');
+  }
+
+  private async assertDocumentsBelong(propertyId: string, documentIds: string[]) {
+    if (documentIds.length === 0) return;
+    const count = await prisma.document.count({
+      where: { propertyId, id: { in: [...new Set(documentIds)] } },
+    });
+    if (count !== new Set(documentIds).size) {
+      throw new APIError(
+        'Every material evidence document must belong to the same property.',
+        409,
+        'MATERIAL_EVIDENCE_SCOPE_MISMATCH',
+      );
+    }
+  }
+
   // ── List / Search ─────────────────────────────────────────────────────────
 
   async listSpecs(
@@ -101,6 +564,8 @@ export class MaterialSpecService {
       category?: MaterialCategory;
       scopeLevel?: MaterialScopeLevel;
       roomId?: string;
+      projectId?: string;
+      lifecycleStatus?: MaterialLifecycleStatus;
       isActive?: boolean;
       limit?: number;
       cursor?: string;
@@ -112,6 +577,8 @@ export class MaterialSpecService {
       ...(query.category ? { category: query.category } : {}),
       ...(query.scopeLevel ? { scopeLevel: query.scopeLevel } : {}),
       ...(query.roomId ? { roomId: query.roomId } : {}),
+      ...(query.projectId ? { projectId: query.projectId } : {}),
+      ...(query.lifecycleStatus ? { lifecycleStatus: query.lifecycleStatus } : {}),
       ...(query.isActive !== undefined ? { isActive: query.isActive } : {}),
     };
 
@@ -166,6 +633,8 @@ export class MaterialSpecService {
       include: {
         photos: { orderBy: { sortOrder: 'asc' } },
         room: { select: { id: true, name: true } },
+        extractionReviews: { orderBy: { createdAt: 'desc' }, take: 20 },
+        lifecycleEvents: { orderBy: { occurredAt: 'desc' }, take: 50 },
       },
     });
     if (!spec) throw new APIError('Material spec not found', 404, 'SPEC_NOT_FOUND');
@@ -196,10 +665,18 @@ export class MaterialSpecService {
     isActive?: boolean;
     linkedInventoryItemId?: string | null;
     projectId?: string | null;
-  }) {
+    scopeVersionId?: string | null;
+    careInstructions?: string | null;
+    complianceRelevance?: Prisma.InputJsonValue | null;
+    permitAttributeCheck?: 'NOT_CONFIGURED' | 'REVIEW_REQUIRED' | 'PASSED' | 'FAILED';
+    hoaAttributeCheck?: 'NOT_CONFIGURED' | 'REVIEW_REQUIRED' | 'PASSED' | 'FAILED';
+    submittalDocumentIds?: string[];
+  }, actorUserId?: string) {
     await this.assertRoomBelongs(propertyId, payload.roomId);
     await this.assertInventoryItemBelongs(propertyId, payload.linkedInventoryItemId);
     await this.assertProjectBelongs(propertyId, payload.projectId);
+    await this.assertScopeVersionBelongs(propertyId, payload.scopeVersionId);
+    await this.assertDocumentsBelong(propertyId, payload.submittalDocumentIds ?? []);
 
     // Auto-populate colorHex from paint brand lookup if missing
     let colorHex = payload.colorHex ?? null;
@@ -233,6 +710,24 @@ export class MaterialSpecService {
         isActive: payload.isActive ?? true,
         linkedInventoryItemId: payload.linkedInventoryItemId ?? null,
         projectId: payload.projectId ?? null,
+        scopeVersionId: payload.scopeVersionId ?? null,
+        careInstructions: payload.careInstructions ?? null,
+        complianceRelevance: payload.complianceRelevance ?? undefined,
+        permitAttributeCheck: payload.permitAttributeCheck ?? 'NOT_CONFIGURED',
+        hoaAttributeCheck: payload.hoaAttributeCheck ?? 'NOT_CONFIGURED',
+        submittalDocumentIds: payload.submittalDocumentIds ?? [],
+        ...(actorUserId ? {
+          lifecycleEvents: {
+            create: {
+              propertyId,
+              projectId: payload.projectId ?? null,
+              eventType: 'PROPOSED',
+              toStatus: 'PROPOSED',
+              actorUserId,
+              evidenceDocumentIds: payload.submittalDocumentIds ?? [],
+            },
+          },
+        } : {}),
       },
       include: {
         photos: { orderBy: { sortOrder: 'asc' } },
@@ -244,10 +739,27 @@ export class MaterialSpecService {
   }
 
   async updateSpec(propertyId: string, specId: string, payload: Partial<Parameters<MaterialSpecService['createSpec']>[1]>) {
-    await this.assertSpecBelongs(propertyId, specId);
+    const currentSpec = await this.assertSpecBelongs(propertyId, specId);
+    if (
+      ['INSTALLED', 'AS_BUILT'].includes(currentSpec.lifecycleStatus)
+      && Object.keys(payload).some((key) => [
+        'category', 'manufacturer', 'productLine', 'productName', 'sku',
+        'colorCode', 'colorHex', 'finish', 'dimensions', 'material', 'lotBatch', 'roomId',
+      ].includes(key))
+    ) {
+      throw new APIError(
+        'Installed and as-built identity is immutable. Record a substitution instead.',
+        409,
+        'MATERIAL_AS_BUILT_IDENTITY_IMMUTABLE',
+      );
+    }
     if (payload.roomId !== undefined) await this.assertRoomBelongs(propertyId, payload.roomId);
     if (payload.linkedInventoryItemId !== undefined) await this.assertInventoryItemBelongs(propertyId, payload.linkedInventoryItemId);
     if (payload.projectId !== undefined) await this.assertProjectBelongs(propertyId, payload.projectId);
+    if (payload.scopeVersionId !== undefined) await this.assertScopeVersionBelongs(propertyId, payload.scopeVersionId);
+    if (payload.submittalDocumentIds !== undefined) {
+      await this.assertDocumentsBelong(propertyId, payload.submittalDocumentIds);
+    }
 
     // Re-run color lookup if colorCode changed and colorHex not explicitly set
     const updateData: Prisma.MaterialSpecUpdateInput = {};
@@ -270,6 +782,15 @@ export class MaterialSpecService {
     if (payload.quantityPurchased !== undefined) updateData.quantityPurchased = payload.quantityPurchased;
     if (payload.lotBatch !== undefined) updateData.lotBatch = payload.lotBatch;
     if (payload.notes !== undefined) updateData.notes = payload.notes;
+    if (payload.careInstructions !== undefined) updateData.careInstructions = payload.careInstructions;
+    if (payload.complianceRelevance !== undefined) {
+      updateData.complianceRelevance = payload.complianceRelevance === null
+        ? Prisma.JsonNull
+        : payload.complianceRelevance;
+    }
+    if (payload.permitAttributeCheck !== undefined) updateData.permitAttributeCheck = payload.permitAttributeCheck;
+    if (payload.hoaAttributeCheck !== undefined) updateData.hoaAttributeCheck = payload.hoaAttributeCheck;
+    if (payload.submittalDocumentIds !== undefined) updateData.submittalDocumentIds = payload.submittalDocumentIds;
     if (payload.isActive !== undefined) updateData.isActive = payload.isActive;
     if (payload.linkedInventoryItemId !== undefined) {
       updateData.inventoryItem = payload.linkedInventoryItemId
@@ -279,6 +800,11 @@ export class MaterialSpecService {
     if (payload.projectId !== undefined) {
       updateData.project = payload.projectId
         ? { connect: { id: payload.projectId } }
+        : { disconnect: true };
+    }
+    if (payload.scopeVersionId !== undefined) {
+      updateData.scopeVersion = payload.scopeVersionId
+        ? { connect: { id: payload.scopeVersionId } }
         : { disconnect: true };
     }
 
@@ -306,7 +832,14 @@ export class MaterialSpecService {
   }
 
   async deleteSpec(propertyId: string, specId: string) {
-    await this.assertSpecBelongs(propertyId, specId);
+    const spec = await this.assertSpecBelongs(propertyId, specId);
+    if (spec.lifecycleStatus !== 'PROPOSED') {
+      throw new APIError(
+        'Approved, substituted, installed, and as-built material history cannot be deleted; archive it instead.',
+        409,
+        'MATERIAL_HISTORY_IMMUTABLE',
+      );
+    }
     await prisma.materialSpec.delete({ where: { id: specId } });
   }
 

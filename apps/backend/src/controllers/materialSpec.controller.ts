@@ -19,6 +19,8 @@ export async function listSpecs(req: CustomRequest, res: Response, next: NextFun
         category: req.query.category as any,
         scopeLevel: req.query.scopeLevel as any,
         roomId: req.query.roomId ? String(req.query.roomId) : undefined,
+        projectId: req.query.projectId ? String(req.query.projectId) : undefined,
+        lifecycleStatus: req.query.lifecycleStatus as any,
         isActive: req.query.isActive !== undefined ? req.query.isActive === 'true' : undefined,
         limit: req.query.limit ? Number(req.query.limit) : undefined,
         cursor: req.query.cursor ? String(req.query.cursor) : undefined,
@@ -70,7 +72,7 @@ export async function createSpec(req: CustomRequest, res: Response, next: NextFu
       {},
       'materialSpecifications',
     );
-    const spec = await service.createSpec(propertyId, req.body);
+    const spec = await service.createSpec(propertyId, req.body, req.user!.userId);
     const propertyContext = await getProjectComplianceEnvelope(propertyId, req.user!.userId, 'MATERIAL_SPECS');
 
     analyticsEmitter.track({
@@ -106,6 +108,61 @@ export async function updateSpec(req: CustomRequest, res: Response, next: NextFu
   } catch (err) {
     next(err);
   }
+}
+
+export async function transitionMaterialLifecycle(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const spec = await service.transitionLifecycle(
+      req.params.propertyId,
+      req.params.specId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data: { spec } });
+  } catch (err) { next(err); }
+}
+
+export async function substituteMaterial(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const spec = await service.substituteSpec(
+      req.params.propertyId,
+      req.params.specId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data: { spec } });
+  } catch (err) { next(err); }
+}
+
+export async function createMaterialExtraction(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const review = await service.createExtractionReview(
+      req.params.propertyId,
+      req.params.specId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data: { review } });
+  } catch (err) { next(err); }
+}
+
+export async function reviewMaterialExtraction(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const review = await service.reviewExtraction(
+      req.params.propertyId,
+      req.params.specId,
+      req.params.reviewId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data: { review } });
+  } catch (err) { next(err); }
+}
+
+export async function getMaterialRepairReorder(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const record = await service.getRepairReorderRecord(req.params.propertyId, req.params.specId);
+    res.json({ success: true, data: { record } });
+  } catch (err) { next(err); }
 }
 
 export async function deleteSpec(req: CustomRequest, res: Response, next: NextFunction) {

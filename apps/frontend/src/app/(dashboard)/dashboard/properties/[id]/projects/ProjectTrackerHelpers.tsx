@@ -126,6 +126,7 @@ const NAV_TABS = [
   { label: 'Compliance sync', suffix: '/execution-alignment' },
   { label: 'Payments', suffix: '/payments' },
   { label: 'Change Orders', suffix: '/change-orders' },
+  { label: 'Materials', suffix: '/materials' },
   { label: 'Log', suffix: '/log' },
   { label: 'Issues', suffix: '/issues' },
 ];

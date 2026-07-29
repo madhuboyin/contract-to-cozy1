@@ -4787,6 +4787,9 @@ export type MaterialCategory = 'PAINT' | 'TILE' | 'FLOORING' | 'GROUT' | 'COUNTE
 export type MaterialScopeLevel = 'ROOM' | 'PROPERTY';
 export type MaterialSurface = 'WALLS' | 'CEILING' | 'FLOOR' | 'BACKSPLASH' | 'SHOWER_WALLS' | 'SHOWER_FLOOR' | 'TUB_SURROUND' | 'COUNTERTOP' | 'EXTERIOR_FACADE' | 'TRIM' | 'DOORS' | 'WINDOWS' | 'CABINETRY' | 'OTHER';
 export type MaterialSpecExportStatus = 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED';
+export type MaterialLifecycleStatus = 'PROPOSED' | 'APPROVED' | 'SUBSTITUTED' | 'INSTALLED' | 'AS_BUILT';
+export type MaterialVerificationConfidence = 'REPORTED' | 'DOCUMENTED' | 'VERIFIED';
+export type MaterialComplianceCheckStatus = 'NOT_CONFIGURED' | 'REVIEW_REQUIRED' | 'PASSED' | 'FAILED';
 
 export interface MaterialSpecPhoto {
   id: string; materialSpecId: string; propertyId: string;
@@ -4802,9 +4805,59 @@ export interface MaterialSpec {
   purchaseDate?: string | null; quantityPurchased?: string | null; lotBatch?: string | null;
   notes?: string | null; isActive: boolean;
   linkedInventoryItemId?: string | null; projectId?: string | null;
+  scopeVersionId?: string | null; sourceProgressLogId?: string | null;
+  sourceChangeOrderId?: string | null; substitutedFromId?: string | null;
+  lifecycleStatus: MaterialLifecycleStatus;
+  verificationConfidence: MaterialVerificationConfidence;
+  complianceRelevance?: {
+    permitRelevant?: boolean;
+    hoaRelevant?: boolean;
+    attributes?: string[];
+  } | null;
+  permitAttributeCheck: MaterialComplianceCheckStatus;
+  hoaAttributeCheck: MaterialComplianceCheckStatus;
+  submittalDocumentIds: string[];
+  approvalDocumentIds: string[];
+  receiptDocumentId?: string | null;
+  warrantyDocumentId?: string | null;
+  manualDocumentId?: string | null;
+  careInstructions?: string | null;
+  quantityInstalled?: string | null;
+  quantityRemaining?: string | null;
+  remainingStorageLocation?: string | null;
+  installedAt?: string | null;
+  installedByName?: string | null;
+  verifiedAt?: string | null;
+  verifiedByUserId?: string | null;
   createdAt: string; updatedAt: string;
   photos: MaterialSpecPhoto[];
   room?: { id: string; name: string } | null;
+  extractionReviews?: MaterialExtractionReview[];
+  lifecycleEvents?: Array<{
+    id: string;
+    eventType: string;
+    fromStatus?: MaterialLifecycleStatus | null;
+    toStatus: MaterialLifecycleStatus;
+    evidenceDocumentIds: string[];
+    notes?: string | null;
+    occurredAt: string;
+  }>;
+}
+
+export interface MaterialExtractionReview {
+  id: string;
+  materialSpecId: string;
+  propertyId: string;
+  sourceDocumentId?: string | null;
+  sourcePhotoKey?: string | null;
+  extractionMethod: string;
+  parserVersion?: string | null;
+  candidateFields: Record<string, unknown>;
+  confidence?: Record<string, unknown> | null;
+  status: 'NEEDS_REVIEW' | 'CONFIRMED' | 'REJECTED';
+  reviewedFields?: Record<string, unknown> | null;
+  reviewNotes?: string | null;
+  reviewedAt?: string | null;
 }
 
 export interface MaterialSpecExport {

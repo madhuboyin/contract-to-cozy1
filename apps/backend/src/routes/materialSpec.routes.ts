@@ -17,6 +17,11 @@ import {
   requestExport,
   listExports,
   getExport,
+  transitionMaterialLifecycle,
+  substituteMaterial,
+  createMaterialExtraction,
+  reviewMaterialExtraction,
+  getMaterialRepairReorder,
 } from '../controllers/materialSpec.controller';
 
 import {
@@ -27,6 +32,10 @@ import {
   addPhotoBodySchema,
   reorderPhotosBodySchema,
   requestExportBodySchema,
+  transitionMaterialLifecycleBodySchema,
+  substituteMaterialBodySchema,
+  createMaterialExtractionBodySchema,
+  reviewMaterialExtractionBodySchema,
 } from '../validators/materialSpec.validators';
 
 const router = Router();
@@ -81,6 +90,40 @@ router.patch(
   propertyAuthMiddleware,
   validateBody(updateSpecBodySchema),
   updateSpec
+);
+
+router.post(
+  '/properties/:propertyId/materials/:specId/lifecycle',
+  propertyAuthMiddleware,
+  validateBody(transitionMaterialLifecycleBodySchema),
+  transitionMaterialLifecycle,
+);
+
+router.post(
+  '/properties/:propertyId/materials/:specId/substitutions',
+  propertyAuthMiddleware,
+  validateBody(substituteMaterialBodySchema),
+  substituteMaterial,
+);
+
+router.post(
+  '/properties/:propertyId/materials/:specId/extractions',
+  propertyAuthMiddleware,
+  validateBody(createMaterialExtractionBodySchema),
+  createMaterialExtraction,
+);
+
+router.post(
+  '/properties/:propertyId/materials/:specId/extractions/:reviewId/review',
+  propertyAuthMiddleware,
+  validateBody(reviewMaterialExtractionBodySchema),
+  reviewMaterialExtraction,
+);
+
+router.get(
+  '/properties/:propertyId/materials/:specId/repair-reorder',
+  propertyAuthMiddleware,
+  getMaterialRepairReorder,
 );
 
 router.delete('/properties/:propertyId/materials/:specId', propertyAuthMiddleware, deleteSpec);

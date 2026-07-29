@@ -1503,27 +1503,73 @@ export async function listLogEntries(projectId: string, propertyId: string, para
 
 export async function createLogEntry(projectId: string, propertyId: string, userId: string, data: any) {
   await assertProject(projectId, propertyId);
-  return prisma.projectProgressLog.create({
-    data: {
-      projectId,
-      milestoneId: data.milestoneId,
-      entryDate: new Date(data.entryDate),
-      entryType: data.entryType,
-      notes: data.notes,
-      photoKeys: data.photoKeys ?? [],
-      roomId: data.roomId,
-      materialType: data.materialType,
-      materialBrand: data.materialBrand,
-      materialModel: data.materialModel,
-      materialColor: data.materialColor,
-      materialSupplier: data.materialSupplier,
-      materialQuantity: data.materialQuantity,
-      loggedByUserId: userId,
-    },
-    include: {
-      milestone: { select: { id: true, name: true } },
-      room: { select: { id: true, name: true } },
-    },
+  const project = await prisma.projectRecord.findFirst({
+    where: { id: projectId, propertyId },
+    select: { renovationScopeVersionId: true, inventoryItemId: true },
+  });
+  return prisma.$transaction(async (tx) => {
+    const entry = await tx.projectProgressLog.create({
+      data: {
+        projectId,
+        milestoneId: data.milestoneId,
+        entryDate: new Date(data.entryDate),
+        entryType: data.entryType,
+        notes: data.notes,
+        photoKeys: data.photoKeys ?? [],
+        roomId: data.roomId,
+        materialType: data.materialType,
+        materialBrand: data.materialBrand,
+        materialModel: data.materialModel,
+        materialColor: data.materialColor,
+        materialSupplier: data.materialSupplier,
+        materialQuantity: data.materialQuantity,
+        loggedByUserId: userId,
+      },
+      include: {
+        milestone: { select: { id: true, name: true } },
+        room: { select: { id: true, name: true } },
+      },
+    });
+    if (data.materialType) {
+      const supportedCategories = new Set([
+        'PAINT', 'TILE', 'FLOORING', 'GROUT', 'COUNTERTOP', 'CABINET',
+        'HARDWARE', 'TRIM_MOLDING', 'WALLPAPER', 'ROOFING', 'SIDING',
+        'WINDOW', 'DOOR', 'INSULATION',
+      ]);
+      const normalizedCategory = String(data.materialType).trim().toUpperCase().replace(/ /g, '_');
+      const spec = await tx.materialSpec.create({
+        data: {
+          propertyId,
+          roomId: data.roomId,
+          projectId,
+          scopeVersionId: project?.renovationScopeVersionId,
+          sourceProgressLogId: entry.id,
+          linkedInventoryItemId: project?.inventoryItemId,
+          scopeLevel: data.roomId ? 'ROOM' : 'PROPERTY',
+          category: (supportedCategories.has(normalizedCategory) ? normalizedCategory : 'OTHER') as any,
+          label: data.materialType,
+          manufacturer: data.materialBrand,
+          productName: data.materialModel,
+          colorCode: data.materialColor,
+          supplier: data.materialSupplier,
+          quantityPurchased: data.materialQuantity,
+          lifecycleStatus: 'PROPOSED',
+          verificationConfidence: 'REPORTED',
+        },
+      });
+      await tx.materialLifecycleEvent.create({
+        data: {
+          materialSpecId: spec.id,
+          propertyId,
+          projectId,
+          eventType: 'PROPOSED',
+          toStatus: 'PROPOSED',
+          actorUserId: userId,
+          notes: 'Created from a Project material delivery log.',
+        },
+      });
+    }
+    return entry;
   });
 }
 
@@ -1651,6 +1697,8 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
     openBlockingOrMajorIssues,
     payments,
     photoCount,
+    materialLogCount,
+    projectMaterials,
   ] = await Promise.all([
     prisma.propertyPermitRecord.findMany({
       where: {
@@ -1698,6 +1746,23 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
     prisma.projectProgressLog.count({
       where: { projectId, photoKeys: { isEmpty: false } },
     }),
+    prisma.projectProgressLog.count({
+      where: { projectId, materialType: { not: null } },
+    }),
+    prisma.materialSpec.findMany({
+      where: { projectId, isActive: true },
+      select: {
+        id: true,
+        label: true,
+        lifecycleStatus: true,
+        manufacturer: true,
+        productName: true,
+        sku: true,
+        colorCode: true,
+        lotBatch: true,
+        verificationConfidence: true,
+      },
+    }),
   ]);
 
   const lastPayment = payments[0];
@@ -1720,6 +1785,19 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
     && (
       approval.decisionTruthLayer === 'SOURCE_OBSERVED'
       || approval.decisionTruthLayer === 'ASSOCIATION_CONFIRMED'
+    )
+  );
+  const projectMaterialsVerified = (
+    projectMaterials.length === 0
+    && materialLogCount === 0
+  ) || (
+    projectMaterials.length >= materialLogCount
+    && projectMaterials.every(material =>
+      material.lifecycleStatus === 'AS_BUILT'
+      && material.verificationConfidence === 'VERIFIED'
+      && material.manufacturer
+      && material.productName
+      && (material.sku || material.colorCode || material.lotBatch)
     )
   );
 
@@ -1773,6 +1851,26 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
       status: photoCount > 0 ? 'PASSED' as const : 'FAILED' as const,
       passed: photoCount > 0,
       blockers: photoCount === 0 ? ['No progress photos have been logged'] : [],
+    },
+    {
+      key: 'materials_verified_as_built',
+      label: 'Project materials verified as-built',
+      status: projectMaterialsVerified ? 'PASSED' as const : 'FAILED' as const,
+      passed: projectMaterialsVerified,
+      blockers: projectMaterialsVerified ? [] : [
+        ...(projectMaterials.length < materialLogCount
+          ? ['One or more material delivery logs have no linked material record.']
+          : []),
+        ...projectMaterials
+          .filter(material =>
+            material.lifecycleStatus !== 'AS_BUILT'
+            || material.verificationConfidence !== 'VERIFIED'
+            || !material.manufacturer
+            || !material.productName
+            || !(material.sku || material.colorCode || material.lotBatch)
+          )
+          .map(material => `${material.label} is not a verified, exactly identified as-built record`),
+      ],
     },
   ];
 

@@ -13672,6 +13672,7 @@ model RenovationScopeVersion {
   requirements RenovationRequirement[]
   complianceConditions RenovationComplianceCondition[]
   executionProjects ProjectRecord[]
+  materialSpecs MaterialSpec[]
 
   @@unique([renovationCaseId, version])
   @@unique([renovationCaseId, idempotencyKey])
@@ -14604,6 +14605,42 @@ enum MaterialSpecExportStatus {
   EXPIRED
 }
 
+enum MaterialLifecycleStatus {
+  PROPOSED
+  APPROVED
+  SUBSTITUTED
+  INSTALLED
+  AS_BUILT
+}
+
+enum MaterialVerificationConfidence {
+  REPORTED
+  DOCUMENTED
+  VERIFIED
+}
+
+enum MaterialComplianceCheckStatus {
+  NOT_CONFIGURED
+  REVIEW_REQUIRED
+  PASSED
+  FAILED
+}
+
+enum MaterialLifecycleEventType {
+  PROPOSED
+  APPROVED
+  SUBSTITUTED
+  INSTALLED
+  AS_BUILT_VERIFIED
+  EXTRACTION_CONFIRMED
+}
+
+enum MaterialExtractionReviewStatus {
+  NEEDS_REVIEW
+  CONFIRMED
+  REJECTED
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 // A. One weekly Gazette edition per property.
@@ -14875,7 +14912,29 @@ model MaterialSpec {
 
   linkedInventoryItemId String?
   projectId             String?
+  scopeVersionId        String?
   sourceProgressLogId   String? @unique
+  sourceChangeOrderId   String?
+  substitutedFromId     String?
+
+  lifecycleStatus       MaterialLifecycleStatus @default(PROPOSED)
+  verificationConfidence MaterialVerificationConfidence @default(REPORTED)
+  complianceRelevance   Json?
+  permitAttributeCheck  MaterialComplianceCheckStatus @default(NOT_CONFIGURED)
+  hoaAttributeCheck     MaterialComplianceCheckStatus @default(NOT_CONFIGURED)
+  submittalDocumentIds  String[] @default([])
+  approvalDocumentIds   String[] @default([])
+  receiptDocumentId     String?
+  warrantyDocumentId    String?
+  manualDocumentId      String?
+  careInstructions      String? @db.Text
+  quantityInstalled     String?
+  quantityRemaining     String?
+  remainingStorageLocation String?
+  installedAt           DateTime?
+  installedByName       String?
+  verifiedAt            DateTime?
+  verifiedByUserId      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -14884,8 +14943,14 @@ model MaterialSpec {
   room              InventoryRoom?      @relation(fields: [roomId], references: [id], onDelete: SetNull)
   inventoryItem     InventoryItem?      @relation(fields: [linkedInventoryItemId], references: [id], onDelete: SetNull)
   project           ProjectRecord?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  scopeVersion      RenovationScopeVersion? @relation(fields: [scopeVersionId], references: [id], onDelete: SetNull)
   sourceProgressLog ProjectProgressLog? @relation(fields: [sourceProgressLogId], references: [id], onDelete: SetNull)
+  sourceChangeOrder ProjectChangeOrder? @relation(fields: [sourceChangeOrderId], references: [id], onDelete: SetNull)
+  substitutedFrom  MaterialSpec? @relation("MaterialSubstitutions", fields: [substitutedFromId], references: [id], onDelete: SetNull)
+  substitutes      MaterialSpec[] @relation("MaterialSubstitutions")
   photos            MaterialSpecPhoto[]
+  lifecycleEvents   MaterialLifecycleEvent[]
+  extractionReviews MaterialExtractionReview[]
 
   @@index([propertyId])
   @@index([roomId])
@@ -14893,7 +14958,57 @@ model MaterialSpec {
   @@index([propertyId, category])
   @@index([isActive])
   @@index([projectId])
+  @@index([scopeVersionId])
+  @@index([projectId, lifecycleStatus])
+  @@index([substitutedFromId])
   @@map("material_specs")
+}
+
+model MaterialLifecycleEvent {
+  id                String @id @default(uuid())
+  materialSpecId    String
+  propertyId        String
+  projectId         String?
+  eventType         MaterialLifecycleEventType
+  fromStatus        MaterialLifecycleStatus?
+  toStatus          MaterialLifecycleStatus
+  actorUserId       String
+  evidenceDocumentIds String[] @default([])
+  comparison        Json?
+  complianceImpact  Json?
+  notes             String? @db.Text
+  occurredAt        DateTime @default(now())
+
+  materialSpec MaterialSpec @relation(fields: [materialSpecId], references: [id], onDelete: Cascade)
+
+  @@index([materialSpecId, occurredAt])
+  @@index([projectId, occurredAt])
+  @@map("material_lifecycle_events")
+}
+
+model MaterialExtractionReview {
+  id                String @id @default(uuid())
+  materialSpecId    String
+  propertyId        String
+  sourceDocumentId  String?
+  sourcePhotoKey    String?
+  extractionMethod  String
+  parserVersion     String?
+  candidateFields   Json
+  confidence        Json?
+  status            MaterialExtractionReviewStatus @default(NEEDS_REVIEW)
+  reviewedFields    Json?
+  reviewNotes       String?
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  materialSpec MaterialSpec @relation(fields: [materialSpecId], references: [id], onDelete: Cascade)
+
+  @@index([materialSpecId, status])
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@map("material_extraction_reviews")
 }
 
 model MaterialSpecPhoto {
@@ -16899,6 +17014,7 @@ model ProjectChangeOrder {
   project    ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
   approvedBy User?         @relation("ProjectChangeOrderApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   complianceReviewedBy User? @relation("ProjectChangeOrderComplianceReviewedBy", fields: [complianceReviewedByUserId], references: [id], onDelete: SetNull)
+  materialSpecs MaterialSpec[]
 
   @@unique([projectId, changeNumber])
   @@index([projectId, status])

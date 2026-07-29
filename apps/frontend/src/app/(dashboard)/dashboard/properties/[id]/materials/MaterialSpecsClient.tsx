@@ -100,6 +100,15 @@ function SpecCard({ spec, propertyId }: SpecCardProps) {
               {spec.room.name}
             </span>
           )}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+            spec.lifecycleStatus === 'AS_BUILT'
+              ? 'bg-emerald-100 text-emerald-800'
+              : spec.lifecycleStatus === 'SUBSTITUTED'
+                ? 'bg-gray-100 text-gray-500'
+                : 'bg-indigo-100 text-indigo-800'
+          }`}>
+            {spec.lifecycleStatus.replace('_', ' ')}
+          </span>
         </div>
         <div className="flex items-center gap-2 mb-1">
           {spec.colorHex && (
@@ -150,6 +159,8 @@ function SpecForm({
   const [notes, setNotes] = useState(initialValues?.notes ?? '');
   const [purchaseDate, setPurchaseDate] = useState(initialValues?.purchaseDate?.slice(0, 10) ?? '');
   const [quantityPurchased, setQuantityPurchased] = useState(initialValues?.quantityPurchased ?? '');
+  const [lotBatch, setLotBatch] = useState(initialValues?.lotBatch ?? '');
+  const [careInstructions, setCareInstructions] = useState(initialValues?.careInstructions ?? '');
   const [isActive, setIsActive] = useState(initialValues?.isActive ?? true);
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -182,6 +193,8 @@ function SpecForm({
         projectId: initialValues?.projectId ?? null,
         purchaseDate: purchaseDate || null,
         quantityPurchased: quantityPurchased || null,
+        lotBatch: lotBatch || null,
+        careInstructions: careInstructions || null,
       };
       if (isEdit) body.isActive = isActive;
 
@@ -268,6 +281,16 @@ function SpecForm({
           <Label htmlFor="spec-finish">Finish</Label>
           <Input id="spec-finish" value={finish} onChange={e => setFinish(e.target.value)} placeholder="e.g. Eggshell" />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="spec-batch">Lot / Batch</Label>
+        <Input id="spec-batch" value={lotBatch} onChange={e => setLotBatch(e.target.value)} placeholder="Manufacturer batch or dye lot" />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="spec-care">Care Instructions</Label>
+        <Textarea id="spec-care" value={careInstructions} onChange={e => setCareInstructions(e.target.value)} placeholder="Cleaning, repair, and maintenance guidance" rows={3} />
       </div>
 
       <div className="flex flex-col gap-1.5">
