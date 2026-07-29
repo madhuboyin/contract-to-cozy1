@@ -18,9 +18,11 @@ jest.mock('next/link', () => ({
   default: React.forwardRef<
     HTMLAnchorElement,
     React.AnchorHTMLAttributes<HTMLAnchorElement>
-  >(({ href, children, ...rest }, ref) => (
+  >(function MockLink({ href, children, ...rest }, ref) {
+    return (
     <a ref={ref} href={String(href)} {...rest}>{children}</a>
-  )),
+    );
+  }),
 }));
 jest.mock('@/lib/api/client', () => ({
   api: {

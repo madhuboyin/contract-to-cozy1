@@ -3,7 +3,7 @@ import axeCore from 'axe-core';
 import { installSavingsBenefitsRoutes } from './savingsBenefitsFixtures';
 
 test('complete Savings and Benefits view passes accessibility, keyboard, zoom, and partner-consent checks', async ({ page }) => {
-  await installSavingsBenefitsRoutes(page);
+  const captured = await installSavingsBenefitsRoutes(page);
   await page.goto('/acceptance/savings-benefits');
   await expect(page.getByRole('heading', { name: 'Savings and Benefits acceptance' })).toBeVisible();
 
@@ -15,8 +15,31 @@ test('complete Savings and Benefits view passes accessibility, keyboard, zoom, a
   await page.getByRole('option', { name: 'Approved Energy Help' }).click();
   await expect(page.getByText('Contract to Cozy may receive a referral payment.')).toBeVisible();
   await page.getByRole('checkbox').check();
-  await page.getByRole('button', { name: 'Consent and share' }).click();
+  await expect(consentDialog.getByText(/records permission only/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Record consent' }).click();
   await expect(consentDialog).toBeHidden();
+  expect(captured.actionPayloads).toHaveLength(1);
+  expect(captured.actionPayloads[0]).toMatchObject({
+    actionType: 'PARTNER_HANDOFF_CONSENTED',
+    externalOwner: 'partner-1',
+    sharedFields: {
+      opportunityId: 'match-acceptance',
+      opportunityFamily: 'BENEFIT',
+      opportunityTitle: 'State energy rebate',
+      category: 'REBATE',
+    },
+    consent: {
+      partnerId: 'partner-1',
+      compensationMayOccur: true,
+      rankingInfluenced: false,
+      sharedFieldNames: [
+        'opportunityId',
+        'opportunityFamily',
+        'opportunityTitle',
+        'category',
+      ],
+    },
+  });
   await page.waitForTimeout(500);
 
   await page.addScriptTag({ content: axeCore.source });

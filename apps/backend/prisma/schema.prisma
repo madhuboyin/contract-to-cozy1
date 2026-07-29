@@ -11716,6 +11716,7 @@ model SavingsBenefitAction {
   consentJson            Json?
   sharedFieldsJson       Json?
   handoffStatus          SavingsBenefitHandoffStatus?
+  handoffDeliveryReference String?
   handoffSubmittedAt     DateTime?
   handoffAcknowledgedAt  DateTime?
   handoffFulfilledAt     DateTime?

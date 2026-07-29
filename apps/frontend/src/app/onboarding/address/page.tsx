@@ -161,7 +161,7 @@ export default function AddressOnboardingPage() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Onboarding Temporarily Unavailable</h1>
           <p className="text-slate-500 mt-2 max-w-sm mx-auto">
-            We're experiencing a high volume of home lookups. Please refresh the page or try again in a few minutes.
+            We&apos;re experiencing a high volume of home lookups. Please refresh the page or try again in a few minutes.
           </p>
           <Button className="mt-8 rounded-xl h-12 px-8" onClick={() => window.location.reload()}>
             Refresh Page

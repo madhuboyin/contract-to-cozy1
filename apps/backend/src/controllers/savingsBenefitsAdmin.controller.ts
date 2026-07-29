@@ -270,6 +270,7 @@ export async function transitionHandoff(req: AuthRequest, res: Response): Promis
       req.body.status,
       req.user!.userId,
       req.body.reason,
+      req.body.deliveryReference,
       req,
     );
     res.json({ success: true, data: { action } });

@@ -97,7 +97,7 @@ export default function ReportViolationModal({ open, onClose, onReported, proper
               onChange={(e) => setWorkType(e.target.value as HoaWorkType)}
               className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
             >
-              <option value="">What's this about? (optional)</option>
+              <option value="">What&apos;s this about? (optional)</option>
               {WORK_TYPES.map((wt) => (
                 <option key={wt} value={wt}>{WORK_TYPE_LABELS[wt]}</option>
               ))}

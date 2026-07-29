@@ -108,11 +108,13 @@ export function useTransitionSavingsBenefitPartnerHandoff() {
       actionId,
       status,
       reason,
+      deliveryReference,
     }: {
       actionId: string;
       status: 'SUBMITTED' | 'ACKNOWLEDGED' | 'FULFILLED' | 'FAILED' | 'REVOKED';
       reason: string;
-    }) => transitionSavingsBenefitPartnerHandoff(actionId, status, reason),
+      deliveryReference?: string;
+    }) => transitionSavingsBenefitPartnerHandoff(actionId, status, reason, deliveryReference),
     onSuccess: () => qc.invalidateQueries({ queryKey: PARTNER_HANDOFFS_KEY }),
   });
 }

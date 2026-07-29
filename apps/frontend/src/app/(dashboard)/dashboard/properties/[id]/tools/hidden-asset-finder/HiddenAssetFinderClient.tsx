@@ -518,7 +518,7 @@ function SensitiveFactsPanel({ matchId }: { matchId: string }) {
         Additional eligibility details (optional)
       </h3>
       <p className="text-[11px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
-        This program's official criteria include personal details we never collect broadly. Answering is optional,
+        This program&apos;s official criteria include personal details we never collect broadly. Answering is optional,
         used only for this program, and can be removed at any time.
       </p>
       <div className="space-y-2">

@@ -105,11 +105,18 @@ test('real services persist the reviewed-source author-review-publish golden pat
   const {
     savingsBenefitsUnifiedService,
   } = require('../../src/services/savingsBenefitsUnified.service.ts');
+  const {
+    createSavingsBenefitPartnerComplaint,
+    resolveSavingsBenefitPartnerComplaint,
+    revokeSavingsBenefitHandoff,
+    transitionSavingsBenefitHandoff,
+  } = require('../../src/services/savingsBenefitsPartner.service.ts');
 
   const runId = `savings-benefits-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const userIds = [];
   let sourceId;
   let programId;
+  let partnerId;
   let evidenceDocumentId;
   try {
     const [author, reviewer, publisher] = await Promise.all(
@@ -253,11 +260,29 @@ test('real services persist the reviewed-source author-review-publish golden pat
       evidenceNote: 'Award letter received.',
       documentIds: [evidence.id],
     });
+    await assert.rejects(
+      () => verifySavingsBenefitOutcome(
+        'BENEFIT',
+        received.id,
+        homeowner.id,
+        'A recorder must not verify their own outcome.',
+      ),
+      /different administrator/,
+    );
     await verifySavingsBenefitOutcome(
       'BENEFIT',
       received.id,
       reviewer.id,
       'Acceptance reviewer independently checked the award letter.',
+    );
+    await assert.rejects(
+      () => verifySavingsBenefitOutcome(
+        'BENEFIT',
+        received.id,
+        reviewer.id,
+        'A verified outcome must not be verified twice.',
+      ),
+      /already been independently verified/,
     );
     const realized = await savingsBenefitsUnifiedService.getUnified(property.id, homeowner.id);
     assert.equal(realized.realized.length, 1);
@@ -272,6 +297,120 @@ test('real services persist the reviewed-source author-review-publish golden pat
     const corrected = await savingsBenefitsUnifiedService.getUnified(property.id, homeowner.id);
     assert.equal(corrected.realized.length, 0);
     assert.equal(corrected.totals.verifiedValueByCurrency.USD, undefined);
+
+    partnerId = `${runId}-partner`;
+    await prisma.savingsBenefitPartner.create({
+      data: {
+        id: partnerId,
+        name: 'Acceptance partner',
+        status: 'ACTIVE',
+        supportedJurisdictions: ['NJ'],
+        disclosureVersion: 'acceptance-v1',
+        compensationMayOccur: true,
+        compensationDisclosure: 'Contract to Cozy may receive compensation.',
+        rankingDisclosure: 'Compensation does not influence organic ranking.',
+        privacyDisclosure: 'Only the approved opportunity fields are delivered.',
+        fulfillmentSlaHours: 24,
+        effectiveAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    });
+    const sharedFields = {
+      opportunityId: match.id,
+      opportunityFamily: 'BENEFIT',
+      opportunityTitle: program.name,
+      category: program.category,
+    };
+    const consent = {
+      partnerId,
+      disclosureAcknowledged: true,
+      consentVersion: 'acceptance-v1',
+      consentedAt: new Date().toISOString(),
+      compensationMayOccur: true,
+      rankingInfluenced: false,
+      selectionCriteria: ['Jurisdiction support', 'Program category fit'],
+      nonCommercialAlternative: 'Continue independently with the official program.',
+      sharedFieldNames: Object.keys(sharedFields),
+    };
+    await assert.rejects(
+      () => createCanonicalAction(property.id, match.id, homeowner.id, {
+        idempotencyKey: `${runId}:partner-compensation-mismatch`,
+        family: 'BENEFIT',
+        actionType: 'PARTNER_HANDOFF_CONSENTED',
+        externalOwner: partnerId,
+        sharedFields,
+        consent: { ...consent, compensationMayOccur: false },
+      }),
+      /explicit consent contract/,
+    );
+    await assert.rejects(
+      () => createCanonicalAction(property.id, match.id, homeowner.id, {
+        idempotencyKey: `${runId}:partner-field-injection`,
+        family: 'BENEFIT',
+        actionType: 'PARTNER_HANDOFF_CONSENTED',
+        externalOwner: partnerId,
+        sharedFields: { ...sharedFields, email: homeowner.email },
+        consent: { ...consent, sharedFieldNames: [...consent.sharedFieldNames, 'email'] },
+      }),
+      /approved consent contract/,
+    );
+    const partnerAction = await createCanonicalAction(property.id, match.id, homeowner.id, {
+      idempotencyKey: `${runId}:partner-delivery`,
+      family: 'BENEFIT',
+      actionType: 'PARTNER_HANDOFF_CONSENTED',
+      externalOwner: partnerId,
+      sharedFields,
+      consent,
+    });
+    const submittedHandoff = await transitionSavingsBenefitHandoff(
+      partnerAction.id,
+      'SUBMITTED',
+      publisher.id,
+      'Acceptance administrator delivered the consented payload.',
+      `${runId}:delivery-receipt`,
+    );
+    assert.equal(submittedHandoff.handoffDeliveryReference, `${runId}:delivery-receipt`);
+    await transitionSavingsBenefitHandoff(
+      partnerAction.id,
+      'ACKNOWLEDGED',
+      publisher.id,
+      'Acceptance partner acknowledged the delivery.',
+    );
+    await transitionSavingsBenefitHandoff(
+      partnerAction.id,
+      'FULFILLED',
+      publisher.id,
+      'Acceptance partner fulfilled the handoff.',
+    );
+    const complaint = await createSavingsBenefitPartnerComplaint(
+      property.id,
+      partnerAction.id,
+      homeowner.id,
+      'SERVICE',
+      'Acceptance complaint after fulfillment.',
+    );
+    await resolveSavingsBenefitPartnerComplaint(
+      complaint.id,
+      'RESOLVED',
+      'Acceptance reviewer confirmed corrective action.',
+      reviewer.id,
+    );
+
+    const revocableAction = await createCanonicalAction(property.id, match.id, homeowner.id, {
+      idempotencyKey: `${runId}:partner-revocation`,
+      family: 'BENEFIT',
+      actionType: 'PARTNER_HANDOFF_CONSENTED',
+      externalOwner: partnerId,
+      sharedFields,
+      consent: { ...consent, consentedAt: new Date().toISOString() },
+    });
+    const revokedHandoff = await revokeSavingsBenefitHandoff(
+      property.id,
+      revocableAction.id,
+      homeowner.id,
+      'Acceptance homeowner withdrew consent.',
+    );
+    assert.equal(revokedHandoff.handoffStatus, 'REVOKED');
+    assert.equal(revokedHandoff.state, 'CANCELLED');
 
     await savingsBenefitsAdminService.updateSource(source.id, {
       name: `${source.name} materially changed`,
@@ -298,6 +437,7 @@ test('real services persist the reviewed-source author-review-publish golden pat
     if (evidenceDocumentId) await prisma.document.deleteMany({ where: { id: evidenceDocumentId } });
     if (programId) await prisma.hiddenAssetProgram.deleteMany({ where: { id: programId } });
     if (sourceId) await prisma.hiddenAssetSource.deleteMany({ where: { id: sourceId } });
+    if (partnerId) await prisma.savingsBenefitPartner.deleteMany({ where: { id: partnerId } });
     if (userIds.length > 0) {
       await prisma.auditLog.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });

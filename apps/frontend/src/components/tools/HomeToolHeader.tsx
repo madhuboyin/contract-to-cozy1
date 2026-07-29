@@ -44,8 +44,6 @@ export default function HomeToolHeader({
   showBackLink = false,
 }: HomeToolHeaderProps) {
   const definition = getDiscoverableTool(toolId);
-  if (!definition) return null;
-  const Icon = definition.icon;
   const resolvedBackHref = backHref ?? (propertyId ? `/dashboard/properties/${propertyId}` : null);
 
   const propertyQuery = useQuery({
@@ -59,6 +57,9 @@ export default function HomeToolHeader({
     enabled: Boolean(propertyId && !monitoringAddress),
     staleTime: 5 * 60 * 1000,
   });
+
+  if (!definition) return null;
+  const Icon = definition.icon;
 
   const resolvedMonitoringAddress =
     monitoringAddress?.trim() ||

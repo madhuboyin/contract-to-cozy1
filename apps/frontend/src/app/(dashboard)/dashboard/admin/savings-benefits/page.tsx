@@ -458,7 +458,7 @@ function ProgramFormDialog({
               <SelectContent>
                 <SelectItem value="PROPERTY">The property (default — re-evaluated per property)</SelectItem>
                 <SelectItem value="HOUSEHOLD">The household / applicant (e.g. veteran status, income)</SelectItem>
-                <SelectItem value="EITHER">Either, depending on how it's claimed</SelectItem>
+                <SelectItem value="EITHER">Either, depending on how it&apos;s claimed</SelectItem>
               </SelectContent>
             </Select>
             <p className="mt-1 text-xs text-slate-500">
@@ -744,6 +744,71 @@ function OperationalReasonDialog({
           >
             {pending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
             Confirm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ManualDeliveryDialog({
+  open,
+  partnerName,
+  pending,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  partnerName: string;
+  pending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (reason: string, deliveryReference: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  const [deliveryReference, setDeliveryReference] = useState('');
+  const reset = () => {
+    setReason('');
+    setDeliveryReference('');
+  };
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirm delivery to {partnerName}</DialogTitle>
+          <DialogDescription>
+            Confirm that only the displayed, consented fields were delivered outside the platform.
+            Record a durable receipt, ticket, or external submission reference before advancing the handoff.
+          </DialogDescription>
+        </DialogHeader>
+        <Label htmlFor="handoff-delivery-reference">Delivery reference</Label>
+        <Input
+          id="handoff-delivery-reference"
+          value={deliveryReference}
+          onChange={(event) => setDeliveryReference(event.target.value)}
+          placeholder="Partner receipt, secure-transfer ticket, or submission ID"
+        />
+        <Label htmlFor="handoff-delivery-reason">Delivery notes</Label>
+        <Textarea
+          id="handoff-delivery-reason"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          className="min-h-[96px]"
+          placeholder="How and when the approved payload was delivered"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
+          <Button
+            disabled={pending || reason.trim().length < 3 || deliveryReference.trim().length < 3}
+            onClick={() => onConfirm(reason.trim(), deliveryReference.trim())}
+          >
+            {pending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Confirm delivered
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1053,6 +1118,10 @@ export default function SavingsBenefitsAdminPage() {
     status: 'FAILED' | 'REVOKED';
     partnerName: string;
   } | null>(null);
+  const [submissionTarget, setSubmissionTarget] = useState<{
+    actionId: string;
+    partnerName: string;
+  } | null>(null);
   const [complaintDecision, setComplaintDecision] = useState<{
     complaintId: string;
     partnerName: string;
@@ -1318,19 +1387,33 @@ export default function SavingsBenefitsAdminPage() {
                       : 'No reconciled outcome'}
                     {handoff.openComplaintCount ? ` · ${handoff.openComplaintCount} open complaint(s)` : ''}
                   </p>
+                  {handoff.sharedFields ? (
+                    <dl className="mt-2 grid gap-x-3 gap-y-1 text-xs sm:grid-cols-2">
+                      {Object.entries(handoff.sharedFields).map(([field, value]) => (
+                        <div key={field}>
+                          <dt className="font-semibold text-slate-700">{field}</dt>
+                          <dd className="break-words text-slate-600">{String(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                  {handoff.deliveryReference ? (
+                    <p className="mt-1 text-xs text-slate-600">
+                      Delivery reference: {handoff.deliveryReference}
+                    </p>
+                  ) : null}
                 </div>
                 {handoff.overdue ? <Badge variant="destructive">SLA overdue</Badge> : null}
                 {handoff.handoffStatus === 'CONSENTED' ? (
                   <Button
                     size="sm"
                     disabled={transitionHandoffM.isPending}
-                    onClick={() => transitionHandoffM.mutate({
+                    onClick={() => setSubmissionTarget({
                       actionId: handoff.id,
-                      status: 'SUBMITTED',
-                      reason: 'Partner submission confirmed by administrator.',
+                      partnerName: handoff.partner?.name ?? 'Unknown partner',
                     })}
                   >
-                    Mark submitted
+                    Confirm delivery
                   </Button>
                 ) : null}
                 {handoff.handoffStatus === 'SUBMITTED' ? (
@@ -1515,6 +1598,36 @@ export default function SavingsBenefitsAdminPage() {
               },
               onError: (error) => toast({
                 title: 'Could not update handoff',
+                description: error instanceof Error ? error.message : undefined,
+                variant: 'destructive',
+              }),
+            },
+          );
+        }}
+      />
+      <ManualDeliveryDialog
+        open={submissionTarget !== null}
+        partnerName={submissionTarget?.partnerName ?? ''}
+        pending={transitionHandoffM.isPending}
+        onOpenChange={(open) => {
+          if (!open) setSubmissionTarget(null);
+        }}
+        onConfirm={(reason, deliveryReference) => {
+          if (!submissionTarget) return;
+          transitionHandoffM.mutate(
+            {
+              actionId: submissionTarget.actionId,
+              status: 'SUBMITTED',
+              reason,
+              deliveryReference,
+            },
+            {
+              onSuccess: () => {
+                setSubmissionTarget(null);
+                toast({ title: 'Partner delivery recorded' });
+              },
+              onError: (error) => toast({
+                title: 'Could not record delivery',
                 description: error instanceof Error ? error.message : undefined,
                 variant: 'destructive',
               }),

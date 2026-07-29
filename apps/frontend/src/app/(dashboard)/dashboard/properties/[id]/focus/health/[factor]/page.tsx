@@ -1774,7 +1774,7 @@ export default function HealthInsightFocusPage() {
             </div>
             <div className="px-5 pb-4">
               <p className="text-[11px] text-slate-400">
-                Items marked "Act now" are most likely to affect safety or cost significantly if deferred.
+                Items marked &quot;Act now&quot; are most likely to affect safety or cost significantly if deferred.
               </p>
             </div>
           </div>

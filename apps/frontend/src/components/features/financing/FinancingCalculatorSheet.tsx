@@ -136,7 +136,7 @@ export default function FinancingCalculatorSheet({
             </p>
           ) : equity ? (
             <p className="text-slate-500">
-              Your current equity position doesn't meet lender HELOC requirements (need ≥ 20%
+              Your current equity position doesn&apos;t meet lender HELOC requirements (need ≥ 20%
               equity and LTV ≤ 85%).
             </p>
           ) : (

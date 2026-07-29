@@ -69,7 +69,7 @@ export default function InviteAcceptPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-sm w-full bg-white rounded-2xl p-6 shadow-sm space-y-5">
         <div className="text-center space-y-1">
-          <p className="text-sm text-gray-500">You've been invited to</p>
+          <p className="text-sm text-gray-500">You&apos;ve been invited to</p>
           <h1 className="text-lg font-semibold text-gray-900">{preview.propertyAddressSnippet}</h1>
           <p className="text-sm text-gray-500">by {preview.invitedByName}</p>
         </div>

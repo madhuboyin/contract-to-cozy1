@@ -2737,7 +2737,7 @@ function CaseWorkspace({
                 <CardHeader className={SECTION_HEADER_CLASS}>
                   <CardTitle className="text-base">Ready to close the deal?</CardTitle>
                   <CardDescription>
-                    Once you've sent the draft and agreed on a final price, record it in Price Finalization to unlock the provider booking step.
+                    Once you&apos;ve sent the draft and agreed on a final price, record it in Price Finalization to unlock the provider booking step.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className={cn(SECTION_CONTENT_CLASS, 'flex flex-col gap-2.5 sm:flex-row sm:flex-wrap')}>

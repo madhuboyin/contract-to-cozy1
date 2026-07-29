@@ -11,7 +11,7 @@ import {
   CTAMetric,
   CTAPriority,
   createCTAContract,
-  useCtaValidation,
+  useCtaValidation as validateCtaAtRuntime,
 } from './contracts';
 
 export class CTABuilder {
@@ -183,7 +183,7 @@ export class CTABuilder {
    */
   buildAndValidate(): CTAContract {
     const contract = this.build();
-    useCtaValidation(contract);
+    validateCtaAtRuntime(contract);
     return contract;
   }
 

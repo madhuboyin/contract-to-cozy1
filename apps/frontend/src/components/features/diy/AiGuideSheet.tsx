@@ -41,7 +41,7 @@ export default function AiGuideSheet({ propertyId, initialPrompt = '', onGuideSt
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
         <p className="text-sm text-neutral-500">
-          Tell us what you'd like to tackle and we'll generate a step-by-step guide tailored to your home.
+          Tell us what you&apos;d like to tackle and we&apos;ll generate a step-by-step guide tailored to your home.
         </p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <textarea

@@ -165,7 +165,7 @@ export default function ProjectTrackerPage() {
             disabled={abandoning}
             className="w-full text-center text-sm text-neutral-400 disabled:opacity-50"
           >
-            I'll hire a pro instead
+            I&apos;ll hire a pro instead
           </button>
         </div>
       )}

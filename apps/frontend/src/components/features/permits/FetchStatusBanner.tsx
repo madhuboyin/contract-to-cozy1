@@ -27,7 +27,7 @@ export default function FetchStatusBanner({ fetchJob, city, onTrigger }: Props) 
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Check for public permit records</p>
           <p className="text-xs text-[hsl(var(--mobile-text-secondary))] mt-0.5">
-            We may be able to pull permit records from {cityLabel}'s open data.
+            We may be able to pull permit records from {cityLabel}&apos;s open data.
           </p>
         </div>
         <button

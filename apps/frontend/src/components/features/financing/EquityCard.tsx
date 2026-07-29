@@ -39,7 +39,7 @@ export default function EquityCard({
           Add mortgage details to see your equity
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          We'll calculate your home equity and estimated HELOC capacity
+          We&apos;ll calculate your home equity and estimated HELOC capacity
         </p>
         <Button asChild size="sm" className="mt-4">
           <Link href={`/dashboard/properties/${propertyId}/tools/financing/profile`}>

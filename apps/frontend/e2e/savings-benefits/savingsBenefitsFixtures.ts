@@ -71,6 +71,7 @@ function responseBody(handoff = false) {
 }
 
 export async function installSavingsBenefitsRoutes(page: Page, handoff = false) {
+  const actionPayloads: Array<Record<string, unknown>> = [];
   await page.route(`**/api/properties/${PROPERTY_ID}/savings-benefits`, (route) =>
     route.fulfill({ json: responseBody(handoff) }));
   await page.route(`**/api/properties/${PROPERTY_ID}/savings-benefits/partners`, (route) =>
@@ -90,10 +91,13 @@ export async function installSavingsBenefitsRoutes(page: Page, handoff = false) 
         },
       },
     }));
-  await page.route('**/api/properties/**/savings-benefits/opportunities/**/actions', (route) =>
-    route.fulfill({ status: 201, json: { success: true, data: { id: 'handoff-action' } } }));
+  await page.route('**/api/properties/**/savings-benefits/opportunities/**/actions', async (route) => {
+    actionPayloads.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({ status: 201, json: { success: true, data: { id: 'handoff-action' } } });
+  });
   await page.route('**/api/properties/**/savings-benefits/actions/**/handoff/revoke', (route) =>
     route.fulfill({ json: { success: true, data: {} } }));
   await page.route('**/api/properties/**/savings-benefits/actions/**/handoff/complaints', (route) =>
     route.fulfill({ status: 201, json: { success: true, data: { id: 'complaint-1' } } }));
+  return { actionPayloads };
 }

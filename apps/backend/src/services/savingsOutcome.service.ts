@@ -646,6 +646,18 @@ export async function verifySavingsBenefitOutcome(
         },
       });
       if (!outcome) throw new Error('Outcome not found.');
+      if (outcome.recordedBy === actorId) {
+        throw new SavingsOutcomeGovernanceError(
+          'INDEPENDENT_REVIEWER_REQUIRED',
+          'An outcome must be verified by a different administrator than the person who recorded it.',
+        );
+      }
+      if (outcome.verificationState === 'VERIFIED') {
+        throw new SavingsOutcomeGovernanceError(
+          'OUTCOME_ALREADY_VERIFIED',
+          'This outcome has already been independently verified.',
+        );
+      }
       if (outcome.stage !== 'RECEIVED' || outcome.revokedAt) {
         throw new SavingsOutcomeGovernanceError(
           'OUTCOME_NOT_VERIFIABLE',
@@ -700,6 +712,18 @@ export async function verifySavingsBenefitOutcome(
       },
     });
     if (!outcome) throw new Error('Outcome not found.');
+    if (outcome.recordedBy === actorId) {
+      throw new SavingsOutcomeGovernanceError(
+        'INDEPENDENT_REVIEWER_REQUIRED',
+        'An outcome must be verified by a different administrator than the person who recorded it.',
+      );
+    }
+    if (outcome.verificationState === 'VERIFIED') {
+      throw new SavingsOutcomeGovernanceError(
+        'OUTCOME_ALREADY_VERIFIED',
+        'This outcome has already been independently verified.',
+      );
+    }
     if (outcome.stage !== 'RECEIVED' || outcome.revokedAt) {
       throw new SavingsOutcomeGovernanceError(
         'OUTCOME_NOT_VERIFIABLE',

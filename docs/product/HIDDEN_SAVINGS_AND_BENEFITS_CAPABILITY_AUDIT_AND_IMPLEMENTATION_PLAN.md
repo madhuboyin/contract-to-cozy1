@@ -1248,8 +1248,9 @@ The final review was performed against the implemented repository state, not
 only against the original finding list. It closed the remaining fail-closed,
 workflow, concurrency, and executable-acceptance gaps:
 
-- stale or unreviewed programs are excluded from discovery, canonical detail,
-  pursuing, and realized projections;
+- stale or unreviewed programs are excluded from discovery, actionable
+  canonical detail, and pursuing projections; historical realized outcomes
+  remain visible because source staleness must not erase received value;
 - source, program, property, and account changes enqueue property-scoped
   reevaluation and surface queue admission failures;
 - source author, program author, reviewer, and publisher separation is
@@ -1271,6 +1272,20 @@ workflow, concurrency, and executable-acceptance gaps:
 - the worker Dockerfile stages every backend dependency required by the worker
   compiler, including Hidden Asset freshness and canonical maintenance
   work-item modules.
+- partner consent is checked against the approved registry compensation flag,
+  a server-owned field allowlist, and server-derived opportunity values;
+- consent and delivery are separate lifecycle events: homeowner consent stores
+  permission, while an administrator must display the exact payload and record
+  a durable external receipt before marking the handoff submitted;
+- outcome verification requires a different actor from the homeowner outcome
+  recorder and rejects repeated verification;
+- the additive migration chain now includes the Home Habit recurrence values,
+  adopted-maintenance-task relation, partner delivery receipt, editorial actor
+  fields, and compensation flag, with an executable pre-change-schema
+  rehearsal in CI;
+- the repository-wide frontend ESLint error baseline is cleared so the
+  Savings and Benefits browser acceptance job can execute rather than being
+  skipped upstream.
 
 The repository validation set completed with:
 
@@ -1285,9 +1300,9 @@ The repository validation set completed with:
 - `git diff --check`.
 
 No additional P0, P1, or P2 implementation gap remains open in the bounded
-scope of this audit. Live source accuracy, third-party availability, production
-data quality, and operational response are ongoing controls rather than
-repository implementation findings.
+scope of this audit after the final closure validation. Live source accuracy,
+third-party availability, production data quality, and operational response
+are ongoing controls rather than repository implementation findings.
 
 ---
 

@@ -320,9 +320,13 @@ export function GuidanceOverviewInlineStep({
   const [note, setNote] = React.useState('');
 
   const config = getInlineStepConfig(step);
-  if (!config) return null;
 
   React.useEffect(() => {
+    if (!config) {
+      setSelectedChecklist({});
+      setNote('');
+      return;
+    }
     const existingSelections =
       step.producedData && typeof step.producedData === 'object'
         ? step.producedData
@@ -338,6 +342,8 @@ export function GuidanceOverviewInlineStep({
     setSelectedChecklist(checklistSelections);
     setNote(existingNote);
   }, [step.id, step.stepKey, step.producedData]);
+
+  if (!config) return null;
 
   async function handleComplete(option: StepOption) {
     try {

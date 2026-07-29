@@ -13,9 +13,9 @@ jest.mock('next/link', () => ({
   default: React.forwardRef<
     HTMLAnchorElement,
     React.AnchorHTMLAttributes<HTMLAnchorElement>
-  >(({ href, children, ...rest }, ref) => (
-    <a ref={ref} href={String(href)} {...rest}>{children}</a>
-  )),
+  >(function MockLink({ href, children, ...rest }, ref) {
+    return <a ref={ref} href={String(href)} {...rest}>{children}</a>;
+  }),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({ track: mockTrack }));

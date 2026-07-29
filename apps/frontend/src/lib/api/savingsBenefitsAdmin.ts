@@ -207,6 +207,8 @@ export interface SavingsBenefitPartnerHandoffItem {
   submittedAt: string | null;
   acknowledgedAt: string | null;
   fulfilledAt: string | null;
+  deliveryReference: string | null;
+  sharedFields: Record<string, unknown> | null;
   dueAt: string | null;
   overdue: boolean;
   openComplaintCount: number;
@@ -349,8 +351,13 @@ export async function transitionSavingsBenefitPartnerHandoff(
   actionId: string,
   status: 'SUBMITTED' | 'ACKNOWLEDGED' | 'FULFILLED' | 'FAILED' | 'REVOKED',
   reason: string,
+  deliveryReference?: string,
 ): Promise<void> {
-  await api.post(`/api/admin/savings-benefits/handoffs/${actionId}/transition`, { status, reason });
+  await api.post(`/api/admin/savings-benefits/handoffs/${actionId}/transition`, {
+    status,
+    reason,
+    deliveryReference,
+  });
 }
 
 export async function upsertSavingsBenefitPartner(

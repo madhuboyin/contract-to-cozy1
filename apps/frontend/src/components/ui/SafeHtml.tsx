@@ -32,7 +32,18 @@ const ALLOWED_TARGETS = new Set(['_blank', '_self']);
 const SAFE_URI_PATTERN =
   /^(?:(?:https?:|mailto:|tel:)|\/(?!\/)|#)/i;
 const SAFE_IMAGE_SRC_PATTERN = /^https:\/\//i;
-let trustedHtmlPolicy: { createHTML(input: string): string | TrustedHTML } | null = null;
+const trustedHtmlPolicy: { createHTML(input: string): string | TrustedHTML } | null =
+  typeof window !== 'undefined' && window.trustedTypes
+    ? (() => {
+        try {
+          return window.trustedTypes.createPolicy('dompurify', {
+            createHTML: (input) => input,
+          });
+        } catch {
+          return null;
+        }
+      })()
+    : null;
 
 interface SafeHtmlProps {
   html: string;
@@ -84,20 +95,8 @@ export function SafeHtml({ html, as: Tag = 'div', className }: SafeHtmlProps) {
 
     const finalHtml = container.innerHTML;
 
-    if (typeof window !== 'undefined' && window.trustedTypes) {
-      if (!trustedHtmlPolicy) {
-        try {
-          trustedHtmlPolicy = window.trustedTypes.createPolicy('dompurify', {
-            createHTML: (input) => input,
-          });
-        } catch {
-          trustedHtmlPolicy = null;
-        }
-      }
-
-      if (trustedHtmlPolicy) {
-        return trustedHtmlPolicy.createHTML(finalHtml);
-      }
+    if (trustedHtmlPolicy) {
+      return trustedHtmlPolicy.createHTML(finalHtml);
     }
 
     return finalHtml;

@@ -53,6 +53,14 @@ jobs:
       - name: Generate Prisma Client
         run: npm run prisma:generate
 
+      - name: Rehearse additive closure migrations
+        run: |
+          PGPASSWORD=postgres createdb -h 127.0.0.1 -U postgres contract_to_cozy_migration_rehearsal
+          PGPASSWORD=postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d contract_to_cozy_migration_rehearsal -f tests/fixtures/savings-benefits-pre-closure-schema.sql
+          PGPASSWORD=postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d contract_to_cozy_migration_rehearsal -f prisma/migrations/20260729170000_add_savings_editorial_separation/migration.sql
+          PGPASSWORD=postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d contract_to_cozy_migration_rehearsal -f prisma/migrations/20260729183000_complete_savings_closure/migration.sql
+          PGPASSWORD=postgres psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d contract_to_cozy_migration_rehearsal -f tests/fixtures/verify-savings-benefits-closure-migrations.sql
+
       - name: Enable PostGIS in acceptance database
         run: PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d contract_to_cozy_acceptance -c 'CREATE EXTENSION IF NOT EXISTS postgis'
 

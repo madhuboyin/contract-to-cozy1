@@ -168,7 +168,7 @@ export default function DiyHubPage() {
           onClick={() => setShowAiSheet(true)}
           className="w-full rounded-2xl border-2 border-dashed border-neutral-200 py-4 text-sm font-medium text-[hsl(var(--mobile-text-secondary))]"
         >
-          Don't see your project? Describe it →
+          Don&apos;t see your project? Describe it →
         </button>
       )}
 

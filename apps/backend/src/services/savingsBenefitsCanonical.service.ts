@@ -112,9 +112,17 @@ export interface UpdateCanonicalActionInput {
   }>;
 }
 
+export const SAVINGS_BENEFIT_HANDOFF_SHARED_FIELD_NAMES = [
+  'category',
+  'opportunityFamily',
+  'opportunityId',
+  'opportunityTitle',
+] as const;
+
 export function assertPartnerHandoffGovernance(
   input: Pick<CreateCanonicalActionInput, 'externalOwner' | 'consent' | 'sharedFields'>,
-  partner: Pick<SavingsBenefitPartnerRecord, 'id' | 'disclosureVersion'>,
+  partner: Pick<SavingsBenefitPartnerRecord, 'id' | 'disclosureVersion' | 'compensationMayOccur'>,
+  expectedSharedFields?: Record<string, unknown>,
 ) {
   const partnerId = input.externalOwner?.trim();
   if (!partnerId || partner.id !== partnerId) {
@@ -129,7 +137,7 @@ export function assertPartnerHandoffGovernance(
     || consent.consentVersion.trim() !== partner.disclosureVersion
     || typeof consent.consentedAt !== 'string'
     || Number.isNaN(new Date(consent.consentedAt).getTime())
-    || typeof consent.compensationMayOccur !== 'boolean'
+    || consent.compensationMayOccur !== partner.compensationMayOccur
     || typeof consent.rankingInfluenced !== 'boolean'
     || consent.rankingInfluenced !== false
     || !Array.isArray(consent.selectionCriteria)
@@ -145,11 +153,20 @@ export function assertPartnerHandoffGovernance(
     consent.sharedFieldNames.filter((value): value is string => typeof value === 'string'),
   )].sort();
   const actualFields = Object.keys(input.sharedFields ?? {}).sort();
+  const allowedFields = [...SAVINGS_BENEFIT_HANDOFF_SHARED_FIELD_NAMES];
   if (
     previewedFields.length !== actualFields.length
     || previewedFields.some((value, index) => value !== actualFields[index])
+    || actualFields.length !== allowedFields.length
+    || actualFields.some((value, index) => value !== allowedFields[index])
   ) {
-    throw new Error('The fields being shared do not match the consent preview.');
+    throw new Error('The fields being shared do not match the approved consent contract.');
+  }
+  if (
+    expectedSharedFields
+    && actualFields.some((field) => input.sharedFields?.[field] !== expectedSharedFields[field])
+  ) {
+    throw new Error('The partner handoff payload does not match the server-derived opportunity data.');
   }
 }
 
@@ -282,7 +299,20 @@ export async function createCanonicalAction(
       input.externalOwner!,
       property?.state,
     );
-    assertPartnerHandoffGovernance(input, partner);
+    const expectedSharedFields = detail.family === 'BENEFIT'
+      ? {
+          opportunityId,
+          opportunityFamily: detail.family,
+          opportunityTitle: detail.opportunity.program.name,
+          category: detail.opportunity.program.category,
+        }
+      : {
+          opportunityId,
+          opportunityFamily: detail.family,
+          opportunityTitle: detail.opportunity.headline,
+          category: detail.opportunity.categoryKey,
+        };
+    assertPartnerHandoffGovernance(input, partner, expectedSharedFields);
   }
 
   const completedImmediately = new Set<SavingsBenefitActionType>([

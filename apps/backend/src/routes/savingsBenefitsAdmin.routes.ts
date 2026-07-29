@@ -79,6 +79,15 @@ const OutcomeVerificationBodySchema = z.object({
 const HandoffTransitionBodySchema = z.object({
   status: z.enum(['SUBMITTED', 'ACKNOWLEDGED', 'FULFILLED', 'FAILED', 'REVOKED']),
   reason: z.string().trim().min(3).max(2000),
+  deliveryReference: z.string().trim().min(3).max(500).optional(),
+}).superRefine((value, context) => {
+  if (value.status === 'SUBMITTED' && !value.deliveryReference) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['deliveryReference'],
+      message: 'A delivery receipt or external submission reference is required.',
+    });
+  }
 });
 
 const ComplaintResolutionBodySchema = z.object({

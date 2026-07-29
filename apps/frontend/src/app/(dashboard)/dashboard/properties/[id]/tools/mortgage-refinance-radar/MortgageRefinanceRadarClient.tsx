@@ -2221,7 +2221,7 @@ export default function MortgageRefinanceRadarClient() {
                   Steps to act today
                 </p>
                 <p className="text-sm text-slate-700 dark:text-slate-300">
-                  A refinance window doesn't stay open forever. Here's what you can do right now — no lender or partner needed.
+                  A refinance window doesn&apos;t stay open forever. Here&apos;s what you can do right now — no lender or partner needed.
                 </p>
                 <ol className="space-y-3">
                   {[

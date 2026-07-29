@@ -196,6 +196,7 @@ function PartnerHandoffControls({
             <DialogTitle>Share this opportunity with an approved partner</DialogTitle>
             <DialogDescription>
               Review the recipient, commercial disclosures, ranking policy, privacy terms, and exact fields before consenting.
+              This records permission only; an administrator must separately deliver the approved payload and record a receipt.
             </DialogDescription>
           </DialogHeader>
           <Label htmlFor={`partner-${item.id}`}>Partner</Label>
@@ -226,7 +227,7 @@ function PartnerHandoffControls({
                   checked={acknowledged}
                   onChange={(event) => setAcknowledged(event.target.checked)}
                 />
-                <span>I consent to sharing these exact fields with {selectedPartner.name} under disclosure version {selectedPartner.disclosureVersion}.</span>
+                <span>I authorize these exact fields to be delivered to {selectedPartner.name} under disclosure version {selectedPartner.disclosureVersion}.</span>
               </label>
             </div>
           ) : null}
@@ -234,7 +235,7 @@ function PartnerHandoffControls({
           <DialogFooter>
             <Button variant="outline" onClick={() => setMode(null)}>Cancel</Button>
             <Button disabled={!selectedPartner || !acknowledged || handoffM.isPending} onClick={() => handoffM.mutate()}>
-              Consent and share
+              Record consent
             </Button>
           </DialogFooter>
         </DialogContent>

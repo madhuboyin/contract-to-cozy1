@@ -110,7 +110,7 @@ export function ReplacementPrioritiesCapture({
       {/* Budget */}
       <div className="space-y-2">
         <p className="text-sm font-semibold text-slate-800">
-          What's your budget for replacing {assetName}?
+          What&apos;s your budget for replacing {assetName}?
           <span className="ml-1 font-normal text-slate-400">(optional)</span>
         </p>
         <div className="relative">

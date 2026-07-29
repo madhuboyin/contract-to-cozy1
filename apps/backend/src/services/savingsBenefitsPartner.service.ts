@@ -105,6 +105,13 @@ export async function listSavingsBenefitHandoffs(
       submittedAt: action.handoffSubmittedAt,
       acknowledgedAt: action.handoffAcknowledgedAt,
       fulfilledAt: action.handoffFulfilledAt,
+      deliveryReference: action.handoffDeliveryReference,
+      sharedFields:
+        action.sharedFieldsJson
+        && typeof action.sharedFieldsJson === 'object'
+        && !Array.isArray(action.sharedFieldsJson)
+          ? action.sharedFieldsJson
+          : null,
       dueAt,
       overdue: Boolean(dueAt && !terminal && dueAt < now),
       partner: action.partner,
@@ -243,6 +250,7 @@ export async function transitionSavingsBenefitHandoff(
   nextStatus: SavingsBenefitHandoffStatus,
   actorId: string,
   reason: string,
+  deliveryReference?: string | null,
   req?: Pick<Request, 'ip' | 'headers'> | null,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -256,12 +264,22 @@ export async function transitionSavingsBenefitHandoff(
     if (!HANDOFF_TRANSITIONS[action.handoffStatus].includes(nextStatus)) {
       throw new Error(`Cannot transition a handoff from ${action.handoffStatus} to ${nextStatus}.`);
     }
+    const normalizedDeliveryReference = deliveryReference?.trim() ?? '';
+    if (nextStatus === 'SUBMITTED' && normalizedDeliveryReference.length < 3) {
+      throw new Error('A delivery receipt or external submission reference is required.');
+    }
     const now = new Date();
     const updated = await tx.savingsBenefitAction.updateMany({
       where: { id: action.id, handoffStatus: action.handoffStatus },
       data: {
         handoffStatus: nextStatus,
-        ...(nextStatus === 'SUBMITTED' ? { handoffSubmittedAt: now, submittedAt: now } : {}),
+        ...(nextStatus === 'SUBMITTED'
+          ? {
+              handoffSubmittedAt: now,
+              submittedAt: now,
+              handoffDeliveryReference: normalizedDeliveryReference,
+            }
+          : {}),
         ...(nextStatus === 'ACKNOWLEDGED' ? { handoffAcknowledgedAt: now } : {}),
         ...(nextStatus === 'FULFILLED' ? { handoffFulfilledAt: now } : {}),
         ...(nextStatus === 'REVOKED'
@@ -280,7 +298,12 @@ export async function transitionSavingsBenefitHandoff(
       reason,
       disposition: nextStatus,
       oldValues: { handoffStatus: action.handoffStatus },
-      newValues: { handoffStatus: nextStatus },
+      newValues: {
+        handoffStatus: nextStatus,
+        ...(nextStatus === 'SUBMITTED'
+          ? { deliveryReference: normalizedDeliveryReference }
+          : {}),
+      },
       relatedRefs: { partnerId: action.partnerId },
       req,
     }, tx);

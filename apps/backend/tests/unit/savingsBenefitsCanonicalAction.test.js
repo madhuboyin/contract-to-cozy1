@@ -30,9 +30,15 @@ test('benefit amount periods retain their exact one-time, monthly, or annual bas
 });
 
 test('partner handoffs fail closed unless recipient, disclosure, rank basis, and field preview agree', () => {
+  const sharedFields = {
+    opportunityId: 'match-1',
+    opportunityFamily: 'BENEFIT',
+    opportunityTitle: 'State energy rebate',
+    category: 'REBATE',
+  };
   const input = {
     externalOwner: 'partner-1',
-    sharedFields: { email: 'homeowner@example.com' },
+    sharedFields,
     consent: {
       partnerId: 'partner-1',
       disclosureAcknowledged: true,
@@ -42,23 +48,54 @@ test('partner handoffs fail closed unless recipient, disclosure, rank basis, and
       rankingInfluenced: false,
       selectionCriteria: ['Licensed in the property state', 'Relevant service category'],
       nonCommercialAlternative: 'Contact the official program administrator directly.',
-      sharedFieldNames: ['email'],
+      sharedFieldNames: Object.keys(sharedFields),
     },
   };
   assert.doesNotThrow(() => assertPartnerHandoffGovernance(
     input,
-    { id: 'partner-1', disclosureVersion: 'partner-handoff-v1' },
+    { id: 'partner-1', disclosureVersion: 'partner-handoff-v1', compensationMayOccur: true },
+    sharedFields,
   ));
   assert.throws(
-    () => assertPartnerHandoffGovernance(input, { id: 'partner-2', disclosureVersion: 'partner-handoff-v1' }),
+    () => assertPartnerHandoffGovernance(
+      input,
+      { id: 'partner-2', disclosureVersion: 'partner-handoff-v1', compensationMayOccur: true },
+      sharedFields,
+    ),
     /not approved/,
   );
   assert.throws(
     () => assertPartnerHandoffGovernance({
       ...input,
-      sharedFields: { email: 'homeowner@example.com', phone: '555-0100' },
-    }, { id: 'partner-1', disclosureVersion: 'partner-handoff-v1' }),
-    /do not match the consent preview/,
+      sharedFields: { ...sharedFields, email: 'homeowner@example.com' },
+    }, {
+      id: 'partner-1',
+      disclosureVersion: 'partner-handoff-v1',
+      compensationMayOccur: true,
+    }, sharedFields),
+    /approved consent contract/,
+  );
+  assert.throws(
+    () => assertPartnerHandoffGovernance({
+      ...input,
+      consent: { ...input.consent, compensationMayOccur: false },
+    }, {
+      id: 'partner-1',
+      disclosureVersion: 'partner-handoff-v1',
+      compensationMayOccur: true,
+    }, sharedFields),
+    /explicit consent contract/,
+  );
+  assert.throws(
+    () => assertPartnerHandoffGovernance({
+      ...input,
+      sharedFields: { ...sharedFields, opportunityTitle: 'Tampered title' },
+    }, {
+      id: 'partner-1',
+      disclosureVersion: 'partner-handoff-v1',
+      compensationMayOccur: true,
+    }, sharedFields),
+    /server-derived opportunity data/,
   );
 });
 
