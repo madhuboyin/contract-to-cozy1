@@ -409,11 +409,7 @@ async function getPotentialOpportunitiesByCategory(homeownerProfileId: string, p
   for (const [key, list] of grouped.entries()) {
     grouped.set(
       key,
-      [...list].sort((a, b) => {
-        const annualDiff = (asNumber(b.estimatedAnnualSavings) ?? 0) - (asNumber(a.estimatedAnnualSavings) ?? 0);
-        if (annualDiff !== 0) return annualDiff;
-        return b.generatedAt.getTime() - a.generatedAt.getTime();
-      })
+      [...list].sort(compareHomeSavingsOpportunitiesByNetValue)
     );
   }
 
@@ -449,6 +445,32 @@ function computeNetAnnualSavings(
   const switchingCost = ASSUMED_SWITCHING_COST[categoryKey] ?? 0;
   if (estimatedAnnualSavings == null) return { switchingCost, netAnnualSavings: null };
   return { switchingCost, netAnnualSavings: round2(estimatedAnnualSavings - switchingCost) };
+}
+
+function netAnnualSavingsForRanking(opportunity: HomeSavingsOpportunity): number | null {
+  const persistedNet = asNumber(opportunity.netAnnualSavings);
+  if (persistedNet !== undefined) return persistedNet;
+  return computeNetAnnualSavings(
+    normalizeCategoryKey(opportunity.categoryKey),
+    asNumber(opportunity.estimatedAnnualSavings),
+  ).netAnnualSavings;
+}
+
+/**
+ * Orders opportunities by the value the homeowner can actually retain after
+ * modeled first-year switching friction. Legacy rows without persisted net
+ * value are evaluated with the same category assumption used at generation.
+ */
+export function compareHomeSavingsOpportunitiesByNetValue(
+  a: HomeSavingsOpportunity,
+  b: HomeSavingsOpportunity,
+): number {
+  const aNet = netAnnualSavingsForRanking(a);
+  const bNet = netAnnualSavingsForRanking(b);
+  if (aNet === null && bNet !== null) return 1;
+  if (aNet !== null && bNet === null) return -1;
+  if (aNet !== null && bNet !== null && aNet !== bNet) return bNet - aNet;
+  return b.generatedAt.getTime() - a.generatedAt.getTime();
 }
 
 /**

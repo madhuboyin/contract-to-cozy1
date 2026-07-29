@@ -6,6 +6,7 @@ require('ts-node/register');
 let sourceRow;
 let programRow;
 let inTransaction = false;
+let raceSourceVersionOnReview = false;
 const sourceCreates = [];
 const sourceUpdates = [];
 const programUpdates = [];
@@ -24,7 +25,17 @@ const hiddenAssetSource = {
   },
   updateMany: async ({ where, data }) => {
     sourceUpdates.push({ where, data, inTransaction });
-    if (where.id !== sourceRow.id || where.version !== sourceRow.version) return { count: 0 };
+    if (raceSourceVersionOnReview && data.lastReviewedAt) {
+      raceSourceVersionOnReview = false;
+      sourceRow = { ...sourceRow, version: sourceRow.version + 1 };
+    }
+    if (
+      where.id !== sourceRow.id
+      || where.version !== sourceRow.version
+      || (where.updatedAt && where.updatedAt.getTime() !== sourceRow.updatedAt.getTime())
+    ) {
+      return { count: 0 };
+    }
     const nextVersion = data.version?.increment
       ? sourceRow.version + data.version.increment
       : sourceRow.version;
@@ -92,6 +103,7 @@ test.beforeEach(() => {
     lastAuthoredBy: 'author-1',
     version: 1,
     reviewedVersion: 1,
+    updatedAt: new Date('2026-07-29T10:00:00.000Z'),
   };
   programRow = {
     id: 'program-1',
@@ -117,6 +129,7 @@ test.beforeEach(() => {
   sourceUpdates.length = 0;
   programUpdates.length = 0;
   auditCreates.length = 0;
+  raceSourceVersionOnReview = false;
 });
 
 test('creating or editing source metadata cannot silently attest a fresh review', async () => {
@@ -147,6 +160,10 @@ test('source review attestation and its audit row share one transaction', async 
 
   assert.equal(reviewed.lastReviewedBy, 'reviewer-1');
   assert.equal(sourceUpdates[0].inTransaction, true);
+  assert.equal(
+    sourceUpdates[0].where.updatedAt.toISOString(),
+    '2026-07-29T10:00:00.000Z',
+  );
   assert.equal(auditCreates[0].inTransaction, true);
   assert.equal(auditCreates[0].data.action, 'ADMIN_SAVINGS_BENEFITS_SOURCE_REVIEW');
   assert.equal(
@@ -164,6 +181,20 @@ test('the current source author cannot attest their own review', async () => {
     ),
     /different administrator/,
   );
+});
+
+test('source review fails if content changes after the reviewer reads it', async () => {
+  raceSourceVersionOnReview = true;
+
+  await assert.rejects(
+    () => savingsBenefitsAdminService.reviewSource(
+      'source-1',
+      'reviewer-1',
+      'Review of the version visible before the concurrent edit.',
+    ),
+    /changed concurrently/,
+  );
+  assert.equal(auditCreates.length, 0);
 });
 
 test('program lifecycle transition and its audit row are atomic and compare-and-set guarded', async () => {

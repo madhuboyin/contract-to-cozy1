@@ -285,13 +285,23 @@ export class SavingsBenefitsAdminService {
       }
 
       const reviewedAt = new Date();
-      const reviewedSource = await tx.hiddenAssetSource.update({
-        where: { id: sourceId },
+      const reviewedWrite = await tx.hiddenAssetSource.updateMany({
+        where: {
+          id: sourceId,
+          version: source.version,
+          updatedAt: source.updatedAt,
+        },
         data: {
           lastReviewedAt: reviewedAt,
           lastReviewedBy: actorUserId,
           reviewedVersion: source.version,
         },
+      });
+      if (reviewedWrite.count !== 1) {
+        throw new Error('Source changed concurrently. Refresh and review the current version.');
+      }
+      const reviewedSource = await tx.hiddenAssetSource.findUniqueOrThrow({
+        where: { id: sourceId },
       });
       await recordAdminAction({
         actorId: actorUserId,

@@ -172,6 +172,58 @@ test('skips a match whose reviewed program is no longer actionable', async () =>
   assert.equal(result.skipped, 1);
 });
 
+test('skips a match when its source review has become stale', async () => {
+  const { deps, getCreateCalls } = fakeDeps({
+    matches: [match({
+      program: {
+        source: {
+          status: 'ACTIVE',
+          officialUrl: 'https://agency.gov',
+          lastReviewedAt: new Date('2020-01-01T00:00:00.000Z'),
+          reviewSlaDays: 180,
+          version: 1,
+          reviewedVersion: 1,
+        },
+      },
+    })],
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(result.skipped, 1);
+});
+
+test('skips a match when the program verification has become stale', async () => {
+  const { deps, getCreateCalls } = fakeDeps({
+    matches: [match({
+      program: {
+        lastVerifiedAt: new Date('2020-01-01T00:00:00.000Z'),
+      },
+    })],
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(result.skipped, 1);
+});
+
+test('skips a match before its application window opens', async () => {
+  const { deps, getCreateCalls } = fakeDeps({
+    matches: [match({
+      program: {
+        applicationWindowOpensAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    })],
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(result.skipped, 1);
+});
+
 test('dry run reports what would be sent without creating a notification or updating the match', async () => {
   const { deps, getCreateCalls, getUpdateCalls } = fakeDeps({ matches: [match()] });
 
