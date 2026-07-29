@@ -48,12 +48,13 @@ const setOpportunityStatusBodySchema = z.object({
 });
 
 const recordOpportunityOutcomeBodySchema = z.object({
-  stage: z.enum(['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN']),
+  stage: z.enum(['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION']),
   observedMonthlyValue: z.number().nonnegative().nullable().optional(),
   observedAnnualValue: z.number().nonnegative().nullable().optional(),
   currency: z.string().trim().length(3).optional(),
   evidenceNote: z.string().trim().min(1).max(2000).nullable().optional(),
   denialReason: z.string().trim().min(1).max(2000).nullable().optional(),
+  closureReason: z.string().trim().min(1).max(2000).nullable().optional(),
   documentIds: z.array(z.string().uuid()).max(10).optional(),
   observationStartedAt: z.string().datetime().nullable().optional(),
   observationEndedAt: z.string().datetime().nullable().optional(),

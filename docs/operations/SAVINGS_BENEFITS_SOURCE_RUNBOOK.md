@@ -83,9 +83,9 @@ immediately excludes the program from matching (`fetchCandidatePrograms` in
 window fields unset never excludes a program by itself — there is no
 requirement to track funding for every program, only a requirement not to
 keep recommending one once you know its funding is exhausted or its
-application window has closed. The admin console does not expose these
-fields yet — set them via `savingsBenefitsAdminService.createProgram`/
-`updateProgram` directly until it does.
+application window has closed. The admin console exposes funding status,
+application opening/deadline, and program expiration and rejects internally
+inconsistent date ranges.
 
 ### Handling a stale or failed source
 
@@ -131,10 +131,13 @@ Marking a benefit match `PURSUING` or a recurring-cost opportunity
 now have a real application/award trail (`savingsOutcome.service.ts`,
 Slice 7) instead of stopping there:
 
-`SUBMITTED → APPROVED → RECEIVED`, or `→ DENIED` / `→ WITHDRAWN` at any
-non-terminal point. Each stage is its own append-only row (
+`SUBMITTED → APPROVED → RECEIVED`, or `→ DENIED` / `→ WITHDRAWN` /
+`→ EXPIRED` / `→ NO_ACTION` at a valid non-terminal point. `EXPIRED` and
+`NO_ACTION` may also be recorded before submission when the homeowner never
+applied. Every closed-without-value stage records a reason. Each stage is its
+own append-only row (
 `HiddenAssetMatchOutcome` / `HomeSavingsOpportunityOutcome`) so the full
-history is preserved, not overwritten. A new trail must begin at `SUBMITTED`.
+history is preserved, not overwritten.
 `RECEIVED` requires an amount/observed value and evidence; recurring value
 also requires an observation window of at least 28 days.
 
@@ -143,12 +146,33 @@ API: `POST`/`GET /api/property-hidden-asset-matches/:matchId/outcome` and
 workspace exposes this trail, evidence attachment, and revocation/correction
 controls.
 
+Attached evidence is accepted only when the Document Vault row belongs to the
+authenticated user and the same property as the opportunity. This prevents a
+document from another home from being silently included in an application or
+outcome packet.
+
 Homeowner entries are explicitly `SELF_REPORTED` or `EVIDENCE_ATTACHED`.
 Neither state publishes the platform's verified `SAVINGS_REALIZATION`
 signal. Only a separate verification workflow may mark an entry `VERIFIED`
 and project it into verified downstream totals.
 
-## 4. Known limitations (by design, not oversight)
+## 4. Reminder and partner controls
+
+Savings deadline reminders are explicit opt-in under Notification preferences.
+The homeowner chooses email cadence, a 1–90 day lead time, and a minimum
+estimated match value. The worker scans a bounded 90-day window, then applies
+the property-specific preference (falling back only to a Savings & Benefits
+global preference) before creating any reminder. Suppressed or failed
+notifications remain retryable.
+
+Partner handoffs fail closed unless `SAVINGS_BENEFITS_APPROVED_PARTNERS`
+contains the requested partner ID. The recorded consent contract must identify
+that partner, acknowledge the disclosure, state whether compensation or
+ranking influence exists, list the selection criteria and non-commercial
+alternative, and exactly match the fields previewed for sharing. The full
+contract is retained on `SavingsBenefitAction.consentJson` for audit.
+
+## 5. Known limitations (by design, not oversight)
 
 - Coverage is New Jersey-only today. Every other state/region correctly
   shows as "not covered" in the homeowner-facing coverage statement — this

@@ -17,7 +17,11 @@
 // benefits-side outcome ledger is still fully real and evidence-backed —
 // it just doesn't yet feed the shared signal system.
 
-import { PropertyHiddenAssetMatchStatus, SavingsOutcomeStage } from '@prisma/client';
+import {
+  HomeSavingsOpportunityStatus,
+  PropertyHiddenAssetMatchStatus,
+  SavingsOutcomeStage,
+} from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 export class SavingsOutcomeGovernanceError extends Error {
@@ -29,14 +33,22 @@ export class SavingsOutcomeGovernanceError extends Error {
   }
 }
 
-const TERMINAL_STAGES: SavingsOutcomeStage[] = ['DENIED', 'RECEIVED', 'WITHDRAWN'];
+const TERMINAL_STAGES: SavingsOutcomeStage[] = [
+  'DENIED',
+  'RECEIVED',
+  'WITHDRAWN',
+  'EXPIRED',
+  'NO_ACTION',
+];
 
 const ALLOWED_NEXT_STAGES: Record<SavingsOutcomeStage, SavingsOutcomeStage[]> = {
-  SUBMITTED: ['APPROVED', 'DENIED', 'WITHDRAWN'],
-  APPROVED: ['RECEIVED', 'WITHDRAWN'],
+  SUBMITTED: ['APPROVED', 'DENIED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION'],
+  APPROVED: ['RECEIVED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION'],
   DENIED: [],
   RECEIVED: [],
   WITHDRAWN: [],
+  EXPIRED: [],
+  NO_ACTION: [],
 };
 
 /**
@@ -49,7 +61,7 @@ export function isValidOutcomeTransition(
   from: SavingsOutcomeStage | null,
   to: SavingsOutcomeStage
 ): boolean {
-  if (from === null) return to === 'SUBMITTED';
+  if (from === null) return to === 'SUBMITTED' || to === 'EXPIRED' || to === 'NO_ACTION';
   if (TERMINAL_STAGES.includes(from)) return false;
   return ALLOWED_NEXT_STAGES[from].includes(to);
 }
@@ -58,6 +70,7 @@ export interface RecordOutcomeInput {
   stage: SavingsOutcomeStage;
   evidenceNote?: string | null;
   denialReason?: string | null;
+  closureReason?: string | null;
   /** Existing Document Vault rows to attach as evidence for this ledger entry (HSB-033). */
   documentIds?: string[];
   supersedesOutcomeId?: string | null;
@@ -86,6 +99,15 @@ function assertStageInputIsComplete(input: RecordOutcomeInput, hasValue: boolean
   if (input.stage === 'DENIED' && !input.denialReason?.trim()) {
     throw new SavingsOutcomeGovernanceError('MISSING_DENIAL_REASON', 'A DENIED outcome must include a reason.');
   }
+  if (
+    (input.stage === 'WITHDRAWN' || input.stage === 'EXPIRED' || input.stage === 'NO_ACTION')
+    && !input.closureReason?.trim()
+  ) {
+    throw new SavingsOutcomeGovernanceError(
+      'MISSING_CLOSURE_REASON',
+      `A ${input.stage} outcome must include a reason.`,
+    );
+  }
 }
 
 /**
@@ -93,12 +115,20 @@ function assertStageInputIsComplete(input: RecordOutcomeInput, hasValue: boolean
  * which stores homeownerProfile.id — see documentAuth.middleware.ts for the
  * same pattern) before linking any of them as outcome evidence.
  */
-async function assertDocumentsOwnedByUser(documentIds: string[] | undefined, userId: string): Promise<string[]> {
+async function assertDocumentsOwnedByUser(
+  documentIds: string[] | undefined,
+  userId: string,
+  propertyId: string | null,
+): Promise<string[]> {
   if (!documentIds || documentIds.length === 0) return [];
-  const homeownerProfile = await prisma.homeownerProfile.findUnique({ where: { userId }, select: { id: true } });
-  if (!homeownerProfile) throw new Error('Homeowner profile not found.');
+  if (!propertyId) {
+    throw new SavingsOutcomeGovernanceError(
+      'DOCUMENT_PROPERTY_REQUIRED',
+      'Evidence can only be attached to a property-scoped savings opportunity.',
+    );
+  }
   const owned = await prisma.document.findMany({
-    where: { id: { in: documentIds }, uploadedBy: homeownerProfile.id },
+    where: { id: { in: documentIds }, uploadedBy: userId, propertyId },
     select: { id: true },
   });
   if (owned.length !== documentIds.length) {
@@ -131,7 +161,7 @@ export async function recordHiddenAssetMatchOutcome(
 ) {
   const match = await assertMatchForUser(matchId, userId);
   assertStageInputIsComplete(input, input.amountReceived != null);
-  const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId);
+  const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId, match.propertyId);
 
   const latest = await prisma.hiddenAssetMatchOutcome.findFirst({
     where: { matchId, revokedAt: null },
@@ -153,6 +183,10 @@ export async function recordHiddenAssetMatchOutcome(
         currency: input.currency ?? 'USD',
         evidenceNote: input.evidenceNote ?? null,
         denialReason: input.stage === 'DENIED' ? input.denialReason ?? null : null,
+        closureReason:
+          input.stage === 'WITHDRAWN' || input.stage === 'EXPIRED' || input.stage === 'NO_ACTION'
+            ? input.closureReason ?? null
+            : null,
         verificationState: ownedDocumentIds.length > 0 ? 'EVIDENCE_ATTACHED' : 'SELF_REPORTED',
         supersedesOutcomeId: input.supersedesOutcomeId ?? null,
         recordedBy: userId,
@@ -167,7 +201,21 @@ export async function recordHiddenAssetMatchOutcome(
     // Marking PURSUING is a homeowner intent signal, not the outcome trail
     // itself — once a real outcome exists, the match should reflect it too
     // rather than staying frozen at PURSUING.
-    if (match.status === PropertyHiddenAssetMatchStatus.PURSUING) {
+    if (input.stage === 'EXPIRED') {
+      await tx.propertyHiddenAssetMatch.update({
+        where: { id: matchId },
+        data: { status: PropertyHiddenAssetMatchStatus.EXPIRED },
+      });
+    } else if (
+      input.stage === 'DENIED'
+      || input.stage === 'WITHDRAWN'
+      || input.stage === 'NO_ACTION'
+    ) {
+      await tx.propertyHiddenAssetMatch.update({
+        where: { id: matchId },
+        data: { status: PropertyHiddenAssetMatchStatus.INACTIVE },
+      });
+    } else if (match.status === PropertyHiddenAssetMatchStatus.PURSUING) {
       await tx.propertyHiddenAssetMatch.update({
         where: { id: matchId },
         data: { pursuedAt: match.pursuedAt ?? created.recordedAt },
@@ -236,7 +284,11 @@ export async function recordHomeSavingsOpportunityOutcome(
     input.observedAnnualValue != null || input.observedMonthlyValue != null
   );
   assertRecurringObservationWindow(input);
-  const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId);
+  const ownedDocumentIds = await assertDocumentsOwnedByUser(
+    input.documentIds,
+    userId,
+    opportunity.propertyId,
+  );
 
   const latest = await prisma.homeSavingsOpportunityOutcome.findFirst({
     where: { opportunityId, revokedAt: null },
@@ -258,6 +310,10 @@ export async function recordHomeSavingsOpportunityOutcome(
       currency: input.currency ?? opportunity.currency,
       evidenceNote: input.evidenceNote ?? null,
       denialReason: input.stage === 'DENIED' ? input.denialReason ?? null : null,
+      closureReason:
+        input.stage === 'WITHDRAWN' || input.stage === 'EXPIRED' || input.stage === 'NO_ACTION'
+          ? input.closureReason ?? null
+          : null,
       verificationState: ownedDocumentIds.length > 0 ? 'EVIDENCE_ATTACHED' : 'SELF_REPORTED',
       observationStartedAt: input.stage === 'RECEIVED' ? input.observationStartedAt ?? null : null,
       observationEndedAt: input.stage === 'RECEIVED' ? input.observationEndedAt ?? null : null,
@@ -270,6 +326,21 @@ export async function recordHomeSavingsOpportunityOutcome(
     await prisma.document.updateMany({
       where: { id: { in: ownedDocumentIds } },
       data: { homeSavingsOpportunityOutcomeId: outcome.id },
+    });
+  }
+  if (input.stage === 'EXPIRED') {
+    await prisma.homeSavingsOpportunity.update({
+      where: { id: opportunityId },
+      data: { status: HomeSavingsOpportunityStatus.EXPIRED },
+    });
+  } else if (
+    input.stage === 'DENIED'
+    || input.stage === 'WITHDRAWN'
+    || input.stage === 'NO_ACTION'
+  ) {
+    await prisma.homeSavingsOpportunity.update({
+      where: { id: opportunityId },
+      data: { status: HomeSavingsOpportunityStatus.DISMISSED },
     });
   }
 

@@ -92,12 +92,37 @@ export async function upsertNotificationPreference(userId: string, input: {
   propertyId?: string | null; memberUserId?: string | null; category: NotificationCategory;
   channel: keyof typeof NotificationChannel; enabled: boolean; cadence: Cadence;
   quietStart?: string | null; quietEnd?: string | null; timezone: string;
+  minimumValue?: number | null; deadlineLeadDays?: number | null;
 }) {
   const scopeKey = notificationScopeKey(input);
   return prisma.notificationPreference.upsert({
     where: { userId_scopeKey_category_channel: { userId, scopeKey, category: input.category, channel: input.channel } },
-    create: { userId, scopeKey, propertyId: input.propertyId, memberUserId: input.memberUserId, category: input.category, channel: input.channel, enabled: input.enabled, cadence: input.cadence as NotificationCadence, quietStart: input.quietStart, quietEnd: input.quietEnd, timezone: input.timezone },
-    update: { propertyId: input.propertyId, memberUserId: input.memberUserId, enabled: input.enabled, cadence: input.cadence as NotificationCadence, quietStart: input.quietStart, quietEnd: input.quietEnd, timezone: input.timezone },
+    create: {
+      userId,
+      scopeKey,
+      propertyId: input.propertyId,
+      memberUserId: input.memberUserId,
+      category: input.category,
+      channel: input.channel,
+      enabled: input.enabled,
+      cadence: input.cadence as NotificationCadence,
+      quietStart: input.quietStart,
+      quietEnd: input.quietEnd,
+      timezone: input.timezone,
+      minimumValue: input.category === 'SAVINGS_BENEFITS' ? input.minimumValue : null,
+      deadlineLeadDays: input.category === 'SAVINGS_BENEFITS' ? input.deadlineLeadDays : null,
+    },
+    update: {
+      propertyId: input.propertyId,
+      memberUserId: input.memberUserId,
+      enabled: input.enabled,
+      cadence: input.cadence as NotificationCadence,
+      quietStart: input.quietStart,
+      quietEnd: input.quietEnd,
+      timezone: input.timezone,
+      minimumValue: input.category === 'SAVINGS_BENEFITS' ? input.minimumValue : null,
+      deadlineLeadDays: input.category === 'SAVINGS_BENEFITS' ? input.deadlineLeadDays : null,
+    },
   });
 }
 

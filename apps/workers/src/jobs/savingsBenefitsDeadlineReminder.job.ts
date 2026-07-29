@@ -6,10 +6,10 @@ import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelat
 import type { WorkerRunResult } from '../lib/workerRunResult';
 import { savingsBenefitsUrl } from '../lib/deepLinks';
 
-const REMINDER_WINDOW_DAYS = 5;
+const REMINDER_SCAN_WINDOW_DAYS = 90;
 
 export interface SavingsBenefitsDeadlineReminderDeps {
-  prisma: Pick<typeof prisma, 'propertyHiddenAssetMatch'>;
+  prisma: Pick<typeof prisma, 'propertyHiddenAssetMatch' | 'notificationPreference'>;
   notificationService: Pick<typeof NotificationService, 'create'>;
   logger: AppLogger;
 }
@@ -49,7 +49,7 @@ export async function savingsBenefitsDeadlineReminderJob(
     : undefined;
 
   const now = new Date();
-  const windowEnd = new Date(now.getTime() + REMINDER_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const windowEnd = new Date(now.getTime() + REMINDER_SCAN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   const matches = await (prisma as any).propertyHiddenAssetMatch.findMany({
     where: {
@@ -87,6 +87,36 @@ export async function savingsBenefitsDeadlineReminderJob(
     try {
       const userId = match.property?.homeownerProfile?.userId;
       if (!userId || !match.program?.applicationWindowClosesAt) {
+        skipped += 1;
+        continue;
+      }
+      const preferences = await (prisma as any).notificationPreference.findMany({
+        where: {
+          userId,
+          category: 'SAVINGS_BENEFITS',
+          channel: 'EMAIL',
+          scopeKey: { in: [`PROPERTY:${match.propertyId}`, 'GLOBAL'] },
+        },
+      });
+      const preference =
+        preferences.find((item: any) => item.scopeKey === `PROPERTY:${match.propertyId}`)
+        ?? preferences.find((item: any) => item.scopeKey === 'GLOBAL');
+      if (!preference?.enabled || preference.cadence === 'MUTED') {
+        skipped += 1;
+        continue;
+      }
+      const leadDays = preference.deadlineLeadDays ?? 14;
+      const daysUntilDeadline = Math.ceil(
+        (new Date(match.program.applicationWindowClosesAt).getTime() - now.getTime())
+        / (24 * 60 * 60 * 1000),
+      );
+      const estimatedValue = Number(
+        match.estimatedValueMax?.toString?.()
+        ?? match.estimatedValueMin?.toString?.()
+        ?? 0,
+      );
+      const minimumValue = Number(preference.minimumValue?.toString?.() ?? 0);
+      if (daysUntilDeadline > leadDays || estimatedValue < minimumValue) {
         skipped += 1;
         continue;
       }

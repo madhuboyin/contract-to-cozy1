@@ -23,6 +23,10 @@ const {
 const { applyFreshnessPenalty } = require('../../src/services/hiddenAssets/categoryConfig.ts');
 const { isFundingAvailable } = require('../../src/services/hiddenAssets/fundingWindow.ts');
 const { computeMutualExclusions } = require('../../src/services/hiddenAssets.service.ts');
+const {
+  internetCategory,
+  normalizeInternetPromotion,
+} = require('../../src/services/homeSavings/categories/internet.ts');
 
 const fx = require('../fixtures/savingsBenefitsGoldenFixtures.js');
 
@@ -134,9 +138,17 @@ test('12. no source coverage — a region with zero registered programs yields z
   assert.equal(candidatePrograms.length, 0);
 });
 
-test.skip('13. internet benchmark only — covered by homeSavings category module tests, not this suite', () => {
-  // The category comparison math (apps/backend/src/services/homeSavings/categories/*)
-  // has no dedicated test file yet — flagged, not silently assumed passing.
+test('13. internet benchmark only is labeled as a broad, non-address-qualified estimate', async () => {
+  const scenario = fx.internetBenchmarkOnly;
+  const drafts = await internetCategory.generateOpportunities({
+    ...scenario,
+    homeownerProfileId: 'profile-1',
+    category: { key: 'INTERNET' },
+  });
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0].estimatedMonthlySavings, 29.25);
+  assert.equal(drafts[0].estimatedAnnualSavings, 351);
+  assert.match(drafts[0].detail, /Broad estimate — not an address-qualified offer/);
 });
 
 test('14. address-qualified offer — the model exists and honestly defaults to benchmark-only (HSB-021)', () => {
@@ -160,9 +172,12 @@ test('14. address-qualified offer — the model exists and honestly defaults to 
   assert.doesNotMatch(serviceSource, /offerSourceKind:\s*'ADDRESS_QUALIFIED'/);
 });
 
-test.skip('15. promotional-to-ongoing price — covered by homeSavings category module tests, not this suite', () => {
-  // Same gap as #13 — category-specific promo/ongoing pricing math has no
-  // dedicated test file; flagged rather than assumed.
+test('15. promotional pricing comparisons use the ongoing price, never the teaser rate', () => {
+  const normalized = normalizeInternetPromotion(fx.promotionalInternetPrice);
+  assert.equal(normalized.promotionalMonthlyPrice, 40);
+  assert.equal(normalized.ongoingMonthlyPrice, 85);
+  assert.equal(normalized.comparisonMonthlyPrice, 85);
+  assert.equal(normalized.comparisonBasis, 'ONGOING_PRICE');
 });
 
 test('16. completed switch with two observed bills is a valid RECEIVED input', () => {

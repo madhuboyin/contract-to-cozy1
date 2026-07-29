@@ -9,6 +9,30 @@ import { amountToMonthly, asNumber, daysUntil, pickStateValue, round2, toRecord 
 
 const DEFAULT_MONTHLY_BASELINE = 75;
 
+export function normalizeInternetPromotion(input: {
+  promotionalMonthlyPrice: number;
+  ongoingMonthlyPrice: number;
+  promotionMonths: number;
+}) {
+  if (
+    !Number.isFinite(input.promotionalMonthlyPrice)
+    || !Number.isFinite(input.ongoingMonthlyPrice)
+    || !Number.isInteger(input.promotionMonths)
+    || input.promotionalMonthlyPrice < 0
+    || input.ongoingMonthlyPrice < 0
+    || input.promotionMonths <= 0
+  ) {
+    throw new Error('Internet promotion pricing is invalid.');
+  }
+  return {
+    promotionalMonthlyPrice: round2(input.promotionalMonthlyPrice),
+    ongoingMonthlyPrice: round2(input.ongoingMonthlyPrice),
+    promotionMonths: input.promotionMonths,
+    comparisonMonthlyPrice: round2(input.ongoingMonthlyPrice),
+    comparisonBasis: 'ONGOING_PRICE' as const,
+  };
+}
+
 async function ensureAccount({ existingAccount }: CategoryEnsureAccountParams) {
   return existingAccount;
 }

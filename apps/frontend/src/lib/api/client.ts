@@ -3280,6 +3280,8 @@ class APIClient {
     quietStart?: string | null;
     quietEnd?: string | null;
     timezone: string;
+    minimumValue?: number | null;
+    deadlineLeadDays?: number | null;
   }): Promise<APIResponse<any>> {
     return this.request('/api/notifications/preferences', { method: 'PUT', body: input });
   }
@@ -4237,6 +4239,7 @@ class APIClient {
       currency?: string;
       evidenceNote?: string | null;
       denialReason?: string | null;
+      closureReason?: string | null;
       documentIds?: string[];
       supersedesOutcomeId?: string | null;
     }
@@ -4270,6 +4273,7 @@ class APIClient {
       currency?: string;
       evidenceNote?: string | null;
       denialReason?: string | null;
+      closureReason?: string | null;
       documentIds?: string[];
       observationStartedAt?: string | null;
       observationEndedAt?: string | null;

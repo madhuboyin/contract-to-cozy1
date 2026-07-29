@@ -33,6 +33,8 @@ export const NotificationPreferenceInputSchema = z.object({
   quietStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
   quietEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
   timezone: z.string().trim().min(1).max(100).default('UTC'),
+  minimumValue: z.number().nonnegative().max(10_000_000).nullable().optional(),
+  deadlineLeadDays: z.number().int().min(1).max(90).nullable().optional(),
 }).strict();
 
 export function notificationScopeKey(input: { propertyId?: string | null; memberUserId?: string | null }) {

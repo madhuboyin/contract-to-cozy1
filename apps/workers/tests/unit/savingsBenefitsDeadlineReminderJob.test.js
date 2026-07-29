@@ -7,12 +7,26 @@ const { savingsBenefitsDeadlineReminderJob } = require('../../src/jobs/savingsBe
 
 const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
-function fakeDeps({ matches, throwsForEntityId = null, suppressesEntityId = null }) {
+function fakeDeps({
+  matches,
+  throwsForEntityId = null,
+  suppressesEntityId = null,
+  preferences = [{
+    scopeKey: 'GLOBAL',
+    enabled: true,
+    cadence: 'IMMEDIATE',
+    minimumValue: 0,
+    deadlineLeadDays: 14,
+  }],
+}) {
   const createCalls = [];
   const updateCalls = [];
 
   const deps = {
     prisma: {
+      notificationPreference: {
+        findMany: async () => preferences,
+      },
       propertyHiddenAssetMatch: {
         findMany: async () => matches,
         update: async (args) => {
@@ -52,6 +66,8 @@ function match(overrides = {}) {
       name: 'Senior Freeze',
       applicationWindowClosesAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
     },
+    estimatedValueMin: 250,
+    estimatedValueMax: 500,
     ...overrides,
   };
 }
@@ -133,4 +149,46 @@ test('a context-suppressed notification stays retryable and is not marked sent',
   assert.equal(getUpdateCalls().length, 0);
   assert.equal(result.notified, 0);
   assert.equal(result.skipped, 1);
+});
+
+test('does not send without an explicit Savings & Benefits reminder preference', async () => {
+  const { deps, getCreateCalls, getUpdateCalls } = fakeDeps({
+    matches: [match()],
+    preferences: [],
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(getUpdateCalls().length, 0);
+  assert.equal(result.skipped, 1);
+});
+
+test('honors homeowner deadline lead-time and minimum-value controls', async () => {
+  const { deps, getCreateCalls } = fakeDeps({
+    matches: [
+      match({
+        id: 'too-early',
+        program: {
+          name: 'Early window',
+          applicationWindowClosesAt: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000),
+        },
+      }),
+      match({ id: 'too-small', estimatedValueMax: 100 }),
+      match({ id: 'eligible', estimatedValueMax: 750 }),
+    ],
+    preferences: [{
+      scopeKey: 'GLOBAL',
+      enabled: true,
+      cadence: 'IMMEDIATE',
+      minimumValue: 500,
+      deadlineLeadDays: 10,
+    }],
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.deepEqual(getCreateCalls().map((call) => call.entityId), ['eligible']);
+  assert.equal(result.notified, 1);
+  assert.equal(result.skipped, 2);
 });

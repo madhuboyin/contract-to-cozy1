@@ -1080,12 +1080,15 @@ export default function HiddenAssetFinderClient() {
               . {coverageQuery.data.categoriesNotCovered.length > 0
                 ? `${coverageQuery.data.categoriesNotCovered.length} benefit ${coverageQuery.data.categoriesNotCovered.length === 1 ? 'category has' : 'categories have'} no reviewed program for this address yet — that's a coverage gap, not confirmation nothing exists there.`
                 : 'All tracked benefit categories have at least one reviewed program for this address.'}
+              {coverageQuery.data.nextReviewAt
+                ? ` Next source review is due ${formatDate(coverageQuery.data.nextReviewAt)}.`
+                : ''}
             </p>
           ) : (
             <p>
               No reviewed sources cover this property&apos;s region yet. This is a coverage gap in our
               registry, not confirmation that no benefits exist here — check official state and local
-              sources directly.
+              sources directly. No source review is currently scheduled for this area.
             </p>
           )}
         </div>
@@ -1188,6 +1191,8 @@ export default function HiddenAssetFinderClient() {
           title={
             !hasBeenScanned
               ? 'No benefits detected yet'
+              : categoryFilter
+                ? `No ${CATEGORY_LABEL[categoryFilter].toLowerCase()} matches`
               : summary?.programsEvaluated === 0
                 ? 'No reviewed programs cover this area yet'
                 : 'No programs matched'
@@ -1195,6 +1200,10 @@ export default function HiddenAssetFinderClient() {
           description={
             !hasBeenScanned
               ? 'Run a scan to check for potential tax exemptions, rebates, discounts, and other programs that may apply to this home. Results depend on your current property details.'
+              : categoryFilter
+                ? coverageQuery.data?.categoriesNotCovered.includes(categoryFilter)
+                  ? `No reviewed ${CATEGORY_LABEL[categoryFilter].toLowerCase()} programs currently cover this address. This is a registry coverage gap, not confirmation that no program exists.${coverageQuery.data.nextReviewAt ? ` The next source review is due ${formatDate(coverageQuery.data.nextReviewAt)}.` : ' No source review is currently scheduled for this area.'}`
+                  : `Reviewed ${CATEGORY_LABEL[categoryFilter].toLowerCase()} programs cover this address, but none matched the property facts in the latest scan.${coverageQuery.data?.nextReviewAt ? ` The next source review is due ${formatDate(coverageQuery.data.nextReviewAt)}.` : ''}`
               : summary?.programsEvaluated === 0
                 ? "We don't yet have reviewed programs in our registry for this property's location. This is a coverage gap, not a sign that no benefits exist — check official state and local sources directly."
                 : `Your last scan checked ${summary?.programsEvaluated} reviewed program${summary?.programsEvaluated === 1 ? '' : 's'} and found no match for this property. Results may change as new programs are added or as your property details are updated.`

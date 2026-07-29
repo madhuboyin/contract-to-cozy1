@@ -6,6 +6,7 @@ const path = require('node:path');
 require('ts-node/register');
 
 const {
+  assertPartnerHandoffGovernance,
   isCanonicalActionTransitionAllowed,
 } = require('../../src/services/savingsBenefitsCanonical.service.ts');
 const {
@@ -26,6 +27,36 @@ test('benefit amount periods retain their exact one-time, monthly, or annual bas
   assert.equal(valueBasisForBenefitPeriod('MONTHLY'), 'MONTHLY');
   assert.equal(valueBasisForBenefitPeriod('ANNUAL'), 'ANNUAL');
   assert.equal(valueBasisForBenefitPeriod('UNKNOWN'), 'UNKNOWN');
+});
+
+test('partner handoffs fail closed unless recipient, disclosure, rank basis, and field preview agree', () => {
+  const input = {
+    externalOwner: 'partner-1',
+    sharedFields: { email: 'homeowner@example.com' },
+    consent: {
+      partnerId: 'partner-1',
+      disclosureAcknowledged: true,
+      consentVersion: 'partner-handoff-v1',
+      consentedAt: '2026-07-29T12:00:00.000Z',
+      compensationMayOccur: true,
+      rankingInfluenced: false,
+      selectionCriteria: ['Licensed in the property state', 'Relevant service category'],
+      nonCommercialAlternative: 'Contact the official program administrator directly.',
+      sharedFieldNames: ['email'],
+    },
+  };
+  assert.doesNotThrow(() => assertPartnerHandoffGovernance(input, ['partner-1']));
+  assert.throws(
+    () => assertPartnerHandoffGovernance(input, []),
+    /not approved/,
+  );
+  assert.throws(
+    () => assertPartnerHandoffGovernance({
+      ...input,
+      sharedFields: { email: 'homeowner@example.com', phone: '555-0100' },
+    }, ['partner-1']),
+    /do not match the consent preview/,
+  );
 });
 
 test('canonical action persistence and route contracts require idempotency and expose lifecycle updates', () => {

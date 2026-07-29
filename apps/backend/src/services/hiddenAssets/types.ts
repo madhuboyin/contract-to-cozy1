@@ -354,4 +354,6 @@ export interface CoverageDTO {
   sources: CoverageSourceDTO[];
   categoriesCovered: HiddenAssetCategory[];
   categoriesNotCovered: HiddenAssetCategory[];
+  /** Earliest scheduled source review among sources covering this address. */
+  nextReviewAt: string | null;
 }

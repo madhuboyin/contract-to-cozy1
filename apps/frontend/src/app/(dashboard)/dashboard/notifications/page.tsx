@@ -111,6 +111,8 @@ export default function NotificationsPage() {
   const [cadence, setCadence] = React.useState('WEEKLY_BRIEF');
   const [quietStart, setQuietStart] = React.useState('21:00');
   const [quietEnd, setQuietEnd] = React.useState('07:00');
+  const [minimumSavingsValue, setMinimumSavingsValue] = React.useState('0');
+  const [savingsDeadlineLeadDays, setSavingsDeadlineLeadDays] = React.useState('14');
   const [savingPreference, setSavingPreference] = React.useState(false);
   const [pendingOutcomeById, setPendingOutcomeById] = React.useState<Record<string, string>>({});
 
@@ -119,16 +121,26 @@ export default function NotificationsPage() {
     void api.listNotificationPreferences().then((result) => {
       if (!result.success) return;
       const preference = result.data.find((item: any) => item.scopeKey === preferenceScopeKey && item.category === selectedCategory && item.channel === 'EMAIL');
-      const fallback = result.data.find((item: any) => item.scopeKey === 'GLOBAL' && item.category === 'ALL' && item.channel === 'EMAIL');
+      const fallback = selectedCategory === 'REFINANCE' || selectedCategory === 'SAVINGS_BENEFITS'
+        ? undefined
+        : result.data.find((item: any) => item.scopeKey === 'GLOBAL' && item.category === 'ALL' && item.channel === 'EMAIL');
       const resolved = preference ?? fallback;
       if (resolved) {
         setCadence(resolved.cadence);
         setQuietStart(resolved.quietStart ?? '21:00');
         setQuietEnd(resolved.quietEnd ?? '07:00');
+        setMinimumSavingsValue(String(resolved.minimumValue ?? 0));
+        setSavingsDeadlineLeadDays(String(resolved.deadlineLeadDays ?? 14));
       } else {
-        setCadence('WEEKLY_BRIEF');
+        setCadence(
+          selectedCategory === 'REFINANCE' || selectedCategory === 'SAVINGS_BENEFITS'
+            ? 'MUTED'
+            : 'WEEKLY_BRIEF',
+        );
         setQuietStart('21:00');
         setQuietEnd('07:00');
+        setMinimumSavingsValue('0');
+        setSavingsDeadlineLeadDays('14');
       }
     }).catch(() => undefined);
   }, [preferenceScopeKey, refresh, selectedCategory]);
@@ -136,10 +148,33 @@ export default function NotificationsPage() {
   const savePreference = async () => {
     setSavingPreference(true);
     try {
+      const normalizedMinimumValue = Math.min(
+        10_000_000,
+        Math.max(0, Number(minimumSavingsValue || 0)),
+      );
+      const normalizedLeadDays = Math.min(
+        90,
+        Math.max(1, Math.round(Number(savingsDeadlineLeadDays || 14))),
+      );
       await api.updateNotificationPreference({
         propertyId,
         category: selectedCategory, channel: 'EMAIL', enabled: cadence !== 'MUTED', cadence,
         quietStart, quietEnd, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        minimumValue: selectedCategory === 'SAVINGS_BENEFITS'
+          ? normalizedMinimumValue
+          : null,
+        deadlineLeadDays: selectedCategory === 'SAVINGS_BENEFITS'
+          ? normalizedLeadDays
+          : null,
+      });
+      setMinimumSavingsValue(String(normalizedMinimumValue));
+      setSavingsDeadlineLeadDays(String(normalizedLeadDays));
+      toast({ title: 'Notification preferences saved' });
+    } catch (error: any) {
+      toast({
+        title: 'Could not save notification preferences',
+        description: error?.message || 'Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setSavingPreference(false);
@@ -294,6 +329,38 @@ export default function NotificationsPage() {
           <label className="text-xs font-medium text-slate-600">Quiet hours end<input type="time" value={quietEnd} onChange={(event) => setQuietEnd(event.target.value)} className="mt-1 min-h-[40px] w-full rounded-lg border bg-white px-2 text-sm" /></label>
           <button type="button" disabled={savingPreference} onClick={savePreference} className="min-h-[40px] rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white disabled:opacity-60">{savingPreference ? 'Saving…' : 'Save preferences'}</button>
         </div>
+        {selectedCategory === 'SAVINGS_BENEFITS' ? (
+          <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2">
+            <label className="text-xs font-medium text-slate-600">
+              Minimum estimated value
+              <input
+                type="number"
+                min="0"
+                step="25"
+                value={minimumSavingsValue}
+                onChange={(event) => setMinimumSavingsValue(event.target.value)}
+                className="mt-1 min-h-[44px] w-full rounded-lg border bg-white px-2 text-sm"
+                aria-describedby="savings-reminder-controls-help"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Remind me this many days before
+              <input
+                type="number"
+                min="1"
+                max="90"
+                value={savingsDeadlineLeadDays}
+                onChange={(event) => setSavingsDeadlineLeadDays(event.target.value)}
+                className="mt-1 min-h-[44px] w-full rounded-lg border bg-white px-2 text-sm"
+                aria-describedby="savings-reminder-controls-help"
+              />
+            </label>
+            <p id="savings-reminder-controls-help" className="text-xs text-slate-600 sm:col-span-2">
+              Savings deadline reminders are opt-in. Only reviewed matches at or above this value
+              are considered, and in-app continuity remains available.
+            </p>
+          </div>
+        ) : null}
       </MobileCard>
       {visibleNotifications.length === 0 ? (
         <EmptyStateCard

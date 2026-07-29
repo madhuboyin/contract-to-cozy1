@@ -1173,6 +1173,23 @@ The family should route:
 | HSB-039 | P2 | No amount-period taxonomy | One-time and annual values mix | Type monetary period and recurrence |
 | HSB-040 | P2 | No partner governance | Future lead risk | Add disclosure, consent, rank, and audit controls |
 
+### 10.1 P2 implementation reconciliation — July 29, 2026
+
+| ID | Current state | Repository evidence |
+| --- | --- | --- |
+| HSB-029 | Implemented | Reviewed source/program author-review-publish console and role-gated admin APIs |
+| HSB-030 | Implemented | Source-health audit worker, bounded metrics, Prometheus alerts, and operations runbook |
+| HSB-031 | Implemented | Retry-safe, explicit-opt-in deadline reminder worker |
+| HSB-032 | Implemented | Append-only `DENIED`, `WITHDRAWN`, `EXPIRED`, and `NO_ACTION` outcomes with required reasons |
+| HSB-033 | Implemented | Property-scoped Document Vault evidence on action checklists and outcomes |
+| HSB-034 | Implemented | Savings and Benefits accessibility regression contract covering names, keyboard behavior, dialogs, focus, and touch targets |
+| HSB-035 | Implemented | All 17 golden scenarios execute without skipped cases |
+| HSB-036 | Implemented | Category-specific coverage/match empty states with next-review date or explicit unscheduled state |
+| HSB-037 | Implemented | Category-specific opt-in, cadence, quiet hours, deadline lead time, and minimum-value controls |
+| HSB-038 | Implemented | Explicit `PROPERTY` / `HOUSEHOLD` / `EITHER` beneficiary scope |
+| HSB-039 | Implemented | Exact `ONE_TIME` / `MONTHLY` / `ANNUAL` / `UNKNOWN` monetary periods |
+| HSB-040 | Implemented | Approved-recipient allowlist, disclosure/ranking contract, exact field preview, consent persistence, and fail-closed handoff |
+
 ---
 
 ## 11. Best-in-Class Target Experience
@@ -2423,4 +2440,3 @@ Observed validation baseline:
   operational gap even if production rows were inserted manually;
 - live program availability, tax rules, utility offers, and legal requirements
   were intentionally not validated in this repository audit.
-

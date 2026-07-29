@@ -2266,6 +2266,7 @@ export interface HiddenAssetCoverageDTO {
   sources: HiddenAssetCoverageSourceDTO[];
   categoriesCovered: HiddenAssetCategory[];
   categoriesNotCovered: HiddenAssetCategory[];
+  nextReviewAt: string | null;
 }
 
 // ============================================================================
@@ -2297,7 +2298,14 @@ export interface SensitiveFactStatusDTO {
 // SAVINGS OUTCOME LEDGER (application/award trail — HSB-018/019/033)
 // ============================================================================
 
-export type SavingsOutcomeStageValue = 'SUBMITTED' | 'APPROVED' | 'DENIED' | 'RECEIVED' | 'WITHDRAWN';
+export type SavingsOutcomeStageValue =
+  | 'SUBMITTED'
+  | 'APPROVED'
+  | 'DENIED'
+  | 'RECEIVED'
+  | 'WITHDRAWN'
+  | 'EXPIRED'
+  | 'NO_ACTION';
 export type SavingsOutcomeVerificationState = 'SELF_REPORTED' | 'EVIDENCE_ATTACHED' | 'VERIFIED' | 'REVOKED';
 
 export interface SavingsOutcomeDocumentDTO {
@@ -2316,6 +2324,7 @@ export interface HiddenAssetMatchOutcomeDTO {
   currency: string;
   evidenceNote: string | null;
   denialReason: string | null;
+  closureReason: string | null;
   verificationState: SavingsOutcomeVerificationState;
   verifiedAt: string | null;
   revokedAt: string | null;
@@ -2335,6 +2344,7 @@ export interface HomeSavingsOpportunityOutcomeDTO {
   currency: string;
   evidenceNote: string | null;
   denialReason: string | null;
+  closureReason: string | null;
   verificationState: SavingsOutcomeVerificationState;
   observationStartedAt: string | null;
   observationEndedAt: string | null;

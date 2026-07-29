@@ -95,6 +95,49 @@ export interface UpdateCanonicalActionInput {
   }>;
 }
 
+export function assertPartnerHandoffGovernance(
+  input: Pick<CreateCanonicalActionInput, 'externalOwner' | 'consent' | 'sharedFields'>,
+  approvedPartners = (process.env.SAVINGS_BENEFITS_APPROVED_PARTNERS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean),
+) {
+  const partnerId = input.externalOwner?.trim();
+  if (!partnerId || !approvedPartners.includes(partnerId)) {
+    throw new Error('The requested partner is not approved for Savings & Benefits handoffs.');
+  }
+  const consent = input.consent;
+  if (
+    !consent
+    || consent.partnerId !== partnerId
+    || consent.disclosureAcknowledged !== true
+    || typeof consent.consentVersion !== 'string'
+    || !consent.consentVersion.trim()
+    || typeof consent.consentedAt !== 'string'
+    || Number.isNaN(new Date(consent.consentedAt).getTime())
+    || typeof consent.compensationMayOccur !== 'boolean'
+    || typeof consent.rankingInfluenced !== 'boolean'
+    || !Array.isArray(consent.selectionCriteria)
+    || consent.selectionCriteria.length === 0
+    || consent.selectionCriteria.some((value) => typeof value !== 'string' || !value.trim())
+    || typeof consent.nonCommercialAlternative !== 'string'
+    || !consent.nonCommercialAlternative.trim()
+    || !Array.isArray(consent.sharedFieldNames)
+  ) {
+    throw new Error('Complete the partner disclosure and explicit consent contract before sharing data.');
+  }
+  const previewedFields = [...new Set(
+    consent.sharedFieldNames.filter((value): value is string => typeof value === 'string'),
+  )].sort();
+  const actualFields = Object.keys(input.sharedFields ?? {}).sort();
+  if (
+    previewedFields.length !== actualFields.length
+    || previewedFields.some((value, index) => value !== actualFields[index])
+  ) {
+    throw new Error('The fields being shared do not match the consent preview.');
+  }
+}
+
 function buildActionChecklist(
   detail: Awaited<ReturnType<typeof getCanonicalOpportunityDetail>>,
 ): CanonicalActionChecklistItem[] {
@@ -214,6 +257,9 @@ export async function createCanonicalAction(
     && (!input.externalOwner?.trim() || !input.sharedFields)
   ) {
     throw new Error('A partner handoff must name the recipient and preview the fields being shared.');
+  }
+  if (input.actionType === 'PARTNER_HANDOFF_CONSENTED') {
+    assertPartnerHandoffGovernance(input);
   }
 
   if (input.family === 'BENEFIT') {

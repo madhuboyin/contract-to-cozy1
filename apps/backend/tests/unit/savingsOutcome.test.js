@@ -11,6 +11,8 @@ let matches = new Map();
 let matchOutcomes = [];
 let opportunities = new Map();
 let opportunityOutcomes = [];
+let documents = [];
+const documentOwnershipQueries = [];
 const publishSavingsRealizationSignalCalls = [];
 let publishSavingsRealizationSignalImpl = async () => ({ id: 'signal-1' });
 
@@ -68,6 +70,11 @@ require.cache[prismaPath] = {
           if (opportunity.userId !== where.homeownerProfile.userId) return null;
           return opportunity;
         },
+        update: async ({ where, data }) => {
+          const opportunity = opportunities.get(where.id);
+          Object.assign(opportunity, data);
+          return opportunity;
+        },
       },
       homeSavingsOpportunityOutcome: {
         findFirst: async ({ where }) => {
@@ -86,10 +93,23 @@ require.cache[prismaPath] = {
           return row;
         },
       },
+      document: {
+        findMany: async ({ where }) => {
+          documentOwnershipQueries.push(where);
+          return documents
+            .filter((document) =>
+              where.id.in.includes(document.id)
+              && document.uploadedBy === where.uploadedBy
+              && document.propertyId === where.propertyId)
+            .map(({ id }) => ({ id }));
+        },
+        updateMany: async () => ({ count: 1 }),
+      },
       $transaction: async (fn) =>
         fn({
           hiddenAssetMatchOutcome: require.cache[prismaPath].exports.prisma.hiddenAssetMatchOutcome,
           propertyHiddenAssetMatch: require.cache[prismaPath].exports.prisma.propertyHiddenAssetMatch,
+          document: require.cache[prismaPath].exports.prisma.document,
         }),
     },
   },
@@ -121,13 +141,15 @@ const {
 
 test.beforeEach(() => {
   matches = new Map([
-    ['match-1', { id: 'match-1', userId: 'user-1', status: 'PURSUING', pursuedAt: null }],
+    ['match-1', { id: 'match-1', propertyId: 'property-1', userId: 'user-1', status: 'PURSUING', pursuedAt: null }],
   ]);
   matchOutcomes = [];
   opportunities = new Map([
     ['opp-1', { id: 'opp-1', userId: 'user-1', propertyId: 'property-1', currency: 'USD' }],
   ]);
   opportunityOutcomes = [];
+  documents = [];
+  documentOwnershipQueries.length = 0;
   publishSavingsRealizationSignalCalls.length = 0;
   publishSavingsRealizationSignalImpl = async () => ({ id: 'signal-1' });
   recordedAtSequence = 0;
@@ -137,16 +159,20 @@ test.beforeEach(() => {
 // Pure transition rules
 // ============================================================================
 
-test('a first-ever outcome must start at SUBMITTED', () => {
+test('a first-ever outcome can start with submission or a reasoned no-value closure', () => {
   assert.equal(isValidOutcomeTransition(null, 'SUBMITTED'), true);
+  assert.equal(isValidOutcomeTransition(null, 'EXPIRED'), true);
+  assert.equal(isValidOutcomeTransition(null, 'NO_ACTION'), true);
   assert.equal(isValidOutcomeTransition(null, 'RECEIVED'), false);
   assert.equal(isValidOutcomeTransition(null, 'DENIED'), false);
 });
 
-test('SUBMITTED can move to APPROVED, DENIED, or WITHDRAWN, but not RECEIVED', () => {
+test('SUBMITTED can move to approval or a reasoned terminal stage, but not RECEIVED', () => {
   assert.equal(isValidOutcomeTransition('SUBMITTED', 'APPROVED'), true);
   assert.equal(isValidOutcomeTransition('SUBMITTED', 'DENIED'), true);
   assert.equal(isValidOutcomeTransition('SUBMITTED', 'WITHDRAWN'), true);
+  assert.equal(isValidOutcomeTransition('SUBMITTED', 'EXPIRED'), true);
+  assert.equal(isValidOutcomeTransition('SUBMITTED', 'NO_ACTION'), true);
   assert.equal(isValidOutcomeTransition('SUBMITTED', 'RECEIVED'), false);
 });
 
@@ -156,9 +182,9 @@ test('APPROVED can move to RECEIVED or WITHDRAWN, but not back to SUBMITTED', ()
   assert.equal(isValidOutcomeTransition('APPROVED', 'SUBMITTED'), false);
 });
 
-test('DENIED, RECEIVED, and WITHDRAWN are terminal', () => {
-  for (const terminal of ['DENIED', 'RECEIVED', 'WITHDRAWN']) {
-    for (const next of ['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN']) {
+test('every closed outcome stage is terminal', () => {
+  for (const terminal of ['DENIED', 'RECEIVED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION']) {
+    for (const next of ['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION']) {
       assert.equal(isValidOutcomeTransition(terminal, next), false, `${terminal} -> ${next}`);
     }
   }
@@ -180,6 +206,26 @@ test('recordHiddenAssetMatchOutcome rejects a DENIED outcome without a reason', 
     () => recordHiddenAssetMatchOutcome('match-1', 'user-1', { stage: 'DENIED' }),
     SavingsOutcomeGovernanceError
   );
+});
+
+test('expiration and no-action feedback require a reason and close the opportunity status', async () => {
+  await assert.rejects(
+    () => recordHiddenAssetMatchOutcome('match-1', 'user-1', { stage: 'EXPIRED' }),
+    SavingsOutcomeGovernanceError,
+  );
+  const expired = await recordHiddenAssetMatchOutcome('match-1', 'user-1', {
+    stage: 'EXPIRED',
+    closureReason: 'The official application window closed before documents were ready.',
+  });
+  assert.equal(expired.closureReason, 'The official application window closed before documents were ready.');
+  assert.equal(matches.get('match-1').status, 'EXPIRED');
+
+  const noAction = await recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', {
+    stage: 'NO_ACTION',
+    closureReason: 'The contract exit fee outweighed the expected savings.',
+  });
+  assert.equal(noAction.closureReason, 'The contract exit fee outweighed the expected savings.');
+  assert.equal(opportunities.get('opp-1').status, 'DISMISSED');
 });
 
 test('recordHiddenAssetMatchOutcome records SUBMITTED then APPROVED then RECEIVED, and backfills pursuedAt', async () => {
@@ -213,6 +259,28 @@ test('recordHiddenAssetMatchOutcome rejects RECEIVED coming directly after SUBMI
 test('recordHiddenAssetMatchOutcome rejects a mismatched owner', async () => {
   await assert.rejects(() =>
     recordHiddenAssetMatchOutcome('match-1', 'someone-else', { stage: 'SUBMITTED' })
+  );
+});
+
+test('outcome evidence must belong to the authenticated user and the same property', async () => {
+  documents = [{ id: 'document-1', uploadedBy: 'user-1', propertyId: 'property-1' }];
+  await recordHiddenAssetMatchOutcome('match-1', 'user-1', {
+    stage: 'SUBMITTED',
+    documentIds: ['document-1'],
+  });
+  assert.deepEqual(documentOwnershipQueries[0], {
+    id: { in: ['document-1'] },
+    uploadedBy: 'user-1',
+    propertyId: 'property-1',
+  });
+
+  documents = [{ id: 'other-property-document', uploadedBy: 'user-1', propertyId: 'property-2' }];
+  await assert.rejects(
+    () => recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', {
+      stage: 'SUBMITTED',
+      documentIds: ['other-property-document'],
+    }),
+    /not found/,
   );
 });
 

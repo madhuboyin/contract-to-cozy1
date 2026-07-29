@@ -186,6 +186,28 @@ module.exports = {
   // candidate program list for the derived region pairs).
   noCoverageProperty: attrs({ state: 'WY', county: 'Teton', utilityProvider: 'Lower Valley Energy' }),
 
+  // 13. A real current bill compared with a state benchmark; never an offer.
+  internetBenchmarkOnly: {
+    property: { id: 'property-1', state: 'NJ', zipCode: '08608' },
+    account: {
+      amount: 120,
+      billingCadence: 'MONTHLY',
+      usageJson: { speedTier: '500 Mbps' },
+      contractEndDate: null,
+    },
+    metadata: {
+      typicalMonthlyByState: { NJ: 75 },
+      alternativesByState: { NJ: ['Provider A'] },
+    },
+  },
+
+  // 15. A teaser rate must normalize to the ongoing price for comparison.
+  promotionalInternetPrice: {
+    promotionalMonthlyPrice: 40,
+    ongoingMonthlyPrice: 85,
+    promotionMonths: 12,
+  },
+
   // 16. Completed switch with two observed bills — recurring-cost RECEIVED
   // outcome input shape.
   completedSwitchOutcomeInput: {

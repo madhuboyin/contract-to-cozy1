@@ -828,6 +828,13 @@ export class HiddenAssetService {
 
     const allCategories = Object.values(HiddenAssetCategory);
     const categoriesNotCovered = allCategories.filter((category) => !categoriesCovered.has(category));
+    const nextReviewAt = [...sourceById.values()].reduce<Date | null>((earliest, source) => {
+      if (!source.lastReviewedAt) return earliest;
+      const reviewAt = new Date(
+        source.lastReviewedAt.getTime() + source.reviewSlaDays * 24 * 60 * 60 * 1000,
+      );
+      return !earliest || reviewAt < earliest ? reviewAt : earliest;
+    }, null);
 
     return {
       propertyId,
@@ -836,6 +843,7 @@ export class HiddenAssetService {
       sources,
       categoriesCovered: [...categoriesCovered],
       categoriesNotCovered,
+      nextReviewAt: nextReviewAt?.toISOString() ?? null,
     };
   }
 

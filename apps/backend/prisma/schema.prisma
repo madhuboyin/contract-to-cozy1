@@ -5968,6 +5968,10 @@ model NotificationPreference {
   quietEnd     String?
   timezone     String              @default("UTC")
   sensitivity NotificationSensitivity?
+  // Savings & Benefits category controls (HSB-037). Null uses the product
+  // default; values are ignored for other notification categories.
+  minimumValue    Decimal? @db.Decimal(12, 2)
+  deadlineLeadDays Int?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -8175,17 +8179,19 @@ enum HomeSavingsOpportunityStatus {
 }
 
 // Shared application/award trail stage for both HiddenAssetMatchOutcome and
-// HomeSavingsOpportunityOutcome. SUBMITTED/APPROVED/DENIED/WITHDRAWN track an
-// in-progress or closed-without-value application; RECEIVED is the only
+// HomeSavingsOpportunityOutcome. SUBMITTED/APPROVED/DENIED/WITHDRAWN/EXPIRED/
+// NO_ACTION track an in-progress or closed-without-value application; RECEIVED is the only
 // stage that represents realized value, and is the only one that requires
 // (and is expected to carry) an amount/observed-value and evidenceNote.
-// DENIED, RECEIVED, and WITHDRAWN are terminal — no further transitions.
+// DENIED, RECEIVED, WITHDRAWN, EXPIRED, and NO_ACTION are terminal.
 enum SavingsOutcomeStage {
   SUBMITTED
   APPROVED
   DENIED
   RECEIVED
   WITHDRAWN
+  EXPIRED
+  NO_ACTION
 }
 
 enum SavingsOutcomeVerificationState {
@@ -8359,6 +8365,7 @@ model HomeSavingsOpportunityOutcome {
   // switching providers." Required for RECEIVED.
   evidenceNote         String?
   denialReason         String? // set only when stage = DENIED
+  closureReason        String? // required for WITHDRAWN, EXPIRED, or NO_ACTION
   verificationState   SavingsOutcomeVerificationState @default(SELF_REPORTED)
   observationStartedAt DateTime?
   observationEndedAt   DateTime?
@@ -11724,6 +11731,7 @@ model HiddenAssetMatchOutcome {
   // realized-value claim always has a stated basis, not just a status flip.
   evidenceNote   String?
   denialReason   String? // set only when stage = DENIED
+  closureReason  String? // required for WITHDRAWN, EXPIRED, or NO_ACTION
   verificationState SavingsOutcomeVerificationState @default(SELF_REPORTED)
   verifiedAt          DateTime?
   verifiedBy          String?

@@ -16,6 +16,7 @@ const documentPickerModal = readSource(
   'src/app/(dashboard)/dashboard/components/inventory/DocumentPickerModal.tsx',
 );
 const adminConsole = readSource('src/app/(dashboard)/dashboard/admin/savings-benefits/page.tsx');
+const notificationsPage = readSource('src/app/(dashboard)/dashboard/notifications/page.tsx');
 
 describe('Savings and Benefits — accessibility contract (HSB-034)', () => {
   it('OutcomeRecorder: stage picker and free-text inputs are all named for assistive technology', () => {
@@ -24,6 +25,7 @@ describe('Savings and Benefits — accessibility contract (HSB-034)', () => {
     expect(outcomeRecorder).toContain("aria-label={family === 'BENEFIT' ? 'Amount received in dollars'");
     expect(outcomeRecorder).toContain('aria-label="Reason given for the denial"');
     expect(outcomeRecorder).toContain('aria-label="Evidence note"');
+    expect(outcomeRecorder).toContain('aria-label="Reason this opportunity was closed without value"');
     expect(outcomeRecorder).toContain('aria-labelledby={`savings-action-checklist-${activeAction.id}`}');
     expect(outcomeRecorder).toContain('className="min-h-11 rounded-md');
     // Every focusable custom control gets a visible focus ring, not just the
@@ -59,5 +61,12 @@ describe('Savings and Benefits — accessibility contract (HSB-034)', () => {
     expect(adminConsole).toContain('<Trash2 className="h-3.5 w-3.5" aria-hidden="true" />');
     expect(adminConsole).toContain('<Label htmlFor="program-funding-status">');
     expect(adminConsole).toContain('<Label htmlFor="program-application-deadline">');
+  });
+
+  it('Savings reminder value and deadline controls are labelled and meet the 44px touch target', () => {
+    expect(notificationsPage).toContain('Minimum estimated value');
+    expect(notificationsPage).toContain('Remind me this many days before');
+    expect(notificationsPage).toContain('aria-describedby="savings-reminder-controls-help"');
+    expect(notificationsPage).toContain('min-h-[44px]');
   });
 });

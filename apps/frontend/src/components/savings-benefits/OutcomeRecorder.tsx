@@ -31,6 +31,8 @@ const STAGE_LABEL: Record<SavingsOutcomeStageValue, string> = {
   DENIED: 'Denied',
   RECEIVED: 'Received',
   WITHDRAWN: 'Withdrawn',
+  EXPIRED: 'Expired',
+  NO_ACTION: 'No action',
 };
 
 const STAGE_TONE: Record<SavingsOutcomeStageValue, StatusChipTone> = {
@@ -39,6 +41,8 @@ const STAGE_TONE: Record<SavingsOutcomeStageValue, StatusChipTone> = {
   DENIED: 'danger',
   RECEIVED: 'good',
   WITHDRAWN: 'elevated',
+  EXPIRED: 'elevated',
+  NO_ACTION: 'elevated',
 };
 
 // Mirrors savingsOutcome.service.ts's ALLOWED_NEXT_STAGES — kept in sync
@@ -46,11 +50,13 @@ const STAGE_TONE: Record<SavingsOutcomeStageValue, StatusChipTone> = {
 // (the backend is the source of truth; this only pre-filters the picker so
 // a homeowner isn't offered a transition that would just get rejected).
 const ALLOWED_NEXT_STAGES: Record<SavingsOutcomeStageValue, SavingsOutcomeStageValue[]> = {
-  SUBMITTED: ['APPROVED', 'DENIED', 'WITHDRAWN'],
-  APPROVED: ['RECEIVED', 'WITHDRAWN'],
+  SUBMITTED: ['APPROVED', 'DENIED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION'],
+  APPROVED: ['RECEIVED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION'],
   DENIED: [],
   RECEIVED: [],
   WITHDRAWN: [],
+  EXPIRED: [],
+  NO_ACTION: [],
 };
 function formatMoney(value: number | null, currency: string): string | null {
   if (value == null) return null;
@@ -89,6 +95,7 @@ export function OutcomeRecorder({
   const [amount, setAmount] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
   const [denialReason, setDenialReason] = useState('');
+  const [closureReason, setClosureReason] = useState('');
   const [observationStartedAt, setObservationStartedAt] = useState('');
   const [observationEndedAt, setObservationEndedAt] = useState('');
   const [documents, setDocuments] = useState<Array<{ id: string; name: string }>>([]);
@@ -118,7 +125,9 @@ export function OutcomeRecorder({
 
   const outcomes: OutcomeDTO[] = outcomesQuery.data ?? [];
   const latest = [...outcomes].reverse().find((outcome) => !outcome.revokedAt) ?? null;
-  const allowedStages: SavingsOutcomeStageValue[] = latest ? ALLOWED_NEXT_STAGES[latest.stage] : ['SUBMITTED'];
+  const allowedStages: SavingsOutcomeStageValue[] = latest
+    ? ALLOWED_NEXT_STAGES[latest.stage]
+    : ['SUBMITTED', 'EXPIRED', 'NO_ACTION'];
   const isTerminal = latest != null && allowedStages.length === 0;
 
   useMemo(() => {
@@ -145,6 +154,10 @@ export function OutcomeRecorder({
           currency: defaultCurrency,
           evidenceNote: evidenceNote.trim() || undefined,
           denialReason: stage === 'DENIED' ? denialReason.trim() || undefined : undefined,
+          closureReason:
+            stage === 'WITHDRAWN' || stage === 'EXPIRED' || stage === 'NO_ACTION'
+              ? closureReason.trim() || undefined
+              : undefined,
           documentIds,
         });
       }
@@ -154,6 +167,10 @@ export function OutcomeRecorder({
         currency: defaultCurrency,
         evidenceNote: evidenceNote.trim() || undefined,
         denialReason: stage === 'DENIED' ? denialReason.trim() || undefined : undefined,
+        closureReason:
+          stage === 'WITHDRAWN' || stage === 'EXPIRED' || stage === 'NO_ACTION'
+            ? closureReason.trim() || undefined
+            : undefined,
         documentIds,
         observationStartedAt:
           stage === 'RECEIVED' && observationStartedAt
@@ -169,6 +186,7 @@ export function OutcomeRecorder({
       setAmount('');
       setEvidenceNote('');
       setDenialReason('');
+      setClosureReason('');
       setObservationStartedAt('');
       setObservationEndedAt('');
       setDocuments([]);
@@ -220,6 +238,8 @@ export function OutcomeRecorder({
 
   const needsAmount = stage === 'RECEIVED';
   const needsDenialReason = stage === 'DENIED';
+  const needsClosureReason =
+    stage === 'WITHDRAWN' || stage === 'EXPIRED' || stage === 'NO_ACTION';
   const needsEvidence = stage === 'RECEIVED';
   const needsObservationWindow = family === 'RECURRING_COST' && stage === 'RECEIVED';
   const observationWindowIsSufficient = (() => {
@@ -233,6 +253,7 @@ export function OutcomeRecorder({
     !submitMutation.isPending &&
     (!needsAmount || amount.trim().length > 0) &&
     (!needsDenialReason || denialReason.trim().length > 0) &&
+    (!needsClosureReason || closureReason.trim().length > 0) &&
     (!needsEvidence || evidenceNote.trim().length > 0 || documents.length > 0) &&
     observationWindowIsSufficient;
 
@@ -371,6 +392,11 @@ export function OutcomeRecorder({
                 {outcome.denialReason ? (
                   <p className="mt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">Reason: {outcome.denialReason}</p>
                 ) : null}
+                {outcome.closureReason ? (
+                  <p className="mt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                    Reason: {outcome.closureReason}
+                  </p>
+                ) : null}
                 {outcome.documents.length > 0 ? (
                   <ul className="mt-1.5 space-y-0.5">
                     {outcome.documents.map((d) => (
@@ -445,6 +471,23 @@ export function OutcomeRecorder({
               onChange={(e) => setDenialReason(e.target.value)}
               placeholder="Reason given for the denial"
               aria-label="Reason given for the denial"
+              className="h-8 w-full rounded-md border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 text-xs dark:bg-slate-900"
+            />
+          ) : null}
+
+          {needsClosureReason ? (
+            <input
+              type="text"
+              value={closureReason}
+              onChange={(e) => setClosureReason(e.target.value)}
+              placeholder={
+                stage === 'EXPIRED'
+                  ? 'What expired or closed?'
+                  : stage === 'NO_ACTION'
+                    ? 'Why did you decide not to proceed?'
+                    : 'Why was this withdrawn?'
+              }
+              aria-label="Reason this opportunity was closed without value"
               className="h-8 w-full rounded-md border border-[hsl(var(--mobile-border-subtle))] bg-white px-2 text-xs dark:bg-slate-900"
             />
           ) : null}
