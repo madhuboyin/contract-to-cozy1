@@ -17,8 +17,8 @@
 | Analytics integrity | Engagement, handoff, resolution, and verified outcome stages remain distinct | Pass |
 | Commercial integrity controls | Real-user launch requires an explicit commercial-integrity approval | Implemented; approval pending |
 | Content and safety controls | Real-user launch requires explicit content/safety and governance approvals | Implemented; approval pending |
-| Accessibility | Launch gate requires recorded target-build accessibility evidence | Pending owner evidence |
-| Responsive behavior | Launch gate requires recorded target-build mobile/responsive evidence | Pending owner evidence |
+| Accessibility | Four-view axe and keyboard acceptance suite plus version-bound launch evidence | Automation implemented; target-build run and manual owner evidence pending |
+| Responsive behavior | Pixel 7 and iPhone 13 four-view overflow acceptance plus version-bound launch evidence | Automation implemented; target-build run and owner evidence pending |
 
 ## Claim review boundary
 
@@ -38,15 +38,28 @@ document does not self-approve those roles.
 
 ## Required launch evidence still outstanding
 
-- target-build automated accessibility report and manual keyboard/screen-reader
-  review;
-- mobile and desktop responsive evidence for all four canonical views;
+- target-build execution of the automated accessibility report and manual
+  keyboard/screen-reader review;
+- recorded mobile and desktop evidence for all four canonical views;
 - named content/safety approval;
 - named commercial-integrity approval;
 - enforced capability governance approvals;
 - target-environment operational drill output;
 - operations dashboard snapshot with critical anomalies reviewed; and
 - confirmation that no uncontained high-risk gap remains.
+
+Repository-controlled follow-up implementation now includes:
+
+- an Admin + MFA-protected Ownership Cost Operations dashboard with source,
+  calculation, action-funnel, anomaly, replay, and launch-gate views;
+- deployable Prometheus alert rules and a Grafana dashboard;
+- CI-wired four-view accessibility, keyboard, Pixel 7, and iPhone 13
+  acceptance;
+- evidence-version enforcement for accessibility and responsive approval; and
+- an immutable operations-review evidence requirement.
+
+See
+`docs/operations/OWNERSHIP_COST_TARGET_BUILD_REVIEW_CHECKLIST.md`.
 
 Until those artifacts exist, keep
 `OWNERSHIP_COST_REAL_USER_LAUNCH_ENABLED=false` and all approval variables

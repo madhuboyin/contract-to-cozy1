@@ -1243,7 +1243,7 @@ export default function OwnershipCostsClient() {
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <Link
         href={`/dashboard/properties/${propertyId}`}
-        className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+        className="inline-flex items-center gap-2 text-sm font-medium !text-slate-700 hover:!text-slate-950"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to property
@@ -1452,7 +1452,7 @@ export default function OwnershipCostsClient() {
                     <Link
                       href={category.correction.href}
                       onClick={() => correctionClick(category)}
-                      className="mt-3 inline-flex min-h-10 items-center text-sm font-semibold text-teal-700 hover:text-teal-900"
+                      className="mt-3 inline-flex min-h-10 items-center text-sm font-semibold !text-teal-800 hover:!text-teal-950"
                     >
                       {category.correction.label}
                     </Link>
@@ -1525,7 +1525,7 @@ export default function OwnershipCostsClient() {
                           <Link
                             href={category.correction.href}
                             onClick={() => correctionClick(category)}
-                            className="font-semibold text-teal-700 hover:text-teal-900"
+                            className="font-semibold !text-teal-800 hover:!text-teal-950"
                           >
                             {category.correction.label}
                           </Link>

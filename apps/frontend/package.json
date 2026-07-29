@@ -26,6 +26,7 @@
     "test:coverage-launch:e2e": "COVERAGE_LAUNCH_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.coverage-launch.config.ts",
     "test:property-tax:e2e": "PROPERTY_TAX_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.property-tax.config.ts",
     "test:home-digital-twin:e2e": "HOME_DIGITAL_TWIN_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.home-digital-twin.config.ts",
+    "test:ownership-cost:e2e": "OWNERSHIP_COST_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.ownership-cost.config.ts",
     "test:visual-contract": "jest src/__tests__/priority-route-visual-contract.test.ts",
     "test:visual-contract:update": "jest src/__tests__/priority-route-visual-contract.test.ts -u",
     "test:watch": "jest --watch",

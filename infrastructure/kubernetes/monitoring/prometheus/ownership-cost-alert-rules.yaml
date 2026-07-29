@@ -1,0 +1,91 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: production-ownership-cost-alert-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: contract-to-cozy-ownership-costs
+      rules:
+        - alert: OwnershipCostCriticalAnomaly
+          expr: sum(ownership_cost_anomalies{severity="CRITICAL"}) > 0
+          for: 10m
+          labels:
+            severity: critical
+            team: platform
+            capability: ownership-costs
+          annotations:
+            summary: Ownership Cost Intelligence has a critical anomaly
+            description: One or more missing adapters, adapter failures, stale snapshots, definition mismatches, or material category jumps require review.
+
+        - alert: OwnershipCostCanonicalAdapterMissing
+          expr: sum(ownership_cost_anomalies{type="MISSING_CANONICAL_ADAPTER"}) > 0
+          for: 15m
+          labels:
+            severity: critical
+            team: platform
+            capability: ownership-costs
+          annotations:
+            summary: Ownership Cost Intelligence is missing a canonical adapter
+            description: The operations report has detected at least one property without every expected canonical adapter.
+
+        - alert: OwnershipCostAdapterFailure
+          expr: sum(ownership_cost_anomalies{type="ADAPTER_FAILURE"}) > 0
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+            capability: ownership-costs
+          annotations:
+            summary: Ownership Cost Intelligence adapter failures persisted
+            description: One or more canonical source adapter runs failed and the last-known-good snapshot should be reviewed.
+
+        - alert: OwnershipCostDefinitionMismatch
+          expr: sum(ownership_cost_anomalies{type="DEFINITION_MISMATCH"}) > 0
+          for: 10m
+          labels:
+            severity: critical
+            team: platform
+            capability: ownership-costs
+          annotations:
+            summary: Ownership Cost Intelligence definition drift detected
+            description: A retained snapshot does not match the active method or category-definition version.
+
+        - alert: OwnershipCostCategoryJump
+          expr: sum(ownership_cost_anomalies{type="CATEGORY_JUMP"}) > 0
+          for: 30m
+          labels:
+            severity: warning
+            team: product-integrity
+            capability: ownership-costs
+          annotations:
+            summary: Ownership Cost Intelligence material category jump
+            description: A source-backed category change crossed the operational review threshold; this is a review trigger, not proof the source is wrong.
+
+        - alert: OwnershipCostCalculationFailureRatioHigh
+          expr: >-
+            sum(rate(ownership_cost_calculations_total{outcome="failure"}[15m]))
+            /
+            clamp_min(sum(rate(ownership_cost_calculations_total[15m])), 0.001)
+            > 0.05
+          for: 15m
+          labels:
+            severity: critical
+            team: platform
+            capability: ownership-costs
+          annotations:
+            summary: Ownership Cost Intelligence calculation failure ratio is high
+            description: More than 5% of canonical ownership-cost calculations have failed for fifteen minutes.
+
+        - alert: OwnershipCostCalculationP95LatencyHigh
+          expr: histogram_quantile(0.95, sum by (le) (rate(ownership_cost_calculation_duration_seconds_bucket[15m]))) > 1
+          for: 15m
+          labels:
+            severity: warning
+            team: platform
+            capability: ownership-costs
+          annotations:
+            summary: Ownership Cost Intelligence calculation latency is high
+            description: Canonical ownership-cost calculation p95 latency has exceeded one second for fifteen minutes.

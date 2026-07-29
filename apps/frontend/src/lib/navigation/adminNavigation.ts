@@ -21,6 +21,7 @@ import {
   LayoutDashboard,
   Radar,
   Landmark,
+  Receipt,
 } from 'lucide-react';
 import type { NavJob } from './jobsNavigation';
 
@@ -137,6 +138,15 @@ export const ADMIN_NAV: NavJob[] = [
     href: '/dashboard/admin/property-tax',
     icon: Landmark,
     description: 'Tax-source health, rule freshness, guardrails, and kill switches',
+    engines: [],
+    globalHref: true,
+  },
+  {
+    key: 'admin-ownership-costs',
+    name: 'Ownership Cost Operations',
+    href: '/dashboard/admin/ownership-costs',
+    icon: Receipt,
+    description: 'Source coverage, calculation integrity, replay, anomalies, and launch readiness',
     engines: [],
     globalHref: true,
   },

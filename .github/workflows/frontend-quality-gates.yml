@@ -43,3 +43,14 @@ jobs:
 
       - name: Home Digital Twin desktop and mobile acceptance
         run: npm run test:home-digital-twin:e2e
+
+      - name: Ownership Cost accessibility and responsive acceptance
+        run: npm run test:ownership-cost:e2e
+
+      - name: Upload Ownership Cost target-build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ownership-cost-target-build-evidence
+          path: apps/frontend/test-results/ownership-cost-evidence.json
+          if-no-files-found: error

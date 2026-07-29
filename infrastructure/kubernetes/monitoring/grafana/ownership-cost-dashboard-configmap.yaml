@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-ownership-costs
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  ownership-cost-observability.json: |
+    {
+      "id": null,
+      "uid": "ctc-ownership-costs",
+      "title": "Ownership Cost Intelligence - Integrity and Outcomes",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "tags": ["ownership-costs", "financial-integrity", "operations"],
+      "time": {"from": "now-24h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "Calculations by Lens and Outcome",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [{
+            "expr": "sum by (lens, outcome) (rate(ownership_cost_calculations_total[15m]))",
+            "legendFormat": "{{lens}} / {{outcome}}",
+            "refId": "A"
+          }]
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "Calculation Latency p95",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [{
+            "expr": "histogram_quantile(0.95, sum by (lens, le) (rate(ownership_cost_calculation_duration_seconds_bucket[15m])))",
+            "legendFormat": "{{lens}}",
+            "refId": "A"
+          }]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Operational Anomalies",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [{
+            "expr": "sum by (type, severity) (ownership_cost_anomalies)",
+            "legendFormat": "{{type}} / {{severity}}",
+            "refId": "A"
+          }]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Replay Outcomes",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [{
+            "expr": "sum by (outcome) (increase(ownership_cost_replay_total[1h]))",
+            "legendFormat": "{{outcome}}",
+            "refId": "A"
+          }]
+        }
+      ]
+    }

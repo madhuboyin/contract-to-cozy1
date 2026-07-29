@@ -7,8 +7,10 @@ import {
   OWNERSHIP_COST_METHOD_VERSION,
 } from './ownershipCostAdapters';
 import {
+  OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION,
   OWNERSHIP_COST_LAUNCH_EVIDENCE_VERSION,
   OWNERSHIP_COST_OPERATIONAL_DRILL_VERSION,
+  OWNERSHIP_COST_RESPONSIVE_EVIDENCE_VERSION,
   evaluateOwnershipCostLaunchGate,
   type OwnershipCostLaunchGateInput,
 } from './ownershipCostLaunchGate.service';
@@ -29,6 +31,11 @@ function readyLaunchInput(): OwnershipCostLaunchGateInput {
     realUserLaunchEnabled: true,
     technicalEvidenceVersion: OWNERSHIP_COST_LAUNCH_EVIDENCE_VERSION,
     operationalDrillVersion: OWNERSHIP_COST_OPERATIONAL_DRILL_VERSION,
+    accessibilityEvidenceVersion:
+      OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION,
+    responsiveEvidenceVersion:
+      OWNERSHIP_COST_RESPONSIVE_EVIDENCE_VERSION,
+    operationsReviewEvidenceId: 'operational-drill-fixture',
     accessibilityApproved: true,
     responsiveApproved: true,
     contentSafetyApproved: true,

@@ -44,14 +44,27 @@ export class CapabilityGovernanceReviewError extends Error {
   }
 }
 
+function requiredCapabilityGovernanceRoles(
+  capability: ToolCapabilityDefinition,
+): RecommendationReviewRole[] {
+  const roles = requiredRecommendationReviewRolesForTier(
+    capability.governance.safetyTier,
+    capability.governance.commercialAction,
+  );
+  // Ownership Cost Intelligence has an explicit launch-plan requirement for
+  // named commercial-integrity review even while its current capability
+  // definition does not perform a commercial action.
+  if (capability.id === 'ownership-costs') {
+    roles.push('COMMERCIAL_INTEGRITY');
+  }
+  return [...new Set(roles)];
+}
+
 export function evaluateCapabilityGovernanceReadiness(
   capability: ToolCapabilityDefinition,
   reviews: readonly CapabilityGovernanceReviewRecord[],
 ): CapabilityGovernanceReadiness {
-  const requiredRoles = requiredRecommendationReviewRolesForTier(
-    capability.governance.safetyTier,
-    capability.governance.commercialAction,
-  );
+  const requiredRoles = requiredCapabilityGovernanceRoles(capability);
   const currentReviews = reviews.filter((review) =>
     review.capabilityId === capability.id
     && review.manifestVersion === capability.version
@@ -126,10 +139,7 @@ export async function recordCapabilityGovernanceReview(params: {
   if (!capability) {
     throw new CapabilityGovernanceReviewError('CAPABILITY_NOT_FOUND');
   }
-  const requiredRoles = requiredRecommendationReviewRolesForTier(
-    capability.governance.safetyTier,
-    capability.governance.commercialAction,
-  );
+  const requiredRoles = requiredCapabilityGovernanceRoles(capability);
   if (
     !RECOMMENDATION_REVIEW_ROLES.includes(params.role)
     || !requiredRoles.includes(params.role)

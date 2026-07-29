@@ -6,8 +6,10 @@ const path = require('node:path');
 require('ts-node/register');
 
 const {
+  OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION,
   OWNERSHIP_COST_LAUNCH_EVIDENCE_VERSION,
   OWNERSHIP_COST_OPERATIONAL_DRILL_VERSION,
+  OWNERSHIP_COST_RESPONSIVE_EVIDENCE_VERSION,
   OWNERSHIP_COST_VALUE_FUNNEL,
   evaluateOwnershipCostLaunchGate,
 } = require(
@@ -56,6 +58,11 @@ function readyLaunch(overrides = {}) {
     realUserLaunchEnabled: true,
     technicalEvidenceVersion: OWNERSHIP_COST_LAUNCH_EVIDENCE_VERSION,
     operationalDrillVersion: OWNERSHIP_COST_OPERATIONAL_DRILL_VERSION,
+    accessibilityEvidenceVersion:
+      OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION,
+    responsiveEvidenceVersion:
+      OWNERSHIP_COST_RESPONSIVE_EVIDENCE_VERSION,
+    operationsReviewEvidenceId: 'ops-review-2026-07-28',
     accessibilityApproved: true,
     responsiveApproved: true,
     contentSafetyApproved: true,
@@ -229,6 +236,17 @@ test('real-user launch is fail-closed on technical, operational, accessibility, 
     'COMMERCIAL_INTEGRITY_APPROVAL_MISSING',
     'UNCONTAINED_HIGH_RISK_GAP',
   ]) assert.ok(blocked.blockers.includes(blocker), blocker);
+
+  const missingEvidence = evaluateOwnershipCostLaunchGate(readyLaunch({
+    accessibilityEvidenceVersion: null,
+    responsiveEvidenceVersion: 'stale-responsive-version',
+    operationsReviewEvidenceId: null,
+  }));
+  assert.deepEqual(missingEvidence.blockers, [
+    'ACCESSIBILITY_EVIDENCE_MISSING',
+    'RESPONSIVE_EVIDENCE_VERSION_MISMATCH',
+    'OPERATIONS_REVIEW_EVIDENCE_MISSING',
+  ]);
 });
 
 test('operations endpoints and environment controls are protected and fail closed', () => {
@@ -249,6 +267,8 @@ test('operations endpoints and environment controls are protected and fail close
   assert.match(env, /OWNERSHIP_COST_REAL_USER_LAUNCH_ENABLED=false/);
   assert.match(env, /OWNERSHIP_COST_CONTENT_SAFETY_APPROVED=false/);
   assert.match(env, /OWNERSHIP_COST_COMMERCIAL_INTEGRITY_APPROVED=false/);
+  assert.match(env, /OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION=/);
+  assert.match(env, /OWNERSHIP_COST_OPERATIONS_REVIEW_EVIDENCE_ID=/);
   assert.match(metrics, /ownership_cost_calculations_total/);
   assert.match(metrics, /ownership_cost_replay_total/);
   assert.match(metrics, /ownership_cost_anomalies/);
@@ -267,4 +287,37 @@ test('operational drill and runbook cover replay, containment, and approval evid
   assert.match(runbook, /mutationPerformed: false/);
   assert.match(runbook, /Engagement .* is not a resolved outcome/i);
   assert.match(runbook, /content\/safety and commercial-integrity/i);
+});
+
+test('operator UI, browser evidence, dashboards, and deployable alerts are present', () => {
+  const adminPage = read(
+    'apps/frontend/src/app/(dashboard)/dashboard/admin/ownership-costs/page.tsx',
+  );
+  const acceptance = read(
+    'apps/frontend/e2e/ownership-costs/ownership-costs.spec.ts',
+  );
+  const mobileAcceptance = read(
+    'apps/frontend/e2e/ownership-costs/ownership-costs.mobile.spec.ts',
+  );
+  const alertRules = read(
+    'infrastructure/kubernetes/monitoring/prometheus/ownership-cost-alert-rules.yaml',
+  );
+  const grafana = read(
+    'infrastructure/kubernetes/monitoring/grafana/ownership-cost-dashboard-configmap.yaml',
+  );
+  const governance = read(
+    'apps/backend/src/services/capabilityGovernanceReview.service.ts',
+  );
+  assert.match(adminPage, /Ownership Cost Operations/);
+  assert.match(adminPage, /Read-only retained calculation replay/);
+  assert.match(acceptance, /axe\.run/);
+  assert.match(acceptance, /page\.keyboard\.press/);
+  assert.match(mobileAcceptance, /scrollWidth > window\.innerWidth/);
+  assert.match(alertRules, /OwnershipCostCanonicalAdapterMissing/);
+  assert.match(alertRules, /OwnershipCostDefinitionMismatch/);
+  assert.match(alertRules, /OwnershipCostCategoryJump/);
+  assert.match(grafana, /ownership_cost_anomalies/);
+  assert.match(grafana, /ownership_cost_replay_total/);
+  assert.match(governance, /capability\.id === 'ownership-costs'/);
+  assert.match(governance, /roles\.push\('COMMERCIAL_INTEGRITY'\)/);
 });

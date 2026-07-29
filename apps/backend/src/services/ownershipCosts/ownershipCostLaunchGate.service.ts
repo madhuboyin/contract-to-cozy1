@@ -10,6 +10,10 @@ export const OWNERSHIP_COST_LAUNCH_EVIDENCE_VERSION =
   'ownership-cost-slice-9-v1';
 export const OWNERSHIP_COST_OPERATIONAL_DRILL_VERSION =
   'ownership-cost-operational-drill-v1';
+export const OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION =
+  'ownership-cost-accessibility-v1';
+export const OWNERSHIP_COST_RESPONSIVE_EVIDENCE_VERSION =
+  'ownership-cost-responsive-v1';
 
 export const OWNERSHIP_COST_VALUE_FUNNEL = [
   'SNAPSHOT_READY',
@@ -29,6 +33,9 @@ export type OwnershipCostLaunchGateInput = {
   realUserLaunchEnabled: boolean;
   technicalEvidenceVersion: string | null;
   operationalDrillVersion: string | null;
+  accessibilityEvidenceVersion: string | null;
+  responsiveEvidenceVersion: string | null;
+  operationsReviewEvidenceId: string | null;
   accessibilityApproved: boolean;
   responsiveApproved: boolean;
   contentSafetyApproved: boolean;
@@ -64,7 +71,26 @@ export function evaluateOwnershipCostLaunchGate(
     blockers.push('OPERATIONAL_DRILL_VERSION_MISMATCH');
   }
   if (!input.accessibilityApproved) blockers.push('ACCESSIBILITY_GATE_FAILED');
+  if (!input.accessibilityEvidenceVersion) {
+    blockers.push('ACCESSIBILITY_EVIDENCE_MISSING');
+  } else if (
+    input.accessibilityEvidenceVersion
+      !== OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION
+  ) {
+    blockers.push('ACCESSIBILITY_EVIDENCE_VERSION_MISMATCH');
+  }
   if (!input.responsiveApproved) blockers.push('RESPONSIVE_GATE_FAILED');
+  if (!input.responsiveEvidenceVersion) {
+    blockers.push('RESPONSIVE_EVIDENCE_MISSING');
+  } else if (
+    input.responsiveEvidenceVersion
+      !== OWNERSHIP_COST_RESPONSIVE_EVIDENCE_VERSION
+  ) {
+    blockers.push('RESPONSIVE_EVIDENCE_VERSION_MISMATCH');
+  }
+  if (!input.operationsReviewEvidenceId) {
+    blockers.push('OPERATIONS_REVIEW_EVIDENCE_MISSING');
+  }
   if (!input.contentSafetyApproved) blockers.push('CONTENT_SAFETY_APPROVAL_MISSING');
   if (!input.commercialIntegrityApproved) {
     blockers.push('COMMERCIAL_INTEGRITY_APPROVAL_MISSING');
@@ -97,6 +123,14 @@ export function evaluateOwnershipCostLaunchGate(
       expectedOperationalDrillVersion:
         OWNERSHIP_COST_OPERATIONAL_DRILL_VERSION,
       recordedOperationalDrillVersion: input.operationalDrillVersion,
+      expectedAccessibilityEvidenceVersion:
+        OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION,
+      recordedAccessibilityEvidenceVersion:
+        input.accessibilityEvidenceVersion,
+      expectedResponsiveEvidenceVersion:
+        OWNERSHIP_COST_RESPONSIVE_EVIDENCE_VERSION,
+      recordedResponsiveEvidenceVersion: input.responsiveEvidenceVersion,
+      operationsReviewEvidenceId: input.operationsReviewEvidenceId,
     },
     approvals: {
       accessibility: input.accessibilityApproved,
@@ -145,6 +179,12 @@ export async function getOwnershipCostLaunchGate(
       env.OWNERSHIP_COST_LAUNCH_EVIDENCE_VERSION?.trim() || null,
     operationalDrillVersion:
       env.OWNERSHIP_COST_OPERATIONAL_DRILL_VERSION?.trim() || null,
+    accessibilityEvidenceVersion:
+      env.OWNERSHIP_COST_ACCESSIBILITY_EVIDENCE_VERSION?.trim() || null,
+    responsiveEvidenceVersion:
+      env.OWNERSHIP_COST_RESPONSIVE_EVIDENCE_VERSION?.trim() || null,
+    operationsReviewEvidenceId:
+      env.OWNERSHIP_COST_OPERATIONS_REVIEW_EVIDENCE_ID?.trim() || null,
     accessibilityApproved:
       enabled(env.OWNERSHIP_COST_ACCESSIBILITY_APPROVED),
     responsiveApproved:
