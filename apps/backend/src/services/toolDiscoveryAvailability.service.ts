@@ -51,7 +51,14 @@ export type ToolDiscoveryAvailability = {
   generatedAt: string;
 };
 
-const LEGACY_TOOL_ROLLOUT_KEYS = new Set<string>();
+const LEGACY_TOOL_ROLLOUT_KEYS = new Set([
+  'COVERAGE_OPTIONS',
+  'HIDDEN_ASSET_FINDER',
+  'HOME_SAVINGS',
+  'INSURANCE_TREND',
+  'RISK_PREMIUM_OPTIMIZER',
+  'TAX_APPEAL',
+]);
 
 function readReleaseMode(value: string | undefined): {
   mode: ToolDiscoveryReleaseMode;

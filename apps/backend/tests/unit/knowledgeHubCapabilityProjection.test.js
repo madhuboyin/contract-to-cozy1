@@ -21,7 +21,6 @@ const {
 const EXISTING_STABLE_KEYS = {
   'replace-repair': 'REPLACE_REPAIR',
   'coverage-intelligence': 'COVERAGE_INTELLIGENCE',
-  'risk-premium-optimizer': 'RISK_PREMIUM_OPTIMIZER',
   'do-nothing-simulator': 'DO_NOTHING_SIMULATOR',
   climate: 'CLIMATE_RISK',
   budget: 'BUDGET_PLANNER',
@@ -30,7 +29,6 @@ const EXISTING_STABLE_KEYS = {
   appreciation: 'VALUE_TRACKER',
   emergency: 'EMERGENCY_HELP',
   'property-tax': 'PROPERTY_TAX',
-  'insurance-trend': 'INSURANCE_TREND',
   'ownership-costs': 'OWNERSHIP_COSTS',
   'sell-hold-rent': 'SELL_HOLD_RENT',
   'break-even': 'BREAK_EVEN',

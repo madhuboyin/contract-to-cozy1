@@ -70,6 +70,7 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   RISK_PREMIUM_OPTIMIZER:    { label: 'Risk Premium Optimizer',      defaultPct: 100 },
   REPLACE_OR_REPAIR:         { label: 'Replace or Repair',           defaultPct: 100 },
   DO_NOTHING_SIMULATOR:      { label: 'Do Nothing Simulator',        defaultPct: 100 },
+  SAVINGS_BENEFITS:          { label: 'Savings & Benefits',          defaultPct: 100 },
   HOME_SAVINGS:              { label: 'Home Savings',                defaultPct: 100 },
   ENERGY_AUDIT:              { label: 'Energy Audit',                defaultPct: 25  },
   APPLIANCE_ORACLE:          { label: 'Appliance Oracle',            defaultPct: 100 },
