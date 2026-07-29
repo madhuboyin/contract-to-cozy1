@@ -36,6 +36,15 @@ require.cache[prismaPath] = {
           }
           return row;
         },
+        updateMany: async ({ where, data }) => {
+          const row = programs.get(where.id);
+          if (!row || (where.version !== undefined && row.version !== where.version)) return { count: 0 };
+          const { version, ...rest } = data;
+          Object.assign(row, rest);
+          if (version?.increment) row.version = (row.version ?? 1) + version.increment;
+          return { count: 1 };
+        },
+        findUniqueOrThrow: async ({ where }) => programs.get(where.id),
       },
       hiddenAssetProgramRule: {
         createMany: async ({ data }) => {
@@ -51,11 +60,13 @@ require.cache[prismaPath] = {
           return row;
         },
       },
+      auditLog: { create: async ({ data }) => ({ id: 'audit-1', ...data }) },
       $transaction: async (fn) =>
         fn({
           hiddenAssetProgram: require.cache[prismaPath].exports.prisma.hiddenAssetProgram,
           hiddenAssetProgramRule: require.cache[prismaPath].exports.prisma.hiddenAssetProgramRule,
           hiddenAssetProgramVersionSnapshot: require.cache[prismaPath].exports.prisma.hiddenAssetProgramVersionSnapshot,
+          auditLog: require.cache[prismaPath].exports.prisma.auditLog,
         }),
     },
   },
@@ -85,32 +96,32 @@ function baseProgramInput(overrides = {}) {
 }
 
 test('createProgram defaults benefitPeriod to UNKNOWN when omitted', async () => {
-  const created = await savingsBenefitsAdminService.createProgram(baseProgramInput());
+  const created = await savingsBenefitsAdminService.createProgram(baseProgramInput(), 'admin-1');
   assert.equal(created.benefitPeriod, 'UNKNOWN');
 });
 
 test('createProgram respects an explicit benefitPeriod', async () => {
   const created = await savingsBenefitsAdminService.createProgram(
-    baseProgramInput({ benefitPeriod: 'ANNUAL' })
+    baseProgramInput({ benefitPeriod: 'ANNUAL' }), 'admin-1'
   );
   assert.equal(created.benefitPeriod, 'ANNUAL');
 });
 
 test('updateProgram preserves the existing benefitPeriod when omitted', async () => {
   const created = await savingsBenefitsAdminService.createProgram(
-    baseProgramInput({ benefitPeriod: 'ONE_TIME' })
+    baseProgramInput({ benefitPeriod: 'ONE_TIME' }), 'admin-1'
   );
-  const updated = await savingsBenefitsAdminService.updateProgram(created.id, baseProgramInput());
+  const updated = await savingsBenefitsAdminService.updateProgram(created.id, baseProgramInput(), 'admin-1');
   assert.equal(updated.benefitPeriod, 'ONE_TIME');
 });
 
 test('updateProgram overrides benefitPeriod when explicitly provided', async () => {
   const created = await savingsBenefitsAdminService.createProgram(
-    baseProgramInput({ benefitPeriod: 'ONE_TIME' })
+    baseProgramInput({ benefitPeriod: 'ONE_TIME' }), 'admin-1'
   );
   const updated = await savingsBenefitsAdminService.updateProgram(
     created.id,
-    baseProgramInput({ benefitPeriod: 'MONTHLY' })
+    baseProgramInput({ benefitPeriod: 'MONTHLY' }), 'admin-1'
   );
   assert.equal(updated.benefitPeriod, 'MONTHLY');
 });

@@ -108,6 +108,15 @@ function ItemRow({ item }: { item: SavingsBenefitsUnifiedItemDTO }) {
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip tone={FAMILY_TONE[item.family]}>{FAMILY_LABEL[item.family]}</StatusChip>
         <StatusChip tone="info">{item.statusLabel}</StatusChip>
+        {item.lifecycle === 'REALIZED' ? (
+          <StatusChip tone={item.verificationState === 'VERIFIED' ? 'protected' : 'elevated'}>
+            {item.verificationState === 'VERIFIED'
+              ? 'Independently verified'
+              : item.verificationState === 'EVIDENCE_ATTACHED'
+                ? 'Evidence attached'
+                : 'Self-reported'}
+          </StatusChip>
+        ) : null}
         {item.mutuallyExclusiveWith.length > 0 ? (
           <StatusChip tone="elevated">Conflicts with {item.mutuallyExclusiveWith.length}</StatusChip>
         ) : null}
@@ -199,11 +208,22 @@ export function RealizedPanel({ propertyId }: { propertyId: string }) {
   return (
     <div className="space-y-3">
       {totals ? (
-        <MobileCard variant="compact" className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs text-[hsl(var(--mobile-text-secondary))]">Recorded value realized</span>
-          <span className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-            {formatMoney(totals.realizedValueTotal, 'USD')}
-          </span>
+        <MobileCard variant="compact" className="space-y-2">
+          <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+            Recorded received value, grouped by currency
+          </p>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {Object.entries(totals.realizedValueByCurrency).map(([currency, value]) => (
+              <div key={currency}>
+                <p className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                  {formatMoney(value, currency)}
+                </p>
+                <p className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">
+                  {formatMoney(totals.verifiedValueByCurrency[currency] ?? 0, currency)} independently verified
+                </p>
+              </div>
+            ))}
+          </div>
         </MobileCard>
       ) : null}
       {totals && totals.exclusionConflicts.length > 0 ? (

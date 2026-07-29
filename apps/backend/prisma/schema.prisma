@@ -8363,8 +8363,10 @@ model HomeSavingsOpportunity {
 model HomeSavingsOpportunityOutcome {
   id            String @id @default(uuid())
   opportunityId String
+  actionId      String?
   idempotencyKey String
   opportunity   HomeSavingsOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  action        SavingsBenefitAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
 
   stage                SavingsOutcomeStage
   observedMonthlyValue Decimal?            @db.Decimal(12, 2) // set only when stage = RECEIVED
@@ -8392,6 +8394,7 @@ model HomeSavingsOpportunityOutcome {
   documents Document[] @relation("HomeSavingsOpportunityOutcomeDocuments")
 
   @@index([opportunityId])
+  @@index([actionId])
   @@unique([opportunityId, idempotencyKey])
   @@index([opportunityId, recordedAt])
   @@index([opportunityId, verificationState])
@@ -11452,6 +11455,10 @@ model HiddenAssetSource {
 
   lastReviewedAt DateTime?
   lastReviewedBy String?
+  // Material edits increment version and invalidate the attestation. A
+  // source is current only when reviewedVersion exactly matches version.
+  version         Int @default(1)
+  reviewedVersion Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -11497,6 +11504,9 @@ model HiddenAssetProgram {
   reviewStatus HiddenAssetProgramReviewStatus @default(DRAFT)
   reviewedAt   DateTime?
   reviewedBy   String?
+  // Approval is bound to the exact content/rule version reviewed. Publishing
+  // fails closed if approvedVersion no longer matches version.
+  approvedVersion Int?
   publishedAt  DateTime?
   publishedBy  String?
 
@@ -11689,25 +11699,102 @@ model SavingsBenefitAction {
   actionType             SavingsBenefitActionType
   state                  SavingsBenefitActionState @default(STARTED)
   externalOwner          String?
+  partnerId              String?
   consentJson            Json?
   sharedFieldsJson       Json?
+  handoffStatus          SavingsBenefitHandoffStatus?
+  handoffSubmittedAt     DateTime?
+  handoffAcknowledgedAt  DateTime?
+  handoffFulfilledAt     DateTime?
+  handoffRevokedAt       DateTime?
+  handoffRevocationReason String?
   homeActionReference    String?
   checklistJson          Json?
   startedAt              DateTime @default(now())
   submittedAt            DateTime?
   completedAt            DateTime?
   followUpAt             DateTime?
+  followUpNotificationSentAt DateTime?
+  followUpNotificationClaimedAt DateTime?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
   hiddenAssetMatch       PropertyHiddenAssetMatch? @relation(fields: [hiddenAssetMatchId], references: [id], onDelete: Cascade)
   homeSavingsOpportunity HomeSavingsOpportunity?   @relation(fields: [homeSavingsOpportunityId], references: [id], onDelete: Cascade)
+  partner                SavingsBenefitPartner?    @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  hiddenAssetOutcomes    HiddenAssetMatchOutcome[]
+  homeSavingsOutcomes    HomeSavingsOpportunityOutcome[]
+  complaints             SavingsBenefitPartnerComplaint[]
 
   @@index([propertyId, state])
+  @@index([state, followUpAt, followUpNotificationSentAt])
   @@unique([propertyId, idempotencyKey])
   @@index([hiddenAssetMatchId])
   @@index([homeSavingsOpportunityId])
+  @@index([partnerId, handoffStatus])
   @@map("savings_benefit_actions")
+}
+
+enum SavingsBenefitPartnerStatus {
+  ACTIVE
+  PAUSED
+  RETIRED
+}
+
+enum SavingsBenefitHandoffStatus {
+  CONSENTED
+  SUBMITTED
+  ACKNOWLEDGED
+  FULFILLED
+  FAILED
+  REVOKED
+}
+
+enum SavingsBenefitPartnerComplaintStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+model SavingsBenefitPartner {
+  id                     String @id
+  name                   String
+  status                 SavingsBenefitPartnerStatus @default(ACTIVE)
+  supportedJurisdictions String[]
+  disclosureVersion      String
+  compensationDisclosure String
+  rankingDisclosure      String
+  privacyDisclosure      String
+  fulfillmentSlaHours    Int
+  effectiveAt            DateTime
+  expiresAt              DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  actions SavingsBenefitAction[]
+
+  @@index([status, effectiveAt])
+  @@map("savings_benefit_partners")
+}
+
+model SavingsBenefitPartnerComplaint {
+  id          String @id @default(uuid())
+  actionId    String
+  reportedBy  String
+  category    String
+  description String
+  status      SavingsBenefitPartnerComplaintStatus @default(OPEN)
+  resolution  String?
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  action SavingsBenefitAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@index([actionId, status])
+  @@index([status, createdAt])
+  @@map("savings_benefit_partner_complaints")
 }
 
 model PropertyHiddenAssetCriterionResult {
@@ -11735,8 +11822,10 @@ model PropertyHiddenAssetCriterionResult {
 model HiddenAssetMatchOutcome {
   id      String @id @default(uuid())
   matchId String
+  actionId String?
   idempotencyKey String
   match   PropertyHiddenAssetMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  action  SavingsBenefitAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
 
   stage          SavingsOutcomeStage
   amountReceived Decimal?            @db.Decimal(12, 2) // set only when stage = RECEIVED
@@ -11762,6 +11851,7 @@ model HiddenAssetMatchOutcome {
   documents Document[] @relation("HiddenAssetMatchOutcomeDocuments")
 
   @@index([matchId])
+  @@index([actionId])
   @@unique([matchId, idempotencyKey])
   @@index([matchId, recordedAt])
   @@index([matchId, verificationState])

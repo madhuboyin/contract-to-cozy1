@@ -4357,6 +4357,7 @@ class APIClient {
         id: string;
         actionType: string;
         state: 'STARTED' | 'COMPLETED' | 'CANCELLED';
+        handoffStatus?: 'CONSENTED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'FULFILLED' | 'FAILED' | 'REVOKED' | null;
         followUpAt: string | null;
         homeActionReference: string | null;
         checklistJson: Array<{
@@ -4377,6 +4378,7 @@ class APIClient {
           id: string;
           actionType: string;
           state: 'STARTED' | 'COMPLETED' | 'CANCELLED';
+          handoffStatus?: 'CONSENTED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'FULFILLED' | 'FAILED' | 'REVOKED' | null;
           followUpAt: string | null;
           homeActionReference: string | null;
           checklistJson: Array<{
@@ -4408,6 +4410,28 @@ class APIClient {
   ): Promise<void> {
     await this.patch(
       `/api/properties/${propertyId}/savings-benefits/actions/${actionId}`,
+      input,
+    );
+  }
+
+  async revokeSavingsBenefitsPartnerHandoff(
+    propertyId: string,
+    actionId: string,
+    reason: string,
+  ): Promise<void> {
+    await this.post(
+      `/api/properties/${propertyId}/savings-benefits/actions/${actionId}/handoff/revoke`,
+      { reason },
+    );
+  }
+
+  async reportSavingsBenefitsPartnerComplaint(
+    propertyId: string,
+    actionId: string,
+    input: { category: string; description: string },
+  ): Promise<void> {
+    await this.post(
+      `/api/properties/${propertyId}/savings-benefits/actions/${actionId}/handoff/complaints`,
       input,
     );
   }

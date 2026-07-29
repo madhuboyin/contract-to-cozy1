@@ -18,6 +18,10 @@ import {
   RecordSensitiveFactInput,
   recordSensitiveFact,
 } from './hiddenAssetSensitiveFacts.service';
+import {
+  getEligibleSavingsBenefitPartner,
+  type SavingsBenefitPartnerRecord,
+} from './savingsBenefitsPartner.service';
 
 const hiddenAssets = new HiddenAssetService();
 const homeSavings = new HomeSavingsService();
@@ -105,13 +109,10 @@ export interface UpdateCanonicalActionInput {
 
 export function assertPartnerHandoffGovernance(
   input: Pick<CreateCanonicalActionInput, 'externalOwner' | 'consent' | 'sharedFields'>,
-  approvedPartners = (process.env.SAVINGS_BENEFITS_APPROVED_PARTNERS ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean),
+  partner: Pick<SavingsBenefitPartnerRecord, 'id' | 'disclosureVersion'>,
 ) {
   const partnerId = input.externalOwner?.trim();
-  if (!partnerId || !approvedPartners.includes(partnerId)) {
+  if (!partnerId || partner.id !== partnerId) {
     throw new Error('The requested partner is not approved for Savings & Benefits handoffs.');
   }
   const consent = input.consent;
@@ -120,11 +121,12 @@ export function assertPartnerHandoffGovernance(
     || consent.partnerId !== partnerId
     || consent.disclosureAcknowledged !== true
     || typeof consent.consentVersion !== 'string'
-    || !consent.consentVersion.trim()
+    || consent.consentVersion.trim() !== partner.disclosureVersion
     || typeof consent.consentedAt !== 'string'
     || Number.isNaN(new Date(consent.consentedAt).getTime())
     || typeof consent.compensationMayOccur !== 'boolean'
     || typeof consent.rankingInfluenced !== 'boolean'
+    || consent.rankingInfluenced !== false
     || !Array.isArray(consent.selectionCriteria)
     || consent.selectionCriteria.length === 0
     || consent.selectionCriteria.some((value) => typeof value !== 'string' || !value.trim())
@@ -267,7 +269,15 @@ export async function createCanonicalAction(
     throw new Error('A partner handoff must name the recipient and preview the fields being shared.');
   }
   if (input.actionType === 'PARTNER_HANDOFF_CONSENTED') {
-    assertPartnerHandoffGovernance(input);
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { state: true },
+    });
+    const partner = await getEligibleSavingsBenefitPartner(
+      input.externalOwner!,
+      property?.state,
+    );
+    assertPartnerHandoffGovernance(input, partner);
   }
 
   const completedImmediately = new Set<SavingsBenefitActionType>([
@@ -355,12 +365,20 @@ export async function createCanonicalAction(
           actionType: input.actionType,
           state: completedImmediately ? 'COMPLETED' : 'STARTED',
           externalOwner: input.externalOwner ?? null,
+          partnerId:
+            input.actionType === 'PARTNER_HANDOFF_CONSENTED'
+              ? input.externalOwner
+              : null,
           consentJson: input.consent
             ? input.consent as Prisma.InputJsonValue
             : undefined,
           sharedFieldsJson: input.sharedFields
             ? input.sharedFields as Prisma.InputJsonValue
-            : undefined,
+              : undefined,
+          handoffStatus:
+            input.actionType === 'PARTNER_HANDOFF_CONSENTED'
+              ? 'CONSENTED'
+              : null,
           homeActionReference:
             input.family === 'BENEFIT'
               ? `savings-benefit-match:${opportunityId}`
@@ -494,29 +512,35 @@ export async function updateCanonicalAction(
   }
 
   const nextState = input.state ?? action.state;
-  if (input.state === 'CANCELLED' && action.state !== 'CANCELLED') {
-    if (action.hiddenAssetMatchId) {
-      await hiddenAssets.updateMatchStatus(
-        action.hiddenAssetMatchId,
-        { status: PropertyHiddenAssetMatchStatus.VIEWED },
-        userId,
-      );
-    } else if (action.homeSavingsOpportunityId) {
-      await homeSavings.setOpportunityStatus(
-        action.homeSavingsOpportunityId,
-        HomeSavingsOpportunityStatus.SAVED,
-        userId,
-      );
+  return prisma.$transaction(async (tx) => {
+    if (input.state === 'CANCELLED' && action.state !== 'CANCELLED') {
+      if (action.hiddenAssetMatchId) {
+        const restored = await tx.propertyHiddenAssetMatch.updateMany({
+          where: { id: action.hiddenAssetMatchId, propertyId },
+          data: { status: PropertyHiddenAssetMatchStatus.VIEWED },
+        });
+        if (restored.count !== 1) throw new Error('Opportunity not found or access denied.');
+      } else if (action.homeSavingsOpportunityId) {
+        const restored = await tx.homeSavingsOpportunity.updateMany({
+          where: { id: action.homeSavingsOpportunityId, propertyId },
+          data: { status: HomeSavingsOpportunityStatus.SAVED },
+        });
+        if (restored.count !== 1) throw new Error('Opportunity not found or access denied.');
+      }
     }
-  }
-  return prisma.savingsBenefitAction.update({
-    where: { id: action.id },
-    data: {
-      state: nextState,
-      followUpAt: input.followUpAt === undefined ? action.followUpAt : input.followUpAt,
-      checklistJson: checklist as unknown as Prisma.InputJsonValue,
-      completedAt: nextState === 'COMPLETED' ? action.completedAt ?? new Date() : null,
-    },
+    const updated = await tx.savingsBenefitAction.updateMany({
+      where: { id: action.id, state: action.state, updatedAt: action.updatedAt },
+      data: {
+        state: nextState,
+        followUpAt: input.followUpAt === undefined ? action.followUpAt : input.followUpAt,
+        checklistJson: checklist as unknown as Prisma.InputJsonValue,
+        completedAt: nextState === 'COMPLETED' ? action.completedAt ?? new Date() : null,
+      },
+    });
+    if (updated.count !== 1) {
+      throw new Error('Action changed concurrently. Refresh and try again.');
+    }
+    return tx.savingsBenefitAction.findUniqueOrThrow({ where: { id: action.id } });
   });
 }
 
@@ -546,27 +570,19 @@ export async function recordCanonicalActionOutcome(
   if (!action) throw new Error('Action not found or access denied.');
 
   const outcome = action.hiddenAssetMatchId
-    ? await recordHiddenAssetMatchOutcome(action.hiddenAssetMatchId, userId, input as RecordHiddenAssetMatchOutcomeInput)
+    ? await recordHiddenAssetMatchOutcome(
+        action.hiddenAssetMatchId,
+        userId,
+        { ...input, actionId: action.id } as RecordHiddenAssetMatchOutcomeInput,
+      )
     : action.homeSavingsOpportunityId
       ? await recordHomeSavingsOpportunityOutcome(
           action.homeSavingsOpportunityId,
           userId,
-          input as RecordHomeSavingsOpportunityOutcomeInput,
+          { ...input, actionId: action.id } as RecordHomeSavingsOpportunityOutcomeInput,
         )
       : null;
   if (!outcome) throw new Error('Action is not linked to an opportunity.');
-
-  await prisma.savingsBenefitAction.update({
-    where: { id: action.id },
-    data: {
-      state: input.stage === 'DENIED' || input.stage === 'RECEIVED' || input.stage === 'WITHDRAWN'
-        ? 'COMPLETED'
-        : 'STARTED',
-      completedAt: input.stage === 'DENIED' || input.stage === 'RECEIVED' || input.stage === 'WITHDRAWN'
-        ? new Date()
-        : null,
-    },
-  });
   return outcome;
 }
 

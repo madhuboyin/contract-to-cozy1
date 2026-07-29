@@ -1825,6 +1825,8 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
               officialUrl: true,
               lastReviewedAt: true,
               reviewSlaDays: true,
+              version: true,
+              reviewedVersion: true,
             },
           },
         },

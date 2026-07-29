@@ -33,11 +33,19 @@ import {
   useCreateSavingsBenefitsSource,
   useSavingsBenefitsPrograms,
   useSavingsBenefitsQueues,
+  useSavingsBenefitPartnerComplaints,
+  useSavingsBenefitPartnerHandoffs,
+  useSavingsBenefitPartners,
   useReviewSavingsBenefitsSource,
+  useSavingsBenefitsOutcomeVerificationQueue,
   useSavingsBenefitsSources,
   useTransitionSavingsBenefitsProgram,
+  useTransitionSavingsBenefitPartnerHandoff,
   useUpdateSavingsBenefitsProgram,
   useUpdateSavingsBenefitsSource,
+  useUpsertSavingsBenefitPartner,
+  useVerifySavingsBenefitsOutcome,
+  useResolveSavingsBenefitPartnerComplaint,
 } from '@/hooks/useSavingsBenefitsAdmin';
 import type {
   AdminProgramInput,
@@ -45,8 +53,11 @@ import type {
   AdminProgramRuleInput,
   AdminSourceInput,
   AdminSourceListItem,
+  OutcomeVerificationQueueItem,
   EditorialQueueItem,
   LifecycleAction,
+  SavingsBenefitPartnerInput,
+  SavingsBenefitPartnerItem,
 } from '@/lib/api/savingsBenefitsAdmin';
 
 const SOURCE_KINDS = [
@@ -159,7 +170,7 @@ function SourceFormDialog({
         <DialogHeader>
           <DialogTitle>{initial ? 'Edit source' : 'Add source'}</DialogTitle>
           <DialogDescription>
-            An organization that owns one or more benefit programs. Editing metadata does not renew its review SLA.
+            An organization that owns one or more benefit programs. Material metadata changes invalidate the prior review and require a new attestation.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -691,6 +702,163 @@ function SourceReviewDialog({
   );
 }
 
+function OutcomeVerificationDialog({
+  outcome,
+  onOpenChange,
+  pending,
+  onConfirm,
+}: {
+  outcome: OutcomeVerificationQueueItem | null;
+  onOpenChange: (open: boolean) => void;
+  pending: boolean;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <Dialog
+      open={outcome !== null}
+      onOpenChange={(next) => {
+        if (!next) setReason('');
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Verify received outcome: {outcome?.title}</DialogTitle>
+          <DialogDescription>
+            Independently check the attached evidence before promoting this value into verified downstream totals.
+          </DialogDescription>
+        </DialogHeader>
+        <Label htmlFor="outcome-verification-reason">Verification notes</Label>
+        <Textarea
+          id="outcome-verification-reason"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="What evidence was checked and why it supports the recorded amount"
+          className="min-h-[80px]"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
+          <Button onClick={() => onConfirm(reason.trim())} disabled={pending || reason.trim().length < 3}>
+            {pending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Verify outcome
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PartnerFormDialog({
+  open,
+  initial,
+  pending,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  initial: SavingsBenefitPartnerItem | null;
+  pending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (partnerId: string, input: SavingsBenefitPartnerInput) => void;
+}) {
+  const [partnerId, setPartnerId] = useState('');
+  const [name, setName] = useState('');
+  const [jurisdictions, setJurisdictions] = useState('');
+  const [disclosureVersion, setDisclosureVersion] = useState('');
+  const [compensationDisclosure, setCompensationDisclosure] = useState('');
+  const [rankingDisclosure, setRankingDisclosure] = useState('');
+  const [privacyDisclosure, setPrivacyDisclosure] = useState('');
+  const [fulfillmentSlaHours, setFulfillmentSlaHours] = useState('48');
+  const [status, setStatus] = useState<SavingsBenefitPartnerItem['status']>('ACTIVE');
+  const [effectiveAt, setEffectiveAt] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+
+  React.useEffect(() => {
+    if (!open) return;
+    setPartnerId(initial?.id ?? '');
+    setName(initial?.name ?? '');
+    setJurisdictions(initial?.supportedJurisdictions.join(', ') ?? '');
+    setDisclosureVersion(initial?.disclosureVersion ?? '');
+    setCompensationDisclosure(initial?.compensationDisclosure ?? '');
+    setRankingDisclosure(initial?.rankingDisclosure ?? '');
+    setPrivacyDisclosure(initial?.privacyDisclosure ?? '');
+    setFulfillmentSlaHours(String(initial?.fulfillmentSlaHours ?? 48));
+    setStatus(initial?.status ?? 'ACTIVE');
+    setEffectiveAt((initial?.effectiveAt ?? new Date().toISOString()).slice(0, 16));
+    setExpiresAt(initial?.expiresAt?.slice(0, 16) ?? '');
+  }, [initial, open]);
+
+  const valid =
+    partnerId.trim()
+    && name.trim()
+    && disclosureVersion.trim()
+    && compensationDisclosure.trim()
+    && rankingDisclosure.trim()
+    && privacyDisclosure.trim()
+    && Number(fulfillmentSlaHours) > 0
+    && effectiveAt
+    && !Number.isNaN(new Date(effectiveAt).getTime())
+    && (!expiresAt || new Date(expiresAt) > new Date(effectiveAt));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{initial ? 'Edit partner governance' : 'Add approved partner'}</DialogTitle>
+          <DialogDescription>
+            Configure jurisdiction, disclosures, effective period, and fulfillment SLA. Handoffs fail closed outside this registry.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div><Label htmlFor="partner-id">Partner ID</Label><Input id="partner-id" value={partnerId} disabled={Boolean(initial)} onChange={(e) => setPartnerId(e.target.value)} /></div>
+          <div><Label htmlFor="partner-name">Name</Label><Input id="partner-name" value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div>
+            <Label htmlFor="partner-status">Status</Label>
+            <Select value={status} onValueChange={(value) => setStatus(value as SavingsBenefitPartnerItem['status'])}>
+              <SelectTrigger id="partner-status"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="PAUSED">Paused</SelectItem>
+                <SelectItem value="RETIRED">Retired</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="sm:col-span-2"><Label htmlFor="partner-jurisdictions">Jurisdictions</Label><Input id="partner-jurisdictions" value={jurisdictions} onChange={(e) => setJurisdictions(e.target.value)} placeholder="NJ, NY" /></div>
+          <div><Label htmlFor="partner-disclosure-version">Disclosure version</Label><Input id="partner-disclosure-version" value={disclosureVersion} onChange={(e) => setDisclosureVersion(e.target.value)} /></div>
+          <div><Label htmlFor="partner-sla">Fulfillment SLA hours</Label><Input id="partner-sla" type="number" min={1} value={fulfillmentSlaHours} onChange={(e) => setFulfillmentSlaHours(e.target.value)} /></div>
+          <div><Label htmlFor="partner-effective-at">Effective at</Label><Input id="partner-effective-at" type="datetime-local" value={effectiveAt} onChange={(e) => setEffectiveAt(e.target.value)} /></div>
+          <div><Label htmlFor="partner-expires-at">Expires at (optional)</Label><Input id="partner-expires-at" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} /></div>
+          <div className="sm:col-span-2"><Label htmlFor="partner-compensation">Compensation disclosure</Label><Textarea id="partner-compensation" value={compensationDisclosure} onChange={(e) => setCompensationDisclosure(e.target.value)} /></div>
+          <div className="sm:col-span-2"><Label htmlFor="partner-ranking">Ranking disclosure</Label><Textarea id="partner-ranking" value={rankingDisclosure} onChange={(e) => setRankingDisclosure(e.target.value)} /></div>
+          <div className="sm:col-span-2"><Label htmlFor="partner-privacy">Privacy disclosure</Label><Textarea id="partner-privacy" value={privacyDisclosure} onChange={(e) => setPrivacyDisclosure(e.target.value)} /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
+          <Button
+            disabled={pending || !valid}
+            onClick={() => onSubmit(partnerId.trim(), {
+              name: name.trim(),
+              status,
+              supportedJurisdictions: jurisdictions.split(',').map((value) => value.trim()).filter(Boolean),
+              disclosureVersion: disclosureVersion.trim(),
+              compensationDisclosure: compensationDisclosure.trim(),
+              rankingDisclosure: rankingDisclosure.trim(),
+              privacyDisclosure: privacyDisclosure.trim(),
+              fulfillmentSlaHours: Number(fulfillmentSlaHours),
+              effectiveAt: new Date(effectiveAt).toISOString(),
+              expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+            })}
+          >
+            {pending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Save partner
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function QueueSection({
   title,
   emptyText,
@@ -748,17 +916,27 @@ export default function SavingsBenefitsAdminPage() {
   const sourcesQ = useSavingsBenefitsSources();
   const programsQ = useSavingsBenefitsPrograms();
   const queuesQ = useSavingsBenefitsQueues();
+  const outcomeVerificationQ = useSavingsBenefitsOutcomeVerificationQueue();
+  const partnersQ = useSavingsBenefitPartners();
+  const partnerComplaintsQ = useSavingsBenefitPartnerComplaints();
+  const partnerHandoffsQ = useSavingsBenefitPartnerHandoffs();
   const createSourceM = useCreateSavingsBenefitsSource();
   const updateSourceM = useUpdateSavingsBenefitsSource();
   const reviewSourceM = useReviewSavingsBenefitsSource();
   const createProgramM = useCreateSavingsBenefitsProgram();
   const updateProgramM = useUpdateSavingsBenefitsProgram();
   const transitionM = useTransitionSavingsBenefitsProgram();
+  const verifyOutcomeM = useVerifySavingsBenefitsOutcome();
+  const upsertPartnerM = useUpsertSavingsBenefitPartner();
+  const resolveComplaintM = useResolveSavingsBenefitPartnerComplaint();
+  const transitionHandoffM = useTransitionSavingsBenefitPartnerHandoff();
 
   const [sourceDialog, setSourceDialog] = useState<{ open: boolean; item: AdminSourceListItem | null }>({ open: false, item: null });
   const [sourceReviewTarget, setSourceReviewTarget] = useState<AdminSourceListItem | null>(null);
   const [programDialog, setProgramDialog] = useState<{ open: boolean; item: AdminProgramListItem | null }>({ open: false, item: null });
   const [target, setTarget] = useState<{ item: EditorialQueueItem; action: LifecycleAction } | null>(null);
+  const [verificationTarget, setVerificationTarget] = useState<OutcomeVerificationQueueItem | null>(null);
+  const [partnerDialog, setPartnerDialog] = useState<{ open: boolean; item: SavingsBenefitPartnerItem | null }>({ open: false, item: null });
 
   if (guard.status !== 'ready') return guard.node;
 
@@ -780,6 +958,8 @@ export default function SavingsBenefitsAdminPage() {
           <TabsTrigger value="sources">Sources</TabsTrigger>
           <TabsTrigger value="programs">Programs</TabsTrigger>
           <TabsTrigger value="queue">Review queue</TabsTrigger>
+          <TabsTrigger value="outcomes">Outcome verification</TabsTrigger>
+          <TabsTrigger value="partners">Partners</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sources" className="mt-4 space-y-3">
@@ -856,8 +1036,8 @@ export default function SavingsBenefitsAdminPage() {
                     size="sm"
                     variant="outline"
                     className="h-7 text-[11px]"
-                    disabled={program.reviewStatus === 'PUBLISHED'}
-                    title={program.reviewStatus === 'PUBLISHED' ? 'Unpublish and return to draft before editing.' : undefined}
+                    disabled={program.reviewStatus !== 'DRAFT'}
+                    title={program.reviewStatus !== 'DRAFT' ? 'Return this program to Draft before editing.' : undefined}
                     onClick={() => setProgramDialog({ open: true, item: program })}
                   >
                     Edit
@@ -895,6 +1075,155 @@ export default function SavingsBenefitsAdminPage() {
             </div>
           ) : null}
         </TabsContent>
+        <TabsContent value="outcomes" className="mt-4">
+          {outcomeVerificationQ.isLoading ? (
+            <div className="flex items-center gap-2 p-6 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading received outcomes…
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(outcomeVerificationQ.data?.outcomes ?? []).map((outcome) => (
+                <div key={`${outcome.family}-${outcome.id}`} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800">{outcome.title}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {outcome.family} · {outcome.value ? `${outcome.currency} ${outcome.value}` : 'value unavailable'} · {outcome.documents.length} document(s)
+                    </p>
+                  </div>
+                  <Badge variant="outline">{outcome.verificationState}</Badge>
+                  <Button
+                    size="sm"
+                    disabled={outcome.documents.length === 0}
+                    title={outcome.documents.length === 0 ? 'Document Vault evidence is required' : undefined}
+                    onClick={() => setVerificationTarget(outcome)}
+                  >
+                    Verify
+                  </Button>
+                </div>
+              ))}
+              {(outcomeVerificationQ.data?.outcomes ?? []).length === 0 ? (
+                <p className="text-xs text-slate-400">No received outcomes are waiting for verification.</p>
+              ) : null}
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="partners" className="mt-4 space-y-5">
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setPartnerDialog({ open: true, item: null })}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add partner
+            </Button>
+          </div>
+          <section aria-labelledby="partner-registry-heading" className="space-y-2">
+            <h3 id="partner-registry-heading" className="text-sm font-semibold">Approved partner registry</h3>
+            {(partnersQ.data?.partners ?? []).map((partner) => (
+              <div key={partner.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{partner.name}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {partner.id} · {partner.supportedJurisdictions.join(', ') || 'all jurisdictions'} · SLA {partner.fulfillmentSlaHours}h
+                  </p>
+                </div>
+                <Badge variant="outline">{partner.status}</Badge>
+                <Button size="sm" variant="outline" onClick={() => setPartnerDialog({ open: true, item: partner })}>Edit</Button>
+              </div>
+            ))}
+            {(partnersQ.data?.partners ?? []).length === 0 ? <p className="text-xs text-slate-400">No partners are approved.</p> : null}
+          </section>
+          <section aria-labelledby="partner-complaints-heading" className="space-y-2">
+            <h3 id="partner-complaints-heading" className="text-sm font-semibold">Open partner complaints</h3>
+            {(partnerComplaintsQ.data?.complaints ?? []).map((complaint) => (
+              <div key={complaint.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{complaint.action.partner?.name ?? 'Unknown partner'} · {complaint.category}</p>
+                  <p className="text-xs text-slate-600">{complaint.description}</p>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={resolveComplaintM.isPending}
+                  onClick={() => {
+                    const resolution = window.prompt('Resolution notes');
+                    if (resolution?.trim() && resolution.trim().length >= 3) {
+                      resolveComplaintM.mutate({
+                        complaintId: complaint.id,
+                        status: 'RESOLVED',
+                        resolution: resolution.trim(),
+                      });
+                    }
+                  }}
+                >
+                  Resolve
+                </Button>
+              </div>
+            ))}
+            {(partnerComplaintsQ.data?.complaints ?? []).length === 0 ? <p className="text-xs text-slate-400">No open complaints.</p> : null}
+          </section>
+          <section aria-labelledby="partner-handoffs-heading" className="space-y-2">
+            <h3 id="partner-handoffs-heading" className="text-sm font-semibold">Partner handoffs and SLA</h3>
+            {(partnerHandoffsQ.data?.handoffs ?? []).map((handoff) => (
+              <div
+                key={handoff.id}
+                className={`flex flex-wrap items-center gap-3 rounded-xl border p-3 ${
+                  handoff.overdue ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">
+                    {handoff.partner?.name ?? 'Unknown partner'} · {handoff.handoffStatus}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Property {handoff.propertyId} · due {handoff.dueAt ? new Date(handoff.dueAt).toLocaleString() : 'not set'}
+                    {' · '}
+                    {handoff.outcome
+                      ? `Outcome ${handoff.outcome.stage} (${handoff.outcome.verificationState})`
+                      : 'No reconciled outcome'}
+                    {handoff.openComplaintCount ? ` · ${handoff.openComplaintCount} open complaint(s)` : ''}
+                  </p>
+                </div>
+                {handoff.overdue ? <Badge variant="destructive">SLA overdue</Badge> : null}
+                {handoff.handoffStatus === 'CONSENTED' ? (
+                  <Button
+                    size="sm"
+                    disabled={transitionHandoffM.isPending}
+                    onClick={() => transitionHandoffM.mutate({
+                      actionId: handoff.id,
+                      status: 'SUBMITTED',
+                      reason: 'Partner submission confirmed by administrator.',
+                    })}
+                  >
+                    Mark submitted
+                  </Button>
+                ) : null}
+                {handoff.handoffStatus === 'SUBMITTED' ? (
+                  <Button
+                    size="sm"
+                    disabled={transitionHandoffM.isPending}
+                    onClick={() => transitionHandoffM.mutate({
+                      actionId: handoff.id,
+                      status: 'ACKNOWLEDGED',
+                      reason: 'Partner acknowledgement confirmed by administrator.',
+                    })}
+                  >
+                    Mark acknowledged
+                  </Button>
+                ) : null}
+                {handoff.handoffStatus === 'ACKNOWLEDGED' ? (
+                  <Button
+                    size="sm"
+                    disabled={transitionHandoffM.isPending}
+                    onClick={() => transitionHandoffM.mutate({
+                      actionId: handoff.id,
+                      status: 'FULFILLED',
+                      reason: 'Partner fulfillment confirmed by administrator.',
+                    })}
+                  >
+                    Mark fulfilled
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+            {(partnerHandoffsQ.data?.handoffs ?? []).length === 0 ? <p className="text-xs text-slate-400">No partner handoffs.</p> : null}
+          </section>
+        </TabsContent>
       </Tabs>
 
       <SourceFormDialog
@@ -931,6 +1260,56 @@ export default function SavingsBenefitsAdminPage() {
               },
               onError: (error) => toast({
                 title: 'Could not record source review',
+                description: error instanceof Error ? error.message : undefined,
+                variant: 'destructive',
+              }),
+            },
+          );
+        }}
+      />
+      <OutcomeVerificationDialog
+        outcome={verificationTarget}
+        onOpenChange={(open) => {
+          if (!open) setVerificationTarget(null);
+        }}
+        pending={verifyOutcomeM.isPending}
+        onConfirm={(reason) => {
+          if (!verificationTarget) return;
+          verifyOutcomeM.mutate(
+            {
+              outcomeId: verificationTarget.id,
+              family: verificationTarget.family,
+              reason,
+            },
+            {
+              onSuccess: () => {
+                setVerificationTarget(null);
+                toast({ title: 'Outcome independently verified' });
+              },
+              onError: (error) => toast({
+                title: 'Could not verify outcome',
+                description: error instanceof Error ? error.message : undefined,
+                variant: 'destructive',
+              }),
+            },
+          );
+        }}
+      />
+      <PartnerFormDialog
+        open={partnerDialog.open}
+        initial={partnerDialog.item}
+        pending={upsertPartnerM.isPending}
+        onOpenChange={(open) => setPartnerDialog((previous) => ({ ...previous, open }))}
+        onSubmit={(partnerId, input) => {
+          upsertPartnerM.mutate(
+            { partnerId, input },
+            {
+              onSuccess: () => {
+                setPartnerDialog({ open: false, item: null });
+                toast({ title: 'Partner governance saved' });
+              },
+              onError: (error) => toast({
+                title: 'Could not save partner',
                 description: error instanceof Error ? error.message : undefined,
                 variant: 'destructive',
               }),

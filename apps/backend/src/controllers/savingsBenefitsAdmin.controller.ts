@@ -7,6 +7,18 @@ import {
   getSavingsBenefitsEditorialQueues,
   transitionSavingsBenefitProgram,
 } from '../services/savingsBenefitsGovernance.service';
+import {
+  listSavingsBenefitOutcomeVerificationQueue,
+  verifySavingsBenefitOutcome,
+} from '../services/savingsOutcome.service';
+import {
+  listSavingsBenefitPartnerComplaints,
+  listSavingsBenefitHandoffs,
+  listSavingsBenefitPartners,
+  resolveSavingsBenefitPartnerComplaint,
+  transitionSavingsBenefitHandoff,
+  upsertSavingsBenefitPartner,
+} from '../services/savingsBenefitsPartner.service';
 
 function handleClientError(err: unknown, res: Response): boolean {
   if (err instanceof SavingsBenefitsGovernanceError) {
@@ -44,7 +56,11 @@ export async function getSource(req: AuthRequest, res: Response): Promise<void> 
 
 export async function createSource(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const source = await savingsBenefitsAdminService.createSource(req.body);
+    const source = await savingsBenefitsAdminService.createSource(
+      req.body,
+      req.user!.userId,
+      req,
+    );
     res.status(201).json({ success: true, data: { source } });
   } catch (err: any) {
     logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to create source');
@@ -54,7 +70,12 @@ export async function createSource(req: AuthRequest, res: Response): Promise<voi
 
 export async function updateSource(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const source = await savingsBenefitsAdminService.updateSource(req.params.sourceId, req.body);
+    const source = await savingsBenefitsAdminService.updateSource(
+      req.params.sourceId,
+      req.body,
+      req.user!.userId,
+      req,
+    );
     res.json({ success: true, data: { source } });
   } catch (err: any) {
     if (handleClientError(err, res)) return;
@@ -105,7 +126,11 @@ export async function getProgram(req: AuthRequest, res: Response): Promise<void>
 
 export async function createProgram(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const program = await savingsBenefitsAdminService.createProgram(req.body);
+    const program = await savingsBenefitsAdminService.createProgram(
+      req.body,
+      req.user!.userId,
+      req,
+    );
     res.status(201).json({ success: true, data: { program } });
   } catch (err: any) {
     logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to create program');
@@ -115,7 +140,12 @@ export async function createProgram(req: AuthRequest, res: Response): Promise<vo
 
 export async function updateProgram(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const program = await savingsBenefitsAdminService.updateProgram(req.params.programId, req.body, req.user!.userId);
+    const program = await savingsBenefitsAdminService.updateProgram(
+      req.params.programId,
+      req.body,
+      req.user!.userId,
+      req,
+    );
     res.json({ success: true, data: { program } });
   } catch (err: any) {
     if (handleClientError(err, res)) return;
@@ -158,6 +188,112 @@ export function makeTransitionHandler(allowedActions: readonly string[]) {
       res.status(500).json({ success: false, error: { message: 'Failed to transition program' } });
     }
   };
+}
+
+export async function verifyOutcome(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const outcome = await verifySavingsBenefitOutcome(
+      req.body.family,
+      req.params.outcomeId,
+      req.user!.userId,
+      req.body.reason,
+      req,
+    );
+    res.json({ success: true, data: { outcome } });
+  } catch (err: any) {
+    if (handleClientError(err, res)) return;
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to verify outcome');
+    res.status(409).json({ success: false, error: { message: err.message ?? 'Failed to verify outcome' } });
+  }
+}
+
+export async function listOutcomeVerificationQueue(_req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const outcomes = await listSavingsBenefitOutcomeVerificationQueue();
+    res.json({ success: true, data: { outcomes } });
+  } catch (err: any) {
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to list verification queue');
+    res.status(500).json({ success: false, error: { message: 'Failed to list verification queue' } });
+  }
+}
+
+export async function listPartners(_req: AuthRequest, res: Response): Promise<void> {
+  try {
+    res.json({ success: true, data: { partners: await listSavingsBenefitPartners() } });
+  } catch (err: any) {
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to list partners');
+    res.status(500).json({ success: false, error: { message: 'Failed to list partners' } });
+  }
+}
+
+export async function upsertPartner(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const partner = await upsertSavingsBenefitPartner(
+      {
+        ...req.body,
+        id: req.params.partnerId,
+        effectiveAt: new Date(req.body.effectiveAt),
+        expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
+      },
+      req.user!.userId,
+      req,
+    );
+    res.json({ success: true, data: { partner } });
+  } catch (err: any) {
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to upsert partner');
+    res.status(409).json({ success: false, error: { message: err.message ?? 'Failed to save partner' } });
+  }
+}
+
+export async function listPartnerHandoffs(_req: AuthRequest, res: Response): Promise<void> {
+  try {
+    res.json({ success: true, data: { handoffs: await listSavingsBenefitHandoffs() } });
+  } catch (err: any) {
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to list partner handoffs');
+    res.status(500).json({ success: false, error: { message: 'Failed to list partner handoffs' } });
+  }
+}
+
+export async function transitionHandoff(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const action = await transitionSavingsBenefitHandoff(
+      req.params.actionId,
+      req.body.status,
+      req.user!.userId,
+      req.body.reason,
+      req,
+    );
+    res.json({ success: true, data: { action } });
+  } catch (err: any) {
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to transition handoff');
+    res.status(409).json({ success: false, error: { message: err.message ?? 'Failed to transition handoff' } });
+  }
+}
+
+export async function listPartnerComplaints(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const complaints = await listSavingsBenefitPartnerComplaints(req.query.status as any);
+    res.json({ success: true, data: { complaints } });
+  } catch (err: any) {
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to list complaints');
+    res.status(500).json({ success: false, error: { message: 'Failed to list complaints' } });
+  }
+}
+
+export async function resolvePartnerComplaint(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const complaint = await resolveSavingsBenefitPartnerComplaint(
+      req.params.complaintId,
+      req.body.status,
+      req.body.resolution,
+      req.user!.userId,
+      req,
+    );
+    res.json({ success: true, data: { complaint } });
+  } catch (err: any) {
+    logger.error({ err }, '[SAVINGS-BENEFITS-ADMIN] Failed to resolve complaint');
+    res.status(409).json({ success: false, error: { message: err.message ?? 'Failed to resolve complaint' } });
+  }
 }
 
 export async function getEditorialQueuesHandler(_req: AuthRequest, res: Response): Promise<void> {

@@ -7,6 +7,8 @@ import {
   getSavingsBenefitsCoverage,
   getSavingsBenefitsOpportunityDetail,
   patchSavingsBenefitsAction,
+  postSavingsBenefitHandoffRevocation,
+  postSavingsBenefitPartnerComplaint,
   postSavingsBenefitsActionOutcome,
   postSavingsBenefitsOpportunityAction,
   postSavingsBenefitsOpportunityFact,
@@ -105,6 +107,7 @@ router.patch(
 );
 
 const outcomeBody = z.object({
+  idempotencyKey: z.string().trim().min(8).max(160),
   stage: z.enum(['SUBMITTED', 'APPROVED', 'DENIED', 'RECEIVED', 'WITHDRAWN', 'EXPIRED', 'NO_ACTION']),
   amountReceived: z.number().nonnegative().nullable().optional(),
   observedMonthlyValue: z.number().nonnegative().nullable().optional(),
@@ -123,6 +126,27 @@ router.post(
   propertyAuthMiddleware,
   validateBody(outcomeBody),
   postSavingsBenefitsActionOutcome,
+);
+
+const handoffRevocationBody = z.object({
+  reason: z.string().trim().min(3).max(1000),
+});
+router.post(
+  '/properties/:propertyId/savings-benefits/actions/:actionId/handoff/revoke',
+  propertyAuthMiddleware,
+  validateBody(handoffRevocationBody),
+  postSavingsBenefitHandoffRevocation,
+);
+
+const partnerComplaintBody = z.object({
+  category: z.string().trim().min(2).max(80),
+  description: z.string().trim().min(3).max(2000),
+});
+router.post(
+  '/properties/:propertyId/savings-benefits/actions/:actionId/handoff/complaints',
+  propertyAuthMiddleware,
+  validateBody(partnerComplaintBody),
+  postSavingsBenefitPartnerComplaint,
 );
 
 export default router;

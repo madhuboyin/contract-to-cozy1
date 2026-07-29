@@ -80,8 +80,13 @@ export interface SavingsBenefitsUnifiedResponseDTO {
   totals: {
     inProgressCount: number;
     realizedCount: number;
-    realizedValueTotal: number;
-    realizedValueByFamily: Record<SavingsBenefitsFamily, number>;
+    // Convenience total is populated only when every amount shares one
+    // currency. Multi-currency values are never arithmetically combined.
+    realizedValueTotal: number | null;
+    realizedValueCurrency: string | null;
+    realizedValueByCurrency: Record<string, number>;
+    verifiedValueByCurrency: Record<string, number>;
+    realizedValueByFamily: Record<SavingsBenefitsFamily, Record<string, number>>;
     // Non-empty only when two-or-more realized items share an
     // exclusionGroupKey — worth a homeowner double-checking, since the
     // programs were flagged as normally incompatible. The totals above
@@ -443,10 +448,25 @@ export class SavingsBenefitsUnifiedService {
     // prospective "don't pursue both" signal, not grounds to discard real,
     // evidence-backed money a homeowner actually received. Conflicts are
     // surfaced for review instead of silently dropped or silently summed.
-    const realizedValueByFamily: Record<SavingsBenefitsFamily, number> = { BENEFIT: 0, RECURRING_COST: 0 };
+    const realizedValueByCurrency: Record<string, number> = {};
+    const verifiedValueByCurrency: Record<string, number> = {};
+    const realizedValueByFamily: Record<SavingsBenefitsFamily, Record<string, number>> = {
+      BENEFIT: {},
+      RECURRING_COST: {},
+    };
     for (const item of realized) {
-      realizedValueByFamily[item.family] = round2(realizedValueByFamily[item.family] + (item.realizedValue ?? 0));
+      const value = item.realizedValue ?? 0;
+      realizedValueByCurrency[item.currency] = round2((realizedValueByCurrency[item.currency] ?? 0) + value);
+      realizedValueByFamily[item.family][item.currency] = round2(
+        (realizedValueByFamily[item.family][item.currency] ?? 0) + value,
+      );
+      if (item.verificationState === SavingsOutcomeVerificationState.VERIFIED) {
+        verifiedValueByCurrency[item.currency] = round2(
+          (verifiedValueByCurrency[item.currency] ?? 0) + value,
+        );
+      }
     }
+    const currencies = Object.keys(realizedValueByCurrency);
 
     const exclusionConflicts: SavingsBenefitsExclusionConflictDTO[] = [];
     const seenGroupKeys = new Set<string>();
@@ -467,7 +487,10 @@ export class SavingsBenefitsUnifiedService {
       totals: {
         inProgressCount: inProgress.length,
         realizedCount: realized.length,
-        realizedValueTotal: round2(realizedValueByFamily.BENEFIT + realizedValueByFamily.RECURRING_COST),
+        realizedValueTotal: currencies.length === 1 ? realizedValueByCurrency[currencies[0]] : null,
+        realizedValueCurrency: currencies.length === 1 ? currencies[0] : null,
+        realizedValueByCurrency,
+        verifiedValueByCurrency,
         realizedValueByFamily,
         exclusionConflicts,
       },

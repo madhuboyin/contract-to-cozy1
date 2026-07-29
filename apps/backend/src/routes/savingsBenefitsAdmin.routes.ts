@@ -19,11 +19,19 @@ import {
   getSource,
   listProgramVersionHistory,
   listPrograms,
+  listPartnerComplaints,
+  listPartnerHandoffs,
+  listPartners,
+  listOutcomeVerificationQueue,
   listSources,
   makeTransitionHandler,
   reviewSource,
+  resolvePartnerComplaint,
+  transitionHandoff,
   updateProgram,
   updateSource,
+  upsertPartner,
+  verifyOutcome,
 } from '../controllers/savingsBenefitsAdmin.controller';
 
 const router = Router();
@@ -47,6 +55,34 @@ const SourceBodySchema = z.object({
 
 const SourceReviewBodySchema = z.object({
   reason: z.string().trim().min(1, 'reason is required').max(2000),
+});
+
+const PartnerBodySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  status: z.enum(['ACTIVE', 'PAUSED', 'RETIRED']).optional(),
+  supportedJurisdictions: z.array(z.string().trim().min(2).max(32)).max(100),
+  disclosureVersion: z.string().trim().min(1).max(80),
+  compensationDisclosure: z.string().trim().min(1).max(2000),
+  rankingDisclosure: z.string().trim().min(1).max(2000),
+  privacyDisclosure: z.string().trim().min(1).max(2000),
+  fulfillmentSlaHours: z.number().int().positive().max(24 * 90),
+  effectiveAt: z.string().datetime(),
+  expiresAt: z.string().datetime().nullable().optional(),
+});
+
+const OutcomeVerificationBodySchema = z.object({
+  family: z.enum(['BENEFIT', 'RECURRING_COST']),
+  reason: z.string().trim().min(3).max(2000),
+});
+
+const HandoffTransitionBodySchema = z.object({
+  status: z.enum(['SUBMITTED', 'ACKNOWLEDGED', 'FULFILLED', 'FAILED', 'REVOKED']),
+  reason: z.string().trim().min(3).max(2000),
+});
+
+const ComplaintResolutionBodySchema = z.object({
+  status: z.enum(['RESOLVED', 'DISMISSED']),
+  resolution: z.string().trim().min(3).max(2000),
 });
 
 const RuleBodySchema = z.object({
@@ -165,6 +201,52 @@ router.post(
   requireCapability('SAVINGS_BENEFITS_AUTHOR'),
   validateBody(SourceBodySchema),
   createSource
+);
+
+router.post(
+  '/admin/savings-benefits/outcomes/:outcomeId/verify',
+  requireCapability('SAVINGS_BENEFITS_REVIEW'),
+  validateBody(OutcomeVerificationBodySchema),
+  verifyOutcome,
+);
+router.get(
+  '/admin/savings-benefits/outcome-verification-queue',
+  requireCapability('SAVINGS_BENEFITS_REVIEW'),
+  listOutcomeVerificationQueue,
+);
+
+router.get(
+  '/admin/savings-benefits/partners',
+  requireCapability('SAVINGS_BENEFITS_PUBLISH'),
+  listPartners,
+);
+router.put(
+  '/admin/savings-benefits/partners/:partnerId',
+  requireCapability('SAVINGS_BENEFITS_PUBLISH'),
+  validateBody(PartnerBodySchema),
+  upsertPartner,
+);
+router.get(
+  '/admin/savings-benefits/handoffs',
+  requireCapability('SAVINGS_BENEFITS_PUBLISH'),
+  listPartnerHandoffs,
+);
+router.post(
+  '/admin/savings-benefits/handoffs/:actionId/transition',
+  requireCapability('SAVINGS_BENEFITS_PUBLISH'),
+  validateBody(HandoffTransitionBodySchema),
+  transitionHandoff,
+);
+router.get(
+  '/admin/savings-benefits/partner-complaints',
+  requireCapability('SAVINGS_BENEFITS_REVIEW'),
+  listPartnerComplaints,
+);
+router.post(
+  '/admin/savings-benefits/partner-complaints/:complaintId/resolve',
+  requireCapability('SAVINGS_BENEFITS_REVIEW'),
+  validateBody(ComplaintResolutionBodySchema),
+  resolvePartnerComplaint,
 );
 router.put(
   '/admin/savings-benefits/sources/:sourceId',

@@ -1207,6 +1207,41 @@ checks:
   `SAVINGS_BENEFITS`, rather than muting the broader material-deadline
   category.
 
+### 10.3 Post-implementation gap closure — July 29, 2026
+
+The final implementation review closed the remaining cross-cutting integrity
+and operations gaps:
+
+- source attestations are content-version-bound; material metadata edits
+  increment the source version and invalidate the prior review;
+- program content is editable only in `DRAFT`, approval is bound to the exact
+  content version, and publish uses a compare-and-set transition;
+- all source/program authoring changes and partner-governance changes write
+  queryable admin audit records;
+- realized outcomes remain self-reported or evidence-attached until an admin
+  reviewer verifies Document Vault evidence; only `VERIFIED` recurring
+  outcomes may publish shared realization signals;
+- action completion, terminal outcomes, idempotency, and revocation
+  reconciliation now commit atomically;
+- realized totals are grouped by ISO currency and never summed or formatted
+  as USD across currencies;
+- the partner allowlist is now a durable, effective-dated registry with
+  jurisdiction, disclosure version, SLA, lifecycle, complaints, revocation,
+  linked outcomes, and an overdue handoff work queue;
+- source/program/property/account changes request event-driven reevaluation,
+  with the scheduled sweep retained as recovery;
+- saved action follow-ups use an opt-in, lease-protected, idempotent reminder
+  worker with durable notification reconciliation;
+- accessibility coverage now renders the real outcome interaction and runs
+  executable WCAG A/AA checks in addition to source contracts;
+- the golden-path suite now includes an isolated, database-backed
+  owner-applied-schema and integrity gate, enabled with
+  `SAVINGS_BENEFITS_ACCEPTANCE_DATABASE_URL`.
+
+Validation for this closure includes backend type-checking, focused domain
+tests, frontend production compilation, worker compilation, and the actual
+worker Docker image build.
+
 ---
 
 ## 11. Best-in-Class Target Experience

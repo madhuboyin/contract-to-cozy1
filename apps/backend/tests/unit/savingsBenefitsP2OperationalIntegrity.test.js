@@ -22,6 +22,16 @@ const hiddenAssetSource = {
     sourceRow = { ...sourceRow, ...data };
     return sourceRow;
   },
+  updateMany: async ({ where, data }) => {
+    sourceUpdates.push({ where, data, inTransaction });
+    if (where.id !== sourceRow.id || where.version !== sourceRow.version) return { count: 0 };
+    const nextVersion = data.version?.increment
+      ? sourceRow.version + data.version.increment
+      : sourceRow.version;
+    sourceRow = { ...sourceRow, ...data, version: nextVersion };
+    return { count: 1 };
+  },
+  findUniqueOrThrow: async ({ where }) => where.id === sourceRow.id ? sourceRow : Promise.reject(new Error('not found')),
 };
 
 const hiddenAssetProgram = {
@@ -79,11 +89,15 @@ test.beforeEach(() => {
     status: 'ACTIVE',
     lastReviewedAt: new Date('2026-01-01T00:00:00.000Z'),
     lastReviewedBy: 'reviewer-old',
+    version: 1,
+    reviewedVersion: 1,
   };
   programRow = {
     id: 'program-1',
     name: 'Benefit program',
     reviewStatus: 'IN_REVIEW',
+    version: 1,
+    approvedVersion: null,
     publishedAt: null,
     sourceUrl: 'https://example.gov/programs/benefit',
     lastVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -92,6 +106,8 @@ test.beforeEach(() => {
       officialUrl: 'https://example.gov/programs',
       lastReviewedAt: new Date(),
       reviewSlaDays: 180,
+      version: 1,
+      reviewedVersion: 1,
     },
   };
   sourceCreates.length = 0;
@@ -105,7 +121,7 @@ test('creating or editing source metadata cannot silently attest a fresh review'
     name: 'New source',
     sourceKind: 'OFFICIAL_GOVERNMENT',
     officialUrl: 'https://example.gov/new',
-  });
+  }, 'author-1');
   assert.equal(sourceCreates[0].lastReviewedAt, null);
   assert.equal(sourceCreates[0].lastReviewedBy, null);
 
@@ -113,9 +129,10 @@ test('creating or editing source metadata cannot silently attest a fresh review'
     name: 'Official source renamed',
     sourceKind: 'OFFICIAL_GOVERNMENT',
     officialUrl: 'https://example.gov/programs',
-  });
-  assert.equal('lastReviewedAt' in sourceUpdates[0].data, false);
-  assert.equal('lastReviewedBy' in sourceUpdates[0].data, false);
+  }, 'author-1');
+  assert.equal(sourceUpdates[0].data.lastReviewedAt, null);
+  assert.equal(sourceUpdates[0].data.lastReviewedBy, null);
+  assert.equal(sourceUpdates[0].data.reviewedVersion, null);
 });
 
 test('source review attestation and its audit row share one transaction', async () => {

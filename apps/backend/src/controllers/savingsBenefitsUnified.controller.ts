@@ -15,6 +15,10 @@ import type {
   RecordHiddenAssetMatchOutcomeInput,
   RecordHomeSavingsOpportunityOutcomeInput,
 } from '../services/savingsOutcome.service';
+import {
+  createSavingsBenefitPartnerComplaint,
+  revokeSavingsBenefitHandoff,
+} from '../services/savingsBenefitsPartner.service';
 
 function requireUserId(req: CustomRequest): string {
   const userId = req.user?.userId;
@@ -121,6 +125,37 @@ export async function getSavingsBenefitsCoverage(req: CustomRequest, res: Respon
   } catch (error: any) {
     const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 500;
     return res.status(status).json({ success: false, message: error?.message || 'Failed to fetch coverage.' });
+  }
+}
+
+export async function postSavingsBenefitHandoffRevocation(req: CustomRequest, res: Response) {
+  try {
+    const data = await revokeSavingsBenefitHandoff(
+      req.params.propertyId,
+      req.params.actionId,
+      requireUserId(req),
+      req.body.reason,
+    );
+    return res.json({ success: true, data });
+  } catch (error: any) {
+    const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 409;
+    return res.status(status).json({ success: false, message: error?.message || 'Failed to revoke handoff.' });
+  }
+}
+
+export async function postSavingsBenefitPartnerComplaint(req: CustomRequest, res: Response) {
+  try {
+    const data = await createSavingsBenefitPartnerComplaint(
+      req.params.propertyId,
+      req.params.actionId,
+      requireUserId(req),
+      req.body.category,
+      req.body.description,
+    );
+    return res.status(201).json({ success: true, data });
+  } catch (error: any) {
+    const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 422;
+    return res.status(status).json({ success: false, message: error?.message || 'Failed to report complaint.' });
   }
 }
 

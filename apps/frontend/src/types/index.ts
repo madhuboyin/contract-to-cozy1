@@ -2424,8 +2424,11 @@ export interface SavingsBenefitsUnifiedResponseDTO {
   totals: {
     inProgressCount: number;
     realizedCount: number;
-    realizedValueTotal: number;
-    realizedValueByFamily: Record<SavingsBenefitsFamily, number>;
+    realizedValueTotal: number | null;
+    realizedValueCurrency: string | null;
+    realizedValueByCurrency: Record<string, number>;
+    verifiedValueByCurrency: Record<string, number>;
+    realizedValueByFamily: Record<SavingsBenefitsFamily, Record<string, number>>;
     exclusionConflicts: SavingsBenefitsExclusionConflictDTO[];
   };
 }

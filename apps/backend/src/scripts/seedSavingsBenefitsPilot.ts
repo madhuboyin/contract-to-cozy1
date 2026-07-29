@@ -94,7 +94,7 @@ const NJ_PROGRAMS: Omit<HiddenAssetProgramInput, 'sourceId'>[] = [
 
 async function ensureSource(): Promise<string> {
   const existing = await prisma.hiddenAssetSource.findFirst({ where: { name: NJ_SOURCE.name } });
-  const source = existing ?? await savingsBenefitsAdminService.createSource(NJ_SOURCE);
+  const source = existing ?? await savingsBenefitsAdminService.createSource(NJ_SOURCE, SEED_ACTOR);
   await savingsBenefitsAdminService.reviewSource(
     source.id,
     SEED_ACTOR,
@@ -107,7 +107,10 @@ async function ensureProgramPublished(sourceId: string, input: Omit<HiddenAssetP
   let program = await prisma.hiddenAssetProgram.findFirst({ where: { name: input.name, sourceId } });
 
   if (!program) {
-    const result = await savingsBenefitsAdminService.createProgram({ ...input, sourceId });
+    const result = await savingsBenefitsAdminService.createProgram(
+      { ...input, sourceId },
+      SEED_ACTOR,
+    );
     program = result;
   }
 

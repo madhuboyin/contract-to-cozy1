@@ -16,6 +16,8 @@ function source(overrides = {}) {
     officialUrl: 'https://agency.gov/benefits',
     lastReviewedAt: new Date('2026-07-01T12:00:00.000Z'),
     reviewSlaDays: 180,
+    version: 1,
+    reviewedVersion: 1,
     ...overrides,
   };
 }
@@ -39,6 +41,7 @@ test('paused, never-reviewed, and overdue sources fail closed', () => {
     isSourceReviewCurrent(source({ lastReviewedAt: new Date('2025-01-01T00:00:00Z') }), NOW),
     false,
   );
+  assert.equal(isSourceReviewCurrent(source({ version: 2, reviewedVersion: 1 }), NOW), false);
 });
 
 test('programs require an official URL and a current verification date', () => {

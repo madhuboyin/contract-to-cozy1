@@ -893,6 +893,25 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'savings-benefits-follow-up-reminders',
+    name: 'Savings and Benefits Action Follow-up Reminders',
+    description:
+      'Reminds opted-in homeowners when a durable Savings and Benefits action reaches its requested follow-up date.',
+    category: 'FINANCIAL_MARKET',
+    schedule: 'Hourly',
+    cronExpression: '15 * * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'savings-benefits-follow-up-reminders',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'DECIDE',
+    defaultEnabledInBeta: true,
+    supportsDryRun: true,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'savings-benefits-source-health-audit',
     name: 'Savings and Benefits Source Health Audit',
     description:

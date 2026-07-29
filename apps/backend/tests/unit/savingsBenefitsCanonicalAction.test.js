@@ -45,16 +45,19 @@ test('partner handoffs fail closed unless recipient, disclosure, rank basis, and
       sharedFieldNames: ['email'],
     },
   };
-  assert.doesNotThrow(() => assertPartnerHandoffGovernance(input, ['partner-1']));
+  assert.doesNotThrow(() => assertPartnerHandoffGovernance(
+    input,
+    { id: 'partner-1', disclosureVersion: 'partner-handoff-v1' },
+  ));
   assert.throws(
-    () => assertPartnerHandoffGovernance(input, []),
+    () => assertPartnerHandoffGovernance(input, { id: 'partner-2', disclosureVersion: 'partner-handoff-v1' }),
     /not approved/,
   );
   assert.throws(
     () => assertPartnerHandoffGovernance({
       ...input,
       sharedFields: { email: 'homeowner@example.com', phone: '555-0100' },
-    }, ['partner-1']),
+    }, { id: 'partner-1', disclosureVersion: 'partner-handoff-v1' }),
     /do not match the consent preview/,
   );
 });

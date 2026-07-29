@@ -23,7 +23,10 @@ import {
   PropertyHiddenAssetMatchStatus,
   SavingsOutcomeStage,
 } from '@prisma/client';
+import type { Request } from 'express';
 import { prisma } from '../lib/prisma';
+import { recordAdminAction } from './adminAudit.service';
+import { signalService } from './signal.service';
 
 export class SavingsOutcomeGovernanceError extends Error {
   code: string;
@@ -69,6 +72,8 @@ export function isValidOutcomeTransition(
 
 export interface RecordOutcomeInput {
   idempotencyKey?: string;
+  /** Internal canonical-action linkage; never accepted from homeowner input. */
+  actionId?: string;
   stage: SavingsOutcomeStage;
   evidenceNote?: string | null;
   denialReason?: string | null;
@@ -76,6 +81,35 @@ export interface RecordOutcomeInput {
   /** Existing Document Vault rows to attach as evidence for this ledger entry (HSB-033). */
   documentIds?: string[];
   supersedesOutcomeId?: string | null;
+}
+
+function actionStateForOutcome(stage: SavingsOutcomeStage): 'STARTED' | 'COMPLETED' {
+  return TERMINAL_STAGES.includes(stage) ? 'COMPLETED' : 'STARTED';
+}
+
+async function reconcileCanonicalActionForOutcome(
+  tx: Prisma.TransactionClient,
+  input: RecordOutcomeInput,
+  relation: { hiddenAssetMatchId?: string; homeSavingsOpportunityId?: string },
+) {
+  if (!input.actionId) return;
+  const state = actionStateForOutcome(input.stage);
+  const updated = await tx.savingsBenefitAction.updateMany({
+    where: {
+      id: input.actionId,
+      ...relation,
+    },
+    data: {
+      state,
+      completedAt: state === 'COMPLETED' ? new Date() : null,
+    },
+  });
+  if (updated.count !== 1) {
+    throw new SavingsOutcomeGovernanceError(
+      'ACTION_LINK_MISMATCH',
+      'The canonical action is not linked to this opportunity.',
+    );
+  }
 }
 
 function assertStageInputIsComplete(input: RecordOutcomeInput, hasValue: boolean): void {
@@ -195,7 +229,10 @@ export async function recordHiddenAssetMatchOutcome(
           },
         },
       });
-      if (existing) return existing;
+      if (existing) {
+        await reconcileCanonicalActionForOutcome(tx, input, { hiddenAssetMatchId: matchId });
+        return existing;
+      }
       if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
         throw new SavingsOutcomeGovernanceError(
           'INVALID_TRANSITION',
@@ -206,6 +243,7 @@ export async function recordHiddenAssetMatchOutcome(
       const created = await tx.hiddenAssetMatchOutcome.create({
       data: {
         matchId,
+        actionId: input.actionId ?? null,
         idempotencyKey: resolvedIdempotencyKey,
         stage: input.stage,
         amountReceived: input.stage === 'RECEIVED' ? input.amountReceived ?? null : null,
@@ -250,6 +288,7 @@ export async function recordHiddenAssetMatchOutcome(
         data: { pursuedAt: match.pursuedAt ?? created.recordedAt },
       });
     }
+      await reconcileCanonicalActionForOutcome(tx, input, { hiddenAssetMatchId: matchId });
       return created;
     });
   } catch (error) {
@@ -357,7 +396,10 @@ export async function recordHomeSavingsOpportunityOutcome(
           },
         },
       });
-      if (existing) return existing;
+      if (existing) {
+        await reconcileCanonicalActionForOutcome(tx, input, { homeSavingsOpportunityId: opportunityId });
+        return existing;
+      }
       if (!isValidOutcomeTransition(latest?.stage ?? null, input.stage)) {
         throw new SavingsOutcomeGovernanceError(
           'INVALID_TRANSITION',
@@ -368,6 +410,7 @@ export async function recordHomeSavingsOpportunityOutcome(
       const outcome = await tx.homeSavingsOpportunityOutcome.create({
         data: {
           opportunityId,
+          actionId: input.actionId ?? null,
           idempotencyKey: resolvedIdempotencyKey,
           stage: input.stage,
           observedMonthlyValue: input.stage === 'RECEIVED' ? input.observedMonthlyValue ?? null : null,
@@ -407,6 +450,7 @@ export async function recordHomeSavingsOpportunityOutcome(
           data: { status: HomeSavingsOpportunityStatus.DISMISSED },
         });
       }
+      await reconcileCanonicalActionForOutcome(tx, input, { homeSavingsOpportunityId: opportunityId });
       return outcome;
     });
   } catch (error) {
@@ -450,14 +494,49 @@ export async function revokeHiddenAssetMatchOutcome(
   if (outcome.revokedAt) {
     throw new SavingsOutcomeGovernanceError('ALREADY_REVOKED', 'This outcome is already revoked.');
   }
-  return prisma.hiddenAssetMatchOutcome.update({
-    where: { id: outcomeId },
-    data: {
-      verificationState: 'REVOKED',
-      revokedAt: new Date(),
-      revokedBy: userId,
-      revocationReason: reason,
-    },
+  return prisma.$transaction(async (tx) => {
+    const latest = await tx.hiddenAssetMatchOutcome.findFirst({
+      where: { matchId: outcome.matchId, revokedAt: null },
+      orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    if (latest?.id !== outcome.id) {
+      throw new SavingsOutcomeGovernanceError(
+        'ONLY_LATEST_CAN_BE_REVOKED',
+        'Revoke the latest outcome before correcting an earlier stage.',
+      );
+    }
+    const revoked = await tx.hiddenAssetMatchOutcome.update({
+      where: { id: outcomeId },
+      data: {
+        verificationState: 'REVOKED',
+        revokedAt: new Date(),
+        revokedBy: userId,
+        revocationReason: reason,
+      },
+    });
+    const previous = await tx.hiddenAssetMatchOutcome.findFirst({
+      where: { matchId: outcome.matchId, revokedAt: null },
+      orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    await tx.propertyHiddenAssetMatch.update({
+      where: { id: outcome.matchId },
+      data: {
+        status:
+          previous?.stage === 'EXPIRED'
+            ? 'EXPIRED'
+            : previous && ['DENIED', 'WITHDRAWN', 'NO_ACTION'].includes(previous.stage)
+              ? 'INACTIVE'
+              : 'PURSUING',
+      },
+    });
+    if (outcome.actionId) {
+      const state = previous && TERMINAL_STAGES.includes(previous.stage) ? 'COMPLETED' : 'STARTED';
+      await tx.savingsBenefitAction.updateMany({
+        where: { id: outcome.actionId, hiddenAssetMatchId: outcome.matchId },
+        data: { state, completedAt: state === 'COMPLETED' ? previous?.recordedAt ?? new Date() : null },
+      });
+    }
+    return revoked;
   });
 }
 
@@ -476,6 +555,16 @@ export async function revokeHomeSavingsOpportunityOutcome(
   }
   const revokedAt = new Date();
   return prisma.$transaction(async (tx) => {
+    const latest = await tx.homeSavingsOpportunityOutcome.findFirst({
+      where: { opportunityId: outcome.opportunityId, revokedAt: null },
+      orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    if (latest?.id !== outcome.id) {
+      throw new SavingsOutcomeGovernanceError(
+        'ONLY_LATEST_CAN_BE_REVOKED',
+        'Revoke the latest outcome before correcting an earlier stage.',
+      );
+    }
     const revoked = await tx.homeSavingsOpportunityOutcome.update({
       where: { id: outcomeId },
       data: {
@@ -485,6 +574,30 @@ export async function revokeHomeSavingsOpportunityOutcome(
         revocationReason: reason,
       },
     });
+    const previous = await tx.homeSavingsOpportunityOutcome.findFirst({
+      where: { opportunityId: outcome.opportunityId, revokedAt: null },
+      orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    await tx.homeSavingsOpportunity.update({
+      where: { id: outcome.opportunityId },
+      data: {
+        status:
+          previous?.stage === 'EXPIRED'
+            ? 'EXPIRED'
+            : previous && ['DENIED', 'WITHDRAWN', 'NO_ACTION'].includes(previous.stage)
+              ? 'DISMISSED'
+              : previous?.stage === 'RECEIVED'
+                ? 'SWITCHED'
+                : 'APPLIED',
+      },
+    });
+    if (outcome.actionId) {
+      const state = previous && TERMINAL_STAGES.includes(previous.stage) ? 'COMPLETED' : 'STARTED';
+      await tx.savingsBenefitAction.updateMany({
+        where: { id: outcome.actionId, homeSavingsOpportunityId: outcome.opportunityId },
+        data: { state, completedAt: state === 'COMPLETED' ? previous?.recordedAt ?? new Date() : null },
+      });
+    }
     if (outcome.opportunity.propertyId) {
       await tx.signal.updateMany({
         where: {
@@ -499,4 +612,168 @@ export async function revokeHomeSavingsOpportunityOutcome(
     }
     return revoked;
   });
+}
+
+export async function verifySavingsBenefitOutcome(
+  family: 'BENEFIT' | 'RECURRING_COST',
+  outcomeId: string,
+  actorId: string,
+  reason: string,
+  req?: Pick<Request, 'ip' | 'headers'> | null,
+) {
+  let propertyId: string | null = null;
+  const verified = await prisma.$transaction(async (tx) => {
+    if (family === 'BENEFIT') {
+      const outcome = await tx.hiddenAssetMatchOutcome.findUnique({
+        where: { id: outcomeId },
+        include: {
+          documents: { select: { id: true } },
+          match: { select: { propertyId: true } },
+        },
+      });
+      if (!outcome) throw new Error('Outcome not found.');
+      if (outcome.stage !== 'RECEIVED' || outcome.revokedAt) {
+        throw new SavingsOutcomeGovernanceError(
+          'OUTCOME_NOT_VERIFIABLE',
+          'Only a current RECEIVED outcome can be verified.',
+        );
+      }
+      if (outcome.documents.length === 0) {
+        throw new SavingsOutcomeGovernanceError(
+          'VERIFICATION_EVIDENCE_REQUIRED',
+          'Independent verification requires attached Document Vault evidence.',
+        );
+      }
+      propertyId = outcome.match.propertyId;
+      const updated = await tx.hiddenAssetMatchOutcome.update({
+        where: { id: outcome.id },
+        data: { verificationState: 'VERIFIED', verifiedAt: new Date(), verifiedBy: actorId },
+      });
+      await recordAdminAction({
+        actorId,
+        action: 'ADMIN_SAVINGS_BENEFITS_OUTCOME_VERIFY',
+        entityType: 'HIDDEN_ASSET_MATCH_OUTCOME',
+        entityId: outcome.id,
+        capability: 'SAVINGS_BENEFITS_REVIEW',
+        reason,
+        disposition: 'VERIFIED',
+        oldValues: { verificationState: outcome.verificationState },
+        newValues: { verificationState: 'VERIFIED' },
+        relatedRefs: { propertyId: outcome.match.propertyId, matchId: outcome.matchId },
+        req,
+      }, tx);
+      return updated;
+    }
+
+    const outcome = await tx.homeSavingsOpportunityOutcome.findUnique({
+      where: { id: outcomeId },
+      include: {
+        documents: { select: { id: true } },
+        opportunity: { select: { propertyId: true } },
+      },
+    });
+    if (!outcome) throw new Error('Outcome not found.');
+    if (outcome.stage !== 'RECEIVED' || outcome.revokedAt) {
+      throw new SavingsOutcomeGovernanceError(
+        'OUTCOME_NOT_VERIFIABLE',
+        'Only a current RECEIVED outcome can be verified.',
+      );
+    }
+    if (outcome.documents.length === 0) {
+      throw new SavingsOutcomeGovernanceError(
+        'VERIFICATION_EVIDENCE_REQUIRED',
+        'Independent verification requires attached Document Vault evidence.',
+      );
+    }
+    if (!outcome.opportunity.propertyId) {
+      throw new SavingsOutcomeGovernanceError(
+        'PROPERTY_REQUIRED',
+        'A property-scoped outcome is required for verification.',
+      );
+    }
+    propertyId = outcome.opportunity.propertyId;
+    const updated = await tx.homeSavingsOpportunityOutcome.update({
+      where: { id: outcome.id },
+      data: { verificationState: 'VERIFIED', verifiedAt: new Date(), verifiedBy: actorId },
+    });
+    await recordAdminAction({
+      actorId,
+      action: 'ADMIN_SAVINGS_BENEFITS_OUTCOME_VERIFY',
+      entityType: 'HOME_SAVINGS_OPPORTUNITY_OUTCOME',
+      entityId: outcome.id,
+      capability: 'SAVINGS_BENEFITS_REVIEW',
+      reason,
+      disposition: 'VERIFIED',
+      oldValues: { verificationState: outcome.verificationState },
+      newValues: { verificationState: 'VERIFIED' },
+      relatedRefs: { propertyId, opportunityId: outcome.opportunityId },
+      req,
+    }, tx);
+    return updated;
+  });
+
+  // The verified ledger write is authoritative. Refreshing the derived
+  // shared signal happens after commit and can be safely retried.
+  if (family === 'RECURRING_COST' && propertyId) {
+    await signalService.refreshSignalsForProperty(propertyId);
+  }
+  return verified;
+}
+
+export async function listSavingsBenefitOutcomeVerificationQueue() {
+  const [benefits, recurring] = await Promise.all([
+    prisma.hiddenAssetMatchOutcome.findMany({
+      where: {
+        stage: 'RECEIVED',
+        revokedAt: null,
+        verificationState: { in: ['SELF_REPORTED', 'EVIDENCE_ATTACHED'] },
+      },
+      include: {
+        documents: { select: { id: true, name: true } },
+        match: { include: { program: { select: { name: true } } } },
+      },
+      orderBy: { recordedAt: 'asc' },
+      take: 200,
+    }),
+    prisma.homeSavingsOpportunityOutcome.findMany({
+      where: {
+        stage: 'RECEIVED',
+        revokedAt: null,
+        verificationState: { in: ['SELF_REPORTED', 'EVIDENCE_ATTACHED'] },
+      },
+      include: {
+        documents: { select: { id: true, name: true } },
+        opportunity: { select: { headline: true } },
+      },
+      orderBy: { recordedAt: 'asc' },
+      take: 200,
+    }),
+  ]);
+  return [
+    ...benefits.map((outcome) => ({
+      family: 'BENEFIT' as const,
+      id: outcome.id,
+      title: outcome.match.program.name,
+      value: outcome.amountReceived?.toString() ?? null,
+      currency: outcome.currency,
+      verificationState: outcome.verificationState,
+      evidenceNote: outcome.evidenceNote,
+      documents: outcome.documents,
+      recordedAt: outcome.recordedAt,
+    })),
+    ...recurring.map((outcome) => ({
+      family: 'RECURRING_COST' as const,
+      id: outcome.id,
+      title: outcome.opportunity.headline,
+      value:
+        outcome.observedAnnualValue?.toString()
+        ?? outcome.observedMonthlyValue?.toString()
+        ?? null,
+      currency: outcome.currency,
+      verificationState: outcome.verificationState,
+      evidenceNote: outcome.evidenceNote,
+      documents: outcome.documents,
+      recordedAt: outcome.recordedAt,
+    })),
+  ].sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
 }

@@ -624,7 +624,19 @@ export class HomeSavingsService {
         where: { id: existingAccount.id },
         data: updateData,
       });
-
+      try {
+        await this.runComparison(
+          propertyId,
+          userId,
+          { categoryKey },
+          HomeSavingsRunTrigger.EVENT_DRIVEN,
+        );
+      } catch (err) {
+        logger.error(
+          { err, propertyId, categoryKey },
+          '[HOME-SAVINGS] Account saved but event-driven comparison failed; manual retry remains available',
+        );
+      }
       return { account: serializeAccount(account) };
     }
 
@@ -634,13 +646,27 @@ export class HomeSavingsService {
           data: baseData,
         });
 
+    try {
+      await this.runComparison(
+        propertyId,
+        userId,
+        { categoryKey },
+        HomeSavingsRunTrigger.EVENT_DRIVEN,
+      );
+    } catch (err) {
+      logger.error(
+        { err, propertyId, categoryKey },
+        '[HOME-SAVINGS] Account saved but event-driven comparison failed; manual retry remains available',
+      );
+    }
     return { account: serializeAccount(account) };
   }
 
   async runComparison(
     propertyId: string,
     userId: string,
-    input: RunComparisonInput
+    input: RunComparisonInput,
+    trigger: HomeSavingsRunTrigger = HomeSavingsRunTrigger.MANUAL,
   ): Promise<{ runId: string; summary: HomeSavingsSummaryDTO }> {
     const property = await assertPropertyForUser(propertyId, userId);
     const financialContext = await getFinancialContextDecisions(propertyId, userId, 'HOME_SAVINGS');
@@ -748,7 +774,7 @@ export class HomeSavingsService {
       data: {
         homeownerProfileId: property.homeownerProfileId,
         propertyId: property.id,
-        trigger: HomeSavingsRunTrigger.MANUAL,
+        trigger,
         inputsJson: {
           version: 1,
           propertyContextVersion: financialContext.contextVersion,

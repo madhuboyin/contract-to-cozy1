@@ -22,6 +22,7 @@ import {
 import type { Request } from 'express';
 import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
+import { requestBroadSavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
 
 const SOURCE_HEALTH_LEVELS = ['HEALTHY', 'DEGRADED', 'CRITICAL'] as const;
 export type SourceHealthLevel = (typeof SOURCE_HEALTH_LEVELS)[number];
@@ -156,32 +157,92 @@ export class SavingsBenefitsAdminService {
     return source;
   }
 
-  async createSource(input: HiddenAssetSourceInput) {
-    return prisma.hiddenAssetSource.create({
-      data: {
-        name: input.name.trim(),
-        sourceKind: input.sourceKind,
-        officialUrl: input.officialUrl.trim(),
-        reviewSlaDays: input.reviewSlaDays ?? 180,
-        status: input.status ?? 'ACTIVE',
-        lastReviewedAt: null,
-        lastReviewedBy: null,
-      },
+  async createSource(
+    input: HiddenAssetSourceInput,
+    actorUserId: string,
+    req?: Pick<Request, 'ip' | 'headers'> | null,
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const source = await tx.hiddenAssetSource.create({
+        data: {
+          name: input.name.trim(),
+          sourceKind: input.sourceKind,
+          officialUrl: input.officialUrl.trim(),
+          reviewSlaDays: input.reviewSlaDays ?? 180,
+          status: input.status ?? 'ACTIVE',
+          lastReviewedAt: null,
+          lastReviewedBy: null,
+          reviewedVersion: null,
+        },
+      });
+      await recordAdminAction({
+        actorId: actorUserId,
+        action: 'ADMIN_SAVINGS_BENEFITS_SOURCE_CREATE',
+        entityType: 'HIDDEN_ASSET_SOURCE',
+        entityId: source.id,
+        capability: 'SAVINGS_BENEFITS_AUTHOR',
+        reason: 'Source created through the Savings & Benefits admin console.',
+        disposition: 'CREATED_UNREVIEWED',
+        newValues: JSON.parse(JSON.stringify(source)),
+        req,
+      }, tx);
+      return source;
     });
   }
 
-  async updateSource(sourceId: string, input: HiddenAssetSourceInput) {
+  async updateSource(
+    sourceId: string,
+    input: HiddenAssetSourceInput,
+    actorUserId: string,
+    req?: Pick<Request, 'ip' | 'headers'> | null,
+  ) {
     const existing = await prisma.hiddenAssetSource.findUnique({ where: { id: sourceId } });
     if (!existing) throw new Error('Source not found');
-    return prisma.hiddenAssetSource.update({
-      where: { id: sourceId },
-      data: {
-        name: input.name.trim(),
-        sourceKind: input.sourceKind,
-        officialUrl: input.officialUrl.trim(),
-        reviewSlaDays: input.reviewSlaDays ?? existing.reviewSlaDays,
-        status: input.status ?? existing.status,
-      },
+    const nextReviewSlaDays = input.reviewSlaDays ?? existing.reviewSlaDays;
+    const materialChange =
+      existing.name !== input.name.trim()
+      || existing.sourceKind !== input.sourceKind
+      || existing.officialUrl !== input.officialUrl.trim()
+      || existing.reviewSlaDays !== nextReviewSlaDays;
+
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.hiddenAssetSource.updateMany({
+        where: { id: sourceId, version: existing.version },
+        data: {
+          name: input.name.trim(),
+          sourceKind: input.sourceKind,
+          officialUrl: input.officialUrl.trim(),
+          reviewSlaDays: nextReviewSlaDays,
+          status: input.status ?? existing.status,
+          ...(materialChange
+            ? {
+                version: { increment: 1 },
+                lastReviewedAt: null,
+                lastReviewedBy: null,
+                reviewedVersion: null,
+              }
+            : {}),
+        },
+      });
+      if (updated.count !== 1) {
+        throw new Error('Source changed concurrently. Refresh and try again.');
+      }
+      const source = await tx.hiddenAssetSource.findUniqueOrThrow({ where: { id: sourceId } });
+      await recordAdminAction({
+        actorId: actorUserId,
+        action: 'ADMIN_SAVINGS_BENEFITS_SOURCE_UPDATE',
+        entityType: 'HIDDEN_ASSET_SOURCE',
+        entityId: sourceId,
+        capability: 'SAVINGS_BENEFITS_AUTHOR',
+        reason: materialChange
+          ? 'Material source metadata changed; prior review attestation invalidated.'
+          : 'Source operational status updated.',
+        disposition: materialChange ? 'REVIEW_INVALIDATED' : 'UPDATED',
+        oldValues: JSON.parse(JSON.stringify(existing)),
+        newValues: JSON.parse(JSON.stringify(source)),
+        req,
+      }, tx);
+      return source;
     });
   }
 
@@ -191,16 +252,17 @@ export class SavingsBenefitsAdminService {
     reason: string,
     req?: Pick<Request, 'ip' | 'headers'> | null,
   ) {
-    return prisma.$transaction(async (tx) => {
+    const reviewed = await prisma.$transaction(async (tx) => {
       const source = await tx.hiddenAssetSource.findUnique({ where: { id: sourceId } });
       if (!source) throw new Error('Source not found');
 
       const reviewedAt = new Date();
-      const reviewed = await tx.hiddenAssetSource.update({
+      const reviewedSource = await tx.hiddenAssetSource.update({
         where: { id: sourceId },
         data: {
           lastReviewedAt: reviewedAt,
           lastReviewedBy: actorUserId,
+          reviewedVersion: source.version,
         },
       });
       await recordAdminAction({
@@ -218,12 +280,15 @@ export class SavingsBenefitsAdminService {
         newValues: {
           lastReviewedAt: reviewedAt.toISOString(),
           lastReviewedBy: actorUserId,
+          reviewedVersion: source.version,
         },
         relatedRefs: { name: source.name, officialUrl: source.officialUrl },
         req,
       }, tx);
-      return reviewed;
+      return reviewedSource;
     });
+    await requestBroadSavingsBenefitsReevaluation(`source:${sourceId}:reviewed`);
+    return reviewed;
   }
 
   async listPrograms(filters: { sourceId?: string; reviewStatus?: HiddenAssetProgramReviewStatus } = {}) {
@@ -247,7 +312,11 @@ export class SavingsBenefitsAdminService {
     return program;
   }
 
-  async createProgram(input: HiddenAssetProgramInput) {
+  async createProgram(
+    input: HiddenAssetProgramInput,
+    actorUserId: string,
+    req?: Pick<Request, 'ip' | 'headers'> | null,
+  ) {
     assertConsistentGroupKinds(input.rules);
     return prisma.$transaction(async (tx) => {
       const program = await tx.hiddenAssetProgram.create({
@@ -294,17 +363,34 @@ export class SavingsBenefitsAdminService {
           unknownHandling: rule.unknownHandling ?? 'HOLD_CANDIDATE',
         })),
       });
-      return this.getProgram(program.id, tx);
+      const detail = await this.getProgram(program.id, tx);
+      await recordAdminAction({
+        actorId: actorUserId,
+        action: 'ADMIN_SAVINGS_BENEFITS_PROGRAM_CREATE',
+        entityType: 'HIDDEN_ASSET_PROGRAM',
+        entityId: program.id,
+        capability: 'SAVINGS_BENEFITS_AUTHOR',
+        reason: 'Program created through the Savings & Benefits admin console.',
+        disposition: 'CREATED_DRAFT',
+        newValues: JSON.parse(JSON.stringify(detail)),
+        req,
+      }, tx);
+      return detail;
     });
   }
 
-  async updateProgram(programId: string, input: HiddenAssetProgramInput, actorUserId?: string) {
+  async updateProgram(
+    programId: string,
+    input: HiddenAssetProgramInput,
+    actorUserId: string,
+    req?: Pick<Request, 'ip' | 'headers'> | null,
+  ) {
     assertConsistentGroupKinds(input.rules);
     const existing = await prisma.hiddenAssetProgram.findUnique({ where: { id: programId } });
     if (!existing) throw new Error('Program not found');
-    if (existing.reviewStatus === 'PUBLISHED') {
+    if (existing.reviewStatus !== 'DRAFT') {
       throw new Error(
-        'Published programs are immutable. Unpublish and return the program to DRAFT before editing.',
+        `Only DRAFT programs can be edited. Return this ${existing.reviewStatus} program to DRAFT first.`,
       );
     }
 
@@ -319,12 +405,12 @@ export class SavingsBenefitsAdminService {
           version: existing.version,
           snapshotJson: JSON.parse(JSON.stringify(priorDetail)),
           changeReason: 'Program edited via admin console',
-          recordedBy: actorUserId ?? null,
+          recordedBy: actorUserId,
         },
       });
 
-      await tx.hiddenAssetProgram.update({
-        where: { id: programId },
+      const updated = await tx.hiddenAssetProgram.updateMany({
+        where: { id: programId, version: existing.version, reviewStatus: 'DRAFT' },
         data: {
           sourceId: input.sourceId,
           name: input.name.trim(),
@@ -347,11 +433,15 @@ export class SavingsBenefitsAdminService {
           exclusionGroupKey: input.exclusionGroupKey !== undefined ? input.exclusionGroupKey : existing.exclusionGroupKey,
           beneficiaryScope: input.beneficiaryScope ?? existing.beneficiaryScope,
           version: { increment: 1 },
-          // Saving content must not change lifecycle state — reviewStatus,
-          // reviewedAt/By, and publishedAt/By are preserved as-is.
-          reviewStatus: existing.reviewStatus,
+          approvedVersion: null,
+          reviewedAt: null,
+          reviewedBy: null,
+          lastVerifiedAt: null,
         },
       });
+      if (updated.count !== 1) {
+        throw new Error('Program changed concurrently. Refresh and try again.');
+      }
       await tx.hiddenAssetProgramRule.deleteMany({ where: { programId } });
       await tx.hiddenAssetProgramRule.createMany({
         data: input.rules.map((rule, index) => ({
@@ -369,7 +459,20 @@ export class SavingsBenefitsAdminService {
           unknownHandling: rule.unknownHandling ?? 'HOLD_CANDIDATE',
         })),
       });
-      return this.getProgram(programId, tx);
+      const detail = await this.getProgram(programId, tx);
+      await recordAdminAction({
+        actorId: actorUserId,
+        action: 'ADMIN_SAVINGS_BENEFITS_PROGRAM_UPDATE',
+        entityType: 'HIDDEN_ASSET_PROGRAM',
+        entityId: programId,
+        capability: 'SAVINGS_BENEFITS_AUTHOR',
+        reason: 'Draft program content and rules updated.',
+        disposition: 'DRAFT_UPDATED',
+        oldValues: JSON.parse(JSON.stringify(priorDetail)),
+        newValues: JSON.parse(JSON.stringify(detail)),
+        req,
+      }, tx);
+      return detail;
     });
   }
 

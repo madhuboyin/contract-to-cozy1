@@ -157,6 +157,67 @@ export interface TransitionResult {
   action: LifecycleAction;
 }
 
+export interface OutcomeVerificationQueueItem {
+  family: 'BENEFIT' | 'RECURRING_COST';
+  id: string;
+  title: string;
+  value: string | null;
+  currency: string;
+  verificationState: 'SELF_REPORTED' | 'EVIDENCE_ATTACHED';
+  evidenceNote: string | null;
+  documents: Array<{ id: string; name: string }>;
+  recordedAt: string;
+}
+
+export interface SavingsBenefitPartnerItem {
+  id: string;
+  name: string;
+  status: 'ACTIVE' | 'PAUSED' | 'RETIRED';
+  supportedJurisdictions: string[];
+  disclosureVersion: string;
+  compensationDisclosure: string;
+  rankingDisclosure: string;
+  privacyDisclosure: string;
+  fulfillmentSlaHours: number;
+  effectiveAt: string;
+  expiresAt: string | null;
+}
+
+export type SavingsBenefitPartnerInput = Omit<SavingsBenefitPartnerItem, 'id'>;
+
+export interface SavingsBenefitPartnerComplaintItem {
+  id: string;
+  category: string;
+  description: string;
+  status: 'OPEN' | 'RESOLVED' | 'DISMISSED';
+  createdAt: string;
+  action: {
+    id: string;
+    partner: { id: string; name: string } | null;
+  };
+}
+
+export interface SavingsBenefitPartnerHandoffItem {
+  id: string;
+  propertyId: string;
+  state: string;
+  handoffStatus: 'CONSENTED' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'FULFILLED' | 'FAILED' | 'REVOKED';
+  startedAt: string;
+  submittedAt: string | null;
+  acknowledgedAt: string | null;
+  fulfilledAt: string | null;
+  dueAt: string | null;
+  overdue: boolean;
+  openComplaintCount: number;
+  partner: SavingsBenefitPartnerItem | null;
+  outcome: {
+    id: string;
+    stage: string;
+    verificationState: 'SELF_REPORTED' | 'EVIDENCE_ATTACHED' | 'VERIFIED';
+    recordedAt: string;
+  } | null;
+}
+
 const ENDPOINT_FOR_ACTION: Record<LifecycleAction, string> = {
   SUBMIT_FOR_REVIEW: 'author-action',
   REVIVE_TO_DRAFT: 'author-action',
@@ -244,4 +305,68 @@ export async function transitionProgram(
     { action, reason },
   );
   return res.data;
+}
+
+export async function fetchOutcomeVerificationQueue(): Promise<{ outcomes: OutcomeVerificationQueueItem[] }> {
+  const res = await api.get<{ outcomes: OutcomeVerificationQueueItem[] }>(
+    '/api/admin/savings-benefits/outcome-verification-queue',
+  );
+  return res.data;
+}
+
+export async function verifyOutcome(
+  outcomeId: string,
+  family: OutcomeVerificationQueueItem['family'],
+  reason: string,
+): Promise<void> {
+  await api.post(`/api/admin/savings-benefits/outcomes/${outcomeId}/verify`, { family, reason });
+}
+
+export async function fetchSavingsBenefitPartners(): Promise<{ partners: SavingsBenefitPartnerItem[] }> {
+  const res = await api.get<{ partners: SavingsBenefitPartnerItem[] }>('/api/admin/savings-benefits/partners');
+  return res.data;
+}
+
+export async function fetchSavingsBenefitPartnerHandoffs(): Promise<{
+  handoffs: SavingsBenefitPartnerHandoffItem[];
+}> {
+  const res = await api.get<{ handoffs: SavingsBenefitPartnerHandoffItem[] }>(
+    '/api/admin/savings-benefits/handoffs',
+  );
+  return res.data;
+}
+
+export async function transitionSavingsBenefitPartnerHandoff(
+  actionId: string,
+  status: 'SUBMITTED' | 'ACKNOWLEDGED' | 'FULFILLED' | 'FAILED' | 'REVOKED',
+  reason: string,
+): Promise<void> {
+  await api.post(`/api/admin/savings-benefits/handoffs/${actionId}/transition`, { status, reason });
+}
+
+export async function upsertSavingsBenefitPartner(
+  partnerId: string,
+  input: SavingsBenefitPartnerInput,
+): Promise<void> {
+  await api.put(`/api/admin/savings-benefits/partners/${partnerId}`, input);
+}
+
+export async function fetchSavingsBenefitPartnerComplaints(): Promise<{
+  complaints: SavingsBenefitPartnerComplaintItem[];
+}> {
+  const res = await api.get<{ complaints: SavingsBenefitPartnerComplaintItem[] }>(
+    '/api/admin/savings-benefits/partner-complaints?status=OPEN',
+  );
+  return res.data;
+}
+
+export async function resolveSavingsBenefitPartnerComplaint(
+  complaintId: string,
+  status: 'RESOLVED' | 'DISMISSED',
+  resolution: string,
+): Promise<void> {
+  await api.post(
+    `/api/admin/savings-benefits/partner-complaints/${complaintId}/resolve`,
+    { status, resolution },
+  );
 }

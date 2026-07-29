@@ -9,6 +9,8 @@ export interface ReviewedSourceFreshness {
   officialUrl: string | null;
   lastReviewedAt: Date | null;
   reviewSlaDays: number;
+  version: number;
+  reviewedVersion: number | null;
 }
 
 export interface ReviewedProgramFreshness {
@@ -29,6 +31,7 @@ export function isSourceReviewCurrent(
   return (
     source.status === 'ACTIVE'
     && Boolean(source.officialUrl?.trim())
+    && source.reviewedVersion === source.version
     && dueAt !== null
     && dueAt.getTime() >= now.getTime()
   );

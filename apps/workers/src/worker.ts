@@ -65,6 +65,7 @@ import { detectUnpermittedWorkJob, DETECT_UNPERMITTED_WORK_JOB } from './jobs/de
 import { generatePermitDisclosureJob, GENERATE_PERMIT_DISCLOSURE_JOB } from './jobs/generatePermitDisclosure.job';
 import { permitInspectionReminderJob } from './jobs/permitInspectionReminder.job';
 import { savingsBenefitsDeadlineReminderJob } from './jobs/savingsBenefitsDeadlineReminder.job';
+import { savingsBenefitsFollowUpReminderJob } from './jobs/savingsBenefitsFollowUpReminder.job';
 import { savingsBenefitsSourceHealthAuditJob } from './jobs/savingsBenefitsSourceHealthAudit.job';
 import { recalculateReserveFundsJob } from './jobs/recalculateReserveFunds.job';
 import { reserveFundReconciliationJob } from './jobs/reserveFundReconciliation.job';
@@ -412,6 +413,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
   'permit-inspection-reminders':     async (opts) => permitInspectionReminderJob(opts),
   'savings-benefits-deadline-reminders': async (opts) => savingsBenefitsDeadlineReminderJob(opts),
+  'savings-benefits-follow-up-reminders': async (opts) => savingsBenefitsFollowUpReminderJob(opts),
   'savings-benefits-source-health-audit': async (opts) => savingsBenefitsSourceHealthAuditJob(opts),
   'reserve-fund-recalculation':      async (opts) => {
     const result = await recalculateReserveFundsJob(opts);

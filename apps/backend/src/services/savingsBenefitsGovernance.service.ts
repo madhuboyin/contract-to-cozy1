@@ -19,6 +19,7 @@ import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
 import { AdminCapability } from '../config/adminCapabilities';
 import { isReviewedProgramCurrent, isSourceReviewCurrent } from './hiddenAssets/sourceFreshness';
+import { requestBroadSavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
 
 export class SavingsBenefitsGovernanceError extends Error {
   code: string;
@@ -74,6 +75,8 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
       id: true,
       name: true,
       reviewStatus: true,
+      version: true,
+      approvedVersion: true,
       publishedAt: true,
       sourceUrl: true,
       lastVerifiedAt: true,
@@ -83,6 +86,8 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
           officialUrl: true,
           lastReviewedAt: true,
           reviewSlaDays: true,
+          version: true,
+          reviewedVersion: true,
         },
       },
     },
@@ -112,6 +117,12 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
         'Cannot publish a program without an official source URL.',
       );
     }
+    if (program.approvedVersion !== program.version) {
+      throw new SavingsBenefitsGovernanceError(
+        'APPROVED_VERSION_MISMATCH',
+        'Cannot publish because the current program version was not the version approved by a reviewer.',
+      );
+    }
     // APPROVE stamps lastVerifiedAt below. This defensive check also protects
     // older rows that reached APPROVED before freshness became fail-closed.
     if (!isReviewedProgramCurrent(program, program.source, now)) {
@@ -128,6 +139,7 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
       where: {
         id: input.programId,
         reviewStatus: program.reviewStatus,
+        version: program.version,
       },
       data: {
         reviewStatus: spec.to,
@@ -136,8 +148,19 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
               reviewedAt: transitionedAt,
               reviewedBy: input.actorId,
               lastVerifiedAt: transitionedAt,
+              approvedVersion: program.version,
             }
           : {}),
+        ...(
+          input.action === 'RETURN_TO_DRAFT' || input.action === 'REVIVE_TO_DRAFT'
+            ? {
+                approvedVersion: null,
+                reviewedAt: null,
+                reviewedBy: null,
+                lastVerifiedAt: null,
+              }
+            : {}
+        ),
         ...(input.action === 'PUBLISH'
           ? { publishedAt: program.publishedAt ?? transitionedAt, publishedBy: input.actorId }
           : {}),
@@ -158,12 +181,31 @@ export async function transitionSavingsBenefitProgram(input: TransitionInput, ct
       capability: spec.capability,
       reason: input.reason,
       disposition: input.action,
-      oldValues: { reviewStatus: program.reviewStatus } as Prisma.InputJsonValue,
-      newValues: { reviewStatus: spec.to } as Prisma.InputJsonValue,
+      oldValues: {
+        reviewStatus: program.reviewStatus,
+        version: program.version,
+        approvedVersion: program.approvedVersion,
+      } as Prisma.InputJsonValue,
+      newValues: {
+        reviewStatus: spec.to,
+        version: program.version,
+        approvedVersion:
+          input.action === 'APPROVE'
+            ? program.version
+            : input.action === 'RETURN_TO_DRAFT' || input.action === 'REVIVE_TO_DRAFT'
+              ? null
+              : program.approvedVersion,
+      } as Prisma.InputJsonValue,
       relatedRefs: { name: program.name },
       req: ctx.req,
     }, tx);
   });
+
+  if (input.action === 'PUBLISH' || input.action === 'UNPUBLISH' || input.action === 'ARCHIVE') {
+    await requestBroadSavingsBenefitsReevaluation(
+      `program:${input.programId}:${input.action.toLowerCase()}`,
+    );
+  }
 
   return { previousStatus: program.reviewStatus, status: spec.to, action: input.action };
 }
