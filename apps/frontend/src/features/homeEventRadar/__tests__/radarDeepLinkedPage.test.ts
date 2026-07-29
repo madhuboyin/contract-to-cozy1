@@ -5,10 +5,6 @@ const pageSource = fs.readFileSync(path.resolve(
   process.cwd(),
   'src/app/(dashboard)/dashboard/home-event-radar/HomeEventRadarPageClient.tsx',
 ), 'utf8');
-const unifiedHomeSource = fs.readFileSync(path.resolve(
-  process.cwd(),
-  'src/app/(dashboard)/dashboard/components/MobileDashboardHome.tsx',
-), 'utf8');
 
 describe('Home Event Radar URL-backed page state', () => {
   it('derives timing, family, and match selection from the canonical query contract', () => {
@@ -25,9 +21,10 @@ describe('Home Event Radar URL-backed page state', () => {
     expect(pageSource).toContain('Clear event selection');
   });
 
-  it('links Unified Home to the highest-priority canonical match', () => {
-    expect(unifiedHomeSource).toContain('api.getRadarEvents(propertyId');
-    expect(unifiedHomeSource).toContain('buildHomeEventRadarHref({');
-    expect(unifiedHomeSource).toContain('matchId: topRadarItem.propertyMatchId');
-  });
+  // Home Operations Slice 9: this suite previously also asserted that
+  // MobileDashboardHome.tsx deep-linked Home to the top canonical radar
+  // match. That component was dead code (never rendered — UnifiedHomeSurface
+  // replaced it) and has been removed; UnifiedHomeSurface does not carry
+  // this capability today. Flagged as a known gap in the Slice 0-8 launch
+  // review rather than silently dropped or ported here.
 });

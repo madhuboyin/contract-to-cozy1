@@ -27,8 +27,6 @@ import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { WelcomeModal } from './components/WelcomeModal';
 
-import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
-import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import AhaHero from './components/AhaHero';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
@@ -41,8 +39,6 @@ import PriorityAlertBanner from '@/components/dashboard/PriorityAlertBanner';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 import dynamic from 'next/dynamic';
-const MobileDashboardHome = dynamic(() => import('./components/MobileDashboardHome'), { ssr: false });
-const MobileHomeBuyerDashboard = dynamic(() => import('./components/MobileHomeBuyerDashboard'), { ssr: false });
 import { useCelebration } from '@/hooks/useCelebration';
 const MilestoneCelebration = dynamic(
   () => import('@/components/ui/MilestoneCelebration').then((m) => m.MilestoneCelebration),
