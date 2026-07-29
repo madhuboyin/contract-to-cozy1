@@ -2,13 +2,11 @@ import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
 import { ServicePriceRadarService } from '../services/servicePriceRadar.service';
-import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import {
   CreateServicePriceRadarBody,
   listServicePriceRadarQuerySchema,
   TrackServicePriceRadarEventBody,
 } from '../validators/servicePriceRadar.validators';
-import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import {
   assertProjectComplianceApplicable,
@@ -23,21 +21,6 @@ function requireUserId(req: CustomRequest): string {
     throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
   }
   return userId;
-}
-
-function resolveScopeFromLinkedEntities(
-  entities: Array<{ linkedEntityType: string; linkedEntityId: string }> | undefined
-) {
-  let inventoryItemId: string | null = null;
-
-  for (const entity of entities ?? []) {
-    if (!inventoryItemId && (entity.linkedEntityType === 'APPLIANCE' || entity.linkedEntityType === 'SYSTEM')) {
-      inventoryItemId = entity.linkedEntityId;
-    }
-    if (inventoryItemId) break;
-  }
-
-  return { inventoryItemId };
 }
 
 export async function createServicePriceRadarCheck(
@@ -69,58 +52,15 @@ export async function createServicePriceRadarCheck(
       currentContext.contextVersion,
     );
 
-    const guidanceSignalIntentFamily =
-      payload.guidanceSignalIntentFamily?.trim().toLowerCase() || null;
-
-    const issueDomain =
-      guidanceSignalIntentFamily === 'inspection_followup_needed'
-        ? 'MAINTENANCE'
-        : 'ASSET_LIFECYCLE';
-    const guidanceScope = resolveScopeFromLinkedEntities(result.check.linkedEntities);
-
-    try {
-      await guidanceJourneyService.recordToolCompletion({
-        propertyId: req.params.propertyId,
-        actorUserId: userId,
-        journeyId: payload.guidanceJourneyId ?? null,
-        inventoryItemId: guidanceScope.inventoryItemId,
-        signalIntentFamily: guidanceSignalIntentFamily ?? 'lifecycle_end_or_past_life',
-        issueDomain,
-        sourceToolKey: 'service-price-radar',
-        sourceEntityType: 'SERVICE_PRICE_RADAR_CHECK',
-        sourceEntityId: result.check.id,
-        stepKey: payload.guidanceStepKey ?? null,
-        status: 'COMPLETED',
-        producedData: {
-          checkId: result.check.id,
-          serviceCategory: result.check.serviceCategory,
-          verdict: result.check.verdict,
-          confidenceScore: result.check.confidenceScore,
-          fairPriceMin: result.check.expectedLow,
-          fairPriceMax: result.check.expectedHigh,
-          fairPriceMedian: result.check.expectedMedian,
-          currency: result.check.quoteCurrency,
-          quoteAmount: result.check.quoteAmount,
-          explanationShort: result.check.explanationShort,
-          proofType: 'price_validation',
-          proofId: result.check.id,
-        },
-        metadata: {
-          linkedEntityCount: result.check.linkedEntities?.length ?? 0,
-        },
-      });
-    } catch (guidanceError) {
-      logger.warn({ guidanceError }, '[GUIDANCE] service price radar hook failed');
-    }
-
     analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      eventType: AnalyticsEvent.TOOL_USED,
       userId,
       propertyId: req.params.propertyId,
       moduleKey: AnalyticsModule.MARKETPLACE,
       featureKey: AnalyticsFeature.SERVICE_PRICE_RADAR,
       metadataJson: {
-        actionType: 'create_check',
+        actionType: 'check_generated',
+        outcomeCompleted: false,
         verdict: result.check.verdict,
         confidenceScore: result.check.confidenceScore,
       },

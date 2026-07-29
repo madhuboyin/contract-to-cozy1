@@ -183,9 +183,9 @@ export function buildServicePriceRadarGuardrail(
 
   if (input.verdict === 'INSUFFICIENT_DATA' || missingRange) {
     return {
-      title: 'Broad estimate only',
+      title: 'Rough planning range only',
       description: benchmarkMissing
-        ? 'We could only estimate a broad range based on limited property and pricing context.'
+        ? 'No current, qualified benchmark was available. This broad range uses planning assumptions and cannot show whether the quote is fair.'
         : 'We could only estimate a broad range with the context available for this home.',
       tone: 'info',
     };
@@ -195,16 +195,16 @@ export function buildServicePriceRadarGuardrail(
     return {
       title: 'Estimate is directional',
       description:
-        'We used regional pricing data for this estimate. Treat it as a starting point and compare with another quote if the amount matters.',
+        'This result uses broad planning assumptions, not verified regional market data. Review the quote scope and compare another proposal before deciding.',
       tone: 'elevated',
     };
   }
 
   if (benchmarkMissing) {
     return {
-      title: 'Based on regional averages',
+      title: 'Planning assumptions only',
       description:
-        'No direct benchmark was found for this service and area, so we used regional pricing data. Adding a linked appliance or more service detail can improve accuracy.',
+        'No qualified benchmark was found for this work. The range is useful for rough budgeting, but it does not validate the quote.',
       tone: 'info',
     };
   }

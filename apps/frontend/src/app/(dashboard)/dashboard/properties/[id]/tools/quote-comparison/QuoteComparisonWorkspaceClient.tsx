@@ -13,12 +13,21 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
+  confirmQuoteProposal,
+  createQuoteProposal,
+  createQuoteProposalFromDocument,
+  getQuoteComparability,
+  getQuoteComparisonWorkspace,
   listServicePriceRadarChecks,
   getProjectComplianceContext,
   getOrCreateQuoteComparisonWorkspace,
+  type QuoteComparabilityResult,
+  type QuoteProposalReadinessStage,
+  type QuoteProposalSummary,
   type ServicePriceRadarCheckSummary,
   type ServiceRadarVerdict,
 } from '../service-price-radar/servicePriceRadarApi';
+import { api } from '@/lib/api/client';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
@@ -43,6 +52,12 @@ type QuoteCandidate = {
   sourceLabel: string;
   serviceRadarCheckId: string | null;
   createdAt: string | null;
+  readinessStage: QuoteProposalReadinessStage;
+  readinessScore: number;
+  missingFacts: Array<{ key: string; label: string; whyItMatters: string }>;
+  persisted: boolean;
+  extracted: boolean;
+  homeownerConfirmed: boolean;
 };
 
 const CONTEXT_KEYS = [
@@ -86,34 +101,6 @@ function buildContextQuery(searchParams: SearchParamSource): string {
   return serialized ? `?${serialized}` : '';
 }
 
-function buildForwardQuery(
-  searchParams: SearchParamSource,
-  overrides?: Partial<{
-    vendorName: string;
-    quoteAmount: string;
-    serviceCategory: string;
-    serviceRadarCheckId: string;
-    quoteComparisonWorkspaceId: string;
-  }>
-): string {
-  const query = new URLSearchParams();
-  for (const key of CONTEXT_KEYS) {
-    const value = searchParams.get(key);
-    if (value) {
-      query.set(key, value);
-    }
-  }
-
-  if (overrides?.vendorName) query.set('vendorName', overrides.vendorName);
-  if (overrides?.quoteAmount) query.set('quoteAmount', overrides.quoteAmount);
-  if (overrides?.serviceCategory) query.set('serviceCategory', overrides.serviceCategory);
-  if (overrides?.serviceRadarCheckId) query.set('serviceRadarCheckId', overrides.serviceRadarCheckId);
-  if (overrides?.quoteComparisonWorkspaceId) query.set('quoteComparisonWorkspaceId', overrides.quoteComparisonWorkspaceId);
-
-  const serialized = query.toString();
-  return serialized ? `?${serialized}` : '';
-}
-
 function mapRadarCheckToQuote(check: ServicePriceRadarCheckSummary): QuoteCandidate {
   return {
     id: check.id,
@@ -128,6 +115,36 @@ function mapRadarCheckToQuote(check: ServicePriceRadarCheckSummary): QuoteCandid
     sourceLabel: 'Service Price Radar',
     serviceRadarCheckId: check.id,
     createdAt: check.createdAt,
+    readinessStage: 'PLANNING_ESTIMATE',
+    readinessScore: 0,
+    missingFacts: [],
+    persisted: false,
+    extracted: false,
+    homeownerConfirmed: false,
+  };
+}
+
+function mapProposalToQuote(proposal: QuoteProposalSummary): QuoteCandidate {
+  return {
+    id: proposal.id,
+    vendorName: proposal.vendorName,
+    quoteAmount: Number(proposal.quoteAmount),
+    currency: proposal.currency || 'USD',
+    serviceCategory: proposal.serviceCategory,
+    verdict: null,
+    confidenceScore: null,
+    expectedLow: null,
+    expectedHigh: null,
+    sourceLabel: proposal.extractions?.length ? 'Extracted quote document' : 'Saved proposal',
+    serviceRadarCheckId:
+      proposal.sourceType === 'SYSTEM_LINKED' ? proposal.sourceReferenceId : null,
+    createdAt: proposal.createdAt,
+    readinessStage: proposal.readinessStage,
+    readinessScore: proposal.readinessScore,
+    missingFacts: Array.isArray(proposal.missingFactsJson) ? proposal.missingFactsJson : [],
+    persisted: true,
+    extracted: Boolean(proposal.extractions?.length),
+    homeownerConfirmed: Boolean(proposal.homeownerConfirmedAt),
   };
 }
 
@@ -143,43 +160,6 @@ function sortCandidates(quotes: QuoteCandidate[], preferredCategory?: string | n
 
     return a.quoteAmount - b.quoteAmount;
   });
-}
-
-function verdictTone(verdict: ServiceRadarVerdict | null): 'good' | 'info' | 'elevated' | 'danger' {
-  if (verdict === 'UNDERPRICED' || verdict === 'FAIR') return 'good';
-  if (verdict === 'HIGH') return 'elevated';
-  if (verdict === 'VERY_HIGH') return 'danger';
-  return 'info';
-}
-
-function chooseRecommendedQuote(
-  quotes: QuoteCandidate[],
-  preferredCategory?: string | null
-): QuoteCandidate | null {
-  if (quotes.length === 0) return null;
-
-  const scoped =
-    preferredCategory
-      ? quotes.filter((quote) => quote.serviceCategory === preferredCategory)
-      : quotes;
-  const source = scoped.length > 0 ? scoped : quotes;
-
-  const fairCandidates = source.filter(
-    (quote) => quote.verdict === 'UNDERPRICED' || quote.verdict === 'FAIR'
-  );
-  if (fairCandidates.length > 0) {
-    return [...fairCandidates].sort((a, b) => {
-      if (a.quoteAmount !== b.quoteAmount) return a.quoteAmount - b.quoteAmount;
-      return (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0);
-    })[0];
-  }
-
-  const nonHighCandidates = source.filter((quote) => quote.verdict !== 'VERY_HIGH');
-  if (nonHighCandidates.length > 0) {
-    return [...nonHighCandidates].sort((a, b) => a.quoteAmount - b.quoteAmount)[0];
-  }
-
-  return [...source].sort((a, b) => a.quoteAmount - b.quoteAmount)[0];
 }
 
 function formatExpectedRange(quote: QuoteCandidate): string {
@@ -219,8 +199,19 @@ export default function QuoteComparisonWorkspaceClient() {
   const [selectedQuoteIds, setSelectedQuoteIds] = React.useState<string[]>([]);
   const [manualVendorName, setManualVendorName] = React.useState('');
   const [manualQuoteAmount, setManualQuoteAmount] = React.useState('');
+  const [manualScopeKind, setManualScopeKind] = React.useState<'REPAIR' | 'REPLACEMENT' | 'INSTALLATION' | 'MAINTENANCE' | 'INSPECTION' | 'OTHER' | 'UNKNOWN'>('UNKNOWN');
+  const [manualScopeSummary, setManualScopeSummary] = React.useState('');
+  const [manualServiceLocation, setManualServiceLocation] = React.useState('');
+  const [manualLineItem, setManualLineItem] = React.useState('');
+  const [manualInclusions, setManualInclusions] = React.useState('');
+  const [manualExclusions, setManualExclusions] = React.useState('');
+  const [manualWarranty, setManualWarranty] = React.useState('');
+  const [manualPayment, setManualPayment] = React.useState('');
   const [manualInputError, setManualInputError] = React.useState<string | null>(null);
+  const [savingQuote, setSavingQuote] = React.useState(false);
+  const [uploadingQuote, setUploadingQuote] = React.useState(false);
   const [propertyContext, setPropertyContext] = React.useState<PropertyContextEnvelope | null>(null);
+  const [comparability, setComparability] = React.useState<QuoteComparabilityResult | null>(null);
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(
     searchParams.get('quoteComparisonWorkspaceId')
   );
@@ -241,6 +232,12 @@ export default function QuoteComparisonWorkspaceClient() {
       sourceLabel: 'Prefilled quote',
       serviceRadarCheckId: null,
       createdAt: null,
+      readinessStage: 'PLANNING_ESTIMATE',
+      readinessScore: 0,
+      missingFacts: [],
+      persisted: false,
+      extracted: false,
+      homeownerConfirmed: false,
     };
   }, [defaultCategory, defaultQuoteAmount, defaultVendorName]);
 
@@ -261,9 +258,17 @@ export default function QuoteComparisonWorkspaceClient() {
       ]);
       setPropertyContext(context);
       setWorkspaceId(workspaceResult.workspace.id);
+      const [savedWorkspace, comparisonResult] = await Promise.all([
+        getQuoteComparisonWorkspace(propertyId, workspaceResult.workspace.id),
+        getQuoteComparability(propertyId, workspaceResult.workspace.id),
+      ]);
+      setComparability(comparisonResult);
 
       const mappedChecks = checks.map(mapRadarCheckToQuote);
-      const merged = prefilledQuote ? [prefilledQuote, ...mappedChecks] : mappedChecks;
+      const savedQuotes = (savedWorkspace.quotes ?? []).map(mapProposalToQuote);
+      const merged = prefilledQuote
+        ? [prefilledQuote, ...savedQuotes, ...mappedChecks]
+        : [...savedQuotes, ...mappedChecks];
 
       // Deduplicate by id, then sort by category relevance and recency.
       const dedupedMap = new Map<string, QuoteCandidate>();
@@ -276,6 +281,7 @@ export default function QuoteComparisonWorkspaceClient() {
       setError(loadError?.message || 'Unable to load quote candidates.');
       setQuotes(prefilledQuote ? [prefilledQuote] : []);
       setPropertyContext(null);
+      setComparability(null);
     } finally {
       setLoading(false);
     }
@@ -303,24 +309,13 @@ export default function QuoteComparisonWorkspaceClient() {
       const existing = previous.filter((id) => quotes.some((quote) => quote.id === id));
       if (existing.length > 0) return existing.slice(0, 3);
 
-      const recommended = chooseRecommendedQuote(quotes, defaultCategory);
-      const fallbackIds = quotes
-        .filter((quote) => quote.id !== recommended?.id)
-        .slice(0, 1)
-        .map((quote) => quote.id);
-      return [recommended?.id, ...fallbackIds].filter((value): value is string => Boolean(value));
+      return quotes.slice(0, 2).map((quote) => quote.id);
     });
-  }, [defaultCategory, quotes]);
+  }, [quotes]);
 
   const selectedQuotes = React.useMemo(
     () => quotes.filter((quote) => selectedQuoteIds.includes(quote.id)),
     [quotes, selectedQuoteIds]
-  );
-
-  const recommendationPool = selectedQuotes.length > 0 ? selectedQuotes : quotes;
-  const recommendedQuote = React.useMemo(
-    () => chooseRecommendedQuote(recommendationPool, defaultCategory),
-    [defaultCategory, recommendationPool]
   );
 
   const comparisonSpread = React.useMemo(() => {
@@ -335,21 +330,6 @@ export default function QuoteComparisonWorkspaceClient() {
     };
   }, [selectedQuotes]);
 
-  const priceFinalizationQuery = React.useMemo(
-    () =>
-      buildForwardQuery(searchParams, {
-        vendorName: recommendedQuote?.vendorName ?? '',
-        quoteAmount:
-          typeof recommendedQuote?.quoteAmount === 'number'
-            ? recommendedQuote.quoteAmount.toFixed(2)
-            : '',
-        serviceCategory: recommendedQuote?.serviceCategory ?? '',
-        serviceRadarCheckId: recommendedQuote?.serviceRadarCheckId ?? '',
-        quoteComparisonWorkspaceId: workspaceId ?? '',
-      }),
-    [recommendedQuote, searchParams, workspaceId]
-  );
-
   const toggleSelection = (quoteId: string) => {
     setSelectedQuoteIds((previous) => {
       if (previous.includes(quoteId)) {
@@ -362,7 +342,7 @@ export default function QuoteComparisonWorkspaceClient() {
     });
   };
 
-  const addManualQuote = () => {
+  const addManualQuote = async () => {
     const parsedAmount = toNumberOrNull(manualQuoteAmount);
     if (!manualVendorName.trim()) {
       setManualInputError('Vendor name is required.');
@@ -373,26 +353,84 @@ export default function QuoteComparisonWorkspaceClient() {
       return;
     }
 
-    const manualQuote: QuoteCandidate = {
-      id: `manual-${Date.now()}`,
-      vendorName: manualVendorName.trim(),
-      quoteAmount: parsedAmount,
-      currency: 'USD',
-      serviceCategory: defaultCategory || null,
-      verdict: null,
-      confidenceScore: null,
-      expectedLow: null,
-      expectedHigh: null,
-      sourceLabel: 'Manual entry',
-      serviceRadarCheckId: null,
-      createdAt: new Date().toISOString(),
-    };
+    if (!workspaceId) {
+      setManualInputError('The quote workspace is still loading.');
+      return;
+    }
+    setSavingQuote(true);
+    try {
+      const proposal = await createQuoteProposal(propertyId, workspaceId, {
+        vendorName: manualVendorName.trim(),
+        quoteAmount: parsedAmount,
+        serviceCategory: (defaultCategory as ServicePriceRadarCheckSummary['serviceCategory']) || null,
+        quoteDate: new Date().toISOString(),
+        scopeKind: manualScopeKind,
+        scopeSummary: manualScopeSummary.trim() || null,
+        serviceLocation: manualServiceLocation.trim() || null,
+        lineItems: manualLineItem.trim()
+          ? [{ description: manualLineItem.trim(), kind: 'OTHER', total: parsedAmount }]
+          : [],
+        terms: [
+          ...(manualInclusions.trim() ? [{ type: 'INCLUSION' as const, value: manualInclusions.trim(), included: true }] : []),
+          ...(manualExclusions.trim() ? [{ type: 'EXCLUSION' as const, value: manualExclusions.trim(), included: false }] : []),
+          ...(manualWarranty.trim() ? [{ type: 'WARRANTY' as const, value: manualWarranty.trim() }] : []),
+          ...(manualPayment.trim() ? [{ type: 'PAYMENT' as const, value: manualPayment.trim() }] : []),
+        ],
+      });
+      const manualQuote = mapProposalToQuote(proposal);
+      setQuotes((previous) => sortCandidates([manualQuote, ...previous], defaultCategory));
+      setSelectedQuoteIds((previous) => [manualQuote.id, ...previous].slice(0, 3));
+      setManualVendorName('');
+      setManualQuoteAmount('');
+      setManualScopeKind('UNKNOWN');
+      setManualScopeSummary('');
+      setManualServiceLocation('');
+      setManualLineItem('');
+      setManualInclusions('');
+      setManualExclusions('');
+      setManualWarranty('');
+      setManualPayment('');
+      setManualInputError(null);
+      setComparability(await getQuoteComparability(propertyId, workspaceId));
+    } catch (saveError: any) {
+      setManualInputError(saveError?.message || 'Unable to save this quote.');
+    } finally {
+      setSavingQuote(false);
+    }
+  };
 
-    setQuotes((previous) => sortCandidates([manualQuote, ...previous], defaultCategory));
-    setSelectedQuoteIds((previous) => [manualQuote.id, ...previous].slice(0, 3));
-    setManualVendorName('');
-    setManualQuoteAmount('');
+  const uploadQuoteDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !workspaceId) return;
+    setUploadingQuote(true);
     setManualInputError(null);
+    try {
+      const analyzed = await api.analyzeDocument(file, propertyId, false);
+      const documentId = analyzed.data?.document?.id;
+      if (!documentId) throw new Error('Document analysis did not return a saved document.');
+      const proposal = await createQuoteProposalFromDocument(propertyId, workspaceId, documentId);
+      const extractedQuote = mapProposalToQuote(proposal);
+      setQuotes((previous) => sortCandidates([extractedQuote, ...previous], defaultCategory));
+      setSelectedQuoteIds((previous) => [extractedQuote.id, ...previous].slice(0, 3));
+      setComparability(await getQuoteComparability(propertyId, workspaceId));
+    } catch (uploadError: any) {
+      setManualInputError(uploadError?.message || 'Unable to analyze this quote document.');
+    } finally {
+      setUploadingQuote(false);
+    }
+  };
+
+  const confirmExtractedQuote = async (quoteId: string) => {
+    if (!workspaceId) return;
+    try {
+      const proposal = await confirmQuoteProposal(propertyId, workspaceId, quoteId);
+      const confirmed = mapProposalToQuote(proposal);
+      setQuotes((previous) => previous.map((quote) => quote.id === quoteId ? confirmed : quote));
+      setComparability(await getQuoteComparability(propertyId, workspaceId));
+    } catch (confirmError: any) {
+      setError(confirmError?.message || 'Unable to confirm extracted facts.');
+    }
   };
 
   const backHref = isGuidanceContext
@@ -405,12 +443,9 @@ export default function QuoteComparisonWorkspaceClient() {
       })
     : `/dashboard/properties/${propertyId}`;
   const trust = pricingLoopTrust({
-    confidenceLabel:
-      selectedQuotes.length >= 2
-        ? 'High with multiple side-by-side quotes in the same decision flow'
-        : 'Medium until at least two comparable quotes are selected',
+    confidenceLabel: 'Comparison is gated by scope completeness and homeowner confirmation',
     freshnessLabel: 'Updates as new Service Price Radar checks are created',
-    sourceLabel: 'Service Price Radar history + prefilled quote context + manual quote entries',
+    sourceLabel: 'Saved proposals + quote-document extraction provenance + Service Price Radar history',
   });
 
   return (
@@ -418,58 +453,18 @@ export default function QuoteComparisonWorkspaceClient() {
       backHref={backHref}
       backLabel={isGuidanceContext ? 'Back to guidance' : 'Back to property'}
       title="Quote Comparison Workspace"
-      subtitle="Compare live quote checks side by side and choose the best quote to finalize."
+      subtitle="Normalize proposal scope and terms before treating prices as comparable."
       rail={<HomeToolsRail propertyId={propertyId} context="quote-comparison" currentToolId="quote-comparison" />}
       trust={trust}
-      priorityAction={
-        recommendedQuote
-          ? {
-              title: `Recommended quote: ${recommendedQuote.vendorName} at ${formatMoney(recommendedQuote.quoteAmount, recommendedQuote.currency)}`,
-              description:
-                'Use the recommended quote to prefill Price Finalization, then lock accepted terms before booking.',
-              impactLabel: comparisonSpread
-                ? `${formatMoney(comparisonSpread.spread)} spread across selected quotes`
-                : 'Decision handoff ready',
-              confidenceLabel:
-                recommendedQuote.confidenceScore != null
-                  ? `${Math.round(recommendedQuote.confidenceScore * 100)}% quote confidence`
-                  : 'Confidence improves with benchmarked quote checks',
-              primaryAction: (
-                <Link
-                  href={`/dashboard/properties/${propertyId}/tools/price-finalization${priceFinalizationQuery}`}
-                  onClick={() => track('action_completed', { tool: 'quote-comparison', actionType: 'continue_to_finalization', propertyId })}
-                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold text-white hover:bg-black/90"
-                >
-                  Continue to Price Finalization
-                </Link>
-              ),
-              supportingAction: (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Link
-                    href={`/dashboard/properties/${propertyId}/tools/service-price-radar${contextQuery}`}
-                    className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
-                  >
-                    Check another quote
-                  </Link>
-                  <Link
-                    href={`/dashboard/properties/${propertyId}/tools/negotiation-shield${contextQuery}`}
-                    className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
-                  >
-                    Open Negotiation Shield
-                  </Link>
-                </div>
-              ),
-            }
-          : undefined
-      }
+      priorityAction={undefined}
       summary={
         <div className="space-y-3">
           <PropertyContextStatusNotice context={propertyContext} title="Quote comparison context" />
-          {recommendedQuote ? (
+          {selectedQuotes[0] ? (
             <CapabilityDiscoveryAnchor
               anchor="QUOTE_ANALYSIS_RESULT"
               propertyId={propertyId}
-              entityId={recommendedQuote.serviceRadarCheckId ?? recommendedQuote.id}
+              entityId={selectedQuotes[0].serviceRadarCheckId ?? selectedQuotes[0].id}
               journeyId={guidanceJourneyId || undefined}
             />
           ) : null}
@@ -478,14 +473,15 @@ export default function QuoteComparisonWorkspaceClient() {
             title="Quote Decision Snapshot"
             value={selectedQuotes.length}
             status={
-              <StatusChip tone={recommendedQuote ? verdictTone(recommendedQuote.verdict) : 'info'}>
-                {recommendedQuote?.verdict ? formatEnumLabel(recommendedQuote.verdict) : 'Select quotes'}
+              <StatusChip tone={comparability?.status === 'COMPARABLE' ? 'good' : 'info'}>
+                {comparability ? formatEnumLabel(comparability.status) : 'Checking readiness'}
               </StatusChip>
             }
             summary={
-              comparisonSpread
-                ? `Lowest: ${formatMoney(comparisonSpread.low)} · Highest: ${formatMoney(comparisonSpread.high)}`
-                : 'Select at least two quotes to see spread and recommendation strength.'
+              comparability?.reasons[0] ??
+              (comparisonSpread
+                ? `Price spread: ${formatMoney(comparisonSpread.spread)}. Scope comparability is not established yet.`
+                : 'Add at least two complete proposals and confirm extracted facts.')
             }
           />
         </div>
@@ -494,7 +490,7 @@ export default function QuoteComparisonWorkspaceClient() {
         <div className="space-y-4">
           <ScenarioInputCard
             title="Candidate Quotes"
-            subtitle="Select up to 3 quotes to compare. Higher confidence and fair-range quotes are prioritized."
+            subtitle="Select up to 3 proposals. Price is contextual only until scope and terms are comparison ready."
             badge={<StatusChip tone="info">{quotes.length} quotes</StatusChip>}
           >
             {loading ? (
@@ -527,22 +523,39 @@ export default function QuoteComparisonWorkspaceClient() {
                         subtitle={`${formatMoney(quote.quoteAmount, quote.currency)} · ${quote.sourceLabel}`}
                         meta={formatExpectedRange(quote)}
                         status={
-                          <StatusChip tone={verdictTone(quote.verdict)}>
-                            {quote.verdict ? formatEnumLabel(quote.verdict) : 'No verdict'}
+                          <StatusChip tone={quote.readinessStage === 'COMPARISON_READY' ? 'good' : 'info'}>
+                            {formatEnumLabel(quote.readinessStage)}
                           </StatusChip>
                         }
                         trailing={
-                          <Button
-                            type="button"
-                            variant={isSelected ? 'default' : 'outline'}
-                            className="min-h-[36px] px-3 text-xs"
-                            onClick={() => toggleSelection(quote.id)}
-                            disabled={disableSelection}
-                          >
-                            {isSelected ? 'Selected' : 'Select'}
-                          </Button>
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              type="button"
+                              variant={isSelected ? 'default' : 'outline'}
+                              className="min-h-[36px] px-3 text-xs"
+                              onClick={() => toggleSelection(quote.id)}
+                              disabled={disableSelection}
+                            >
+                              {isSelected ? 'Selected' : 'Select'}
+                            </Button>
+                            {quote.persisted && !quote.homeownerConfirmed ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="min-h-[36px] px-3 text-xs"
+                                onClick={() => confirmExtractedQuote(quote.id)}
+                              >
+                                Review and confirm
+                              </Button>
+                            ) : null}
+                          </div>
                         }
                       />
+                      {quote.missingFacts.length > 0 ? (
+                        <p className="mb-0 mt-2 text-xs text-slate-500">
+                          Needed next: {quote.missingFacts.slice(0, 3).map((fact) => fact.label).join(', ')}
+                        </p>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -556,13 +569,29 @@ export default function QuoteComparisonWorkspaceClient() {
           </ScenarioInputCard>
 
           <ScenarioInputCard
+            title="Upload a Quote Document"
+            subtitle="Analyze a PDF or image, keep extraction provenance, then confirm the extracted facts."
+          >
+            <label className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5">
+              {uploadingQuote ? 'Analyzing quote…' : 'Choose quote document'}
+              <input
+                type="file"
+                accept=".pdf,image/*"
+                className="sr-only"
+                disabled={uploadingQuote || !workspaceId}
+                onChange={uploadQuoteDocument}
+              />
+            </label>
+          </ScenarioInputCard>
+
+          <ScenarioInputCard
             title="Add Quote Manually"
-            subtitle="Add a quote that is not yet in Service Price Radar."
+            subtitle="Vendor and total create an incomplete proposal. Add scope and terms before comparison."
             actions={
               <ActionPriorityRow
                 primaryAction={
-                  <Button type="button" onClick={addManualQuote}>
-                    Add manual quote
+                  <Button type="button" onClick={addManualQuote} disabled={savingQuote}>
+                    {savingQuote ? 'Saving…' : 'Add manual quote'}
                   </Button>
                 }
               />
@@ -575,6 +604,85 @@ export default function QuoteComparisonWorkspaceClient() {
                   value={manualVendorName}
                   onChange={(event) => setManualVendorName(event.target.value)}
                   placeholder="Example HVAC Co."
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Work type</span>
+                <select
+                  value={manualScopeKind}
+                  onChange={(event) => setManualScopeKind(event.target.value as typeof manualScopeKind)}
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                >
+                  <option value="UNKNOWN">Choose work type</option>
+                  <option value="REPAIR">Repair</option>
+                  <option value="REPLACEMENT">Replacement</option>
+                  <option value="INSTALLATION">Installation</option>
+                  <option value="MAINTENANCE">Maintenance</option>
+                  <option value="INSPECTION">Inspection</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Service location</span>
+                <input
+                  value={manualServiceLocation}
+                  onChange={(event) => setManualServiceLocation(event.target.value)}
+                  placeholder="Attic, kitchen, exterior…"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm md:col-span-2">
+                <span className="font-medium">Scope summary</span>
+                <input
+                  value={manualScopeSummary}
+                  onChange={(event) => setManualScopeSummary(event.target.value)}
+                  placeholder="What work will the provider perform?"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm md:col-span-2">
+                <span className="font-medium">Primary line item</span>
+                <input
+                  value={manualLineItem}
+                  onChange={(event) => setManualLineItem(event.target.value)}
+                  placeholder="Example: Replace 3-ton attic air handler"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Included work</span>
+                <input
+                  value={manualInclusions}
+                  onChange={(event) => setManualInclusions(event.target.value)}
+                  placeholder="Equipment, labor, cleanup…"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Excluded work</span>
+                <input
+                  value={manualExclusions}
+                  onChange={(event) => setManualExclusions(event.target.value)}
+                  placeholder="Permits, electrical upgrades…"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Warranty</span>
+                <input
+                  value={manualWarranty}
+                  onChange={(event) => setManualWarranty(event.target.value)}
+                  placeholder="Parts and labor coverage"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Payment terms</span>
+                <input
+                  value={manualPayment}
+                  onChange={(event) => setManualPayment(event.target.value)}
+                  placeholder="Deposit and balance timing"
                   className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
                 />
               </label>
@@ -607,10 +715,10 @@ export default function QuoteComparisonWorkspaceClient() {
                   Refresh quotes
                 </Button>
                 <Link
-                  href={`/dashboard/properties/${propertyId}/tools/price-finalization${priceFinalizationQuery}`}
+                  href={`/dashboard/properties/${propertyId}/tools/service-price-radar${contextQuery}`}
                   className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
                 >
-                  Open Price Finalization
+                  Check another quote
                 </Link>
               </div>
             }

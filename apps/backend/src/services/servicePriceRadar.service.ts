@@ -24,6 +24,10 @@ import {
   ServiceRadarVerdictValue,
 } from './servicePriceRadar.types';
 import { logger } from '../lib/logger';
+import {
+  buildServicePriceBenchmarkScopeKey,
+  qualifyServicePriceBenchmark,
+} from './servicePriceBenchmarkQualification';
 
 const prismaAny = prisma as any;
 const engine = new ServicePriceRadarEngine();
@@ -44,6 +48,11 @@ function asNumber(value: unknown): number | null {
 function textOrNull(value: unknown): string | null {
   const trimmed = String(value ?? '').trim();
   return trimmed ? trimmed : null;
+}
+
+function asDate(value: unknown): Date {
+  if (value instanceof Date) return value;
+  return new Date(String(value ?? ''));
 }
 
 function normalizeLooseToken(value: string): string {
@@ -275,16 +284,16 @@ function buildRadarNextAction(
   }
   if (verdict === 'UNDERPRICED') {
     return {
-      href: `/dashboard/providers?propertyId=${propertyId}`,
-      label: 'Book this service',
-      reason: 'Quote looks favorable — book while the price is right',
+      href: `/dashboard/properties/${propertyId}/tools/negotiation-shield`,
+      label: 'Verify the quote scope',
+      reason: 'An unusually low quote can omit important work, permits, warranty coverage, or provider qualifications',
     };
   }
   if (verdict === 'INSUFFICIENT_DATA') {
     return {
-      href: `/dashboard/properties/${propertyId}`,
-      label: 'Complete your property profile',
-      reason: 'More property details improve price estimate accuracy',
+      href: `/dashboard/properties/${propertyId}/tools/negotiation-shield`,
+      label: 'Review missing quote details',
+      reason: 'Clarify scope, exclusions, permits, warranty, and payment terms before deciding',
     };
   }
   return null;
@@ -640,6 +649,14 @@ export function scoreBenchmark(
   property: PropertyContext,
   normalizedSubcategory: string | null
 ): number {
+  const expectedScopeKey = buildServicePriceBenchmarkScopeKey(
+    benchmark.serviceCategory,
+    normalizedSubcategory,
+  );
+  if (benchmark.normalizedScopeKey !== expectedScopeKey) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
   const candidates = normalizeBenchmarkRegionCandidates(property);
   const normalizedRegionKey = normalizeRegionKey(benchmark.regionKey) ?? '';
   let score = 0;
@@ -693,54 +710,147 @@ async function findBestBenchmark(
   serviceSubcategory: string | null
 ): Promise<BenchmarkMatch> {
   try {
+    const evaluatedAt = new Date();
     const rows = await prismaAny.servicePriceBenchmark.findMany({
       where: {
         serviceCategory,
-        isActive: true,
-        effectiveFrom: { lte: new Date() },
-        OR: [
-          { effectiveTo: null },
-          { effectiveTo: { gte: new Date() } },
-        ],
       },
+      take: 500,
       select: {
         id: true,
+        releaseId: true,
         serviceCategory: true,
         serviceSubcategory: true,
+        normalizedScopeKey: true,
         regionType: true,
         regionKey: true,
         homeType: true,
         sizeBand: true,
+        unit: true,
+        quantityLow: true,
+        quantityHigh: true,
+        currency: true,
         baseLow: true,
         baseHigh: true,
         baseMedian: true,
+        percentileLow: true,
+        percentileHigh: true,
+        sampleSize: true,
         laborFactor: true,
         materialFactor: true,
         complexityFactorJson: true,
-        sourceLabel: true,
+        observationNotes: true,
+        release: {
+          select: {
+            version: true,
+            status: true,
+            qualityStatus: true,
+            observationStart: true,
+            observationEnd: true,
+            publishedAt: true,
+            retrievedAt: true,
+            effectiveAt: true,
+            expiresAt: true,
+            geographyDefinitionJson: true,
+            methodologySummary: true,
+            cohortDefinitionJson: true,
+            percentileDefinitionJson: true,
+            reviewedAt: true,
+            activatedAt: true,
+            importRun: {
+              select: {
+                status: true,
+                checksumSha256: true,
+              },
+            },
+            source: {
+              select: {
+                id: true,
+                sourceKey: true,
+                name: true,
+                sourceUrl: true,
+                licenseSummary: true,
+                rightsStatus: true,
+                reviewStatus: true,
+                isActive: true,
+                health: {
+                  select: {
+                    status: true,
+                    checkedAt: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
     let best: ServicePriceBenchmarkRecord | null = null;
     let bestScore = Number.NEGATIVE_INFINITY;
+    const qualificationReasons = new Set<string>();
 
     for (const row of rows as any[]) {
       const candidate: ServicePriceBenchmarkRecord = {
         id: String(row.id),
+        releaseId: String(row.releaseId),
         serviceCategory: String(row.serviceCategory) as ServiceCategoryValue,
         serviceSubcategory: textOrNull(row.serviceSubcategory),
+        normalizedScopeKey: String(row.normalizedScopeKey),
         regionType: String(row.regionType) as ServiceBenchmarkRegionTypeValue,
         regionKey: String(row.regionKey),
         homeType: textOrNull(row.homeType),
         sizeBand: textOrNull(row.sizeBand),
+        unit: String(row.unit),
+        quantityLow: asNumber(row.quantityLow),
+        quantityHigh: asNumber(row.quantityHigh),
+        currency: String(row.currency ?? 'USD').toUpperCase(),
         baseLow: asNumber(row.baseLow) ?? 0,
         baseHigh: asNumber(row.baseHigh) ?? 0,
         baseMedian: asNumber(row.baseMedian),
+        percentileLow: asNumber(row.percentileLow),
+        percentileHigh: asNumber(row.percentileHigh),
+        sampleSize: Number(row.sampleSize ?? 0),
         laborFactor: asNumber(row.laborFactor),
         materialFactor: asNumber(row.materialFactor),
         complexityFactorJson: (row.complexityFactorJson ?? null) as Prisma.JsonValue | null,
-        sourceLabel: textOrNull(row.sourceLabel),
+        observationNotes: textOrNull(row.observationNotes),
+        sourceId: String(row.release?.source?.id ?? ''),
+        sourceKey: String(row.release?.source?.sourceKey ?? ''),
+        sourceName: String(row.release?.source?.name ?? ''),
+        sourceUrl: String(row.release?.source?.sourceUrl ?? ''),
+        licenseSummary: String(row.release?.source?.licenseSummary ?? ''),
+        sourceRightsStatus: String(row.release?.source?.rightsStatus ?? ''),
+        sourceReviewStatus: String(row.release?.source?.reviewStatus ?? ''),
+        sourceIsActive: row.release?.source?.isActive === true,
+        sourceHealthStatus: String(row.release?.source?.health?.status ?? 'UNKNOWN'),
+        sourceHealthCheckedAt: row.release?.source?.health?.checkedAt
+          ? asDate(row.release.source.health.checkedAt)
+          : null,
+        releaseVersion: String(row.release?.version ?? ''),
+        releaseStatus: String(row.release?.status ?? ''),
+        releaseQualityStatus: String(row.release?.qualityStatus ?? ''),
+        observationStart: asDate(row.release?.observationStart),
+        observationEnd: asDate(row.release?.observationEnd),
+        publishedAt: row.release?.publishedAt ? asDate(row.release.publishedAt) : null,
+        retrievedAt: asDate(row.release?.retrievedAt),
+        effectiveAt: asDate(row.release?.effectiveAt),
+        expiresAt: asDate(row.release?.expiresAt),
+        methodologySummary: String(row.release?.methodologySummary ?? ''),
+        geographyDefinitionJson: (row.release?.geographyDefinitionJson ?? null) as Prisma.JsonValue,
+        cohortDefinitionJson: (row.release?.cohortDefinitionJson ?? null) as Prisma.JsonValue,
+        percentileDefinitionJson: (row.release?.percentileDefinitionJson ?? null) as Prisma.JsonValue,
+        reviewedAt: row.release?.reviewedAt ? asDate(row.release.reviewedAt) : null,
+        activatedAt: row.release?.activatedAt ? asDate(row.release.activatedAt) : null,
+        importRunStatus: String(row.release?.importRun?.status ?? ''),
+        importChecksumSha256: String(row.release?.importRun?.checksumSha256 ?? ''),
       };
+
+      const qualification = qualifyServicePriceBenchmark(candidate, evaluatedAt);
+      if (!qualification.qualified) {
+        qualification.reasons.forEach((reason) => qualificationReasons.add(reason));
+        continue;
+      }
 
       const score = scoreBenchmark(candidate, property, serviceSubcategory);
       if (score > bestScore) {
@@ -750,13 +860,30 @@ async function findBestBenchmark(
     }
 
     if (!best || bestScore === Number.NEGATIVE_INFINITY) {
-      return { matched: false, benchmark: null };
+      return {
+        matched: false,
+        qualified: false,
+        benchmark: null,
+        qualificationReasons: qualificationReasons.size
+          ? Array.from(qualificationReasons).sort()
+          : ['NO_MATCHING_BENCHMARK'],
+      };
     }
 
-    return { matched: true, benchmark: best };
+    return {
+      matched: true,
+      qualified: true,
+      benchmark: best,
+      qualificationReasons: [],
+    };
   } catch (error) {
     logger.warn({ err: error }, 'Service Price Radar benchmark lookup skipped');
-    return { matched: false, benchmark: null };
+    return {
+      matched: false,
+      qualified: false,
+      benchmark: null,
+      qualificationReasons: ['SOURCE_UNAVAILABLE'],
+    };
   }
 }
 

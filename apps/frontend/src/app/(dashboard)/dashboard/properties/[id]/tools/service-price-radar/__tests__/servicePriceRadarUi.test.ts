@@ -67,9 +67,9 @@ describe('servicePriceRadarUi', () => {
           expectedHigh: null,
         })
       ).toEqual({
-        title: 'Broad estimate only',
+        title: 'Rough planning range only',
         description:
-          'We could only estimate a broad range based on limited property and pricing context.',
+          'No current, qualified benchmark was available. This broad range uses planning assumptions and cannot show whether the quote is fair.',
         tone: 'info',
       });
     });
@@ -84,11 +84,25 @@ describe('servicePriceRadarUi', () => {
           expectedHigh: 2800,
         })
       ).toEqual({
-        title: 'Directional result',
+        title: 'Estimate is directional',
         description:
-          'This result uses fallback regional assumptions, so it is best treated as a broad guide.',
+          'This result uses broad planning assumptions, not verified regional market data. Review the quote scope and compare another proposal before deciding.',
         tone: 'elevated',
       });
+    });
+
+    it('never upgrades a missing benchmark into a regional-average claim', () => {
+      const guardrail = buildServicePriceRadarGuardrail({
+        verdict: 'INSUFFICIENT_DATA',
+        confidenceScore: 0.58,
+        benchmarkMatched: false,
+        expectedLow: 1500,
+        expectedHigh: 2800,
+      });
+
+      expect(guardrail?.title).toBe('Rough planning range only');
+      expect(guardrail?.description.toLowerCase()).not.toContain('regional average');
+      expect(guardrail?.description.toLowerCase()).not.toContain('regional pricing data');
     });
   });
 });

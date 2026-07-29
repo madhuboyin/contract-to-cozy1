@@ -24,7 +24,6 @@ import {
   type ServicePriceRadarCheckDetail,
   type ServiceRadarCategory,
 } from '@/app/(dashboard)/dashboard/properties/[id]/tools/service-price-radar/servicePriceRadarApi';
-import { completeGuidanceStep } from '@/lib/api/guidanceApi';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatIssueTypeLabel } from '@/features/guidance/utils/guidanceDisplay';
 
@@ -88,7 +87,7 @@ function inferCategory(inventoryCategory: string | null | undefined): ServiceRad
 // Types
 // ---------------------------------------------------------------------------
 
-type Phase = 'loading' | 'prior' | 'form' | 'submitting' | 'result' | 'done';
+type Phase = 'loading' | 'prior' | 'form' | 'submitting' | 'result';
 
 type PriceCheckInlineProps = {
   propertyId: string;
@@ -148,7 +147,6 @@ export function PriceCheckInline({
   const [vendorName, setVendorName] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<ServicePriceRadarCheckDetail | null>(null);
-  const [completing, setCompleting] = React.useState(false);
 
   // ---- Fetch recent checks to detect State C ----
   const recentChecksQuery = useQuery({
@@ -235,29 +233,6 @@ export function PriceCheckInline({
     }
   }
 
-  // ---- Complete step using either the new or prior result ----
-  async function handleComplete(check: ServicePriceRadarCheckDetail) {
-    setCompleting(true);
-    try {
-      await completeGuidanceStep(propertyId, stepId, {
-        checkId: check.id,
-        verdict: check.verdict,
-        quoteAmount: check.quoteAmount,
-        expectedLow: check.expectedLow,
-        expectedHigh: check.expectedHigh,
-        sourceToolKey: 'service-price-radar',
-      });
-      queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
-      queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
-      setPhase('done');
-      onComplete();
-    } catch (err) {
-      console.error('[PriceCheckInline] complete failed', err);
-    } finally {
-      setCompleting(false);
-    }
-  }
-
   const fullToolParams = new URLSearchParams();
   fullToolParams.set('guidanceJourneyId', journeyId);
   fullToolParams.set('guidanceStepKey', stepKey);
@@ -273,16 +248,6 @@ export function PriceCheckInline({
   }
   const fullToolHref = `/dashboard/properties/${propertyId}/tools/service-price-radar?${fullToolParams.toString()}`;
 
-  // ---- Done ----
-  if (phase === 'done') {
-    return (
-      <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-        <CheckCircle className="h-4 w-4 shrink-0" />
-        Price validated. Moving to next step.
-      </div>
-    );
-  }
-
   // ---- Loading ----
   if (phase === 'loading') {
     return (
@@ -296,14 +261,14 @@ export function PriceCheckInline({
   if (phase === 'submitting') {
     return (
       <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-3 text-sm text-[hsl(var(--mobile-text-secondary))]">
-        Checking quote against market rates…
+        Reviewing the quote and available planning context…
       </div>
     );
   }
 
   // ---- State B: Result from new check ----
   if (phase === 'result' && result) {
-    return <ResultView check={result} completing={completing} onComplete={handleComplete} onRecheck={() => setPhase('form')} fullToolHref={fullToolHref} />;
+    return <ResultView check={result} onRecheck={() => setPhase('form')} fullToolHref={fullToolHref} />;
   }
 
   // ---- State C: Prior check exists ----
@@ -322,13 +287,12 @@ export function PriceCheckInline({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Button
-            className="min-h-[44px] w-full"
-            disabled={completing}
-            onClick={() => handleComplete(priorCheck as unknown as ServicePriceRadarCheckDetail)}
+          <Link
+            href={fullToolHref}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 text-sm font-medium text-white"
           >
-            {completing ? 'Saving…' : 'Use this result & continue'}
-          </Button>
+            Open review and record decision
+          </Link>
           <button
             type="button"
             onClick={() => setPhase('form')}
@@ -359,10 +323,10 @@ export function PriceCheckInline({
       {!isGuided ? (
         <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
           <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-            Validate the service quote
+            Review the service quote
           </p>
           <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
-            Enter the quote you received. We&apos;ll compare it against market rates for your area.
+            Enter the quote you received. We&apos;ll show a rough planning range and clearly identify when qualified market evidence is unavailable.
           </p>
         </div>
       ) : null}
@@ -479,14 +443,10 @@ export function PriceCheckInline({
 
 function ResultView({
   check,
-  completing,
-  onComplete,
   onRecheck,
   fullToolHref,
 }: {
   check: ServicePriceRadarCheckDetail;
-  completing: boolean;
-  onComplete: (c: ServicePriceRadarCheckDetail) => void;
   onRecheck: () => void;
   fullToolHref: string;
 }) {
@@ -517,11 +477,11 @@ function ResultView({
         {hasRange && (
           <>
             <div className="rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white p-2 text-center">
-              <p className="text-xs text-[hsl(var(--mobile-text-muted))]">Market low</p>
+              <p className="text-xs text-[hsl(var(--mobile-text-muted))]">Planning low</p>
               <p className="text-sm font-semibold">{formatCurrency(check.expectedLow!)}</p>
             </div>
             <div className="rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white p-2 text-center">
-              <p className="text-xs text-[hsl(var(--mobile-text-muted))]">Market high</p>
+              <p className="text-xs text-[hsl(var(--mobile-text-muted))]">Planning high</p>
               <p className="text-sm font-semibold">{formatCurrency(check.expectedHigh!)}</p>
             </div>
           </>
@@ -530,13 +490,12 @@ function ResultView({
 
       {/* Actions */}
       <div className="flex flex-col gap-2">
-        <Button
-          className="min-h-[44px] w-full"
-          disabled={completing}
-          onClick={() => onComplete(check)}
+        <Link
+          href={fullToolHref}
+          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 text-sm font-medium text-white"
         >
-          {completing ? 'Saving…' : 'Mark price validated & continue'}
-        </Button>
+          Open review and record decision
+        </Link>
         <button
           type="button"
           onClick={onRecheck}

@@ -1,10 +1,23 @@
 import { Router } from 'express';
-import { getOrCreateWorkspace } from '../controllers/quoteComparison.controller';
+import {
+  addQuoteFromDocument,
+  addQuoteProposal,
+  confirmQuote,
+  getComparability,
+  getOrCreateWorkspace,
+  getWorkspace,
+  updateQuote,
+} from '../controllers/quoteComparison.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
-import { getOrCreateQuoteWorkspaceSchema } from '../validators/quoteComparison.validators';
+import {
+  createQuoteFromDocumentSchema,
+  createQuoteProposalSchema,
+  getOrCreateQuoteWorkspaceSchema,
+  updateQuoteProposalSchema,
+} from '../validators/quoteComparison.validators';
 
 const router = Router();
 router.use(apiRateLimiter);
@@ -15,6 +28,45 @@ router.post(
   propertyAuthMiddleware,
   validateBody(getOrCreateQuoteWorkspaceSchema),
   getOrCreateWorkspace,
+);
+
+router.get(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId',
+  propertyAuthMiddleware,
+  getWorkspace,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes',
+  propertyAuthMiddleware,
+  validateBody(createQuoteProposalSchema),
+  addQuoteProposal,
+);
+
+router.patch(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/:quoteId',
+  propertyAuthMiddleware,
+  validateBody(updateQuoteProposalSchema),
+  updateQuote,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/from-document',
+  propertyAuthMiddleware,
+  validateBody(createQuoteFromDocumentSchema),
+  addQuoteFromDocument,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/:quoteId/confirm',
+  propertyAuthMiddleware,
+  confirmQuote,
+);
+
+router.get(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/comparability',
+  propertyAuthMiddleware,
+  getComparability,
 );
 
 export default router;

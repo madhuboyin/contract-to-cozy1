@@ -411,6 +411,10 @@ function determineVerdict(quoteAmount: number, low: number | null, high: number 
   return 'VERY_HIGH';
 }
 
+function hasQualifiedBenchmark(match: BenchmarkMatch): boolean {
+  return match.matched && match.qualified && Boolean(match.benchmark);
+}
+
 function confidenceBand(confidence: number | null): 'low' | 'medium' | 'high' | 'unknown' {
   if (confidence === null || confidence === undefined) return 'unknown';
   if (confidence >= 0.72) return 'high';
@@ -469,6 +473,7 @@ export class ServicePriceRadarEngine {
     linkedEntities: LinkedEntityContext[],
     benchmarkMatch: BenchmarkMatch
   ): ServicePriceRadarEvaluation {
+    const qualifiedBenchmarkMatched = hasQualifiedBenchmark(benchmarkMatch);
     const heuristic = CATEGORY_HEURISTICS[input.serviceCategory] ?? CATEGORY_HEURISTICS.OTHER;
     const normalizedSubcategory = normalizeFreeform(input.serviceSubcategory) ?? normalizeFreeform(input.serviceLabelRaw);
 
@@ -484,10 +489,10 @@ export class ServicePriceRadarEngine {
     const reasonCodes = new Set<string>();
     const notes = [...heuristic.notes];
 
-    let low = benchmarkMatch.matched && benchmarkMatch.benchmark ? benchmarkMatch.benchmark.baseLow : heuristic.baseLow;
-    let high = benchmarkMatch.matched && benchmarkMatch.benchmark ? benchmarkMatch.benchmark.baseHigh : heuristic.baseHigh;
+    let low = qualifiedBenchmarkMatched && benchmarkMatch.benchmark ? benchmarkMatch.benchmark.baseLow : heuristic.baseLow;
+    let high = qualifiedBenchmarkMatched && benchmarkMatch.benchmark ? benchmarkMatch.benchmark.baseHigh : heuristic.baseHigh;
     let median =
-      benchmarkMatch.matched && benchmarkMatch.benchmark?.baseMedian != null
+      qualifiedBenchmarkMatched && benchmarkMatch.benchmark?.baseMedian != null
         ? benchmarkMatch.benchmark.baseMedian
         : (low + high) / 2;
 
@@ -497,7 +502,14 @@ export class ServicePriceRadarEngine {
       { code: 'REGION_BASELINE', multiplier: region.multiplier, note: region.note, reasonCode: 'REGION_BASELINE' },
       { code: 'PROPERTY_AGE', multiplier: age.multiplier, note: age.note, reasonCode: age.reasonCode },
       { code: 'LINKED_CONTEXT', multiplier: linked.multiplier, note: linked.note, reasonCode: linked.reasonCodes },
-      { code: 'BENCHMARK_FACTORS', multiplier: benchmark.multiplier, note: benchmark.note, reasonCode: benchmarkMatch.matched ? 'BENCHMARK' : 'HEURISTIC_FALLBACK' },
+      {
+        code: 'BENCHMARK_FACTORS',
+        multiplier: qualifiedBenchmarkMatched ? benchmark.multiplier : 1,
+        note: qualifiedBenchmarkMatched
+          ? benchmark.note
+          : 'No qualified benchmark was available, so this range is planning guidance only.',
+        reasonCode: qualifiedBenchmarkMatched ? 'QUALIFIED_BENCHMARK' : 'PLANNING_ASSUMPTIONS',
+      },
     ];
 
     for (const item of adjustmentSeries) {
@@ -529,8 +541,8 @@ export class ServicePriceRadarEngine {
     median = round(clamp(median, low, high));
 
     let confidence = 0.32;
-    if (benchmarkMatch.matched) confidence += 0.28;
-    if (benchmarkMatch.benchmark?.serviceSubcategory && normalizedSubcategory && benchmarkMatch.benchmark.serviceSubcategory === normalizedSubcategory) confidence += 0.08;
+    if (qualifiedBenchmarkMatched) confidence += 0.28;
+    if (qualifiedBenchmarkMatched && benchmarkMatch.benchmark?.serviceSubcategory && normalizedSubcategory && benchmarkMatch.benchmark.serviceSubcategory === normalizedSubcategory) confidence += 0.08;
     if (property.sizeBand) confidence += 0.06;
     if (property.yearBuilt) confidence += 0.05;
     if (linkedEntities.length) confidence += 0.08;
@@ -543,7 +555,9 @@ export class ServicePriceRadarEngine {
     }
     confidence = round(clamp(confidence, 0.18, 0.92), 4);
 
-    const verdict = determineVerdict(normalizedQuote.quoteAmountUsd, low, high, confidence);
+    const verdict = qualifiedBenchmarkMatched
+      ? determineVerdict(normalizedQuote.quoteAmountUsd, low, high, confidence)
+      : 'INSUFFICIENT_DATA';
     const lowConfidence = confidence !== null && confidence < 0.5;
     const explanationShort = buildExplanationShort(
       verdict,
@@ -552,9 +566,9 @@ export class ServicePriceRadarEngine {
       high,
       input.serviceCategory,
       confidence,
-      benchmarkMatch.matched
+      qualifiedBenchmarkMatched
     );
-    const mode = benchmarkMatch.matched ? 'benchmark' : 'fallback';
+    const mode = qualifiedBenchmarkMatched ? 'qualified_benchmark' : 'planning';
     const confidenceLabel = confidenceBand(confidence);
 
     const propertySnapshotJson = {
@@ -598,11 +612,31 @@ export class ServicePriceRadarEngine {
         fxSource: normalizedQuote.fxSource,
       },
       benchmark: {
-        matched: benchmarkMatch.matched,
+        matched: qualifiedBenchmarkMatched,
+        evidenceLevel: qualifiedBenchmarkMatched ? 'QUALIFIED_BENCHMARK' : 'CATEGORY_HEURISTIC_ONLY',
         benchmarkId: benchmarkMatch.benchmark?.id ?? null,
+        releaseId: benchmarkMatch.benchmark?.releaseId ?? null,
+        releaseVersion: benchmarkMatch.benchmark?.releaseVersion ?? null,
         regionType: benchmarkMatch.benchmark?.regionType ?? null,
         regionKey: benchmarkMatch.benchmark?.regionKey ?? null,
-        sourceLabel: benchmarkMatch.benchmark?.sourceLabel ?? null,
+        normalizedScopeKey: benchmarkMatch.benchmark?.normalizedScopeKey ?? null,
+        unit: benchmarkMatch.benchmark?.unit ?? null,
+        sampleSize: benchmarkMatch.benchmark?.sampleSize ?? null,
+        percentileLow: benchmarkMatch.benchmark?.percentileLow ?? null,
+        percentileHigh: benchmarkMatch.benchmark?.percentileHigh ?? null,
+        sourceKey: benchmarkMatch.benchmark?.sourceKey ?? null,
+        sourceName: benchmarkMatch.benchmark?.sourceName ?? null,
+        sourceUrl: benchmarkMatch.benchmark?.sourceUrl ?? null,
+        observationStart: benchmarkMatch.benchmark?.observationStart.toISOString() ?? null,
+        observationEnd: benchmarkMatch.benchmark?.observationEnd.toISOString() ?? null,
+        retrievedAt: benchmarkMatch.benchmark?.retrievedAt.toISOString() ?? null,
+        effectiveAt: benchmarkMatch.benchmark?.effectiveAt.toISOString() ?? null,
+        expiresAt: benchmarkMatch.benchmark?.expiresAt.toISOString() ?? null,
+        methodologySummary: benchmarkMatch.benchmark?.methodologySummary ?? null,
+        geographyDefinition: benchmarkMatch.benchmark?.geographyDefinitionJson ?? null,
+        cohortDefinition: benchmarkMatch.benchmark?.cohortDefinitionJson ?? null,
+        percentileDefinition: benchmarkMatch.benchmark?.percentileDefinitionJson ?? null,
+        qualificationReasons: benchmarkMatch.qualificationReasons,
       },
       confidence: {
         score: confidence,
@@ -623,13 +657,14 @@ export class ServicePriceRadarEngine {
       reasonCodes: Array.from(reasonCodes),
       notes,
       limitations:
-        verdict === 'INSUFFICIENT_DATA'
-          ? ['Estimate is broad because the available property or pricing context was limited.']
+        !qualifiedBenchmarkMatched
+          ? [
+              'No current, reviewed benchmark with complete provenance was available.',
+              'This rough planning range cannot determine whether the quote is fair, high, or underpriced.',
+            ]
           : !normalizedQuote.fxSupported
             ? ['Quote currency is outside supported FX currencies; fairness result is directional only.']
-          : !benchmarkMatch.matched
-            ? ['Direct benchmark data was unavailable, so fallback regional assumptions were used.']
-            : lowConfidence
+          : lowConfidence
               ? ['Estimate confidence is limited, so treat the result as directional rather than exact.']
               : [],
     };

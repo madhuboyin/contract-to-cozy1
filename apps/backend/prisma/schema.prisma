@@ -1513,6 +1513,52 @@ enum ServiceBenchmarkRegionType {
   COUNTY
 }
 
+enum ServiceBenchmarkRightsStatus {
+  PENDING
+  APPROVED
+  RESTRICTED
+  REVOKED
+}
+
+enum ServiceBenchmarkReviewStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ServiceBenchmarkImportStatus {
+  PENDING
+  RUNNING
+  VALIDATED
+  FAILED
+  REJECTED
+}
+
+enum ServiceBenchmarkReleaseStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  ACTIVE
+  DEACTIVATED
+  ROLLED_BACK
+}
+
+enum ServiceBenchmarkQualityStatus {
+  PENDING
+  PASSED
+  FAILED
+  QUARANTINED
+}
+
+enum ServiceBenchmarkSourceHealthStatus {
+  UNKNOWN
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+}
+
 enum QuoteComparisonWorkspaceStatus {
   DRAFT
   SHORTLISTED
@@ -1525,6 +1571,65 @@ enum QuoteComparisonQuoteDecision {
   SHORTLISTED
   ACCEPTED
   REJECTED
+}
+
+enum QuoteProposalReadinessStage {
+  PLANNING_ESTIMATE
+  INCOMPLETE_QUOTE
+  REVIEW_READY
+  COMPARISON_READY
+}
+
+enum QuoteExtractionStatus {
+  PENDING
+  EXTRACTED
+  FAILED
+  CONFIRMED
+}
+
+enum QuoteFactConfirmationStatus {
+  EXTRACTED_UNCONFIRMED
+  HOMEOWNER_CONFIRMED
+  HOMEOWNER_CORRECTED
+  NOT_APPLICABLE
+}
+
+enum QuoteScopeKind {
+  REPAIR
+  REPLACEMENT
+  INSTALLATION
+  MAINTENANCE
+  INSPECTION
+  OTHER
+  UNKNOWN
+}
+
+enum QuoteLineItemKind {
+  LABOR
+  MATERIAL
+  EQUIPMENT
+  PERMIT
+  DISPOSAL
+  TAX
+  ALLOWANCE
+  OTHER
+}
+
+enum QuoteTermType {
+  INCLUSION
+  EXCLUSION
+  ALLOWANCE
+  PERMIT
+  DISPOSAL
+  CLEANUP
+  WARRANTY
+  PAYMENT
+  SCHEDULE
+  EXPIRATION
+  LICENSE
+  INSURANCE
+  CHANGE_ORDER
+  OTHER
 }
 
 enum PriceFinalizationStatus {
@@ -3467,6 +3572,7 @@ model Document {
   propertyTaxAppealComparables PropertyTaxAppealComparable[] @relation("PropertyTaxAppealComparableDocument")
   propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[] @relation("PropertyTaxAppealFilingConfirmation")
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
+  quoteComparisonExtractions QuoteComparisonExtraction[]
 
   homeSavingsAccountId     String?
   homeSavingsOpportunityId String?
@@ -8300,31 +8406,139 @@ model ServiceRadarCheckSystemLink {
   @@map("service_radar_check_system_links")
 }
 
+model ServicePriceBenchmarkSource {
+  id                 String                       @id @default(uuid())
+  sourceKey          String                       @unique
+  name               String
+  ownerName          String
+  sourceUrl          String
+  licenseSummary     String
+  rightsStatus       ServiceBenchmarkRightsStatus @default(PENDING)
+  reviewStatus       ServiceBenchmarkReviewStatus @default(DRAFT)
+  isActive           Boolean                      @default(false)
+  approvedByUserId   String?
+  approvedAt         DateTime?
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+
+  importRuns ServicePriceBenchmarkImportRun[]
+  releases   ServicePriceBenchmarkRelease[]
+  health     ServicePriceBenchmarkSourceHealth?
+
+  @@index([isActive, rightsStatus, reviewStatus])
+  @@map("service_price_benchmark_sources")
+}
+
+model ServicePriceBenchmarkImportRun {
+  id                String                       @id @default(uuid())
+  sourceId          String
+  externalRunKey    String
+  status            ServiceBenchmarkImportStatus @default(PENDING)
+  sourceVersion     String
+  checksumSha256    String
+  requestedByUserId String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  rowCount          Int                          @default(0)
+  acceptedRowCount  Int                          @default(0)
+  rejectedRowCount  Int                          @default(0)
+  validationJson    Json?
+  errorSummary      String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  source  ServicePriceBenchmarkSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  release ServicePriceBenchmarkRelease?
+
+  @@unique([sourceId, externalRunKey])
+  @@index([sourceId, status, createdAt(sort: Desc)])
+  @@map("service_price_benchmark_import_runs")
+}
+
+model ServicePriceBenchmarkRelease {
+  id                       String                        @id @default(uuid())
+  sourceId                 String
+  importRunId              String                        @unique
+  version                  String
+  status                   ServiceBenchmarkReleaseStatus @default(DRAFT)
+  qualityStatus            ServiceBenchmarkQualityStatus @default(PENDING)
+  observationStart         DateTime
+  observationEnd           DateTime
+  publishedAt              DateTime?
+  retrievedAt              DateTime
+  effectiveAt              DateTime
+  expiresAt                DateTime
+  geographyDefinitionJson  Json
+  methodologySummary       String
+  cohortDefinitionJson     Json
+  percentileDefinitionJson Json
+  reviewNotes              String?
+  reviewedByUserId         String?
+  reviewedAt               DateTime?
+  activatedByUserId        String?
+  activatedAt              DateTime?
+  deactivatedAt            DateTime?
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+
+  source     ServicePriceBenchmarkSource    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  importRun  ServicePriceBenchmarkImportRun @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+  benchmarks ServicePriceBenchmark[]
+
+  @@unique([sourceId, version])
+  @@index([status, qualityStatus, effectiveAt, expiresAt])
+  @@index([sourceId, observationEnd(sort: Desc)])
+  @@map("service_price_benchmark_releases")
+}
+
+model ServicePriceBenchmarkSourceHealth {
+  id                  String                             @id @default(uuid())
+  sourceId            String                             @unique
+  status              ServiceBenchmarkSourceHealthStatus @default(UNKNOWN)
+  checkedAt           DateTime
+  lastHealthyAt       DateTime?
+  lastImportAt        DateTime?
+  consecutiveFailures Int                                @default(0)
+  detailsJson         Json?
+  updatedAt           DateTime                           @updatedAt
+
+  source ServicePriceBenchmarkSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([status, checkedAt])
+  @@map("service_price_benchmark_source_health")
+}
+
 model ServicePriceBenchmark {
   id                   String                     @id @default(uuid())
+  releaseId            String
   serviceCategory      ServiceCategory
   serviceSubcategory   String?
+  normalizedScopeKey   String
   regionType           ServiceBenchmarkRegionType
   regionKey            String
   homeType             String?
   sizeBand             String?
+  unit                 String
+  quantityLow          Decimal?                   @db.Decimal(12, 3)
+  quantityHigh         Decimal?                   @db.Decimal(12, 3)
+  currency             String                     @default("USD") @db.VarChar(3)
   baseLow              Decimal                    @db.Decimal(12, 2)
   baseHigh             Decimal                    @db.Decimal(12, 2)
   baseMedian           Decimal?                   @db.Decimal(12, 2)
+  percentileLow        Decimal?                   @db.Decimal(6, 3)
+  percentileHigh       Decimal?                   @db.Decimal(6, 3)
+  sampleSize           Int
   laborFactor          Decimal?                   @db.Decimal(6, 3)
   materialFactor       Decimal?                   @db.Decimal(6, 3)
   complexityFactorJson Json?
-  effectiveFrom        DateTime
-  effectiveTo          DateTime?
-  sourceLabel          String?
-  isActive             Boolean                    @default(true)
+  observationNotes     String?
   createdAt            DateTime                   @default(now())
-  updatedAt            DateTime                   @updatedAt
 
+  release ServicePriceBenchmarkRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, serviceCategory, normalizedScopeKey, regionType, regionKey, homeType, sizeBand, unit])
   @@index([serviceCategory, regionType, regionKey])
-  @@index([isActive])
-  @@index([effectiveFrom])
-  @@index([effectiveTo])
+  @@index([releaseId])
   @@map("service_price_benchmarks")
 }
 
@@ -8389,7 +8603,12 @@ model QuoteComparisonQuote {
   quoteAmount     Decimal   @db.Decimal(12, 2)
   currency        String    @default("USD")
   quoteDate       DateTime?
+  expirationDate  DateTime?
   serviceLabelRaw String?
+  serviceCategory ServiceCategory?
+  serviceLocation String?
+  scopeKind       QuoteScopeKind @default(UNKNOWN)
+  scopeSummary    String?
   notes           String?
 
   sourceType        ServiceRadarQuoteSource @default(MANUAL)
@@ -8402,14 +8621,132 @@ model QuoteComparisonQuote {
   decision   QuoteComparisonQuoteDecision @default(UNDECIDED)
   isSelected Boolean                      @default(false)
 
+  readinessStage   QuoteProposalReadinessStage @default(PLANNING_ESTIMATE)
+  readinessScore   Int                         @default(0)
+  comparabilityKey String?
+  missingFactsJson Json?
+  ambiguitiesJson  Json?
+
+  providerLicenseNumber   String?
+  providerLicenseVerified Boolean?
+  providerInsuranceVerified Boolean?
+  homeownerConfirmedAt    DateTime?
+  homeownerConfirmedByUserId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace QuoteComparisonWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace        QuoteComparisonWorkspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lineItems        QuoteComparisonLineItem[]
+  terms            QuoteComparisonTerm[]
+  extractions      QuoteComparisonExtraction[]
+  factConfirmations QuoteComparisonFactConfirmation[]
 
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([workspaceId, decision])
+  @@index([workspaceId, readinessStage])
+  @@index([comparabilityKey])
   @@map("quote_comparison_quotes")
+}
+
+model QuoteComparisonLineItem {
+  id      String @id @default(uuid())
+  quoteId String
+
+  kind        QuoteLineItemKind @default(OTHER)
+  description String
+  quantity    Decimal?          @db.Decimal(12, 3)
+  unit        String?
+  unitPrice   Decimal?          @db.Decimal(12, 2)
+  total       Decimal?          @db.Decimal(12, 2)
+  sortOrder   Int               @default(0)
+
+  confirmationStatus QuoteFactConfirmationStatus @default(EXTRACTED_UNCONFIRMED)
+  confidence         Float?
+  sourceText         String?
+  sourcePage         Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quote QuoteComparisonQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, sortOrder])
+  @@map("quote_comparison_line_items")
+}
+
+model QuoteComparisonTerm {
+  id      String @id @default(uuid())
+  quoteId String
+
+  type     QuoteTermType
+  label    String?
+  value    String
+  included Boolean?
+
+  confirmationStatus QuoteFactConfirmationStatus @default(EXTRACTED_UNCONFIRMED)
+  confidence         Float?
+  sourceText         String?
+  sourcePage         Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quote QuoteComparisonQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, type])
+  @@map("quote_comparison_terms")
+}
+
+model QuoteComparisonExtraction {
+  id         String @id @default(uuid())
+  quoteId    String
+  documentId String
+
+  status        QuoteExtractionStatus @default(PENDING)
+  provider      String?
+  model         String?
+  schemaVersion String
+  rawResultJson Json?
+  warningsJson  Json?
+  errorMessage  String?
+  startedAt     DateTime              @default(now())
+  completedAt   DateTime?
+  confirmedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quote    QuoteComparisonQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  document Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, createdAt(sort: Desc)])
+  @@index([documentId])
+  @@map("quote_comparison_extractions")
+}
+
+model QuoteComparisonFactConfirmation {
+  id      String @id @default(uuid())
+  quoteId String
+  fieldKey String
+
+  extractedValueJson Json?
+  confirmedValueJson Json?
+  status             QuoteFactConfirmationStatus @default(EXTRACTED_UNCONFIRMED)
+  confidence         Float?
+  sourceText         String?
+  sourcePage         Int?
+  confirmedByUserId  String?
+  confirmedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quote QuoteComparisonQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, fieldKey])
+  @@index([quoteId, status])
+  @@map("quote_comparison_fact_confirmations")
 }
 
 model PriceFinalization {

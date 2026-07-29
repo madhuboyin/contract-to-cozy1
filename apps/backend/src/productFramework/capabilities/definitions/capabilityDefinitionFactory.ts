@@ -382,9 +382,21 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
     acceptedContext: ['PROPERTY', 'JOURNEY', 'PROJECT'],
   },
   'service-price-radar': {
-    sourceKinds: ['MAINTENANCE', 'PROJECT', 'GUIDANCE'],
+    sourceKinds: ['MAINTENANCE', 'PROJECT', 'GUIDANCE', 'INCIDENT', 'SYSTEM'],
     triggerFamily: 'SERVICE_DECISION_ACTIVE',
-    reason: 'A repair, maintenance, contractor, or quote decision is active.',
+    reason: 'A quote or explicit service-quote decision is ready to review.',
+    requiresExplicitTrigger: true,
+    acceptedContext: [
+      'PROPERTY',
+      'INVENTORY_ITEM',
+      'DOCUMENT',
+      'PROJECT',
+      'ROOM',
+      'ISSUE',
+      'SERVICE',
+      'JOURNEY',
+      'HOME_ACTION',
+    ],
   },
   'status-board': {
     sourceKinds: ['GUIDANCE', 'MAINTENANCE', 'INCIDENT'],

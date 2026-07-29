@@ -192,24 +192,62 @@ export type LinkedEntityContext = {
 
 export type ServicePriceBenchmarkRecord = {
   id: string;
+  releaseId: string;
+  normalizedScopeKey: string;
   serviceCategory: ServiceCategoryValue;
   serviceSubcategory: string | null;
   regionType: ServiceBenchmarkRegionTypeValue;
   regionKey: string;
   homeType: string | null;
   sizeBand: string | null;
+  unit: string;
+  quantityLow: number | null;
+  quantityHigh: number | null;
+  currency: string;
   baseLow: number;
   baseHigh: number;
   baseMedian: number | null;
+  percentileLow: number | null;
+  percentileHigh: number | null;
+  sampleSize: number;
   laborFactor: number | null;
   materialFactor: number | null;
   complexityFactorJson: Prisma.JsonValue | null;
-  sourceLabel: string | null;
+  observationNotes: string | null;
+  sourceId: string;
+  sourceKey: string;
+  sourceName: string;
+  sourceUrl: string;
+  licenseSummary: string;
+  sourceRightsStatus: string;
+  sourceReviewStatus: string;
+  sourceIsActive: boolean;
+  sourceHealthStatus: string;
+  sourceHealthCheckedAt: Date | null;
+  releaseVersion: string;
+  releaseStatus: string;
+  releaseQualityStatus: string;
+  observationStart: Date;
+  observationEnd: Date;
+  publishedAt: Date | null;
+  retrievedAt: Date;
+  effectiveAt: Date;
+  expiresAt: Date;
+  methodologySummary: string;
+  geographyDefinitionJson: Prisma.JsonValue;
+  cohortDefinitionJson: Prisma.JsonValue;
+  percentileDefinitionJson: Prisma.JsonValue;
+  reviewedAt: Date | null;
+  activatedAt: Date | null;
+  importRunStatus: string;
+  importChecksumSha256: string;
 };
 
 export type BenchmarkMatch = {
   matched: boolean;
+  qualified: boolean;
   benchmark: ServicePriceBenchmarkRecord | null;
+  qualificationReasons: string[];
 };
 
 export type PriceAdjustment = {

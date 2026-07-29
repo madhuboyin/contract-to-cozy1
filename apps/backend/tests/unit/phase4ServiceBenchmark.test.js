@@ -29,6 +29,7 @@ const property = {
 function benchmark(overrides = {}) {
   return {
     id: 'benchmark-1',
+    normalizedScopeKey: 'hvac:general',
     serviceCategory: 'HVAC',
     serviceSubcategory: null,
     regionType: 'STATE',
@@ -63,4 +64,15 @@ test('benchmark matching accepts generic or exact canonical property dimensions'
     homeType: 'SINGLE_FAMILY_DETACHED',
     sizeBand: 'MEDIUM',
   }), property, null)));
+});
+
+test('benchmark matching rejects a different normalized service scope', () => {
+  assert.equal(
+    scoreBenchmark(
+      benchmark({ normalizedScopeKey: 'hvac:heat_pump_replacement' }),
+      property,
+      null,
+    ),
+    Number.NEGATIVE_INFINITY,
+  );
 });

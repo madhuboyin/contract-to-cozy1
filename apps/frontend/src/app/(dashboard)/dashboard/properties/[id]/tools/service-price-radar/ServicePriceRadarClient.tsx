@@ -357,7 +357,7 @@ function buildNegotiationShieldHref(
     resolvedNextStepKey ??
     (check.verdict === 'VERY_HIGH' || check.verdict === 'HIGH'
       ? 'compare_quotes'
-      : check.verdict === 'FAIR' || check.verdict === 'UNDERPRICED'
+      : check.verdict === 'FAIR'
         ? 'finalize_price'
         : 'prepare_negotiation');
 
@@ -398,7 +398,7 @@ function deriveHandoffStepKey(
     guidanceNextStepKey ??
     (check.verdict === 'VERY_HIGH' || check.verdict === 'HIGH'
       ? 'compare_quotes'
-      : check.verdict === 'FAIR' || check.verdict === 'UNDERPRICED'
+      : check.verdict === 'FAIR'
         ? 'finalize_price'
         : 'prepare_negotiation')
   );
@@ -453,6 +453,14 @@ function extractFactorChips(check: ServicePriceRadarCheckDetail): string[] {
 function extractBenchmarkMeta(check: ServicePriceRadarCheckDetail): {
   benchmarkMatched: boolean;
   estimationMode: 'benchmark' | 'fallback';
+  sourceName: string | null;
+  sourceUrl: string | null;
+  releaseVersion: string | null;
+  observationStart: string | null;
+  observationEnd: string | null;
+  expiresAt: string | null;
+  sampleSize: number | null;
+  methodologySummary: string | null;
 } {
   const pricing = asRecord(check.pricingFactorsJson);
   const benchmark = asRecord(pricing?.benchmark ?? null);
@@ -460,23 +468,29 @@ function extractBenchmarkMeta(check: ServicePriceRadarCheckDetail): {
   return {
     benchmarkMatched,
     estimationMode: benchmarkMatched ? 'benchmark' : 'fallback',
+    sourceName: typeof benchmark?.sourceName === 'string' ? benchmark.sourceName : null,
+    sourceUrl: typeof benchmark?.sourceUrl === 'string' ? benchmark.sourceUrl : null,
+    releaseVersion: typeof benchmark?.releaseVersion === 'string' ? benchmark.releaseVersion : null,
+    observationStart: typeof benchmark?.observationStart === 'string' ? benchmark.observationStart : null,
+    observationEnd: typeof benchmark?.observationEnd === 'string' ? benchmark.observationEnd : null,
+    expiresAt: typeof benchmark?.expiresAt === 'string' ? benchmark.expiresAt : null,
+    sampleSize: typeof benchmark?.sampleSize === 'number' ? benchmark.sampleSize : null,
+    methodologySummary:
+      typeof benchmark?.methodologySummary === 'string' ? benchmark.methodologySummary : null,
   };
 }
 
 function sanitizeExplanationText(text: string | null | undefined): string | null {
   if (!text) return null;
   return text
-    .replace(/\. ?This result uses fallback regional assumptions\./gi, '.')
-    .replace(/This result uses fallback regional assumptions for this property\./gi, 'Based on regional pricing data for your area.')
-    .replace(/This result uses fallback regional assumptions\./gi, 'Based on regional pricing data for your area.')
-    .replace(/fallback regional assumptions/gi, 'regional pricing data')
-    .replace(/^Directional result:\s*/i, '')
+    .replace(/fallback regional assumptions/gi, 'broad planning assumptions')
     .trim() || null;
 }
 
 const REASON_LABEL_MAP: Record<string, string> = {
-  'Heuristic Fallback': 'Regional pricing data',
-  'Heuristic fallback': 'Regional pricing data',
+  'Heuristic Fallback': 'Planning assumptions',
+  'Heuristic fallback': 'Planning assumptions',
+  'Planning Assumptions': 'Planning assumptions',
   'System Context': 'Property details',
   'Region Baseline': 'Area pricing',
   'Service Scope': 'Service type',
@@ -736,21 +750,34 @@ export default function ServicePriceRadarClient() {
   const pricingTrust = pricingLoopTrust({
     confidenceLabel:
       currentCheck?.confidenceScore != null
-        ? `${Math.round(currentCheck.confidenceScore * 100)}% quote confidence`
-        : 'Confidence improves with richer quote context',
-    freshnessLabel: 'Updates with each quote check and linked entity adjustment',
+        ? `${Math.round(currentCheck.confidenceScore * 100)}% input completeness signal`
+        : 'Input completeness improves with richer quote context',
+    freshnessLabel: 'Recomputed with each quote check and linked entity adjustment',
     sourceLabel:
-      'Service category priors + property context + linked entities + regional pricing factors',
+      'Service category planning assumptions + property context + linked entities',
   });
   const currentVerdict = verdictMeta(currentCheck?.verdict ?? null);
-  const currentConfidence = confidenceMeta(currentCheck?.confidenceScore ?? null);
   const currentReasons = currentCheck ? extractReasons(currentCheck) : [];
   const adjustmentRows = currentCheck ? extractAdjustmentRows(currentCheck) : [];
   const factorChips = currentCheck ? extractFactorChips(currentCheck) : [];
   const currentLinkedEntities = currentCheck?.linkedEntities ?? [];
   const currentBenchmarkMeta = currentCheck
     ? extractBenchmarkMeta(currentCheck)
-    : { benchmarkMatched: false, estimationMode: 'fallback' as const };
+    : {
+        benchmarkMatched: false,
+        estimationMode: 'fallback' as const,
+        sourceName: null,
+        sourceUrl: null,
+        releaseVersion: null,
+        observationStart: null,
+        observationEnd: null,
+        expiresAt: null,
+        sampleSize: null,
+        methodologySummary: null,
+      };
+  const currentConfidence = currentBenchmarkMeta.benchmarkMatched
+    ? confidenceMeta(currentCheck?.confidenceScore ?? null)
+    : { label: 'Qualified evidence unavailable', tone: 'elevated' as const };
   const currentGuardrail = currentCheck
     ? buildServicePriceRadarGuardrail({
         verdict: currentCheck.verdict,
@@ -1224,7 +1251,7 @@ export default function ServicePriceRadarClient() {
           <MobilePageIntro
             eyebrow="Home tool"
             title="Service Price Radar"
-            subtitle="Know if a quote is fair for your home before you book the work."
+            subtitle="Understand a quote, spot missing details, and decide what to do next."
             action={<Radar className="h-5 w-5 text-[hsl(var(--mobile-brand-strong))] lg:hidden" />}
           />
         </div>
@@ -1466,13 +1493,13 @@ export default function ServicePriceRadarClient() {
                   status={<StatusChip tone={currentVerdict.tone}>{currentVerdict.label}</StatusChip>}
                   summary={
                     sanitizeExplanationText(currentCheck.explanationShort) ??
-                    'We compared your quote against the expected range for this home.'
+                    'We compared your quote with the evidence currently available for this home.'
                   }
                 />
 
                 <ScenarioInputCard
                   title="Estimate breakdown"
-                  subtitle="Your quote plotted against the expected range for this service and area."
+                  subtitle="Your quote plotted against a rough planning range when qualified market evidence is unavailable."
                   badge={<StatusChip tone={currentConfidence.tone}>{currentConfidence.label}</StatusChip>}
                 >
                   <QuoteComparisonMeter
@@ -1636,29 +1663,66 @@ export default function ServicePriceRadarClient() {
                                 typeof region?.state === 'string' ? region.state : null,
                                 typeof region?.zipPrefix === 'string' ? `ZIP ${region.zipPrefix}` : null,
                               ].filter(Boolean);
-                              return parts.length ? parts.join(' • ') : 'Fallback regional context';
+                              return parts.length ? parts.join(' • ') : 'Property location unavailable';
                             })(),
                           },
                           {
                             label: 'Benchmark',
-                            value: (() => {
-                              const pricing = asRecord(currentCheck.pricingFactorsJson);
-                              const benchmark = asRecord(pricing?.benchmark ?? null);
-                              const matched = benchmark?.matched === true;
-                              return matched ? 'Matched benchmark' : 'Regional averages used';
-                            })(),
+                            value: currentBenchmarkMeta.benchmarkMatched
+                              ? `Qualified${currentBenchmarkMeta.releaseVersion ? ` · release ${currentBenchmarkMeta.releaseVersion}` : ''}`
+                              : 'No qualified benchmark',
                           },
                           {
-                            label: 'Confidence',
+                            label: 'Source',
+                            value: currentBenchmarkMeta.sourceName ?? 'Planning assumptions only',
+                          },
+                          {
+                            label: 'Observed period',
+                            value:
+                              currentBenchmarkMeta.observationStart && currentBenchmarkMeta.observationEnd
+                                ? `${compactDate(currentBenchmarkMeta.observationStart)} – ${compactDate(currentBenchmarkMeta.observationEnd)}`
+                                : 'Not available',
+                          },
+                          {
+                            label: 'Sample',
+                            value: currentBenchmarkMeta.sampleSize != null
+                              ? `${currentBenchmarkMeta.sampleSize.toLocaleString()} observations`
+                              : 'Not available',
+                          },
+                          {
+                            label: 'Fresh through',
+                            value: currentBenchmarkMeta.expiresAt
+                              ? compactDate(currentBenchmarkMeta.expiresAt)
+                              : 'Not available',
+                          },
+                          {
+                            label: 'Evidence',
                             value: currentConfidence.label,
-                          },
-                          {
-                            label: 'Engine version',
-                            value: currentCheck.engineVersion ?? 'MVP',
                           },
                         ]}
                         columns={2}
                       />
+
+                      {currentBenchmarkMeta.benchmarkMatched ? (
+                        <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-3 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                          <p className="mb-1 font-semibold text-[hsl(var(--mobile-text-primary))]">
+                            Method
+                          </p>
+                          <p className="mb-0">
+                            {currentBenchmarkMeta.methodologySummary ?? 'Method summary unavailable.'}
+                          </p>
+                          {currentBenchmarkMeta.sourceUrl ? (
+                            <a
+                              href={currentBenchmarkMeta.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex font-medium text-[hsl(var(--mobile-brand-strong))] underline underline-offset-2"
+                            >
+                              View benchmark source
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
 
                       {currentLinkedEntities.length > 0 ? (
                         <div className="space-y-2">

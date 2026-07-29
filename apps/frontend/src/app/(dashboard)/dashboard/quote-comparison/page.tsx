@@ -8,7 +8,6 @@ import {
   DollarSign,
   Loader2,
   Plus,
-  ShieldCheck,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -34,13 +33,7 @@ import {
   SERVICE_PRICE_RADAR_CATEGORY_OPTIONS,
   type ServiceRadarCategory,
 } from '@/app/(dashboard)/dashboard/properties/[id]/tools/service-price-radar/servicePriceRadarApi';
-import { cn } from '@/lib/utils';
 import { formatEnumLabel } from '@/lib/utils/formatters';
-import {
-  getProviderCategoryForMaintenanceCategory,
-  getProviderWorkCategory,
-} from '@/lib/config/serviceCategoryMapping';
-
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 interface QuoteEntry {
   id: string;
@@ -55,7 +48,7 @@ interface QuoteResult extends QuoteEntry {
 }
 
 function verdictTone(verdict: string | null | undefined): 'good' | 'elevated' | 'needsAction' | 'info' {
-  if (verdict === 'FAIR' || verdict === 'UNDERPRICED') return 'good';
+  if (verdict === 'FAIR') return 'good';
   if (verdict === 'HIGH') return 'elevated';
   if (verdict === 'VERY_HIGH') return 'needsAction';
   return 'info';
@@ -66,14 +59,11 @@ function verdictLabel(verdict: string | null | undefined) {
   if (verdict === 'UNDERPRICED') return 'Below market';
   if (verdict === 'HIGH') return 'Above market';
   if (verdict === 'VERY_HIGH') return 'Well above market';
-  if (verdict === 'INSUFFICIENT_DATA') return '';
+  if (verdict === 'INSUFFICIENT_DATA') return 'Planning range only';
   return 'Pending';
 }
 
 function VerdictIcon({ verdict }: { verdict: string | null | undefined }) {
-  if (verdict === 'FAIR' || verdict === 'UNDERPRICED') {
-    return <ShieldCheck className="h-5 w-5 text-emerald-600" />;
-  }
   if (verdict === 'HIGH' || verdict === 'VERY_HIGH') {
     return <TrendingUp className="h-5 w-5 text-amber-500" />;
   }
@@ -148,37 +138,19 @@ export default function QuoteComparisonPage() {
       })
     );
 
-    // Sort: fair/underpriced first, then by amount ascending
-    const sorted = [...settled].sort((a, b) => {
-      const aGood = a.result?.verdict === 'FAIR' || a.result?.verdict === 'UNDERPRICED';
-      const bGood = b.result?.verdict === 'FAIR' || b.result?.verdict === 'UNDERPRICED';
-      if (aGood && !bGood) return -1;
-      if (!aGood && bGood) return 1;
-      return Number(a.amount) - Number(b.amount);
-    });
-
-    setResults(sorted);
+    setResults(settled);
     setIsChecking(false);
   };
 
-  const handleBookProvider = (q: QuoteResult) => {
-    const params = new URLSearchParams({
-      propertyId,
-      category: getProviderCategoryForMaintenanceCategory(category),
-    });
-    const workCategory = getProviderWorkCategory(searchParams.get('workCategory')) ??
-      getProviderWorkCategory(category) ??
-      getProviderWorkCategory(serviceLabel);
-    if (workCategory) params.set('workCategory', workCategory);
+  const handleReviewQuote = (q: QuoteResult) => {
+    const params = new URLSearchParams();
     if (q.vendorName) params.set('vendorName', q.vendorName);
-    if (serviceLabel) params.set('serviceLabel', serviceLabel);
-    params.set('from', 'quote-comparison');
-    router.push(`/dashboard/providers?${params.toString()}`);
+    params.set('quoteAmount', q.amount);
+    params.set('serviceCategory', category);
+    params.set('create', '1');
+    params.set('scenario', 'contractor-quote-review');
+    router.push(`/dashboard/properties/${propertyId}/tools/negotiation-shield?${params.toString()}`);
   };
-
-  const bestPick = results.find(
-    (r) => r.result?.verdict === 'FAIR' || r.result?.verdict === 'UNDERPRICED'
-  );
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-4 sm:px-6">
@@ -192,7 +164,7 @@ export default function QuoteComparisonPage() {
       <MobilePageIntro
         eyebrow="Fix · Quote Comparison"
         title={serviceLabel || `${categoryDisplay} Quotes`}
-        subtitle="Enter quotes from multiple vendors to find the best fair-priced option."
+        subtitle="Enter quote amounts for a preliminary review. Scope and terms must be checked before the proposals can be compared."
       />
 
       {/* Quote entry form */}
@@ -287,7 +259,7 @@ export default function QuoteComparisonPage() {
         <MobileSection>
           <MobileSectionHeader
             title="Comparison Results"
-            subtitle="Ranked by price fairness, then by amount."
+            subtitle="Not ranked: amount alone cannot establish that proposals have comparable scope."
           />
 
           {results.length === 0 ? (
@@ -297,34 +269,24 @@ export default function QuoteComparisonPage() {
             />
           ) : (
             <div className="space-y-3">
-              {bestPick && (
-                <MobileCard
-                  variant="compact"
-                  className="border-emerald-200 bg-emerald-50 space-y-1"
-                >
-                  <p className="text-xs font-bold tracking-normal text-emerald-600">
-                    Best Pick
-                  </p>
-                  <p className="text-sm font-semibold text-emerald-900">
-                    {bestPick.vendorName || 'Unnamed vendor'} at $
-                    {Number(bestPick.amount).toLocaleString()} is fairly priced.
-                  </p>
-                </MobileCard>
-              )}
+              <MobileCard variant="compact" className="border-amber-200 bg-amber-50 space-y-1">
+                <p className="text-xs font-bold tracking-normal text-amber-700">
+                  Not comparable yet
+                </p>
+                <p className="text-sm font-semibold text-amber-950">
+                  Confirm scope, exclusions, permits, warranty, payment terms, and provider qualifications before selecting a quote.
+                </p>
+              </MobileCard>
 
-              {results.map((r, idx) => (
+              {results.map((r) => (
                 <MobileCard
                   key={r.id}
                   variant="compact"
-                  className={cn(
-                    'space-y-3',
-                    r === bestPick && 'border-emerald-200 ring-1 ring-emerald-200'
-                  )}
+                  className="space-y-3"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[11px] font-bold text-slate-400">#{idx + 1}</span>
                         <p className="text-sm font-bold text-slate-900 truncate">
                           {r.vendorName || 'Unnamed vendor'}
                         </p>
@@ -348,7 +310,7 @@ export default function QuoteComparisonPage() {
                         </div>
                         {r.result?.expectedMedian && (
                           <p className="text-[11px] text-slate-500">
-                            Market median: ${r.result.expectedMedian.toLocaleString()}
+                            Planning midpoint: ${r.result.expectedMedian.toLocaleString()}
                           </p>
                         )}
                       </div>
@@ -364,7 +326,15 @@ export default function QuoteComparisonPage() {
                   {!r.loading && !r.error && r.result?.confidenceScore && (
                     <div className="flex items-center gap-2">
                       <ConfidenceBadge
-                        level="high"
+                        level={
+                          r.result?.verdict === 'INSUFFICIENT_DATA'
+                            ? 'low'
+                            : r.result.confidenceScore >= 0.72
+                              ? 'high'
+                              : r.result.confidenceScore >= 0.5
+                                ? 'medium'
+                                : 'low'
+                        }
                         score={Math.round(r.result.confidenceScore * 100)}
                       />
                     </div>
@@ -372,12 +342,12 @@ export default function QuoteComparisonPage() {
 
                   {!r.loading && propertyId && (
                     <Button
-                      variant={r === bestPick ? 'default' : 'outline'}
+                      variant="outline"
                       size="sm"
                       className="w-full h-10 rounded-xl font-semibold"
-                      onClick={() => handleBookProvider(r)}
+                      onClick={() => handleReviewQuote(r)}
                     >
-                      {r === bestPick ? 'Book this provider' : 'Find similar providers'}
+                      Review scope before choosing
                       <ArrowRight className="ml-1.5 h-4 w-4" />
                     </Button>
                   )}

@@ -38,6 +38,7 @@
     "lint:ssrf": "node scripts/check-ssrf-guards.js",
     "lint:notification-boundary": "node scripts/check-notification-boundary.js",
     "report:weekly": "ts-node scripts/weekly-retention-report.ts",
+    "report:service-price-benchmarks": "ts-node src/scripts/reportServicePriceBenchmarkHealth.ts",
     "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts",
     "bootstrap:admin-capabilities": "ts-node scripts/adminCapabilityBootstrap.ts"
   },

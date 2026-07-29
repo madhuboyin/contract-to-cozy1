@@ -69,7 +69,7 @@
 | savings-benefits | Savings and Benefits | home, ai | `/dashboard/properties/[id]/tools/savings-benefits` | Verified | SAVE_OPTIMIZE | BETA | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | sell-hold-rent | Sell / Hold / Rent | home, ai | `/dashboard/properties/[id]/tools/sell-hold-rent` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | seller-prep | Seller Prep | home | `/dashboard/properties/[id]/seller-prep` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
-| service-price-radar | Service Price Radar | home, ai | `/dashboard/properties/[id]/tools/service-price-radar` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| service-price-radar | Service Price Radar | home, ai | `/dashboard/properties/[id]/tools/service-price-radar` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | status-board | Status Board | home | `/dashboard/properties/[id]/status-board` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | visual-inspector | Visual Inspector | ai | `/dashboard/visual-inspector` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CATALOG_ONLY |
 

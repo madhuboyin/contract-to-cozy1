@@ -168,9 +168,6 @@ export const SERVICE_PRICE_RADAR_CATEGORY_OPTIONS: Array<{
   { value: 'CLEANING', label: 'Cleaning', shortLabel: 'Cleaning', helper: 'Deep cleaning or recurring service quotes' },
   { value: 'MOVING', label: 'Moving', shortLabel: 'Moving', helper: 'Move labor and transport estimates' },
   { value: 'LOCKSMITH', label: 'Locksmith', shortLabel: 'Locksmith', helper: 'Lock changes, rekeying, and access work' },
-  { value: 'INSURANCE', label: 'Insurance Service', shortLabel: 'Insurance', helper: 'Broad professional service estimate' },
-  { value: 'ATTORNEY', label: 'Attorney', shortLabel: 'Attorney', helper: 'Broad professional service estimate' },
-  { value: 'FINANCE', label: 'Finance Service', shortLabel: 'Finance', helper: 'Broad professional service estimate' },
   { value: 'WARRANTY', label: 'Warranty Service', shortLabel: 'Warranty', helper: 'Broad professional service estimate' },
   { value: 'ADMIN', label: 'Administrative Service', shortLabel: 'Admin', helper: 'Broad administrative help estimate' },
   { value: 'OTHER', label: 'Other', shortLabel: 'Other', helper: 'Use when no category fits well' },
@@ -249,6 +246,37 @@ export type QuoteComparisonWorkspaceSummary = {
   status: 'DRAFT' | 'SHORTLISTED' | 'DECIDED' | 'ARCHIVED';
   serviceCategory: ServiceRadarCategory | null;
   inventoryItemId: string | null;
+  quotes?: QuoteProposalSummary[];
+};
+
+export type QuoteProposalReadinessStage =
+  | 'PLANNING_ESTIMATE'
+  | 'INCOMPLETE_QUOTE'
+  | 'REVIEW_READY'
+  | 'COMPARISON_READY';
+
+export type QuoteProposalSummary = {
+  id: string;
+  vendorName: string;
+  quoteAmount: number;
+  currency: string;
+  serviceCategory: ServiceRadarCategory | null;
+  serviceLabelRaw: string | null;
+  sourceType: ServiceRadarQuoteSource;
+  sourceReferenceId: string | null;
+  readinessStage: QuoteProposalReadinessStage;
+  readinessScore: number;
+  missingFactsJson: Array<{ key: string; label: string; whyItMatters: string }> | null;
+  ambiguitiesJson: Array<{ key: string; message: string }> | null;
+  homeownerConfirmedAt: string | null;
+  createdAt: string;
+  extractions?: Array<{ id: string; status: string; document: { id: string; name: string } }>;
+};
+
+export type QuoteComparabilityResult = {
+  status: 'COMPARABLE' | 'NOT_COMPARABLE' | 'NEEDS_MORE_INFORMATION';
+  eligibleQuoteIds: string[];
+  reasons: string[];
 };
 
 export async function getOrCreateQuoteComparisonWorkspace(
@@ -268,4 +296,83 @@ export async function getOrCreateQuoteComparisonWorkspace(
     ...input,
   });
   return { workspace: res.data.workspace, reused: res.data.reused };
+}
+
+export async function getQuoteComparisonWorkspace(
+  propertyId: string,
+  workspaceId: string
+): Promise<QuoteComparisonWorkspaceSummary> {
+  const res = await api.get<{ workspace: QuoteComparisonWorkspaceSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}`
+  );
+  return res.data.workspace;
+}
+
+export async function createQuoteProposal(
+  propertyId: string,
+  workspaceId: string,
+  input: {
+    vendorName: string;
+    quoteAmount: number;
+    serviceCategory?: ServiceRadarCategory | null;
+    quoteDate?: string | null;
+    serviceLocation?: string | null;
+    scopeKind?: 'REPAIR' | 'REPLACEMENT' | 'INSTALLATION' | 'MAINTENANCE' | 'INSPECTION' | 'OTHER' | 'UNKNOWN';
+    scopeSummary?: string | null;
+    lineItems?: Array<{
+      kind?: 'LABOR' | 'MATERIAL' | 'EQUIPMENT' | 'PERMIT' | 'DISPOSAL' | 'TAX' | 'ALLOWANCE' | 'OTHER';
+      description: string;
+      quantity?: number | null;
+      unit?: string | null;
+      unitPrice?: number | null;
+      total?: number | null;
+    }>;
+    terms?: Array<{
+      type: 'INCLUSION' | 'EXCLUSION' | 'ALLOWANCE' | 'PERMIT' | 'DISPOSAL' | 'CLEANUP' | 'WARRANTY' | 'PAYMENT' | 'SCHEDULE' | 'EXPIRATION' | 'LICENSE' | 'INSURANCE' | 'CHANGE_ORDER' | 'OTHER';
+      value: string;
+      included?: boolean | null;
+    }>;
+    sourceType?: ServiceRadarQuoteSource;
+    sourceReferenceId?: string | null;
+  }
+): Promise<QuoteProposalSummary> {
+  const res = await api.post<{ quote: QuoteProposalSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes`,
+    input
+  );
+  return res.data.quote;
+}
+
+export async function createQuoteProposalFromDocument(
+  propertyId: string,
+  workspaceId: string,
+  documentId: string
+): Promise<QuoteProposalSummary> {
+  const res = await api.post<{ quote: QuoteProposalSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/from-document`,
+    { documentId }
+  );
+  return res.data.quote;
+}
+
+export async function confirmQuoteProposal(
+  propertyId: string,
+  workspaceId: string,
+  quoteId: string
+): Promise<QuoteProposalSummary> {
+  const res = await api.post<{ quote: QuoteProposalSummary }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/${quoteId}/confirm`,
+    {}
+  );
+  return res.data.quote;
+}
+
+export async function getQuoteComparability(
+  propertyId: string,
+  workspaceId: string
+): Promise<QuoteComparabilityResult> {
+  const res = await api.get<{ comparability: QuoteComparabilityResult }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/comparability`
+  );
+  return res.data.comparability;
 }

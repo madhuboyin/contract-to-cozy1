@@ -6,6 +6,7 @@ import {
 } from '../services/servicePriceRadar.types';
 
 const MAX_SERVICE_PRICE_RADAR_QUOTE_AMOUNT = 250000;
+const UNSUPPORTED_GENERIC_PRICE_CATEGORIES = new Set(['INSURANCE', 'ATTORNEY', 'FINANCE']);
 
 function normalizeLooseToken(value: string): string {
   return value
@@ -88,6 +89,14 @@ export const createServicePriceRadarBodySchema = z.object({
   guidanceJourneyId: z.string().uuid().optional(),
   guidanceStepKey: z.string().trim().min(1).max(80).optional(),
   guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),
+}).superRefine((value, ctx) => {
+  if (UNSUPPORTED_GENERIC_PRICE_CATEGORIES.has(value.serviceCategory)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['serviceCategory'],
+      message: 'This regulated professional-service category is not supported by Service Price Radar.',
+    });
+  }
 });
 
 export type CreateServicePriceRadarBody = z.infer<typeof createServicePriceRadarBodySchema>;

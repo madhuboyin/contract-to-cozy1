@@ -796,7 +796,7 @@
       "outcomeCategory": "DECIDE_COMPARE",
       "rolloutKey": "SERVICE_PRICE_RADAR",
       "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
+      "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
