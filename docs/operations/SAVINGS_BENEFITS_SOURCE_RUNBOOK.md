@@ -1,7 +1,7 @@
 # Savings and Benefits Source Runbook
 
 **Status:** Active runbook
-**Last reconciled:** July 28, 2026
+**Last reconciled:** July 29, 2026
 **Product contract:** [Hidden Savings and Benefits Capability Audit and Implementation Plan](../product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md)
 
 ## 1. Scope and owners
@@ -58,8 +58,7 @@ from the backend image).
    `apps/backend/src/services/hiddenAssets/ruleEngine.ts` for exactly how a
    program's groups are combined into a match decision and confidence
    level. Also set `benefitPeriod` (ONE_TIME/MONTHLY/ANNUAL, default
-   UNKNOWN) — the admin console doesn't expose this yet either. Getting it
-   right matters once a homeowner records a RECEIVED outcome (section 3):
+   UNKNOWN). Getting it right matters once a homeowner records a RECEIVED outcome (section 3):
    a one-time rebate must never be read as an ongoing annual value.
 4. Submit the program for review (`SUBMIT_FOR_REVIEW`), have a different
    admin approve it (`APPROVE`) after independently checking the official
@@ -96,6 +95,20 @@ retired, or never-reviewed sources fail closed: their programs are excluded
 from scans, coverage claims, action transitions, and Home promotion. Re-review
 and save the source, then independently review the affected program before
 making it actionable again.
+
+The hourly `savings-benefits-source-health-audit` worker evaluates every
+source without mutating its review state. It publishes:
+
+- `savings_benefits_sources{health="HEALTHY|DEGRADED|CRITICAL"}`;
+- `savings_benefits_source_oldest_overdue_seconds`;
+- the generic `cron_job_last_success_timestamp_seconds` heartbeat.
+
+Prometheus rules live in
+`infrastructure/kubernetes/monitoring/prometheus/savings-benefits-alert-rules.yaml`.
+A critical source, an overdue active source, or a missing audit heartbeat
+alerts Platform Operations. The structured worker warning contains the exact
+source ID/name; source identifiers are intentionally excluded from Prometheus
+labels to keep metric cardinality bounded.
 
 ### Correcting an incorrect program
 

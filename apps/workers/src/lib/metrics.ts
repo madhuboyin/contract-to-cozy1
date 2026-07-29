@@ -64,6 +64,23 @@ export const cronJobLastSuccessTimestamp = new Gauge({
   registers: [register],
 });
 
+// ─── Savings and Benefits source-health metrics ─────────────────────────────
+// Health is deliberately the only label. Source IDs/names are unbounded and
+// belong in the admin console and structured logs, not Prometheus labels.
+
+export const savingsBenefitsSourcesByHealth = new Gauge({
+  name: 'savings_benefits_sources',
+  help: 'Current reviewed Savings and Benefits source count by bounded health state',
+  labelNames: ['health'] as const,
+  registers: [register],
+});
+
+export const savingsBenefitsSourceOldestOverdueSeconds = new Gauge({
+  name: 'savings_benefits_source_oldest_overdue_seconds',
+  help: 'Seconds the oldest active Savings and Benefits source is past its review SLA',
+  registers: [register],
+});
+
 // ─── Home Event Radar durable pipeline metrics ──────────────────────────────
 
 export const radarIngestObservationsTotal = new Counter({

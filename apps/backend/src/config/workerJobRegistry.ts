@@ -893,6 +893,26 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'savings-benefits-source-health-audit',
+    name: 'Savings and Benefits Source Health Audit',
+    description:
+      'Evaluates every reviewed source against its configured review SLA and publishes bounded health metrics for operational alerting.',
+    category: 'FINANCIAL_MARKET',
+    schedule: 'Hourly',
+    cronExpression: '0 * * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'savings-benefits-source-health-audit',
+    triggerSupported: true,
+    impact: 'READ_ONLY',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: true,
+    supportsPropertyScope: false,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'permit-fetch',
     name: 'Permit History Fetch',
     description:

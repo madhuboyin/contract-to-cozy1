@@ -3,12 +3,17 @@ import { CustomRequest } from '../types';
 import { logger } from '../lib/logger';
 import { savingsBenefitsUnifiedService } from '../services/savingsBenefitsUnified.service';
 import {
+  CreateCanonicalActionInput,
   createCanonicalAction,
   getCanonicalCoverage,
   getCanonicalOpportunityDetail,
   recordCanonicalActionOutcome,
   recordCanonicalFact,
 } from '../services/savingsBenefitsCanonical.service';
+import type {
+  RecordHiddenAssetMatchOutcomeInput,
+  RecordHomeSavingsOpportunityOutcomeInput,
+} from '../services/savingsOutcome.service';
 
 function requireUserId(req: CustomRequest): string {
   const userId = req.user?.userId;
@@ -52,10 +57,10 @@ export async function postSavingsBenefitsOpportunityAction(req: CustomRequest, r
       req.params.propertyId,
       req.params.opportunityId,
       requireUserId(req),
-      {
+      ({
         ...body,
         followUpAt: body.followUpAt ? new Date(body.followUpAt) : null,
-      },
+      }) as CreateCanonicalActionInput,
     );
     return res.status(201).json({ success: true, data });
   } catch (error: any) {
@@ -71,11 +76,11 @@ export async function postSavingsBenefitsActionOutcome(req: CustomRequest, res: 
       req.params.propertyId,
       req.params.actionId,
       requireUserId(req),
-      {
+      ({
         ...body,
         observationStartedAt: body.observationStartedAt ? new Date(body.observationStartedAt) : null,
         observationEndedAt: body.observationEndedAt ? new Date(body.observationEndedAt) : null,
-      },
+      }) as RecordHiddenAssetMatchOutcomeInput | RecordHomeSavingsOpportunityOutcomeInput,
     );
     return res.status(201).json({ success: true, data });
   } catch (error: any) {

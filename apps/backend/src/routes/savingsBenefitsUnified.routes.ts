@@ -70,8 +70,8 @@ const actionBody = z.object({
     'SWITCHED', 'RECEIVED', 'FOLLOW_UP_SCHEDULED',
   ]),
   externalOwner: z.string().trim().max(200).nullable().optional(),
-  consent: z.record(z.unknown()).nullable().optional(),
-  sharedFields: z.record(z.unknown()).nullable().optional(),
+  consent: z.record(z.string(), z.unknown()).nullable().optional(),
+  sharedFields: z.record(z.string(), z.unknown()).nullable().optional(),
   followUpAt: z.string().datetime().nullable().optional(),
 });
 

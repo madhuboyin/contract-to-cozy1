@@ -53,14 +53,14 @@ function match(overrides = {}) {
   };
 }
 
-test('sends the reminder with MATERIAL_DEADLINE category and MATERIAL urgency, then marks notificationSentAt', async () => {
+test('sends the reminder with category-specific consent and MATERIAL urgency, then marks notificationSentAt', async () => {
   const { deps, getCreateCalls, getUpdateCalls } = fakeDeps({ matches: [match()] });
 
   const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
 
   const calls = getCreateCalls();
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].category, 'MATERIAL_DEADLINE');
+  assert.equal(calls[0].category, 'SAVINGS_BENEFITS');
   assert.equal(calls[0].urgency, 'MATERIAL');
   assert.equal(calls[0].entityType, 'PropertyHiddenAssetMatch');
   assert.equal(calls[0].entityId, 'match-1');

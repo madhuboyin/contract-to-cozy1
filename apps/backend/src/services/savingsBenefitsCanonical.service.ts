@@ -1,5 +1,6 @@
 import {
   HomeSavingsOpportunityStatus,
+  Prisma,
   PropertyHiddenAssetMatchStatus,
   SavingsBenefitActionType,
 } from '@prisma/client';
@@ -129,8 +130,12 @@ export async function createCanonicalAction(
       actionType: input.actionType,
       state: completedImmediately ? 'COMPLETED' : 'STARTED',
       externalOwner: input.externalOwner ?? null,
-      consentJson: input.consent ?? undefined,
-      sharedFieldsJson: input.sharedFields ?? undefined,
+      consentJson: input.consent
+        ? input.consent as Prisma.InputJsonValue
+        : undefined,
+      sharedFieldsJson: input.sharedFields
+        ? input.sharedFields as Prisma.InputJsonValue
+        : undefined,
       submittedAt: input.actionType === 'EXTERNALLY_SUBMITTED' ? now : null,
       completedAt: completedImmediately ? now : null,
       followUpAt: input.followUpAt ?? null,

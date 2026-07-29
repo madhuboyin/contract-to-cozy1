@@ -77,6 +77,7 @@ export interface AdminProgramListItem {
   benefitType: string;
   benefitEstimateMin: number | null;
   benefitEstimateMax: number | null;
+  benefitPeriod: HiddenAssetBenefitPeriod;
   reviewStatus: HiddenAssetProgramReviewStatus;
   eligibilityNotes: string | null;
   sourceUrl: string | null;
@@ -89,6 +90,7 @@ export interface AdminProgramListItem {
 }
 
 export type HiddenAssetBeneficiaryScope = 'PROPERTY' | 'HOUSEHOLD' | 'EITHER';
+export type HiddenAssetBenefitPeriod = 'UNKNOWN' | 'ONE_TIME' | 'MONTHLY' | 'ANNUAL';
 
 export interface AdminProgramInput {
   sourceId: string;
@@ -100,6 +102,7 @@ export interface AdminProgramInput {
   benefitType: string;
   benefitEstimateMin?: number | null;
   benefitEstimateMax?: number | null;
+  benefitPeriod?: HiddenAssetBenefitPeriod;
   currency?: string;
   sourceUrl?: string | null;
   sourceLabel?: string | null;

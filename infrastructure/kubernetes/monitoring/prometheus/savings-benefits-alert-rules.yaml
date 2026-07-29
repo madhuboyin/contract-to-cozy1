@@ -1,0 +1,40 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: production-savings-benefits-alert-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: contract-to-cozy-savings-benefits
+      rules:
+        - alert: SavingsBenefitsSourceUnreviewedOrInactive
+          expr: savings_benefits_sources{health="CRITICAL"} > 0
+          for: 15m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: Savings and Benefits has a critical reviewed-source gap
+            description: At least one source is inactive or has never been reviewed. Homeowner matching fails closed until an operator resolves it.
+
+        - alert: SavingsBenefitsSourceReviewSlaBreached
+          expr: savings_benefits_sources{health="DEGRADED"} > 0
+          for: 15m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: Savings and Benefits source review SLA breached
+            description: At least one active source is past its configured review SLA and is suppressed from homeowner matching.
+
+        - alert: SavingsBenefitsSourceHealthAuditMissing
+          expr: time() - cron_job_last_success_timestamp_seconds{job_key="savings-benefits-source-health-audit"} > 7200
+          for: 15m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: Savings and Benefits source-health audit is not running
+            description: The hourly source-health audit has not completed successfully in more than two hours.

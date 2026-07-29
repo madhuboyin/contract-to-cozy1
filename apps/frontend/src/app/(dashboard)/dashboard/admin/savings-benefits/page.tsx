@@ -71,6 +71,7 @@ const CATEGORIES = [
 const REGION_TYPES = ['COUNTRY', 'STATE', 'COUNTY', 'CITY', 'ZIP', 'UTILITY', 'HAZARD_ZONE', 'HISTORIC_DISTRICT'] as const;
 
 const BENEFIT_TYPES = ['TAX_SAVINGS', 'TAX_CREDIT', 'REBATE', 'DISCOUNT', 'GRANT', 'CREDIT', 'OTHER'] as const;
+const BENEFIT_PERIODS = ['UNKNOWN', 'ONE_TIME', 'MONTHLY', 'ANNUAL'] as const;
 
 const RULE_OPERATORS = [
   'EQUALS',
@@ -228,6 +229,7 @@ function ProgramFormDialog({
   const [regionValue, setRegionValue] = useState(initial?.regionValue ?? '');
   const [benefitType, setBenefitType] = useState<string>(initial?.benefitType ?? 'TAX_CREDIT');
   const [benefitMax, setBenefitMax] = useState(initial?.benefitEstimateMax?.toString() ?? '');
+  const [benefitPeriod, setBenefitPeriod] = useState<string>(initial?.benefitPeriod ?? 'UNKNOWN');
   const [sourceUrl, setSourceUrl] = useState(initial?.sourceUrl ?? '');
   const [eligibilityNotes, setEligibilityNotes] = useState(initial?.eligibilityNotes ?? '');
   const [exclusionGroupKey, setExclusionGroupKey] = useState(initial?.exclusionGroupKey ?? '');
@@ -245,6 +247,7 @@ function ProgramFormDialog({
     setRegionValue(initial?.regionValue ?? '');
     setBenefitType(initial?.benefitType ?? 'TAX_CREDIT');
     setBenefitMax(initial?.benefitEstimateMax?.toString() ?? '');
+    setBenefitPeriod(initial?.benefitPeriod ?? 'UNKNOWN');
     setSourceUrl(initial?.sourceUrl ?? '');
     setEligibilityNotes(initial?.eligibilityNotes ?? '');
     setExclusionGroupKey(initial?.exclusionGroupKey ?? '');
@@ -312,9 +315,25 @@ function ProgramFormDialog({
               <Input value={regionValue} onChange={(e) => setRegionValue(e.target.value)} placeholder="e.g. NJ" />
             </div>
           </div>
-          <div>
-            <Label>Benefit estimate max ($, optional)</Label>
-            <Input type="number" value={benefitMax} onChange={(e) => setBenefitMax(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Benefit estimate max ($, optional)</Label>
+              <Input type="number" value={benefitMax} onChange={(e) => setBenefitMax(e.target.value)} />
+            </div>
+            <div>
+              <Label>Amount period</Label>
+              <Select value={benefitPeriod} onValueChange={setBenefitPeriod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {BENEFIT_PERIODS.map((period) => (
+                    <SelectItem key={period} value={period}>{period}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-slate-500">
+                Use UNKNOWN unless the official source clearly says whether the amount is one-time or recurring.
+              </p>
+            </div>
           </div>
           <div>
             <Label>Official source URL</Label>
@@ -487,6 +506,7 @@ function ProgramFormDialog({
                 regionValue: regionValue.trim(),
                 benefitType,
                 benefitEstimateMax: benefitMax ? Number(benefitMax) : null,
+                benefitPeriod: benefitPeriod as AdminProgramInput['benefitPeriod'],
                 sourceUrl: sourceUrl.trim() || null,
                 eligibilityNotes: eligibilityNotes.trim() || null,
                 exclusionGroupKey: exclusionGroupKey.trim() || null,
