@@ -462,6 +462,37 @@ export async function getCompletionChecklist(req: Request, res: Response, next: 
   } catch (err) { next(err); }
 }
 
+export async function getCloseoutPackage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await svc.getCloseoutPackage(req.params.projectId, req.params.propertyId);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function createCloseoutShareLink(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await svc.createCloseoutShareLink(
+      req.params.projectId,
+      req.params.propertyId,
+      req.body.expiresInDays,
+    );
+    res.status(201).json({
+      success: true,
+      data: {
+        shareUrl: `/renovation-closeout/share/${data.token}`,
+        expiresAt: data.shareLink.expiresAt,
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+export async function getPublicCloseoutPackage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await svc.getPublicCloseoutPackage(req.params.token);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function completeMinorWork(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.completeMinorWork(req.params.propertyId, req.user!.userId, req.body);

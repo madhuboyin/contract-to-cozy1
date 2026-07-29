@@ -137,6 +137,14 @@ export default function ProjectDashboardPage() {
             {p.followUpDueAt ? ` · Follow-up ${fmtDate(p.followUpDueAt)}` : ''}
             {p.followUpHealth ? ` · Health ${p.followUpHealth.toLowerCase().replace(/_/g, ' ')}` : ''}
           </p>
+          {p.closeoutPackageGeneratedAt && (
+            <Link
+              href={`/dashboard/properties/${propertyId}/projects/${projectId}/completion/package`}
+              className="mt-2 inline-block text-xs font-semibold underline"
+            >
+              View closeout package
+            </Link>
+          )}
         </div>
       )}
 

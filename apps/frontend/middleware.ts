@@ -62,6 +62,7 @@ const NO_STORE_PAGE_PREFIXES = [
   '/reports/share',
   '/gazette/share',
   '/home-score/share',
+  '/renovation-closeout/share',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -123,6 +124,7 @@ function isTokenizedOrSharedPage(pathname: string, searchParams: URLSearchParams
   return (
     pathname.startsWith('/reports/share/') ||
     pathname.startsWith('/gazette/share/') ||
+    pathname.startsWith('/renovation-closeout/share/') ||
     (pathname.startsWith('/vault/') && searchParams.has('token'))
   );
 }
@@ -212,6 +214,7 @@ export function middleware(request: NextRequest) {
     '/terms',
     '/privacy',
     '/cookies',
+    '/renovation-closeout/share',
   ];
 
   const isPublicRoute =

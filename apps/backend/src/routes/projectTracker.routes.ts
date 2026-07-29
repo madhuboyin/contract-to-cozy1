@@ -37,6 +37,9 @@ import {
   updateIssue,
   resolveIssue,
   getCompletionChecklist,
+  getCloseoutPackage,
+  createCloseoutShareLink,
+  getPublicCloseoutPackage,
   confirmCompletion,
   completeMinorWork,
   getProviderExecutionReadiness,
@@ -61,12 +64,14 @@ import {
   UpdateIssueSchema,
   ResolveIssueSchema,
   ConfirmCompletionSchema,
+  CreateCloseoutShareSchema,
   CompleteMinorWorkSchema,
 } from '../validators/projectTracker.validators';
 
 const router = Router();
 
 router.use(apiRateLimiter);
+router.get('/project-closeout/share/:token', getPublicCloseoutPackage);
 router.use(authenticate);
 
 // ── Milestone templates (no property context needed) ──────────────────────────
@@ -265,6 +270,17 @@ router.post(
   propertyAuthMiddleware,
   validateBody(ConfirmCompletionSchema),
   confirmCompletion,
+);
+router.get(
+  '/properties/:propertyId/projects/:projectId/completion/package',
+  propertyAuthMiddleware,
+  getCloseoutPackage,
+);
+router.post(
+  '/properties/:propertyId/projects/:projectId/completion/share',
+  propertyAuthMiddleware,
+  validateBody(CreateCloseoutShareSchema),
+  createCloseoutShareLink,
 );
 
 export default router;

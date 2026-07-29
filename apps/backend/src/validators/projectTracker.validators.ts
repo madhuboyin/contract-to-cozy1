@@ -356,6 +356,31 @@ export const ResolveIssueSchema = z.object({
 
 const verificationResult = z.enum(['PASSED', 'FAILED', 'NOT_REQUIRED', 'UNRESOLVED']);
 const projectOutcomeStatus = z.enum(['VERIFIED_SUCCESS', 'INCOMPLETE', 'FAILED', 'DISPUTED', 'DELAYED', 'UNSAFE']);
+const closeoutDeclaration = z.object({
+  category: z.enum([
+    'PUNCH_LIST',
+    'CORRECTIONS',
+    'LIEN_WAIVER',
+    'PAYMENT',
+    'WARRANTY',
+    'COMMISSIONING',
+    'SAFETY',
+    'INSPECTION',
+  ]),
+  disposition: z.enum(['SATISFIED', 'NOT_APPLICABLE', 'OPEN_EXCEPTION']),
+  evidenceDocumentIds: z.array(z.string().min(1)).max(50).default([]),
+  notes: z.string().max(2000).default(''),
+  responsibleParty: z.enum(['HOUSEHOLD', 'CONTRACTOR', 'SHARED', 'AUTHORITY']).optional(),
+  dueAt: z.string().date().optional(),
+}).superRefine((value, ctx) => {
+  if (value.disposition !== 'SATISFIED' && !value.notes.trim()) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['notes'],
+      message: 'Not-applicable and open-exception declarations require a rationale.',
+    });
+  }
+});
 
 export const ConfirmCompletionSchema = z.object({
   actualEndDate: z.string().date().optional(),
@@ -369,6 +394,13 @@ export const ConfirmCompletionSchema = z.object({
     summary: z.string().min(1).max(1000),
     blocksClosure: z.boolean().default(true),
   })).default([]),
+  closeoutDeclarations: z.array(closeoutDeclaration)
+    .max(8)
+    .refine(
+      (items) => new Set(items.map((item) => item.category)).size === items.length,
+      { message: 'Each closeout category may be declared only once.' },
+    )
+    .default([]),
   actualCostCents: z.number().int().min(0).optional(),
   providerOutcome: z.enum(['SUCCESS', 'PARTIAL', 'FAILED', 'NOT_APPLICABLE']),
   recommendationOverridden: z.boolean().default(false),
@@ -399,6 +431,35 @@ export const ConfirmCompletionSchema = z.object({
   followUpDate: z.string().date().optional(),
 }).superRefine((value, ctx) => {
   if (value.outcomeStatus !== 'VERIFIED_SUCCESS') return;
+  const requiredCloseoutCategories = [
+    'PUNCH_LIST',
+    'CORRECTIONS',
+    'LIEN_WAIVER',
+    'PAYMENT',
+    'WARRANTY',
+    'COMMISSIONING',
+    'SAFETY',
+    'INSPECTION',
+  ];
+  const closeoutByCategory = new Map(
+    value.closeoutDeclarations.map((item) => [item.category, item]),
+  );
+  for (const category of requiredCloseoutCategories) {
+    const declaration = closeoutByCategory.get(category as typeof value.closeoutDeclarations[number]['category']);
+    if (!declaration) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['closeoutDeclarations'],
+        message: `${category.toLowerCase().replace(/_/g, ' ')} applicability must be declared.`,
+      });
+    } else if (declaration.disposition === 'OPEN_EXCEPTION') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['closeoutDeclarations'],
+        message: `${category.toLowerCase().replace(/_/g, ' ')} remains open.`,
+      });
+    }
+  }
   if (!value.recommendationComprehensionConfirmed) {
     ctx.addIssue({ code: 'custom', path: ['recommendationComprehensionConfirmed'], message: 'Confirm that the recommendation, alternatives, and material tradeoffs were understood.' });
   }
@@ -416,6 +477,10 @@ export const ConfirmCompletionSchema = z.object({
   if (value.actualCostCents === undefined) {
     ctx.addIssue({ code: 'custom', path: ['actualCostCents'], message: 'Verified closure requires the final actual cost.' });
   }
+});
+
+export const CreateCloseoutShareSchema = z.object({
+  expiresInDays: z.number().int().min(1).max(90).default(30),
 });
 
 export const CompleteMinorWorkSchema = z.object({

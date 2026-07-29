@@ -13137,6 +13137,8 @@ enum RenovationCaseEventType {
   READINESS_OVERRIDE_RECORDED
   READINESS_OVERRIDE_REVOKED
   PROJECT_HANDOFF_STARTED
+  CLOSEOUT_RECONCILED
+  CLOSEOUT_PACKAGE_CREATED
 }
 
 model RenovationCase {
@@ -16709,6 +16711,11 @@ enum ProjectIssueStatus {
 enum ProjectWriteBackTarget {
   DIGITAL_TWIN
   CAPITAL_TIMELINE
+  CAPITAL_PLAN
+  PROPERTY_TAX
+  OWNERSHIP_COST
+  RENOVATION_CASE
+  CLOSEOUT_PACKAGE
   MATERIAL_SPECS
   HOME_TIMELINE
   HOME_EVENTS
@@ -16847,6 +16854,8 @@ model ProjectRecord {
 
   // Timestamp of when completion write-backs were applied
   writeBackAppliedAt DateTime?
+  closeoutPackage Json?
+  closeoutPackageGeneratedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -16874,6 +16883,7 @@ model ProjectRecord {
   completionHomeEvent HomeEvent?
   materialSpecs       MaterialSpec[]
   providerReview      Review?
+  closeoutShareLinks  ProjectCloseoutShareLink[]
 
   @@index([propertyId, status])
   @@index([propertyId, createdAt(sort: Desc)])
@@ -17106,6 +17116,7 @@ model ProjectIssue {
 model ProjectWriteBack {
   id        String @id @default(uuid())
   projectId String
+  idempotencyKey String? @unique
 
   targetSystem   ProjectWriteBackTarget
   targetRecordId String? // ID of the record created or updated in the target system
@@ -17124,6 +17135,35 @@ model ProjectWriteBack {
   @@index([appliedByUserId])
   @@index([targetSystem, appliedAt])
   @@map("project_write_backs")
+}
+
+enum ProjectCloseoutShareStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+// Secure share links for the immutable-at-generation closeout package snapshot.
+// Raw tokens are never persisted.
+model ProjectCloseoutShareLink {
+  id         String @id @default(uuid())
+  projectId  String
+  propertyId String
+  tokenHash  String @unique
+  status     ProjectCloseoutShareStatus @default(ACTIVE)
+  packageSnapshot Json
+  expiresAt DateTime?
+  revokedAt DateTime?
+  lastViewedAt DateTime?
+  viewCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([propertyId, status])
+  @@map("project_closeout_share_links")
 }
 
 // ============================================================================

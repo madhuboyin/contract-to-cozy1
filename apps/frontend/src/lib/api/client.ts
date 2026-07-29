@@ -5959,6 +5959,7 @@ class APIClient {
     safetyCheckResult: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED';
     inspectionResult: 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED';
     unresolvedExceptions: Array<{ type: 'QUALITY' | 'SAFETY' | 'SCOPE' | 'PERMIT' | 'FUNCTIONAL' | 'OTHER'; summary: string; blocksClosure: boolean }>;
+    closeoutDeclarations: import('@/types').ProjectCloseoutDeclaration[];
     actualCostCents?: number;
     providerOutcome: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'NOT_APPLICABLE';
     recommendationOverridden?: boolean;
@@ -5978,9 +5979,42 @@ class APIClient {
     nextInspectionDate?: string;
     replacementHorizonDate?: string;
     followUpDate?: string;
-  }): Promise<{ project: import('@/types').ProjectRecord }> {
-    const res = await this.post<{ project: import('@/types').ProjectRecord }>(`/api/properties/${propertyId}/projects/${projectId}/completion/confirm`, payload);
+  }): Promise<{ project: import('@/types').ProjectRecord; closeoutPackage: import('@/types').ProjectCloseoutPackage }> {
+    const res = await this.post<{ project: import('@/types').ProjectRecord; closeoutPackage: import('@/types').ProjectCloseoutPackage }>(`/api/properties/${propertyId}/projects/${projectId}/completion/confirm`, payload);
     if (!res.data) throw new APIError('Failed to confirm completion', 500);
+    return res.data;
+  }
+
+  async getProjectCloseoutPackage(propertyId: string, projectId: string): Promise<{
+    closeoutPackage: import('@/types').ProjectCloseoutPackage;
+    writeBacks: Array<{ id: string; targetSystem: string; action: string; appliedAt: string; payload: Record<string, unknown> }>;
+  }> {
+    const res = await this.get<{
+      closeoutPackage: import('@/types').ProjectCloseoutPackage;
+      writeBacks: Array<{ id: string; targetSystem: string; action: string; appliedAt: string; payload: Record<string, unknown> }>;
+    }>(`/api/properties/${propertyId}/projects/${projectId}/completion/package`);
+    if (!res.data) throw new APIError('Failed to load closeout package', 500);
+    return res.data;
+  }
+
+  async createProjectCloseoutShare(propertyId: string, projectId: string, expiresInDays = 30): Promise<{ shareUrl: string; expiresAt: string }> {
+    const res = await this.post<{ shareUrl: string; expiresAt: string }>(
+      `/api/properties/${propertyId}/projects/${projectId}/completion/share`,
+      { expiresInDays },
+    );
+    if (!res.data) throw new APIError('Failed to create closeout share link', 500);
+    return res.data;
+  }
+
+  async getPublicProjectCloseoutPackage(token: string): Promise<{
+    package: import('@/types').ProjectCloseoutPackage;
+    expiresAt?: string | null;
+  }> {
+    const res = await this.get<{
+      package: import('@/types').ProjectCloseoutPackage;
+      expiresAt?: string | null;
+    }>(`/api/project-closeout/share/${token}`);
+    if (!res.data) throw new APIError('Closeout share link is unavailable', 404);
     return res.data;
   }
   // ── Neighbourhood Trust Network ──────────────────────────────────────────

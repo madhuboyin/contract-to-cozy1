@@ -6232,6 +6232,8 @@ export interface ProjectRecord {
   contractorRatingBudget?: number | null;
   contractorReviewText?: string | null;
   writeBackAppliedAt?: string | null;
+  closeoutPackage?: ProjectCloseoutPackage | null;
+  closeoutPackageGeneratedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   // Included in detail view
@@ -6251,8 +6253,63 @@ export interface ProjectCompletionCheck {
 }
 
 export interface ProjectCompletionChecklist {
+  renovationCaseId?: string | null;
   checks: ProjectCompletionCheck[];
   allPassed: boolean;
+  authorityCloseout?: {
+    permit: { applicability: ProjectRequirementApplicability; status: string; recordId?: string | null };
+    hoa: { applicability: ProjectRequirementApplicability; status: string; recordId?: string | null };
+  };
+}
+
+export type ProjectCloseoutCategory =
+  | 'PUNCH_LIST'
+  | 'CORRECTIONS'
+  | 'LIEN_WAIVER'
+  | 'PAYMENT'
+  | 'WARRANTY'
+  | 'COMMISSIONING'
+  | 'SAFETY'
+  | 'INSPECTION';
+
+export interface ProjectCloseoutDeclaration {
+  category: ProjectCloseoutCategory;
+  disposition: 'SATISFIED' | 'NOT_APPLICABLE' | 'OPEN_EXCEPTION';
+  evidenceDocumentIds: string[];
+  notes: string;
+  responsibleParty?: 'HOUSEHOLD' | 'CONTRACTOR' | 'SHARED' | 'AUTHORITY';
+  dueAt?: string;
+}
+
+export interface ProjectCloseoutPackage {
+  schemaVersion: string;
+  generatedAt: string;
+  propertyId: string;
+  project: {
+    id: string;
+    name: string;
+    outcomeStatus: string;
+    actualEndDate: string;
+    actualCostCents?: number | null;
+  };
+  renovationCase?: { id: string; name: string; lifecycle: string; outcomeStatus: string } | null;
+  authorityCloseout: ProjectCompletionChecklist['authorityCloseout'];
+  checklist: Array<ProjectCompletionCheck & {
+    applicability?: string;
+    evidenceDocumentIds?: string[];
+  }>;
+  unresolvedItems: Array<Record<string, unknown>>;
+  evidence: {
+    documentIds: string[];
+    materialSpecIds: string[];
+    commissioningResult: string;
+    functionalVerificationResult: string;
+    safetyCheckResult: string;
+    inspectionResult: string;
+  };
+  reconciledRecords: Record<string, unknown>;
+  refreshes: Array<{ targetSystem: string; status: string }>;
+  verifiedInstalledFactsApplied: boolean;
 }
 
 export type ProjectRequirementApplicability =

@@ -33,6 +33,13 @@ import { resolveInspectionFindingWorkKey, propagateFindingResolutionFromExecutio
 import { invalidateStatusForInventoryItem } from './homeStatusBoard.service';
 import type { OperationalWorkItemState } from '@prisma/client';
 import { evaluateRequirementCompletionCheck } from './projectCompliance/completionPolicy';
+import {
+  caseOutcomeForProjectOutcome,
+  closeoutWriteBackKey,
+  validateCloseoutDeclarations,
+  VERIFIED_CLOSEOUT_REFRESH_TARGETS,
+} from './projectCompliance/closeoutPolicy';
+import { createHash, randomBytes } from 'node:crypto';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -239,6 +246,7 @@ const EXCEPTION_TYPE_TO_ISSUE_CATEGORY: Record<string, ProjectIssueCategory> = {
 export function mapUnresolvedExceptionToProjectIssue(
   projectId: string,
   exception: { type: string; summary: string; blocksClosure: boolean },
+  sourceEntityId?: string,
 ): Prisma.ProjectIssueCreateManyInput {
   const severity: ProjectIssueSeverity = exception.blocksClosure ? 'BLOCKING' : 'MINOR';
   return {
@@ -249,6 +257,8 @@ export function mapUnresolvedExceptionToProjectIssue(
     category: EXCEPTION_TYPE_TO_ISSUE_CATEGORY[exception.type] ?? 'OTHER',
     status: 'OPEN' as ProjectIssueStatus,
     blocksPayment: severity === 'BLOCKING',
+    sourceEntityType: sourceEntityId ? 'PROJECT_CLOSEOUT' : undefined,
+    sourceEntityId,
   };
 }
 
@@ -1689,6 +1699,14 @@ export async function resolveIssue(
 
 export async function getCompletionChecklist(projectId: string, propertyId: string) {
   const project = await assertProject(projectId, propertyId);
+  const authoritySourceFilter = project.renovationCaseId
+    ? {
+        OR: [
+          { sourceEntityType: 'PROJECT', sourceEntityId: projectId },
+          { sourceEntityType: 'RENOVATION_CASE', sourceEntityId: project.renovationCaseId },
+        ],
+      }
+    : { sourceEntityType: 'PROJECT', sourceEntityId: projectId };
 
   const [
     linkedPermits,
@@ -1704,8 +1722,7 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
       where: {
         propertyId,
         isActive: true,
-        sourceEntityType: 'PROJECT',
-        sourceEntityId: projectId,
+        ...authoritySourceFilter,
       },
       select: {
         id: true,
@@ -1720,8 +1737,7 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
       where: {
         propertyId,
         isActive: true,
-        sourceEntityType: 'PROJECT',
-        sourceEntityId: projectId,
+        ...authoritySourceFilter,
       },
       select: {
         id: true,
@@ -1875,7 +1891,31 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
   ];
 
   const allPassed = checks.every(c => c.passed);
-  return { checks, allPassed };
+  return {
+    renovationCaseId: project.renovationCaseId,
+    checks,
+    allPassed,
+    authorityCloseout: {
+      permit: {
+        applicability: project.permitApplicability,
+        status: project.permitApplicability === 'REQUIRED'
+          ? (officiallyFinaledPermit ? 'OFFICIALLY_FINALED' : 'UNRESOLVED')
+          : project.permitApplicability === 'UNKNOWN'
+            ? 'UNRESOLVED'
+            : 'NOT_APPLICABLE',
+        recordId: officiallyFinaledPermit?.id ?? linkedPermits[0]?.id ?? null,
+      },
+      hoa: {
+        applicability: project.hoaApplicability,
+        status: project.hoaApplicability === 'REQUIRED'
+          ? (authorityApprovedHoa ? 'AUTHORITY_APPROVED' : 'UNRESOLVED')
+          : project.hoaApplicability === 'UNKNOWN'
+            ? 'UNRESOLVED'
+            : 'NOT_APPLICABLE',
+        recordId: authorityApprovedHoa?.id ?? linkedHoaApprovals[0]?.id ?? null,
+      },
+    },
+  };
 }
 
 export async function completeMinorWork(propertyId: string, userId: string, data: any) {
@@ -2045,11 +2085,23 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
     ? new Date(actualEndDate.getTime() + data.warrantyPeriodMonths * 30 * 24 * 60 * 60 * 1000)
     : undefined;
   const verifiedSuccess = data.outcomeStatus === 'VERIFIED_SUCCESS';
+  const closeoutEvaluation = validateCloseoutDeclarations(
+    data.closeoutDeclarations ?? [],
+    verifiedSuccess,
+  );
+  if (closeoutEvaluation.blockers.length > 0) {
+    throw new APIError(
+      `Cannot complete project — closeout declarations are unresolved: ${closeoutEvaluation.blockers.join('; ')}`,
+      400,
+      'CLOSEOUT_DECLARATIONS_INCOMPLETE',
+      { blockers: closeoutEvaluation.blockers },
+    );
+  }
 
+  const completionChecklist = await getCompletionChecklist(projectId, propertyId);
   if (verifiedSuccess) {
-    const { checks, allPassed } = await getCompletionChecklist(projectId, propertyId);
-    if (!allPassed) {
-      const failed = checks.filter(c => !c.passed).map(c => c.label);
+    if (!completionChecklist.allPassed) {
+      const failed = completionChecklist.checks.filter(c => !c.passed).map(c => c.label);
       throw new APIError(
         `Cannot complete project — unresolved items: ${failed.join('; ')}`,
         400, 'CHECKLIST_INCOMPLETE',
@@ -2073,6 +2125,13 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
         property: { select: { homeownerProfileId: true } },
         contractorProfile: { select: { userId: true } },
         progressLogs: { where: { materialType: { not: null } } },
+        renovationCase: {
+          include: {
+            currentScopeVersion: true,
+            requirements: true,
+            complianceConditions: true,
+          },
+        },
       },
     });
     if (!existing) throw new APIError('Project not found', 404, 'NOT_FOUND');
@@ -2093,6 +2152,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       return {
         project: existing,
         writeBacks: await tx.projectWriteBack.findMany({ where: { projectId } }),
+        closeoutPackage: existing.closeoutPackage,
         idempotentReplay: true,
       };
     }
@@ -2107,6 +2167,8 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       modelNumber: data.modelNumber ?? null,
       serialNumber: data.serialNumber ?? null,
       workDate: actualEndDate.toISOString(),
+      closeoutDeclarations: data.closeoutDeclarations,
+      closeoutChecklist: closeoutEvaluation.items,
     };
     const project = await tx.projectRecord.update({
       where: { id: projectId },
@@ -2173,7 +2235,34 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
     // trackable ProjectIssue rows instead of only free text on the HomeEvent.
     if (data.unresolvedExceptions.length > 0) {
       await tx.projectIssue.createMany({
-        data: data.unresolvedExceptions.map((exception: any) => mapUnresolvedExceptionToProjectIssue(projectId, exception)),
+        data: data.unresolvedExceptions.map((exception: any, index: number) =>
+          mapUnresolvedExceptionToProjectIssue(projectId, exception, `exception:${index}`)),
+        skipDuplicates: true,
+      });
+    }
+    const openCloseoutDeclarations = (data.closeoutDeclarations ?? []).filter(
+      (declaration: any) => declaration.disposition === 'OPEN_EXCEPTION',
+    );
+    if (openCloseoutDeclarations.length > 0) {
+      await tx.projectIssue.createMany({
+        data: openCloseoutDeclarations.map((declaration: any) => ({
+          projectId,
+          title: `${String(declaration.category).toLowerCase().replace(/_/g, ' ')} remains open`,
+          description: declaration.notes,
+          severity: declaration.category === 'SAFETY' ? 'BLOCKING' : 'MAJOR',
+          category: declaration.category === 'SAFETY'
+            ? 'SAFETY'
+            : declaration.category === 'PAYMENT'
+              ? 'PAYMENT_DISPUTE'
+              : 'OTHER',
+          status: 'OPEN',
+          blocksPayment: declaration.category === 'SAFETY' || declaration.category === 'PAYMENT',
+          evidenceDocumentIds: declaration.evidenceDocumentIds,
+          responsibleParty: declaration.responsibleParty ?? 'SHARED',
+          sourceEntityType: 'PROJECT_CLOSEOUT',
+          sourceEntityId: `declaration:${declaration.category}`,
+        })),
+        skipDuplicates: true,
       });
     }
 
@@ -2415,11 +2504,205 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
         where: { resolvedByProjectId: projectId, status: { not: 'RESOLVED' } },
         data: { status: 'RESOLVED', resolvedAt: new Date(), resolutionNotes: `Resolved by verified project: ${project.name}` },
       });
+      await tx.homeCapitalTimelineAnalysis.updateMany({
+        where: { propertyId, status: 'READY' },
+        data: { status: 'STALE' },
+      });
       await tx.projectRecord.update({ where: { id: projectId }, data: { writeBackAppliedAt: new Date() } });
+    }
+
+    const closeoutGeneratedAt = existing.closeoutPackageGeneratedAt ?? new Date();
+    const caseOutcome = caseOutcomeForProjectOutcome(data.outcomeStatus);
+    if (existing.renovationCase) {
+      await tx.renovationCase.update({
+        where: { id: existing.renovationCase.id },
+        data: {
+          lifecycle: caseOutcome.lifecycle,
+          outcomeStatus: caseOutcome.outcomeStatus,
+        },
+      });
+      await tx.renovationCaseEvent.upsert({
+        where: {
+          renovationCaseId_idempotencyKey: {
+            renovationCaseId: existing.renovationCase.id,
+            idempotencyKey: `project-closeout:${projectId}:reconciled`,
+          },
+        },
+        create: {
+          renovationCaseId: existing.renovationCase.id,
+          propertyId,
+          actorUserId: userId,
+          idempotencyKey: `project-closeout:${projectId}:reconciled`,
+          eventType: 'CLOSEOUT_RECONCILED',
+          fromLifecycle: existing.renovationCase.lifecycle,
+          toLifecycle: caseOutcome.lifecycle,
+          scopeVersionId: existing.renovationScopeVersionId,
+          payload: {
+            projectId,
+            outcomeStatus: data.outcomeStatus,
+            verifiedInstalledFactsApplied: verifiedSuccess,
+            unresolvedItems: [
+              ...data.unresolvedExceptions,
+              ...openCloseoutDeclarations,
+            ],
+          },
+        },
+        update: {
+          toLifecycle: caseOutcome.lifecycle,
+          payload: {
+            projectId,
+            outcomeStatus: data.outcomeStatus,
+            verifiedInstalledFactsApplied: verifiedSuccess,
+            unresolvedItems: [
+              ...data.unresolvedExceptions,
+              ...openCloseoutDeclarations,
+            ],
+          },
+        },
+      });
+      const caseLinks = [
+        ...documentIds.map((targetId) => ({ linkType: 'DOCUMENT', targetId })),
+        ...materialSpecIds.map((targetId) => ({ linkType: 'MATERIAL_SPEC', targetId })),
+      ];
+      if (caseLinks.length > 0) {
+        await tx.renovationCaseLink.createMany({
+          data: caseLinks.map((link) => ({
+            renovationCaseId: existing.renovationCase!.id,
+            propertyId,
+            scopeVersionId: existing.renovationScopeVersionId,
+            linkType: link.linkType as any,
+            targetId: link.targetId,
+            metadata: { source: 'PROJECT_CLOSEOUT', projectId },
+            createdByUserId: userId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    const closeoutPackage = {
+      schemaVersion: 'renovation-closeout-package-v1',
+      generatedAt: closeoutGeneratedAt.toISOString(),
+      propertyId,
+      project: {
+        id: projectId,
+        name: existing.name,
+        projectType: existing.projectType,
+        executionPath: existing.executionPath,
+        fulfillmentMode: existing.fulfillmentMode,
+        actualEndDate: actualEndDate.toISOString(),
+        outcomeStatus: data.outcomeStatus,
+        actualCostCents: data.actualCostCents ?? null,
+      },
+      renovationCase: existing.renovationCase ? {
+        id: existing.renovationCase.id,
+        name: existing.renovationCase.name,
+        lifecycle: caseOutcome.lifecycle,
+        outcomeStatus: caseOutcome.outcomeStatus,
+        scopeVersion: existing.renovationCase.currentScopeVersion ? {
+          version: existing.renovationCase.currentScopeVersion.version,
+          summary: existing.renovationCase.currentScopeVersion.summary,
+          workItems: existing.renovationCase.currentScopeVersion.workItems,
+          spacesAffected: existing.renovationCase.currentScopeVersion.spacesAffected,
+          systemsAffected: existing.renovationCase.currentScopeVersion.systemsAffected,
+          intendedUse: existing.renovationCase.currentScopeVersion.intendedUse,
+          structuralEffects: existing.renovationCase.currentScopeVersion.structuralEffects,
+          exteriorEffects: existing.renovationCase.currentScopeVersion.exteriorEffects,
+          contractCostCents: existing.renovationCase.currentScopeVersion.contractCostCents,
+          approvalStatus: existing.renovationCase.currentScopeVersion.approvalStatus,
+        } : null,
+        requirements: existing.renovationCase.requirements.map((requirement) => ({
+          family: requirement.family,
+          question: requirement.question,
+          applicability: requirement.applicability,
+          determination: requirement.determination,
+          truthLayer: requirement.truthLayer,
+          authorityName: requirement.authorityName,
+          sourceType: requirement.sourceType,
+          sourceUrl: requirement.sourceUrl,
+          evidenceNotes: requirement.evidenceNotes,
+          isBlocking: requirement.isBlocking,
+        })),
+        complianceConditions: existing.renovationCase.complianceConditions.map((condition) => ({
+          subjectType: condition.subjectType,
+          title: condition.title,
+          description: condition.description,
+          sourceReference: condition.sourceReference,
+          status: condition.status,
+          isBlocking: condition.isBlocking,
+          dueAt: condition.dueAt?.toISOString() ?? null,
+          expiresAt: condition.expiresAt?.toISOString() ?? null,
+          satisfiedAt: condition.satisfiedAt?.toISOString() ?? null,
+          verificationNotes: condition.verificationNotes,
+        })),
+      } : null,
+      authorityCloseout: completionChecklist.authorityCloseout,
+      checklist: [
+        ...completionChecklist.checks,
+        ...closeoutEvaluation.items,
+      ],
+      unresolvedItems: [
+        ...data.unresolvedExceptions,
+        ...openCloseoutDeclarations,
+      ],
+      evidence: {
+        documentIds,
+        materialSpecIds,
+        commissioningResult: data.commissioningResult,
+        functionalVerificationResult: data.functionalVerificationResult,
+        safetyCheckResult: data.safetyCheckResult,
+        inspectionResult: data.inspectionResult,
+      },
+      reconciledRecords: {
+        homeEventId: event.id,
+        expenseId,
+        warrantyId,
+        inventoryItemId: verifiedSuccess ? existing.inventoryItemId : null,
+        futureCareTaskIds,
+        providerReviewId,
+      },
+      refreshes: verifiedSuccess
+        ? VERIFIED_CLOSEOUT_REFRESH_TARGETS.map((targetSystem) => ({
+            targetSystem,
+            status: 'PENDING',
+          }))
+        : [],
+      verifiedInstalledFactsApplied: verifiedSuccess,
+    };
+    await tx.projectRecord.update({
+      where: { id: projectId },
+      data: {
+        closeoutPackage: closeoutPackage as Prisma.InputJsonValue,
+        closeoutPackageGeneratedAt: closeoutGeneratedAt,
+      },
+    });
+    if (existing.renovationCase) {
+      await tx.renovationCaseEvent.upsert({
+        where: {
+          renovationCaseId_idempotencyKey: {
+            renovationCaseId: existing.renovationCase.id,
+            idempotencyKey: `project-closeout:${projectId}:package`,
+          },
+        },
+        create: {
+          renovationCaseId: existing.renovationCase.id,
+          propertyId,
+          actorUserId: userId,
+          idempotencyKey: `project-closeout:${projectId}:package`,
+          eventType: 'CLOSEOUT_PACKAGE_CREATED',
+          scopeVersionId: existing.renovationScopeVersionId,
+          payload: { projectId, generatedAt: closeoutGeneratedAt.toISOString(), schemaVersion: closeoutPackage.schemaVersion },
+        },
+        update: {
+          payload: { projectId, generatedAt: closeoutGeneratedAt.toISOString(), schemaVersion: closeoutPackage.schemaVersion },
+        },
+      });
     }
 
     const writeBackRows = [
       { targetSystem: 'HOME_EVENTS', targetRecordId: event.id, action: verifiedSuccess ? 'CREATED' : 'UPDATED', payload: { outcomeStatus: data.outcomeStatus } },
+      { targetSystem: 'CLOSEOUT_PACKAGE', targetRecordId: projectId, action: 'UPDATED', payload: { generatedAt: closeoutGeneratedAt, schemaVersion: closeoutPackage.schemaVersion } },
+      ...(existing.renovationCaseId ? [{ targetSystem: 'RENOVATION_CASE', targetRecordId: existing.renovationCaseId, action: 'UPDATED', payload: caseOutcome }] : []),
       ...(documentIds.length ? [{ targetSystem: 'DOCUMENTS', targetRecordId: documentIds[0], action: 'LINKED', payload: { documentIds } }] : []),
       ...(expenseId ? [{ targetSystem: 'EXPENSES', targetRecordId: expenseId, action: 'CREATED', payload: { actualCostCents: data.actualCostCents } }] : []),
       ...(warrantyId ? [{ targetSystem: 'WARRANTIES', targetRecordId: warrantyId, action: 'CREATED', payload: { warrantyExpiresAt } }] : []),
@@ -2427,16 +2710,32 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       ...(materialSpecIds.length ? [{ targetSystem: 'MATERIAL_SPECS', targetRecordId: materialSpecIds[0], action: 'CREATED', payload: { materialSpecIds } }] : []),
       ...(futureCareTaskIds.length ? [{ targetSystem: 'FUTURE_CARE', targetRecordId: futureCareTaskIds[0], action: 'CREATED', payload: { taskIds: futureCareTaskIds } }] : []),
       ...(providerReviewId ? [{ targetSystem: 'PROVIDER_REVIEWS', targetRecordId: providerReviewId, action: 'CREATED', payload: { verifiedOutcome: true, journeyId: existing.guidanceJourneyId } }] : []),
+      ...(verifiedSuccess ? VERIFIED_CLOSEOUT_REFRESH_TARGETS.map((targetSystem) => ({
+        targetSystem,
+        targetRecordId: propertyId,
+        action: 'RESET',
+        payload: {
+          status: 'PENDING',
+          reason: 'Verified renovation closeout changed canonical property facts.',
+          requestedAt: closeoutGeneratedAt.toISOString(),
+        },
+      })) : []),
     ];
     for (const row of writeBackRows) {
-      const prior = await tx.projectWriteBack.findFirst({
-        where: { projectId, targetSystem: row.targetSystem as any, targetRecordId: row.targetRecordId },
+      const idempotencyKey = closeoutWriteBackKey(projectId, row.targetSystem, row.targetRecordId);
+      await tx.projectWriteBack.upsert({
+        where: { idempotencyKey },
+        create: {
+          projectId,
+          idempotencyKey,
+          targetSystem: row.targetSystem as any,
+          targetRecordId: row.targetRecordId,
+          action: row.action as any,
+          payload: row.payload as any,
+          appliedByUserId: userId,
+        },
+        update: {},
       });
-      if (!prior) {
-        await tx.projectWriteBack.create({
-          data: { projectId, targetSystem: row.targetSystem as any, targetRecordId: row.targetRecordId, action: row.action as any, payload: row.payload as any, appliedByUserId: userId },
-        });
-      }
     }
 
     return {
@@ -2449,6 +2748,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       materialSpecIds,
       futureCareTaskIds,
       providerReviewId,
+      closeoutPackage,
       idempotentReplay: false,
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -2478,4 +2778,68 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
     }
   }
   return result;
+}
+
+export async function getCloseoutPackage(projectId: string, propertyId: string) {
+  await assertProject(projectId, propertyId);
+  const project = await prisma.projectRecord.findUnique({
+    where: { id: projectId },
+    select: {
+      id: true,
+      renovationCaseId: true,
+      outcomeStatus: true,
+      closeoutPackage: true,
+      closeoutPackageGeneratedAt: true,
+      writeBacks: { orderBy: { appliedAt: 'asc' } },
+    },
+  });
+  if (!project?.closeoutPackage) {
+    throw new APIError('Closeout package has not been generated.', 404, 'CLOSEOUT_PACKAGE_NOT_FOUND');
+  }
+  return project;
+}
+
+export async function createCloseoutShareLink(
+  projectId: string,
+  propertyId: string,
+  expiresInDays = 30,
+) {
+  const closeout = await getCloseoutPackage(projectId, propertyId);
+  const rawToken = randomBytes(32).toString('hex');
+  const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000);
+  const shareLink = await prisma.projectCloseoutShareLink.create({
+    data: {
+      projectId,
+      propertyId,
+      tokenHash,
+      packageSnapshot: closeout.closeoutPackage as Prisma.InputJsonValue,
+      expiresAt,
+    },
+    select: { id: true, expiresAt: true, createdAt: true },
+  });
+  return { token: rawToken, shareLink };
+}
+
+export async function getPublicCloseoutPackage(rawToken: string) {
+  const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+  const now = new Date();
+  const link = await prisma.projectCloseoutShareLink.findFirst({
+    where: {
+      tokenHash,
+      status: 'ACTIVE',
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+  });
+  if (!link) {
+    throw new APIError('Closeout share link was not found or has expired.', 404, 'CLOSEOUT_SHARE_NOT_FOUND');
+  }
+  await prisma.projectCloseoutShareLink.update({
+    where: { id: link.id },
+    data: { viewCount: { increment: 1 }, lastViewedAt: now },
+  });
+  return {
+    package: link.packageSnapshot,
+    expiresAt: link.expiresAt,
+  };
 }

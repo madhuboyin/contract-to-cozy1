@@ -8,6 +8,8 @@ import { api } from '@/lib/api/client';
 import type {
   ProjectCompletionCheck,
   ProjectCompletionChecklist,
+  ProjectCloseoutCategory,
+  ProjectCloseoutDeclaration,
   ProjectRecord,
   ProjectRequirementApplicability,
 } from '@/types';
@@ -49,6 +51,28 @@ const REQUIREMENT_OPTIONS: Array<{ value: ProjectRequirementApplicability; label
   { value: 'WAIVED_WITH_ACKNOWLEDGMENT', label: 'Waived with acknowledgment' },
 ];
 
+const CLOSEOUT_CATEGORY_LABELS: Record<ProjectCloseoutCategory, string> = {
+  PUNCH_LIST: 'Punch list',
+  CORRECTIONS: 'Corrections',
+  LIEN_WAIVER: 'Lien waiver',
+  PAYMENT: 'Final payment',
+  WARRANTY: 'Warranty',
+  COMMISSIONING: 'Commissioning',
+  SAFETY: 'Safety',
+  INSPECTION: 'Inspection',
+};
+
+const INITIAL_CLOSEOUT_DECLARATIONS: ProjectCloseoutDeclaration[] = [
+  { category: 'PUNCH_LIST', disposition: 'SATISFIED', evidenceDocumentIds: [], notes: '' },
+  { category: 'CORRECTIONS', disposition: 'SATISFIED', evidenceDocumentIds: [], notes: '' },
+  { category: 'LIEN_WAIVER', disposition: 'NOT_APPLICABLE', evidenceDocumentIds: [], notes: 'No separate lien waiver applies.' },
+  { category: 'PAYMENT', disposition: 'SATISFIED', evidenceDocumentIds: [], notes: '' },
+  { category: 'WARRANTY', disposition: 'NOT_APPLICABLE', evidenceDocumentIds: [], notes: 'No separate warranty applies.' },
+  { category: 'COMMISSIONING', disposition: 'SATISFIED', evidenceDocumentIds: [], notes: '' },
+  { category: 'SAFETY', disposition: 'SATISFIED', evidenceDocumentIds: [], notes: '' },
+  { category: 'INSPECTION', disposition: 'NOT_APPLICABLE', evidenceDocumentIds: [], notes: 'No separate inspection applies.' },
+];
+
 function CompletionCheckIcon({ check }: { check: ProjectCompletionCheck }) {
   if (check.status === 'PASSED') {
     return <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-600 mt-0.5" />;
@@ -74,6 +98,9 @@ export default function CompletionPage() {
   const [confirming, setConfirming] = useState(false);
   const [savingRequirements, setSavingRequirements] = useState(false);
   const [proofDocuments, setProofDocuments] = useState<ProjectProof[]>([]);
+  const [closeoutDeclarations, setCloseoutDeclarations] = useState<ProjectCloseoutDeclaration[]>(
+    INITIAL_CLOSEOUT_DECLARATIONS,
+  );
   const [requirements, setRequirements] = useState({
     permitApplicability: 'UNKNOWN' as ProjectRequirementApplicability,
     permitApplicabilityBasis: '',
@@ -185,6 +212,12 @@ export default function CompletionPage() {
         safetyCheckResult: form.safetyCheckResult as 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED',
         inspectionResult: form.inspectionResult as 'PASSED' | 'FAILED' | 'NOT_REQUIRED' | 'UNRESOLVED',
         unresolvedExceptions: form.exceptionSummary.trim() ? [{ type: form.outcomeStatus === 'UNSAFE' ? 'SAFETY' : 'OTHER', summary: form.exceptionSummary.trim(), blocksClosure: true }] : [],
+        closeoutDeclarations: closeoutDeclarations.map((declaration) => ({
+          ...declaration,
+          evidenceDocumentIds: proofDocuments
+            .map((proof) => proof.documentId)
+            .filter((documentId): documentId is string => Boolean(documentId)),
+        })),
         actualCostCents: form.actualCost ? Math.round(Number(form.actualCost) * 100) : undefined,
         providerOutcome: form.providerOutcome as 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'NOT_APPLICABLE',
         recommendationOverridden: form.recommendationOverridden,
@@ -203,7 +236,7 @@ export default function CompletionPage() {
         replacementHorizonDate: form.replacementHorizonDate || undefined,
         followUpDate: form.followUpDate || undefined,
       });
-      router.push(`/dashboard/properties/${propertyId}/projects/${projectId}`);
+      router.push(`/dashboard/properties/${propertyId}/projects/${projectId}/completion/package`);
     } catch (e: any) {
       setError(e?.message ?? 'Failed to confirm completion');
       setConfirming(false);
@@ -389,6 +422,47 @@ export default function CompletionPage() {
         </MobileCard>
 
         <MobileCard className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">Case closeout declarations</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Make applicability explicit for every closeout area. Open exceptions remain visible and produce a completed-with-open-items case.
+            </p>
+          </div>
+          {closeoutDeclarations.map((declaration, index) => (
+            <div key={declaration.category} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[11rem_1fr]">
+              <div className="space-y-1.5">
+                <Label htmlFor={`closeout-${declaration.category}`}>
+                  {CLOSEOUT_CATEGORY_LABELS[declaration.category]}
+                </Label>
+                <select
+                  id={`closeout-${declaration.category}`}
+                  value={declaration.disposition}
+                  onChange={(event) => setCloseoutDeclarations((current) => current.map((item, itemIndex) =>
+                    itemIndex === index
+                      ? { ...item, disposition: event.target.value as ProjectCloseoutDeclaration['disposition'] }
+                      : item))}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="SATISFIED">Satisfied</option>
+                  <option value="NOT_APPLICABLE">Not applicable</option>
+                  <option value="OPEN_EXCEPTION">Open exception</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`closeout-notes-${declaration.category}`}>Evidence note or rationale</Label>
+                <Input
+                  id={`closeout-notes-${declaration.category}`}
+                  value={declaration.notes}
+                  onChange={(event) => setCloseoutDeclarations((current) => current.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, notes: event.target.value } : item))}
+                  placeholder="Evidence, source, remaining work, or why this does not apply"
+                />
+              </div>
+            </div>
+          ))}
+        </MobileCard>
+
+        <MobileCard className="space-y-3">
           <h2 className="text-sm font-semibold text-slate-700">Future care</h2>
           <div className="grid grid-cols-2 gap-3">
             {[['nextMaintenanceDate', 'Next maintenance'], ['nextInspectionDate', 'Next inspection'], ['replacementHorizonDate', 'Replacement horizon'], ['followUpDate', 'Outcome follow-up']].map(([field, label]) => <div key={field} className="space-y-1.5"><Label htmlFor={field}>{label}</Label><Input id={field} type="date" value={form[field as keyof typeof form] as string} onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))} /></div>)}
@@ -424,6 +498,7 @@ export default function CompletionPage() {
             <li>HomeEvent, expense, proof, inventory, warranty, and material records updated transactionally</li>
             <li>Maintenance, inspection, warranty, replacement, and follow-up actions scheduled</li>
             <li>Contractor ratings saved to project record</li>
+            <li>Renovation Case, downstream refresh ledger, and shareable closeout package reconciled</li>
           </ul>
         </div>
 
