@@ -2161,6 +2161,7 @@ export interface HiddenAssetMatchDTO {
   estimatedValue: number | null;
   estimatedValueMin: number | null;
   estimatedValueMax: number | null;
+  benefitPeriod: 'UNKNOWN' | 'ONE_TIME' | 'MONTHLY' | 'ANNUAL';
   currency: string;
   confidenceLevel: HiddenAssetConfidenceLevel;
   /** Human-friendly match-stage label from backend ("Strong property match", etc.) — never implies approval. */
@@ -2174,6 +2175,9 @@ export interface HiddenAssetMatchDTO {
   eligibilityNotes: string | null;
   lastVerifiedAt: string | null;
   expiresAt: string | null;
+  fundingStatus: 'UNKNOWN' | 'OPEN' | 'CLOSED';
+  applicationWindowOpensAt: string | null;
+  applicationWindowClosesAt: string | null;
   isProgramActive: boolean;
   /** Non-null when program data is stale — surface as a caveat in UI. */
   freshnessNote: string | null;
@@ -2353,7 +2357,7 @@ export interface HomeSavingsOpportunityOutcomeDTO {
 
 export type SavingsBenefitsFamily = 'BENEFIT' | 'RECURRING_COST';
 export type SavingsBenefitsLifecycle = 'IN_PROGRESS' | 'REALIZED';
-export type SavingsBenefitsValueBasis = 'ONE_TIME' | 'RECURRING' | 'UNKNOWN';
+export type SavingsBenefitsValueBasis = 'ONE_TIME' | 'MONTHLY' | 'ANNUAL' | 'UNKNOWN';
 
 export interface SavingsBenefitsUnifiedItemDTO {
   id: string;

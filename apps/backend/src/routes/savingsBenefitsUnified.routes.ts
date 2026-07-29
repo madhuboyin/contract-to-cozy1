@@ -6,6 +6,7 @@ import { getSavingsBenefitsUnifiedForProperty } from '../controllers/savingsBene
 import {
   getSavingsBenefitsCoverage,
   getSavingsBenefitsOpportunityDetail,
+  patchSavingsBenefitsAction,
   postSavingsBenefitsActionOutcome,
   postSavingsBenefitsOpportunityAction,
   postSavingsBenefitsOpportunityFact,
@@ -63,6 +64,7 @@ router.post(
 );
 
 const actionBody = z.object({
+  idempotencyKey: z.string().trim().min(1).max(160),
   family: z.enum(['BENEFIT', 'RECURRING_COST']),
   actionType: z.enum([
     'SAVE', 'DISMISS', 'PREPARE', 'OFFICIAL_SOURCE_OPENED', 'QUOTE_REQUESTED',
@@ -80,6 +82,26 @@ router.post(
   propertyAuthMiddleware,
   validateBody(actionBody),
   postSavingsBenefitsOpportunityAction,
+);
+
+const actionUpdateBody = z.object({
+  state: z.enum(['STARTED', 'COMPLETED', 'CANCELLED']).optional(),
+  followUpAt: z.string().datetime().nullable().optional(),
+  checklist: z.array(z.object({
+    key: z.string().trim().min(1).max(200),
+    completed: z.boolean(),
+    evidenceDocumentIds: z.array(z.string().uuid()).max(20).optional(),
+  })).max(100).optional(),
+}).refine(
+  (body) => body.state !== undefined || body.followUpAt !== undefined || body.checklist !== undefined,
+  { message: 'At least one action update is required.' },
+);
+
+router.patch(
+  '/properties/:propertyId/savings-benefits/actions/:actionId',
+  propertyAuthMiddleware,
+  validateBody(actionUpdateBody),
+  patchSavingsBenefitsAction,
 );
 
 const outcomeBody = z.object({

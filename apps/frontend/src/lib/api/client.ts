@@ -4313,6 +4313,7 @@ class APIClient {
     propertyId: string,
     opportunityId: string,
     input: {
+      idempotencyKey: string;
       family: 'BENEFIT' | 'RECURRING_COST';
       actionType:
         | 'SAVE'
@@ -4338,6 +4339,71 @@ class APIClient {
       input,
     );
     return res.data;
+  }
+
+  async getSavingsBenefitsOpportunityDetail(
+    propertyId: string,
+    opportunityId: string,
+  ): Promise<{
+    family: 'BENEFIT' | 'RECURRING_COST';
+    opportunity: {
+      savingsBenefitActions?: Array<{
+        id: string;
+        actionType: string;
+        state: 'STARTED' | 'COMPLETED' | 'CANCELLED';
+        followUpAt: string | null;
+        homeActionReference: string | null;
+        checklistJson: Array<{
+          key: string;
+          label: string;
+          required: boolean;
+          evidenceRequired: boolean;
+          completedAt: string | null;
+          evidenceDocumentIds: string[];
+        }> | null;
+      }>;
+    };
+  }> {
+    const res = await this.get<{
+      family: 'BENEFIT' | 'RECURRING_COST';
+      opportunity: {
+        savingsBenefitActions?: Array<{
+          id: string;
+          actionType: string;
+          state: 'STARTED' | 'COMPLETED' | 'CANCELLED';
+          followUpAt: string | null;
+          homeActionReference: string | null;
+          checklistJson: Array<{
+            key: string;
+            label: string;
+            required: boolean;
+            evidenceRequired: boolean;
+            completedAt: string | null;
+            evidenceDocumentIds: string[];
+          }> | null;
+        }>;
+      };
+    }>(`/api/properties/${propertyId}/savings-benefits/opportunities/${opportunityId}`);
+    return res.data;
+  }
+
+  async updateSavingsBenefitsAction(
+    propertyId: string,
+    actionId: string,
+    input: {
+      state?: 'STARTED' | 'COMPLETED' | 'CANCELLED';
+      followUpAt?: string | null;
+      checklist?: Array<{
+        key: string;
+        completed: boolean;
+        evidenceDocumentIds?: string[];
+      }>;
+    },
+  ): Promise<void> {
+    await this.patch(
+      `/api/properties/${propertyId}/savings-benefits/actions/${actionId}`,
+      input,
+    );
   }
 
   // ==========================================================================

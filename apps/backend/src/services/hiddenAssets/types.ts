@@ -243,6 +243,9 @@ export interface HiddenAssetMatchDTO {
   eligibilityNotes: string | null;
   lastVerifiedAt: string | null;
   expiresAt: string | null;
+  fundingStatus: HiddenAssetFundingStatus;
+  applicationWindowOpensAt: string | null;
+  applicationWindowClosesAt: string | null;
   isProgramActive: boolean;
   /** Non-null when program data is stale. Surface to users as a caveat. */
   freshnessNote: string | null;

@@ -119,11 +119,14 @@ export async function resolveNotificationPolicy(input: {
     (scopeKeys.length - scopeKeys.indexOf(preference.scopeKey)) * 10 + (preference.category === category ? 1 : 0);
   preferences.sort((a, b) => specificity(b) - specificity(a));
   const defaultCadence: Cadence = IMMEDIATE_CATEGORIES.has(category) || urgency !== 'ROUTINE' ? 'IMMEDIATE' : 'WEEKLY_BRIEF';
-  // Refinance email is explicit opt-in only. Never inherit the legacy global
-  // email default for a financial opportunity.
+  // Material-financial opportunity email is explicit opt-in only. Never
+  // inherit the legacy global email default for refinance or Savings and
+  // Benefits; in-app continuity remains available.
+  const requiresExplicitFinancialEmail =
+    category === 'REFINANCE' || category === 'SAVINGS_BENEFITS';
   const channelDefaults: Array<keyof typeof NotificationChannel> = [
     'IN_APP',
-    ...(category !== 'REFINANCE' && input.legacyEmailEnabled ? ['EMAIL' as const] : []),
+    ...(!requiresExplicitFinancialEmail && input.legacyEmailEnabled ? ['EMAIL' as const] : []),
   ];
   const configuredChannels = preferences.map((preference) => preference.channel as keyof typeof NotificationChannel);
   const channels = [...new Set([...channelDefaults, ...configuredChannels])].map((channel) => {

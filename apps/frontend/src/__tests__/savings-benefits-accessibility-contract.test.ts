@@ -24,6 +24,8 @@ describe('Savings and Benefits — accessibility contract (HSB-034)', () => {
     expect(outcomeRecorder).toContain("aria-label={family === 'BENEFIT' ? 'Amount received in dollars'");
     expect(outcomeRecorder).toContain('aria-label="Reason given for the denial"');
     expect(outcomeRecorder).toContain('aria-label="Evidence note"');
+    expect(outcomeRecorder).toContain('aria-labelledby={`savings-action-checklist-${activeAction.id}`}');
+    expect(outcomeRecorder).toContain('className="min-h-11 rounded-md');
     // Every focusable custom control gets a visible focus ring, not just the
     // browser default (which some global resets suppress).
     expect(outcomeRecorder).toContain('focus-visible:ring-2 focus-visible:ring-teal-500');
@@ -55,5 +57,7 @@ describe('Savings and Benefits — accessibility contract (HSB-034)', () => {
   it('Admin console: icon-only rule-removal control is named per row, not just visually implied', () => {
     expect(adminConsole).toContain('aria-label={`Remove rule ${index + 1}`}');
     expect(adminConsole).toContain('<Trash2 className="h-3.5 w-3.5" aria-hidden="true" />');
+    expect(adminConsole).toContain('<Label htmlFor="program-funding-status">');
+    expect(adminConsole).toContain('<Label htmlFor="program-application-deadline">');
   });
 });

@@ -23,7 +23,7 @@ import { logger } from '../lib/logger';
 
 export type SavingsBenefitsFamily = 'BENEFIT' | 'RECURRING_COST';
 export type SavingsBenefitsLifecycle = 'IN_PROGRESS' | 'REALIZED';
-export type SavingsBenefitsValueBasis = 'ONE_TIME' | 'RECURRING' | 'UNKNOWN';
+export type SavingsBenefitsValueBasis = 'ONE_TIME' | 'MONTHLY' | 'ANNUAL' | 'UNKNOWN';
 
 export interface SavingsBenefitsUnifiedItemDTO {
   id: string;
@@ -102,9 +102,10 @@ function safeJsonToStringArray(json: Prisma.JsonValue | null | undefined): strin
   return null;
 }
 
-function valueBasisForBenefitPeriod(benefitPeriod: string): SavingsBenefitsValueBasis {
+export function valueBasisForBenefitPeriod(benefitPeriod: string): SavingsBenefitsValueBasis {
   if (benefitPeriod === 'ONE_TIME') return 'ONE_TIME';
-  if (benefitPeriod === 'MONTHLY' || benefitPeriod === 'ANNUAL') return 'RECURRING';
+  if (benefitPeriod === 'MONTHLY') return 'MONTHLY';
+  if (benefitPeriod === 'ANNUAL') return 'ANNUAL';
   return 'UNKNOWN';
 }
 
@@ -149,7 +150,9 @@ function mapPursuingMatch(row: PursuingMatchRow, propertyId: string, mutuallyExc
     estimatedValueBasis: valueBasisForBenefitPeriod(program.benefitPeriod),
     realizedValue: null,
     currency: program.currency,
-    deadline: program.expiresAt ? program.expiresAt.toISOString() : null,
+    deadline: program.applicationWindowClosesAt?.toISOString()
+      ?? program.expiresAt?.toISOString()
+      ?? null,
     sourceLabel: program.sourceLabel ?? null,
     statusLabel: 'Pursuing',
     outcomeStage: latestOutcome?.stage ?? null,
@@ -177,7 +180,7 @@ function mapAppliedOpportunity(row: AppliedOpportunityRow, propertyId: string): 
     category: row.categoryKey,
     explanation: row.detail ?? null,
     estimatedValue: netValue ?? grossValue,
-    estimatedValueBasis: 'RECURRING',
+    estimatedValueBasis: 'ANNUAL',
     realizedValue: null,
     currency: row.currency,
     deadline: row.expiresAt ? row.expiresAt.toISOString() : null,
@@ -233,7 +236,7 @@ function mapReceivedOpportunityOutcome(outcome: ReceivedOpportunityOutcomeRow, p
     category: opportunity.categoryKey,
     explanation: outcome.evidenceNote ?? null,
     estimatedValue: asNumber(opportunity.netAnnualSavings) ?? asNumber(opportunity.estimatedAnnualSavings) ?? null,
-    estimatedValueBasis: 'RECURRING',
+    estimatedValueBasis: 'ANNUAL',
     realizedValue: observedAnnual ?? (observedMonthly != null ? round2(observedMonthly * 12) : null),
     currency: outcome.currency,
     deadline: null,

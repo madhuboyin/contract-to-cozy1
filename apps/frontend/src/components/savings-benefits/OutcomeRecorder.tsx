@@ -93,6 +93,7 @@ export function OutcomeRecorder({
   const [observationEndedAt, setObservationEndedAt] = useState('');
   const [documents, setDocuments] = useState<Array<{ id: string; name: string }>>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [checklistDocumentTarget, setChecklistDocumentTarget] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -104,6 +105,16 @@ export function OutcomeRecorder({
         : api.listHomeSavingsOpportunityOutcomes(id),
     staleTime: 30_000,
   });
+  const actionDetailQuery = useQuery({
+    queryKey: ['savings-benefits-action-detail', propertyId, id],
+    queryFn: () => api.getSavingsBenefitsOpportunityDetail(propertyId, id),
+    staleTime: 30_000,
+  });
+  const activeAction =
+    actionDetailQuery.data?.opportunity.savingsBenefitActions?.find(
+      (action) => action.state === 'STARTED',
+    ) ?? null;
+  const actionChecklist = activeAction?.checklistJson ?? [];
 
   const outcomes: OutcomeDTO[] = outcomesQuery.data ?? [];
   const latest = [...outcomes].reverse().find((outcome) => !outcome.revokedAt) ?? null;
@@ -176,6 +187,20 @@ export function OutcomeRecorder({
     onSuccess: invalidate,
   });
 
+  const actionMutation = useMutation({
+    mutationFn: (input: Parameters<typeof api.updateSavingsBenefitsAction>[2]) => {
+      if (!activeAction) throw new Error('No active action is available.');
+      return api.updateSavingsBenefitsAction(propertyId, activeAction.id, input);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['savings-benefits-action-detail', propertyId, id],
+      });
+      queryClient.invalidateQueries({ queryKey: ['savings-benefits-unified', propertyId] });
+      invalidate();
+    },
+  });
+
   async function handleUpload(file: File) {
     setUploading(true);
     setUploadError(null);
@@ -213,6 +238,104 @@ export function OutcomeRecorder({
 
   return (
     <div className="space-y-3">
+      {activeAction ? (
+        <section
+          className="space-y-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] p-3"
+          aria-labelledby={`savings-action-checklist-${activeAction.id}`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3
+              id={`savings-action-checklist-${activeAction.id}`}
+              className="text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
+            >
+              Resume preparation
+            </h3>
+            <StatusChip tone="info">{activeAction.actionType.replace(/_/g, ' ')}</StatusChip>
+          </div>
+          {actionChecklist.length > 0 ? (
+            <ul className="space-y-2">
+              {actionChecklist.map((item) => (
+                <li key={item.key}>
+                  <label className="flex min-h-11 items-start gap-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-5 w-5"
+                      checked={Boolean(item.completedAt)}
+                      disabled={actionMutation.isPending}
+                      onChange={(event) => actionMutation.mutate({
+                        checklist: [{
+                          key: item.key,
+                          completed: event.target.checked,
+                          evidenceDocumentIds: item.evidenceDocumentIds,
+                        }],
+                      })}
+                    />
+                    <span>
+                      {item.label}
+                      {item.required ? <span className="ml-1 font-medium">(required)</span> : null}
+                      {item.evidenceRequired ? (
+                        <span className="ml-1 font-medium">(evidence required)</span>
+                      ) : null}
+                    </span>
+                  </label>
+                  {item.evidenceRequired ? (
+                    <div className="ml-7 mt-1 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-md border border-[hsl(var(--mobile-border-subtle))] px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        disabled={actionMutation.isPending}
+                        onClick={() => {
+                          setChecklistDocumentTarget(item.key);
+                          setPickerOpen(true);
+                        }}
+                      >
+                        Attach Vault evidence
+                      </button>
+                      <span className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">
+                        {item.evidenceDocumentIds.length} attached
+                      </span>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+              No evidence checklist applies to this action.
+            </p>
+          )}
+          {actionMutation.isError ? (
+            <p role="alert" className="text-xs text-rose-700">
+              {actionMutation.error instanceof Error
+                ? actionMutation.error.message
+                : 'Could not update the action.'}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="min-h-11 rounded-md bg-[hsl(var(--mobile-brand-strong))] px-3 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-50"
+              disabled={
+                actionMutation.isPending
+                || actionChecklist.some((item) =>
+                  (item.required && !item.completedAt)
+                  || (item.evidenceRequired && item.evidenceDocumentIds.length === 0))
+              }
+              onClick={() => actionMutation.mutate({ state: 'COMPLETED' })}
+            >
+              Complete preparation
+            </button>
+            <button
+              type="button"
+              className="min-h-11 rounded-md border border-[hsl(var(--mobile-border-subtle))] px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              disabled={actionMutation.isPending}
+              onClick={() => actionMutation.mutate({ state: 'CANCELLED' })}
+            >
+              Cancel action
+            </button>
+          </div>
+        </section>
+      ) : null}
       <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
         Application &amp; outcome trail
       </h3>
@@ -393,9 +516,32 @@ export function OutcomeRecorder({
       <DocumentPickerModal
         open={pickerOpen}
         propertyId={propertyId}
-        alreadyLinkedIds={new Set(documents.map((d) => d.id))}
-        onClose={() => setPickerOpen(false)}
+        alreadyLinkedIds={new Set(
+          checklistDocumentTarget
+            ? actionChecklist.find((item) => item.key === checklistDocumentTarget)
+                ?.evidenceDocumentIds ?? []
+            : documents.map((d) => d.id),
+        )}
+        onClose={() => {
+          setPickerOpen(false);
+          setChecklistDocumentTarget(null);
+        }}
         onPick={(doc) => {
+          if (checklistDocumentTarget && activeAction) {
+            const item = actionChecklist.find((entry) => entry.key === checklistDocumentTarget);
+            if (item) {
+              actionMutation.mutate({
+                checklist: [{
+                  key: item.key,
+                  completed: Boolean(item.completedAt),
+                  evidenceDocumentIds: [...new Set([...item.evidenceDocumentIds, doc.id])],
+                }],
+              });
+            }
+            setChecklistDocumentTarget(null);
+            setPickerOpen(false);
+            return;
+          }
           setDocuments((prev) => [...prev, { id: doc.id, name: doc.name || doc.id }]);
           setPickerOpen(false);
         }}

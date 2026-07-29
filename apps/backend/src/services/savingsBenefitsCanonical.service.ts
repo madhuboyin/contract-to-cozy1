@@ -69,10 +69,119 @@ export async function getCanonicalOpportunityDetail(
 export interface CreateCanonicalActionInput {
   family: CanonicalOpportunityFamily;
   actionType: SavingsBenefitActionType;
+  idempotencyKey: string;
   externalOwner?: string | null;
   consent?: Record<string, unknown> | null;
   sharedFields?: Record<string, unknown> | null;
   followUpAt?: Date | null;
+}
+
+export interface CanonicalActionChecklistItem {
+  key: string;
+  label: string;
+  required: boolean;
+  evidenceRequired: boolean;
+  completedAt: string | null;
+  evidenceDocumentIds: string[];
+}
+
+export interface UpdateCanonicalActionInput {
+  state?: 'STARTED' | 'COMPLETED' | 'CANCELLED';
+  followUpAt?: Date | null;
+  checklist?: Array<{
+    key: string;
+    completed: boolean;
+    evidenceDocumentIds?: string[];
+  }>;
+}
+
+function buildActionChecklist(
+  detail: Awaited<ReturnType<typeof getCanonicalOpportunityDetail>>,
+): CanonicalActionChecklistItem[] {
+  if (detail.family === 'BENEFIT') {
+    return detail.opportunity.program.rules.map((rule) => ({
+      key: rule.id,
+      label:
+        rule.evidenceRequirement
+        ?? rule.homeownerExplanation
+        ?? `Confirm ${rule.attribute.replace(/_/g, ' ')}`,
+      required: rule.kind !== 'OPTIONAL' || rule.requiresExternalVerification,
+      evidenceRequired:
+        rule.requiresExternalVerification || Boolean(rule.evidenceRequirement?.trim()),
+      completedAt: null,
+      evidenceDocumentIds: [],
+    }));
+  }
+
+  return [
+    {
+      key: 'current-cost',
+      label: 'Confirm the current bill amount and billing period',
+      required: true,
+      evidenceRequired: false,
+      completedAt: null,
+      evidenceDocumentIds: [],
+    },
+    {
+      key: 'comparison-terms',
+      label:
+        detail.opportunity.offerSourceKind === 'ADDRESS_QUALIFIED'
+          ? 'Confirm the quoted service, fees, term, and ongoing price'
+          : 'Review the benchmark assumptions; this is not an address-qualified offer',
+      required: true,
+      evidenceRequired: false,
+      completedAt: null,
+      evidenceDocumentIds: [],
+    },
+    {
+      key: 'switching-friction',
+      label: 'Confirm cancellation terms and switching costs before proceeding',
+      required: true,
+      evidenceRequired: false,
+      completedAt: null,
+      evidenceDocumentIds: [],
+    },
+  ];
+}
+
+function parseChecklist(value: Prisma.JsonValue | null): CanonicalActionChecklistItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+    const row = item as Record<string, unknown>;
+    if (typeof row.key !== 'string' || typeof row.label !== 'string') return [];
+    return [{
+      key: row.key,
+      label: row.label,
+      required: row.required === true,
+      evidenceRequired: row.evidenceRequired === true,
+      completedAt: typeof row.completedAt === 'string' ? row.completedAt : null,
+      evidenceDocumentIds: Array.isArray(row.evidenceDocumentIds)
+        ? row.evidenceDocumentIds.filter((id): id is string => typeof id === 'string')
+        : [],
+    }];
+  });
+}
+
+function assertIdempotentActionMatches(
+  action: {
+    hiddenAssetMatchId: string | null;
+    homeSavingsOpportunityId: string | null;
+    actionType: SavingsBenefitActionType;
+  },
+  opportunityId: string,
+  input: CreateCanonicalActionInput,
+) {
+  const storedOpportunityId =
+    input.family === 'BENEFIT'
+      ? action.hiddenAssetMatchId
+      : action.homeSavingsOpportunityId;
+  if (
+    storedOpportunityId !== opportunityId
+    || action.actionType !== input.actionType
+  ) {
+    throw new Error('This idempotency key was already used for a different action.');
+  }
 }
 
 export async function createCanonicalAction(
@@ -84,6 +193,18 @@ export async function createCanonicalAction(
   const detail = await getCanonicalOpportunityDetail(propertyId, opportunityId, userId);
   if (detail.family !== input.family) {
     throw new Error('Opportunity family does not match the requested action.');
+  }
+  const existingAction = await prisma.savingsBenefitAction.findUnique({
+    where: {
+      propertyId_idempotencyKey: {
+        propertyId,
+        idempotencyKey: input.idempotencyKey,
+      },
+    },
+  });
+  if (existingAction) {
+    assertIdempotentActionMatches(existingAction, opportunityId, input);
+    return existingAction;
   }
   if (input.actionType === 'PARTNER_HANDOFF_CONSENTED' && !input.consent) {
     throw new Error('Explicit partner-handoff consent is required.');
@@ -122,23 +243,160 @@ export async function createCanonicalAction(
     'FOLLOW_UP_SCHEDULED',
   ]).has(input.actionType);
   const now = new Date();
-  return prisma.savingsBenefitAction.create({
+  const checklist = buildActionChecklist(detail);
+  try {
+    return await prisma.savingsBenefitAction.create({
+      data: {
+        propertyId,
+        idempotencyKey: input.idempotencyKey,
+        hiddenAssetMatchId: input.family === 'BENEFIT' ? opportunityId : null,
+        homeSavingsOpportunityId: input.family === 'RECURRING_COST' ? opportunityId : null,
+        actionType: input.actionType,
+        state: completedImmediately ? 'COMPLETED' : 'STARTED',
+        externalOwner: input.externalOwner ?? null,
+        consentJson: input.consent
+          ? input.consent as Prisma.InputJsonValue
+          : undefined,
+        sharedFieldsJson: input.sharedFields
+          ? input.sharedFields as Prisma.InputJsonValue
+          : undefined,
+        homeActionReference:
+          input.family === 'BENEFIT'
+            ? `savings-benefit-match:${opportunityId}`
+            : `savings-benefit-recurring:${opportunityId}`,
+        checklistJson: checklist as unknown as Prisma.InputJsonValue,
+        submittedAt: input.actionType === 'EXTERNALLY_SUBMITTED' ? now : null,
+        completedAt: completedImmediately ? now : null,
+        followUpAt: input.followUpAt ?? null,
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === 'P2002'
+    ) {
+      const racedAction = await prisma.savingsBenefitAction.findUnique({
+        where: {
+          propertyId_idempotencyKey: {
+            propertyId,
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+      });
+      if (racedAction) {
+        assertIdempotentActionMatches(racedAction, opportunityId, input);
+        return racedAction;
+      }
+    }
+    throw error;
+  }
+}
+
+const ACTION_STATE_TRANSITIONS: Record<string, string[]> = {
+  STARTED: ['COMPLETED', 'CANCELLED'],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
+export function isCanonicalActionTransitionAllowed(
+  current: string,
+  next: string,
+): boolean {
+  return current === next || (ACTION_STATE_TRANSITIONS[current]?.includes(next) ?? false);
+}
+
+export async function updateCanonicalAction(
+  propertyId: string,
+  actionId: string,
+  userId: string,
+  input: UpdateCanonicalActionInput,
+) {
+  await assertProperty(propertyId, userId);
+  const action = await prisma.savingsBenefitAction.findFirst({
+    where: { id: actionId, propertyId },
+  });
+  if (!action) throw new Error('Action not found or access denied.');
+
+  if (
+    input.state
+    && !isCanonicalActionTransitionAllowed(action.state, input.state)
+  ) {
+    throw new Error(`Cannot transition an action from ${action.state} to ${input.state}.`);
+  }
+
+  let checklist = parseChecklist(action.checklistJson);
+  if (input.checklist?.length) {
+    const requestedDocumentIds = [...new Set(
+      input.checklist.flatMap((item) => item.evidenceDocumentIds ?? []),
+    )];
+    if (requestedDocumentIds.length > 0) {
+      const ownedDocuments = await prisma.document.findMany({
+        where: { id: { in: requestedDocumentIds }, uploadedBy: userId, propertyId },
+        select: { id: true },
+      });
+      if (ownedDocuments.length !== requestedDocumentIds.length) {
+        throw new Error('One or more checklist documents are unavailable or not owned by this user.');
+      }
+    }
+    const updatesByKey = new Map(input.checklist.map((item) => [item.key, item]));
+    const unknownKeys = [...updatesByKey.keys()].filter(
+      (key) => !checklist.some((item) => item.key === key),
+    );
+    if (unknownKeys.length > 0) {
+      throw new Error(`Unknown checklist item: ${unknownKeys.join(', ')}.`);
+    }
+    checklist = checklist.map((item) => {
+      const update = updatesByKey.get(item.key);
+      if (!update) return item;
+      return {
+        ...item,
+        completedAt: update.completed ? item.completedAt ?? new Date().toISOString() : null,
+        evidenceDocumentIds: update.evidenceDocumentIds ?? item.evidenceDocumentIds,
+      };
+    });
+    const invalidEvidenceItem = checklist.find(
+      (item) =>
+        item.evidenceRequired
+        && Boolean(item.completedAt)
+        && item.evidenceDocumentIds.length === 0,
+    );
+    if (invalidEvidenceItem) {
+      throw new Error(`Attach evidence before completing "${invalidEvidenceItem.label}".`);
+    }
+  }
+
+  if (
+    input.state === 'COMPLETED'
+    && checklist.some((item) =>
+      (item.required && !item.completedAt)
+      || (item.evidenceRequired && item.evidenceDocumentIds.length === 0))
+  ) {
+    throw new Error('Complete every required checklist item before completing this action.');
+  }
+
+  const nextState = input.state ?? action.state;
+  if (input.state === 'CANCELLED' && action.state !== 'CANCELLED') {
+    if (action.hiddenAssetMatchId) {
+      await hiddenAssets.updateMatchStatus(
+        action.hiddenAssetMatchId,
+        { status: PropertyHiddenAssetMatchStatus.VIEWED },
+        userId,
+      );
+    } else if (action.homeSavingsOpportunityId) {
+      await homeSavings.setOpportunityStatus(
+        action.homeSavingsOpportunityId,
+        HomeSavingsOpportunityStatus.SAVED,
+        userId,
+      );
+    }
+  }
+  return prisma.savingsBenefitAction.update({
+    where: { id: action.id },
     data: {
-      propertyId,
-      hiddenAssetMatchId: input.family === 'BENEFIT' ? opportunityId : null,
-      homeSavingsOpportunityId: input.family === 'RECURRING_COST' ? opportunityId : null,
-      actionType: input.actionType,
-      state: completedImmediately ? 'COMPLETED' : 'STARTED',
-      externalOwner: input.externalOwner ?? null,
-      consentJson: input.consent
-        ? input.consent as Prisma.InputJsonValue
-        : undefined,
-      sharedFieldsJson: input.sharedFields
-        ? input.sharedFields as Prisma.InputJsonValue
-        : undefined,
-      submittedAt: input.actionType === 'EXTERNALLY_SUBMITTED' ? now : null,
-      completedAt: completedImmediately ? now : null,
-      followUpAt: input.followUpAt ?? null,
+      state: nextState,
+      followUpAt: input.followUpAt === undefined ? action.followUpAt : input.followUpAt,
+      checklistJson: checklist as unknown as Prisma.InputJsonValue,
+      completedAt: nextState === 'COMPLETED' ? action.completedAt ?? new Date() : null,
     },
   });
 }

@@ -9,6 +9,7 @@ import {
   getCanonicalOpportunityDetail,
   recordCanonicalActionOutcome,
   recordCanonicalFact,
+  updateCanonicalAction,
 } from '../services/savingsBenefitsCanonical.service';
 import type {
   RecordHiddenAssetMatchOutcomeInput,
@@ -66,6 +67,30 @@ export async function postSavingsBenefitsOpportunityAction(req: CustomRequest, r
   } catch (error: any) {
     const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 422;
     return res.status(status).json({ success: false, message: error?.message || 'Failed to record action.' });
+  }
+}
+
+export async function patchSavingsBenefitsAction(req: CustomRequest, res: Response) {
+  try {
+    const body = req.body as Record<string, any>;
+    const data = await updateCanonicalAction(
+      req.params.propertyId,
+      req.params.actionId,
+      requireUserId(req),
+      {
+        ...body,
+        followUpAt:
+          body.followUpAt === undefined
+            ? undefined
+            : body.followUpAt
+              ? new Date(body.followUpAt)
+              : null,
+      },
+    );
+    return res.json({ success: true, data });
+  } catch (error: any) {
+    const status = /not found|access denied/i.test(error?.message ?? '') ? 404 : 422;
+    return res.status(status).json({ success: false, message: error?.message || 'Failed to update action.' });
   }
 }
 

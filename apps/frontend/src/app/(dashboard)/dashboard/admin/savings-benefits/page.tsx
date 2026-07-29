@@ -230,6 +230,14 @@ function ProgramFormDialog({
   const [benefitType, setBenefitType] = useState<string>(initial?.benefitType ?? 'TAX_CREDIT');
   const [benefitMax, setBenefitMax] = useState(initial?.benefitEstimateMax?.toString() ?? '');
   const [benefitPeriod, setBenefitPeriod] = useState<string>(initial?.benefitPeriod ?? 'UNKNOWN');
+  const [fundingStatus, setFundingStatus] = useState<string>(initial?.fundingStatus ?? 'UNKNOWN');
+  const [applicationWindowOpensAt, setApplicationWindowOpensAt] = useState(
+    initial?.applicationWindowOpensAt?.slice(0, 10) ?? '',
+  );
+  const [applicationWindowClosesAt, setApplicationWindowClosesAt] = useState(
+    initial?.applicationWindowClosesAt?.slice(0, 10) ?? '',
+  );
+  const [expiresAt, setExpiresAt] = useState(initial?.expiresAt?.slice(0, 10) ?? '');
   const [sourceUrl, setSourceUrl] = useState(initial?.sourceUrl ?? '');
   const [eligibilityNotes, setEligibilityNotes] = useState(initial?.eligibilityNotes ?? '');
   const [exclusionGroupKey, setExclusionGroupKey] = useState(initial?.exclusionGroupKey ?? '');
@@ -248,6 +256,10 @@ function ProgramFormDialog({
     setBenefitType(initial?.benefitType ?? 'TAX_CREDIT');
     setBenefitMax(initial?.benefitEstimateMax?.toString() ?? '');
     setBenefitPeriod(initial?.benefitPeriod ?? 'UNKNOWN');
+    setFundingStatus(initial?.fundingStatus ?? 'UNKNOWN');
+    setApplicationWindowOpensAt(initial?.applicationWindowOpensAt?.slice(0, 10) ?? '');
+    setApplicationWindowClosesAt(initial?.applicationWindowClosesAt?.slice(0, 10) ?? '');
+    setExpiresAt(initial?.expiresAt?.slice(0, 10) ?? '');
     setSourceUrl(initial?.sourceUrl ?? '');
     setEligibilityNotes(initial?.eligibilityNotes ?? '');
     setExclusionGroupKey(initial?.exclusionGroupKey ?? '');
@@ -338,6 +350,41 @@ function ProgramFormDialog({
           <div>
             <Label>Official source URL</Label>
             <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="program-funding-status">Funding status</Label>
+              <Select value={fundingStatus} onValueChange={setFundingStatus}>
+                <SelectTrigger id="program-funding-status"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UNKNOWN">Unknown—verify before relying on availability</SelectItem>
+                  <SelectItem value="OPEN">Reported open</SelectItem>
+                  <SelectItem value="CLOSED">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="program-expires-at">Program expires (optional)</Label>
+              <Input id="program-expires-at" type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="program-applications-open">Applications open (optional)</Label>
+              <Input
+                id="program-applications-open"
+                type="date"
+                value={applicationWindowOpensAt}
+                onChange={(event) => setApplicationWindowOpensAt(event.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="program-application-deadline">Application deadline (optional)</Label>
+              <Input
+                id="program-application-deadline"
+                type="date"
+                value={applicationWindowClosesAt}
+                onChange={(event) => setApplicationWindowClosesAt(event.target.value)}
+              />
+            </div>
           </div>
           <div>
             <Label>Mutual-exclusion group key (optional)</Label>
@@ -507,6 +554,16 @@ function ProgramFormDialog({
                 benefitType,
                 benefitEstimateMax: benefitMax ? Number(benefitMax) : null,
                 benefitPeriod: benefitPeriod as AdminProgramInput['benefitPeriod'],
+                fundingStatus: fundingStatus as AdminProgramInput['fundingStatus'],
+                applicationWindowOpensAt: applicationWindowOpensAt
+                  ? new Date(`${applicationWindowOpensAt}T00:00:00.000Z`).toISOString()
+                  : null,
+                applicationWindowClosesAt: applicationWindowClosesAt
+                  ? new Date(`${applicationWindowClosesAt}T23:59:59.999Z`).toISOString()
+                  : null,
+                expiresAt: expiresAt
+                  ? new Date(`${expiresAt}T23:59:59.999Z`).toISOString()
+                  : null,
                 sourceUrl: sourceUrl.trim() || null,
                 eligibilityNotes: eligibilityNotes.trim() || null,
                 exclusionGroupKey: exclusionGroupKey.trim() || null,

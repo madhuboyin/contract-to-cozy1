@@ -644,6 +644,15 @@ function HiddenAssetDetailSheet({
               </h3>
               <p className="text-sm font-semibold">{valueStr}</p>
               <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                {match.benefitPeriod === 'ONE_TIME'
+                  ? 'One-time amount'
+                  : match.benefitPeriod === 'MONTHLY'
+                    ? 'Monthly amount'
+                    : match.benefitPeriod === 'ANNUAL'
+                      ? 'Annual amount'
+                      : 'Amount period has not been reviewed'}
+              </p>
+              <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
                 These are estimates only — actual benefit depends on your eligibility, program rules, and available funding.
               </p>
             </div>
@@ -667,7 +676,30 @@ function HiddenAssetDetailSheet({
                   {formatDate(match.expiresAt)}
                 </p>
               )}
-              {!match.lastVerifiedAt && !match.expiresAt && (
+              {match.applicationWindowOpensAt && (
+                <p>
+                  <span className="text-[hsl(var(--mobile-text-secondary))]">Applications open: </span>
+                  {formatDate(match.applicationWindowOpensAt)}
+                </p>
+              )}
+              {match.applicationWindowClosesAt && (
+                <p className="font-medium text-amber-700">
+                  <span>Application deadline: </span>
+                  {formatDate(match.applicationWindowClosesAt)}
+                </p>
+              )}
+              <p>
+                <span className="text-[hsl(var(--mobile-text-secondary))]">Funding status: </span>
+                {match.fundingStatus === 'OPEN'
+                  ? 'Reported open'
+                  : match.fundingStatus === 'CLOSED'
+                    ? 'Reported closed'
+                    : 'Not confirmed—verify with the official source'}
+              </p>
+              {!match.lastVerifiedAt
+                && !match.expiresAt
+                && !match.applicationWindowOpensAt
+                && !match.applicationWindowClosesAt && (
                 <p className="text-[hsl(var(--mobile-text-secondary))]">
                   No date information available. Verify current status with the official source.
                 </p>
@@ -946,12 +978,15 @@ export default function HiddenAssetFinderClient() {
     mutationFn: ({
       matchId,
       status,
+      idempotencyKey,
     }: {
       matchId: string;
       status: 'VIEWED' | 'DISMISSED' | 'PURSUING';
+      idempotencyKey?: string;
     }) => {
       if (status === 'VIEWED') return updateHiddenAssetMatchStatus(matchId, status);
       return api.createSavingsBenefitsAction(propertyId, matchId, {
+        idempotencyKey: idempotencyKey ?? `benefit:${matchId}:${status}`,
         family: 'BENEFIT',
         actionType: status === 'DISMISSED' ? 'DISMISS' : 'PREPARE',
       });
@@ -986,7 +1021,11 @@ export default function HiddenAssetFinderClient() {
   function handleClaim() {
     if (!selectedMatch) return;
     statusMutation.mutate(
-      { matchId: selectedMatch.id, status: 'PURSUING' },
+      {
+        matchId: selectedMatch.id,
+        status: 'PURSUING',
+        idempotencyKey: `benefit:${selectedMatch.id}:prepare:${crypto.randomUUID()}`,
+      },
       {
         onSuccess: () => {
           toast({

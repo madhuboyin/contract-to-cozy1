@@ -45,6 +45,7 @@ test('canonical notification policy supports scope, cadence, quiet hours, and ur
   assert.equal(inferNotificationCategory('SEVERE_WEATHER_ALERT'), 'SAFETY');
   assert.equal(inferNotificationCategory('REFINANCE_OPPORTUNITY_OPENED'), 'REFINANCE');
   assert.deepEqual(notificationPreferenceCategories('REFINANCE'), ['REFINANCE']);
+  assert.deepEqual(notificationPreferenceCategories('SAVINGS_BENEFITS'), ['SAVINGS_BENEFITS']);
   assert.deepEqual(notificationPreferenceCategories('MAINTENANCE'), ['MAINTENANCE', 'ALL']);
   assert.equal(inferNotificationUrgency('CLAIM_SUBMITTED'), 'MATERIAL');
   assert.equal(NotificationPreferenceInputSchema.safeParse({

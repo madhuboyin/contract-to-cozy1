@@ -111,6 +111,29 @@ const ProgramBodySchema = z.object({
   exclusionGroupKey: z.string().nullable().optional(),
   beneficiaryScope: z.enum(['PROPERTY', 'HOUSEHOLD', 'EITHER']).optional(),
   rules: z.array(RuleBodySchema).default([]),
+}).superRefine((program, context) => {
+  if (
+    program.applicationWindowOpensAt
+    && program.applicationWindowClosesAt
+    && program.applicationWindowClosesAt < program.applicationWindowOpensAt
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['applicationWindowClosesAt'],
+      message: 'Application deadline must be on or after the opening date.',
+    });
+  }
+  if (
+    program.expiresAt
+    && program.applicationWindowClosesAt
+    && program.expiresAt < program.applicationWindowClosesAt
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['expiresAt'],
+      message: 'Program expiration must be on or after the application deadline.',
+    });
+  }
 });
 
 const AuthorActionBodySchema = z.object({

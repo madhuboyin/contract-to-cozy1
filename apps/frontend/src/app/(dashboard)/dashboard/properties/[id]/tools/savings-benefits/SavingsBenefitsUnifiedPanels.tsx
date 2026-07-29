@@ -93,8 +93,10 @@ function ItemRow({ item }: { item: SavingsBenefitsUnifiedItemDTO }) {
       ? 'Realized'
       : item.estimatedValueBasis === 'ONE_TIME'
         ? 'One-time (est.)'
-        : item.estimatedValueBasis === 'RECURRING'
-          ? 'Annual (est.)'
+        : item.estimatedValueBasis === 'MONTHLY'
+          ? 'Monthly (est.)'
+          : item.estimatedValueBasis === 'ANNUAL'
+            ? 'Annual (est.)'
           : 'Estimated';
   const deadlineLabel = formatDate(item.deadline);
 

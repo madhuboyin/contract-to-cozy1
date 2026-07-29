@@ -78,6 +78,10 @@ export interface AdminProgramListItem {
   benefitEstimateMin: number | null;
   benefitEstimateMax: number | null;
   benefitPeriod: HiddenAssetBenefitPeriod;
+  fundingStatus: 'UNKNOWN' | 'OPEN' | 'CLOSED';
+  applicationWindowOpensAt: string | null;
+  applicationWindowClosesAt: string | null;
+  expiresAt: string | null;
   reviewStatus: HiddenAssetProgramReviewStatus;
   eligibilityNotes: string | null;
   sourceUrl: string | null;
@@ -108,6 +112,9 @@ export interface AdminProgramInput {
   sourceLabel?: string | null;
   eligibilityNotes?: string | null;
   expiresAt?: string | null;
+  fundingStatus?: 'UNKNOWN' | 'OPEN' | 'CLOSED';
+  applicationWindowOpensAt?: string | null;
+  applicationWindowClosesAt?: string | null;
   /**
    * Programs sharing a non-null exclusionGroupKey are mutually exclusive —
    * a homeowner can realistically claim only one from the group.

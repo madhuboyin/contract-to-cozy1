@@ -7,7 +7,7 @@ const { savingsBenefitsDeadlineReminderJob } = require('../../src/jobs/savingsBe
 
 const noopLogger = { info() {}, warn() {}, error() {}, debug() {}, fatal() {}, child() { return this; } };
 
-function fakeDeps({ matches, throwsForEntityId = null }) {
+function fakeDeps({ matches, throwsForEntityId = null, suppressesEntityId = null }) {
   const createCalls = [];
   const updateCalls = [];
 
@@ -25,6 +25,9 @@ function fakeDeps({ matches, throwsForEntityId = null }) {
       create: async (input) => {
         if (throwsForEntityId && input.entityId === throwsForEntityId) {
           throw new Error('notification service exploded');
+        }
+        if (suppressesEntityId && input.entityId === suppressesEntityId) {
+          return null;
         }
         createCalls.push(input);
         return { id: `notification-${createCalls.length}` };
@@ -116,4 +119,18 @@ test('dry run reports what would be sent without creating a notification or upda
   assert.equal(getCreateCalls().length, 0);
   assert.equal(getUpdateCalls().length, 0);
   assert.equal(result.notified, 1);
+});
+
+test('a context-suppressed notification stays retryable and is not marked sent', async () => {
+  const { deps, getCreateCalls, getUpdateCalls } = fakeDeps({
+    matches: [match()],
+    suppressesEntityId: 'match-1',
+  });
+
+  const result = await savingsBenefitsDeadlineReminderJob(undefined, deps);
+
+  assert.equal(getCreateCalls().length, 0);
+  assert.equal(getUpdateCalls().length, 0);
+  assert.equal(result.notified, 0);
+  assert.equal(result.skipped, 1);
 });

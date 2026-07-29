@@ -11662,6 +11662,7 @@ model PropertyHiddenAssetMatch {
 model SavingsBenefitAction {
   id                     String @id @default(uuid())
   propertyId             String
+  idempotencyKey         String
   hiddenAssetMatchId     String?
   homeSavingsOpportunityId String?
   actionType             SavingsBenefitActionType
@@ -11670,6 +11671,7 @@ model SavingsBenefitAction {
   consentJson            Json?
   sharedFieldsJson       Json?
   homeActionReference    String?
+  checklistJson          Json?
   startedAt              DateTime @default(now())
   submittedAt            DateTime?
   completedAt            DateTime?
@@ -11681,6 +11683,7 @@ model SavingsBenefitAction {
   homeSavingsOpportunity HomeSavingsOpportunity?   @relation(fields: [homeSavingsOpportunityId], references: [id], onDelete: Cascade)
 
   @@index([propertyId, state])
+  @@unique([propertyId, idempotencyKey])
   @@index([hiddenAssetMatchId])
   @@index([homeSavingsOpportunityId])
   @@map("savings_benefit_actions")

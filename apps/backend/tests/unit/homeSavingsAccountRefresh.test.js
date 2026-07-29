@@ -42,6 +42,8 @@ require.cache[prismaPath] = {
 
 const {
   canonicalFactsChanged,
+  calculateEstimatedPaybackMonths,
+  highestSingleAnnualSavings,
 } = require('../../src/services/homeSavings/helpers.ts');
 const {
   insuranceHomeCategory,
@@ -58,6 +60,22 @@ test.beforeEach(() => {
   insurancePolicy = null;
   warranty = null;
   updateCalls.length = 0;
+});
+
+test('payback uses monthly savings or an annual fallback and does not invent a value', () => {
+  assert.equal(calculateEstimatedPaybackMonths(25, 300, 75), 3);
+  assert.equal(calculateEstimatedPaybackMonths(null, 240, 50), 2.5);
+  assert.equal(calculateEstimatedPaybackMonths(0, 0, 50), null);
+  assert.equal(calculateEstimatedPaybackMonths(25, 300, null), null);
+});
+
+test('aggregate savings uses the highest single net annual opportunity, not an overlapping sum', () => {
+  const opportunities = [
+    { netAnnualSavings: 420, estimatedAnnualSavings: 500 },
+    { netAnnualSavings: 300, estimatedAnnualSavings: 350 },
+    { netAnnualSavings: null, estimatedAnnualSavings: 390 },
+  ];
+  assert.equal(highestSingleAnnualSavings(opportunities), 420);
 });
 
 test('canonicalFactsChanged detects a drifted amount and treats equal Decimals as unchanged', () => {

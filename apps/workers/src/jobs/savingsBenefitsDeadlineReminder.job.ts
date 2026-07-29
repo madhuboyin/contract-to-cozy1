@@ -104,7 +104,7 @@ export async function savingsBenefitsDeadlineReminderJob(
         continue;
       }
 
-      await notificationService.create({
+      const notification = await notificationService.create({
         userId,
         type: 'SAVINGS_BENEFIT_DEADLINE_REMINDER',
         title: `Application window closing: ${match.program.name}`,
@@ -127,6 +127,13 @@ export async function savingsBenefitsDeadlineReminderJob(
           ...(smokeCorrelationId ? { smokeCorrelationId } : {}),
         },
       });
+      if (!notification) {
+        skipped += 1;
+        logger.info(
+          `[SavingsBenefitsDeadlineReminder] Notification policy/context suppressed match ${match.id}; leaving it retryable`,
+        );
+        continue;
+      }
 
       await (prisma as any).propertyHiddenAssetMatch.update({
         where: { id: match.id },

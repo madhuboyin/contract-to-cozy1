@@ -312,6 +312,10 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
       // savings require an observed/received outcome with evidence.
       if (status === 'SAVED' || status === 'DISMISSED' || status === 'APPLIED' || status === 'SWITCHED') {
         await api.createSavingsBenefitsAction(propertyId, opportunityId, {
+          idempotencyKey:
+            status === 'APPLIED' || status === 'SWITCHED'
+              ? `recurring:${opportunityId}:${status}:${crypto.randomUUID()}`
+              : `recurring:${opportunityId}:${status}`,
           family: 'RECURRING_COST',
           actionType:
             status === 'SAVED'
@@ -379,7 +383,7 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
         }
         summary={
           hasSavings
-            ? `Broad benchmarks indicate up to ${money(potentialAnnualSavings)}/year to investigate. These are not offers or found savings.`
+            ? `The highest single net benchmark indicates up to ${money(potentialAnnualSavings)}/year to investigate. Categories are not summed because opportunities may overlap. This is not an offer or found savings.`
             : 'No material benchmark difference is currently indicated.'
         }
         highlights={[
@@ -647,6 +651,16 @@ export default function HomeSavingsCheckPanel({ propertyId, autoRun }: HomeSavin
                               <div>
                                 Net of ~{money(opportunity.estimatedSwitchingCost)} switching cost (est.):{' '}
                                 <span className="font-medium text-gray-800">{money(opportunity.netAnnualSavings)}/yr</span>
+                              </div>
+                            )}
+                            {opportunity.estimatedPaybackMonths != null && (
+                              <div className="flex justify-between gap-4">
+                                <span>Estimated payback on switching friction</span>
+                                <span className="font-medium text-gray-800">
+                                  {opportunity.estimatedPaybackMonths === 0
+                                    ? 'Immediate'
+                                    : `${opportunity.estimatedPaybackMonths} month${opportunity.estimatedPaybackMonths === 1 ? '' : 's'}`}
+                                </span>
                               </div>
                             )}
                             <div className={confidenceTone(opportunity.confidence)}>

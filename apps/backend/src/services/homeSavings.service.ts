@@ -19,7 +19,15 @@ import {
   OpportunityStatusInput,
   RunComparisonInput,
 } from './homeSavings/types';
-import { amountToAnnual, amountToMonthly, asNumber, round2, toRecord } from './homeSavings/helpers';
+import {
+  amountToAnnual,
+  amountToMonthly,
+  asNumber,
+  calculateEstimatedPaybackMonths,
+  highestSingleAnnualSavings,
+  round2,
+  toRecord,
+} from './homeSavings/helpers';
 import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
 import { getFinancialContextDecisions } from './financialContext/context';
@@ -68,6 +76,8 @@ export type HomeSavingsOpportunityDTO = {
   estimatedSwitchingCost: number | null;
   /** estimatedAnnualSavings net of estimatedSwitchingCost (first year only). Null when there's no gross estimate to net against. */
   netAnnualSavings: number | null;
+  /** Months for gross monthly savings to recover modeled switching friction. */
+  estimatedPaybackMonths: number | null;
   /** EQUIVALENT only when the comparison controlled for a real matching attribute (e.g. same speed tier) — never assumed. */
   equivalenceState: 'EQUIVALENT' | 'NOT_EQUIVALENT' | 'UNKNOWN';
   /** What backs the dollar figure — always BENCHMARK_ESTIMATE today; no address-qualified connector exists yet (HSB-021). */
@@ -93,6 +103,7 @@ export type HomeSavingsSummaryDTO = {
   propertyId: string;
   potentialMonthlySavings: number;
   potentialAnnualSavings: number;
+  potentialSavingsAggregation: 'HIGHEST_SINGLE_NET_ANNUAL';
   categories: HomeSavingsSummaryCategoryDTO[];
   updatedAt: string;
   propertyContextVersion: string | null;
@@ -184,6 +195,14 @@ function serializeAccount(account: HomeSavingsAccount): HomeSavingsAccountDTO {
 }
 
 function serializeOpportunity(opportunity: HomeSavingsOpportunity): HomeSavingsOpportunityDTO {
+  const estimatedMonthlySavings = asNumber(opportunity.estimatedMonthlySavings) ?? null;
+  const estimatedAnnualSavings = asNumber(opportunity.estimatedAnnualSavings) ?? null;
+  const estimatedSwitchingCost = asNumber(opportunity.estimatedSwitchingCost) ?? null;
+  const estimatedPaybackMonths = calculateEstimatedPaybackMonths(
+    estimatedMonthlySavings,
+    estimatedAnnualSavings,
+    estimatedSwitchingCost,
+  );
   return {
     id: opportunity.id,
     categoryKey: normalizeCategoryKey(opportunity.categoryKey),
@@ -192,10 +211,11 @@ function serializeOpportunity(opportunity: HomeSavingsOpportunity): HomeSavingsO
     confidence: opportunity.confidence,
     headline: opportunity.headline,
     detail: opportunity.detail ?? null,
-    estimatedMonthlySavings: asNumber(opportunity.estimatedMonthlySavings) ?? null,
-    estimatedAnnualSavings: asNumber(opportunity.estimatedAnnualSavings) ?? null,
-    estimatedSwitchingCost: asNumber(opportunity.estimatedSwitchingCost) ?? null,
+    estimatedMonthlySavings,
+    estimatedAnnualSavings,
+    estimatedSwitchingCost,
     netAnnualSavings: asNumber(opportunity.netAnnualSavings) ?? null,
+    estimatedPaybackMonths,
     equivalenceState: opportunity.equivalenceState,
     offerSourceKind: opportunity.offerSourceKind,
     currency: opportunity.currency,
@@ -386,8 +406,6 @@ export class HomeSavingsService {
     );
 
     const categorySummaries: HomeSavingsSummaryCategoryDTO[] = [];
-    let potentialMonthlySavings = 0;
-    let potentialAnnualSavings = 0;
     const latestRun = await prisma.homeSavingsRun.findFirst({
       where: { propertyId: property.id, homeownerProfileId: property.homeownerProfileId },
       orderBy: [{ ranAt: 'desc' }, { createdAt: 'desc' }],
@@ -400,11 +418,6 @@ export class HomeSavingsService {
       const categoryOpportunities = opportunitiesByCategory.get(categoryKey) ?? [];
       const topOpportunity = categoryOpportunities[0] ?? null;
 
-      if (topOpportunity) {
-        potentialMonthlySavings += asNumber(topOpportunity.estimatedMonthlySavings) ?? 0;
-        potentialAnnualSavings += asNumber(topOpportunity.estimatedAnnualSavings) ?? 0;
-      }
-
       categorySummaries.push({
         category: serializeCategory(category),
         status: computeCategoryStatus(account, categoryOpportunities),
@@ -412,12 +425,22 @@ export class HomeSavingsService {
         topOpportunity: topOpportunity ? serializeOpportunity(topOpportunity) : null,
       });
     }
+    const highestSingleNetAnnualSavings = highestSingleAnnualSavings(
+      categorySummaries.flatMap(({ topOpportunity }) =>
+        topOpportunity
+          ? [{
+              netAnnualSavings: topOpportunity.netAnnualSavings,
+              estimatedAnnualSavings: topOpportunity.estimatedAnnualSavings,
+            }]
+          : []),
+    );
 
     return {
       homeownerProfileId: property.homeownerProfileId,
       propertyId: property.id,
-      potentialMonthlySavings: round2(potentialMonthlySavings),
-      potentialAnnualSavings: round2(potentialAnnualSavings),
+      potentialMonthlySavings: round2(highestSingleNetAnnualSavings / 12),
+      potentialAnnualSavings: round2(highestSingleNetAnnualSavings),
+      potentialSavingsAggregation: 'HIGHEST_SINGLE_NET_ANNUAL',
       categories: categorySummaries,
       updatedAt: new Date().toISOString(),
       propertyContextVersion: readContextVersion(latestRun?.inputsJson ?? null),

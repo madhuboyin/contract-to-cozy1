@@ -62,6 +62,41 @@ export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+export function calculateEstimatedPaybackMonths(
+  estimatedMonthlySavings: number | null,
+  estimatedAnnualSavings: number | null,
+  estimatedSwitchingCost: number | null,
+): number | null {
+  const grossMonthlySavings =
+    estimatedMonthlySavings
+    ?? (estimatedAnnualSavings != null ? estimatedAnnualSavings / 12 : null);
+  if (
+    grossMonthlySavings == null
+    || grossMonthlySavings <= 0
+    || estimatedSwitchingCost == null
+  ) {
+    return null;
+  }
+  return estimatedSwitchingCost <= 0
+    ? 0
+    : round2(estimatedSwitchingCost / grossMonthlySavings);
+}
+
+export function highestSingleAnnualSavings(
+  opportunities: Array<{
+    netAnnualSavings: number | null | undefined;
+    estimatedAnnualSavings: number | null | undefined;
+  }>,
+): number {
+  return round2(opportunities.reduce((highest, opportunity) => {
+    const value =
+      opportunity.netAnnualSavings
+      ?? opportunity.estimatedAnnualSavings
+      ?? 0;
+    return Math.max(highest, value);
+  }, 0));
+}
+
 export function amountToMonthly(amount: number | undefined, cadence: HomeSavingsBillingCadence): number | undefined {
   if (amount === undefined || !Number.isFinite(amount) || amount < 0) return undefined;
 
