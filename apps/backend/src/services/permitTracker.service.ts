@@ -385,8 +385,10 @@ export class PermitTrackerService {
       },
     });
 
-    // Auto-final permit if all required milestones passed
-    if (patch.status === 'PASSED') {
+    // Local milestone progress is homeowner-reported tracking, not an issuing
+    // authority decision. Completing every tracked step must never mutate the
+    // permit's official status or finaled date.
+    if (patch.status === 'PASSED' && existing.status !== 'PASSED') {
       const remaining = await prisma.permitInspectionMilestone.count({
         where: {
           permitRecordId: permitId,
@@ -395,10 +397,6 @@ export class PermitTrackerService {
         },
       });
       if (remaining === 0) {
-        await prisma.propertyPermitRecord.update({
-          where: { id: permitId },
-          data: { status: 'FINALED', finaledDate: new Date() },
-        });
         const permit = await prisma.propertyPermitRecord.findUnique({
           where: { id: permitId },
           select: { permitNumber: true },
@@ -406,12 +404,19 @@ export class PermitTrackerService {
         await prisma.homeEvent.create({
           data: {
             propertyId,
-            title: `Permit ${permit?.permitNumber ?? 'finaled'}`,
-            summary: 'All required inspections passed — permit closed out.',
+            title: `Permit ${permit?.permitNumber ?? 'tracking'} steps marked complete`,
+            summary: 'All locally tracked required inspection steps are marked complete. Verify official finalization with the issuing authority; the permit official status has not changed.',
             type: 'MAINTENANCE',
+            subtype: 'PERMIT_TRACKING_STEPS_COMPLETE',
             importance: 'NORMAL',
             visibility: 'PRIVATE',
             occurredAt: new Date(),
+            idempotencyKey: `permit:${permitId}:tracked-inspections-complete`,
+            meta: {
+              permitRecordId: permitId,
+              trackingProgress: 'ALL_REQUIRED_STEPS_REPORTED_COMPLETE',
+              officialStatusChanged: false,
+            },
           },
         }).catch(() => {});
       }

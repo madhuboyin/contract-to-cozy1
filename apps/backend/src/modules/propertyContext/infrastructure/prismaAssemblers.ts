@@ -915,8 +915,24 @@ export const complianceAssembler: PropertyContextAssembler = {
         select: { id: true, name: true, managementCompany: true, updatedAt: true },
       }),
       prisma.hoaApprovalRecord.findMany({
-        where: { propertyId, isActive: true, status: { in: ['NOT_SUBMITTED', 'SUBMITTED', 'UNDER_REVIEW'] } },
-        select: { id: true, workType: true, status: true, submittedDate: true, expirationDate: true, updatedAt: true },
+        where: {
+          propertyId,
+          isActive: true,
+          OR: [
+            { decisionStatus: null },
+            { decisionStatus: 'EXPIRED' },
+          ],
+        },
+        select: {
+          id: true,
+          workType: true,
+          reportedStatus: true,
+          decisionStatus: true,
+          decisionTruthLayer: true,
+          submittedDate: true,
+          expirationDate: true,
+          updatedAt: true,
+        },
         orderBy: { updatedAt: 'desc' },
         take: 100,
       }),

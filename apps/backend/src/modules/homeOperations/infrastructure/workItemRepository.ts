@@ -81,6 +81,20 @@ export function findWorkItemById(workItemId: string) {
 }
 
 /**
+ * Home Operations Slice 7: read-only lookup used by Status Board to link to
+ * an already-resolved work item for a subject (e.g. an inventory item) —
+ * Status Board never proposes or creates one itself, it only asks "does
+ * something already track this?" CLOSED items are excluded since a closed
+ * item is no longer the active obligation for its subject.
+ */
+export function findActiveWorkItemsForSubject(subjectType: OperationalWorkSubjectType, subjectId: string) {
+  return prisma.operationalWorkItem.findMany({
+    where: { subjectType, subjectId, state: { not: 'CLOSED' } },
+    orderBy: { updatedAt: 'desc' },
+  });
+}
+
+/**
  * Two candidates resolving to the same workKey can race to create it — both
  * see no existing row via findUnique, both call create. Postgres's
  * @@unique([propertyId, workKey]) constraint lets only one insert win; the

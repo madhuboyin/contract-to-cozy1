@@ -1,4 +1,9 @@
 import crypto from 'crypto';
+import {
+  HoaDecisionStatus,
+  HoaDecisionSourceType,
+  HoaDecisionTruthLayer,
+} from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { IncidentService } from './incidents/incident.service';
@@ -42,7 +47,7 @@ class HoaComplianceService {
     });
   }
 
-  async createApprovalRecord(propertyId: string, payload: any) {
+  async createApprovalRecord(propertyId: string, userId: string, payload: any) {
     const association = await prisma.hoaAssociation.findFirst({
       where: { propertyId, isActive: true },
     });
@@ -50,14 +55,37 @@ class HoaComplianceService {
       throw new APIError('Add your HOA/association details before tracking an approval', 400, 'NO_ASSOCIATION');
     }
 
+    await assertDecisionTruth(propertyId, payload);
+    const hasDecision = payload.decisionStatus != null;
+
     return prisma.hoaApprovalRecord.create({
       data: {
         propertyId,
         hoaAssociationId: association.id,
         workType: payload.workType,
         description: payload.description,
-        status: payload.status ?? 'NOT_SUBMITTED',
+        reportedStatus: payload.reportedStatus ?? 'NOT_SUBMITTED',
+        reportedAt: new Date(),
+        reportedByUserId: userId,
+        decisionStatus: payload.decisionStatus,
+        decisionTruthLayer: payload.decisionTruthLayer,
+        decisionSourceType: payload.decisionSourceType,
+        decisionSourceReference: payload.decisionSourceReference,
+        decisionEvidenceDocumentId: payload.decisionEvidenceDocumentId,
+        associationReferenceNumber: payload.associationReferenceNumber,
+        decisionObservedAt: hasDecision
+          ? payload.decisionObservedAt
+            ? new Date(payload.decisionObservedAt)
+            : new Date()
+          : undefined,
+        decisionEffectiveDate: payload.decisionEffectiveDate
+          ? new Date(payload.decisionEffectiveDate)
+          : undefined,
+        decisionRecordedByUserId: hasDecision ? userId : undefined,
         submittedDate: payload.submittedDate ? new Date(payload.submittedDate) : undefined,
+        approvalConditions: payload.approvalConditions,
+        denialReason: payload.denialReason,
+        expirationDate: payload.expirationDate ? new Date(payload.expirationDate) : undefined,
         documentIds: payload.documentIds ?? [],
         notes: payload.notes,
         renovationAdvisorSessionId: payload.renovationAdvisorSessionId,
@@ -69,23 +97,97 @@ class HoaComplianceService {
     });
   }
 
-  async updateApprovalRecord(recordId: string, propertyId: string, patch: any) {
+  async updateApprovalRecord(recordId: string, propertyId: string, userId: string, patch: any) {
     const existing = await prisma.hoaApprovalRecord.findFirst({
       where: { id: recordId, propertyId, isActive: true },
     });
     if (!existing) throw new APIError('Approval record not found', 404, 'NOT_FOUND');
+
+    const clearingDecision = patch.decisionStatus === null;
+    const candidateDecision = {
+      decisionStatus: patch.decisionStatus !== undefined ? patch.decisionStatus : existing.decisionStatus,
+      decisionTruthLayer: clearingDecision
+        ? null
+        : patch.decisionTruthLayer !== undefined
+        ? patch.decisionTruthLayer
+        : existing.decisionTruthLayer,
+      decisionSourceType: clearingDecision
+        ? null
+        : patch.decisionSourceType !== undefined
+        ? patch.decisionSourceType
+        : existing.decisionSourceType,
+      decisionSourceReference: clearingDecision
+        ? null
+        : patch.decisionSourceReference !== undefined
+        ? patch.decisionSourceReference
+        : existing.decisionSourceReference,
+      decisionEvidenceDocumentId: clearingDecision
+        ? null
+        : patch.decisionEvidenceDocumentId !== undefined
+        ? patch.decisionEvidenceDocumentId
+        : existing.decisionEvidenceDocumentId,
+      associationReferenceNumber: clearingDecision
+        ? null
+        : patch.associationReferenceNumber !== undefined
+        ? patch.associationReferenceNumber
+        : existing.associationReferenceNumber,
+      approvalConditions: clearingDecision
+        ? null
+        : patch.approvalConditions !== undefined
+        ? patch.approvalConditions
+        : existing.approvalConditions,
+      decisionObservedAt: clearingDecision
+        ? null
+        : patch.decisionObservedAt !== undefined
+        ? patch.decisionObservedAt
+        : existing.decisionObservedAt,
+      decisionEffectiveDate: clearingDecision
+        ? null
+        : patch.decisionEffectiveDate !== undefined
+        ? patch.decisionEffectiveDate
+        : existing.decisionEffectiveDate,
+    };
+    await assertDecisionTruth(propertyId, candidateDecision);
 
     return prisma.hoaApprovalRecord.update({
       where: { id: recordId },
       data: {
         workType: patch.workType,
         description: patch.description,
-        status: patch.status,
+        reportedStatus: patch.reportedStatus,
+        reportedAt: patch.reportedStatus !== undefined ? new Date() : undefined,
+        reportedByUserId: patch.reportedStatus !== undefined ? userId : undefined,
+        decisionStatus: patch.decisionStatus,
+        decisionTruthLayer: clearingDecision ? null : patch.decisionTruthLayer,
+        decisionSourceType: clearingDecision ? null : patch.decisionSourceType,
+        decisionSourceReference: clearingDecision ? null : patch.decisionSourceReference,
+        decisionEvidenceDocumentId: clearingDecision ? null : patch.decisionEvidenceDocumentId,
+        associationReferenceNumber: clearingDecision ? null : patch.associationReferenceNumber,
+        decisionObservedAt: clearingDecision
+          ? null
+          : patch.decisionObservedAt
+            ? new Date(patch.decisionObservedAt)
+            : patch.decisionStatus !== undefined && !existing.decisionObservedAt
+              ? new Date()
+              : undefined,
+        decisionEffectiveDate: clearingDecision
+          ? null
+          : patch.decisionEffectiveDate
+            ? new Date(patch.decisionEffectiveDate)
+            : undefined,
+        decisionRecordedByUserId: clearingDecision
+          ? null
+          : patch.decisionStatus !== undefined
+            ? userId
+            : undefined,
         submittedDate: patch.submittedDate ? new Date(patch.submittedDate) : undefined,
-        decisionDate: patch.decisionDate ? new Date(patch.decisionDate) : undefined,
-        approvalConditions: patch.approvalConditions,
-        denialReason: patch.denialReason,
-        expirationDate: patch.expirationDate ? new Date(patch.expirationDate) : undefined,
+        approvalConditions: clearingDecision ? null : patch.approvalConditions,
+        denialReason: clearingDecision ? null : patch.denialReason,
+        expirationDate: clearingDecision
+          ? null
+          : patch.expirationDate
+            ? new Date(patch.expirationDate)
+            : undefined,
         documentIds: patch.documentIds,
         notes: patch.notes,
       },
@@ -204,6 +306,121 @@ class HoaComplianceService {
     });
 
     return incident;
+  }
+}
+
+const DECISION_STATUSES = new Set<HoaDecisionStatus>([
+  HoaDecisionStatus.APPROVED,
+  HoaDecisionStatus.APPROVED_WITH_CONDITIONS,
+  HoaDecisionStatus.DENIED,
+  HoaDecisionStatus.EXPIRED,
+]);
+
+export async function assertDecisionTruth(propertyId: string, input: {
+  decisionStatus?: HoaDecisionStatus | null;
+  decisionTruthLayer?: HoaDecisionTruthLayer | null;
+  decisionSourceType?: HoaDecisionSourceType | null;
+  decisionSourceReference?: string | null;
+  decisionEvidenceDocumentId?: string | null;
+  associationReferenceNumber?: string | null;
+  approvalConditions?: string | null;
+  decisionObservedAt?: string | Date | null;
+  decisionEffectiveDate?: string | Date | null;
+}) {
+  if (input.decisionStatus == null) {
+    const hasOrphanedDecisionMetadata = Boolean(
+      input.decisionTruthLayer
+      || input.decisionSourceType
+      || input.decisionSourceReference
+      || input.decisionEvidenceDocumentId
+      || input.associationReferenceNumber
+      || input.approvalConditions
+      || input.decisionObservedAt
+      || input.decisionEffectiveDate,
+    );
+    if (hasOrphanedDecisionMetadata) {
+      throw new APIError(
+        'HOA decision provenance cannot be recorded without a decision status',
+        400,
+        'HOA_DECISION_STATUS_REQUIRED',
+      );
+    }
+    return;
+  }
+
+  if (!DECISION_STATUSES.has(input.decisionStatus)) {
+    throw new APIError(
+      'Only an association decision can be recorded as decision truth',
+      400,
+      'INVALID_HOA_DECISION_STATUS',
+    );
+  }
+  if (!input.decisionTruthLayer || !input.decisionSourceType) {
+    throw new APIError(
+      'Association decision status requires a truth layer and source type',
+      400,
+      'HOA_DECISION_PROVENANCE_REQUIRED',
+    );
+  }
+
+  if (
+    input.decisionTruthLayer === HoaDecisionTruthLayer.DOCUMENTED
+    && !input.decisionEvidenceDocumentId
+  ) {
+    throw new APIError(
+      'A documented HOA decision requires an evidence document',
+      400,
+      'HOA_DECISION_EVIDENCE_REQUIRED',
+    );
+  }
+  if (
+    input.decisionTruthLayer === HoaDecisionTruthLayer.SOURCE_OBSERVED
+    && !input.decisionSourceReference
+    && !input.decisionEvidenceDocumentId
+  ) {
+    throw new APIError(
+      'A source-observed HOA decision requires a source reference or evidence document',
+      400,
+      'HOA_DECISION_SOURCE_REQUIRED',
+    );
+  }
+  if (
+    input.decisionTruthLayer === HoaDecisionTruthLayer.ASSOCIATION_CONFIRMED
+    && !input.associationReferenceNumber
+    && !input.decisionEvidenceDocumentId
+  ) {
+    throw new APIError(
+      'An association-confirmed decision requires a reference number or evidence document',
+      400,
+      'HOA_DECISION_CONFIRMATION_REQUIRED',
+    );
+  }
+  if (
+    input.decisionStatus === HoaDecisionStatus.APPROVED_WITH_CONDITIONS
+    && !input.approvalConditions?.trim()
+  ) {
+    throw new APIError(
+      'An approval with conditions requires the association conditions',
+      400,
+      'HOA_APPROVAL_CONDITIONS_REQUIRED',
+    );
+  }
+
+  if (input.decisionEvidenceDocumentId) {
+    const evidence = await prisma.document.findFirst({
+      where: {
+        id: input.decisionEvidenceDocumentId,
+        propertyId,
+      },
+      select: { id: true },
+    });
+    if (!evidence) {
+      throw new APIError(
+        'HOA decision evidence must belong to the same property',
+        400,
+        'HOA_DECISION_EVIDENCE_PROPERTY_MISMATCH',
+      );
+    }
   }
 }
 

@@ -12,6 +12,7 @@ import {
   ProductAnalyticsEventType,
   ServiceCategory,
   PropertyMaintenanceTask,
+  ProjectRequirementApplicability,
 } from '@prisma/client';
 import {
   emitServiceQuoteDecisionAnalytics,
@@ -30,18 +31,93 @@ import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/
 import { maintenanceTaskSourceAdapter } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
 import { resolveInspectionFindingWorkKey, propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import type { OperationalWorkItemState } from '@prisma/client';
+import { evaluateRequirementCompletionCheck } from './projectCompliance/completionPolicy';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
 async function assertProject(projectId: string, propertyId: string) {
   const project = await prisma.projectRecord.findUnique({
     where: { id: projectId },
-    select: { id: true, propertyId: true, status: true, contractAmountCents: true, approvedChangeOrderDeltaCents: true },
+    select: {
+      id: true,
+      propertyId: true,
+      status: true,
+      contractAmountCents: true,
+      approvedChangeOrderDeltaCents: true,
+      permitApplicability: true,
+      permitApplicabilityBasis: true,
+      hoaApplicability: true,
+      hoaApplicabilityBasis: true,
+    },
   });
   if (!project || project.propertyId !== propertyId) {
     throw new APIError('Project not found', 404, 'NOT_FOUND');
   }
   return project;
+}
+
+export function assertProjectRequirementApplicability(
+  label: 'Permit' | 'HOA',
+  applicability: ProjectRequirementApplicability,
+  basis: string | null | undefined,
+) {
+  if (applicability === 'UNKNOWN' && basis?.trim()) {
+    throw new APIError(
+      `${label} applicability must be decided before adding a basis.`,
+      400,
+      'PROJECT_REQUIREMENT_DECISION_REQUIRED',
+      { requirement: label.toUpperCase() },
+    );
+  }
+  if (applicability !== 'UNKNOWN' && !basis?.trim()) {
+    throw new APIError(
+      `${label} applicability requires a source or rationale.`,
+      400,
+      'PROJECT_REQUIREMENT_BASIS_REQUIRED',
+      { requirement: label.toUpperCase(), applicability },
+    );
+  }
+}
+
+async function assertMilestoneLinks(
+  projectId: string,
+  propertyId: string,
+  data: { dependsOnMilestoneId?: string | null; linkedPermitMilestoneId?: string | null },
+) {
+  if (data.dependsOnMilestoneId) {
+    const dependency = await prisma.projectMilestone.findFirst({
+      where: { id: data.dependsOnMilestoneId, projectId, propertyId },
+      select: { id: true },
+    });
+    if (!dependency) {
+      throw new APIError(
+        'Milestone dependency must belong to the same project and property.',
+        409,
+        'PROJECT_MILESTONE_SCOPE_MISMATCH',
+      );
+    }
+  }
+  if (data.linkedPermitMilestoneId) {
+    const permitMilestone = await prisma.permitInspectionMilestone.findFirst({
+      where: {
+        id: data.linkedPermitMilestoneId,
+        propertyId,
+        permitRecord: {
+          isActive: true,
+          sourceEntityType: 'PROJECT',
+          sourceEntityId: projectId,
+        },
+      },
+      select: { id: true },
+    });
+    if (!permitMilestone) {
+      throw new APIError(
+        'Permit milestone must belong to a permit linked to the same project and property.',
+        409,
+        'PROJECT_PERMIT_SCOPE_MISMATCH',
+      );
+    }
+  }
 }
 
 // ── Home Operations work-item reconciliation (Slice 4) ──────────────────────
@@ -640,6 +716,10 @@ export async function createProject(propertyId: string, data: any) {
         sourceEntityType: projectData.sourceEntityType,
         sourceEntityId: projectData.sourceEntityId,
         sourceJourneyId: projectData.sourceJourneyId,
+        permitApplicability: projectData.permitApplicability ?? 'UNKNOWN',
+        permitApplicabilityBasis: projectData.permitApplicabilityBasis,
+        hoaApplicability: projectData.hoaApplicability ?? 'UNKNOWN',
+        hoaApplicabilityBasis: projectData.hoaApplicabilityBasis,
         providerRankingRationale: projectData.providerRankingRationale,
         commercialDisclosure: projectData.commercialDisclosure,
         credentialCheck: projectData.contractorId ? {
@@ -720,7 +800,22 @@ export async function listProjectWriteBacks(projectId: string, propertyId: strin
 }
 
 export async function updateProject(projectId: string, propertyId: string, data: any) {
-  await assertProject(projectId, propertyId);
+  const existing = await assertProject(projectId, propertyId);
+  const permitApplicability = data.permitApplicability ?? existing.permitApplicability;
+  const permitApplicabilityBasis = data.permitApplicability === 'UNKNOWN'
+    ? null
+    : data.permitApplicabilityBasis !== undefined
+      ? data.permitApplicabilityBasis
+      : existing.permitApplicabilityBasis;
+  const hoaApplicability = data.hoaApplicability ?? existing.hoaApplicability;
+  const hoaApplicabilityBasis = data.hoaApplicability === 'UNKNOWN'
+    ? null
+    : data.hoaApplicabilityBasis !== undefined
+      ? data.hoaApplicabilityBasis
+      : existing.hoaApplicabilityBasis;
+  assertProjectRequirementApplicability('Permit', permitApplicability, permitApplicabilityBasis);
+  assertProjectRequirementApplicability('HOA', hoaApplicability, hoaApplicabilityBasis);
+
   return prisma.projectRecord.update({
     where: { id: projectId },
     data: {
@@ -736,6 +831,10 @@ export async function updateProject(projectId: string, propertyId: string, data:
       ...(data.serviceCategory !== undefined && { serviceCategory: data.serviceCategory }),
       ...(data.contractDocumentKey !== undefined && { contractDocumentKey: data.contractDocumentKey }),
       ...(data.status && { status: data.status as ProjectRecordStatus }),
+      ...(data.permitApplicability !== undefined && { permitApplicability, permitApplicabilityBasis }),
+      ...(data.permitApplicabilityBasis !== undefined && data.permitApplicability === undefined && { permitApplicabilityBasis }),
+      ...(data.hoaApplicability !== undefined && { hoaApplicability, hoaApplicabilityBasis }),
+      ...(data.hoaApplicabilityBasis !== undefined && data.hoaApplicability === undefined && { hoaApplicabilityBasis }),
     },
   });
 }
@@ -765,6 +864,7 @@ export async function listMilestones(projectId: string, propertyId: string) {
 
 export async function createMilestone(projectId: string, propertyId: string, data: any) {
   await assertProject(projectId, propertyId);
+  await assertMilestoneLinks(projectId, propertyId, data);
 
   // Auto-assign position if not provided (append to end)
   let position = data.position;
@@ -795,6 +895,7 @@ export async function createMilestone(projectId: string, propertyId: string, dat
 export async function updateMilestone(milestoneId: string, projectId: string, propertyId: string, data: any) {
   await assertProject(projectId, propertyId);
   await assertMilestone(milestoneId, projectId);
+  await assertMilestoneLinks(projectId, propertyId, data);
 
   return prisma.projectMilestone.update({
     where: { id: milestoneId },
@@ -1277,18 +1378,46 @@ export async function resolveIssue(
 // ── Completion ────────────────────────────────────────────────────────────────
 
 export async function getCompletionChecklist(projectId: string, propertyId: string) {
-  await assertProject(projectId, propertyId);
+  const project = await assertProject(projectId, propertyId);
 
   const [
-    permitMilestones,
+    linkedPermits,
+    linkedHoaApprovals,
     disputedMilestones,
     openBlockingOrMajorIssues,
     payments,
     photoCount,
   ] = await Promise.all([
-    prisma.projectMilestone.findMany({
-      where: { projectId, milestoneType: 'PERMIT_INSPECTION' },
-      select: { id: true, name: true, status: true },
+    prisma.propertyPermitRecord.findMany({
+      where: {
+        propertyId,
+        isActive: true,
+        sourceEntityType: 'PROJECT',
+        sourceEntityId: projectId,
+      },
+      select: {
+        id: true,
+        permitNumber: true,
+        status: true,
+        source: true,
+        isVerified: true,
+        finaledDate: true,
+      },
+    }),
+    prisma.hoaApprovalRecord.findMany({
+      where: {
+        propertyId,
+        isActive: true,
+        sourceEntityType: 'PROJECT',
+        sourceEntityId: projectId,
+      },
+      select: {
+        id: true,
+        decisionStatus: true,
+        decisionTruthLayer: true,
+        approvalConditions: true,
+        expirationDate: true,
+      },
     }),
     prisma.projectMilestone.count({
       where: { projectId, status: 'DISPUTED' },
@@ -1307,38 +1436,77 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
     }),
   ]);
 
-  const unpassed = permitMilestones.filter(m => m.status !== 'COMPLETE');
   const lastPayment = payments[0];
   const finalPaymentPaid = lastPayment?.status === 'PAID';
+  const officiallyFinaledPermit = linkedPermits.find((permit) =>
+    permit.status === 'FINALED'
+    && permit.finaledDate != null
+    && (permit.source === 'OPEN_DATA_API' || permit.isVerified)
+  );
+  const authorityApprovedHoa = linkedHoaApprovals.find((approval) =>
+    approval.decisionStatus === 'APPROVED'
+    && (
+      approval.decisionTruthLayer === 'SOURCE_OBSERVED'
+      || approval.decisionTruthLayer === 'ASSOCIATION_CONFIRMED'
+    )
+    && (!approval.expirationDate || approval.expirationDate >= new Date())
+  );
+  const conditionalHoaApproval = linkedHoaApprovals.find((approval) =>
+    approval.decisionStatus === 'APPROVED_WITH_CONDITIONS'
+    && (
+      approval.decisionTruthLayer === 'SOURCE_OBSERVED'
+      || approval.decisionTruthLayer === 'ASSOCIATION_CONFIRMED'
+    )
+  );
 
   const checks = [
-    {
-      key: 'permit_inspections_passed',
-      label: 'All permit inspections passed',
-      passed: unpassed.length === 0,
-      blockers: unpassed.map(m => m.name),
-    },
+    evaluateRequirementCompletionCheck({
+      key: 'permit_closeout',
+      label: 'Required permit officially finaled',
+      applicability: project.permitApplicability,
+      basis: project.permitApplicabilityBasis,
+      requiredSatisfied: Boolean(officiallyFinaledPermit),
+      requiredBlockers: linkedPermits.length === 0
+        ? ['Link the applicable permit record to this project.']
+        : ['Obtain or record authority-backed permit finalization evidence.'],
+    }),
+    evaluateRequirementCompletionCheck({
+      key: 'hoa_approval',
+      label: 'Required HOA approval confirmed',
+      applicability: project.hoaApplicability,
+      basis: project.hoaApplicabilityBasis,
+      requiredSatisfied: Boolean(authorityApprovedHoa),
+      requiredBlockers: conditionalHoaApproval
+        ? ['Confirm and satisfy every association approval condition before completion.']
+        : linkedHoaApprovals.length === 0
+          ? ['Link the applicable HOA approval record to this project.']
+          : ['Record a current source-observed or association-confirmed approval.'],
+    }),
     {
       key: 'no_disputed_milestones',
       label: 'No milestones in disputed status',
+      status: disputedMilestones === 0 ? 'PASSED' as const : 'FAILED' as const,
       passed: disputedMilestones === 0,
       blockers: disputedMilestones > 0 ? [`${disputedMilestones} disputed milestone(s)`] : [],
     },
     {
       key: 'no_open_blocking_issues',
       label: 'No open blocking or major issues',
+      status: openBlockingOrMajorIssues.length === 0 ? 'PASSED' as const : 'FAILED' as const,
       passed: openBlockingOrMajorIssues.length === 0,
       blockers: openBlockingOrMajorIssues.map(i => i.title),
     },
     {
       key: 'final_payment_paid',
       label: 'Final payment marked paid',
+      status: finalPaymentPaid ? 'PASSED' as const : 'FAILED' as const,
       passed: finalPaymentPaid,
       blockers: !finalPaymentPaid && lastPayment ? [`Payment "${lastPayment.description}" is not paid`] : [],
     },
     {
       key: 'progress_photos_logged',
       label: 'At least one progress photo logged',
+      status: photoCount > 0 ? 'PASSED' as const : 'FAILED' as const,
       passed: photoCount > 0,
       blockers: photoCount === 0 ? ['No progress photos have been logged'] : [],
     },

@@ -4,25 +4,20 @@
 // Called fire-and-forget after a session evaluation completes successfully.
 //
 // Integrations wired here:
-//   1. Home Timeline  — HomeEventsAutoGen.ensureEvent (type=IMPROVEMENT, idempotent)
-//   2. Digital Twin   — HomeTwinScenario (scenarioType=RENOVATION, idempotent via existing check)
-//   3. Compliance Task — PropertyMaintenanceTask when licensing/permit status requires action
-//   4. Linked IDs      — persistLinkedEntityIds writes back to session for UI traceability
+//   1. Compliance Task — PropertyMaintenanceTask when licensing/permit status requires action
 //
-// TCO and Break-Even are compute-only surfaces with no injection path; integration
-// is surfaced as structured output in the session response (linkedEntities) only.
+// An advisor evaluation is research, not a selected or completed renovation.
+// It therefore must not create a Home Timeline improvement or Digital Twin
+// scenario. Those durable records require an explicit downstream selection or
+// verified completion.
 //
 // All integrations are individually try/caught so a failure in one never blocks the others.
 
-import { prisma } from '../../lib/prisma';
-import { HomeEventsAutoGen } from '../../services/homeEvents/homeEvents.autogen';
-import { HomeDigitalTwinScenarioService } from '../../services/homeDigitalTwinScenario.service';
 import { PropertyMaintenanceTaskService } from '../../services/PropertyMaintenanceTask.service';
 import type { EvaluationOutput } from '../types/homeRenovationAdvisor.types';
 import type { SessionWithIncludes } from '../repository/advisorSession.repository';
 import { logger } from '../../lib/logger';
-
-const scenarioService = new HomeDigitalTwinScenarioService();
+import { getComplianceTaskRequirements } from './complianceTaskPolicy';
 
 // ============================================================================
 // PUBLIC ENTRY POINT
@@ -36,165 +31,17 @@ export async function runPostEvaluationIntegrations(
   session: SessionWithIncludes,
   output: EvaluationOutput,
 ): Promise<void> {
-  const linkedIds: {
-    linkedTimelineItemId?: string | null;
-    linkedDigitalTwinScenarioId?: string | null;
-  } = {};
-
-  // 1. Home Timeline
-  try {
-    const event = await integrateHomeTimeline(session, output);
-    if (event?.id) {
-      // Note: linkedTimelineItemId is a FK to HomeCapitalTimelineItem, not HomeEvent.
-      // We store the homeEvent ID as a reference string only (no FK on session for HomeEvent).
-      // The session's linkedTimelineItemId FK points to HomeCapitalTimelineItem if linked.
-      // For now we log the event ID to console for traceability.
-      logger.info(
-        `[RenovationAdvisor] Home timeline event logged: eventId=${event.id} sessionId=${session.id}`,
-      );
-    }
-  } catch (err) {
-    logger.error({ err }, '[RenovationAdvisor] Home timeline integration failed');
-  }
-
-  // 2. Digital Twin Scenario
-  try {
-    const scenarioId = await integrateDigitalTwin(session, output);
-    if (scenarioId) {
-      linkedIds.linkedDigitalTwinScenarioId = scenarioId;
-    }
-  } catch (err) {
-    logger.error({ err }, '[RenovationAdvisor] Digital twin integration failed');
-  }
-
-  // 3. Compliance Task (only for high-risk permit/licensing situations)
+  // Advisor research may create a follow-up action, but never durable property
+  // history or a selected planning scenario.
   try {
     await integrateComplianceTask(session, output);
   } catch (err) {
     logger.error({ err }, '[RenovationAdvisor] Compliance task integration failed');
   }
-
-  // 4. Persist linked IDs back to the session (if any were populated)
-  if (Object.values(linkedIds).some((v) => v != null)) {
-    try {
-      await persistLinkedEntityIds(session.id, linkedIds);
-    } catch (err) {
-      logger.error({ err }, '[RenovationAdvisor] Failed to persist linked entity IDs');
-    }
-  }
 }
 
 // ============================================================================
-// 1. HOME TIMELINE — log a HomeEvent for the evaluation
-// ============================================================================
-
-async function integrateHomeTimeline(
-  session: SessionWithIncludes,
-  output: EvaluationOutput,
-): Promise<{ id: string } | null> {
-  const renovationLabel = formatRenovationType(session.renovationType as string);
-  const riskLabel = formatRiskLevel(output.overallRiskLevel as string);
-  const confidenceLabel = formatConfidenceLevel(output.overallConfidence as string);
-
-  // Idempotency key: one event per session evaluation — re-runs overwrite via dedupe.
-  // Using session ID so re-evaluations don't create duplicate timeline events.
-  const idempotencyKey = `renovation-advisor:${session.id}:evaluated`;
-
-  return HomeEventsAutoGen.ensureEvent({
-    propertyId: session.propertyId,
-    createdById: session.createdByUserId ?? null,
-    type: 'IMPROVEMENT' as any,
-    subtype: 'HOME_RENOVATION_RISK_CHECK',
-    occurredAt: new Date(),
-    title: `Renovation check: ${renovationLabel}`,
-    summary: `Risk level: ${riskLabel} | Confidence: ${confidenceLabel}. ${output.overallSummary ?? ''}`.trim(),
-    amount: session.projectCostInput ? String(session.projectCostInput) : null,
-    currency: 'USD',
-    meta: {
-      sessionId: session.id,
-      renovationType: session.renovationType,
-      overallRiskLevel: output.overallRiskLevel,
-      overallConfidence: output.overallConfidence,
-      permitStatus: output.permit.requirementStatus,
-      licensingStatus: output.licensing.requirementStatus,
-      isRetroactive: session.isRetroactiveCheck,
-    },
-    idempotencyKey,
-  });
-}
-
-// ============================================================================
-// 2. DIGITAL TWIN — create / find a RENOVATION scenario
-// ============================================================================
-
-async function integrateDigitalTwin(
-  session: SessionWithIncludes,
-  output: EvaluationOutput,
-): Promise<string | null> {
-  if (!session.createdByUserId) return null;
-
-  // Look up the property's digital twin (may not exist)
-  const twin = await prisma.homeDigitalTwin.findUnique({
-    where: { propertyId: session.propertyId },
-    select: { id: true },
-  });
-
-  if (!twin) {
-    // Twin not initialized yet — skip silently
-    return null;
-  }
-
-  // Check if a scenario already exists for this session (idempotency)
-  const existingScenario = await prisma.homeTwinScenario.findFirst({
-    where: {
-      digitalTwinId: twin.id,
-      propertyId: session.propertyId,
-      inputPayload: {
-        path: ['advisorSessionId'],
-        equals: session.id,
-      },
-    },
-    select: { id: true },
-  });
-
-  if (existingScenario) {
-    return existingScenario.id;
-  }
-
-  const renovationLabel = formatRenovationType(session.renovationType as string);
-  const costNum = session.projectCostInput ? Number(session.projectCostInput) : null;
-
-  const scenario = await scenarioService.createScenario(
-    twin.id,
-    session.propertyId,
-    session.createdByUserId,
-    {
-      name: `${renovationLabel} Renovation`,
-      scenarioType: 'RENOVATION' as any,
-      description: output.overallSummary ?? `Renovation risk check for ${renovationLabel}.`,
-      inputPayload: {
-        advisorSessionId: session.id,
-        renovationType: session.renovationType,
-        projectCost: costNum,
-        permitStatus: output.permit.requirementStatus,
-        taxImpactMonthlyMin: output.taxImpact.monthlyTaxIncreaseMin,
-        taxImpactMonthlyMax: output.taxImpact.monthlyTaxIncreaseMax,
-        licensingStatus: output.licensing.requirementStatus,
-        overallRiskLevel: output.overallRiskLevel,
-        overallConfidence: output.overallConfidence,
-        jurisdiction: session.normalizedJurisdictionKey,
-        assumptions: {
-          projectCost: costNum,
-        },
-      },
-    },
-  );
-
-  return scenario.id;
-}
-
-// ============================================================================
-// 3. COMPLIANCE TASK — create a maintenance task for high-risk compliance gaps
+// COMPLIANCE TASK — create a maintenance task for compliance follow-up
 // ============================================================================
 
 async function integrateComplianceTask(
@@ -203,15 +50,13 @@ async function integrateComplianceTask(
 ): Promise<void> {
   if (!session.createdByUserId) return;
 
-  const riskLevel = output.overallRiskLevel as string;
-  const permitStatus = output.permit.requirementStatus as string;
-  const licensingStatus = output.licensing.requirementStatus as string;
+  const riskLevel = output.overallRiskLevel;
+  const { needsPermitTask, needsLicensingTask } = getComplianceTaskRequirements(
+    output.permit.requirementStatus,
+    output.licensing.requirementStatus,
+  );
 
   // Only create a compliance task when there's a concrete action required
-  const needsPermitTask =
-    permitStatus === 'PERMIT_REQUIRED' || permitStatus === 'PERMIT_LIKELY_REQUIRED';
-  const needsLicensingTask =
-    licensingStatus === 'LICENSE_REQUIRED' || licensingStatus === 'LICENSE_LIKELY_REQUIRED';
   const isHighRisk = riskLevel === 'HIGH' || riskLevel === 'CRITICAL';
 
   if (!needsPermitTask && !needsLicensingTask && !isHighRisk) return;
@@ -220,8 +65,14 @@ async function integrateComplianceTask(
 
   // Build a single consolidated compliance task
   const taskLines: string[] = [];
-  if (needsPermitTask) taskLines.push('Obtain required building permit before starting work.');
-  if (needsLicensingTask) taskLines.push('Verify contractor licensing requirements for your jurisdiction.');
+  if (output.permit.requirementStatus === 'REQUIRED') {
+    taskLines.push('Verify the issuing authority and obtain the required building permit before starting work.');
+  } else if (output.permit.requirementStatus === 'LIKELY_REQUIRED') {
+    taskLines.push('Verify with the issuing authority whether a building permit is required before starting work.');
+  }
+  if (needsLicensingTask) {
+    taskLines.push('Verify contractor licensing requirements for your jurisdiction.');
+  }
   if (isHighRisk && !needsPermitTask && !needsLicensingTask) {
     taskLines.push('Review renovation compliance requirements due to high risk assessment.');
   }
@@ -256,34 +107,6 @@ async function integrateComplianceTask(
 }
 
 // ============================================================================
-// 4. PERSIST LINKED ENTITY IDs BACK TO SESSION
-// ============================================================================
-
-async function persistLinkedEntityIds(
-  sessionId: string,
-  ids: {
-    linkedTimelineItemId?: string | null;
-    linkedDigitalTwinScenarioId?: string | null;
-  },
-): Promise<void> {
-  const data: Record<string, unknown> = {};
-
-  if (ids.linkedTimelineItemId !== undefined) {
-    data.linkedTimelineItemId = ids.linkedTimelineItemId;
-  }
-  if (ids.linkedDigitalTwinScenarioId !== undefined) {
-    data.linkedDigitalTwinScenarioId = ids.linkedDigitalTwinScenarioId;
-  }
-
-  if (Object.keys(data).length === 0) return;
-
-  await prisma.homeRenovationAdvisorSession.update({
-    where: { id: sessionId },
-    data: data as any,
-  });
-}
-
-// ============================================================================
 // HELPERS
 // ============================================================================
 
@@ -292,25 +115,4 @@ function formatRenovationType(type: string): string {
     .replace(/_/g, ' ')
     .toLowerCase()
     .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatRiskLevel(level: string): string {
-  const labels: Record<string, string> = {
-    CRITICAL: 'Critical',
-    HIGH: 'High',
-    MEDIUM: 'Medium',
-    LOW: 'Low',
-    UNKNOWN: 'Unknown',
-  };
-  return labels[level] ?? level;
-}
-
-function formatConfidenceLevel(level: string): string {
-  const labels: Record<string, string> = {
-    HIGH: 'High',
-    MEDIUM: 'Medium',
-    LOW: 'Low',
-    UNAVAILABLE: 'Unavailable',
-  };
-  return labels[level] ?? level;
 }

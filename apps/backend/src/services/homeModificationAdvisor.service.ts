@@ -8,27 +8,41 @@ import type { HomeModificationApplicability } from './homeModification/applicabi
 import { knownContextValue } from './propertyContextDecision';
 
 type RecommendationCategory = 'ACCESSIBILITY' | 'AGING_IN_PLACE' | 'FAMILY' | 'RESALE' | 'ENERGY' | 'SAFETY';
-type RecommendationPriority = 'IMMEDIATE' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+interface RawModificationRecommendation {
+  title: string;
+  category: RecommendationCategory;
+  estimatedCostMin: number;
+  estimatedCostMax: number;
+  timeline: string;
+  description: string;
+  benefits: string[];
+  whyThisFits: string;
+  contractorType: string;
+  source?: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
+}
 
 interface ModificationRecommendation {
   title: string;
   category: RecommendationCategory;
-  priority: RecommendationPriority;
-  estimatedCost: number;
-  roi: number; // Percentage return on investment
+  costRange: {
+    min: number;
+    max: number;
+    currency: 'USD';
+  };
   timeline: string;
   description: string;
   benefits: string[];
-  contractorType: string;
-  permitRequired: boolean;
-  source?: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
+  whyThisFits: string;
+  professionalToConsult: string;
+  permitGuidance: 'VERIFY_WITH_LOCAL_AUTHORITY';
+  source: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
   confidence?: 'LOW' | 'MEDIUM';
-  validation?: {
+  assumptions: string[];
+  validation: {
     costModel: 'STATE_MULTIPLIER_BASELINE_V1';
-    roiModel: 'CATEGORY_ROI_BOUNDS_V1';
     stateCostMultiplier: number;
-    costWasClamped: boolean;
-    roiWasClamped: boolean;
+    costRangeWasAdjusted: boolean;
     notes: string[];
   };
 }
@@ -40,56 +54,52 @@ interface ModificationReport {
   propertyAge: number | null;
   applicability: HomeModificationApplicability;
   recommendations: ModificationRecommendation[];
-  totalEstimatedCost: number;
-  averageROI: number;
-  quickWins: ModificationRecommendation[];
-  longTermProjects: ModificationRecommendation[];
   meta: {
     classification: 'EDUCATIONAL_ESTIMATE';
     regionalCostModel: 'STATE_MULTIPLIER_BASELINE_V1';
-    roiModel: 'CATEGORY_ROI_BOUNDS_V1';
     financialPlanningSafe: false;
+    selectionRequired: true;
     disclaimer: string;
   };
   generatedAt: Date;
 }
 
-const COMMON_MODIFICATIONS: Record<RecommendationCategory, Array<{ title: string; cost: number; roi: number }>> = {
+const COMMON_MODIFICATIONS: Record<RecommendationCategory, Array<{ title: string; cost: number }>> = {
   ACCESSIBILITY: [
-    { title: 'Wheelchair Ramp Installation', cost: 3500, roi: 50 },
-    { title: 'Walk-in Shower Conversion', cost: 6000, roi: 65 },
-    { title: 'Grab Bars & Handrails', cost: 800, roi: 70 },
-    { title: 'Widened Doorways', cost: 2500, roi: 60 },
+    { title: 'Wheelchair Ramp Installation', cost: 3500 },
+    { title: 'Walk-in Shower Conversion', cost: 6000 },
+    { title: 'Grab Bars & Handrails', cost: 800 },
+    { title: 'Widened Doorways', cost: 2500 },
   ],
   AGING_IN_PLACE: [
-    { title: 'Zero-Step Entry', cost: 4500, roi: 55 },
-    { title: 'Lever-Style Door Handles', cost: 600, roi: 80 },
-    { title: 'Non-Slip Flooring', cost: 3500, roi: 65 },
-    { title: 'Stair Lift Installation', cost: 8000, roi: 45 },
+    { title: 'Zero-Step Entry', cost: 4500 },
+    { title: 'Lever-Style Door Handles', cost: 600 },
+    { title: 'Non-Slip Flooring', cost: 3500 },
+    { title: 'Stair Lift Installation', cost: 8000 },
   ],
   FAMILY: [
-    { title: 'Additional Bedroom', cost: 35000, roi: 85 },
-    { title: 'Finished Basement', cost: 45000, roi: 75 },
-    { title: 'Home Office Conversion', cost: 8000, roi: 70 },
-    { title: 'Playroom/Nursery Update', cost: 5000, roi: 60 },
+    { title: 'Additional Bedroom', cost: 35000 },
+    { title: 'Finished Basement', cost: 45000 },
+    { title: 'Home Office Conversion', cost: 8000 },
+    { title: 'Playroom/Nursery Update', cost: 5000 },
   ],
   RESALE: [
-    { title: 'Kitchen Remodel', cost: 25000, roi: 80 },
-    { title: 'Bathroom Renovation', cost: 15000, roi: 70 },
-    { title: 'Curb Appeal Enhancement', cost: 5000, roi: 100 },
-    { title: 'Deck/Patio Addition', cost: 12000, roi: 75 },
+    { title: 'Kitchen Remodel', cost: 25000 },
+    { title: 'Bathroom Renovation', cost: 15000 },
+    { title: 'Curb Appeal Enhancement', cost: 5000 },
+    { title: 'Deck/Patio Addition', cost: 12000 },
   ],
   ENERGY: [
-    { title: 'Solar Panel Installation', cost: 18000, roi: 95 },
-    { title: 'Smart Thermostat System', cost: 1200, roi: 120 },
-    { title: 'Energy-Efficient Windows', cost: 8000, roi: 70 },
-    { title: 'Insulation Upgrade', cost: 3500, roi: 110 },
+    { title: 'Solar Panel Installation', cost: 18000 },
+    { title: 'Smart Thermostat System', cost: 1200 },
+    { title: 'Energy-Efficient Windows', cost: 8000 },
+    { title: 'Insulation Upgrade', cost: 3500 },
   ],
   SAFETY: [
-    { title: 'Smart Security System', cost: 2500, roi: 85 },
-    { title: 'Outdoor Lighting Upgrade', cost: 1500, roi: 90 },
-    { title: 'Fire Suppression System', cost: 4000, roi: 60 },
-    { title: 'Radon Mitigation', cost: 2000, roi: 75 },
+    { title: 'Smart Security System', cost: 2500 },
+    { title: 'Outdoor Lighting Upgrade', cost: 1500 },
+    { title: 'Fire Suppression System', cost: 4000 },
+    { title: 'Radon Mitigation', cost: 2000 },
   ],
 };
 
@@ -117,19 +127,14 @@ const STATE_COST_MULTIPLIER: Record<string, number> = {
   DEFAULT: 1.0,
 };
 
-const ROI_BOUNDS: Record<RecommendationCategory, { min: number; max: number }> = {
-  ACCESSIBILITY: { min: 20, max: 75 },
-  AGING_IN_PLACE: { min: 25, max: 80 },
-  FAMILY: { min: 35, max: 90 },
-  RESALE: { min: 40, max: 100 },
-  ENERGY: { min: 45, max: 115 },
-  SAFETY: { min: 30, max: 90 },
-};
-
 function clamp(value: number, min: number, max: number): number {
   if (value < min) return min;
   if (value > max) return max;
   return value;
+}
+
+function roundCost(value: number): number {
+  return Math.max(100, Math.round(value / 100) * 100);
 }
 
 export class HomeModificationAdvisorService {
@@ -177,42 +182,20 @@ export class HomeModificationAdvisorService {
       recommendations = recommendations.filter((recommendation) => !/(deck|patio|outdoor|curb appeal|landscap)/i.test(recommendation.title));
     }
 
-    // Calculate totals
-    const totalEstimatedCost = recommendations.reduce((sum, r) => sum + r.estimatedCost, 0);
-    const averageROI = recommendations.length
-      ? Math.round(recommendations.reduce((sum, r) => sum + r.roi, 0) / recommendations.length)
-      : 0;
-
-    // Categorize
-    const quickWins = recommendations.filter(r => 
-      r.priority === 'IMMEDIATE' || (r.estimatedCost < 5000 && r.roi > 80)
-    );
-
-    const longTermProjects = recommendations.filter(r => 
-      r.estimatedCost > 10000 || r.timeline.includes('months')
-    );
-
     return {
       propertyId,
       propertyAddress: property.address,
       userNeeds,
       propertyAge,
       applicability,
-      recommendations: recommendations.sort((a, b) => {
-        const priorityOrder = { 'IMMEDIATE': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
-        return priorityOrder[b.priority] - priorityOrder[a.priority];
-      }),
-      totalEstimatedCost,
-      averageROI,
-      quickWins,
-      longTermProjects,
+      recommendations,
       meta: {
         classification: 'EDUCATIONAL_ESTIMATE',
         regionalCostModel: 'STATE_MULTIPLIER_BASELINE_V1',
-        roiModel: 'CATEGORY_ROI_BOUNDS_V1',
         financialPlanningSafe: false,
+        selectionRequired: true,
         disclaimer:
-          'Costs and ROI are educational estimates calibrated with state-level baselines, not contractor bids or jurisdiction permit records.',
+          'Each option is an educational starting point, not a combined renovation plan. Cost ranges use broad state-level baselines and are not contractor bids. Permit requirements must be verified with the local authority after the scope is defined.',
       },
       generatedAt: new Date(),
     };
@@ -222,7 +205,7 @@ export class HomeModificationAdvisorService {
     property: any,
     userNeeds: string[],
     propertyAge: number | null
-  ): Promise<ModificationRecommendation[]> {
+  ): Promise<RawModificationRecommendation[]> {
     if (!this.ai) {
       return this.getBasicRecommendations(userNeeds, propertyAge);
     }
@@ -243,20 +226,19 @@ Provide 6-8 specific home modification recommendations. Return ONLY valid JSON (
   {
     "title": "Kitchen Island Addition",
     "category": "FAMILY",
-    "priority": "MEDIUM",
-    "estimatedCost": 8000,
-    "roi": 75,
+    "estimatedCostMin": 6000,
+    "estimatedCostMax": 12000,
     "timeline": "2-3 weeks",
     "description": "Add functional kitchen island with seating",
     "benefits": ["Extra counter space", "Casual dining area", "Increased storage"],
-    "contractorType": "General Contractor",
-    "permitRequired": false
+    "whyThisFits": "Supports the selected goal of creating more functional family space.",
+    "contractorType": "General Contractor"
   }
 ]
 
 Categories: ACCESSIBILITY, AGING_IN_PLACE, FAMILY, RESALE, ENERGY, SAFETY
-Priority: IMMEDIATE, HIGH, MEDIUM, LOW
-Include diverse recommendations across categories.`;
+Use broad cost ranges rather than point estimates. Do not provide ROI, urgency rankings, or permit conclusions.
+Include diverse, independent options across categories.`;
 
       const response = await this.ai.models.generateContent({
         model: "gemini-2.0-flash",
@@ -279,7 +261,7 @@ Include diverse recommendations across categories.`;
     }
   }
 
-  private normalizeRecommendationsFromAI(input: unknown): ModificationRecommendation[] {
+  private normalizeRecommendationsFromAI(input: unknown): RawModificationRecommendation[] {
     if (!Array.isArray(input)) return [];
     const allowedCategories: RecommendationCategory[] = [
       'ACCESSIBILITY',
@@ -289,46 +271,43 @@ Include diverse recommendations across categories.`;
       'ENERGY',
       'SAFETY',
     ];
-    const allowedPriorities: RecommendationPriority[] = ['IMMEDIATE', 'HIGH', 'MEDIUM', 'LOW'];
 
     return input
-      .map((raw): ModificationRecommendation | null => {
+      .map((raw): RawModificationRecommendation | null => {
         if (!raw || typeof raw !== 'object') return null;
         const rec = raw as Record<string, unknown>;
         const category = String(rec.category || '').toUpperCase() as RecommendationCategory;
-        const priority = String(rec.priority || '').toUpperCase() as RecommendationPriority;
         const title = String(rec.title || '').trim();
         const description = String(rec.description || '').trim();
+        const whyThisFits = String(rec.whyThisFits || description).trim();
         const contractorType = String(rec.contractorType || 'General Contractor').trim() || 'General Contractor';
         const timeline = String(rec.timeline || '2-4 weeks').trim() || '2-4 weeks';
-        const cost = Number(rec.estimatedCost);
-        const roi = Number(rec.roi);
+        const costMin = Number(rec.estimatedCostMin);
+        const costMax = Number(rec.estimatedCostMax);
         const benefits = Array.isArray(rec.benefits)
           ? rec.benefits.map((b) => String(b).trim()).filter(Boolean).slice(0, 6)
           : [];
-        const permitRequired = Boolean(rec.permitRequired);
 
         if (!title || !description) return null;
 
         return {
           title: title.slice(0, 140),
           category: allowedCategories.includes(category) ? category : 'RESALE',
-          priority: allowedPriorities.includes(priority) ? priority : 'MEDIUM',
-          estimatedCost: Number.isFinite(cost) && cost > 0 ? Math.round(cost) : 5000,
-          roi: Number.isFinite(roi) ? Math.round(roi) : 60,
+          estimatedCostMin: Number.isFinite(costMin) && costMin > 0 ? Math.round(costMin) : 3500,
+          estimatedCostMax: Number.isFinite(costMax) && costMax > 0 ? Math.round(costMax) : 7000,
           timeline,
           description: description.slice(0, 500),
           benefits,
+          whyThisFits: whyThisFits.slice(0, 500),
           contractorType: contractorType.slice(0, 80),
-          permitRequired,
           source: 'AI_ESTIMATE',
         };
       })
-      .filter((rec): rec is ModificationRecommendation => rec !== null);
+      .filter((rec): rec is RawModificationRecommendation => rec !== null);
   }
 
   private applyRegionalGuardrails(
-    recommendations: ModificationRecommendation[],
+    recommendations: RawModificationRecommendation[],
     state?: string | null,
   ): ModificationRecommendation[] {
     const stateKey = String(state || '').toUpperCase();
@@ -338,50 +317,51 @@ Include diverse recommendations across categories.`;
       const baseline = this.findBaselineForCategory(rec.category, rec.title);
       const notes: string[] = [];
 
-      const fallbackCost = baseline ? baseline.cost * stateMultiplier : rec.estimatedCost || 5000;
-      const expectedCost = Math.round(fallbackCost);
-      const minCost = Math.round(expectedCost * 0.7);
-      const maxCost = Math.round(expectedCost * 1.4);
-      const rawCost = Number(rec.estimatedCost);
-      const boundedCost = clamp(
-        Number.isFinite(rawCost) && rawCost > 0 ? Math.round(rawCost) : expectedCost,
-        Math.max(300, minCost),
-        Math.max(500, maxCost),
-      );
-      const costWasClamped = boundedCost !== rawCost;
-      if (costWasClamped) {
-        notes.push(`Cost adjusted to state baseline range for ${stateKey || 'DEFAULT'}.`);
+      const rawMin = Math.min(rec.estimatedCostMin, rec.estimatedCostMax);
+      const rawMax = Math.max(rec.estimatedCostMin, rec.estimatedCostMax);
+      const expectedCost = baseline
+        ? baseline.cost * stateMultiplier
+        : (rawMin + rawMax) / 2 || 5000;
+      const baselineMin = roundCost(expectedCost * 0.7);
+      const baselineMax = roundCost(expectedCost * 1.4);
+      const rawRangeOutsideBaseline = rawMin > baselineMax || rawMax < baselineMin;
+      const boundedMin = rawRangeOutsideBaseline
+        ? baselineMin
+        : roundCost(clamp(rawMin, baselineMin, baselineMax));
+      const boundedMax = rawRangeOutsideBaseline
+        ? baselineMax
+        : roundCost(clamp(rawMax, Math.max(boundedMin, baselineMin), baselineMax));
+      const costRangeWasAdjusted = boundedMin !== roundCost(rawMin) || boundedMax !== roundCost(rawMax);
+      if (costRangeWasAdjusted) {
+        notes.push(`Cost range adjusted to a broad ${stateKey || 'default'} state baseline.`);
       }
-
-      const roiBounds = ROI_BOUNDS[rec.category] ?? { min: 20, max: 100 };
-      const fallbackRoi = baseline?.roi ?? Math.round((roiBounds.min + roiBounds.max) / 2);
-      const rawRoi = Number(rec.roi);
-      const boundedRoi = clamp(
-        Number.isFinite(rawRoi) ? Math.round(rawRoi) : fallbackRoi,
-        roiBounds.min,
-        roiBounds.max,
-      );
-      const roiWasClamped = boundedRoi !== rawRoi;
-      if (roiWasClamped) {
-        notes.push('ROI adjusted to category guardrail range.');
-      }
-
-      if (rec.permitRequired) {
-        notes.push('Permit requirement is informational and should be verified with local jurisdiction.');
-      }
+      notes.push('Actual cost depends on scope, site conditions, labor, materials, and contractor quotes.');
+      notes.push('Permit applicability is unknown until the scope and local authority are verified.');
 
       return {
-        ...rec,
-        estimatedCost: boundedCost,
-        roi: boundedRoi,
-        confidence: costWasClamped || roiWasClamped ? 'LOW' : 'MEDIUM',
+        title: rec.title,
+        category: rec.category,
+        costRange: {
+          min: boundedMin,
+          max: boundedMax,
+          currency: 'USD',
+        },
+        timeline: rec.timeline,
+        description: rec.description,
+        benefits: rec.benefits,
+        whyThisFits: rec.whyThisFits,
+        professionalToConsult: rec.contractorType,
+        permitGuidance: 'VERIFY_WITH_LOCAL_AUTHORITY',
+        confidence: costRangeWasAdjusted ? 'LOW' : 'MEDIUM',
         source: rec.source ?? 'BASELINE_HEURISTIC',
+        assumptions: [
+          `State-level cost factor: ${stateMultiplier.toFixed(2)}.`,
+          'The option has not been scoped, quoted, or checked against local requirements.',
+        ],
         validation: {
           costModel: 'STATE_MULTIPLIER_BASELINE_V1',
-          roiModel: 'CATEGORY_ROI_BOUNDS_V1',
           stateCostMultiplier: stateMultiplier,
-          costWasClamped,
-          roiWasClamped,
+          costRangeWasAdjusted,
           notes,
         },
       };
@@ -391,7 +371,7 @@ Include diverse recommendations across categories.`;
   private findBaselineForCategory(
     category: RecommendationCategory,
     title: string,
-  ): { title: string; cost: number; roi: number } | null {
+  ): { title: string; cost: number } | null {
     const catalog = COMMON_MODIFICATIONS[category] ?? [];
     if (catalog.length === 0) return null;
     const normalizedTitle = title.toLowerCase();
@@ -402,24 +382,21 @@ Include diverse recommendations across categories.`;
     return match ?? catalog[0];
   }
 
-  private getBasicRecommendations(userNeeds: string[], propertyAge: number | null): ModificationRecommendation[] {
-    const recommendations: ModificationRecommendation[] = [];
-
-    // Map user needs to categories
+  private getBasicRecommendations(userNeeds: string[], propertyAge: number | null): RawModificationRecommendation[] {
+    const recommendations: RawModificationRecommendation[] = [];
     const needsLower = userNeeds.map(n => n.toLowerCase()).join(' ');
 
     if (needsLower.includes('accessibility') || needsLower.includes('wheelchair')) {
       recommendations.push({
         title: 'Wheelchair Ramp Installation',
         category: 'ACCESSIBILITY',
-        priority: 'HIGH',
-        estimatedCost: 3500,
-        roi: 50,
+        estimatedCostMin: 2500,
+        estimatedCostMax: 5000,
         timeline: '1-2 weeks',
-        description: 'Install ADA-compliant wheelchair ramp at main entrance',
+        description: 'Install an accessible ramp at the main entrance.',
         benefits: ['Wheelchair access', 'Improved safety', 'Universal design'],
+        whyThisFits: 'Supports the selected accessibility and mobility goal.',
         contractorType: 'Accessibility Specialist',
-        permitRequired: true,
         source: 'BASELINE_HEURISTIC',
       });
     }
@@ -428,14 +405,13 @@ Include diverse recommendations across categories.`;
       recommendations.push({
         title: 'Walk-in Shower Conversion',
         category: 'AGING_IN_PLACE',
-        priority: 'HIGH',
-        estimatedCost: 6000,
-        roi: 65,
+        estimatedCostMin: 4200,
+        estimatedCostMax: 8400,
         timeline: '1-2 weeks',
-        description: 'Convert tub to zero-threshold walk-in shower',
-        benefits: ['Safer bathing', 'Reduced fall risk', 'Modern look'],
+        description: 'Convert a tub to a lower-barrier walk-in shower.',
+        benefits: ['Safer bathing', 'Reduced fall risk', 'Easier access'],
+        whyThisFits: 'Supports the selected aging-in-place goal by reducing bathing barriers.',
         contractorType: 'Bathroom Remodeler',
-        permitRequired: false,
         source: 'BASELINE_HEURISTIC',
       });
     }
@@ -444,14 +420,13 @@ Include diverse recommendations across categories.`;
       recommendations.push({
         title: 'Home Office Conversion',
         category: 'FAMILY',
-        priority: 'MEDIUM',
-        estimatedCost: 8000,
-        roi: 70,
+        estimatedCostMin: 5600,
+        estimatedCostMax: 11200,
         timeline: '2-3 weeks',
-        description: 'Convert spare room to functional home office',
-        benefits: ['Work from home capability', 'Quiet workspace', 'Increased productivity'],
+        description: 'Convert a spare room to a functional home office.',
+        benefits: ['Dedicated workspace', 'Quieter work area', 'Flexible room use'],
+        whyThisFits: 'Supports the selected family-space goal using an existing room.',
         contractorType: 'General Contractor',
-        permitRequired: false,
         source: 'BASELINE_HEURISTIC',
       });
     }
@@ -460,14 +435,13 @@ Include diverse recommendations across categories.`;
       recommendations.push({
         title: 'Kitchen Remodel',
         category: 'RESALE',
-        priority: 'HIGH',
-        estimatedCost: 25000,
-        roi: 80,
+        estimatedCostMin: 17500,
+        estimatedCostMax: 35000,
         timeline: '4-6 weeks',
-        description: 'Update kitchen with modern appliances and finishes',
-        benefits: ['Increased home value', 'Better buyer appeal', 'Modern aesthetics'],
+        description: 'Update kitchen function, appliances, and finishes.',
+        benefits: ['Updated function', 'Buyer appeal', 'Modern aesthetics'],
+        whyThisFits: 'Supports the selected resale goal through a visible, high-use space.',
         contractorType: 'Kitchen Specialist',
-        permitRequired: true,
         source: 'BASELINE_HEURISTIC',
       });
     }
@@ -476,31 +450,28 @@ Include diverse recommendations across categories.`;
       recommendations.push({
         title: 'Smart Thermostat System',
         category: 'ENERGY',
-        priority: 'IMMEDIATE',
-        estimatedCost: 1200,
-        roi: 120,
+        estimatedCostMin: 800,
+        estimatedCostMax: 1700,
         timeline: '1 day',
-        description: 'Install smart HVAC control with learning capabilities',
-        benefits: ['Lower energy bills', 'Remote control', 'Reduced carbon footprint'],
+        description: 'Install a connected HVAC control with scheduling capabilities.',
+        benefits: ['Energy-use controls', 'Remote control', 'Potential comfort improvements'],
+        whyThisFits: 'Supports the selected energy-efficiency goal with a limited-scope control upgrade.',
         contractorType: 'HVAC Technician',
-        permitRequired: false,
         source: 'BASELINE_HEURISTIC',
       });
     }
 
-    // Add universal recommendations
     if (propertyAge !== null && propertyAge > 20) {
       recommendations.push({
         title: 'Energy-Efficient Windows',
         category: 'ENERGY',
-        priority: 'MEDIUM',
-        estimatedCost: 8000,
-        roi: 70,
+        estimatedCostMin: 5600,
+        estimatedCostMax: 11200,
         timeline: '2-3 weeks',
-        description: 'Replace old windows with double-pane energy efficient models',
-        benefits: ['Lower heating costs', 'Noise reduction', 'Increased comfort'],
+        description: 'Evaluate replacing older windows with higher-performance units.',
+        benefits: ['Potential energy savings', 'Noise reduction', 'Improved comfort'],
+        whyThisFits: 'The home age suggests window performance may be worth evaluating.',
         contractorType: 'Window Installer',
-        permitRequired: false,
         source: 'BASELINE_HEURISTIC',
       });
     }
@@ -508,14 +479,13 @@ Include diverse recommendations across categories.`;
     recommendations.push({
       title: 'Smart Security System',
       category: 'SAFETY',
-      priority: 'MEDIUM',
-      estimatedCost: 2500,
-      roi: 85,
+      estimatedCostMin: 1800,
+      estimatedCostMax: 3500,
       timeline: '1 week',
-      description: 'Install comprehensive smart home security system',
-      benefits: ['Enhanced security', 'Remote monitoring', 'Insurance discounts'],
+      description: 'Compare connected security and monitoring options.',
+      benefits: ['Security monitoring', 'Remote visibility', 'Configurable alerts'],
+      whyThisFits: 'Provides a broadly applicable safety option to compare with the selected goals.',
       contractorType: 'Security Installer',
-      permitRequired: false,
       source: 'BASELINE_HEURISTIC',
     });
 

@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, CircleMinus, XCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { ProjectCompletionChecklist, ProjectRecord } from '@/types';
+import type {
+  ProjectCompletionCheck,
+  ProjectCompletionChecklist,
+  ProjectRecord,
+  ProjectRequirementApplicability,
+} from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +41,27 @@ function RatingInput({ id, label, value, onChange }: {
   );
 }
 
+const REQUIREMENT_OPTIONS: Array<{ value: ProjectRequirementApplicability; label: string }> = [
+  { value: 'UNKNOWN', label: 'Not determined' },
+  { value: 'REQUIRED', label: 'Required' },
+  { value: 'NOT_REQUIRED_CONFIRMED', label: 'Not required — confirmed' },
+  { value: 'NOT_APPLICABLE', label: 'Not applicable' },
+  { value: 'WAIVED_WITH_ACKNOWLEDGMENT', label: 'Waived with acknowledgment' },
+];
+
+function CompletionCheckIcon({ check }: { check: ProjectCompletionCheck }) {
+  if (check.status === 'PASSED') {
+    return <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-600 mt-0.5" />;
+  }
+  if (check.status === 'NOT_APPLICABLE') {
+    return <CircleMinus className="h-5 w-5 flex-shrink-0 text-slate-500 mt-0.5" />;
+  }
+  if (check.status === 'WAIVED' || check.status === 'NOT_EVALUATED') {
+    return <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600 mt-0.5" />;
+  }
+  return <XCircle className="h-5 w-5 flex-shrink-0 text-rose-500 mt-0.5" />;
+}
+
 export default function CompletionPage() {
   const params = useParams<{ id: string; projectId: string }>();
   const { id: propertyId, projectId } = params;
@@ -46,7 +72,14 @@ export default function CompletionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [savingRequirements, setSavingRequirements] = useState(false);
   const [proofDocuments, setProofDocuments] = useState<ProjectProof[]>([]);
+  const [requirements, setRequirements] = useState({
+    permitApplicability: 'UNKNOWN' as ProjectRequirementApplicability,
+    permitApplicabilityBasis: '',
+    hoaApplicability: 'UNKNOWN' as ProjectRequirementApplicability,
+    hoaApplicabilityBasis: '',
+  });
   const [form, setForm] = useState({
     actualEndDate: new Date().toISOString().split('T')[0],
     warrantyPeriodMonths: '',
@@ -83,6 +116,12 @@ export default function CompletionPage() {
       ]);
       setChecklist(checklistData);
       setProject(projectData);
+      setRequirements({
+        permitApplicability: projectData.permitApplicability,
+        permitApplicabilityBasis: projectData.permitApplicabilityBasis ?? '',
+        hoaApplicability: projectData.hoaApplicability,
+        hoaApplicabilityBasis: projectData.hoaApplicabilityBasis ?? '',
+      });
       setForm(current => ({
         ...current,
         actualCost: current.actualCost || String((projectData.currentContractAmountCents ?? 0) / 100),
@@ -100,6 +139,35 @@ export default function CompletionPage() {
   const allPassed = checklist?.allPassed ?? false;
   const verifiedSuccess = form.outcomeStatus === 'VERIFIED_SUCCESS';
   const ratingsComplete = project?.fulfillmentMode === 'DIY' || (form.ratingQuality && form.ratingTimeline && form.ratingComms && form.ratingBudget);
+
+  async function saveRequirementDecisions() {
+    const missingBasis =
+      (requirements.permitApplicability !== 'UNKNOWN' && !requirements.permitApplicabilityBasis.trim())
+      || (requirements.hoaApplicability !== 'UNKNOWN' && !requirements.hoaApplicabilityBasis.trim());
+    if (missingBasis) {
+      setError('Add a source or rationale for each permit and HOA applicability decision.');
+      return;
+    }
+    setSavingRequirements(true);
+    setError(null);
+    try {
+      await api.updateProject(propertyId, projectId, {
+        permitApplicability: requirements.permitApplicability,
+        permitApplicabilityBasis: requirements.permitApplicability === 'UNKNOWN'
+          ? null
+          : requirements.permitApplicabilityBasis.trim(),
+        hoaApplicability: requirements.hoaApplicability,
+        hoaApplicabilityBasis: requirements.hoaApplicability === 'UNKNOWN'
+          ? null
+          : requirements.hoaApplicabilityBasis.trim(),
+      });
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to save requirement decisions');
+    } finally {
+      setSavingRequirements(false);
+    }
+  }
 
   async function confirm(e: React.FormEvent) {
     e.preventDefault();
@@ -161,6 +229,64 @@ export default function CompletionPage() {
       {error && <ErrorBanner msg={error} />}
       {loading ? <Spinner /> : null}
 
+      {project && (
+        <MobileCard className="space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">Permit and HOA applicability</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Record what applies and cite the authority, association, document, or rationale. An unknown decision cannot pass verified completion.
+            </p>
+          </div>
+          {([
+            ['permitApplicability', 'permitApplicabilityBasis', 'Permit'],
+            ['hoaApplicability', 'hoaApplicabilityBasis', 'HOA'],
+          ] as const).map(([field, basisField, label]) => (
+            <div key={field} className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor={field}>{label} applicability</Label>
+                <select
+                  id={field}
+                  value={requirements[field]}
+                  onChange={event => setRequirements(current => ({
+                    ...current,
+                    [field]: event.target.value as ProjectRequirementApplicability,
+                    ...(event.target.value === 'UNKNOWN' ? { [basisField]: '' } : {}),
+                  }))}
+                  className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {REQUIREMENT_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={basisField}>Source or rationale</Label>
+                <Input
+                  id={basisField}
+                  value={requirements[basisField]}
+                  disabled={requirements[field] === 'UNKNOWN'}
+                  onChange={event => setRequirements(current => ({
+                    ...current,
+                    [basisField]: event.target.value,
+                  }))}
+                  placeholder={label === 'Permit'
+                    ? 'Authority guidance, permit record, or cited determination'
+                    : 'Association rule, approval record, or no-HOA rationale'}
+                />
+              </div>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={savingRequirements}
+            onClick={saveRequirementDecisions}
+          >
+            {savingRequirements ? 'Saving…' : 'Save requirement decisions'}
+          </Button>
+        </MobileCard>
+      )}
+
       {/* Checklist */}
       {checklist && (
         <MobileCard className="space-y-3">
@@ -168,15 +294,16 @@ export default function CompletionPage() {
           <div className="space-y-2">
             {checklist.checks.map((check, i) => (
               <div key={i} className="flex items-start gap-2.5">
-                {check.passed ? (
-                  <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-600 mt-0.5" />
-                ) : (
-                  <XCircle className="h-5 w-5 flex-shrink-0 text-rose-500 mt-0.5" />
-                )}
+                <CompletionCheckIcon check={check} />
                 <div className="space-y-0.5">
-                  <p className={`text-sm font-medium ${check.passed ? 'text-slate-800' : 'text-slate-700'}`}>
+                  <p className="text-sm font-medium text-slate-800">
                     {check.label}
                   </p>
+                  {check.status !== 'PASSED' && (
+                    <p className="text-xs font-medium text-slate-500">
+                      {check.status.replace(/_/g, ' ').toLowerCase()}
+                    </p>
+                  )}
                   {!check.passed && check.blockers.length > 0 && (
                     <ul className="text-xs text-rose-700 list-disc list-inside">
                       {check.blockers.map((b, bi) => <li key={bi}>{b}</li>)}

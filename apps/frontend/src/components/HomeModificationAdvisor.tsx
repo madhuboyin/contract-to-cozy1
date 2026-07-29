@@ -1,18 +1,14 @@
 // apps/frontend/src/components/HomeModificationAdvisor.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
-  Home, 
-  TrendingUp, 
-  DollarSign, 
   Clock,
-  CheckCircle,
   Loader2,
   Lightbulb,
   AlertCircle
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -28,22 +24,20 @@ import {
 interface ModificationRecommendation {
   title: string;
   category: 'ACCESSIBILITY' | 'AGING_IN_PLACE' | 'FAMILY' | 'RESALE' | 'ENERGY' | 'SAFETY';
-  priority: 'IMMEDIATE' | 'HIGH' | 'MEDIUM' | 'LOW';
-  estimatedCost: number;
-  roi: number;
+  costRange: { min: number; max: number; currency: 'USD' };
   timeline: string;
   description: string;
   benefits: string[];
-  contractorType: string;
-  permitRequired: boolean;
-  source?: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
+  whyThisFits: string;
+  professionalToConsult: string;
+  permitGuidance: 'VERIFY_WITH_LOCAL_AUTHORITY';
+  source: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
   confidence?: 'LOW' | 'MEDIUM';
-  validation?: {
+  assumptions: string[];
+  validation: {
     costModel: 'STATE_MULTIPLIER_BASELINE_V1';
-    roiModel: 'CATEGORY_ROI_BOUNDS_V1';
     stateCostMultiplier: number;
-    costWasClamped: boolean;
-    roiWasClamped: boolean;
+    costRangeWasAdjusted: boolean;
     notes: string[];
   };
 }
@@ -58,15 +52,11 @@ interface ModificationReport {
     outdoor: { status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN'; reasonCodes: string[]; missingFactKeys: string[] };
   };
   recommendations: ModificationRecommendation[];
-  totalEstimatedCost: number;
-  averageROI: number;
-  quickWins: ModificationRecommendation[];
-  longTermProjects: ModificationRecommendation[];
   meta?: {
     classification: 'EDUCATIONAL_ESTIMATE';
     regionalCostModel: 'STATE_MULTIPLIER_BASELINE_V1';
-    roiModel: 'CATEGORY_ROI_BOUNDS_V1';
     financialPlanningSafe: false;
+    selectionRequired: true;
     disclaimer: string;
   };
   generatedAt: string;
@@ -129,16 +119,6 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'IMMEDIATE': return 'bg-red-100 text-red-800 border-red-300';
-      case 'HIGH': return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'LOW': return 'bg-green-100 text-green-800 border-green-300';
-      default: return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
-  };
-
   const getCategoryIcon = (category: string) => {
     const icons: Record<string, string> = {
       'ACCESSIBILITY': '♿',
@@ -155,7 +135,7 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
     return (
       <ScenarioInputCard
         title="Home Improvement Goals"
-        subtitle="Choose goals to generate a prioritized modification plan."
+        subtitle="Choose goals to explore independent upgrade options."
         badge={<StatusChip tone="info">Scenario input</StatusChip>}
         actions={
           <ActionPriorityRow
@@ -211,19 +191,19 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
   return (
     <div className="space-y-6">
       <ResultHeroCard
-        title="Modification Plan"
-        value={`${report.recommendations.length} projects`}
-        status={<StatusChip tone="info">{report.averageROI}% avg ROI</StatusChip>}
-        summary="AI-ranked upgrades based on your goals, timeline, and property profile."
+        title="Explore Upgrade Options"
+        value={`${report.recommendations.length} options`}
+        status={<StatusChip tone="info">Educational options</StatusChip>}
+        summary="Independent ideas matched to your goals and known property context. Select an option before treating it as a renovation plan."
       />
 
       <ReadOnlySummaryBlock
-        title="Plan Snapshot"
+        title="Exploration Snapshot"
         columns={2}
         items={[
-          { label: 'Estimated total cost', value: `$${report.totalEstimatedCost.toLocaleString()}`, emphasize: true },
-          { label: 'Quick wins', value: report.quickWins.length },
-          { label: 'Long-term projects', value: report.longTermProjects.length },
+          { label: 'Goals considered', value: report.userNeeds.length },
+          { label: 'Property age', value: report.propertyAge === null ? 'Unknown' : `${report.propertyAge} years` },
+          { label: 'Options to compare', value: report.recommendations.length },
           { label: 'Generated', value: new Date(report.generatedAt).toLocaleDateString() },
         ]}
       />
@@ -242,94 +222,17 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
             <p className="text-sm font-semibold text-amber-900">Educational Estimate</p>
             <p className="mt-1 text-sm text-amber-800">{report.meta.disclaimer}</p>
             <p className="mt-2 text-xs text-amber-700">
-              Models: {report.meta.regionalCostModel} + {report.meta.roiModel}
+              Cost model: {report.meta.regionalCostModel}
             </p>
           </CardContent>
         </Card>
       ) : null}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-700">Total Projects</p>
-                <p className="text-2xl font-bold text-blue-900">{report.recommendations.length}</p>
-              </div>
-              <Home className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Est. Total Cost</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  ${report.totalEstimatedCost.toLocaleString()}
-                </p>
-              </div>
-              <DollarSign className="w-8 h-8 text-gray-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700">Avg. ROI</p>
-                <p className="text-2xl font-bold text-green-900">{report.averageROI}%</p>
-              </div>
-              <TrendingUp className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Wins */}
-      {report.quickWins.length > 0 && (
-        <div>
-          <h3 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            Quick Wins (High ROI, Low Cost)
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {report.quickWins.map((rec, index) => (
-              <Card key={index} className="border-green-200 bg-green-50">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 className="font-bold text-green-900">{rec.title}</h4>
-                      <p className="text-sm text-green-700 mt-1">{rec.description}</p>
-                    </div>
-                    <span className="text-2xl">{getCategoryIcon(rec.category)}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                    <div>
-                      <p className="text-green-600">Cost</p>
-                      <p className="font-bold text-green-900">${rec.estimatedCost.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-green-600">ROI</p>
-                      <p className="font-bold text-green-900">{rec.roi}%</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* All Recommendations */}
       <div>
-        <h3 className="text-xl font-bold text-gray-900 mb-3">All Recommendations</h3>
+        <h3 className="mb-3 text-xl font-bold text-gray-900">Options to Compare</h3>
         <div className="space-y-4">
           {report.recommendations.map((rec, index) => (
-            <Card key={index} className={`border-2 ${getPriorityColor(rec.priority)}`}>
+            <Card key={index} className="border border-slate-200">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
@@ -351,32 +254,35 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
                       </div>
                     </div>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${getPriorityColor(rec.priority)}`}>
-                    {rec.priority}
-                  </span>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 p-3">
+                  <p className="text-xs font-semibold text-blue-800">Why this may fit</p>
+                  <p className="mt-1 text-sm text-blue-900">{rec.whyThisFits}</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 mb-3 sm:grid-cols-3">
                   <div>
-                    <p className="text-xs text-gray-600">Estimated Cost</p>
-                    <p className="font-bold text-gray-900">${rec.estimatedCost.toLocaleString()}</p>
+                    <p className="text-xs text-gray-600">Broad cost range</p>
+                    <p className="font-bold text-gray-900">
+                      ${rec.costRange.min.toLocaleString()}–${rec.costRange.max.toLocaleString()}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600">ROI</p>
-                    <p className="font-bold text-gray-900">{rec.roi}%</p>
+                    <p className="text-xs text-gray-600">Timeline estimate</p>
+                    <p className="flex items-center gap-1 font-bold text-gray-900">
+                      <Clock className="h-3.5 w-3.5" />
+                      {rec.timeline}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600">Timeline</p>
-                    <p className="font-bold text-gray-900">{rec.timeline}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600">Contractor</p>
-                    <p className="font-bold text-gray-900">{rec.contractorType}</p>
+                    <p className="text-xs text-gray-600">Professional to consult</p>
+                    <p className="font-bold text-gray-900">{rec.professionalToConsult}</p>
                   </div>
                 </div>
 
                 <div className="mb-3">
-                  <p className="text-xs font-semibold text-gray-600 mb-2">Benefits:</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">Potential benefits to evaluate:</p>
                   <div className="flex flex-wrap gap-2">
                     {rec.benefits.map((benefit, i) => (
                       <span
@@ -389,20 +295,18 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
                   </div>
                 </div>
 
-                {rec.permitRequired && (
-                  <div className="flex items-center gap-2 text-sm text-orange-700">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Building permit required</span>
-                  </div>
-                )}
+                <div className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Permit applicability is unknown. Verify the defined scope with the local authority before work starts.</span>
+                </div>
 
-                {rec.validation?.notes?.length ? (
+                {rec.assumptions.length > 0 || rec.validation.notes.length > 0 ? (
                   <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                    <p className="text-xs font-semibold text-slate-700">Validation notes</p>
+                    <p className="text-xs font-semibold text-slate-700">Assumptions and evidence limits</p>
                     <ul className="mt-1 space-y-0.5">
-                      {rec.validation.notes.map((note, noteIndex) => (
+                      {[...rec.assumptions, ...rec.validation.notes].map((note, noteIndex) => (
                         <li key={noteIndex} className="text-xs text-slate-600">
-                          {note}
+                          • {note}
                         </li>
                       ))}
                     </ul>
@@ -414,23 +318,6 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
         </div>
       </div>
 
-      {/* Long-term Projects */}
-      {report.longTermProjects.length > 0 && (
-        <Card className="border-purple-200 bg-purple-50">
-          <CardHeader>
-            <CardTitle className="text-lg">
-              Long-Term Projects ({report.longTermProjects.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-purple-800">
-              These larger projects require more planning and investment but offer significant value.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Footer */}
       <Card className="bg-gray-50">
         <CardContent className="p-4">
           <div className="flex justify-between items-center">
@@ -438,7 +325,7 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
               Generated on {new Date(report.generatedAt).toLocaleString()}
             </p>
             <Button variant="outline" onClick={() => setReport(null)}>
-              Start Over
+              Change goals
             </Button>
           </div>
         </CardContent>

@@ -46,6 +46,40 @@ const inventoryItemCategory = z.enum([
   'SMART_HOME', 'FURNITURE', 'ELECTRONICS', 'OTHER', 'INTERIOR', 'STRUCTURAL',
   'EXTERIOR', 'SITE',
 ]);
+const requirementApplicability = z.enum([
+  'UNKNOWN', 'REQUIRED', 'NOT_REQUIRED_CONFIRMED', 'NOT_APPLICABLE',
+  'WAIVED_WITH_ACKNOWLEDGMENT',
+]);
+
+function requireApplicabilityBasis(
+  value: {
+    permitApplicability?: z.infer<typeof requirementApplicability>;
+    permitApplicabilityBasis?: string | null;
+    hoaApplicability?: z.infer<typeof requirementApplicability>;
+    hoaApplicabilityBasis?: string | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  for (const [field, basisField, label] of [
+    ['permitApplicability', 'permitApplicabilityBasis', 'Permit'],
+    ['hoaApplicability', 'hoaApplicabilityBasis', 'HOA'],
+  ] as const) {
+    if (value[field] === 'UNKNOWN' && value[basisField]?.trim()) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `${label} applicability must be decided before adding a basis.`,
+      });
+    }
+    if (value[field] && value[field] !== 'UNKNOWN' && !value[basisField]?.trim()) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [basisField],
+        message: `${label} applicability requires a source or rationale.`,
+      });
+    }
+  }
+}
 
 // ── Project Record ────────────────────────────────────────────────────────────
 
@@ -72,6 +106,10 @@ export const CreateProjectSchema = z.object({
   sourceEntityType: z.string().trim().min(1).max(160).optional(),
   sourceEntityId: z.string().trim().min(1).max(160).optional(),
   sourceJourneyId: z.string().trim().min(1).max(160).optional(),
+  permitApplicability: requirementApplicability.default('UNKNOWN'),
+  permitApplicabilityBasis: z.string().trim().min(1).max(2000).optional(),
+  hoaApplicability: requirementApplicability.default('UNKNOWN'),
+  hoaApplicabilityBasis: z.string().trim().min(1).max(2000).optional(),
   providerRankingRationale: z.string().min(1).max(1000).optional(),
   commercialDisclosure: CommercialDisclosureSchema.optional(),
   contractAmountCents: z.number().int().min(0),
@@ -90,6 +128,7 @@ export const CreateProjectSchema = z.object({
     position: z.number().int().min(0),
   })).optional(),
 }).superRefine((value, ctx) => {
+  requireApplicabilityBasis(value, ctx);
   if (value.fulfillmentMode === 'PROVIDER' && !value.contractorName) {
     ctx.addIssue({
       code: 'custom',
@@ -140,7 +179,11 @@ export const UpdateProjectSchema = z.object({
   serviceCategory: z.string().optional(),
   contractDocumentKey: z.string().optional(),
   status: z.enum(['PLANNING', 'IN_PROGRESS', 'PAUSED']).optional(),
-});
+  permitApplicability: requirementApplicability.optional(),
+  permitApplicabilityBasis: z.string().trim().min(1).max(2000).nullable().optional(),
+  hoaApplicability: requirementApplicability.optional(),
+  hoaApplicabilityBasis: z.string().trim().min(1).max(2000).nullable().optional(),
+}).superRefine(requireApplicabilityBasis);
 
 // ── Milestones ────────────────────────────────────────────────────────────────
 

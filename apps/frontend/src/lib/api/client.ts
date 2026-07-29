@@ -5482,6 +5482,10 @@ class APIClient {
     sourceEntityType?: string;
     sourceEntityId?: string;
     sourceJourneyId?: string;
+    permitApplicability?: import('@/types').ProjectRequirementApplicability;
+    permitApplicabilityBasis?: string;
+    hoaApplicability?: import('@/types').ProjectRequirementApplicability;
+    hoaApplicabilityBasis?: string;
     providerRankingRationale?: string;
     commercialDisclosure?: {
       involvesCommercialAction: boolean;

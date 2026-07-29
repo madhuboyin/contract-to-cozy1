@@ -5540,6 +5540,16 @@ export type HoaApprovalStatus =
   | 'NOT_SUBMITTED' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED'
   | 'APPROVED_WITH_CONDITIONS' | 'DENIED' | 'EXPIRED';
 
+export type HoaDecisionStatus =
+  | 'APPROVED' | 'APPROVED_WITH_CONDITIONS' | 'DENIED' | 'EXPIRED';
+
+export type HoaDecisionTruthLayer =
+  | 'DOCUMENTED' | 'SOURCE_OBSERVED' | 'ASSOCIATION_CONFIRMED';
+
+export type HoaDecisionSourceType =
+  | 'ASSOCIATION_DOCUMENT' | 'ASSOCIATION_PORTAL' | 'ASSOCIATION_EMAIL'
+  | 'ASSOCIATION_REPRESENTATIVE' | 'OTHER';
+
 export interface HoaAssociation {
   id: string;
   propertyId: string;
@@ -5563,9 +5573,19 @@ export interface HoaApprovalRecord {
   hoaAssociationId: string;
   workType: HoaWorkType;
   description?: string;
-  status: HoaApprovalStatus;
+  reportedStatus: HoaApprovalStatus;
+  reportedAt?: string;
+  reportedByUserId?: string;
+  decisionStatus?: HoaDecisionStatus;
+  decisionTruthLayer?: HoaDecisionTruthLayer;
+  decisionSourceType?: HoaDecisionSourceType;
+  decisionSourceReference?: string;
+  decisionEvidenceDocumentId?: string;
+  associationReferenceNumber?: string;
+  decisionObservedAt?: string;
+  decisionEffectiveDate?: string;
+  decisionRecordedByUserId?: string;
   submittedDate?: string;
-  decisionDate?: string;
   approvalConditions?: string;
   denialReason?: string;
   expirationDate?: string;
@@ -5592,28 +5612,46 @@ export interface UpsertHoaAssociationPayload {
 export interface CreateHoaApprovalRecordPayload {
   workType: HoaWorkType;
   description?: string;
-  status?: HoaApprovalStatus;
+  reportedStatus?: HoaApprovalStatus;
   submittedDate?: string;
   documentIds?: string[];
   notes?: string;
+  approvalConditions?: string;
+  denialReason?: string;
+  expirationDate?: string;
   renovationAdvisorSessionId?: string;
   sourceActionId?: string;
   sourceEntityType?: string;
   sourceEntityId?: string;
   sourceJourneyId?: string;
+  decisionStatus?: HoaDecisionStatus | null;
+  decisionTruthLayer?: HoaDecisionTruthLayer | null;
+  decisionSourceType?: HoaDecisionSourceType | null;
+  decisionSourceReference?: string | null;
+  decisionEvidenceDocumentId?: string | null;
+  associationReferenceNumber?: string | null;
+  decisionObservedAt?: string | null;
+  decisionEffectiveDate?: string | null;
 }
 
 export interface UpdateHoaApprovalRecordPayload {
   workType?: HoaWorkType;
   description?: string;
-  status?: HoaApprovalStatus;
+  reportedStatus?: HoaApprovalStatus;
   submittedDate?: string;
-  decisionDate?: string;
   approvalConditions?: string;
   denialReason?: string;
   expirationDate?: string;
   documentIds?: string[];
   notes?: string;
+  decisionStatus?: HoaDecisionStatus | null;
+  decisionTruthLayer?: HoaDecisionTruthLayer | null;
+  decisionSourceType?: HoaDecisionSourceType | null;
+  decisionSourceReference?: string | null;
+  decisionEvidenceDocumentId?: string | null;
+  associationReferenceNumber?: string | null;
+  decisionObservedAt?: string | null;
+  decisionEffectiveDate?: string | null;
 }
 
 export interface ReportHoaViolationPayload {
@@ -6014,6 +6052,10 @@ export interface ProjectRecord {
   fundingMode: 'SELF_PAID' | 'COVERED' | 'MIXED';
   complexity: 'MINOR' | 'MAJOR';
   recommendationVersion?: string | null;
+  permitApplicability: ProjectRequirementApplicability;
+  permitApplicabilityBasis?: string | null;
+  hoaApplicability: ProjectRequirementApplicability;
+  hoaApplicabilityBasis?: string | null;
   providerRankingRationale?: string | null;
   commercialDisclosure?: Record<string, unknown> | null;
   credentialCheck?: Record<string, unknown> | null;
@@ -6066,6 +6108,7 @@ export interface ProjectRecord {
 export interface ProjectCompletionCheck {
   key: string;
   label: string;
+  status: 'PASSED' | 'FAILED' | 'NOT_EVALUATED' | 'NOT_APPLICABLE' | 'WAIVED';
   passed: boolean;
   blockers: string[];
 }
@@ -6074,6 +6117,13 @@ export interface ProjectCompletionChecklist {
   checks: ProjectCompletionCheck[];
   allPassed: boolean;
 }
+
+export type ProjectRequirementApplicability =
+  | 'UNKNOWN'
+  | 'REQUIRED'
+  | 'NOT_REQUIRED_CONFIRMED'
+  | 'NOT_APPLICABLE'
+  | 'WAIVED_WITH_ACKNOWLEDGMENT';
 
 // ============================================================================
 // NEIGHBOURHOOD TRUST NETWORK

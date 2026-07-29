@@ -3628,6 +3628,7 @@ model Document {
   propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[] @relation("PropertyTaxAppealFilingConfirmation")
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
   quoteComparisonExtractions QuoteComparisonExtraction[]
+  hoaApprovalDecisionEvidence HoaApprovalRecord[]        @relation("HoaApprovalDecisionEvidence")
 
   homeSavingsAccountId     String?
   homeSavingsOpportunityId String?
@@ -15250,6 +15251,27 @@ enum HoaApprovalStatus {
   EXPIRED
 }
 
+enum HoaDecisionStatus {
+  APPROVED
+  APPROVED_WITH_CONDITIONS
+  DENIED
+  EXPIRED
+}
+
+enum HoaDecisionTruthLayer {
+  DOCUMENTED
+  SOURCE_OBSERVED
+  ASSOCIATION_CONFIRMED
+}
+
+enum HoaDecisionSourceType {
+  ASSOCIATION_DOCUMENT
+  ASSOCIATION_PORTAL
+  ASSOCIATION_EMAIL
+  ASSOCIATION_REPRESENTATIVE
+  OTHER
+}
+
 // One HOA/community association per property.
 model HoaAssociation {
   id                String            @id @default(uuid())
@@ -15283,12 +15305,25 @@ model HoaApprovalRecord {
   propertyId       String
   hoaAssociationId String
 
-  workType    HoaWorkType
-  description String?
-  status      HoaApprovalStatus @default(NOT_SUBMITTED)
+  workType      HoaWorkType
+  description   String?
+  reportedStatus HoaApprovalStatus @default(NOT_SUBMITTED)
+  reportedAt     DateTime?
+  reportedByUserId String?
+
+  // A reported status is homeowner/contractor-entered progress. Decision
+  // truth is stored separately and must carry its evidence/source layer.
+  decisionStatus             HoaDecisionStatus?
+  decisionTruthLayer         HoaDecisionTruthLayer?
+  decisionSourceType         HoaDecisionSourceType?
+  decisionSourceReference    String?
+  decisionEvidenceDocumentId String?
+  associationReferenceNumber String?
+  decisionObservedAt         DateTime?
+  decisionRecordedByUserId   String?
 
   submittedDate      DateTime?
-  decisionDate       DateTime?
+  decisionEffectiveDate DateTime?
   approvalConditions String?
   denialReason       String?
   expirationDate     DateTime?
@@ -15309,9 +15344,12 @@ model HoaApprovalRecord {
   property                 Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   hoaAssociation           HoaAssociation                @relation(fields: [hoaAssociationId], references: [id], onDelete: Cascade)
   renovationAdvisorSession HomeRenovationAdvisorSession? @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
+  decisionEvidenceDocument Document?                      @relation("HoaApprovalDecisionEvidence", fields: [decisionEvidenceDocumentId], references: [id], onDelete: SetNull)
 
   @@index([propertyId])
-  @@index([hoaAssociationId, status])
+  @@index([hoaAssociationId, reportedStatus])
+  @@index([hoaAssociationId, decisionStatus, decisionTruthLayer])
+  @@index([decisionEvidenceDocumentId])
   @@index([sourceEntityType, sourceEntityId])
   @@map("hoa_approval_records")
 }
@@ -15749,6 +15787,14 @@ enum ProjectWriteBackAction {
   RESOLVED
 }
 
+enum ProjectRequirementApplicability {
+  UNKNOWN
+  REQUIRED
+  NOT_REQUIRED_CONFIRMED
+  NOT_APPLICABLE
+  WAIVED_WITH_ACKNOWLEDGMENT
+}
+
 // ============================================================================
 // LIVE PROJECT EXECUTION TRACKER — MODELS
 // ============================================================================
@@ -15781,6 +15827,12 @@ model ProjectRecord {
   sourceEntityType      String?
   sourceEntityId        String?
   sourceJourneyId       String?
+
+  // Explicit completion applicability. UNKNOWN never passes a completion gate.
+  permitApplicability      ProjectRequirementApplicability @default(UNKNOWN)
+  permitApplicabilityBasis String?
+  hoaApplicability         ProjectRequirementApplicability @default(UNKNOWN)
+  hoaApplicabilityBasis    String?
 
   // Provider-selection integrity captured before a guided commercial handoff.
   providerRankingRationale String?

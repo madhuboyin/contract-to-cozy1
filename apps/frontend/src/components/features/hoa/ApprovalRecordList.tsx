@@ -1,7 +1,13 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, XCircle, Clock, Plus, Trash2 } from 'lucide-react';
-import type { HoaApprovalRecord, HoaApprovalStatus, HoaWorkType, CreateHoaApprovalRecordPayload, UpdateHoaApprovalRecordPayload } from '@/types';
+import type {
+  HoaApprovalRecord,
+  HoaApprovalStatus,
+  HoaWorkType,
+  CreateHoaApprovalRecordPayload,
+  UpdateHoaApprovalRecordPayload,
+} from '@/types';
 import { APPROVAL_STATUS_LABELS, APPROVAL_STATUS_COLOR, WORK_TYPE_LABELS, formatDate } from './HoaUtils';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 
@@ -15,10 +21,22 @@ interface Props {
 
 const WORK_TYPES = Object.keys(WORK_TYPE_LABELS) as HoaWorkType[];
 
-function StatusIcon({ status }: { status: HoaApprovalStatus }) {
-  if (status === 'APPROVED' || status === 'APPROVED_WITH_CONDITIONS') return <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
-  if (status === 'DENIED') return <XCircle className="h-5 w-5 text-red-500" />;
-  if (status === 'SUBMITTED' || status === 'UNDER_REVIEW') return <Clock className="h-5 w-5 text-blue-500" />;
+function StatusIcon({ record }: { record: HoaApprovalRecord }) {
+  const isAssociationSourced =
+    record.decisionTruthLayer === 'SOURCE_OBSERVED'
+    || record.decisionTruthLayer === 'ASSOCIATION_CONFIRMED';
+  if (
+    isAssociationSourced
+    && (record.decisionStatus === 'APPROVED' || record.decisionStatus === 'APPROVED_WITH_CONDITIONS')
+  ) {
+    return <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
+  }
+  if (isAssociationSourced && record.decisionStatus === 'DENIED') {
+    return <XCircle className="h-5 w-5 text-red-500" />;
+  }
+  if (record.reportedStatus === 'SUBMITTED' || record.reportedStatus === 'UNDER_REVIEW') {
+    return <Clock className="h-5 w-5 text-blue-500" />;
+  }
   return <div className="h-5 w-5 rounded-full border-2 border-neutral-300" />;
 }
 
@@ -49,11 +67,9 @@ export default function ApprovalRecordList({ propertyId, records, onUpdate, onAd
   async function handleStatusChange(record: HoaApprovalRecord, status: HoaApprovalStatus) {
     setSaving(record.id);
     try {
-      const isDecision = status === 'APPROVED' || status === 'APPROVED_WITH_CONDITIONS' || status === 'DENIED';
       await onUpdate(record.id, {
-        status,
+        reportedStatus: status,
         ...(status === 'SUBMITTED' ? { submittedDate: new Date().toISOString() } : {}),
-        ...(isDecision ? { decisionDate: new Date().toISOString() } : {}),
       });
     } finally {
       setSaving(null);
@@ -89,7 +105,7 @@ export default function ApprovalRecordList({ propertyId, records, onUpdate, onAd
 
           <div className="relative z-10 flex items-start gap-3">
             <div className="mt-0.5 shrink-0">
-              <StatusIcon status={record.status} />
+              <StatusIcon record={record} />
             </div>
 
             <div
@@ -103,9 +119,21 @@ export default function ApprovalRecordList({ propertyId, records, onUpdate, onAd
                     <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-muted))] truncate">{record.description}</p>
                   )}
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${APPROVAL_STATUS_COLOR[record.status]}`}>
-                  {APPROVAL_STATUS_LABELS[record.status]}
-                </span>
+                <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                    Reported: {APPROVAL_STATUS_LABELS[record.reportedStatus]}
+                  </span>
+                  {record.decisionStatus && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      record.decisionTruthLayer === 'DOCUMENTED'
+                        ? 'bg-amber-50 text-amber-700'
+                        : APPROVAL_STATUS_COLOR[record.decisionStatus]
+                    }`}>
+                      {record.decisionTruthLayer === 'DOCUMENTED' ? 'Documented' : 'Association'}:{' '}
+                      {APPROVAL_STATUS_LABELS[record.decisionStatus]}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {record.submittedDate && (
@@ -116,9 +144,23 @@ export default function ApprovalRecordList({ propertyId, records, onUpdate, onAd
 
               {expandedId === record.id && (
                 <div className="mt-3 space-y-2 border-t pt-3">
-                  {record.decisionDate && (
+                  {record.decisionEffectiveDate && (
                     <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                      Decided: {formatDate(record.decisionDate)}
+                      Association decision date: {formatDate(record.decisionEffectiveDate)}
+                    </p>
+                  )}
+                  {record.decisionTruthLayer && (
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      Decision source: {record.decisionTruthLayer === 'DOCUMENTED'
+                        ? 'Document uploaded; association source not independently confirmed'
+                        : record.decisionTruthLayer === 'SOURCE_OBSERVED'
+                          ? 'Observed from an association source'
+                          : 'Confirmed by the association'}
+                    </p>
+                  )}
+                  {record.associationReferenceNumber && (
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      Association reference: {record.associationReferenceNumber}
                     </p>
                   )}
                   {record.approvalConditions && (
@@ -133,7 +175,7 @@ export default function ApprovalRecordList({ propertyId, records, onUpdate, onAd
 
                   <div className="flex flex-wrap gap-1.5">
                     {(['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'APPROVED_WITH_CONDITIONS', 'DENIED'] as HoaApprovalStatus[])
-                      .filter((s) => s !== record.status)
+                      .filter((s) => s !== record.reportedStatus)
                       .map((s) => (
                         <button
                           key={s}
@@ -141,7 +183,7 @@ export default function ApprovalRecordList({ propertyId, records, onUpdate, onAd
                           onClick={(e) => { e.stopPropagation(); handleStatusChange(record, s); }}
                           className="rounded-xl border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 disabled:opacity-50"
                         >
-                          {APPROVAL_STATUS_LABELS[s]}
+                          Report {APPROVAL_STATUS_LABELS[s]}
                         </button>
                       ))}
                     <button

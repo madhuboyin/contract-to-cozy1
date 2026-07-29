@@ -89,7 +89,11 @@ export async function createApprovalRecord(req: Request, res: Response, next: Ne
       work,
       ['ownerProjectExecution'],
     );
-    const record = await hoaComplianceService.createApprovalRecord(req.params.propertyId, req.body);
+    const record = await hoaComplianceService.createApprovalRecord(
+      req.params.propertyId,
+      req.user!.userId,
+      req.body,
+    );
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
       req.user!.userId,
@@ -126,6 +130,7 @@ export async function updateApprovalRecord(req: Request, res: Response, next: Ne
     const record = await hoaComplianceService.updateApprovalRecord(
       req.params.id,
       req.params.propertyId,
+      req.user!.userId,
       req.body,
     );
     res.json({ success: true, data: { record } });

@@ -12,7 +12,28 @@ const hoaApprovalStatus = z.enum([
   'NOT_SUBMITTED', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED',
   'APPROVED_WITH_CONDITIONS', 'DENIED', 'EXPIRED',
 ]);
+const hoaDecisionStatus = z.enum([
+  'APPROVED', 'APPROVED_WITH_CONDITIONS', 'DENIED', 'EXPIRED',
+]);
+const hoaDecisionTruthLayer = z.enum([
+  'DOCUMENTED', 'SOURCE_OBSERVED', 'ASSOCIATION_CONFIRMED',
+]);
+const hoaDecisionSourceType = z.enum([
+  'ASSOCIATION_DOCUMENT', 'ASSOCIATION_PORTAL', 'ASSOCIATION_EMAIL',
+  'ASSOCIATION_REPRESENTATIVE', 'OTHER',
+]);
 const lineageId = z.string().trim().min(1).max(160).optional();
+
+const decisionTruthFields = {
+  decisionStatus: hoaDecisionStatus.nullable().optional(),
+  decisionTruthLayer: hoaDecisionTruthLayer.nullable().optional(),
+  decisionSourceType: hoaDecisionSourceType.nullable().optional(),
+  decisionSourceReference: z.string().trim().min(1).max(500).nullable().optional(),
+  decisionEvidenceDocumentId: z.string().trim().min(1).nullable().optional(),
+  associationReferenceNumber: z.string().trim().min(1).max(160).nullable().optional(),
+  decisionObservedAt: z.string().datetime().nullable().optional(),
+  decisionEffectiveDate: z.string().datetime().nullable().optional(),
+};
 
 export const UpsertAssociationSchema = z.object({
   name: z.string().min(1).max(200),
@@ -30,29 +51,33 @@ export const UpsertAssociationSchema = z.object({
 export const CreateApprovalRecordSchema = z.object({
   workType: hoaWorkType,
   description: z.string().optional(),
-  status: hoaApprovalStatus.default('NOT_SUBMITTED'),
+  reportedStatus: hoaApprovalStatus.default('NOT_SUBMITTED'),
   submittedDate: z.string().datetime().optional(),
   documentIds: z.array(z.string()).default([]),
   notes: z.string().optional(),
+  approvalConditions: z.string().optional(),
+  denialReason: z.string().optional(),
+  expirationDate: z.string().datetime().optional(),
   renovationAdvisorSessionId: z.string().optional(),
   sourceActionId: lineageId,
   sourceEntityType: lineageId,
   sourceEntityId: lineageId,
   sourceJourneyId: lineageId,
-});
+  ...decisionTruthFields,
+}).strict();
 
 export const UpdateApprovalRecordSchema = z.object({
   workType: hoaWorkType.optional(),
   description: z.string().optional(),
-  status: hoaApprovalStatus.optional(),
+  reportedStatus: hoaApprovalStatus.optional(),
   submittedDate: z.string().datetime().optional(),
-  decisionDate: z.string().datetime().optional(),
   approvalConditions: z.string().optional(),
   denialReason: z.string().optional(),
   expirationDate: z.string().datetime().optional(),
   documentIds: z.array(z.string()).optional(),
   notes: z.string().optional(),
-});
+  ...decisionTruthFields,
+}).strict();
 
 export const ReportViolationSchema = z.object({
   workType: hoaWorkType.optional(),
