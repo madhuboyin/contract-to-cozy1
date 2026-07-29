@@ -37,6 +37,7 @@ const SOURCE_DEFAULT_JOBS: Record<HomeActionSourceKind, HomeAction['job']> = {
   PROJECT: 'MAJOR_MOMENT',
   SYSTEM: 'STAY_AHEAD',
   SAVINGS_BENEFITS: 'DECIDE',
+  INSPECTION_FINDING: 'DECIDE',
 };
 
 const SOURCE_DESCRIPTIONS: Record<HomeActionSourceKind, string> = {
@@ -49,6 +50,7 @@ const SOURCE_DESCRIPTIONS: Record<HomeActionSourceKind, string> = {
   PROJECT: 'Project, quote, permit, booking, and major-moment work.',
   SYSTEM: 'System-derived risk, lifecycle, and data-quality actions.',
   SAVINGS_BENEFITS: 'Reviewed benefit, rebate, and credit matches with a material value or closing deadline.',
+  INSPECTION_FINDING: 'Confirmed inspection report findings awaiting a homeowner accept/dismiss disposition.',
 };
 
 function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {

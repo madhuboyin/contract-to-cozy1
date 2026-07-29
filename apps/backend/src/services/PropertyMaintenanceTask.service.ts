@@ -28,6 +28,7 @@ import {
   requestRadarPropertyReconciliation,
 } from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
+import { propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { findWorkItemByWorkKey } from '../modules/homeOperations/infrastructure/workItemRepository';
@@ -806,6 +807,9 @@ import { findWorkItemByWorkKey } from '../modules/homeOperations/infrastructure/
               actorType: 'SYSTEM',
               idempotencyKey: `maintenance-task-verified:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
             });
+            // Home Operations Slice 5: this task may have been created by
+            // accepting an Inspection Finding as work — a no-op otherwise.
+            await propagateFindingResolutionFromExecution('MAINTENANCE_TASK', updatedTask.id);
           }
           if (updatedTask.isRecurring && workItem.state === 'VERIFIED') {
             workItem = await transitionWorkItem({

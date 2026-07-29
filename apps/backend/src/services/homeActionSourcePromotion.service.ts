@@ -31,7 +31,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -738,6 +738,102 @@ async function loadRecallActions(propertyId: string, db: HomeActionSourceDb): Pr
       feedbackControls: critical ? ['ACKNOWLEDGE', 'CORRECT_FACT'] : RECOMMENDATION_FEEDBACK,
       relatedJourneyId: null,
       createdAt: match.createdAt.toISOString(), lastEvaluatedAt: match.updatedAt.toISOString(),
+    });
+  });
+}
+
+// Home Operations Slice 5: mirrors resolveFindingWorkPolicy's $1,500
+// threshold in inspectionHub.service.ts — a MAJOR finding above this cost
+// already reads as MATERIAL_FINANCIAL in the Home feed, before the
+// homeowner has explicitly accepted it as work.
+const INSPECTION_MATERIAL_COST_THRESHOLD_CENTS = 150_000;
+const STALE_REPORT_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+
+function formatCentsRangeForCopy(low: number | null, high: number | null): string | null {
+  const fmt = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+  if (low != null && high != null) return `${fmt(low)}–${fmt(high)}`;
+  if (high != null) return `up to ${fmt(high)}`;
+  if (low != null) return `${fmt(low)}+`;
+  return null;
+}
+
+async function loadInspectionFindingActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
+  if (!db.inspectionFinding) return [];
+  const findings = await db.inspectionFinding.findMany({
+    where: { propertyId, status: 'OPEN', severity: { not: 'INFORMATIONAL' }, report: { status: 'CONFIRMED' } },
+    orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }],
+    take: 30,
+    include: { report: { select: { id: true, confirmedAt: true, reportType: true, inspectorName: true } } },
+  });
+
+  return findings.map((finding) => {
+    const isSafety = finding.severity === 'SAFETY';
+    const isMaterialMajor = finding.severity === 'MAJOR' &&
+      (finding.estimatedCostCentsHigh ?? 0) >= INSPECTION_MATERIAL_COST_THRESHOLD_CENTS;
+    const costRangeText = formatCentsRangeForCopy(finding.estimatedCostCentsLow, finding.estimatedCostCentsHigh);
+
+    const governance = isSafety
+      ? {
+          ...lowConsequenceGovernance('inspection-hub-v1'),
+          safetyTier: 'SAFETY_EMERGENCY' as const,
+          professionalBoundary: 'This reflects the inspector\'s written finding, not a licensed re-inspection. Confirm the safety condition with a qualified professional before relying on it.',
+          conservativeFallback: 'Treat the affected system as unsafe until a qualified professional confirms otherwise.',
+        }
+      : isMaterialMajor
+        ? {
+            ...materialFinancialGovernance('inspection-hub-v1'),
+            professionalBoundary: 'Cost estimates are ranges drawn from inspection report language, not a contractor quote.',
+          }
+        : lowConsequenceGovernance('inspection-hub-v1');
+
+    const reportAgeMs = finding.report.confirmedAt ? Date.now() - finding.report.confirmedAt.getTime() : null;
+    const freshness: HomeAction['evidence'][number]['freshness'] =
+      reportAgeMs == null ? 'UNKNOWN' : reportAgeMs > STALE_REPORT_AGE_MS ? 'STALE' : 'CURRENT';
+
+    const whyItMatters = costRangeText
+      ? `${finding.inspectorDescription} Estimated cost range: ${costRangeText}.`
+      : finding.inspectorDescription;
+
+    return adaptHomeActionSource('INSPECTION_FINDING', {
+      id: `inspection-finding:${finding.id}`,
+      propertyId,
+      lineageId: `inspection-finding:${finding.id}`,
+      sourceEntityId: finding.id,
+      sourceVersion: finding.updatedAt.toISOString(),
+      state: 'OPEN',
+      priority: isSafety ? 'NOW' : finding.severity === 'MAJOR' ? 'SOON' : finding.severity === 'MINOR' ? 'PLAN' : 'CONSIDER',
+      signal: `${finding.homeSystem}: ${finding.inspectorRecommendation}`,
+      whyItMatters,
+      recommendedAction: 'Review the finding and accept it as tracked work, or dismiss it.',
+      expectedOutcome: 'The finding is addressed and the inspection record reflects the verified outcome.',
+      timing: {
+        dueAt: null,
+        windowStart: finding.createdAt.toISOString(),
+        windowEnd: null,
+        rationale: isSafety ? 'Safety findings warrant prompt review.' : 'This finding is open in a confirmed inspection report.',
+      },
+      evidence: [{
+        id: finding.report.id,
+        type: 'DOCUMENT',
+        label: `${finding.report.reportType} inspection${finding.report.inspectorName ? ` by ${finding.report.inspectorName}` : ''}`,
+        source: 'Inspection Hub',
+        observedAt: (finding.report.confirmedAt ?? finding.createdAt).toISOString(),
+        freshness,
+        confidence: 1,
+      }],
+      assumptions: [], options: [], tradeoffs: [],
+      confidence: { score: 1, label: 'HIGH', missing: [] },
+      governance,
+      primaryCta: {
+        kind: isSafety ? 'ESCALATE' : 'REVIEW',
+        label: 'Review finding',
+        href: `/dashboard/properties/${propertyId}/inspection-hub/${finding.reportId}?findingId=${encodeURIComponent(finding.id)}`,
+      },
+      secondaryCtas: [],
+      feedbackControls: isSafety ? ['ACKNOWLEDGE', 'CORRECT_FACT'] : RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: finding.createdAt.toISOString(),
+      lastEvaluatedAt: finding.updatedAt.toISOString(),
     });
   });
 }
@@ -1998,6 +2094,7 @@ export async function getPromotedHomeActions(
     loadGuidanceActions(propertyId, db, activeWeatherIncidentIds), Promise.resolve(incidentActions),
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
+    loadInspectionFindingActions(propertyId, db),
     options.includePersonalization === false ? Promise.resolve([]) : loadPersonalizationActions(propertyId, db),
     loadRefinanceDataRequiredActions(propertyId, db),
     loadHomeDigitalTwinFactReviewActions(propertyId, db),

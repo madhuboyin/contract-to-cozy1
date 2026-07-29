@@ -1,6 +1,189 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, InspectionFindingSeverity, MaintenanceTaskPriority } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { logger } from '../lib/logger';
+import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
+import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
+import { inspectionFindingSourceAdapter, resolveInspectionFindingWorkKey } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
+import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
+import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
+import { findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
+
+// ── Home Operations Slice 5: finding -> work policy mapping ────────────────────
+
+// Same $1,500 threshold loadInspectionFindingActions uses to elevate a MAJOR
+// finding's safetyTier to MATERIAL_FINANCIAL before acceptance.
+const MATERIAL_COST_THRESHOLD_CENTS = 150_000;
+
+/**
+ * Deterministic policy, not a homeowner choice — kept small and pure so it
+ * is trivially testable. SAFETY routes to Guidance (matches the real-world
+ * judgment buyerAcquisition.service.ts's dispositionFinding already makes:
+ * safety issues need Guidance's structured decision flow, not a bare task).
+ * A materially expensive MAJOR finding routes to Project — but this slice
+ * does not auto-create the project itself (see acceptFindingAsWork).
+ */
+export function resolveFindingWorkPolicy(
+  finding: Pick<InspectionFindingRecord, 'severity' | 'estimatedCostCentsHigh'>,
+): 'MAINTENANCE' | 'GUIDANCE' | 'PROJECT' {
+  if (finding.severity === 'SAFETY') return 'GUIDANCE';
+  if (finding.severity === 'MAJOR' && (finding.estimatedCostCentsHigh ?? 0) >= MATERIAL_COST_THRESHOLD_CENTS) {
+    return 'PROJECT';
+  }
+  return 'MAINTENANCE';
+}
+
+type InspectionFindingRecord = {
+  severity: InspectionFindingSeverity;
+  estimatedCostCentsHigh: number | null;
+};
+
+function guidanceSeverityForFinding(severity: InspectionFindingSeverity) {
+  if (severity === 'SAFETY') return 'CRITICAL' as const;
+  if (severity === 'MAJOR') return 'HIGH' as const;
+  if (severity === 'MINOR') return 'MEDIUM' as const;
+  return 'LOW' as const;
+}
+
+function maintenancePriorityForFinding(severity: InspectionFindingSeverity): MaintenanceTaskPriority {
+  if (severity === 'SAFETY') return 'URGENT';
+  if (severity === 'MAJOR') return 'HIGH';
+  if (severity === 'MINOR') return 'MEDIUM';
+  return 'LOW';
+}
+
+async function closeFindingWorkItemBestEffort(
+  findingId: string,
+  propertyId: string,
+  actorUserId: string | null,
+): Promise<void> {
+  try {
+    const workKey = resolveInspectionFindingWorkKey(findingId, propertyId);
+    const workItem = await findWorkItemByWorkKey(propertyId, workKey);
+    if (!workItem || workItem.state === 'CLOSED') return;
+    await transitionWorkItem({
+      workItemId: workItem.id,
+      to: 'CLOSED',
+      disposition: 'NOT_RELEVANT',
+      actorType: actorUserId ? 'USER' : 'SYSTEM',
+      actorUserId,
+      idempotencyKey: `inspection-finding-dismissed:${workItem.id}`,
+    });
+  } catch (err) {
+    logger.warn({ err, findingId }, 'Home Operations work item sync failed; finding dismissal proceeds regardless');
+  }
+}
+
+/**
+ * The explicit accept gate — a finding never becomes committed work without
+ * a homeowner calling this. Idempotent: re-accepting a finding that was
+ * already routed returns the existing link rather than creating a second
+ * downstream record.
+ */
+export async function acceptFindingAsWork(
+  findingId: string,
+  reportId: string,
+  propertyId: string,
+  actorUserId: string,
+) {
+  const finding = await prisma.inspectionFinding.findUnique({
+    where: { id: findingId },
+    include: { report: { select: { status: true } } },
+  });
+  if (!finding || finding.reportId !== reportId || finding.propertyId !== propertyId) {
+    throw new APIError('Finding not found', 404, 'NOT_FOUND');
+  }
+  if (finding.report.status !== 'CONFIRMED') {
+    throw new APIError(
+      'Confirm the inspection report before accepting findings as work',
+      409,
+      'REPORT_NOT_CONFIRMED',
+    );
+  }
+  if (finding.status !== 'OPEN') {
+    throw new APIError('Only an open finding can be accepted as work', 409, 'INVALID_STATE');
+  }
+
+  const proposal = inspectionFindingSourceAdapter.propose(finding, propertyId);
+  if (!proposal) {
+    throw new APIError('This finding is not eligible for tracked work', 409, 'NOT_ELIGIBLE');
+  }
+
+  let workItem = await resolveAndUpsertWorkItem(proposal);
+  if (workItem.state === 'CANDIDATE') {
+    workItem = await transitionWorkItem({
+      workItemId: workItem.id,
+      to: 'ACCEPTED',
+      actorType: 'USER',
+      actorUserId,
+      idempotencyKey: `inspection-finding-accepted:${workItem.id}`,
+    });
+  }
+
+  const policy = resolveFindingWorkPolicy(finding);
+
+  const existingExecutions = await prisma.operationalWorkExecution.findMany({
+    where: { workItemId: workItem.id },
+  });
+  if (existingExecutions.length > 0) {
+    return { workItem, policy, execution: existingExecutions[0], created: false };
+  }
+
+  if (policy === 'PROJECT') {
+    // No auto-created project — a project needs contractor/scope/schedule
+    // details a finding alone doesn't have. The work item stays ACCEPTED,
+    // ready for the homeowner to create a project through the normal
+    // Project Tracker flow (documented non-goal, Slice 5 plan).
+    return { workItem, policy, execution: null, created: false };
+  }
+
+  if (policy === 'GUIDANCE') {
+    const { journey } = await guidanceJourneyService.ingestSignal({
+      propertyId,
+      inventoryItemId: finding.inventoryItemId,
+      signalIntentFamily: 'inspection_followup_needed',
+      issueDomain: 'MAINTENANCE',
+      severity: guidanceSeverityForFinding(finding.severity),
+      severityScore: finding.severity === 'SAFETY' ? 100 : 80,
+      confidenceScore: finding.extractionConfidence === 'HIGH' ? 0.9 : finding.extractionConfidence === 'MEDIUM' ? 0.7 : 0.5,
+      sourceType: 'INSPECTION',
+      sourceFeatureKey: 'inspection-hub',
+      sourceToolKey: 'inspection-hub',
+      sourceEntityType: 'INSPECTION_FINDING',
+      sourceEntityId: finding.id,
+      dedupeKey: `${propertyId}:inspection_followup_needed:INSPECTION_FINDING:${finding.id}`,
+      duplicateGroupKey: `${propertyId}:inspection-finding:${finding.id}`,
+      payloadJson: {
+        findingId: finding.id,
+        reportId: finding.reportId,
+        homeSystem: finding.homeSystem,
+        severity: finding.severity,
+        description: finding.inspectorDescription,
+      },
+      actorUserId,
+    });
+    await linkWorkExecution({ workItemId: workItem.id, executionType: 'GUIDANCE', executionEntityId: journey.id });
+    if (workItem.state === 'ACCEPTED') {
+      workItem = await transitionWorkItem({
+        workItemId: workItem.id,
+        to: 'IN_GUIDANCE',
+        actorType: 'SYSTEM',
+        idempotencyKey: `inspection-finding-in-guidance:${workItem.id}`,
+      });
+    }
+    return { workItem, policy, execution: { executionType: 'GUIDANCE' as const, executionEntityId: journey.id }, created: true };
+  }
+
+  // MAINTENANCE
+  const task = await PropertyMaintenanceTaskService.createUserTask(actorUserId, propertyId, {
+    title: `${finding.homeSystem}: ${finding.inspectorRecommendation}`,
+    description: finding.inspectorDescription,
+    priority: maintenancePriorityForFinding(finding.severity),
+    estimatedCost: finding.estimatedCostCentsHigh != null ? finding.estimatedCostCentsHigh / 100 : undefined,
+  });
+  await linkWorkExecution({ workItemId: workItem.id, executionType: 'MAINTENANCE_TASK', executionEntityId: task.id });
+  return { workItem, policy, execution: { executionType: 'MAINTENANCE_TASK' as const, executionEntityId: task.id }, created: true };
+}
 
 function toArr(val: string | string[] | undefined): string[] {
   if (!val) return [];
@@ -147,6 +330,7 @@ export async function dismissFinding(
   reportId: string,
   propertyId: string,
   reason?: string,
+  actorUserId: string | null = null,
 ) {
   const finding = await prisma.inspectionFinding.findUnique({
     where: { id: findingId },
@@ -168,6 +352,7 @@ export async function dismissFinding(
   });
 
   await _syncOpenFindingsCount(reportId);
+  await closeFindingWorkItemBestEffort(findingId, propertyId, actorUserId);
   return updated;
 }
 

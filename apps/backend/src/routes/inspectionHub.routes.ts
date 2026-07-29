@@ -29,6 +29,7 @@ import {
   generateNegotiationPackage,
   getFixDisclosureDecisions,
   saveFixDisclosureDecisions,
+  acceptFindingAsWork,
 } from '../controllers/inspectionHub.controller';
 
 const upload = multer({
@@ -93,6 +94,12 @@ router.post(
   propertyAuthMiddleware,
   validateBody(DismissFindingSchema),
   dismissFinding,
+);
+
+router.post(
+  '/properties/:propertyId/inspection-hub/reports/:reportId/findings/:findingId/accept-as-work',
+  propertyAuthMiddleware,
+  acceptFindingAsWork,
 );
 
 // ── Write-back confirmation ───────────────────────────────────────────────────

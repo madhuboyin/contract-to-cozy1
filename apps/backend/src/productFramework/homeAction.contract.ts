@@ -15,6 +15,7 @@ export const HOME_ACTION_SOURCE_KINDS = [
   'PROJECT',
   'SYSTEM',
   'SAVINGS_BENEFITS',
+  'INSPECTION_FINDING',
 ] as const;
 
 export const HOMEOWNER_JOBS = ['STAY_AHEAD', 'DECIDE', 'MAJOR_MOMENT'] as const;

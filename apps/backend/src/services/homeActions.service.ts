@@ -79,6 +79,7 @@ const SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER = new Set<HomeAction['source']['ki
   'PROJECT',
   'SYSTEM',
   'SAVINGS_BENEFITS',
+  'INSPECTION_FINDING',
 ]);
 
 export const HomeActionCommandSchema = z.object({

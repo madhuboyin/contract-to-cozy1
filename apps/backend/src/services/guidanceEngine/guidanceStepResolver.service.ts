@@ -11,6 +11,7 @@ import { guidanceDerivedDataService } from './guidanceDerivedData.service';
 import { guidanceValidationService } from './guidanceValidation.service';
 import { getStepSkipPolicy } from './guidanceTemplateRegistry';
 import { runJourneyCompletionHooks } from './guidanceCompletionHooks.service';
+import { propagateFindingResolutionFromExecution } from '../../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { logger } from '../../lib/logger';
 import type { RecommendationGovernance } from '../../productFramework/recommendationGovernance.contract';
 import { resolveGuidanceStepGovernance } from './guidanceGovernance.catalog';
@@ -577,6 +578,14 @@ export class GuidanceStepResolverService {
       if (nextStatus === 'COMPLETED' && journey.status !== 'COMPLETED') {
         runJourneyCompletionHooks(params.journeyId).catch((err: unknown) => {
           logger.error({ err }, '[guidance] runJourneyCompletionHooks failed');
+        });
+        // Home Operations Slice 5: this journey may have been created by
+        // accepting an Inspection Finding as work (unlike
+        // runJourneyCompletionHooks, not gated on isUserInitiated — a
+        // signal-derived journey can still resolve a finding). A no-op for
+        // the overwhelming majority of journeys with no inspection origin.
+        propagateFindingResolutionFromExecution('GUIDANCE', params.journeyId).catch((err: unknown) => {
+          logger.error({ err }, '[guidance] propagateFindingResolutionFromExecution failed');
         });
       }
     }

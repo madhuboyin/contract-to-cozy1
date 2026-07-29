@@ -235,6 +235,26 @@ export function linkWorkExecution(input: {
   });
 }
 
+/**
+ * Home Operations Slice 5: reverse lookup used by resolution propagation —
+ * given a downstream execution record (a MAINTENANCE_TASK or GUIDANCE
+ * journey that was created to resolve an Inspection Finding), find any
+ * FINDING-subject work item(s) linked to it via linkWorkExecution, so a
+ * VERIFIED completion on that execution can also verify the finding's own
+ * work item. Scoped to subjectType FINDING since that's the only case this
+ * slice needs (a maintenance task or guidance journey may link back to at
+ * most the finding that spawned it).
+ */
+export function findWorkItemsLinkedToExecution(
+  executionType: OperationalWorkExecutionType,
+  executionEntityId: string,
+) {
+  return prisma.operationalWorkExecution.findMany({
+    where: { executionType, executionEntityId, workItem: { subjectType: 'FINDING' } },
+    include: { workItem: true },
+  });
+}
+
 export function recordWorkEvidence(input: {
   workItemId: string;
   evidenceType: OperationalWorkEvidenceType;

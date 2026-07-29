@@ -149,6 +149,7 @@ export async function dismissFinding(req: Request, res: Response, next: NextFunc
       req.params.reportId,
       req.params.propertyId,
       req.body.reason,
+      req.user?.userId ?? null,
     );
 
     analyticsEmitter.track({
@@ -237,6 +238,28 @@ export async function resolveFinding(req: Request, res: Response, next: NextFunc
     });
 
     res.json({ success: true, data: { finding } });
+  } catch (err) { next(err); }
+}
+
+export async function acceptFindingAsWork(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await hubService.acceptFindingAsWork(
+      req.params.findingId,
+      req.params.reportId,
+      req.params.propertyId,
+      req.user!.userId,
+    );
+
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED,
+      userId: req.user?.userId,
+      propertyId: req.params.propertyId,
+      moduleKey: AnalyticsModule.INSPECTION,
+      featureKey: AnalyticsFeature.INSPECTION_HUB,
+      metadataJson: { actionType: 'accept_finding_as_work', findingId: req.params.findingId, policy: result.policy },
+    });
+
+    res.status(201).json({ success: true, data: result });
   } catch (err) { next(err); }
 }
 
