@@ -78,9 +78,9 @@ Classification values:
 | CTA-019 | Item coverage tool | Add warranty coverage | J2 | warranties create flow | existing + fully functional | - |
 | CTA-020 | Property inventory coverage | Review record / governed help / Info / Replace-Repair | J2 | item coverage, governed handoff, replace-repair | existing + fully functional | - |
 | CTA-021 | Replace-Repair tool | Run analysis | J1/J5 | replaceRepairAnalysis + guidance completion hook | existing + fully functional | - |
-| CTA-022 | Service Price Radar tool | Check quote | J1/J2/J5/J9 | servicePriceRadar + guidance completion hook | existing + fully functional | - |
-| CTA-023 | Service Price Radar tool | Need help responding? | J1/J5/J9 | negotiation-shield handoff | existing + fully functional | - |
-| CTA-024 | Negotiation Shield tool | Analyze case / mark step complete | J1/J5/J9 | negotiationShield + guidance completion hook | existing + fully functional | - |
+| CTA-022 | Service Price Radar tool | Review quote evidence | J1/J2/J5/J9 | planning/qualified evidence check linked to Service Quote Decision; check creation is not completion | consolidated + fully functional | - |
+| CTA-023 | Service Quote Decision workspace | Clarify / compare / decide | J1/J5/J9 | canonical workspace with normalized proposals and explicit outcome | consolidated + fully functional | - |
+| CTA-024 | Negotiation Shield stage | Analyze and preserve negotiation progress | J1/J5/J9 | negotiation case linked to the canonical decision workspace | consolidated + fully functional | - |
 | CTA-025 | Do Nothing Simulator tool | Run simulation / mark step complete | J6/J7 | doNothing simulator + guidance hook | existing + fully functional | - |
 | CTA-026 | Home Savings tool | Run comparison / mark step complete | J6/J7/J9 | home-savings + guidance hook | existing + fully functional | - |
 | CTA-027 | True Cost tool | Compute estimate / mark step complete | J1/J6/J7 | true-cost + guidance hook | existing + fully functional | - |

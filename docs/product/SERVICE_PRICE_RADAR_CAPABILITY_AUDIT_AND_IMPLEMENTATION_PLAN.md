@@ -3,11 +3,32 @@
 **Capability:** 21.2 Service Price Radar  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 27, 2026  
-**Status:** Recommended implementation plan  
+**Status:** Implemented; database reconciliation remains operator-owned
 **Recommended disposition:** **Merge and reposition**  
 **Current safety classification:** Low consequence  
 **Recommended safety classification:** Material financial, with category-specific escalation  
 **Primary outcome family:** Service Quote Decision
+
+### Implementation record
+
+Slices 0–7 have been implemented in the repository:
+
+- heuristic-only results fail closed without categorical market verdicts;
+- qualified benchmark provenance, lifecycle, health, and rollback controls are
+  present;
+- quote extraction, normalization, confirmation, readiness, and comparability
+  are persisted;
+- Service Price Radar, Quote Comparison, Negotiation Shield, Price
+  Finalization, Booking, and optional Project tracking share one durable
+  Service Quote Decision identity;
+- homeowner controls and desktop/mobile acceptance are implemented;
+- consent-gated outcome analytics and aggregate operator reporting are
+  implemented;
+- functional and operational documentation has been reconciled around the
+  implemented contract.
+
+Per the no-user constraint, Prisma migrations and historical backfills were not
+created. Database reconciliation remains a separate deployment-owner action.
 
 ---
 
@@ -272,6 +293,10 @@ The page allows a homeowner to begin with a category and amount and optionally a
 ---
 
 ## 6. Audit Scorecard
+
+This scorecard records the pre-implementation state reviewed on July 27, 2026.
+It is retained as decision history and must not be read as the current
+production-readiness assessment.
 
 | Dimension | Weight | Score | Assessment |
 |---|---:|---:|---|
@@ -1300,7 +1325,7 @@ Cover:
 - alerting and audit trail;
 - schema reconciliation validation.
 
-### 15.5 Current verification baseline
+### 15.5 Original audit verification baseline
 
 At audit time:
 
@@ -1309,7 +1334,13 @@ At audit time:
 - the failure reflects a real contract conflict: the test expects truthful fallback-assumption wording while the current UI emits “regional pricing data”;
 - no complete Service Quote Decision browser acceptance suite was found.
 
-This baseline is not sufficient for launch confidence.
+This original baseline was not sufficient for launch confidence.
+
+The implemented repository now includes the named backend acceptance command,
+39 Service Price Radar and Service Quote Decision tests, and dedicated desktop
+and mobile Playwright configuration. Current commands and coverage are defined
+in `docs/functional/SERVICE_PRICE_RADAR.md`; those results supersede this
+historical baseline.
 
 ---
 
@@ -1399,17 +1430,21 @@ Service Price Radar and its outcome family are complete when:
 
 ---
 
-## 19. Recommended Immediate Next Step
+## 19. Implementation Handoff
 
-Begin with **Slice 0 — Truth, safety, and completion containment**.
+The recommended implementation sequence is complete in the repository.
+Deployment owners must now:
 
-This slice should be implemented before benchmark expansion or visual redesign because it:
+1. reconcile the database directly from the current Prisma schema;
+2. generate and validate the Prisma client;
+3. run the Service Price Radar acceptance suite and frontend production build;
+4. configure and review at least one licensed benchmark source before expecting
+   qualified verdict coverage;
+5. keep sources degraded until health, rights, review, freshness, and quality
+   gates pass;
+6. monitor the Service Quote Decision operator dashboard without promoting
+   unverified or non-consented homeowner data.
 
-- removes the most consequential misleading claims;
-- prevents unsafe low-price actions;
-- aligns completion with the actual homeowner outcome;
-- corrects the framework contract;
-- establishes the language and behavior that every later slice must preserve.
-
-After Slice 0, implement the qualified benchmark and quote-scope foundations before presenting a redesigned “best-in-class” result. A more polished verdict without better evidence would increase, rather than reduce, product risk.
-
+The source of truth for implemented behavior is
+`docs/functional/SERVICE_PRICE_RADAR.md`. Benchmark operations are governed by
+`docs/operations/SERVICE_PRICE_BENCHMARK_SOURCE_OPERATIONS_RUNBOOK.md`.
