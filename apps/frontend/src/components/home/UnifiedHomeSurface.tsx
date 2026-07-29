@@ -455,6 +455,9 @@ export function ActionCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className={priorityTone(action.priority)}>{action.priority}</Badge>
+            {action.workItem?.acceptanceState === 'ACCEPTED' && (
+              <Badge variant="outline" className="rounded-full border-teal-200 bg-teal-50 text-teal-700">In your plan</Badge>
+            )}
           </div>
           <h3 className="mt-3 text-base font-semibold text-slate-950">{action.recommendedAction}</h3>
           <p className="mt-1 text-sm leading-6 text-slate-600">{action.whyItMatters}</p>

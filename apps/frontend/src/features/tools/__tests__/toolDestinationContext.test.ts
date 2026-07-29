@@ -29,6 +29,7 @@ function action(): RankedHomeActionDTO {
       components: { consequence: 1, urgency: 1, confidence: 1, householdRelevance: 1, actionability: 1, missingContextPenalty: 0 },
     },
     deduplication: { canonicalKey: 'coverage:furnace', mergedActionIds: ['legacy-action-1'] },
+    workItem: null,
   };
 }
 

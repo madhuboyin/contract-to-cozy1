@@ -1,21 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ClipboardList, RefreshCw, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import {
-  ActionCard,
-  CoverageCorrectionGroupCard,
-  CriticalWeatherActionCard,
-  EnvironmentActionCard,
-  SeasonalChecklistActionCard,
-  groupAttentionActions,
-} from '@/components/home/UnifiedHomeSurface';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  HOME_OPERATIONS_TABS,
+  HomeOperationsTabPanel,
+  classifyHomeOperationsTab,
+  type HomeOperationsTabKey,
+} from './HomeOperationsTabs';
+import type { RankedHomeActionDTO } from '@/types';
 
 function SkeletonBlock({ className }: { className: string }) {
   return (
@@ -26,7 +25,7 @@ function SkeletonBlock({ className }: { className: string }) {
   );
 }
 
-function ActionPlanSkeleton({
+function HomeOperationsSkeleton({
   showRecovery,
   onRetry,
 }: {
@@ -36,7 +35,7 @@ function ActionPlanSkeleton({
   return (
     <main
       aria-busy="true"
-      aria-label="Loading prioritized action plan"
+      aria-label="Loading Home Operations"
       className="mx-auto w-full max-w-6xl space-y-6 pb-16"
     >
       <div className="flex items-center justify-between gap-3">
@@ -65,7 +64,7 @@ function ActionPlanSkeleton({
 
       <div className="flex min-h-12 flex-col items-center justify-center gap-3 text-center">
         <p className="text-sm font-medium text-slate-600" role="status" aria-live="polite">
-          {showRecovery ? 'This is taking longer than expected.' : 'Organizing your next actions…'}
+          {showRecovery ? 'This is taking longer than expected.' : 'Organizing your home operations…'}
         </p>
         {showRecovery ? (
           <div className="flex flex-wrap justify-center gap-2">
@@ -81,13 +80,9 @@ function ActionPlanSkeleton({
       </div>
 
       <section aria-hidden="true" className="space-y-3">
-        <SkeletonBlock className="h-6 w-72 max-w-full" />
-        <SkeletonBlock className="h-4 w-[28rem] max-w-full" />
+        <SkeletonBlock className="h-9 w-full max-w-2xl" />
         {[0, 1, 2].map((index) => (
-          <div
-            key={index}
-            className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-          >
+          <div key={index} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             {index === 0 ? (
               <div className="absolute inset-x-0 top-0 h-1 animate-pulse bg-gradient-to-r from-transparent via-teal-400 to-transparent motion-reduce:animate-none" />
             ) : null}
@@ -98,10 +93,6 @@ function ActionPlanSkeleton({
             <SkeletonBlock className="mt-4 h-6 w-3/5" />
             <SkeletonBlock className="mt-3 h-4 w-full" />
             <SkeletonBlock className="mt-2 h-4 w-4/5" />
-            <div className="mt-5 flex flex-wrap gap-2">
-              <SkeletonBlock className="h-10 w-40" />
-              <SkeletonBlock className="h-10 w-28" />
-            </div>
           </div>
         ))}
       </section>
@@ -109,11 +100,22 @@ function ActionPlanSkeleton({
   );
 }
 
-export default function PrioritizedActionPlanPage() {
+function tabCounts(actions: RankedHomeActionDTO[]): Record<HomeOperationsTabKey, RankedHomeActionDTO[]> {
+  const byTab: Record<HomeOperationsTabKey, RankedHomeActionDTO[]> = {
+    today: [], upcoming: [], waiting: [], projects: [], routines: [], completed: [],
+  };
+  for (const action of actions) {
+    byTab[classifyHomeOperationsTab(action)].push(action);
+  }
+  return byTab;
+}
+
+export default function HomeOperationsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const focusActionId = searchParams.get('focusActionId');
+  const focusWorkItemId = searchParams.get('focusWorkItemId');
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ['home-action-plan', propertyId],
@@ -122,48 +124,62 @@ export default function PrioritizedActionPlanPage() {
     staleTime: 2 * 60 * 1000,
   });
   const [showSlowLoadingRecovery, setShowSlowLoadingRecovery] = useState(false);
+  const [activeTab, setActiveTab] = useState<HomeOperationsTabKey>('today');
+  const [hasAppliedFocusTab, setHasAppliedFocusTab] = useState(false);
+
+  const byTab = useMemo(() => tabCounts(query.data?.actions ?? []), [query.data]);
+
+  // Deep-link support: land on whichever tab actually contains the focused
+  // action/work item, then scroll to it — the "focused deep link by
+  // work-item ID" requirement (and the pre-existing action-id deep link)
+  // both need to open on a tab that's showing the item, not just Today.
+  useEffect(() => {
+    if (hasAppliedFocusTab || (!focusActionId && !focusWorkItemId) || !query.data) return;
+    const match = query.data.actions.find((action) =>
+      (focusWorkItemId && action.workItem?.id === focusWorkItemId) ||
+      (focusActionId && (
+        action.id === focusActionId ||
+        action.lineageId === focusActionId ||
+        action.deduplication.mergedActionIds.includes(focusActionId)
+      )),
+    );
+    if (match) setActiveTab(classifyHomeOperationsTab(match));
+    setHasAppliedFocusTab(true);
+  }, [focusActionId, focusWorkItemId, hasAppliedFocusTab, query.data]);
 
   useEffect(() => {
-    if (!focusActionId || !query.data) return;
+    if (!focusActionId && !focusWorkItemId) return;
+    if (!query.data) return;
     const frame = window.requestAnimationFrame(() => {
-      document.getElementById(`home-action-${focusActionId}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
+      const id = focusWorkItemId ? `home-action-work-${focusWorkItemId}` : `home-action-${focusActionId}`;
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [focusActionId, query.data]);
+  }, [focusActionId, focusWorkItemId, query.data, activeTab]);
 
   useEffect(() => {
     if (!query.isLoading) {
       setShowSlowLoadingRecovery(false);
       return;
     }
-
     const timer = window.setTimeout(() => setShowSlowLoadingRecovery(true), 8_000);
     return () => window.clearTimeout(timer);
   }, [query.isLoading]);
 
   if (query.isLoading) {
-    return (
-      <ActionPlanSkeleton
-        showRecovery={showSlowLoadingRecovery}
-        onRetry={() => void query.refetch()}
-      />
-    );
+    return <HomeOperationsSkeleton showRecovery={showSlowLoadingRecovery} onRetry={() => void query.refetch()} />;
   }
 
   if (query.isError || !query.data) {
     return (
       <div className="mx-auto max-w-6xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
-        <p className="font-semibold text-rose-800">The prioritized action plan is temporarily unavailable.</p>
+        <p className="font-semibold text-rose-800">Home Operations is temporarily unavailable.</p>
         <Button variant="outline" className="mt-3 rounded-full" onClick={() => query.refetch()}>Try again</Button>
       </div>
     );
   }
 
   const feed = query.data;
-  const entries = groupAttentionActions(feed.actions);
   const urgentCount = feed.actions.filter((action) => action.priority === 'NOW' || action.priority === 'SOON').length;
   const refreshPlan = async () => {
     await query.refetch();
@@ -186,84 +202,50 @@ export default function PrioritizedActionPlanPage() {
           <div className="rounded-2xl bg-teal-100 p-3 text-teal-700"><ClipboardList className="h-5 w-5" /></div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Plan & Projects</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">Prioritized Action Plan</h1>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">Home Operations</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Your complete ranked next-action list. Actions that become managed repair, provider, incident, or execution cases continue in Resolution Center.
+              Keep routine care, inspection follow-ups, and projects moving without tracking the same work twice.
             </p>
           </div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
           <Badge variant="outline" className="rounded-full bg-white">{feed.actions.length} ranked actions</Badge>
-          <Badge variant="outline" className="rounded-full bg-white">{entries.length} grouped topics</Badge>
           <Badge variant="outline" className="rounded-full bg-white">{urgentCount} now or soon</Badge>
         </div>
       </header>
 
-      <section aria-labelledby="ranked-actions-heading" className="space-y-3">
-        <div>
-          <h2 id="ranked-actions-heading" className="text-xl font-semibold text-slate-950">Ranked actions and supporting details</h2>
-          <p className="text-sm text-slate-500">Priority, evidence, confidence, timing, and the next supported move.</p>
-        </div>
-        {entries.length === 0 ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
-            No action currently needs your attention.
-          </div>
-        ) : entries.map((entry) => {
-          const actions = entry.kind === 'COVERAGE_CORRECTION_GROUP' ? entry.actions : [entry.action];
-          const isFocused = Boolean(focusActionId && actions.some((action) =>
-            action.id === focusActionId ||
-            action.lineageId === focusActionId ||
-            action.deduplication.mergedActionIds.includes(focusActionId),
-          ));
-          const anchorId = isFocused && focusActionId
-            ? `home-action-${focusActionId}`
-            : `home-action-${actions[0]?.id ?? 'unknown'}`;
-          const entryKey = entry.kind === 'COVERAGE_CORRECTION_GROUP'
-            ? `coverage-plan-group:${entry.actions.map((action) => action.id).join(':')}`
-            : entry.action.id;
-
+      <nav aria-label="Home Operations views" className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+        {HOME_OPERATIONS_TABS.map((tab) => {
+          const count = byTab[tab.key].length;
+          const isActive = activeTab === tab.key;
           return (
-            <div
-              id={anchorId}
-              key={entryKey}
-              className={`scroll-mt-28 rounded-2xl transition-shadow ${isFocused ? 'ring-2 ring-teal-500 ring-offset-4 ring-offset-white' : ''}`}
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              aria-current={isActive ? 'page' : undefined}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
             >
-              {entry.kind === 'ACTION' ? (
-                <ActionCard
-                  action={entry.action}
-                  propertyId={propertyId}
-                  showSupportingDetails
-                  onChanged={refreshPlan}
-                />
-              ) : entry.kind === 'CRITICAL_WEATHER' ? (
-                <CriticalWeatherActionCard
-                  action={entry.action}
-                  propertyId={propertyId}
-                  showSupportingDetails
-                />
-              ) : entry.kind === 'ENVIRONMENT' ? (
-                <EnvironmentActionCard
-                  action={entry.action}
-                  propertyId={propertyId}
-                  onChanged={refreshPlan}
-                />
-              ) : entry.kind === 'SEASONAL_CHECKLIST' ? (
-                <SeasonalChecklistActionCard
-                  action={entry.action}
-                  propertyId={propertyId}
-                  showSupportingDetails
-                />
-              ) : (
-                <CoverageCorrectionGroupCard
-                  actions={entry.actions}
-                  subjects={entry.subjects}
-                  propertyId={propertyId}
-                  showSupportingDetails
-                />
-              )}
-            </div>
+              {tab.label}
+              {tab.key !== 'routines' ? <span className="ml-1.5 opacity-80">{count}</span> : null}
+            </button>
           );
         })}
+      </nav>
+
+      <section aria-live="polite">
+        <HomeOperationsTabPanel
+          tab={activeTab}
+          actions={byTab[activeTab]}
+          propertyId={propertyId}
+          onChanged={refreshPlan}
+          focusActionId={focusActionId}
+          focusWorkItemId={focusWorkItemId}
+        />
       </section>
     </main>
   );

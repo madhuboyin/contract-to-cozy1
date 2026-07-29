@@ -34,6 +34,8 @@ const nextConfig = {
       { source: '/dashboard/properties/:id/home-lab', destination: '/dashboard/home-lab?propertyId=:id', permanent: false },
       { source: '/dashboard/properties/:id/resolution-center', destination: '/dashboard/resolution-center?propertyId=:id', permanent: false },
       { source: '/dashboard/properties/:id/inventory/coverage', destination: '/dashboard/properties/:id/inventory?tab=coverage', permanent: false },
+      // Home Operations Slice 2: Prioritized Action Plan renamed to Home Operations
+      { source: '/dashboard/properties/:id/action-plan', destination: '/dashboard/properties/:id/home-operations', permanent: false },
 
       // Vault consolidation
       { source: '/dashboard/inventory', destination: '/dashboard/vault?tab=assets', permanent: false },

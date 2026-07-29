@@ -80,27 +80,43 @@ export function findWorkItemById(workItemId: string) {
   return prisma.operationalWorkItem.findUnique({ where: { id: workItemId } });
 }
 
-export function createWorkItem(input: CreateWorkItemInput) {
-  return prisma.operationalWorkItem.create({
-    data: {
-      propertyId: input.propertyId,
-      workKey: input.workKey,
-      subjectType: input.subjectType,
-      subjectId: input.subjectId,
-      obligationType: input.obligationType,
-      priority: input.priority,
-      safetyTier: input.safetyTier,
-      title: input.title,
-      homeownerReason: input.homeownerReason,
-      expectedOutcome: input.expectedOutcome,
-      dueWindowStart: input.dueWindowStart ?? null,
-      dueAt: input.dueAt ?? null,
-      dueWindowEnd: input.dueWindowEnd ?? null,
-      confidence: input.confidence ?? null,
-      missingContext: input.missingContext ?? [],
-      sourceVersion: input.sourceVersion ?? null,
-    },
-  });
+/**
+ * Two candidates resolving to the same workKey can race to create it — both
+ * see no existing row via findUnique, both call create. Postgres's
+ * @@unique([propertyId, workKey]) constraint lets only one insert win; the
+ * loser re-fetches and returns the winner's row instead of failing the
+ * whole resolution, matching the P2002-catch-and-refetch idiom already used
+ * by PropertyMaintenanceTaskService.createFromActionCenter.
+ */
+export async function createWorkItem(input: CreateWorkItemInput) {
+  try {
+    return await prisma.operationalWorkItem.create({
+      data: {
+        propertyId: input.propertyId,
+        workKey: input.workKey,
+        subjectType: input.subjectType,
+        subjectId: input.subjectId,
+        obligationType: input.obligationType,
+        priority: input.priority,
+        safetyTier: input.safetyTier,
+        title: input.title,
+        homeownerReason: input.homeownerReason,
+        expectedOutcome: input.expectedOutcome,
+        dueWindowStart: input.dueWindowStart ?? null,
+        dueAt: input.dueAt ?? null,
+        dueWindowEnd: input.dueWindowEnd ?? null,
+        confidence: input.confidence ?? null,
+        missingContext: input.missingContext ?? [],
+        sourceVersion: input.sourceVersion ?? null,
+      },
+    });
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      const existing = await findWorkItemByWorkKey(input.propertyId, input.workKey);
+      if (existing) return existing;
+    }
+    throw err;
+  }
 }
 
 /** Only ever called when the item is still CANDIDATE (see canRefreshFromSource). */

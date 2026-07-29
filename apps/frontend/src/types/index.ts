@@ -308,6 +308,17 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
     };
   };
   deduplication: { canonicalKey: string; mergedActionIds: string[] };
+  // Home Operations Slice 2: the durable work item this action resolved to,
+  // if it represents genuine work (Maintenance/Guidance/Project/Incident/
+  // Recall/Coverage) rather than an advisory-only recommendation. null for
+  // advisory sources and for a resolution that failed this request.
+  workItem: {
+    id: string;
+    workKey: string;
+    state: 'CANDIDATE' | 'ACCEPTED' | 'SCHEDULED' | 'IN_PROGRESS' | 'IN_GUIDANCE' | 'IN_PROJECT' | 'BLOCKED' | 'DEFERRED' | 'REPORTED_COMPLETE' | 'REOPENED' | 'VERIFIED' | 'FOLLOW_UP_DUE' | 'CLOSED';
+    acceptanceState: 'PROPOSED' | 'ACCEPTED' | 'DECLINED';
+    disposition: 'NOT_RELEVANT' | 'DUPLICATE' | 'EXPIRED' | 'DISMISSED' | null;
+  } | null;
 };
 
 export type HomeFirstValueInsightDTO = {

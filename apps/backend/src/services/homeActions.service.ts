@@ -47,6 +47,9 @@ import {
   applyCoverageActionLifecyclePolicy,
   coverageActionRuntimePolicy,
 } from './coverageLifecycle.service';
+import { proposeWorkItemFromHomeAction } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
+import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
+import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition, OperationalWorkItemState } from '@prisma/client';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -183,6 +186,20 @@ type RankingComponents = {
   missingContextPenalty: number;
 };
 
+// Home Operations Slice 2: the durable identity a work-item-eligible action
+// resolved to (see homeActionWorkItem.adapter.ts). Additive presentation
+// annotation on the ranked response, not a change to the core HomeAction
+// Zod contract other consumers rely on. null for advisory/recommendation
+// -only sources (PERSONALIZATION/SYSTEM/SAVINGS_BENEFITS) and for a
+// work-item-eligible action whose resolution failed this request.
+export type HomeActionWorkItemLink = {
+  id: string;
+  workKey: string;
+  state: OperationalWorkItemState;
+  acceptanceState: OperationalWorkItemAcceptanceState;
+  disposition: OperationalWorkItemDisposition | null;
+};
+
 export type RankedHomeAction = HomeAction & {
   ranking: {
     rank: number;
@@ -194,6 +211,14 @@ export type RankedHomeAction = HomeAction & {
     canonicalKey: string;
     mergedActionIds: string[];
   };
+  workItem: HomeActionWorkItemLink | null;
+};
+
+const HOME_ACTION_PRIORITY_ORDER: Record<HomeAction['priority'], number> = {
+  NOW: 0,
+  SOON: 1,
+  PLAN: 2,
+  CONSIDER: 3,
 };
 
 const CONSEQUENCE_SCORE: Record<HomeAction['governance']['safetyTier'], number> = {
@@ -337,15 +362,9 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
     }
   }
 
-  const priorityOrder: Record<HomeAction['priority'], number> = {
-    NOW: 0,
-    SOON: 1,
-    PLAN: 2,
-    CONSIDER: 3,
-  };
   return [...byCanonicalKey.entries()]
     .sort(([, a], [, b]) =>
-      priorityOrder[a.winner.priority] - priorityOrder[b.winner.priority] ||
+      HOME_ACTION_PRIORITY_ORDER[a.winner.priority] - HOME_ACTION_PRIORITY_ORDER[b.winner.priority] ||
       b.score.score - a.score.score ||
       a.winner.id.localeCompare(b.winner.id))
     .map(([canonicalKey, entry], index) => ({
@@ -355,6 +374,67 @@ export function rankAndDeduplicateHomeActions(actions: HomeAction[]): RankedHome
         canonicalKey,
         mergedActionIds: [...new Set(entry.ids)].filter((id) => id !== entry.winner.id),
       },
+      workItem: null,
+    }));
+}
+
+/**
+ * Home Operations Slice 2 identity resolver hook. Resolves a durable
+ * OperationalWorkItem for every work-item-eligible action (best-effort — a
+ * resolution failure must not break the Home page), then re-collapses the
+ * ranked list a second time preferring the resolved workKey over the fuzzy
+ * canonical-key text heuristic already applied by rankAndDeduplicateHomeActions
+ * — two actions the signal-text heuristic failed to merge but that resolve
+ * to the same durable obligation now collapse into one. Advisory/
+ * recommendation-only sources (no work item) keep using their existing
+ * canonical key, so signal-string dedup becomes the fallback, not the
+ * primary identity.
+ */
+export async function linkWorkItemsAndReconcile(propertyId: string, actions: RankedHomeAction[]): Promise<RankedHomeAction[]> {
+  const resolved = await Promise.all(actions.map(async (action) => {
+    const proposal = proposeWorkItemFromHomeAction(action, propertyId);
+    if (!proposal) return { action, workItem: null as HomeActionWorkItemLink | null };
+    try {
+      const item = await resolveAndUpsertWorkItem(proposal);
+      return {
+        action,
+        workItem: { id: item.id, workKey: item.workKey, state: item.state, acceptanceState: item.acceptanceState, disposition: item.disposition },
+      };
+    } catch (err) {
+      logger.warn({ err, actionId: action.id, propertyId }, 'Home Operations work item resolution failed; action stays unlinked this request');
+      return { action, workItem: null as HomeActionWorkItemLink | null };
+    }
+  }));
+
+  const byKey = new Map<string, { winner: RankedHomeAction; workItem: HomeActionWorkItemLink | null; mergedIds: string[] }>();
+  for (const { action, workItem } of resolved) {
+    const key = workItem ? `work:${workItem.workKey}` : `canonical:${action.deduplication.canonicalKey}`;
+    const current = byKey.get(key);
+    if (!current) {
+      byKey.set(key, { winner: action, workItem, mergedIds: [...action.deduplication.mergedActionIds, action.id] });
+      continue;
+    }
+    current.mergedIds.push(action.id, ...action.deduplication.mergedActionIds);
+    if (action.ranking.score > current.winner.ranking.score ||
+      (action.ranking.score === current.winner.ranking.score && action.id.localeCompare(current.winner.id) < 0)) {
+      current.winner = action;
+      current.workItem = workItem ?? current.workItem;
+    }
+  }
+
+  return [...byKey.values()]
+    .sort((a, b) =>
+      HOME_ACTION_PRIORITY_ORDER[a.winner.priority] - HOME_ACTION_PRIORITY_ORDER[b.winner.priority] ||
+      b.winner.ranking.score - a.winner.ranking.score ||
+      a.winner.id.localeCompare(b.winner.id))
+    .map(({ winner, workItem, mergedIds }, index) => ({
+      ...winner,
+      ranking: { ...winner.ranking, rank: index + 1 },
+      deduplication: {
+        canonicalKey: workItem ? workItem.workKey : winner.deduplication.canonicalKey,
+        mergedActionIds: [...new Set(mergedIds)].filter((id) => id !== winner.id),
+      },
+      workItem,
     }));
 }
 
@@ -402,7 +482,7 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   const candidates = reconcileCoverageHomeActions(governedCoverage.actions, coverageStates);
   const coverageConflictSuppressedCount = governedCoverage.actions.length - candidates.length;
 
-  const actions = rankAndDeduplicateHomeActions(candidates);
+  const actions = await linkWorkItemsAndReconcile(propertyId, rankAndDeduplicateHomeActions(candidates));
   emitHomeActionsSurfaced({ propertyId, userId, actions, source: 'phase2_home_actions' });
   for (const action of actions) {
     for (const supersededActionId of action.deduplication.mergedActionIds) {
@@ -637,7 +717,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
     attention: {
       actions: feed.actions,
       totalCount: feed.actions.length,
-      planHref: `/dashboard/properties/${propertyId}/action-plan`,
+      planHref: `/dashboard/properties/${propertyId}/home-operations`,
       firstValueInsight: feed.firstValueInsight,
     },
     decisions,
@@ -659,7 +739,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       recordHref: `/dashboard/properties/${propertyId}`,
       systemsHref: `/dashboard/properties/${propertyId}/inventory`,
       coverageHref: `/dashboard/properties/${propertyId}/inventory?tab=items&smart=gaps`,
-      workHref: `/dashboard/properties/${propertyId}/action-plan`,
+      workHref: `/dashboard/properties/${propertyId}/home-operations`,
     },
     diagnostics: feed.diagnostics,
     generatedAt: new Date().toISOString(),

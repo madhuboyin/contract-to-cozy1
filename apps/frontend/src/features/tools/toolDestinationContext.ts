@@ -98,7 +98,7 @@ export function resolveToolDestinationContext(args: {
     journey?.strategicAdvice ??
     null;
   const actionPlanHref = sourceAction
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/action-plan?focusActionId=${encodeURIComponent(sourceAction.id)}`
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/home-operations?focusActionId=${encodeURIComponent(sourceAction.id)}`
     : null;
   const journeyHref = journey
     ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`

@@ -35,6 +35,7 @@ function action(overrides: Partial<RankedHomeActionDTO> = {}): RankedHomeActionD
       },
     },
     deduplication: { canonicalKey: 'signal:hvac', mergedActionIds: [] },
+    workItem: null,
     ...overrides,
   };
 }
