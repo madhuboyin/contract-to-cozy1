@@ -461,7 +461,7 @@ export default function QuoteComparisonWorkspaceClient() {
     setManualInputError(null);
     try {
       const analyzed = await api.analyzeDocument(file, propertyId, false);
-      if (!analyzed.success) {
+      if (!('data' in analyzed)) {
         throw new Error(analyzed.error?.message || analyzed.message || 'Document analysis failed.');
       }
       const documentId = analyzed.data?.document?.id;
