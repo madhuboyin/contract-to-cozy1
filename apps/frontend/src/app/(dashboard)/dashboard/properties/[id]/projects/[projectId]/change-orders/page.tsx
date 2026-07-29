@@ -129,7 +129,15 @@ export default function ChangeOrdersPage() {
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-700">Needs review ({proposed.length})</h2>
           {proposed.map(o => (
-            <COCard key={o.id} order={o} onApprove={() => handleApprove(o.id)} onReject={() => handleReject(o.id)} />
+            <COCard
+              key={o.id}
+              order={o}
+              propertyId={propertyId}
+              projectId={projectId}
+              onReviewed={load}
+              onApprove={() => handleApprove(o.id)}
+              onReject={() => handleReject(o.id)}
+            />
           ))}
         </section>
       )}
@@ -137,26 +145,30 @@ export default function ChangeOrdersPage() {
       {approved.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-700">Approved</h2>
-          {approved.map(o => <COCard key={o.id} order={o} />)}
+          {approved.map(o => <COCard key={o.id} order={o} propertyId={propertyId} projectId={projectId} />)}
         </section>
       )}
 
       {other.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-500">Rejected / voided</h2>
-          {other.map(o => <COCard key={o.id} order={o} dimmed />)}
+          {other.map(o => <COCard key={o.id} order={o} propertyId={propertyId} projectId={projectId} dimmed />)}
         </section>
       )}
     </MobilePageContainer>
   );
 }
 
-function COCard({ order: o, onApprove, onReject, dimmed }: {
+function COCard({ order: o, propertyId, projectId, onReviewed, onApprove, onReject, dimmed }: {
   order: ProjectChangeOrder;
+  propertyId: string;
+  projectId: string;
+  onReviewed?: () => void;
   onApprove?: () => void;
   onReject?: () => void;
   dimmed?: boolean;
 }) {
+  const [showReview, setShowReview] = useState(false);
   return (
     <MobileCard variant="compact" className={`space-y-2 ${dimmed ? 'opacity-60' : ''}`}>
       <div className="flex items-start justify-between gap-2">
@@ -176,10 +188,38 @@ function COCard({ order: o, onApprove, onReject, dimmed }: {
       {o.description && <p className="text-xs text-slate-500">{o.description}</p>}
       {o.notes && <p className="text-xs text-slate-500">Notes: {o.notes}</p>}
       {o.approvedAt && <p className="text-xs text-emerald-700">Approved {fmtDate(o.approvedAt)}</p>}
+      <div className="rounded-md bg-slate-50 p-2 text-xs text-slate-700">
+        <p className="font-semibold">Compliance impact: {o.complianceStatus.replaceAll('_', ' ').toLowerCase()}</p>
+        <p>Permit: {o.amendedPermitStatus.replaceAll('_', ' ').toLowerCase()} · HOA: {o.hoaReapprovalStatus.replaceAll('_', ' ').toLowerCase()}</p>
+        {o.complianceImpact?.explanation && <p className="mt-1 text-slate-500">{o.complianceImpact.explanation}</p>}
+      </div>
+
+      {onReviewed && o.complianceStatus === 'RECHECK_REQUIRED' && (
+        <>
+          <Button size="sm" variant="outline" className="h-8 w-full text-xs" onClick={() => setShowReview(v => !v)}>
+            {showReview ? 'Hide authority review' : 'Record authority review'}
+          </Button>
+          {showReview && (
+            <ComplianceReviewForm
+              order={o}
+              propertyId={propertyId}
+              projectId={projectId}
+              onSaved={() => { setShowReview(false); onReviewed(); }}
+            />
+          )}
+        </>
+      )}
 
       {onApprove && onReject && (
         <div className="flex gap-2 pt-1">
-          <Button size="sm" className="h-8 text-xs flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={onApprove}>Approve</Button>
+          <Button
+            size="sm"
+            className="h-8 text-xs flex-1 bg-emerald-600 hover:bg-emerald-700"
+            disabled={o.complianceStatus === 'NOT_EVALUATED' || o.complianceStatus === 'RECHECK_REQUIRED'}
+            onClick={onApprove}
+          >
+            Approve
+          </Button>
           <Button size="sm" variant="outline" className="h-8 text-xs flex-1 text-rose-700 border-rose-300" onClick={onReject}>Reject</Button>
         </div>
       )}
@@ -197,14 +237,24 @@ function AddCOForm({ propertyId, projectId, onSaved, onCancel }: {
   const [err, setErr] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: '', category: 'HOMEOWNER_REQUEST', costDeltaCents: '', description: '', proposedByName: '',
+    impactExplanation: '',
+    workItemsChanged: false,
+    spacesChanged: false,
+    systemsChanged: false,
+    dimensionsChanged: false,
+    structuralEffectsChanged: false,
+    exteriorEffectsChanged: false,
+    regulatedMaterialsChanged: false,
+    scheduleOnly: false,
   });
-  const set = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }));
+  const set = (f: string, v: string | boolean) => setForm(p => ({ ...p, [f]: v }));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const delta = Math.round(parseFloat(form.costDeltaCents) * 100);
     if (!form.title || isNaN(delta)) { setErr('Title and amount are required'); return; }
     if (!form.proposedByName.trim()) { setErr('Proposed-by name is required'); return; }
+    if (!form.impactExplanation.trim()) { setErr('Explain the scope or schedule impact'); return; }
     setSaving(true);
     setErr(null);
     try {
@@ -214,6 +264,17 @@ function AddCOForm({ propertyId, projectId, onSaved, onCancel }: {
         costDeltaCents: delta,
         description: form.description.trim() || '—',
         proposedByName: form.proposedByName.trim(),
+        complianceImpact: {
+          workItemsChanged: form.workItemsChanged,
+          spacesChanged: form.spacesChanged,
+          systemsChanged: form.systemsChanged,
+          dimensionsChanged: form.dimensionsChanged,
+          structuralEffectsChanged: form.structuralEffectsChanged,
+          exteriorEffectsChanged: form.exteriorEffectsChanged,
+          regulatedMaterialsChanged: form.regulatedMaterialsChanged,
+          scheduleOnly: form.scheduleOnly,
+          explanation: form.impactExplanation.trim(),
+        },
       });
       onSaved();
     } catch (e: any) {
@@ -231,6 +292,37 @@ function AddCOForm({ propertyId, projectId, onSaved, onCancel }: {
           <Label htmlFor="coTitle">Title *</Label>
           <Input id="coTitle" value={form.title} onChange={e => set('title', e.target.value)} placeholder="Additional waterproofing" className="h-10" />
         </div>
+        <fieldset className="space-y-2 rounded-md border border-slate-200 p-3">
+          <legend className="px-1 text-sm font-medium text-slate-700">Compliance impact *</legend>
+          <p className="text-xs text-slate-500">Select every part of the approved scope this change affects.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ['workItemsChanged', 'Work items'],
+              ['spacesChanged', 'Spaces'],
+              ['systemsChanged', 'Home systems'],
+              ['dimensionsChanged', 'Dimensions'],
+              ['structuralEffectsChanged', 'Structural effects'],
+              ['exteriorEffectsChanged', 'Exterior appearance'],
+              ['regulatedMaterialsChanged', 'Regulated materials'],
+              ['scheduleOnly', 'Schedule only'],
+            ].map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form[key as keyof typeof form])}
+                  onChange={e => set(key, e.target.checked)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <Textarea
+            value={form.impactExplanation}
+            onChange={e => set('impactExplanation', e.target.value)}
+            rows={2}
+            placeholder="What changed, and why?"
+          />
+        </fieldset>
         <div className="space-y-1.5">
           <Label htmlFor="coProposed">Proposed by *</Label>
           <Input id="coProposed" value={form.proposedByName} onChange={e => set('proposedByName', e.target.value)} placeholder="Contractor or homeowner name" className="h-10" />
@@ -264,5 +356,68 @@ function AddCOForm({ propertyId, projectId, onSaved, onCancel }: {
         </div>
       </form>
     </MobileCard>
+  );
+}
+
+function ComplianceReviewForm({ order, propertyId, projectId, onSaved }: {
+  order: ProjectChangeOrder;
+  propertyId: string;
+  projectId: string;
+  onSaved: () => void;
+}) {
+  const permitRequired = order.amendedPermitStatus !== 'NOT_APPLICABLE';
+  const hoaRequired = order.hoaReapprovalStatus !== 'NOT_APPLICABLE';
+  const [permitStatus, setPermitStatus] = useState<'REQUESTED' | 'CONFIRMED'>('REQUESTED');
+  const [hoaStatus, setHoaStatus] = useState<'REQUESTED' | 'CONFIRMED'>('REQUESTED');
+  const [evidence, setEvidence] = useState('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.reviewChangeOrderCompliance(propertyId, projectId, order.id, {
+        amendedPermitStatus: permitRequired ? permitStatus : 'NOT_APPLICABLE',
+        hoaReapprovalStatus: hoaRequired ? hoaStatus : 'NOT_APPLICABLE',
+        evidenceDocumentIds: evidence.split(',').map(value => value.trim()).filter(Boolean),
+        reviewNotes: notes.trim(),
+      });
+      onSaved();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to record authority review');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-2 rounded-md border border-indigo-200 bg-indigo-50 p-3">
+      {error && <p className="text-xs text-rose-700">{error}</p>}
+      {permitRequired && (
+        <label className="block text-xs font-medium text-slate-700">
+          Amended permit
+          <select className="mt-1 h-9 w-full rounded border bg-white px-2" value={permitStatus} onChange={e => setPermitStatus(e.target.value as 'REQUESTED' | 'CONFIRMED')}>
+            <option value="REQUESTED">Requested / pending</option>
+            <option value="CONFIRMED">Authority confirmed</option>
+          </select>
+        </label>
+      )}
+      {hoaRequired && (
+        <label className="block text-xs font-medium text-slate-700">
+          HOA reapproval
+          <select className="mt-1 h-9 w-full rounded border bg-white px-2" value={hoaStatus} onChange={e => setHoaStatus(e.target.value as 'REQUESTED' | 'CONFIRMED')}>
+            <option value="REQUESTED">Requested / pending</option>
+            <option value="CONFIRMED">Association confirmed</option>
+          </select>
+        </label>
+      )}
+      <Input value={evidence} onChange={e => setEvidence(e.target.value)} placeholder="Evidence document IDs, comma-separated" />
+      <Textarea required value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Authority contact, reference, and review notes" />
+      <Button type="submit" size="sm" className="h-8 w-full text-xs" disabled={saving}>
+        {saving ? 'Saving…' : 'Save compliance review'}
+      </Button>
+    </form>
   );
 }

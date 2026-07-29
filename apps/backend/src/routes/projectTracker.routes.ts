@@ -25,6 +25,7 @@ import {
   listChangeOrders,
   createChangeOrder,
   updateChangeOrder,
+  reviewChangeOrderCompliance,
   approveChangeOrder,
   rejectChangeOrder,
   voidChangeOrder,
@@ -39,6 +40,8 @@ import {
   confirmCompletion,
   completeMinorWork,
   getProviderExecutionReadiness,
+  getProjectExecutionAlignment,
+  retryProjectExecutionReconciliation,
 } from '../controllers/projectTracker.controller';
 
 import {
@@ -52,6 +55,7 @@ import {
   MarkPaymentPaidSchema,
   CreateChangeOrderSchema,
   UpdateChangeOrderSchema,
+  ReviewChangeOrderComplianceSchema,
   CreateLogEntrySchema,
   CreateIssueSchema,
   UpdateIssueSchema,
@@ -89,6 +93,16 @@ router.get(
 );
 router.get('/properties/:propertyId/projects/:projectId', propertyAuthMiddleware, getProject);
 router.get('/properties/:propertyId/projects/:projectId/reconciliation-ledger', propertyAuthMiddleware, getReconciliationLedger);
+router.get(
+  '/properties/:propertyId/projects/:projectId/execution-alignment',
+  propertyAuthMiddleware,
+  getProjectExecutionAlignment,
+);
+router.post(
+  '/properties/:propertyId/projects/:projectId/execution-alignment/reconcile',
+  propertyAuthMiddleware,
+  retryProjectExecutionReconciliation,
+);
 router.patch(
   '/properties/:propertyId/projects/:projectId',
   propertyAuthMiddleware,
@@ -174,6 +188,12 @@ router.patch(
   propertyAuthMiddleware,
   validateBody(UpdateChangeOrderSchema),
   updateChangeOrder,
+);
+router.post(
+  '/properties/:propertyId/projects/:projectId/change-orders/:changeOrderId/compliance-review',
+  propertyAuthMiddleware,
+  validateBody(ReviewChangeOrderComplianceSchema),
+  reviewChangeOrderCompliance,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/change-orders/:changeOrderId/approve',

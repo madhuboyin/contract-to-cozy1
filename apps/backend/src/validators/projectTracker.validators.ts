@@ -243,6 +243,33 @@ export const MarkPaymentPaidSchema = z.object({
 
 // ── Change Orders ─────────────────────────────────────────────────────────────
 
+const ChangeOrderComplianceImpactSchema = z.object({
+  workItemsChanged: z.boolean().default(false),
+  spacesChanged: z.boolean().default(false),
+  systemsChanged: z.boolean().default(false),
+  dimensionsChanged: z.boolean().default(false),
+  structuralEffectsChanged: z.boolean().default(false),
+  exteriorEffectsChanged: z.boolean().default(false),
+  regulatedMaterialsChanged: z.boolean().default(false),
+  scheduleOnly: z.boolean().default(false),
+  explanation: z.string().trim().min(1).max(2000),
+}).superRefine((value, ctx) => {
+  const scopeChanged = value.workItemsChanged
+    || value.spacesChanged
+    || value.systemsChanged
+    || value.dimensionsChanged
+    || value.structuralEffectsChanged
+    || value.exteriorEffectsChanged
+    || value.regulatedMaterialsChanged;
+  if (value.scheduleOnly && scopeChanged) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['scheduleOnly'],
+      message: 'A schedule-only change cannot also declare a scope impact.',
+    });
+  }
+});
+
 export const CreateChangeOrderSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(5000),
@@ -251,6 +278,7 @@ export const CreateChangeOrderSchema = z.object({
   proposedByName: z.string().min(1).max(200),
   supportingDocumentKey: z.string().optional(),
   notes: z.string().max(2000).optional(),
+  complianceImpact: ChangeOrderComplianceImpactSchema,
 });
 
 export const UpdateChangeOrderSchema = z.object({
@@ -261,6 +289,16 @@ export const UpdateChangeOrderSchema = z.object({
   proposedByName: z.string().min(1).max(200).optional(),
   supportingDocumentKey: z.string().optional(),
   notes: z.string().max(2000).optional(),
+  complianceImpact: ChangeOrderComplianceImpactSchema.optional(),
+});
+
+const complianceApprovalStatus = z.enum(['REQUIRED', 'REQUESTED', 'CONFIRMED', 'NOT_APPLICABLE']);
+
+export const ReviewChangeOrderComplianceSchema = z.object({
+  amendedPermitStatus: complianceApprovalStatus,
+  hoaReapprovalStatus: complianceApprovalStatus,
+  evidenceDocumentIds: z.array(z.string().min(1)).max(50).default([]),
+  reviewNotes: z.string().trim().min(1).max(3000),
 });
 
 // ── Progress Log ──────────────────────────────────────────────────────────────

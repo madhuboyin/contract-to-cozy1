@@ -214,7 +214,6 @@ function AddMilestoneForm({ propertyId, projectId, nextPosition, onSaved, onCanc
               className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="STANDARD">Standard</option>
-              <option value="PERMIT_INSPECTION">Permit inspection</option>
               <option value="PAYMENT_TRIGGER">Payment trigger</option>
               <option value="CUSTOM">Custom</option>
             </select>
@@ -286,9 +285,14 @@ function MilestoneCard({
             <Camera className="h-3 w-3" />Photo required
           </span>
         )}
+        {m.executionSourceType !== 'MANUAL' && (
+          <span className="font-medium text-indigo-700">
+            Read-only · {m.executionSourceType.startsWith('PERMIT_') ? 'Permit Tracker' : 'Renovation compliance'}
+          </span>
+        )}
       </div>
 
-      {!dimmed && m.status !== 'COMPLETE' && (
+      {!dimmed && m.status !== 'COMPLETE' && m.executionSourceType === 'MANUAL' && (
         <div className="flex gap-2 pl-8">
           <Button
             size="sm"
@@ -302,6 +306,17 @@ function MilestoneCard({
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1" asChild>
             <Link href={`/dashboard/properties/${propertyId}/projects/${projectId}/log`}>
               <Camera className="h-3 w-3" />Add photo
+            </Link>
+          </Button>
+        </div>
+      )}
+      {!dimmed && m.status !== 'COMPLETE' && m.executionSourceType !== 'MANUAL' && (
+        <div className="pl-8">
+          <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
+            <Link href={m.executionSourceType.startsWith('PERMIT_')
+              ? `/dashboard/permits?propertyId=${propertyId}`
+              : `/dashboard/properties/${propertyId}/projects/${projectId}/execution-alignment`}>
+              Update authoritative source
             </Link>
           </Button>
         </div>

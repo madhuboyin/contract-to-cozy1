@@ -5814,10 +5814,65 @@ class APIClient {
   async createChangeOrder(propertyId: string, projectId: string, payload: {
     title: string; description: string; category: string; costDeltaCents: number;
     proposedByName: string; notes?: string;
+    complianceImpact: {
+      workItemsChanged: boolean; spacesChanged: boolean; systemsChanged: boolean;
+      dimensionsChanged: boolean; structuralEffectsChanged: boolean;
+      exteriorEffectsChanged: boolean; regulatedMaterialsChanged: boolean;
+      scheduleOnly: boolean; explanation: string;
+    };
   }): Promise<import('@/types').ProjectChangeOrder> {
     const res = await this.post<import('@/types').ProjectChangeOrder>(`/api/properties/${propertyId}/projects/${projectId}/change-orders`, payload);
     if (!res.data) throw new APIError('Failed to create change order', 500);
     return res.data;
+  }
+
+  async reviewChangeOrderCompliance(
+    propertyId: string,
+    projectId: string,
+    changeOrderId: string,
+    payload: {
+      amendedPermitStatus: 'REQUIRED' | 'REQUESTED' | 'CONFIRMED' | 'NOT_APPLICABLE';
+      hoaReapprovalStatus: 'REQUIRED' | 'REQUESTED' | 'CONFIRMED' | 'NOT_APPLICABLE';
+      evidenceDocumentIds: string[];
+      reviewNotes: string;
+    },
+  ): Promise<import('@/types').ProjectChangeOrder> {
+    const res = await this.post<import('@/types').ProjectChangeOrder>(
+      `/api/properties/${propertyId}/projects/${projectId}/change-orders/${changeOrderId}/compliance-review`,
+      payload,
+    );
+    if (!res.data) throw new APIError('Failed to record compliance review', 500);
+    return res.data;
+  }
+
+  async getProjectExecutionAlignment(propertyId: string, projectId: string): Promise<{
+    projectId: string;
+    renovationCaseId?: string | null;
+    hasErrors: boolean;
+    projections: Array<{
+      id: string; name: string; status: string; scheduledDate?: string | null;
+      executionSourceType: 'PERMIT_CORRECTION' | 'PERMIT_INSPECTION' | 'HOA_CONDITION';
+      executionSourceId: string; sourceStatus?: string | null;
+      sourceUpdatedAt?: string | null; lastReconciledAt?: string | null;
+      reconciliationStatus: string; reconciliationAttempts: number;
+      reconciliationError?: string | null; linkedPermitMilestoneId?: string | null;
+    }>;
+  }> {
+    const res = await this.get<{
+      projectId: string;
+      renovationCaseId?: string | null;
+      hasErrors: boolean;
+      projections: Array<any>;
+    }>(`/api/properties/${propertyId}/projects/${projectId}/execution-alignment`);
+    if (!res.data) throw new APIError('Failed to load execution alignment', 500);
+    return res.data;
+  }
+
+  async reconcileProjectExecution(propertyId: string, projectId: string): Promise<void> {
+    await this.post(
+      `/api/properties/${propertyId}/projects/${projectId}/execution-alignment/reconcile`,
+      {},
+    );
   }
 
   async approveChangeOrder(propertyId: string, projectId: string, changeOrderId: string): Promise<import('@/types').ProjectChangeOrder> {

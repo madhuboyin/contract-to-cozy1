@@ -123,6 +123,7 @@ export function changeOrderStatusTone(s: ProjectChangeOrderStatus): Tone {
 const NAV_TABS = [
   { label: 'Overview', suffix: '' },
   { label: 'Milestones', suffix: '/milestones' },
+  { label: 'Compliance sync', suffix: '/execution-alignment' },
   { label: 'Payments', suffix: '/payments' },
   { label: 'Change Orders', suffix: '/change-orders' },
   { label: 'Log', suffix: '/log' },

@@ -49,6 +49,7 @@ async function assertProject(projectId: string, propertyId: string) {
       permitApplicabilityBasis: true,
       hoaApplicability: true,
       hoaApplicabilityBasis: true,
+      renovationCaseId: true,
     },
   });
   if (!project || project.propertyId !== propertyId) {
@@ -99,14 +100,22 @@ async function assertMilestoneLinks(
     }
   }
   if (data.linkedPermitMilestoneId) {
+    const project = await prisma.projectRecord.findFirst({
+      where: { id: projectId, propertyId },
+      select: { renovationCaseId: true },
+    });
     const permitMilestone = await prisma.permitInspectionMilestone.findFirst({
       where: {
         id: data.linkedPermitMilestoneId,
         propertyId,
         permitRecord: {
           isActive: true,
-          sourceEntityType: 'PROJECT',
-          sourceEntityId: projectId,
+          OR: [
+            { sourceEntityType: 'PROJECT', sourceEntityId: projectId },
+            ...(project?.renovationCaseId
+              ? [{ sourceEntityType: 'RENOVATION_CASE', sourceEntityId: project.renovationCaseId }]
+              : []),
+          ],
         },
       },
       select: { id: true },
@@ -307,7 +316,16 @@ export async function syncFutureCareTaskWorkItem(propertyId: string, task: Prope
 async function assertMilestone(milestoneId: string, projectId: string) {
   const milestone = await prisma.projectMilestone.findUnique({
     where: { id: milestoneId },
-    select: { id: true, projectId: true, status: true, requiresPhotoEvidence: true, milestoneType: true },
+    select: {
+      id: true,
+      projectId: true,
+      status: true,
+      requiresPhotoEvidence: true,
+      milestoneType: true,
+      linkedPermitMilestoneId: true,
+      executionSourceType: true,
+      executionSourceId: true,
+    },
   });
   if (!milestone || milestone.projectId !== projectId) {
     throw new APIError('Milestone not found', 404, 'NOT_FOUND');
@@ -329,7 +347,16 @@ async function assertPayment(paymentId: string, projectId: string) {
 async function assertChangeOrder(changeOrderId: string, projectId: string) {
   const co = await prisma.projectChangeOrder.findUnique({
     where: { id: changeOrderId },
-    select: { id: true, projectId: true, status: true, costDeltaCents: true },
+    select: {
+      id: true,
+      projectId: true,
+      status: true,
+      costDeltaCents: true,
+      complianceStatus: true,
+      complianceImpact: true,
+      amendedPermitStatus: true,
+      hoaReapprovalStatus: true,
+    },
   });
   if (!co || co.projectId !== projectId) {
     throw new APIError('Change order not found', 404, 'NOT_FOUND');
@@ -340,7 +367,15 @@ async function assertChangeOrder(changeOrderId: string, projectId: string) {
 async function assertIssue(issueId: string, projectId: string) {
   const issue = await prisma.projectIssue.findUnique({
     where: { id: issueId },
-    select: { id: true, projectId: true, status: true, severity: true, blocksPayment: true },
+    select: {
+      id: true,
+      projectId: true,
+      status: true,
+      severity: true,
+      blocksPayment: true,
+      sourceEntityType: true,
+      sourceEntityId: true,
+    },
   });
   if (!issue || issue.projectId !== projectId) {
     throw new APIError('Issue not found', 404, 'NOT_FOUND');
@@ -900,6 +935,13 @@ export async function listMilestones(projectId: string, propertyId: string) {
 
 export async function createMilestone(projectId: string, propertyId: string, data: any) {
   await assertProject(projectId, propertyId);
+  if (data.linkedPermitMilestoneId || data.milestoneType === 'PERMIT_INSPECTION') {
+    throw new APIError(
+      'Permit inspection milestones are created by execution reconciliation and remain read-only in Project Tracker.',
+      409,
+      'PERMIT_TRACKER_AUTHORITY_REQUIRED',
+    );
+  }
   await assertMilestoneLinks(projectId, propertyId, data);
 
   // Auto-assign position if not provided (append to end)
@@ -930,7 +972,18 @@ export async function createMilestone(projectId: string, propertyId: string, dat
 
 export async function updateMilestone(milestoneId: string, projectId: string, propertyId: string, data: any) {
   await assertProject(projectId, propertyId);
-  await assertMilestone(milestoneId, projectId);
+  const milestone = await assertMilestone(milestoneId, projectId);
+  if (milestone.executionSourceType !== 'MANUAL' || milestone.linkedPermitMilestoneId) {
+    throw new APIError(
+      'This is a read-only compliance projection. Update its authoritative source and reconcile again.',
+      409,
+      'EXECUTION_PROJECTION_READ_ONLY',
+      {
+        sourceType: milestone.executionSourceType,
+        sourceId: milestone.executionSourceId ?? milestone.linkedPermitMilestoneId,
+      },
+    );
+  }
   await assertMilestoneLinks(projectId, propertyId, data);
 
   return prisma.projectMilestone.update({
@@ -955,6 +1008,17 @@ export async function completeMilestone(
   await assertProject(projectId, propertyId);
   const milestone = await assertMilestone(milestoneId, projectId);
 
+  if (milestone.executionSourceType !== 'MANUAL' || milestone.linkedPermitMilestoneId) {
+    throw new APIError(
+      'Compliance projections can only complete from their authoritative source.',
+      409,
+      'EXECUTION_PROJECTION_READ_ONLY',
+      {
+        sourceType: milestone.executionSourceType,
+        sourceId: milestone.executionSourceId ?? milestone.linkedPermitMilestoneId,
+      },
+    );
+  }
   if (milestone.status === 'COMPLETE') {
     throw new APIError('Milestone is already complete', 400, 'ALREADY_COMPLETE');
   }
@@ -999,7 +1063,14 @@ export async function completeMilestone(
 
 export async function deleteMilestone(milestoneId: string, projectId: string, propertyId: string) {
   await assertProject(projectId, propertyId);
-  await assertMilestone(milestoneId, projectId);
+  const milestone = await assertMilestone(milestoneId, projectId);
+  if (milestone.executionSourceType !== 'MANUAL' || milestone.linkedPermitMilestoneId) {
+    throw new APIError(
+      'Compliance projections are removed only when their authoritative source is no longer in scope.',
+      409,
+      'EXECUTION_PROJECTION_READ_ONLY',
+    );
+  }
   await prisma.projectMilestone.delete({ where: { id: milestoneId } });
 }
 
@@ -1101,6 +1172,50 @@ export async function deletePayment(paymentId: string, projectId: string, proper
 
 // ── Change Orders ─────────────────────────────────────────────────────────────
 
+type ChangeComplianceImpact = {
+  workItemsChanged?: boolean;
+  spacesChanged?: boolean;
+  systemsChanged?: boolean;
+  dimensionsChanged?: boolean;
+  structuralEffectsChanged?: boolean;
+  exteriorEffectsChanged?: boolean;
+  regulatedMaterialsChanged?: boolean;
+  scheduleOnly?: boolean;
+  explanation?: string;
+};
+
+export function evaluateChangeOrderComplianceImpact(impact: ChangeComplianceImpact | null | undefined) {
+  if (!impact) {
+    return {
+      complianceStatus: 'NOT_EVALUATED' as const,
+      permitRecheckRequired: false,
+      hoaReapprovalRequired: false,
+    };
+  }
+  const permitRecheckRequired = Boolean(
+    impact.workItemsChanged
+    || impact.systemsChanged
+    || impact.dimensionsChanged
+    || impact.structuralEffectsChanged
+    || impact.regulatedMaterialsChanged,
+  );
+  const hoaReapprovalRequired = Boolean(
+    impact.workItemsChanged
+    || impact.spacesChanged
+    || impact.dimensionsChanged
+    || impact.structuralEffectsChanged
+    || impact.exteriorEffectsChanged
+    || impact.regulatedMaterialsChanged,
+  );
+  return {
+    complianceStatus: permitRecheckRequired || hoaReapprovalRequired
+      ? 'RECHECK_REQUIRED' as const
+      : 'NO_RECHECK_REQUIRED' as const,
+    permitRecheckRequired,
+    hoaReapprovalRequired,
+  };
+}
+
 export async function listChangeOrders(projectId: string, propertyId: string) {
   await assertProject(projectId, propertyId);
   return prisma.projectChangeOrder.findMany({
@@ -1111,6 +1226,7 @@ export async function listChangeOrders(projectId: string, propertyId: string) {
 
 export async function createChangeOrder(projectId: string, propertyId: string, data: any) {
   await assertProject(projectId, propertyId);
+  const impactAssessment = evaluateChangeOrderComplianceImpact(data.complianceImpact);
 
   const max = await prisma.projectChangeOrder.aggregate({
     where: { projectId },
@@ -1130,6 +1246,10 @@ export async function createChangeOrder(projectId: string, propertyId: string, d
       proposedByName: data.proposedByName,
       supportingDocumentKey: data.supportingDocumentKey,
       notes: data.notes,
+      complianceImpact: data.complianceImpact,
+      complianceStatus: impactAssessment.complianceStatus,
+      amendedPermitStatus: impactAssessment.permitRecheckRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
+      hoaReapprovalStatus: impactAssessment.hoaReapprovalRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
     },
   });
 }
@@ -1142,6 +1262,9 @@ export async function updateChangeOrder(
   if (co.status !== 'PROPOSED') {
     throw new APIError('Only PROPOSED change orders can be edited', 400, 'CHANGE_ORDER_NOT_EDITABLE');
   }
+  const impactAssessment = data.complianceImpact !== undefined
+    ? evaluateChangeOrderComplianceImpact(data.complianceImpact)
+    : null;
 
   return prisma.projectChangeOrder.update({
     where: { id: changeOrderId },
@@ -1153,6 +1276,76 @@ export async function updateChangeOrder(
       ...(data.proposedByName && { proposedByName: data.proposedByName }),
       ...(data.supportingDocumentKey !== undefined && { supportingDocumentKey: data.supportingDocumentKey }),
       ...(data.notes !== undefined && { notes: data.notes }),
+      ...(data.complianceImpact !== undefined && {
+        complianceImpact: data.complianceImpact,
+        complianceStatus: impactAssessment!.complianceStatus,
+        amendedPermitStatus: impactAssessment!.permitRecheckRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
+        hoaReapprovalStatus: impactAssessment!.hoaReapprovalRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
+        complianceReviewNotes: null,
+        complianceEvidenceDocumentIds: [],
+        complianceReviewedByUserId: null,
+        complianceReviewedAt: null,
+      }),
+    },
+  });
+}
+
+export async function reviewChangeOrderCompliance(
+  changeOrderId: string,
+  projectId: string,
+  propertyId: string,
+  userId: string,
+  data: any,
+) {
+  await assertProject(projectId, propertyId);
+  const co = await assertChangeOrder(changeOrderId, projectId);
+  if (co.status !== 'PROPOSED') {
+    throw new APIError(
+      'Compliance review can only be recorded while a change order is PROPOSED.',
+      409,
+      'CHANGE_ORDER_NOT_EDITABLE',
+    );
+  }
+  if (co.complianceStatus === 'NOT_EVALUATED') {
+    throw new APIError(
+      'Record the structured scope impact before reviewing compliance.',
+      409,
+      'CHANGE_ORDER_IMPACT_REQUIRED',
+    );
+  }
+
+  const impact = (co.complianceImpact ?? {}) as ChangeComplianceImpact;
+  const assessment = evaluateChangeOrderComplianceImpact(impact);
+  const permitStatus = assessment.permitRecheckRequired
+    ? data.amendedPermitStatus
+    : 'NOT_APPLICABLE';
+  const hoaStatus = assessment.hoaReapprovalRequired
+    ? data.hoaReapprovalStatus
+    : 'NOT_APPLICABLE';
+  const evidenceIds: string[] = data.evidenceDocumentIds ?? [];
+  const recheckComplete = (
+    (!assessment.permitRecheckRequired || permitStatus === 'CONFIRMED')
+    && (!assessment.hoaReapprovalRequired || hoaStatus === 'CONFIRMED')
+  );
+
+  if (recheckComplete && evidenceIds.length === 0) {
+    throw new APIError(
+      'Authority or association evidence is required before compliance recheck can be completed.',
+      409,
+      'CHANGE_ORDER_COMPLIANCE_EVIDENCE_REQUIRED',
+    );
+  }
+
+  return prisma.projectChangeOrder.update({
+    where: { id: changeOrderId },
+    data: {
+      amendedPermitStatus: permitStatus,
+      hoaReapprovalStatus: hoaStatus,
+      complianceStatus: recheckComplete ? 'RECHECK_COMPLETE' : assessment.complianceStatus,
+      complianceReviewNotes: data.reviewNotes,
+      complianceEvidenceDocumentIds: evidenceIds,
+      complianceReviewedByUserId: userId,
+      complianceReviewedAt: new Date(),
     },
   });
 }
@@ -1164,6 +1357,25 @@ export async function approveChangeOrder(
   const co = await assertChangeOrder(changeOrderId, projectId);
   if (co.status !== 'PROPOSED') {
     throw new APIError('Only PROPOSED change orders can be approved', 400, 'INVALID_STATUS');
+  }
+  if (
+    co.complianceStatus === 'NOT_EVALUATED'
+    || co.complianceStatus === 'RECHECK_REQUIRED'
+    || co.amendedPermitStatus === 'REQUIRED'
+    || co.amendedPermitStatus === 'REQUESTED'
+    || co.hoaReapprovalStatus === 'REQUIRED'
+    || co.hoaReapprovalStatus === 'REQUESTED'
+  ) {
+    throw new APIError(
+      'Complete the permit and HOA impact recheck before approving this change order.',
+      409,
+      'CHANGE_ORDER_COMPLIANCE_RECHECK_REQUIRED',
+      {
+        complianceStatus: co.complianceStatus,
+        amendedPermitStatus: co.amendedPermitStatus,
+        hoaReapprovalStatus: co.hoaReapprovalStatus,
+      },
+    );
   }
 
   const updated = await prisma.projectChangeOrder.update({
@@ -1365,7 +1577,15 @@ export async function createIssue(projectId: string, propertyId: string, data: a
 
 export async function updateIssue(issueId: string, projectId: string, propertyId: string, data: any) {
   await assertProject(projectId, propertyId);
-  await assertIssue(issueId, projectId);
+  const issue = await assertIssue(issueId, projectId);
+  if (issue.sourceEntityType) {
+    throw new APIError(
+      'This issue is controlled by a compliance source and cannot be edited manually.',
+      409,
+      'EXECUTION_ISSUE_SOURCE_AUTHORITY_REQUIRED',
+      { sourceType: issue.sourceEntityType, sourceId: issue.sourceEntityId },
+    );
+  }
 
   return prisma.projectIssue.update({
     where: { id: issueId },
@@ -1390,6 +1610,14 @@ export async function resolveIssue(
 
   if (issue.status === 'RESOLVED') {
     throw new APIError('Issue is already resolved', 400, 'ALREADY_RESOLVED');
+  }
+  if (issue.sourceEntityType) {
+    throw new APIError(
+      'Resolve the underlying permit inspection or HOA condition; reconciliation will close this issue.',
+      409,
+      'EXECUTION_ISSUE_SOURCE_AUTHORITY_REQUIRED',
+      { sourceType: issue.sourceEntityType, sourceId: issue.sourceEntityId },
+    );
   }
 
   const wasBlocking = issue.severity === 'BLOCKING';

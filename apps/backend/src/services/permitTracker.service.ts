@@ -25,6 +25,10 @@ import { getGeneratePermitDisclosureQueue } from './JobQueue.service';
 import { presignGetObject } from './storage/presign';
 import { JOB_REGISTRY } from '../config/workerJobRegistry';
 import { evaluateWorkerExecution } from '../config/workerExecutionPolicy';
+import {
+  markProjectsForPermitRecordReconciliationError,
+  reconcileProjectsForPermitRecord,
+} from './renovationExecution.service';
 
 // ── Inspection milestone templates ───────────────────────────────────────────
 
@@ -273,6 +277,9 @@ export class PermitTrackerService {
         };
 
     await prisma.propertyPermitRecord.update({ where: { id: permitId }, data });
+    await reconcileProjectsForPermitRecord(permitId, propertyId).catch(async (error) => {
+      await markProjectsForPermitRecordReconciliationError(permitId, propertyId, error).catch(() => {});
+    });
     return this.getPermitDetail(permitId, propertyId);
   }
 
@@ -314,6 +321,9 @@ export class PermitTrackerService {
     if (ACTIVE_STATUSES.includes(payload.status as PermitRecordStatus)) {
       await this.generateInspectionMilestones(permitId, propertyId, existing.category as PermitRecordCategory);
     }
+    await reconcileProjectsForPermitRecord(permitId, propertyId).catch(async (error) => {
+      await markProjectsForPermitRecordReconciliationError(permitId, propertyId, error).catch(() => {});
+    });
     return this.getPermitDetail(permitId, propertyId);
   }
 
@@ -465,6 +475,12 @@ export class PermitTrackerService {
         }).catch(() => {});
       }
     }
+
+    await reconcileProjectsForPermitRecord(permitId, propertyId).catch(async (error) => {
+      // Permit Tracker remains authoritative even if its Project projection
+      // needs an explicit retry from execution-alignment diagnostics.
+      await markProjectsForPermitRecordReconciliationError(permitId, propertyId, error).catch(() => {});
+    });
 
     const now = new Date();
     return {

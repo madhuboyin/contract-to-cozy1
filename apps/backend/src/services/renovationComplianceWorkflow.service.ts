@@ -3,6 +3,10 @@ import { APIError } from '../middleware/error.middleware';
 import { getRenovationCase, linkContributor } from './renovationCase.service';
 import { resolvePropertyAccess } from './propertyAccess.service';
 import { hoaComplianceService } from './hoaCompliance.service';
+import {
+  markProjectsForRenovationCaseReconciliationError,
+  reconcileProjectsForRenovationCase,
+} from './renovationExecution.service';
 
 async function caseScope(propertyId: string, renovationCaseId: string, scopeVersionId?: string) {
   const renovationCase = await prisma.renovationCase.findFirst({
@@ -132,7 +136,7 @@ export async function createCondition(
     });
     if (!evidence) throw new APIError('Condition evidence must belong to this property.', 409, 'RENOVATION_CONDITION_EVIDENCE_SCOPE_MISMATCH');
   }
-  return prisma.renovationComplianceCondition.create({
+  const created = await prisma.renovationComplianceCondition.create({
     data: {
       renovationCaseId,
       propertyId,
@@ -151,6 +155,14 @@ export async function createCondition(
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
     },
   });
+  await reconcileProjectsForRenovationCase(renovationCaseId, propertyId).catch(async (error) => {
+    await markProjectsForRenovationCaseReconciliationError(
+      renovationCaseId,
+      propertyId,
+      error,
+    ).catch(() => {});
+  });
+  return created;
 }
 
 export async function updateCondition(
@@ -171,7 +183,7 @@ export async function updateCondition(
     });
     if (!evidence) throw new APIError('Condition evidence must belong to this property.', 409, 'RENOVATION_CONDITION_EVIDENCE_SCOPE_MISMATCH');
   }
-  return prisma.renovationComplianceCondition.update({
+  const updated = await prisma.renovationComplianceCondition.update({
     where: { id: conditionId },
     data: {
       status: input.status,
@@ -181,6 +193,14 @@ export async function updateCondition(
       verifiedByUserId: actorUserId,
     },
   });
+  await reconcileProjectsForRenovationCase(renovationCaseId, propertyId).catch(async (error) => {
+    await markProjectsForRenovationCaseReconciliationError(
+      renovationCaseId,
+      propertyId,
+      error,
+    ).catch(() => {});
+  });
+  return updated;
 }
 
 export async function createHoaDocumentReview(

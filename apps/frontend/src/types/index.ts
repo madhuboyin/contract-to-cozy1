@@ -5941,6 +5941,8 @@ export type ProjectType =
 
 export type ProjectMilestoneStatus = 'UPCOMING' | 'IN_PROGRESS' | 'COMPLETE' | 'DELAYED' | 'DISPUTED' | 'BLOCKED';
 export type ProjectMilestoneType = 'STANDARD' | 'PERMIT_INSPECTION' | 'PAYMENT_TRIGGER' | 'CUSTOM';
+export type ProjectExecutionSourceType = 'MANUAL' | 'PERMIT_CORRECTION' | 'PERMIT_INSPECTION' | 'HOA_CONDITION';
+export type ProjectExecutionSyncStatus = 'NOT_APPLICABLE' | 'PENDING' | 'HEALTHY' | 'ERROR';
 export type ProjectPaymentStatus = 'PENDING' | 'DUE' | 'PAID' | 'OVERDUE' | 'DISPUTED' | 'ON_HOLD';
 export type ProjectPaymentTriggerType = 'MILESTONE' | 'DATE' | 'MANUAL';
 export type ProjectChangeOrderStatus = 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'VOIDED';
@@ -5962,6 +5964,14 @@ export interface ProjectMilestoneSummary {
   position: number;
   daysDelayed?: number | null;
   linkedPermitMilestoneId?: string | null;
+  executionSourceType: ProjectExecutionSourceType;
+  executionSourceId?: string | null;
+  sourceStatus?: string | null;
+  sourceUpdatedAt?: string | null;
+  lastReconciledAt?: string | null;
+  reconciliationStatus: ProjectExecutionSyncStatus;
+  reconciliationAttempts: number;
+  reconciliationError?: string | null;
 }
 
 export interface ProjectMilestone extends ProjectMilestoneSummary {
@@ -6009,6 +6019,23 @@ export interface ProjectChangeOrder {
   approvedByUserId?: string | null;
   approvedAt?: string | null;
   notes?: string | null;
+  complianceStatus: 'NOT_EVALUATED' | 'NO_RECHECK_REQUIRED' | 'RECHECK_REQUIRED' | 'RECHECK_COMPLETE';
+  complianceImpact?: {
+    workItemsChanged: boolean;
+    spacesChanged: boolean;
+    systemsChanged: boolean;
+    dimensionsChanged: boolean;
+    structuralEffectsChanged: boolean;
+    exteriorEffectsChanged: boolean;
+    regulatedMaterialsChanged: boolean;
+    scheduleOnly: boolean;
+    explanation: string;
+  } | null;
+  complianceReviewNotes?: string | null;
+  complianceEvidenceDocumentIds: string[];
+  amendedPermitStatus: 'NOT_APPLICABLE' | 'REQUIRED' | 'REQUESTED' | 'CONFIRMED';
+  hoaReapprovalStatus: 'NOT_APPLICABLE' | 'REQUIRED' | 'REQUESTED' | 'CONFIRMED';
+  complianceReviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

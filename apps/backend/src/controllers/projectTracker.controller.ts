@@ -1,6 +1,11 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest as Request } from '../types';
 import * as svc from '../services/projectTracker.service';
+import {
+  getProjectExecutionAlignment as getExecutionAlignment,
+  markProjectExecutionReconciliationError,
+  reconcileProjectExecution,
+} from '../services/renovationExecution.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import {
   assertProjectComplianceApplicable,
@@ -328,6 +333,19 @@ export async function updateChangeOrder(req: Request, res: Response, next: NextF
   } catch (err) { next(err); }
 }
 
+export async function reviewChangeOrderCompliance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await svc.reviewChangeOrderCompliance(
+      req.params.changeOrderId,
+      req.params.projectId,
+      req.params.propertyId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function approveChangeOrder(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.approveChangeOrder(
@@ -353,6 +371,27 @@ export async function voidChangeOrder(req: Request, res: Response, next: NextFun
     );
     res.json({ success: true, data });
   } catch (err) { next(err); }
+}
+
+export async function getProjectExecutionAlignment(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await getExecutionAlignment(req.params.projectId, req.params.propertyId);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function retryProjectExecutionReconciliation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await reconcileProjectExecution(req.params.projectId, req.params.propertyId);
+    res.json({ success: true, data });
+  } catch (err) {
+    await markProjectExecutionReconciliationError(
+      req.params.projectId,
+      req.params.propertyId,
+      err,
+    ).catch(() => {});
+    next(err);
+  }
 }
 
 // ── Progress Log ──────────────────────────────────────────────────────────────

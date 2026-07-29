@@ -1985,6 +1985,7 @@ model User {
   // Live Project Execution Tracker
   projectMilestonesCompleted  ProjectMilestone[]   @relation("ProjectMilestoneCompletedBy")
   projectChangeOrdersApproved ProjectChangeOrder[] @relation("ProjectChangeOrderApprovedBy")
+  projectChangeOrdersComplianceReviewed ProjectChangeOrder[] @relation("ProjectChangeOrderComplianceReviewedBy")
   projectIssuesResolved       ProjectIssue[]       @relation("ProjectIssueResolvedBy")
   projectProgressLogsCreated  ProjectProgressLog[] @relation("ProjectProgressLoggedBy")
   projectWriteBacksApplied    ProjectWriteBack[]   @relation("ProjectWriteBackAppliedBy")
@@ -16493,6 +16494,20 @@ enum ProjectMilestoneStatus {
   BLOCKED
 }
 
+enum ProjectExecutionSourceType {
+  MANUAL
+  PERMIT_CORRECTION
+  PERMIT_INSPECTION
+  HOA_CONDITION
+}
+
+enum ProjectExecutionSyncStatus {
+  NOT_APPLICABLE
+  PENDING
+  HEALTHY
+  ERROR
+}
+
 enum ProjectPaymentTriggerType {
   MILESTONE
   DATE
@@ -16522,6 +16537,27 @@ enum ProjectChangeOrderStatus {
   APPROVED
   REJECTED
   VOIDED
+}
+
+enum ProjectChangeComplianceStatus {
+  NOT_EVALUATED
+  NO_RECHECK_REQUIRED
+  RECHECK_REQUIRED
+  RECHECK_COMPLETE
+}
+
+enum ProjectComplianceApprovalStatus {
+  NOT_APPLICABLE
+  REQUIRED
+  REQUESTED
+  CONFIRMED
+}
+
+enum ProjectIssueResponsibleParty {
+  HOUSEHOLD
+  CONTRACTOR
+  SHARED
+  AUTHORITY
 }
 
 enum ProjectProgressLogEntryType {
@@ -16760,6 +16796,17 @@ model ProjectMilestone {
   // For PERMIT_INSPECTION type: synced with the Permit Tracker inspection record
   linkedPermitMilestoneId String?
 
+  // Execution projections are read-only in Project Tracker. Permit Tracker or
+  // the renovation compliance condition remains the source of truth.
+  executionSourceType ProjectExecutionSourceType @default(MANUAL)
+  executionSourceId   String?
+  sourceStatus        String?
+  sourceUpdatedAt     DateTime?
+  lastReconciledAt    DateTime?
+  reconciliationStatus ProjectExecutionSyncStatus @default(NOT_APPLICABLE)
+  reconciliationAttempts Int @default(0)
+  reconciliationError String? @db.Text
+
   // Delay tracking
   daysDelayed Int?
 
@@ -16781,6 +16828,8 @@ model ProjectMilestone {
   @@index([projectId, status])
   @@index([dependsOnMilestoneId])
   @@index([linkedPermitMilestoneId])
+  @@unique([projectId, executionSourceType, executionSourceId])
+  @@index([projectId, reconciliationStatus])
   @@map("project_milestones")
 }
 
@@ -16833,16 +16882,29 @@ model ProjectChangeOrder {
   approvedAt            DateTime?
   notes                 String?   @db.Text
 
+  // A change cannot be approved until its compliance impact is assessed.
+  complianceStatus          ProjectChangeComplianceStatus @default(NOT_EVALUATED)
+  complianceImpact          Json?
+  complianceReviewNotes     String? @db.Text
+  complianceEvidenceDocumentIds String[] @default([])
+  complianceReviewedByUserId String?
+  complianceReviewedAt       DateTime?
+  amendedPermitStatus        ProjectComplianceApprovalStatus @default(NOT_APPLICABLE)
+  hoaReapprovalStatus        ProjectComplianceApprovalStatus @default(NOT_APPLICABLE)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   project    ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
   approvedBy User?         @relation("ProjectChangeOrderApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  complianceReviewedBy User? @relation("ProjectChangeOrderComplianceReviewedBy", fields: [complianceReviewedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, changeNumber])
   @@index([projectId, status])
   @@index([approvedByUserId])
+  @@index([projectId, complianceStatus])
+  @@index([complianceReviewedByUserId])
   @@map("project_change_orders")
 }
 
@@ -16905,6 +16967,10 @@ model ProjectIssue {
   resolvedByUserId String?
 
   attachmentKeys String[] // S3 keys for photos and documents used as evidence
+  evidenceDocumentIds String[] @default([])
+  responsibleParty ProjectIssueResponsibleParty @default(SHARED)
+  sourceEntityType String?
+  sourceEntityId   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -16916,6 +16982,7 @@ model ProjectIssue {
   @@index([projectId, status])
   @@index([projectId, severity])
   @@index([resolvedByUserId])
+  @@unique([projectId, sourceEntityType, sourceEntityId])
   @@map("project_issues")
 }
 
