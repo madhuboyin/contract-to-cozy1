@@ -53,6 +53,9 @@ jobs:
       - name: Service Quote Decision safety and accessibility acceptance
         run: npm run test:service-quote-decision:e2e
 
+      - name: Renovation truth, accessibility, and responsive acceptance
+        run: npm run test:renovations:e2e
+
       - name: Upload Ownership Cost target-build evidence
         if: always()
         uses: actions/upload-artifact@v4

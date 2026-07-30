@@ -887,7 +887,9 @@ node --test tests/unit/
 against the production Next.js build. It covers the canonical list-to-case
 journey, lifecycle-derived primary action, honest empty state, independent
 readiness/compliance failure, legacy redirect, keyboard focus, automated WCAG
-2 A/AA checks, and mobile overflow across Chromium, Firefox, and WebKit.
+2 A/AA checks, truthful requirements failure/retry behavior, and mobile
+overflow across Chromium, Firefox, and WebKit. The suite is enforced by the
+frontend quality-gates workflow.
 
 ```bash
 cd apps/frontend

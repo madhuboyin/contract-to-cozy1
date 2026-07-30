@@ -8,6 +8,7 @@ type FixtureOptions = {
   empty?: boolean;
   readinessFailure?: boolean;
   complianceFailure?: boolean;
+  requirementsFailures?: number;
 };
 
 const property = {
@@ -86,6 +87,7 @@ export async function installAuthenticatedContext(context: BrowserContext) {
 
 export async function installRenovationApi(page: Page, options: FixtureOptions = {}) {
   const requests: string[] = [];
+  let remainingRequirementsFailures = options.requirementsFailures ?? 0;
 
   await page.route(`${apiOrigin}/api/**`, async (route) => {
     const request = route.request();
@@ -139,6 +141,18 @@ export async function installRenovationApi(page: Page, options: FixtureOptions =
     }
     if (requestPath === `/api/properties/${propertyId}/renovation-cases/${caseId}`) {
       await fulfillJson(route, renovationCase);
+      return;
+    }
+    if (
+      request.method() === 'GET'
+      && requestPath === `/api/properties/${propertyId}/renovation-cases/${caseId}/requirements`
+    ) {
+      if (remainingRequirementsFailures > 0) {
+        remainingRequirementsFailures -= 1;
+        await fulfillJson(route, 'Requirements source temporarily unavailable', 503);
+        return;
+      }
+      await fulfillJson(route, []);
       return;
     }
     if (requestPath === `/api/properties/${propertyId}/renovation-cases/${caseId}/readiness`) {

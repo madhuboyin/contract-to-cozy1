@@ -35,6 +35,7 @@ export default function RenovationRequirementsPage() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [authority, setAuthority] = useState({
@@ -58,18 +59,21 @@ export default function RenovationRequirementsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
+    setError('');
     try {
       const [caseResponse, requirementResponse] = await Promise.all([
         api.getRenovationCase(propertyId, caseId),
         api.listRenovationRequirements(propertyId, caseId),
       ]);
       if (!caseResponse.success || !caseResponse.data) throw new Error(caseResponse.message || 'Renovation case not found');
+      if (!requirementResponse.success || !Array.isArray(requirementResponse.data)) {
+        throw new Error(requirementResponse.message || 'Renovation requirements could not be loaded');
+      }
       setRenovationCase(caseResponse.data);
-      setRequirements(requirementResponse.success && Array.isArray(requirementResponse.data)
-        ? requirementResponse.data
-        : []);
+      setRequirements(requirementResponse.data);
     } catch (err: any) {
-      setError(err.message || 'Failed to load requirements');
+      setLoadError(err.message || 'Failed to load requirements');
     } finally {
       setLoading(false);
     }
@@ -150,10 +154,28 @@ export default function RenovationRequirementsPage() {
         </Button>
       </div>
 
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
-      {loading ? <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div> : null}
+      {loadError ? (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <p>{loadError}</p>
+          <Button variant="link" className="mt-1 h-auto p-0 text-red-800" onClick={() => void load()}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
+      {error ? (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {error}
+        </div>
+      ) : null}
+      {loading ? (
+        <div role="status" className="flex items-center justify-center py-10">
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" aria-hidden="true" />
+          Loading renovation requirements…
+        </div>
+      ) : null}
 
-      <Card>
+      {!loading && !loadError ? <>
+        <Card>
         <CardContent className="space-y-4 p-5">
           <div>
             <h2 className="font-semibold text-slate-900">Authority and jurisdiction</h2>
@@ -243,7 +265,8 @@ export default function RenovationRequirementsPage() {
             </Card>
           );
         })}
-      </div>
+        </div>
+      </> : null}
     </div>
   );
 }

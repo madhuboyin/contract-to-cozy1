@@ -1358,6 +1358,32 @@ Exit criteria:
 - a supporting API failure does not hide the durable renovation case; and
 - the legacy property-scoped advisor route resolves to the canonical workspace.
 
+### Slice 13 — Truthful requirements recovery and CI enforcement
+
+**Goal:** prevent a requirements outage from appearing as a successful empty
+research state and make the browser contract a required quality gate.
+
+**Implementation status (2026-07-29):** Implemented.
+
+Deliver:
+
+- treat malformed or unsuccessful requirements responses as load failures;
+- keep authority and requirement mutation controls hidden until the governing
+  requirements read succeeds;
+- expose an accessible retry action without relabeling failure as “no research”;
+- verify recovery from a transient requirements failure in the cross-browser
+  acceptance suite; and
+- run the renovation browser suite in frontend CI for pushes and pull requests
+  targeting `main`.
+
+Exit criteria:
+
+- an unavailable requirements source never renders the successful empty state;
+- a retry can recover without reloading the whole application;
+- mutation failures remain distinct from initial-load failures; and
+- CI blocks changes that break the renovation truth, accessibility, redirect,
+  or responsive contracts.
+
 ---
 
 ## 11. Acceptance Strategy

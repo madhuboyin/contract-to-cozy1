@@ -53,6 +53,22 @@ test('case remains usable when readiness and compliance details fail independent
   await expect(page.getByRole('link', { name: 'Resolve 2 blocking readiness items' })).toBeVisible();
 });
 
+test('requirements failure remains distinct from empty research and recovers on retry', async ({ page }) => {
+  await installRenovationApi(page, { requirementsFailures: 1 });
+  await page.goto(`/dashboard/properties/${propertyId}/renovations/${caseId}/requirements`);
+
+  const requirementsAlert = page.getByRole('alert')
+    .filter({ hasText: 'Requirements source temporarily unavailable' });
+  await expect(requirementsAlert).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Generate research candidates' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Try again' }).click();
+
+  await expect(requirementsAlert).toHaveCount(0);
+  await expect(page.getByText('Start scope-specific requirements research')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Generate research candidates' })).toBeVisible();
+});
+
 test('legacy advisor route redirects to the canonical renovation workspace', async ({ page }) => {
   await installRenovationApi(page);
   await page.goto(`/dashboard/properties/${propertyId}/tools/home-renovation-risk-advisor`);
