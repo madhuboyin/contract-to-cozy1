@@ -95,6 +95,18 @@ export function findActiveWorkItemsForSubject(subjectType: OperationalWorkSubjec
 }
 
 /**
+ * Home Operations Item #12 (§5.16): acceptanceState is monotonic — it moves
+ * PROPOSED -> ACCEPTED once and is preserved through every later transition
+ * (see domain/transitions.ts) — so a count > 0 here is a correct "has this
+ * property ever had work accepted" signal, not just "currently accepted."
+ */
+export function countAcceptedWorkItemsForProperty(propertyId: string) {
+  return prisma.operationalWorkItem.count({
+    where: { propertyId, acceptanceState: 'ACCEPTED' },
+  });
+}
+
+/**
  * Two candidates resolving to the same workKey can race to create it — both
  * see no existing row via findUnique, both call create. Postgres's
  * @@unique([propertyId, workKey]) constraint lets only one insert win; the

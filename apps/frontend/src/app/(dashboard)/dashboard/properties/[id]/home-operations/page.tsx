@@ -245,6 +245,7 @@ export default function HomeOperationsPage() {
           onChanged={refreshPlan}
           focusActionId={focusActionId}
           focusWorkItemId={focusWorkItemId}
+          emptyStateReason={feed.diagnostics.emptyStateReason}
         />
       </section>
     </main>

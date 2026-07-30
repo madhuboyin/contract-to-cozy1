@@ -333,6 +333,17 @@ export type HomeFirstValueInsightDTO = {
   generatedAt: string;
 };
 
+// Home Operations Item #12 (§5.16): distinguishes why the ranked action feed
+// is empty instead of implying "nothing needs attention" in every case.
+// Non-null only when diagnostics.surfacedCount === 0.
+export type HomeActionEmptyStateReason =
+  | 'DATA_UNAVAILABLE'
+  | 'RECOMMENDATIONS_PAUSED'
+  | 'SOURCE_EVALUATION_PENDING'
+  | 'MISSING_FACTS'
+  | 'NO_ACCEPTED_WORK'
+  | 'ALL_CAUGHT_UP';
+
 export type HomeActionFeedDTO = {
   contractVersion: 'phase2-v1';
   propertyId: string;
@@ -352,6 +363,7 @@ export type HomeActionFeedDTO = {
       evaluatedCount: number;
       activeCount: number;
     };
+    emptyStateReason: HomeActionEmptyStateReason | null;
   };
 };
 

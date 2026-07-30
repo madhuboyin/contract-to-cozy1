@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { RankedHomeActionDTO } from '@/types';
+import type { HomeActionEmptyStateReason, RankedHomeActionDTO } from '@/types';
 import {
   ActionCard,
   CoverageCorrectionGroupCard,
@@ -87,6 +87,37 @@ const TAB_EMPTY_STATE: Record<HomeOperationsTabKey, { title: string; body: strin
   completed: { title: 'Nothing completed recently', body: 'Verified and reported-complete work from the last 30 days shows up here.' },
 };
 
+// Home Operations Item #12 (§5.16): shown instead of TAB_EMPTY_STATE only
+// when the whole feed is empty (every tab, simultaneously, for the same
+// reason) — never translate system silence into a home-health guarantee.
+// Copy stays tab-agnostic since all non-routine tabs show the same reason.
+const EMPTY_STATE_REASON_COPY: Record<HomeActionEmptyStateReason, { title: string; body: string }> = {
+  DATA_UNAVAILABLE: {
+    title: 'We couldn’t fully evaluate your home right now',
+    body: 'Something went wrong while generating recommendations. This isn’t a clean bill of health — try refreshing, and contact support if it keeps happening.',
+  },
+  RECOMMENDATIONS_PAUSED: {
+    title: 'Personalized recommendations are paused',
+    body: 'This is a temporary, account-wide pause on generating new suggestions — not a sign your home is in good shape. Regular checks will resume once it’s lifted.',
+  },
+  SOURCE_EVALUATION_PENDING: {
+    title: 'We haven’t evaluated your home yet',
+    body: 'A risk assessment or maintenance checklist hasn’t run for this property yet, so there’s nothing to show — not because nothing needs attention.',
+  },
+  MISSING_FACTS: {
+    title: 'We need more details to recommend anything',
+    body: 'Key facts about your home’s systems and structure are still missing, so we can’t confidently suggest what needs attention. Add property details to unlock recommendations.',
+  },
+  NO_ACCEPTED_WORK: {
+    title: 'No work has been accepted yet',
+    body: 'Nothing showing up here just means nothing’s been added to your plan so far — not that your home has been thoroughly checked. Accept a recommendation to get started.',
+  },
+  ALL_CAUGHT_UP: {
+    title: 'You’re caught up',
+    body: 'Every recommendation has been addressed or is being tracked elsewhere, and nothing new has come up. We’ll let you know as soon as something does.',
+  },
+};
+
 function EntryCard({
   entry,
   propertyId,
@@ -163,6 +194,7 @@ export function HomeOperationsTabPanel({
   onChanged,
   focusActionId,
   focusWorkItemId,
+  emptyStateReason,
 }: {
   tab: HomeOperationsTabKey;
   actions: RankedHomeActionDTO[];
@@ -170,6 +202,7 @@ export function HomeOperationsTabPanel({
   onChanged: () => Promise<unknown>;
   focusActionId: string | null;
   focusWorkItemId: string | null;
+  emptyStateReason: HomeActionEmptyStateReason | null;
 }) {
   if (tab === 'routines') {
     const empty = TAB_EMPTY_STATE.routines;
@@ -182,6 +215,21 @@ export function HomeOperationsTabPanel({
   }
 
   if (actions.length === 0) {
+    // The whole feed is empty (every tab, simultaneously) — say why instead
+    // of defaulting to this tab's "filtered empty" copy, which would imply
+    // a clean bill of health even when recommendations are paused, failed,
+    // or have simply never run for this property.
+    if (emptyStateReason) {
+      const empty = EMPTY_STATE_REASON_COPY[emptyStateReason];
+      const isCaughtUp = emptyStateReason === 'ALL_CAUGHT_UP';
+      return (
+        <div className={`rounded-2xl border p-5 text-center ${isCaughtUp ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+          <p className={`font-semibold ${isCaughtUp ? 'text-emerald-900' : 'text-slate-800'}`}>{empty.title}</p>
+          <p className={`mt-1 text-sm ${isCaughtUp ? 'text-emerald-800' : 'text-slate-600'}`}>{empty.body}</p>
+        </div>
+      );
+    }
+
     const empty = TAB_EMPTY_STATE[tab];
     return (
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">

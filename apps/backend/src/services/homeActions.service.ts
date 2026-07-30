@@ -49,6 +49,7 @@ import {
 } from './coverageLifecycle.service';
 import { proposeWorkItemFromHomeAction } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
+import { hasAcceptedWorkItemForProperty } from '../modules/homeOperations/application/hasAcceptedWorkItem.usecase';
 import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition, OperationalWorkItemState } from '@prisma/client';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
@@ -214,6 +215,53 @@ export type RankedHomeAction = HomeAction & {
   };
   workItem: HomeActionWorkItemLink | null;
 };
+
+// ── Home Operations Item #12 (§5.16): empty-state reason ────────────────────
+//
+// "No actions" can mean several very different things, and the doc's
+// requirement is explicit: "Do not translate system silence into a
+// home-health guarantee." This is a pure, synchronous decision function so
+// it stays unit-testable without mocking the rest of this file's I/O graph.
+// It only matters when the feed is empty — callers should only compute
+// inputs for it inside that branch, since hasEverAcceptedWork requires an
+// extra query best skipped on the common (non-empty) path.
+
+export type HomeActionEmptyStateReason =
+  | 'DATA_UNAVAILABLE'
+  | 'RECOMMENDATIONS_PAUSED'
+  | 'SOURCE_EVALUATION_PENDING'
+  | 'MISSING_FACTS'
+  | 'NO_ACCEPTED_WORK'
+  | 'ALL_CAUGHT_UP';
+
+// Judgment call, not a derived truth — no existing percent-threshold
+// precedent elsewhere in this codebase. Revisit with product if it proves
+// too aggressive/lax in practice.
+const MISSING_FACTS_COMPLETENESS_THRESHOLD_PERCENT = 50;
+
+export function computeHomeActionEmptyStateReason(input: {
+  surfacedCount: number;
+  candidateCount: number;
+  personalizationStatus: 'AVAILABLE' | 'PAUSED' | 'FAILED';
+  derivedFrom: { riskAssessment: boolean; checklist: boolean };
+  contextCompletenessPercent: number | null;
+  hasEverAcceptedWork: boolean;
+}): HomeActionEmptyStateReason | null {
+  if (input.surfacedCount > 0) return null;
+  if (input.personalizationStatus === 'FAILED') return 'DATA_UNAVAILABLE';
+  if (input.personalizationStatus === 'PAUSED') return 'RECOMMENDATIONS_PAUSED';
+  if (input.candidateCount === 0 && !input.derivedFrom.riskAssessment && !input.derivedFrom.checklist) {
+    return 'SOURCE_EVALUATION_PENDING';
+  }
+  if (
+    input.contextCompletenessPercent !== null &&
+    input.contextCompletenessPercent < MISSING_FACTS_COMPLETENESS_THRESHOLD_PERCENT
+  ) {
+    return 'MISSING_FACTS';
+  }
+  if (!input.hasEverAcceptedWork) return 'NO_ACCEPTED_WORK';
+  return 'ALL_CAUGHT_UP';
+}
 
 const HOME_ACTION_PRIORITY_ORDER: Record<HomeAction['priority'], number> = {
   NOW: 0,
@@ -502,6 +550,22 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     }
   }
 
+  // Home Operations Item #12 (§5.16): only computed when the feed is empty —
+  // hasEverAcceptedWork is an extra query, deliberately skipped on the
+  // common (non-empty) path.
+  let emptyStateReason: HomeActionEmptyStateReason | null = null;
+  if (actions.length === 0) {
+    const hasEverAcceptedWork = await hasAcceptedWorkItemForProperty(propertyId);
+    emptyStateReason = computeHomeActionEmptyStateReason({
+      surfacedCount: actions.length,
+      candidateCount: rawCandidates.length,
+      personalizationStatus,
+      derivedFrom: orchestration.derivedFrom,
+      contextCompletenessPercent: orchestration.aggregationContext?.completeness.completenessPercent ?? null,
+      hasEverAcceptedWork,
+    });
+  }
+
   return {
     contractVersion: 'phase2-v1',
     propertyId,
@@ -532,6 +596,7 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
         evaluatedCount: personalization?.evaluated ?? 0,
         activeCount: personalization?.active ?? 0,
       },
+      emptyStateReason,
       // Truth containment: a bare suppressedCount cannot answer "why isn't
       // this on Home?" — the homeowner (or support) needs to see that the
       // work is already tracked elsewhere, not silently dropped. Capped to

@@ -1,5 +1,5 @@
 import type { PropertyContextScope } from '../../modules/propertyContext';
-import { getPropertyContext } from '../../modules/propertyContext';
+import { getContextCompleteness, getPropertyContext } from '../../modules/propertyContext';
 import { evaluateAggregationContext } from './applicabilityPolicy';
 import { projectAggregationLifecycle } from './lifecycle';
 
@@ -56,6 +56,11 @@ export async function getAggregationContextEnvelope(
     decision: relatedDecisions[PRIMARY_DECISION_BY_FEATURE[feature]],
     relatedDecisions,
     lifecycle: projectAggregationLifecycle(context),
+    // Home Operations Item #12 (§5.16): pure in-memory computation over the
+    // snapshot already fetched above — no extra I/O — used to distinguish
+    // "missing facts" from other empty-state reasons on the Home Operations
+    // feed.
+    completeness: getContextCompleteness(context),
   };
 }
 

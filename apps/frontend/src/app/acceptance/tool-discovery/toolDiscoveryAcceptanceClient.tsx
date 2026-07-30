@@ -193,6 +193,7 @@ const home: UnifiedHomeDTO = {
     snoozedCount: 0,
     promotedCount: 0,
     personalization: { status: 'AVAILABLE', evaluatedCount: 0, activeCount: 0 },
+    emptyStateReason: null,
   },
   generatedAt: '2026-07-20T00:00:00.000Z',
 };
