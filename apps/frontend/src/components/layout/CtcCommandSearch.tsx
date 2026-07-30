@@ -30,6 +30,7 @@ export function CtcCommandSearch({ className, onOpen, placeholder = 'Ask your ho
   return (
     <button
       type="button"
+      aria-label={placeholder}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
@@ -41,7 +42,7 @@ export function CtcCommandSearch({ className, onOpen, placeholder = 'Ask your ho
       )}
     >
       <Search className="h-4 w-4 text-slate-400 shrink-0" />
-      <span className="flex-1 text-left text-sm text-slate-400 truncate">
+      <span className="flex-1 text-left text-sm text-slate-600 truncate">
         {placeholder}
       </span>
       <div className="flex items-center gap-1 shrink-0">

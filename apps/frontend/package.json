@@ -29,6 +29,7 @@
     "test:ownership-cost:e2e": "OWNERSHIP_COST_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.ownership-cost.config.ts",
     "test:savings-benefits:e2e": "SAVINGS_BENEFITS_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.savings-benefits.config.ts",
     "test:service-quote-decision:e2e": "npm run build && playwright test --config=playwright.service-quote-decision.config.ts",
+    "test:renovations:e2e": "npm run build && playwright test --config=playwright.renovations.config.ts",
     "test:visual-contract": "jest src/__tests__/priority-route-visual-contract.test.ts",
     "test:visual-contract:update": "jest src/__tests__/priority-route-visual-contract.test.ts -u",
     "test:watch": "jest --watch",

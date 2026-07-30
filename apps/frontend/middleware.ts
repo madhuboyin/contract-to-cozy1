@@ -162,7 +162,11 @@ export function middleware(request: NextRequest) {
     (pathname.startsWith('/acceptance/ownership-costs/') &&
       process.env.OWNERSHIP_COST_ACCEPTANCE_FIXTURE === '1') ||
     (pathname === '/acceptance/savings-benefits' &&
-      process.env.SAVINGS_BENEFITS_ACCEPTANCE_FIXTURE === '1');
+      process.env.SAVINGS_BENEFITS_ACCEPTANCE_FIXTURE === '1') ||
+    (pathname.startsWith('/dashboard/properties/') &&
+      (pathname.includes('/renovations') ||
+        pathname.endsWith('/tools/home-renovation-risk-advisor')) &&
+      process.env.RENOVATION_ACCEPTANCE_FIXTURE === '1');
 
   // ------------------------------------------------------------------
   // 1. Generate CSP nonce and attach headers to the forwarded request

@@ -13,11 +13,11 @@ export function Breadcrumb({ items }: { items: Crumb[] }) {
       <ol className="flex min-w-max items-center space-x-2">
         {items.map((item, idx) => (
           <li key={idx} className="flex items-center space-x-2">
-            {idx > 0 && <span className="text-slate-400">/</span>}
+            {idx > 0 && <span className="text-slate-500">/</span>}
             {item.href ? (
               <Link
                 href={item.href}
-                className="whitespace-nowrap hover:text-gray-900 active:opacity-70 transition-colors"
+                className="no-brand-style whitespace-nowrap text-slate-700 hover:text-gray-900 active:opacity-70 transition-colors"
               >
                 {item.label}
               </Link>

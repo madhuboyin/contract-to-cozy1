@@ -883,6 +883,17 @@ npm run build          # Required — tests import from dist/
 node --test tests/unit/
 ```
 
+**Frontend browser acceptance** uses deterministic authenticated API fixtures
+against the production Next.js build. It covers the canonical list-to-case
+journey, lifecycle-derived primary action, honest empty state, independent
+readiness/compliance failure, legacy redirect, keyboard focus, automated WCAG
+2 A/AA checks, and mobile overflow across Chromium, Firefox, and WebKit.
+
+```bash
+cd apps/frontend
+npm run test:renovations:e2e
+```
+
 ---
 
 ## Known Limitations

@@ -168,6 +168,7 @@ export function FeedbackWidget() {
           onClick={() => setIsOpen(true)}
           className="rounded-full h-12 w-12 shadow-lg bg-blue-600 hover:bg-blue-700 transition-all active:scale-95"
           size="icon"
+          aria-label="Open feedback form"
         >
           <MessageSquare className="h-6 w-6 text-white" />
         </Button>

@@ -253,7 +253,7 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
               href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
               title={isCollapsed ? 'Knowledge' : undefined}
               className={cn(
-                'flex items-center rounded-[14px] text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800',
+                'flex items-center rounded-[14px] text-sm font-semibold text-slate-600 transition-all hover:bg-white/80 hover:text-slate-800',
                 isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
               )}
             >
@@ -264,7 +264,7 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
               href="/dashboard/community-events"
               title={isCollapsed ? 'Community' : undefined}
               className={cn(
-                'flex items-center rounded-[14px] text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800',
+                'flex items-center rounded-[14px] text-sm font-semibold text-slate-600 transition-all hover:bg-white/80 hover:text-slate-800',
                 isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
               )}
             >

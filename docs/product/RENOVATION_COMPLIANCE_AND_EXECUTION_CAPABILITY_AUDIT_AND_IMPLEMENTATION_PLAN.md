@@ -1332,6 +1332,32 @@ Exit criteria:
 - the endpoint is read-only and covered by aggregation and authorization
   contract tests.
 
+### Slice 12 — Browser acceptance and accessibility gate
+
+**Goal:** turn the highest-risk UX acceptance requirements into a repeatable
+production-build browser gate.
+
+**Implementation status (2026-07-29):** Implemented.
+
+Deliver:
+
+- deterministic authenticated renovation API fixtures;
+- canonical list-to-case and one-primary-next-action coverage;
+- honest empty and independently degraded supporting-data states;
+- legacy advisor redirect coverage;
+- desktop Chromium, Firefox, and WebKit coverage;
+- mobile Chrome and WebKit responsive/overflow coverage;
+- keyboard focus and WCAG 2 A/AA automated checks; and
+- an isolated `npm run test:renovations:e2e` acceptance command.
+
+Exit criteria:
+
+- the production build passes all configured desktop and mobile browser projects;
+- accessibility failures expose and fix shared-shell defects instead of being
+  excluded from the scan;
+- a supporting API failure does not hide the durable renovation case; and
+- the legacy property-scoped advisor route resolves to the canonical workspace.
+
 ---
 
 ## 11. Acceptance Strategy
