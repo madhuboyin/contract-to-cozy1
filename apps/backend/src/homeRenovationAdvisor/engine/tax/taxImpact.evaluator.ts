@@ -121,7 +121,7 @@ export async function evaluateTaxImpact(ctx: EvaluationContext): Promise<TaxImpa
     sourceType: rules.sourceType,
     sourceLabel: rules.sourceLabel,
     sourceReferenceUrl: rules.sourceReferenceUrl,
-    sourceRefreshedAt: null,
+    sourceRefreshedAt: rules.sourceRefreshedAt,
     notes: null,
     assumptions,
   };

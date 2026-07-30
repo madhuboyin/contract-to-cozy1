@@ -4566,6 +4566,7 @@ export interface RetroactiveCandidate {
   suggestedRenovationType: string | null;
   suggestedRenovationLabel: string | null;
   hasLinkedAdvisorSession: boolean;
+  existingRenovationCaseId: string | null;
 }
 
 export interface RenovationAdvisorNextAction {

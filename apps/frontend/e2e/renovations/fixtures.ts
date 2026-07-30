@@ -6,6 +6,7 @@ const apiOrigin = 'http://localhost:8080';
 
 type FixtureOptions = {
   empty?: boolean;
+  retroactiveCandidate?: boolean;
   readinessFailure?: boolean;
   complianceFailure?: boolean;
   requirementsFailures?: number;
@@ -137,6 +138,35 @@ export async function installRenovationApi(page: Page, options: FixtureOptions =
     }
     if (requestPath === `/api/properties/${propertyId}/renovation-cases`) {
       await fulfillJson(route, options.empty ? [] : [renovationCase]);
+      return;
+    }
+    if (requestPath === `/api/properties/${propertyId}/home-renovation-advisor/retroactive-candidates`) {
+      await fulfillJson(route, {
+        candidates: options.retroactiveCandidate ? [{
+          timelineEventId: 'historical-event-acceptance',
+          propertyId,
+          eventTitle: 'Completed deck replacement',
+          occurredAt: '2025-09-15T12:00:00.000Z',
+          amount: 12500,
+          suggestedRenovationType: 'DECK_ADDITION',
+          suggestedRenovationLabel: 'Deck Addition',
+          hasLinkedAdvisorSession: false,
+          existingRenovationCaseId: null,
+        }] : [],
+      });
+      return;
+    }
+    if (
+      request.method() === 'POST'
+      && requestPath === `/api/properties/${propertyId}/renovation-cases/retroactive-review`
+    ) {
+      await fulfillJson(route, {
+        ...renovationCase,
+        id: 'historical-case-acceptance',
+        name: 'Completed deck replacement',
+        lifecycle: 'HISTORICAL_RESEARCH',
+        caseType: 'ADDITION',
+      }, 201);
       return;
     }
     if (requestPath === `/api/properties/${propertyId}/renovation-cases/${caseId}`) {

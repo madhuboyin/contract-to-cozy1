@@ -172,7 +172,7 @@ function RenovationOperationalHealthSection({
               Renovation operational health
             </CardTitle>
             <CardDescription>
-              Current lifecycle funnel, trust defects, completion guardrails, and reconciliation alerts.
+              Lifecycle funnel, authority adapter health, measurement completeness, and reconciliation alerts.
             </CardDescription>
           </div>
           <Badge variant={data.operations.alertCount > 0 ? 'destructive' : 'outline'}>
@@ -201,6 +201,31 @@ function RenovationOperationalHealthSection({
             label="Projection errors"
             value={num(data.operations.projectionErrorProjects)}
             sub={`${num(data.operations.activeExecutionProjects)} active execution projects`}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <OverviewCard
+            label="Approval cycle"
+            value={data.funnel.approvalCycleTime.averageHours == null
+              ? '—'
+              : `${num(data.funnel.approvalCycleTime.averageHours)}h`}
+            sub={`${num(data.funnel.approvalCycleTime.completedCycles)} completed cycles`}
+          />
+          <OverviewCard
+            label="Scope rechecks"
+            value={pct(data.funnel.scopeChangeRechecks.completionRate)}
+            sub={`${num(data.funnel.scopeChangeRechecks.completedRechecks)} of ${num(data.funnel.scopeChangeRechecks.changedScopes)}`}
+          />
+          <OverviewCard
+            label="Installed materials"
+            value={pct(data.funnel.installedMaterialCompleteness.completenessRate)}
+            sub={`${num(data.funnel.installedMaterialCompleteness.completeMaterials)} of ${num(data.funnel.installedMaterialCompleteness.installedMaterials)} complete`}
+          />
+          <OverviewCard
+            label="Write-back success"
+            value={pct(data.funnel.downstreamWriteBack.successRate)}
+            sub={`${num(data.funnel.downstreamWriteBack.successfulProjects)} of ${num(data.funnel.downstreamWriteBack.completedProjects)} projects`}
           />
         </div>
 
@@ -234,6 +259,60 @@ function RenovationOperationalHealthSection({
               <div><dt>Unknown applicability</dt><dd className="text-lg font-semibold text-slate-900">{num(data.trust.activeProjectsWithUnknownApplicability)}</dd></div>
             </dl>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-900">Authority source operations</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Coverage, health, latency, freshness, and latest error for configured permit, tax, licensing, and zoning adapters.
+            </p>
+          </div>
+          {data.operations.authoritySources.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-xs">
+                <thead className="border-b border-slate-100 bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">Family / source</th>
+                    <th className="px-4 py-2 font-medium">Coverage</th>
+                    <th className="px-4 py-2 font-medium">Health</th>
+                    <th className="px-4 py-2 font-medium">Latency</th>
+                    <th className="px-4 py-2 font-medium">Freshness</th>
+                    <th className="px-4 py-2 font-medium">Last error</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.operations.authoritySources.map(source => (
+                    <tr key={`${source.family}-${source.sourceId}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-slate-900">{source.family}</p>
+                        <p className="text-slate-500">{source.name} · {source.adapterType}</p>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{source.coverageKey}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={source.health === 'HEALTHY' ? 'outline' : 'secondary'}>
+                          {source.health}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {source.latencyMs == null ? '—' : `${num(source.latencyMs)} ms`}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {source.freshnessAgeHours == null ? source.freshness : `${num(source.freshnessAgeHours)}h`}
+                      </td>
+                      <td className="max-w-64 truncate px-4 py-3 text-slate-600" title={source.lastError ?? undefined}>
+                        {source.lastError ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="p-4 text-sm text-slate-500">
+              No live authority sources are configured. Guidance remains explicitly heuristic.
+            </p>
+          )}
         </div>
 
         {data.operations.alerts.length ? (

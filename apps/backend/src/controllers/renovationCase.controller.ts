@@ -252,6 +252,20 @@ export async function createCase(req: Request, res: Response, next: NextFunction
   } catch (error) { next(error); }
 }
 
+export async function createRetroactiveCase(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { createRetroactiveRenovationCase } = await import(
+      '../homeRenovationAdvisor/engine/retroactive/retroactiveCompliance.service'
+    );
+    const data = await createRetroactiveRenovationCase(
+      req.params.propertyId,
+      req.body.timelineEventId,
+      req.user!.userId,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
 export async function getCase(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await service.getRenovationCase(req.params.propertyId, req.params.caseId);

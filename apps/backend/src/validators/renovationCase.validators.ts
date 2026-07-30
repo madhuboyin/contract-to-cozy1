@@ -88,6 +88,10 @@ export const CreateRenovationCaseSchema = z.object({
   { path: ['targetEndDate'], message: 'Target end date must be on or after target start date.' },
 );
 
+export const CreateRetroactiveRenovationCaseSchema = z.object({
+  timelineEventId: z.string().trim().min(1).max(240),
+});
+
 export const UpdateRenovationCaseSchema = z.object({
   name: z.string().trim().min(1).max(240).optional(),
   objective: z.string().trim().min(1).max(5000).nullable().optional(),

@@ -10,6 +10,7 @@ import {
   PERMIT_RULES_VERSION,
   PermitRuleConfig,
 } from './permitRules.data';
+import { pollAuthorityGuidance } from '../../../services/renovationAuthorityIntegration.service';
 
 // ============================================================================
 // PROVIDER INTERFACE
@@ -61,11 +62,50 @@ export class FallbackPermitRulesProvider implements IPermitRulesProvider {
   }
 }
 
+export class LivePermitRulesProvider implements IPermitRulesProvider {
+  constructor(private readonly fallback: IPermitRulesProvider = new FallbackPermitRulesProvider()) {}
+
+  async getPermitRules(
+    renovationType: HomeRenovationType,
+    state: string | null,
+    county: string | null,
+    city: string | null,
+    postalCode: string | null,
+  ): Promise<PermitRulesProviderResult> {
+    const live = await pollAuthorityGuidance('PERMIT', {
+      renovationType,
+      state,
+      county,
+      city,
+      postalCode,
+    });
+    const rules = live.payload?.rules;
+    if (
+      live.available
+      && rules
+      && typeof rules === 'object'
+      && Array.isArray((rules as Record<string, unknown>).permitTypes)
+      && Array.isArray((rules as Record<string, unknown>).inspectionStages)
+      && typeof (rules as Record<string, unknown>).requirementStatus === 'string'
+    ) {
+      return {
+        data: rules as unknown as PermitRuleConfig,
+        sourceType: AdvisorDataSourceType.API_VERIFIED,
+        sourceLabel: live.sourceLabel ?? 'Verified municipal permit source',
+        sourceReferenceUrl: live.sourceReferenceUrl,
+        sourceRefreshedAt: live.observedAt,
+        dataAvailable: true,
+        providerVersion: 'live-authority-v1',
+      };
+    }
+    return this.fallback.getPermitRules(renovationType, state, county, city, postalCode);
+  }
+}
+
 // ============================================================================
 // FACTORY — swap real provider here when ready
 // ============================================================================
 
 export function getPermitRulesProvider(): IPermitRulesProvider {
-  // Future: return new SymbiumPermitRulesProvider() or new PermitFlowAdapter()
-  return new FallbackPermitRulesProvider();
+  return new LivePermitRulesProvider();
 }

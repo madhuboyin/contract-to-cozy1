@@ -23,6 +23,25 @@ export interface AdminRenovationOperationalHealthResponse {
     verifiedComplete: number;
     completedWithOpenItems: number;
     verifiedCloseoutRate: number | null;
+    approvalCycleTime: {
+      completedCycles: number;
+      averageHours: number | null;
+    };
+    scopeChangeRechecks: {
+      changedScopes: number;
+      completedRechecks: number;
+      completionRate: number | null;
+    };
+    installedMaterialCompleteness: {
+      installedMaterials: number;
+      completeMaterials: number;
+      completenessRate: number | null;
+    };
+    downstreamWriteBack: {
+      completedProjects: number;
+      successfulProjects: number;
+      successRate: number | null;
+    };
   };
   trust: {
     readinessNotEvaluated: number;
@@ -44,6 +63,29 @@ export interface AdminRenovationOperationalHealthResponse {
       count: number;
       label: string;
       exactNextAction: string;
+    }>;
+    authoritySources: Array<{
+      family: 'PERMIT' | 'TAX' | 'LICENSING' | 'ZONING';
+      sourceId: string;
+      name: string;
+      adapterType: string;
+      status: string;
+      coverageType: string;
+      coverageKey: string;
+      lastSuccessAt: string | null;
+      lastError: string | null;
+      latencyMs: number | null;
+      freshness: 'FRESH' | 'STALE' | 'NEVER';
+      freshnessAgeHours: number | null;
+      health: 'HEALTHY' | 'DEGRADED' | 'STALE' | 'DISABLED';
+    }>;
+    authoritySourceFamilies: Array<{
+      family: 'PERMIT' | 'TAX' | 'LICENSING' | 'ZONING';
+      configuredSources: number;
+      activeSources: number;
+      healthySources: number;
+      degradedSources: number;
+      lastSuccessAt: string | null;
     }>;
   };
   guardrails: {

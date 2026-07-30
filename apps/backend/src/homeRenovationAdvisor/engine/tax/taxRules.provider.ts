@@ -9,6 +9,7 @@ import {
   TAX_RULES_VERSION,
   VALUE_UPLIFT_MULTIPLIER_BY_TYPE,
 } from './taxRules.data';
+import { pollAuthorityGuidance } from '../../../services/renovationAuthorityIntegration.service';
 
 export interface TaxRulesProviderResult {
   medianProjectCost: number;
@@ -26,6 +27,7 @@ export interface TaxRulesProviderResult {
   sourceType: AdvisorDataSourceType;
   sourceLabel: string;
   sourceReferenceUrl: string | null;
+  sourceRefreshedAt: Date | null;
   providerVersion: string;
 }
 
@@ -67,12 +69,49 @@ export class FallbackTaxRulesProvider implements ITaxRulesProvider {
       sourceType: AdvisorDataSourceType.INTERNAL_RULE,
       sourceLabel: 'Internal tax heuristics (national defaults)',
       sourceReferenceUrl: null,
+      sourceRefreshedAt: null,
       providerVersion: TAX_RULES_VERSION,
     };
   }
 }
 
+export class LiveTaxRulesProvider implements ITaxRulesProvider {
+  constructor(private readonly fallback: ITaxRulesProvider = new FallbackTaxRulesProvider()) {}
+
+  async getTaxRules(
+    renovationType: HomeRenovationType,
+    state: string | null,
+    county: string | null,
+    postalCode: string | null,
+  ): Promise<TaxRulesProviderResult> {
+    const live = await pollAuthorityGuidance('TAX', {
+      renovationType,
+      state,
+      county,
+      postalCode,
+    });
+    const rules = live.payload?.rules;
+    if (
+      live.available
+      && rules
+      && typeof rules === 'object'
+      && typeof (rules as Record<string, unknown>).medianProjectCost === 'number'
+      && typeof (rules as Record<string, unknown>).millageRate === 'number'
+    ) {
+      return {
+        ...(rules as unknown as TaxRulesProviderResult),
+        dataAvailable: true,
+        sourceType: AdvisorDataSourceType.API_VERIFIED,
+        sourceLabel: live.sourceLabel ?? 'Verified tax authority source',
+        sourceReferenceUrl: live.sourceReferenceUrl,
+        sourceRefreshedAt: live.observedAt,
+        providerVersion: 'live-authority-v1',
+      };
+    }
+    return this.fallback.getTaxRules(renovationType, state, county, postalCode);
+  }
+}
+
 export function getTaxRulesProvider(): ITaxRulesProvider {
-  // Future: return new CoreLogicTaxProvider() or similar
-  return new FallbackTaxRulesProvider();
+  return new LiveTaxRulesProvider();
 }

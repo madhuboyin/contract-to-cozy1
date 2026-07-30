@@ -7,6 +7,10 @@ import {
 import { prisma } from '../config/database';
 import { APIError } from '../middleware/error.middleware';
 import { resolvePropertyAccess } from './propertyAccess.service';
+import {
+  pollAuthorityGuidance,
+  type AuthorityGuidanceResult,
+} from './renovationAuthorityIntegration.service';
 
 const FAMILY_POLICY: Record<RenovationRequirementFamily, {
   question: string;
@@ -130,6 +134,28 @@ export async function generateRequirementCandidates(
       include: { permitOutput: true, licensingOutput: true },
     })
     : null;
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { state: true, city: true, zipCode: true },
+  });
+  const authorityInput = {
+    propertyId,
+    state: property?.state,
+    city: property?.city,
+    postalCode: property?.zipCode,
+    scopeSummary: renovationCase.currentScopeVersion!.summary,
+    renovationType: renovationCase.caseType,
+  };
+  const [livePermit, liveLicensing, liveZoning] = await Promise.all([
+    pollAuthorityGuidance('PERMIT', authorityInput),
+    pollAuthorityGuidance('LICENSING', authorityInput),
+    pollAuthorityGuidance('ZONING', authorityInput),
+  ]);
+  const liveByFamily: Partial<Record<RenovationRequirementFamily, AuthorityGuidanceResult>> = {
+    PERMIT: livePermit,
+    CONTRACTOR: liveLicensing,
+    ZONING: liveZoning,
+  };
   if (input.advisorSessionId && !advisor) {
     throw new APIError(
       'Advisor session must belong to the same property.',
@@ -174,6 +200,7 @@ export async function generateRequirementCandidates(
     }
     for (const family of Object.values(RenovationRequirementFamily)) {
       const policy = FAMILY_POLICY[family];
+      const live = liveByFamily[family];
       const requirementKey = `${family.toLowerCase()}:primary`;
       const existing = await tx.renovationRequirement.findUnique({
         where: {
@@ -185,12 +212,16 @@ export async function generateRequirementCandidates(
         },
       });
       if (existing) continue;
-      const advisoryLikelihood = family === 'PERMIT'
+      const advisoryLikelihood = live?.available
+        ? live.advisoryLikelihood
+        : family === 'PERMIT'
         ? permitAdvisory
         : family === 'CONTRACTOR'
           ? contractorAdvisory
           : 'UNKNOWN';
-      const confidence = family === 'PERMIT'
+      const confidence = live?.available
+        ? live.confidence
+        : family === 'PERMIT'
         ? advisor?.permitOutput?.confidenceLevel ?? 'UNAVAILABLE'
         : family === 'CONTRACTOR'
           ? advisor?.licensingOutput?.confidenceLevel ?? 'UNAVAILABLE'
@@ -205,16 +236,26 @@ export async function generateRequirementCandidates(
           question: policy.question,
           advisoryLikelihood,
           confidence: confidence as AdvisorConfidenceLevel,
-          limitation: advisor && (family === 'PERMIT' || family === 'CONTRACTOR')
+          limitation: live?.available
+            ? live.limitation
+            : advisor && (family === 'PERMIT' || family === 'CONTRACTOR')
             ? 'Advisor rules generate a research candidate only. They do not establish an official requirement.'
             : 'Not yet researched for this authority and scope.',
           exactNextAction: policy.nextAction,
           ownerUserId: accountableOwnerUserId,
           dueAt: researchDueAt,
           isBlocking: policy.blocking,
-          sourceType: advisor && (family === 'PERMIT' || family === 'CONTRACTOR')
+          authorityName: live?.available ? live.sourceLabel : null,
+          sourceType: live?.available
+            ? 'AUTHORITY_WEBSITE'
+            : advisor && (family === 'PERMIT' || family === 'CONTRACTOR')
             ? 'ADVISOR_RULE'
             : 'UNKNOWN',
+          sourceUrl: live?.available ? live.sourceReferenceUrl : null,
+          sourceObservedAt: live?.available ? live.observedAt : null,
+          sourceFreshUntil: live?.available && live.observedAt
+            ? new Date(live.observedAt.getTime() + 7 * 24 * 60 * 60 * 1000)
+            : null,
           advisorSessionId: advisor?.id,
         },
       });
@@ -229,7 +270,19 @@ export async function generateRequirementCandidates(
           nextApplicability: 'UNKNOWN',
           nextDetermination: 'UNDETERMINED',
           nextTruthLayer: 'ADVISORY',
-          payload: json({ advisoryLikelihood, scopeVersionId, advisorSessionId: advisor?.id ?? null }),
+          payload: json({
+            advisoryLikelihood,
+            scopeVersionId,
+            advisorSessionId: advisor?.id ?? null,
+            liveAuthority: live?.available
+              ? {
+                  family: live.family,
+                  observedAt: live.observedAt?.toISOString() ?? null,
+                  latencyMs: live.latencyMs,
+                  sourceReferenceUrl: live.sourceReferenceUrl,
+                }
+              : null,
+          }),
         },
       });
     }

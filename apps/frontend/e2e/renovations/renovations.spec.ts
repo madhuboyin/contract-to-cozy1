@@ -43,6 +43,23 @@ test('workspace exposes empty state without inventing a renovation plan', async 
   );
 });
 
+test('homeowner can start a governed historical compliance review from the canonical workspace', async ({ page }) => {
+  const fixture = await installRenovationApi(page, { empty: true, retroactiveCandidate: true });
+  await page.goto(`/dashboard/properties/${propertyId}/renovations`);
+
+  await expect(page.getByRole('heading', { name: 'Review previously completed work' })).toBeVisible();
+  await expect(page.getByText('Completed deck replacement')).toBeVisible();
+  await expect(page.getByText(/Nothing is reported to an authority automatically/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Start guided review' }).click();
+
+  await expect.poll(() => fixture.requests).toContain(
+    `POST /api/properties/${propertyId}/renovation-cases/retroactive-review`,
+  );
+  await expect(page).toHaveURL(
+    new RegExp(`/renovations/historical-case-acceptance/requirements$`),
+  );
+});
+
 test('case remains usable when readiness and compliance details fail independently', async ({ page }) => {
   await installRenovationApi(page, { readinessFailure: true, complianceFailure: true });
   await page.goto(`/dashboard/properties/${propertyId}/renovations/${caseId}`);

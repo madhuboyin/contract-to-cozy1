@@ -195,7 +195,11 @@ export class PermitFetchService {
 
       await prisma.permitDataSource.update({
         where: { id: dataSource.id },
-        data: { lastFetchAt: new Date(), totalPermitsFetched: { increment: inserted } },
+        data: {
+          lastFetchAt: new Date(),
+          lastFetchError: null,
+          totalPermitsFetched: { increment: inserted },
+        },
       });
 
       // Cross-cutting W4 fix: gate the chained follow-up job too. Unlike

@@ -1647,3 +1647,29 @@ This outcome family is best in class only when:
     historical-work states pass acceptance; and
 15. redundant standalone planning/advisor routes and lifecycle contracts are
     retired.
+
+---
+
+## 18. Implemented Slice 14 — Authority Operations, Measurement, and Historical Review
+
+Implemented July 29, 2026:
+
+- a fail-closed live JSON adapter contract for permit, tax, licensing, and
+  zoning sources; only responses asserting `verified: true` can replace
+  heuristics, while canonical requirement output remains advisory until an
+  official determination is recorded;
+- continued reuse of configured Socrata/Accela permit ingestion and Socrata
+  assessor coverage in the operational source inventory;
+- standardized source coverage, health, latency, freshness, last-success, and
+  last-error reporting in the MFA/capability-protected admin renovation
+  dashboard;
+- measurement of approval cycle time, scope-change recheck completion,
+  installed-material completeness, and downstream write-back success;
+- an idempotent `HOME_EVENT` to `HISTORICAL_RESEARCH` case conversion; and
+- a guided homeowner entry surface for confirming historical scope, researching
+  authority evidence, and tracking remediation in the canonical renovation
+  workspace.
+
+Remaining rollout work is jurisdiction registration and source-specific contract
+certification. An unconfigured jurisdiction is a visible coverage gap, not a
+negative permit, tax, licensing, or zoning finding.

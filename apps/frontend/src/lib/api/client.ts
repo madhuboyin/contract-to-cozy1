@@ -2464,6 +2464,15 @@ class APIClient {
   async listRenovationCases(propertyId: string): Promise<APIResponse<any[]>> {
     return this.request(`/api/properties/${propertyId}/renovation-cases`);
   }
+  async createRetroactiveRenovationCase(
+    propertyId: string,
+    timelineEventId: string,
+  ): Promise<APIResponse<any>> {
+    return this.request(`/api/properties/${propertyId}/renovation-cases/retroactive-review`, {
+      method: 'POST',
+      body: JSON.stringify({ timelineEventId }),
+    });
+  }
   async listRenovationRequirements(propertyId: string, caseId: string): Promise<APIResponse<any>> {
     return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}/requirements`);
   }

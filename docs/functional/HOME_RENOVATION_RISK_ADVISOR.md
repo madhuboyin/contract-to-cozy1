@@ -900,19 +900,19 @@ npm run test:renovations:e2e
 
 ## Known Limitations
 
-1. **Static rules data** — Permit costs, tax uplift percentages, and licensing rules are national heuristics, not live jurisdiction-specific data. Accuracy degrades significantly outside top 15 states.
+1. **Live coverage is configuration-dependent** — Permit, tax, licensing, and zoning can use verified remote authority adapters, while existing municipal permit and assessor ingestion remains available. Unconfigured jurisdictions continue to use explicitly labeled heuristics or unresolved research; coverage is not universal.
 
 2. **15 states have verification URLs** — License lookup links only for CA, TX, FL, NY, AZ, WA, CO, IL, GA, NC, NJ, PA, OH, MI, VA. All other states show no verification URL.
 
 3. **Tax reassessment triggers** — State-level triggers are approximations. Many counties and municipalities override state defaults (e.g., Cook County, IL reassesses triennially; rest of Illinois is annual).
 
-4. **No ADU-specific zoning rules** — ADU regulations (setbacks, owner-occupancy, size limits) vary enormously by city. The advisor flags ADU as REQUIRED/CRITICAL but cannot surface local zoning details.
+4. **ADU zoning coverage varies** — A configured zoning authority adapter can return local guidance, but most jurisdictions do not yet have an adapter. Unsupported areas remain unresolved rather than receiving an inferred official determination.
 
 5. **Renovation type is immutable** — Changing renovation type after session creation requires a new session (by design — the evaluation is scoped to a single type).
 
-6. **No permit status polling** — The advisor does not pull live permit status from municipal systems. It only estimates requirements.
+6. **Permit polling coverage varies** — Socrata and Accela permit ingestion plus verified remote permit-rule adapters are supported where configured. The advisor does not claim live status in unsupported municipalities.
 
-7. **Retroactive candidate detection** — Relies on `HomeEvent.subtype` matching renovation type names. Events not created through the advisor or with unrecognized subtypes will not be detected.
+7. **Retroactive candidate classification** — Timeline improvements can now enter an idempotent canonical historical-review case from the renovation workspace. Renovation-type suggestions still depend on recognized subtypes or event metadata; unrecognized improvements remain reviewable without an inferred type.
 
 8. **No background job queue** — Evaluations run synchronously. For large batch retroactive checks, this could time out.
 
@@ -921,14 +921,13 @@ npm run test:renovations:e2e
 ## Future Enhancements
 
 ### Data & rules
-- [ ] **Live permit APIs** — Integrate OpenDataSoft or BuildPermit APIs for real-time permit fee schedules and local requirements
-- [ ] **ATTOM / CoreLogic tax data** — Replace static millage rates with live assessment data per county
-- [ ] **State licensing board APIs** — Add 35 remaining state verification URLs and live license status checks
+- [x] **Live authority adapter contract** — Configurable verified JSON adapters cover permit, tax, licensing, and zoning without treating unverified responses as authority truth
+- [ ] **Broaden municipal coverage** — Register and validate more jurisdiction-specific permit, tax, licensing, and zoning sources
 - [ ] **City-level rules** — Expand from state-level to city-level permit and licensing rules (starting with top 50 cities)
 - [ ] **Zoning data** — Add ADU-specific zoning rules by municipality
 
 ### Features
-- [ ] **Retroactive checklist UI** — Full UI for completing the compliance checklist (currently API-only)
+- [x] **Retroactive guided entry UI** — Review timeline improvements in the canonical workspace and create/continue an idempotent historical compliance case
 - [ ] **PDF export** — Frontend PDF generation using the export view model (react-pdf or server-side)
 - [ ] **Session history** — List view of past advisor sessions for a property
 - [ ] **Multi-renovation planning** — Run advisor across multiple renovation types and compare

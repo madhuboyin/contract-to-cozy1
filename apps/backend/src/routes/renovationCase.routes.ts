@@ -12,6 +12,7 @@ import {
   ArchiveRenovationCaseSchema,
   CreateRenovationCaseLinkSchema,
   CreateRenovationCaseSchema,
+  CreateRetroactiveRenovationCaseSchema,
   CreateRenovationScopeVersionSchema,
   TransitionRenovationCaseSchema,
   UpdateRenovationCaseSchema,
@@ -81,6 +82,13 @@ router.post(
   canContribute,
   validateBody(CreateRenovationCaseSchema),
   controller.createCase,
+);
+router.post(
+  '/properties/:propertyId/renovation-cases/retroactive-review',
+  propertyAuthMiddleware,
+  canContribute,
+  validateBody(CreateRetroactiveRenovationCaseSchema),
+  controller.createRetroactiveCase,
 );
 router.get(
   '/properties/:propertyId/renovation-cases/:caseId',

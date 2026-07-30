@@ -12,6 +12,10 @@
 import { prisma } from '../../../lib/prisma';
 import { HomeRenovationType } from '@prisma/client';
 import { getRenovationLabel } from '../summary/summaryBuilder.service';
+import {
+  createRenovationCase,
+  transitionRenovationCase,
+} from '../../../services/renovationCase.service';
 
 // Subtypes that may indicate completed renovation work eligible for retroactive review
 const RENOVATION_SUBTYPE_MAP: Record<string, HomeRenovationType> = {
@@ -38,6 +42,7 @@ export interface RetroactiveCandidate {
   suggestedRenovationType: HomeRenovationType | null;
   suggestedRenovationLabel: string | null;
   hasLinkedAdvisorSession: boolean;
+  existingRenovationCaseId: string | null;
 }
 
 /**
@@ -74,7 +79,8 @@ export async function detectRetroactiveCandidates(
 
   if (events.length === 0) return [];
 
-  // 2. Check which properties have advisor sessions (check by property for efficiency)
+  // 2. Keep the legacy advisor linkage signal, but use canonical renovation
+  // cases as the durable/idempotent record for historical review.
   const existingSessions = await prisma.homeRenovationAdvisorSession.findMany({
     where: {
       propertyId,
@@ -90,6 +96,20 @@ export async function detectRetroactiveCandidates(
     existingSessions
       .map((s) => s.linkedTimelineItemId)
       .filter(Boolean) as string[],
+  );
+  const existingCases = await prisma.renovationCase.findMany({
+    where: {
+      propertyId,
+      sourceType: 'HOME_EVENT',
+      sourceId: { in: events.map(event => event.id) },
+      archivedAt: null,
+    },
+    select: { id: true, sourceId: true },
+  });
+  const caseByEventId = new Map(
+    existingCases
+      .filter(item => item.sourceId)
+      .map(item => [item.sourceId as string, item.id]),
   );
 
   // 3. Build candidates list
@@ -124,8 +144,106 @@ export async function detectRetroactiveCandidates(
       suggestedRenovationType: finalType,
       suggestedRenovationLabel: finalType ? getRenovationLabel(finalType) : null,
       hasLinkedAdvisorSession: hasLinked,
+      existingRenovationCaseId: caseByEventId.get(event.id) ?? null,
     });
   }
 
   return candidates;
+}
+
+const CASE_TYPE_BY_RENOVATION_TYPE: Partial<Record<HomeRenovationType, string>> = {
+  ROOM_ADDITION: 'ADDITION',
+  BATHROOM_ADDITION: 'ADDITION',
+  ADU_CONSTRUCTION: 'ADDITION',
+  DECK_ADDITION: 'ADDITION',
+  PATIO_MAJOR_ADDITION: 'ADDITION',
+  GARAGE_CONVERSION: 'CONVERSION',
+  BASEMENT_FINISHING: 'CONVERSION',
+  ROOF_REPLACEMENT: 'REPLACEMENT',
+  STRUCTURAL_REPAIR_MAJOR: 'REPAIR',
+};
+
+export async function createRetroactiveRenovationCase(
+  propertyId: string,
+  timelineEventId: string,
+  actorUserId: string,
+) {
+  const event = await prisma.homeEvent.findFirst({
+    where: {
+      id: timelineEventId,
+      propertyId,
+      type: 'IMPROVEMENT' as any,
+    },
+    select: {
+      id: true,
+      title: true,
+      subtype: true,
+      occurredAt: true,
+      amount: true,
+      meta: true,
+    },
+  });
+  if (!event) {
+    const error = new Error('Historical renovation candidate not found.') as Error & {
+      statusCode?: number;
+      code?: string;
+    };
+    error.statusCode = 404;
+    error.code = 'RETROACTIVE_CANDIDATE_NOT_FOUND';
+    throw error;
+  }
+
+  const subtypeKey = event.subtype?.toUpperCase().replace(/ /g, '_');
+  const meta = event.meta as Record<string, unknown> | null;
+  const metaType = typeof meta?.renovationType === 'string'
+    ? meta.renovationType.toUpperCase()
+    : null;
+  const renovationType = (
+    (subtypeKey && RENOVATION_SUBTYPE_MAP[subtypeKey])
+    || (metaType && RENOVATION_SUBTYPE_MAP[metaType])
+    || null
+  );
+  const caseType = renovationType
+    ? CASE_TYPE_BY_RENOVATION_TYPE[renovationType] ?? 'REMODEL'
+    : 'HISTORICAL_RESEARCH';
+  const idempotencyKey = `retroactive-home-event:${event.id}`;
+  const created = await createRenovationCase(propertyId, actorUserId, {
+    name: event.title,
+    objective: 'Review historical work for permit, tax, licensing, zoning, and closeout gaps.',
+    caseType,
+    governanceTier: 'COMPLIANCE_SENSITIVE',
+    responsibilityContext: 'HOMEOWNER',
+    spacesAffected: [],
+    systemsAffected: [],
+    entryPoint: 'RENOVATION_WORKSPACE_RETROACTIVE_REVIEW',
+    sourceType: 'HOME_EVENT',
+    sourceId: event.id,
+    idempotencyKey,
+    initialScope: {
+      summary: `${event.title} completed ${event.occurredAt.toISOString().slice(0, 10)}.`,
+      workItems: [{
+        title: event.title,
+        status: 'COMPLETED_REPORTED',
+        occurredAt: event.occurredAt.toISOString(),
+        amount: event.amount ? Number(event.amount) : null,
+        renovationType,
+      }],
+      spacesAffected: [],
+      systemsAffected: [],
+      structuralEffects: false,
+      exteriorEffects: false,
+      drawingDocumentIds: [],
+      specificationDocumentIds: [],
+      approvalStatus: 'DRAFT',
+    },
+  });
+
+  if (created.lifecycle === 'IDEA') {
+    return transitionRenovationCase(propertyId, created.id, actorUserId, {
+      lifecycle: 'HISTORICAL_RESEARCH',
+      reason: 'Homeowner started a guided retroactive compliance review.',
+      idempotencyKey: `retroactive-start:${event.id}`,
+    });
+  }
+  return created;
 }
