@@ -136,6 +136,12 @@ import {
   CapabilitySuggestionResponseDTO,
   CapabilitySuggestionSurfaceDTO,
   UnifiedHomeDTO,
+  OperationalWorkItemState,
+  OperationalWorkItemDisposition,
+  OperationalWorkEvidenceType,
+  OperationalWorkEvidenceVerificationStatus,
+  WorkItemListEntryDTO,
+  WorkItemDetailDTO,
 } from '@/types';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 import type { FeatureContextCaptureResult, FeatureContextEvaluation } from '@/components/property-context/featureContextTypes';
@@ -3212,6 +3218,84 @@ class APIClient {
     return this.request<{ actionId: string; interaction: 'OPENED'; recordedAt: string }>(
       `/api/properties/${propertyId}/home-actions/${encodeURIComponent(actionId)}/interactions`,
       { method: 'POST', body: JSON.stringify({ interaction: 'OPENED' }) },
+    );
+  }
+
+  // ── Home Operations Item #16: work-item write API ──────────────────────
+
+  async listWorkItems(
+    propertyId: string,
+    filters?: { state?: string; obligationType?: string; ownerUserId?: string; subjectType?: string; subjectId?: string },
+  ) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters ?? {})) {
+      if (value) query.set(key, value);
+    }
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return this.request<{ items: WorkItemListEntryDTO[] }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items${suffix}`,
+    );
+  }
+
+  async getWorkItem(propertyId: string, workItemId: string) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}`,
+    );
+  }
+
+  async assignWorkItemOwner(propertyId: string, workItemId: string, ownerUserId: string | null) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/assign`,
+      { method: 'POST', body: JSON.stringify({ ownerUserId }) },
+    );
+  }
+
+  async addWorkItemWatcher(propertyId: string, workItemId: string, userId: string) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/watchers`,
+      { method: 'POST', body: JSON.stringify({ userId }) },
+    );
+  }
+
+  async removeWorkItemWatcher(propertyId: string, workItemId: string, userId: string) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/watchers/${encodeURIComponent(userId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async transitionWorkItem(
+    propertyId: string,
+    workItemId: string,
+    to: OperationalWorkItemState,
+    disposition?: OperationalWorkItemDisposition,
+  ) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/transition`,
+      { method: 'POST', body: JSON.stringify({ to, disposition }) },
+    );
+  }
+
+  async recordWorkItemDuplicateDecision(propertyId: string, workItemId: string, supersededByWorkItemId: string) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/duplicate`,
+      { method: 'POST', body: JSON.stringify({ supersededByWorkItemId }) },
+    );
+  }
+
+  async recordWorkItemEvidence(
+    propertyId: string,
+    workItemId: string,
+    input: {
+      evidenceType: OperationalWorkEvidenceType;
+      evidenceEntityId: string;
+      verificationStatus?: OperationalWorkEvidenceVerificationStatus;
+      observedAt?: string;
+    },
+  ) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/evidence`,
+      { method: 'POST', body: JSON.stringify(input) },
     );
   }
 

@@ -1,4 +1,5 @@
 import { getWorkItemGraph } from '../infrastructure/workItemRepository';
+import { LEGAL_TRANSITIONS, closureDispositionRuleFor } from '../domain/transitions';
 
 export async function getWorkItem(workItemId: string) {
   const item = await getWorkItemGraph(workItemId);
@@ -54,5 +55,9 @@ export async function getWorkItem(workItemId: string) {
       observedAt: e.observedAt,
     })),
     watchers: item.watchers.map((w) => ({ userId: w.userId, addedAt: w.addedAt })),
+    // Home Operations Item #16: computed so the write-API frontend never
+    // needs its own copy of the state machine.
+    legalNextStates: LEGAL_TRANSITIONS[item.state],
+    closureDispositionRule: item.state === 'CLOSED' ? null : closureDispositionRuleFor(item.state),
   };
 }

@@ -17,6 +17,7 @@ import {
   MessageCircle,
   Milestone,
   Radar,
+  Settings2,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -37,6 +38,7 @@ import { buildHomeEventRadarHref } from '@/features/homeEventRadar/radarDeepLink
 import {
   RefinanceRadarPortfolioCard,
 } from '@/app/(dashboard)/dashboard/properties/[id]/components/RefinanceRadarDashboardCard';
+import { WorkItemManageDrawer } from '@/components/home/WorkItemManageDrawer';
 
 /**
  * Home Operations Item #13 (§ launch-review gap): last carried by the
@@ -398,14 +400,17 @@ export function CoverageCorrectionGroupCard({
   subjects,
   propertyId,
   showSupportingDetails = false,
+  onChanged,
 }: {
   actions: RankedHomeActionDTO[];
   subjects: string[];
   propertyId: string;
   showSupportingDetails?: boolean;
+  onChanged?: () => Promise<unknown>;
 }) {
   const first = actions[0];
   const href = `/dashboard/properties/${propertyId}/inventory?tab=coverage&focus=incomplete`;
+  const [manageWorkItemId, setManageWorkItemId] = React.useState<string | null>(null);
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -430,9 +435,16 @@ export function CoverageCorrectionGroupCard({
                 <p className="text-sm font-semibold text-slate-900">{coverageCorrectionSubject(action) ?? action.recommendedAction}</p>
                 <p className="mt-1 text-xs text-slate-500">Priority #{action.ranking.rank} · {action.confidence.label.toLowerCase()} confidence</p>
               </div>
-              <Button asChild size="sm" variant="outline" className="rounded-full">
-                <Link href={action.primaryCta.href}>Review item</Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild size="sm" variant="outline" className="rounded-full">
+                  <Link href={action.primaryCta.href}>Review item</Link>
+                </Button>
+                {action.workItem && (
+                  <Button size="sm" variant="ghost" className="rounded-full text-slate-500" onClick={() => setManageWorkItemId(action.workItem!.id)}>
+                    <Settings2 className="mr-1 h-3.5 w-3.5" />Manage
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -442,6 +454,15 @@ export function CoverageCorrectionGroupCard({
           <Link href={href}>Review coverage information<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
         </Button>
       </div>
+      {manageWorkItemId && (
+        <WorkItemManageDrawer
+          propertyId={propertyId}
+          workItemId={manageWorkItemId}
+          open={Boolean(manageWorkItemId)}
+          onOpenChange={(open) => { if (!open) setManageWorkItemId(null); }}
+          onChanged={onChanged ?? (async () => {})}
+        />
+      )}
     </article>
   );
 }
@@ -459,6 +480,7 @@ export function ActionCard({
 }) {
   const { toast } = useToast();
   const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
+  const [manageOpen, setManageOpen] = React.useState(false);
 
   const execute = async (command: HomeActionCommand) => {
     setPending(command);
@@ -573,7 +595,21 @@ export function ActionCard({
             <Link href={correctionHref}>Correct facts</Link>
           </Button>
         )}
+        {action.workItem && (
+          <Button size="sm" variant="ghost" className="rounded-full text-slate-500" onClick={() => setManageOpen(true)}>
+            <Settings2 className="mr-1 h-3.5 w-3.5" />Manage
+          </Button>
+        )}
       </div>
+      {action.workItem && (
+        <WorkItemManageDrawer
+          propertyId={propertyId}
+          workItemId={action.workItem.id}
+          open={manageOpen}
+          onOpenChange={setManageOpen}
+          onChanged={onChanged}
+        />
+      )}
     </article>
   );
 }
@@ -759,6 +795,7 @@ export function UnifiedHomeSurface({
             actions={entry.actions}
             subjects={entry.subjects}
             propertyId={propertyId}
+            onChanged={() => query.refetch()}
           />
         ))}
       </section>

@@ -287,6 +287,66 @@ export type HomeActionCommand =
   | 'ACKNOWLEDGE'
   | 'REMOVE_FROM_HOME';
 
+// Home Operations Item #16: shared with the write-API surface below, so the
+// work-item state machine is typed in exactly one place on the frontend.
+export type OperationalWorkItemState =
+  | 'CANDIDATE' | 'ACCEPTED' | 'SCHEDULED' | 'IN_PROGRESS' | 'IN_GUIDANCE' | 'IN_PROJECT'
+  | 'BLOCKED' | 'DEFERRED' | 'REPORTED_COMPLETE' | 'REOPENED' | 'VERIFIED' | 'FOLLOW_UP_DUE' | 'CLOSED';
+export type OperationalWorkItemAcceptanceState = 'PROPOSED' | 'ACCEPTED' | 'DECLINED';
+export type OperationalWorkItemDisposition = 'NOT_RELEVANT' | 'DUPLICATE' | 'EXPIRED' | 'DISMISSED';
+export type OperationalWorkEvidenceType =
+  | 'PROPERTY_FACT' | 'DOCUMENT' | 'HOME_EVENT' | 'USER_ATTESTATION' | 'DOMAIN_COMPLETION_RECORD' | 'SYSTEM_DERIVATION';
+export type OperationalWorkEvidenceVerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
+export type ClosureDispositionRule = 'REQUIRED' | 'FORBIDDEN' | 'OPTIONAL';
+
+export type WorkItemListEntryDTO = {
+  id: string;
+  workKey: string;
+  subjectType: string;
+  subjectId: string;
+  obligationType: string;
+  state: OperationalWorkItemState;
+  acceptanceState: OperationalWorkItemAcceptanceState;
+  disposition: OperationalWorkItemDisposition | null;
+  priority: 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
+  safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'REGULATED_COVERAGE' | 'SAFETY_EMERGENCY';
+  title: string;
+  homeownerReason: string;
+  expectedOutcome: string;
+  dueWindowStart: string | null;
+  dueAt: string | null;
+  dueWindowEnd: string | null;
+  ownerUserId: string | null;
+  confidence: number | null;
+  missingContext: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkItemDetailDTO = WorkItemListEntryDTO & {
+  acceptedAt: string | null;
+  startedAt: string | null;
+  reportedCompletedAt: string | null;
+  verifiedAt: string | null;
+  deferredUntil: string | null;
+  dismissedAt: string | null;
+  closedAt: string | null;
+  supersededByWorkItemId: string | null;
+  sources: Array<{ sourceType: string; sourceEntityId: string; sourceVersion: string | null; sourceRole: string; active: boolean }>;
+  executions: Array<{ executionType: string; executionEntityId: string; role: string }>;
+  evidence: Array<{
+    evidenceType: OperationalWorkEvidenceType;
+    evidenceEntityId: string;
+    verificationStatus: OperationalWorkEvidenceVerificationStatus | null;
+    observedAt: string;
+  }>;
+  watchers: Array<{ userId: string; addedAt: string }>;
+  // Home Operations Item #16: computed server-side so the frontend never
+  // carries its own copy of the state machine.
+  legalNextStates: OperationalWorkItemState[];
+  closureDispositionRule: ClosureDispositionRule | null;
+};
+
 export type RankedHomeActionDTO = ActivationHomeActionDTO & {
   lineageId: string;
   state: 'OPEN' | 'IN_PROGRESS' | 'SNOOZED' | 'COMPLETED' | 'DEFERRED' | 'DISMISSED' | 'SUPERSEDED';
@@ -315,9 +375,9 @@ export type RankedHomeActionDTO = ActivationHomeActionDTO & {
   workItem: {
     id: string;
     workKey: string;
-    state: 'CANDIDATE' | 'ACCEPTED' | 'SCHEDULED' | 'IN_PROGRESS' | 'IN_GUIDANCE' | 'IN_PROJECT' | 'BLOCKED' | 'DEFERRED' | 'REPORTED_COMPLETE' | 'REOPENED' | 'VERIFIED' | 'FOLLOW_UP_DUE' | 'CLOSED';
-    acceptanceState: 'PROPOSED' | 'ACCEPTED' | 'DECLINED';
-    disposition: 'NOT_RELEVANT' | 'DUPLICATE' | 'EXPIRED' | 'DISMISSED' | null;
+    state: OperationalWorkItemState;
+    acceptanceState: OperationalWorkItemAcceptanceState;
+    disposition: OperationalWorkItemDisposition | null;
   } | null;
 };
 
@@ -6689,6 +6749,60 @@ export interface EnvironmentalHazardsData {
   searchRadiusMiles: number;
 }
 
+export interface LongTermHazardContextItem {
+  propertyMatchId: string;
+  hazardType: string;
+  hazardLabel: string;
+  category: 'LONG_TERM_CONTEXT';
+  title: string;
+  factualSummary: string | null;
+  lifecycleStatus: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  geography: {
+    sourceType: string;
+    sourceKey: string | null;
+    matchedGeography: string;
+    precision: string;
+    distanceMiles: number | null;
+    matchMethod: string;
+  };
+  source: {
+    key: string;
+    provider: string;
+    url: string | null;
+    publishedAt: string | null;
+    lastVerifiedAt: string;
+    revision: number;
+  };
+  interpretation: {
+    relevance: string;
+    confidence: number;
+    missingFacts: string[];
+    boundedExplanation: string;
+  };
+}
+
+export interface EnvironmentLongTermHazardContext {
+  coverage: {
+    state: 'CURRENT' | 'DEGRADED' | 'STALE' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+    comprehensive: false;
+    checkedThrough: string | null;
+    sources: Array<{
+      source: { key: string; family: string; provider: string; termsVersion: string | null };
+      geography: { type: string; key: string | null } | null;
+      state: string;
+      checkedThrough: string | null;
+      limitations: string[];
+      reasonCodes: string[];
+    }>;
+    limitations: string[];
+  };
+  hazards: LongTermHazardContextItem[];
+  emptyState: string | null;
+  pastHazardHref: string;
+}
+
 export interface EnvironmentReportDTO {
   propertyId: string;
   property: {
@@ -6712,6 +6826,7 @@ export interface EnvironmentReportDTO {
   insights: EnvironmentInsight[];
   questions: EnvironmentQuestion[];
   plantAdvisorModules: PlantAdvisorWeatherModule[];
+  longTermHazardContext: EnvironmentLongTermHazardContext;
   sections: {
     weather: SectionResult<WeatherReportData>;
     airQuality: SectionResult<AirQualityData>;

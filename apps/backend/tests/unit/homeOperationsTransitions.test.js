@@ -9,7 +9,9 @@ const {
   assertClosurePairing,
   canRefreshFromSource,
   applyTransition,
+  closureDispositionRuleFor,
   IllegalWorkItemTransitionError,
+  InvalidClosureDispositionError,
 } = require('../../src/modules/homeOperations/domain/transitions.ts');
 
 test('the full doc-tree happy path is legal end to end', () => {
@@ -34,14 +36,25 @@ test('illegal edges are rejected', () => {
 });
 
 test('assertClosurePairing requires a disposition when closing from CANDIDATE', () => {
-  assert.throws(() => assertClosurePairing('CANDIDATE', null));
+  assert.throws(() => assertClosurePairing('CANDIDATE', null), InvalidClosureDispositionError);
   assert.doesNotThrow(() => assertClosurePairing('CANDIDATE', 'NOT_RELEVANT'));
 });
 
 test('assertClosurePairing forbids a disposition on a verified-completion close', () => {
-  assert.throws(() => assertClosurePairing('VERIFIED', 'DISMISSED'));
-  assert.throws(() => assertClosurePairing('FOLLOW_UP_DUE', 'EXPIRED'));
+  assert.throws(() => assertClosurePairing('VERIFIED', 'DISMISSED'), InvalidClosureDispositionError);
+  assert.throws(() => assertClosurePairing('FOLLOW_UP_DUE', 'EXPIRED'), InvalidClosureDispositionError);
   assert.doesNotThrow(() => assertClosurePairing('VERIFIED', null));
+});
+
+// ── Home Operations Item #16 ──────────────────────────────────────────────
+
+test('closureDispositionRuleFor: REQUIRED from CANDIDATE, FORBIDDEN from VERIFIED/FOLLOW_UP_DUE, OPTIONAL elsewhere', () => {
+  assert.equal(closureDispositionRuleFor('CANDIDATE'), 'REQUIRED');
+  assert.equal(closureDispositionRuleFor('VERIFIED'), 'FORBIDDEN');
+  assert.equal(closureDispositionRuleFor('FOLLOW_UP_DUE'), 'FORBIDDEN');
+  for (const state of ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'REOPENED']) {
+    assert.equal(closureDispositionRuleFor(state), 'OPTIONAL', `${state} should be OPTIONAL`);
+  }
 });
 
 test('canRefreshFromSource is true only for CANDIDATE', () => {
@@ -82,5 +95,8 @@ test('applyTransition rejects an illegal transition before touching disposition 
 });
 
 test('applyTransition rejects a disposition on a non-CLOSED destination', () => {
-  assert.throws(() => applyTransition({ state: 'CANDIDATE', acceptanceState: 'PROPOSED' }, 'ACCEPTED', { disposition: 'NOT_RELEVANT' }));
+  assert.throws(
+    () => applyTransition({ state: 'CANDIDATE', acceptanceState: 'PROPOSED' }, 'ACCEPTED', { disposition: 'NOT_RELEVANT' }),
+    InvalidClosureDispositionError,
+  );
 });

@@ -139,7 +139,7 @@ function EntryCard({
   if (entry.kind === 'SEASONAL_CHECKLIST') {
     return <SeasonalChecklistActionCard action={entry.action} propertyId={propertyId} showSupportingDetails />;
   }
-  return <CoverageCorrectionGroupCard actions={entry.actions} subjects={entry.subjects} propertyId={propertyId} showSupportingDetails />;
+  return <CoverageCorrectionGroupCard actions={entry.actions} subjects={entry.subjects} propertyId={propertyId} showSupportingDetails onChanged={onChanged} />;
 }
 
 function EntryList({

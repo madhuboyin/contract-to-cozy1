@@ -27,7 +27,14 @@ function reset() {
 
 const prismaMock = {
   operationalWorkItem: {
-    findUnique: async ({ where }) => workItems.get(where.id) ?? null,
+    findUnique: async ({ where, include }) => {
+      const row = workItems.get(where.id) ?? null;
+      if (!row) return null;
+      if (!include) return row;
+      // getWorkItemGraph's shape — Item #16's getWorkItem test needs the
+      // relation arrays getWorkItem.usecase.ts maps over.
+      return { sources: [], executions: [], evidence: [], watchers: [], ...row };
+    },
     update: async ({ where, data }) => {
       const row = { ...workItems.get(where.id), ...data, updatedAt: new Date() };
       workItems.set(where.id, row);
@@ -70,6 +77,7 @@ const { addWatcher, removeWatcher } = require('../../src/modules/homeOperations/
 const { recordDuplicateDecision } = require('../../src/modules/homeOperations/application/recordDuplicateDecision.usecase.ts');
 const { recordEvidence } = require('../../src/modules/homeOperations/application/recordEvidence.usecase.ts');
 const { transitionWorkItem } = require('../../src/modules/homeOperations/application/transitionWorkItem.usecase.ts');
+const { getWorkItem } = require('../../src/modules/homeOperations/application/getWorkItem.usecase.ts');
 const { IllegalWorkItemTransitionError } = require('../../src/modules/homeOperations/domain/transitions.ts');
 
 function seedWorkItem(overrides = {}) {
@@ -194,4 +202,28 @@ test('a legal transition succeeds', async () => {
   });
 
   assert.equal(updated.state, 'ACCEPTED');
+});
+
+// ── Home Operations Item #16: getWorkItem exposes legalNextStates/closureDispositionRule ──
+
+test('getWorkItem exposes legalNextStates and closureDispositionRule computed from the current state', async () => {
+  reset();
+  const candidate = seedWorkItem({ id: 'wi-candidate', state: 'CANDIDATE' });
+  const verified = seedWorkItem({ id: 'wi-verified', state: 'VERIFIED' });
+  const accepted = seedWorkItem({ id: 'wi-accepted', state: 'ACCEPTED' });
+  const closed = seedWorkItem({ id: 'wi-closed', state: 'CLOSED' });
+
+  const candidateDto = await getWorkItem(candidate.id);
+  assert.deepEqual(candidateDto.legalNextStates, ['ACCEPTED', 'CLOSED']);
+  assert.equal(candidateDto.closureDispositionRule, 'REQUIRED');
+
+  const verifiedDto = await getWorkItem(verified.id);
+  assert.equal(verifiedDto.closureDispositionRule, 'FORBIDDEN');
+
+  const acceptedDto = await getWorkItem(accepted.id);
+  assert.equal(acceptedDto.closureDispositionRule, 'OPTIONAL');
+
+  const closedDto = await getWorkItem(closed.id);
+  assert.deepEqual(closedDto.legalNextStates, []);
+  assert.equal(closedDto.closureDispositionRule, null);
 });

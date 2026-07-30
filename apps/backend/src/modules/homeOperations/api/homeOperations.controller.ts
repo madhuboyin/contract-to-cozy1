@@ -8,7 +8,7 @@ import { addWatcher, removeWatcher } from '../application/watchers.usecase';
 import { transitionWorkItem } from '../application/transitionWorkItem.usecase';
 import { recordDuplicateDecision } from '../application/recordDuplicateDecision.usecase';
 import { recordEvidence } from '../application/recordEvidence.usecase';
-import { IllegalWorkItemTransitionError } from '../domain/transitions';
+import { IllegalWorkItemTransitionError, InvalidClosureDispositionError } from '../domain/transitions';
 import { ListWorkItemsQuerySchema } from './homeOperations.validators';
 
 function homeOperationsContext(req: CustomRequest, res: Response): { propertyId: string } | null {
@@ -64,6 +64,9 @@ async function loadWorkItemForMutation(req: CustomRequest, res: Response, contex
 function handleWorkItemMutationError(err: unknown, res: Response) {
   if (err instanceof IllegalWorkItemTransitionError) {
     return res.status(409).json({ success: false, error: { code: 'ILLEGAL_TRANSITION', message: err.message } });
+  }
+  if (err instanceof InvalidClosureDispositionError) {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_CLOSURE_DISPOSITION', message: err.message } });
   }
   throw err;
 }

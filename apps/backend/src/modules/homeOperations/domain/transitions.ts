@@ -72,6 +72,26 @@ export function assertTransition(from: OperationalWorkItemState, to: Operational
   }
 }
 
+export class InvalidClosureDispositionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidClosureDispositionError';
+  }
+}
+
+/**
+ * Home Operations Item #16: what the disposition field on a close-to-CLOSED
+ * transition requires, for a caller (the write API's frontend) that needs
+ * to render the right control without duplicating this rule itself.
+ */
+export type ClosureDispositionRule = 'REQUIRED' | 'FORBIDDEN' | 'OPTIONAL';
+
+export function closureDispositionRuleFor(from: OperationalWorkItemState): ClosureDispositionRule {
+  if (from === 'CANDIDATE') return 'REQUIRED';
+  if (VERIFIED_CLOSE_ORIGINS.has(from)) return 'FORBIDDEN';
+  return 'OPTIONAL';
+}
+
 /**
  * disposition is required when closing straight from CANDIDATE (the
  * NOT_RELEVANT/DUPLICATE/EXPIRED/DISMISSED branch) and forbidden when
@@ -83,10 +103,10 @@ export function assertClosurePairing(
   disposition: OperationalWorkItemDisposition | null,
 ): void {
   if (from === 'CANDIDATE' && !disposition) {
-    throw new Error('Closing an OperationalWorkItem from CANDIDATE requires a disposition.');
+    throw new InvalidClosureDispositionError('Closing an OperationalWorkItem from CANDIDATE requires a disposition.');
   }
   if (VERIFIED_CLOSE_ORIGINS.has(from) && disposition) {
-    throw new Error(`Closing an OperationalWorkItem from ${from} must not carry a disposition — that path is genuine completion.`);
+    throw new InvalidClosureDispositionError(`Closing an OperationalWorkItem from ${from} must not carry a disposition — that path is genuine completion.`);
   }
 }
 
@@ -127,7 +147,7 @@ export function applyTransition(
   if (to === 'CLOSED') {
     assertClosurePairing(current.state, disposition);
   } else if (disposition) {
-    throw new Error(`disposition may only be set when transitioning to CLOSED, not ${to}.`);
+    throw new InvalidClosureDispositionError(`disposition may only be set when transitioning to CLOSED, not ${to}.`);
   }
 
   const acceptanceState: OperationalWorkItemAcceptanceState =
