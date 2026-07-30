@@ -444,6 +444,7 @@ function completionSignal(seed: CapabilitySeed): string {
     ACTION_INITIATED: 'action_initiated',
     ACTION_COMPLETED: 'action_completed',
     PLAN_CREATED: 'plan_created',
+    OUTCOME_VERIFIED: 'outcome_verified',
   }[seed.completionKind];
   return `${seed.id.replace(/-/g, '_')}_${suffix}`;
 }

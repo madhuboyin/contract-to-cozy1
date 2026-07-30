@@ -40,7 +40,7 @@
 | emergency | Emergency Help | ai | `/dashboard/emergency` | Verified | PLAN_BUDGET | BETA | SAFETY_EMERGENCY | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
 | energy | Energy Audit | ai | `/dashboard/energy` | Verified | PROTECT_MONITOR | BETA | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CATALOG_ONLY |
 | financing | Financing Center | home | `/dashboard/properties/[id]/tools/financing` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
-| guidance-overview | Guidance Overview | home, ai | `/dashboard/properties/[id]/tools/guidance-overview` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CATALOG_ONLY |
+| guidance-overview | Guidance Overview | home, ai | `/dashboard/properties/[id]/tools/guidance-overview` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |
 | hoa-compliance | HOA Compliance | home | `/dashboard/properties/[id]/tools/hoa` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
 | home-digital-twin | Home Upgrade Planner | home | `/dashboard/properties/[id]/tools/home-digital-twin` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-digital-will | Home Digital Will | home, ai | `/dashboard/properties/[id]/tools/home-digital-will` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
@@ -61,7 +61,7 @@
 | permits | Permit Tracker | home | `/dashboard/properties/[id]/tools/permits` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
 | plant-advisor | Plant Advisor | home, ai | `/dashboard/properties/[id]/tools/plant-advisor` | Verified | MAINTAIN_PREVENT | ACTIVE | LOW_CONSEQUENCE | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | price-finalization | Price Finalization | home, ai | `/dashboard/properties/[id]/tools/price-finalization` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |
-| project-tracker | Project Tracker | home | `/dashboard/properties/[id]/projects` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | ACTION_COMPLETED | Canonical | No | CONTEXTUAL_CANONICAL |
+| project-tracker | Project Tracker | home | `/dashboard/properties/[id]/projects` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | OUTCOME_VERIFIED | Canonical | No | CONTEXTUAL_CANONICAL |
 | property-tax | Property Tax Center | home, ai | `/dashboard/properties/[id]/tools/property-tax` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |
 | quote-comparison | Quote Comparison | home, ai | `/dashboard/properties/[id]/tools/quote-comparison` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | WORKFLOW_ONLY |
 | replace-repair | Repair vs Replace | ai | `/dashboard/replace-repair` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | No | CATALOG_ONLY |
@@ -70,7 +70,7 @@
 | sell-hold-rent | Sell / Hold / Rent | home, ai | `/dashboard/properties/[id]/tools/sell-hold-rent` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | seller-prep | Seller Prep | home | `/dashboard/properties/[id]/seller-prep` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | service-price-radar | Service Price Radar | home, ai | `/dashboard/properties/[id]/tools/service-price-radar` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
-| status-board | Status Board | home | `/dashboard/properties/[id]/status-board` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| status-board | Status Board | home | `/dashboard/properties/[id]/status-board` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | visual-inspector | Visual Inspector | ai | `/dashboard/visual-inspector` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CATALOG_ONLY |
 
 ## Interpretation

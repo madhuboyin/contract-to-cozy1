@@ -133,6 +133,11 @@ export const CAPABILITY_COMPLETION_KINDS = [
   'ACTION_INITIATED',
   'ACTION_COMPLETED',
   'PLAN_CREATED',
+  // Home Operations Slice 10: distinct from ACTION_COMPLETED — reserved for
+  // capabilities whose real completion is a verified outcome (evidence
+  // reviewed and confirmed), not merely an action having been taken. See
+  // HOME_OPERATIONS_AND_ACTION_MANAGEMENT_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md §11.
+  'OUTCOME_VERIFIED',
 ] as const;
 
 export const CAPABILITY_READINESS_REQUIREMENT_KINDS = [

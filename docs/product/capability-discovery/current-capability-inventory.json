@@ -258,7 +258,7 @@
       "rolloutKey": "GUIDANCE_OVERVIEW",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_VIEWED",
+      "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
@@ -648,7 +648,7 @@
       "rolloutKey": "PROJECT_TRACKER",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "ACTION_COMPLETED",
+      "completionKind": "OUTCOME_VERIFIED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
@@ -815,7 +815,7 @@
       "rolloutKey": "STATUS_BOARD",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
+      "completionKind": "OUTPUT_VIEWED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

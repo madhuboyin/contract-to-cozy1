@@ -16,7 +16,7 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   ['project-tracker', 'Project Tracker', 'Track contractor projects from contract to completion.', '/dashboard/properties/[id]/projects', 'PROJECT_TRACKER', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['reserve-fund', 'Reserve Fund Planner', 'Plan reserves for future repairs and replacements.', '/dashboard/properties/[id]/tools/reserve-fund', 'RESERVE_FUND', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
   ['seller-prep', 'Seller Prep', 'Prepare the property, documents, and timeline for sale.', '/dashboard/properties/[id]/seller-prep', 'SELLER_PREP', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
-  ['status-board', 'Status Board', 'Review readiness and active priorities in one place.', '/dashboard/properties/[id]/status-board', 'STATUS_BOARD', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
+  ['status-board', 'Status Board', "See your home's current condition, readiness, and evidence in one place.", '/dashboard/properties/[id]/status-board', 'STATUS_BOARD', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
 ] as const).map(([
   id,
   label,
@@ -189,6 +189,13 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
     ],
     expectedOutput:
       'A structured inspection report with extracted findings ready for homeowner review and confirmation.',
+    // Home Operations Slice 10: intentionally stays ARTIFACT_CREATED, not a
+    // new completionKind — "findings confirmed" (using this tool) and
+    // "follow-up resolved" (§11) are two different moments, and resolution
+    // now genuinely lives in the Home Operations work-item lifecycle
+    // (accept-as-work → Maintenance/Guidance/Project → verified), not in
+    // "using the Inspection Hub tool." This capability's completion is
+    // accurately the artifact (the reviewed report/findings) it produces.
     completionSignal: 'inspection_findings_extracted',
     outputEntityTypes: ['ISSUE'] as const,
   } : {}),
@@ -225,7 +232,7 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
     ],
     expectedOutput:
       'A tracked home project with milestones, progress evidence, financial changes, and completion records.',
-    completionSignal: 'project_created_with_milestone_or_progress_verified',
+    completionSignal: 'project_verified_outcome_recorded',
     outputEntityTypes: ['PROJECT'] as const,
   } : {}),
   label,
@@ -241,7 +248,15 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
       : id === 'inspection-hub'
         ? 'ARTIFACT_CREATED' as const
         : id === 'project-tracker'
-          ? 'ACTION_COMPLETED' as const
+          // Home Operations Slice 10 (§11): verified project completion, not
+          // "created with a milestone or progress" — the real machinery this
+          // now reflects lives in projectTracker.service.ts's confirmCompletion.
+          ? 'OUTCOME_VERIFIED' as const
+          : id === 'status-board'
+            // Slice 10 (§11 / §3.1): Status Board reports condition, it does
+            // not create the operational plan its old PLAN_CREATED default
+            // implied — that's Home Operations' job now.
+            ? 'OUTPUT_VIEWED' as const
         : 'PLAN_CREATED' as const,
   mode,
 })));

@@ -329,7 +329,7 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   {
     key: 'guidance-overview',
     title: 'Guidance Overview',
-    description: 'Review active signals and next steps',
+    description: 'Work through an active home decision step by step',
     href: '/dashboard/guidance-overview',
     icon: resolveToolIcon('home', 'guidance-overview'),
     emoji: '🧭',

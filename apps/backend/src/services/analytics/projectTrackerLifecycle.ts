@@ -31,6 +31,14 @@ function baseEvent(
     sourceEntityType: input.sourceEntityType ?? 'PROJECT',
     sourceEntityId: input.sourceEntityId ?? input.projectId,
     journeyId: input.sourceJourneyId ?? null,
+    // Home Operations Slice 10: intentionally does not follow the
+    // project-tracker capability's registry completionKind (OUTCOME_VERIFIED
+    // as of this slice). This is discovery/recommendation telemetry — "the
+    // homeowner did something concrete with this tool, what's next" — fired
+    // at milestone-creation/progress time on purpose, since that's when the
+    // "what tool should we suggest next" signal is actually useful. It is
+    // not a claim that the capability itself is complete; that claim belongs
+    // to the registry value alone, not this event tag.
     completionKind: 'ACTION_COMPLETED',
     outputKey: input.projectId,
   };

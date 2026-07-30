@@ -38,7 +38,8 @@ export type ToolCompletionKind =
   | 'DECISION_RECORDED'
   | 'ACTION_INITIATED'
   | 'ACTION_COMPLETED'
-  | 'PLAN_CREATED';
+  | 'PLAN_CREATED'
+  | 'OUTCOME_VERIFIED';
 
 export type ToolLaunchContext = {
   launchSurface: ToolDiscoverySurface;
@@ -216,10 +217,15 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'plant-advisor': 'OUTPUT_GENERATED',
   diy: 'DECISION_RECORDED',
   'inspection-hub': 'ARTIFACT_CREATED',
-  'project-tracker': 'ACTION_COMPLETED',
+  'project-tracker': 'OUTCOME_VERIFIED',
   'property-tax': 'DECISION_RECORDED',
   'ownership-costs': 'DECISION_RECORDED',
   'savings-benefits': 'DECISION_RECORDED',
+  // Home Operations Slice 10 (§11): exceptions from their outcome
+  // category's default (PLAN_BUDGET → PLAN_CREATED, PROTECT_MONITOR →
+  // OUTPUT_VIEWED), matching the backend registry correction.
+  'status-board': 'OUTPUT_VIEWED',
+  'guidance-overview': 'DECISION_RECORDED',
 };
 
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {

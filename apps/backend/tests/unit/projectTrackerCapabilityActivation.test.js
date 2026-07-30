@@ -60,12 +60,26 @@ test('CAP-807 Project Tracker owns execution record and completion contracts', (
   const capability = canonicalCapabilityRegistry.getById('project-tracker');
   assert.equal(capability.version, 2);
   assert.equal(capability.recommendation.requiresExplicitTrigger, true);
-  assert.equal(capability.lifecycle.completionKind, 'ACTION_COMPLETED');
+  // Home Operations Slice 10: OUTCOME_VERIFIED, not ACTION_COMPLETED on
+  // creation — matches confirmCompletion's real verified-completion
+  // machinery (Home Operations Slice 6) instead of "created with a
+  // milestone or progress."
+  assert.equal(capability.lifecycle.completionKind, 'OUTCOME_VERIFIED');
   assert.equal(
     capability.lifecycle.completionSignal,
-    'project_created_with_milestone_or_progress_verified',
+    'project_verified_outcome_recorded',
   );
   assert.deepEqual(capability.lifecycle.outputEntityTypes, ['PROJECT']);
+});
+
+test('CAP-807 Status Board and Guidance Overview report condition/decision, not a competing plan (Home Operations Slice 10)', () => {
+  const statusBoard = canonicalCapabilityRegistry.getById('status-board');
+  assert.equal(statusBoard.lifecycle.completionKind, 'OUTPUT_VIEWED');
+  assert.doesNotMatch(statusBoard.presentation.shortDescription, /priorit/i);
+
+  const guidanceOverview = canonicalCapabilityRegistry.getById('guidance-overview');
+  assert.equal(guidanceOverview.lifecycle.completionKind, 'DECISION_RECORDED');
+  assert.doesNotMatch(guidanceOverview.presentation.shortDescription, /active (property )?signals/i);
 });
 
 test('CAP-807 explicit project records activate while generic context does not', () => {
