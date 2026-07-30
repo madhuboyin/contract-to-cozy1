@@ -125,22 +125,50 @@ async function createPermitFlag(
     return;
   }
 
-  // No matching permit — create an unpermitted flag
+  // No matching permit in available records — create a non-diagnostic
+  // historical research finding. An inspection observation can raise the
+  // question, but it cannot establish the jurisdictional permit outcome.
   const dedupeKey = `inspection:${finding.id}:${workType}`;
   const existingFlag = await prisma.permitUnpermittedFlag.findUnique({ where: { dedupeKey } });
   if (existingFlag) return;
 
-  const flag = await prisma.permitUnpermittedFlag.create({
-    data: {
-      propertyId: finding.propertyId,
-      workType,
-      triggerType: 'INSPECTION_REPORT_FINDING',
-      flagReason: `Inspection finding suggests ${workType.toLowerCase().replace(/_/g, ' ')} occurred without a matching permit on record. Finding: "${finding.inspectorDescription.slice(0, 200)}"`,
-      status: 'FLAGGED',
-      disclosureRisk: finding.severity === 'MAJOR' ? 'HIGH' : 'MEDIUM',
-      dedupeKey,
-    },
-    select: { id: true },
+  const flag = await prisma.$transaction(async (tx) => {
+    const created = await tx.permitUnpermittedFlag.create({
+      data: {
+        propertyId: finding.propertyId,
+        workType,
+        triggerType: 'INSPECTION_REPORT_FINDING',
+        flagReason: `An inspection finding suggests historical ${workType.toLowerCase().replace(/_/g, ' ')} work. No match was found in the permit records currently available to Contract to Cozy; this does not establish that the work was unpermitted or unlawful. Finding: "${finding.inspectorDescription.slice(0, 200)}"`,
+        status: 'UNKNOWN',
+        disclosureRisk: finding.severity === 'MAJOR' ? 'HIGH' : 'MEDIUM',
+        dedupeKey,
+        workOrigin: 'UNKNOWN',
+        workStage: 'COMPLETED',
+        recordSearchOutcome: 'NOT_FOUND_IN_AVAILABLE_RECORDS',
+        recordsSearchedAt: new Date(),
+        recordsCoverageDescription: `Available permit records cross-referenced from confirmed inspection report ${reportId}.`,
+        evidenceConfidence: 'MEDIUM',
+        researchChannel: 'LICENSED_PROFESSIONAL',
+        researchSourceReference: `Inspection report ${reportId}, finding ${finding.id}`,
+      },
+      select: { id: true },
+    });
+    await tx.permitHistoricalFindingEvent.create({
+      data: {
+        flagId: created.id,
+        propertyId: finding.propertyId,
+        actorUserId: userId,
+        eventType: 'DETECTED',
+        toStatus: 'UNKNOWN',
+        payload: {
+          inspectionReportId: reportId,
+          inspectionFindingId: finding.id,
+          recordSearchOutcome: 'NOT_FOUND_IN_AVAILABLE_RECORDS',
+          nonDiagnostic: true,
+        },
+      },
+    });
+    return created;
   });
 
   // Link finding to the created flag

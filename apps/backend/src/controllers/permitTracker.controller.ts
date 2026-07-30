@@ -281,6 +281,7 @@ export async function updatePermitFlag(req: Request, res: Response, next: NextFu
     const flag = await permitTrackerService.updateFlag(
       req.params.flagId,
       req.params.propertyId,
+      req.user!.userId,
       req.body,
     );
     res.json({ success: true, data: { flag } });
@@ -289,8 +290,24 @@ export async function updatePermitFlag(req: Request, res: Response, next: NextFu
 
 export async function createManualFlag(req: Request, res: Response, next: NextFunction) {
   try {
-    const flag = await permitTrackerService.createManualFlag(req.params.propertyId, req.body);
+    const flag = await permitTrackerService.createManualFlag(
+      req.params.propertyId,
+      req.user!.userId,
+      req.body,
+    );
     res.status(201).json({ success: true, data: { flag } });
+  } catch (err) { next(err); }
+}
+
+export async function createFlagRemediationCase(req: Request, res: Response, next: NextFunction) {
+  try {
+    const renovationCase = await permitTrackerService.createRemediationCase(
+      req.params.flagId,
+      req.params.propertyId,
+      req.user!.userId,
+      req.body,
+    );
+    res.status(201).json({ success: true, data: { renovationCase } });
   } catch (err) { next(err); }
 }
 

@@ -123,11 +123,11 @@ export default function PermitHubPage() {
           <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-amber-800">
-              {summary.openFlags} item{summary.openFlags !== 1 ? 's' : ''} may be unpermitted
+              {summary.openFlags} historical item{summary.openFlags !== 1 ? 's need' : ' needs'} permit research
             </p>
             {summary.highRiskFlags > 0 && (
               <p className="text-xs text-amber-600 mt-0.5">
-                {summary.highRiskFlags} high-risk flag{summary.highRiskFlags !== 1 ? 's' : ''}
+                {summary.highRiskFlags} high-priority finding{summary.highRiskFlags !== 1 ? 's' : ''}
               </p>
             )}
           </div>

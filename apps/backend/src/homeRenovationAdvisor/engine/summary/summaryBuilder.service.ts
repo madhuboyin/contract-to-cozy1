@@ -301,13 +301,13 @@ export function buildWarnings(
       warnings.push({
         code: 'RETROACTIVE_NO_PERMIT_OBTAINED',
         title: structural
-          ? 'Unpermitted Structural Work — Action Recommended'
-          : 'No Permit Obtained for Permitted Work',
+          ? 'Reported Structural Permit Gap — Research Recommended'
+          : 'Reported Permit Documentation Gap',
         severity: structural ? 'CRITICAL' : 'WARNING',
         urgency: structural ? 'IMMEDIATE' : 'HIGH',
         description: structural
-          ? 'This type of structural project typically requires a permit. Unpermitted structural work can affect your ability to sell, void insurance coverage, and create liability. A retroactive permit or disclosure may be needed before your next transaction.'
-          : 'This type of project typically requires a permit, but none was obtained. Unpermitted work may require retroactive permits or disclosure at resale and can affect insurance coverage.',
+          ? 'You reported that no permit was obtained for completed structural work. Requirements vary by place and time, so confirm the historical record and available remediation options with the building authority before drawing a compliance conclusion.'
+          : 'You reported that no permit was obtained for completed work that may have required one. Confirm the historical record with the local authority; this report alone does not determine that the work was unlawful.',
       });
     }
 

@@ -29,6 +29,11 @@ import {
   markProjectsForPermitRecordReconciliationError,
   reconcileProjectsForPermitRecord,
 } from './renovationExecution.service';
+import {
+  evidenceConfidenceForFinding,
+  NOT_FOUND_IN_AVAILABLE_RECORDS_MESSAGE,
+  validateRetroactiveDisposition,
+} from './projectCompliance/retroactiveCompliancePolicy';
 
 // ── Inspection milestone templates ───────────────────────────────────────────
 
@@ -354,7 +359,7 @@ export class PermitTrackerService {
         _count: { id: true },
       }),
       prisma.permitUnpermittedFlag.count({
-        where: { propertyId, status: { in: ['FLAGGED', 'INVESTIGATING'] } },
+        where: { propertyId, status: { in: ['UNKNOWN', 'FLAGGED', 'INVESTIGATING'] } },
       }),
     ]);
 
@@ -526,6 +531,9 @@ export class PermitTrackerService {
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
       include: {
         resolvedByPermit: { select: { permitNumber: true } },
+        remediationCase: { select: { id: true, name: true, lifecycle: true } },
+        historyEvents: { orderBy: { occurredAt: 'asc' } },
+        _count: { select: { historyEvents: true } },
       },
     });
 
@@ -547,7 +555,11 @@ export class PermitTrackerService {
   async getFlagDetail(flagId: string, propertyId: string) {
     const flag = await prisma.permitUnpermittedFlag.findFirst({
       where: { id: flagId, propertyId },
-      include: { resolvedByPermit: { select: { permitNumber: true } } },
+      include: {
+        resolvedByPermit: { select: { permitNumber: true } },
+        remediationCase: { select: { id: true, name: true, lifecycle: true } },
+        historyEvents: { orderBy: { occurredAt: 'asc' } },
+      },
     });
     if (!flag) throw new APIError('Flag not found', 404, 'NOT_FOUND');
     return {
@@ -559,44 +571,206 @@ export class PermitTrackerService {
     };
   }
 
-  async updateFlag(flagId: string, propertyId: string, patch: any) {
+  async updateFlag(flagId: string, propertyId: string, userId: string, patch: any) {
     const existing = await prisma.permitUnpermittedFlag.findFirst({
       where: { id: flagId, propertyId },
     });
     if (!existing) throw new APIError('Flag not found', 404, 'NOT_FOUND');
 
-    await prisma.permitUnpermittedFlag.update({
-      where: { id: flagId },
-      data: {
-        status: patch.status,
-        disclosureRisk: patch.disclosureRisk,
-        resolvedByPermitId: patch.resolvedByPermitId,
-        resolutionNotes: patch.resolutionNotes,
-      },
+    const evidenceDocumentIds = patch.evidenceDocumentIds ?? existing.evidenceDocumentIds;
+    if (evidenceDocumentIds.length > 0) {
+      const count = await prisma.document.count({
+        where: { id: { in: evidenceDocumentIds }, propertyId },
+      });
+      if (count !== new Set(evidenceDocumentIds).size) {
+        throw new APIError('One or more evidence documents do not belong to this property.', 409, 'INVALID_RETROACTIVE_EVIDENCE');
+      }
+    }
+    const resolvedByPermitId = patch.resolvedByPermitId ?? existing.resolvedByPermitId;
+    if (resolvedByPermitId) {
+      const permit = await prisma.propertyPermitRecord.findFirst({
+        where: { id: resolvedByPermitId, propertyId, isActive: true },
+        select: { id: true, source: true, isVerified: true },
+      });
+      if (!permit || (!permit.isVerified && permit.source !== 'OPEN_DATA_API')) {
+        throw new APIError(
+          'The matched permit must be authority-sourced or verified.',
+          409,
+          'AUTHORITATIVE_PERMIT_MATCH_REQUIRED',
+        );
+      }
+    }
+
+    const merged = {
+      currentStatus: existing.status,
+      nextStatus: patch.status,
+      resolvedByPermitId,
+      remediationCaseId: existing.remediationCaseId,
+      resolutionNotes: patch.resolutionNotes ?? existing.resolutionNotes,
+      evidenceDocumentIds,
+      researchChannel: patch.researchChannel ?? existing.researchChannel,
+      researchSourceReference: patch.researchSourceReference ?? existing.researchSourceReference,
+      authorityOutcome: patch.authorityOutcome ?? existing.authorityOutcome,
+      authorityObservedAt: patch.authorityObservedAt ?? existing.authorityObservedAt,
+    };
+    const dispositionErrors = validateRetroactiveDisposition(merged);
+    if (dispositionErrors.length > 0) {
+      throw new APIError(
+        dispositionErrors.join(' '),
+        409,
+        'RETROACTIVE_DISPOSITION_EVIDENCE_REQUIRED',
+        { requirements: dispositionErrors },
+      );
+    }
+    if (patch.recordSearchOutcome === 'MATCH_FOUND' && !resolvedByPermitId) {
+      throw new APIError('A matched-record outcome requires the matching permit.', 409, 'PERMIT_MATCH_REQUIRED');
+    }
+    const nextSearchOutcome = patch.recordSearchOutcome ?? existing.recordSearchOutcome;
+    const nextCoverageDescription = patch.recordsCoverageDescription ?? existing.recordsCoverageDescription;
+    if (nextSearchOutcome !== 'NOT_SEARCHED' && !nextCoverageDescription?.trim()) {
+      throw new APIError(
+        'Describe the records, date range, portal, or documents covered by this search.',
+        409,
+        'RECORD_SEARCH_COVERAGE_REQUIRED',
+      );
+    }
+
+    const nextStatus = patch.status ?? existing.status;
+    const evidenceConfidence = evidenceConfidenceForFinding({
+      recordSearchOutcome: patch.recordSearchOutcome ?? existing.recordSearchOutcome,
+      resolvedByPermitId,
+      evidenceDocumentIds,
+      researchChannel: patch.researchChannel ?? existing.researchChannel,
+      researchSourceReference: patch.researchSourceReference ?? existing.researchSourceReference,
+      authorityOutcome: patch.authorityOutcome ?? existing.authorityOutcome,
+      authorityObservedAt: patch.authorityObservedAt ?? existing.authorityObservedAt,
+    });
+    await prisma.$transaction(async (tx) => {
+      await tx.permitUnpermittedFlag.update({
+        where: { id: flagId },
+        data: {
+          status: patch.status,
+          disclosureRisk: patch.disclosureRisk,
+          resolvedByPermitId: patch.resolvedByPermitId,
+          resolutionNotes: patch.resolutionNotes,
+          workOrigin: patch.workOrigin,
+          workStage: patch.workStage,
+          workStartedAt: patch.workStartedAt ? new Date(patch.workStartedAt) : undefined,
+          workCompletedAt: patch.workCompletedAt ? new Date(patch.workCompletedAt) : undefined,
+          recordSearchOutcome: patch.recordSearchOutcome,
+          recordsSearchedAt: patch.recordSearchOutcome ? new Date() : undefined,
+          recordsCoverageDescription: patch.recordsCoverageDescription,
+          evidenceDocumentIds: patch.evidenceDocumentIds,
+          evidenceConfidence,
+          researchChannel: patch.researchChannel,
+          researchSourceReference: patch.researchSourceReference,
+          authorityOutcome: patch.authorityOutcome,
+          authorityObservedAt: patch.authorityObservedAt ? new Date(patch.authorityObservedAt) : undefined,
+          dispositionAt: patch.status && ['CONFIRMED_PERMITTED', 'CONFIRMED_UNPERMITTED', 'REMEDIATED', 'DISMISSED'].includes(patch.status)
+            ? new Date()
+            : undefined,
+          dispositionByUserId: patch.status && ['CONFIRMED_PERMITTED', 'CONFIRMED_UNPERMITTED', 'REMEDIATED', 'DISMISSED'].includes(patch.status)
+            ? userId
+            : undefined,
+        },
+      });
+      const evidenceChanged = patch.evidenceDocumentIds !== undefined;
+      const searchChanged = patch.recordSearchOutcome !== undefined;
+      const dispositionChanged = nextStatus !== existing.status;
+      await tx.permitHistoricalFindingEvent.create({
+        data: {
+          flagId,
+          propertyId,
+          actorUserId: userId,
+          eventType: dispositionChanged
+            ? 'DISPOSITION_RECORDED'
+            : searchChanged
+              ? 'SEARCH_RECORDED'
+              : evidenceChanged
+                ? 'EVIDENCE_UPDATED'
+                : 'RESEARCH_STARTED',
+          fromStatus: existing.status,
+          toStatus: nextStatus,
+          evidenceDocumentIds,
+          payload: {
+            recordSearchOutcome: patch.recordSearchOutcome ?? existing.recordSearchOutcome,
+            researchChannel: patch.researchChannel ?? existing.researchChannel,
+            researchSourceReference: patch.researchSourceReference ?? existing.researchSourceReference,
+            authorityOutcome: patch.authorityOutcome ?? existing.authorityOutcome,
+            evidenceConfidence,
+            resolutionNotes: patch.resolutionNotes ?? existing.resolutionNotes,
+          },
+        },
+      });
     });
 
     return this.getFlagDetail(flagId, propertyId);
   }
 
-  async createManualFlag(propertyId: string, payload: any) {
+  async createManualFlag(propertyId: string, userId: string, payload: any) {
+    if (payload.recordSearchOutcome === 'MATCH_FOUND') {
+      throw new APIError(
+        'Create the historical finding first, then link the authoritative permit match.',
+        409,
+        'PERMIT_MATCH_REQUIRED',
+      );
+    }
+    if (payload.evidenceDocumentIds.length > 0) {
+      const evidenceCount = await prisma.document.count({
+        where: { id: { in: payload.evidenceDocumentIds }, propertyId },
+      });
+      if (evidenceCount !== new Set(payload.evidenceDocumentIds).size) {
+        throw new APIError('One or more evidence documents do not belong to this property.', 409, 'INVALID_RETROACTIVE_EVIDENCE');
+      }
+    }
     const triggerSource = payload.inventoryItemId
       ? `inventory:${payload.inventoryItemId}`
       : `manual:${Date.now()}`;
 
     const dedupeKey = `${propertyId}:${payload.workType}:${triggerSource}`;
 
-    const flag = await prisma.permitUnpermittedFlag.create({
-      data: {
-        propertyId,
-        workType: payload.workType,
-        triggerType: 'MANUAL',
-        flagReason: payload.flagReason,
-        status: 'FLAGGED',
-        disclosureRisk: payload.disclosureRisk,
-        inventoryItemId: payload.inventoryItemId,
-        resolutionNotes: payload.resolutionNotes,
-        dedupeKey,
-      },
+    const flag = await prisma.$transaction(async (tx) => {
+      const created = await tx.permitUnpermittedFlag.create({
+        data: {
+          propertyId,
+          workType: payload.workType,
+          triggerType: 'MANUAL',
+          flagReason: payload.flagReason || NOT_FOUND_IN_AVAILABLE_RECORDS_MESSAGE,
+          status: 'UNKNOWN',
+          disclosureRisk: payload.disclosureRisk,
+          inventoryItemId: payload.inventoryItemId,
+          resolutionNotes: payload.resolutionNotes,
+          dedupeKey,
+          workOrigin: payload.workOrigin,
+          workStage: payload.workStage,
+          workStartedAt: payload.workStartedAt ? new Date(payload.workStartedAt) : undefined,
+          workCompletedAt: payload.workCompletedAt ? new Date(payload.workCompletedAt) : undefined,
+          recordSearchOutcome: payload.recordSearchOutcome,
+          recordsSearchedAt: payload.recordSearchOutcome !== 'NOT_SEARCHED' ? new Date() : undefined,
+          recordsCoverageDescription: payload.recordsCoverageDescription,
+          evidenceDocumentIds: payload.evidenceDocumentIds,
+          evidenceConfidence: evidenceConfidenceForFinding(payload),
+          researchChannel: payload.researchChannel,
+          researchSourceReference: payload.researchSourceReference,
+        },
+      });
+      await tx.permitHistoricalFindingEvent.create({
+        data: {
+          flagId: created.id,
+          propertyId,
+          actorUserId: userId,
+          eventType: 'INTAKE_CREATED',
+          toStatus: 'UNKNOWN',
+          evidenceDocumentIds: payload.evidenceDocumentIds,
+          payload: {
+            workOrigin: payload.workOrigin,
+            workStage: payload.workStage,
+            recordSearchOutcome: payload.recordSearchOutcome,
+            nonDiagnostic: true,
+          },
+        },
+      });
+      return created;
     });
 
     return {
@@ -604,6 +778,76 @@ export class PermitTrackerService {
       createdAt: flag.createdAt.toISOString(),
       updatedAt: flag.updatedAt.toISOString(),
     };
+  }
+
+  async createRemediationCase(
+    flagId: string,
+    propertyId: string,
+    userId: string,
+    payload: { name?: string; objective?: string },
+  ) {
+    const flag = await prisma.permitUnpermittedFlag.findFirst({
+      where: { id: flagId, propertyId },
+    });
+    if (!flag) throw new APIError('Historical finding not found.', 404, 'NOT_FOUND');
+    if (flag.remediationCaseId) {
+      return prisma.renovationCase.findUniqueOrThrow({ where: { id: flag.remediationCaseId } });
+    }
+    return prisma.$transaction(async (tx) => {
+      const renovationCase = await tx.renovationCase.create({
+        data: {
+          propertyId,
+          createdByUserId: userId,
+          idempotencyKey: `retroactive-remediation:${flag.id}`,
+          name: payload.name?.trim() || `Resolve historical ${flag.workType.toLowerCase().replace(/_/g, ' ')} records`,
+          objective: payload.objective?.trim() || 'Research the historical work, obtain an authoritative determination, and complete any required remediation.',
+          caseType: 'REPAIR',
+          lifecycle: 'REQUIREMENTS_RESEARCH',
+          outcomeStatus: 'OPEN',
+          governanceTier: flag.disclosureRisk === 'HIGH' ? 'COMPLIANCE_SENSITIVE' : 'MATERIAL_FINANCIAL',
+          entryPoint: 'PERMIT_HISTORICAL_RESEARCH',
+          sourceType: 'PERMIT_UNPERMITTED_FLAG',
+          sourceId: flag.id,
+        },
+      });
+      await tx.renovationCaseLink.create({
+        data: {
+          renovationCaseId: renovationCase.id,
+          propertyId,
+          linkType: 'UNPERMITTED_FLAG',
+          targetId: flag.id,
+          metadata: { historicalResearchOnly: true, createsProject: false },
+          createdByUserId: userId,
+        },
+      });
+      await tx.renovationCaseEvent.create({
+        data: {
+          renovationCaseId: renovationCase.id,
+          propertyId,
+          actorUserId: userId,
+          idempotencyKey: `retroactive-remediation:${flag.id}:created`,
+          eventType: 'CASE_CREATED',
+          toLifecycle: 'REQUIREMENTS_RESEARCH',
+          payload: { sourceFlagId: flag.id, historicalResearchOnly: true },
+        },
+      });
+      await tx.permitUnpermittedFlag.update({
+        where: { id: flag.id },
+        data: { remediationCaseId: renovationCase.id, status: 'WILL_REMEDIATE' },
+      });
+      await tx.permitHistoricalFindingEvent.create({
+        data: {
+          flagId: flag.id,
+          propertyId,
+          actorUserId: userId,
+          eventType: 'REMEDIATION_CASE_CREATED',
+          fromStatus: flag.status,
+          toStatus: 'WILL_REMEDIATE',
+          payload: { remediationCaseId: renovationCase.id, projectCreated: false },
+        },
+      });
+      return renovationCase;
+    });
   }
 
   // ── Disclosure Export ─────────────────────────────────────────────────────

@@ -103,6 +103,7 @@ export const INSPECTION_STATUS_COLOR: Record<PermitInspectionStatus, string> = {
 };
 
 export const FLAG_STATUS_LABELS: Record<PermitUnpermittedFlagStatus, string> = {
+  UNKNOWN: 'Unknown — research needed',
   FLAGGED: 'Flagged',
   INVESTIGATING: 'Investigating',
   CONFIRMED_PERMITTED: 'Confirmed Permitted',
@@ -113,6 +114,7 @@ export const FLAG_STATUS_LABELS: Record<PermitUnpermittedFlagStatus, string> = {
 };
 
 export const FLAG_STATUS_COLOR: Record<PermitUnpermittedFlagStatus, string> = {
+  UNKNOWN: 'bg-slate-100 text-slate-700',
   FLAGGED: 'bg-amber-50 text-amber-700',
   INVESTIGATING: 'bg-blue-50 text-blue-700',
   CONFIRMED_PERMITTED: 'bg-emerald-50 text-emerald-700',

@@ -14,6 +14,7 @@ type PermitUnpermittedFlagTrigger =
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { checkPermitWorkerContext } from './projectCompliance/permitWorkerContext.service';
+import { NOT_FOUND_IN_AVAILABLE_RECORDS_MESSAGE } from './projectCompliance/retroactiveCompliancePolicy';
 
 const WINDOW_YEARS = 2;
 
@@ -94,7 +95,14 @@ export class PermitDetectionService {
       }),
       prisma.propertyPermitRecord.findMany({
         where: { propertyId, isActive: true },
-        select: { workTypes: true, issueDate: true },
+        select: {
+          id: true,
+          workTypes: true,
+          issueDate: true,
+          source: true,
+          isVerified: true,
+          documentIds: true,
+        },
       }),
     ]);
 
@@ -128,7 +136,7 @@ export class PermitDetectionService {
         // municipalities don't require one for this kind of work at all.
         // This is an inference from indirect evidence (inventory + permit
         // records), not an authoritative jurisdiction determination.
-        flagReason: `${item.name} (${item.category}) installed ~${installYear} per inventory; no matching permit record found within ±${WINDOW_YEARS} years. Permit requirements vary by municipality — verify with your local building department.`,
+        flagReason: `${item.name} (${item.category}) was recorded as installed around ${installYear}. ${NOT_FOUND_IN_AVAILABLE_RECORDS_MESSAGE}`,
         inventoryItemId: item.id,
       });
     }
@@ -143,6 +151,70 @@ export class PermitDetectionService {
       return true;
     });
 
+    // Reconcile previously-unmatched findings when a later open-data fetch or
+    // uploaded permit document produces a plausible date/work-type match.
+    for (const candidate of candidates) {
+      const matchingPermit = permits.find((permit) => {
+        if (!permit.issueDate || !permit.workTypes.includes(candidate.workType as any)) return false;
+        return Math.abs(new Date(permit.issueDate).getFullYear() - candidate.installYear) <= WINDOW_YEARS;
+      });
+      if (!matchingPermit) continue;
+      const dedupeKey = `${propertyId}:${candidate.workType}:inventory:${candidate.inventoryItemId}`;
+      const existingFlag = await prisma.permitUnpermittedFlag.findUnique({ where: { dedupeKey } });
+      if (
+        !existingFlag
+        || !['UNKNOWN', 'FLAGGED', 'INVESTIGATING'].includes(existingFlag.status)
+        || existingFlag.resolvedByPermitId === matchingPermit.id
+      ) {
+        continue;
+      }
+      const authorityMatch = matchingPermit.source === 'OPEN_DATA_API' || matchingPermit.isVerified;
+      const nextStatus = authorityMatch ? 'CONFIRMED_PERMITTED' : 'INVESTIGATING';
+      const evidenceDocumentIds = Array.from(new Set([
+        ...existingFlag.evidenceDocumentIds,
+        ...matchingPermit.documentIds,
+      ]));
+      await prisma.$transaction(async (tx) => {
+        await tx.permitUnpermittedFlag.update({
+          where: { id: existingFlag.id },
+          data: {
+            status: nextStatus,
+            resolvedByPermitId: authorityMatch ? matchingPermit.id : undefined,
+            recordSearchOutcome: 'MATCH_FOUND',
+            recordsSearchedAt: new Date(),
+            recordsCoverageDescription: `Matched permit work type ${candidate.workType} within ±${WINDOW_YEARS} years of the recorded installation.`,
+            evidenceDocumentIds,
+            evidenceConfidence: authorityMatch ? 'AUTHORITY_CONFIRMED' : 'HIGH',
+            researchChannel: authorityMatch ? 'OPEN_DATA' : 'DOCUMENT_REVIEW',
+            researchSourceReference: `Permit record ${matchingPermit.id}`,
+            authorityOutcome: authorityMatch ? 'CONFIRMED_PERMITTED' : undefined,
+            authorityObservedAt: authorityMatch ? new Date() : undefined,
+            dispositionAt: authorityMatch ? new Date() : undefined,
+            resolutionNotes: authorityMatch
+              ? 'Matched to an authority-sourced or verified permit record.'
+              : 'A document-based permit match was found and still needs authority verification.',
+          },
+        });
+        await tx.permitHistoricalFindingEvent.create({
+          data: {
+            flagId: existingFlag.id,
+            propertyId,
+            eventType: authorityMatch ? 'DISPOSITION_RECORDED' : 'SEARCH_RECORDED',
+            fromStatus: existingFlag.status,
+            toStatus: nextStatus,
+            evidenceDocumentIds,
+            payload: {
+              permitRecordId: matchingPermit.id,
+              matchMethod: matchingPermit.source === 'DOCUMENT_UPLOAD'
+                ? 'DOCUMENT_WORK_TYPE_AND_DATE'
+                : 'OPEN_DATA_WORK_TYPE_AND_DATE',
+              authorityMatch,
+            },
+          },
+        });
+      });
+    }
+
     // Create flags, skip duplicates
     let created = 0;
     for (const candidate of flagsToCreate) {
@@ -150,21 +222,48 @@ export class PermitDetectionService {
       const dedupeKey = `${propertyId}:${candidate.workType}:${triggerSource}`;
 
       try {
-        await prisma.permitUnpermittedFlag.upsert({
+        const existing = await prisma.permitUnpermittedFlag.findUnique({
           where: { dedupeKey },
-          create: {
-            propertyId,
-            workType: candidate.workType,
-            triggerType: candidate.triggerType,
-            flagReason: candidate.flagReason,
-            status: 'FLAGGED',
-            disclosureRisk: DISCLOSURE_RISK[candidate.workType] ?? 'LOW',
-            inventoryItemId: candidate.inventoryItemId,
-            dedupeKey,
-          },
-          update: {},
+          select: { id: true },
         });
-        created++;
+        if (!existing) {
+          await prisma.$transaction(async (tx) => {
+            const flag = await tx.permitUnpermittedFlag.create({
+              data: {
+                propertyId,
+                workType: candidate.workType,
+                triggerType: candidate.triggerType,
+                flagReason: candidate.flagReason,
+                status: 'UNKNOWN',
+                disclosureRisk: DISCLOSURE_RISK[candidate.workType] ?? 'LOW',
+                inventoryItemId: candidate.inventoryItemId,
+                dedupeKey,
+                workOrigin: 'UNKNOWN',
+                workStage: 'COMPLETED',
+                workCompletedAt: new Date(`${candidate.installYear}-01-01T00:00:00.000Z`),
+                recordSearchOutcome: 'NOT_FOUND_IN_AVAILABLE_RECORDS',
+                recordsSearchedAt: new Date(),
+                recordsCoverageDescription: `Available property permit records, work type ${candidate.workType}, ±${WINDOW_YEARS} years.`,
+                evidenceConfidence: 'MEDIUM',
+                researchChannel: 'OPEN_DATA',
+              },
+            });
+            await tx.permitHistoricalFindingEvent.create({
+              data: {
+                flagId: flag.id,
+                propertyId,
+                eventType: 'DETECTED',
+                toStatus: 'UNKNOWN',
+                payload: {
+                  recordSearchOutcome: 'NOT_FOUND_IN_AVAILABLE_RECORDS',
+                  recordsCoverageDescription: `Available property permit records, work type ${candidate.workType}, ±${WINDOW_YEARS} years.`,
+                  nonDiagnostic: true,
+                },
+              },
+            });
+          });
+          created++;
+        }
       } catch (err) {
         logger.warn({ err, dedupeKey }, '[PermitDetectionService] flag upsert skipped');
       }
@@ -182,7 +281,7 @@ export class PermitDetectionService {
     // used by reserveFundReconciliation.job.ts for the same class of bug.
     if (created > 0) {
       const highFlags = await prisma.permitUnpermittedFlag.findMany({
-        where: { propertyId, disclosureRisk: 'HIGH', status: { in: ['FLAGGED', 'INVESTIGATING'] } },
+        where: { propertyId, disclosureRisk: 'HIGH', status: { in: ['UNKNOWN', 'FLAGGED', 'INVESTIGATING'] } },
         select: { id: true },
       });
       if (highFlags.length > 0) {
@@ -195,8 +294,8 @@ export class PermitDetectionService {
           await prisma.homeEvent.create({
             data: {
               propertyId,
-              title: 'Potential unpermitted work detected',
-              summary: `${highFlags.length} high-risk item(s) flagged — review your permit tracker`,
+              title: 'Historical permit research recommended',
+              summary: `${highFlags.length} high-priority item(s) had no match in currently available records. This is not a determination that work was unpermitted.`,
               type: 'NOTE',
               importance: 'HIGH',
               visibility: 'PRIVATE',
@@ -214,7 +313,7 @@ export class PermitDetectionService {
   async getFlagSummary(propertyId: string) {
     const counts = await prisma.permitUnpermittedFlag.groupBy({
       by: ['disclosureRisk'],
-      where: { propertyId, status: { in: ['FLAGGED', 'INVESTIGATING'] } },
+      where: { propertyId, status: { in: ['UNKNOWN', 'FLAGGED', 'INVESTIGATING'] } },
       _count: { id: true },
     });
 

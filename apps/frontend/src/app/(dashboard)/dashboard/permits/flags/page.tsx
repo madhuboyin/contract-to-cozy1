@@ -2,16 +2,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, RefreshCw, Loader2, AlertTriangle, Shield } from 'lucide-react';
+import { ChevronLeft, RefreshCw, Loader2, AlertTriangle, Shield, Plus } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { PermitFlagItem, PermitUnpermittedFlagStatus, PermitDisclosureRisk, UpdateFlagPayload } from '@/types';
+import type { PermitFlagItem, PermitUnpermittedFlagStatus, PermitDisclosureRisk, PermitWorkType, UpdateFlagPayload } from '@/types';
 import UnpermittedFlagCard from '@/components/features/permits/UnpermittedFlagCard';
+import { WORK_TYPE_LABELS } from '@/components/features/permits/PermitUtils';
 
 type StatusFilter = 'open' | 'resolved' | 'all';
 type RiskFilter = PermitDisclosureRisk | 'all';
 
-const OPEN_STATUSES: PermitUnpermittedFlagStatus[] = ['FLAGGED', 'INVESTIGATING'];
-const RESOLVED_STATUSES: PermitUnpermittedFlagStatus[] = ['CONFIRMED_PERMITTED', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE', 'REMEDIATED', 'DISMISSED'];
+const OPEN_STATUSES: PermitUnpermittedFlagStatus[] = ['UNKNOWN', 'FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE'];
+const RESOLVED_STATUSES: PermitUnpermittedFlagStatus[] = ['CONFIRMED_PERMITTED', 'REMEDIATED', 'DISMISSED'];
 
 export default function FlagsPage() {
   const searchParams = useSearchParams();
@@ -23,6 +24,17 @@ export default function FlagsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
   const [scanResult, setScanResult] = useState<{ flagsCreated: number } | null>(null);
+  const [showIntake, setShowIntake] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [intake, setIntake] = useState({
+    workType: 'OTHER' as PermitWorkType,
+    disclosureRisk: 'MEDIUM' as PermitDisclosureRisk,
+    workOrigin: 'PRIOR_OWNER' as 'CURRENT_OWNER' | 'PRIOR_OWNER' | 'UNKNOWN',
+    workStage: 'COMPLETED' as 'ALREADY_STARTED' | 'COMPLETED' | 'UNKNOWN',
+    workStartedAt: '',
+    workCompletedAt: '',
+    flagReason: '',
+  });
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -51,6 +63,29 @@ export default function FlagsPage() {
     }
   }
 
+  async function createHistoricalIntake(event: React.FormEvent) {
+    event.preventDefault();
+    setCreating(true);
+    try {
+      await api.createManualFlag(propertyId, {
+        workType: intake.workType,
+        disclosureRisk: intake.disclosureRisk,
+        workOrigin: intake.workOrigin,
+        workStage: intake.workStage,
+        workStartedAt: intake.workStartedAt || undefined,
+        workCompletedAt: intake.workCompletedAt || undefined,
+        flagReason: intake.flagReason.trim() || undefined,
+        recordSearchOutcome: 'NOT_SEARCHED',
+        evidenceDocumentIds: [],
+        researchChannel: 'NONE',
+      });
+      setShowIntake(false);
+      await load();
+    } finally {
+      setCreating(false);
+    }
+  }
+
   const filtered = flags.filter((f) => {
     const matchStatus =
       statusFilter === 'all' ? true
@@ -63,33 +98,57 @@ export default function FlagsPage() {
   return (
     <div className="space-y-5 p-4 pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <Link href={`/dashboard/permits?propertyId=${propertyId}`} className="flex items-center gap-1 text-sm text-[hsl(var(--mobile-text-secondary))]">
           <ChevronLeft className="h-4 w-4" />
           Back
         </Link>
-        <button
-          onClick={handleScan}
-          disabled={scanning}
-          className="flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 disabled:opacity-50"
-        >
-          {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          Re-run Detection
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowIntake((value) => !value)} className="flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700">
+            <Plus className="h-3.5 w-3.5" /> Add prior work
+          </button>
+          <button
+            onClick={handleScan}
+            disabled={scanning}
+            className="flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 disabled:opacity-50"
+          >
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Search records
+          </button>
+        </div>
       </div>
 
       <div>
-        <h1 className="text-xl font-bold">Unpermitted Work Flags</h1>
+        <h1 className="text-xl font-bold">Historical Permit Research</h1>
         <p className="text-sm text-[hsl(var(--mobile-text-secondary))] mt-0.5">
-          Review potential gaps in your permit coverage
+          Research already-started, completed, and prior-owner work without assuming noncompliance
         </p>
       </div>
+
+      {showIntake && (
+        <form onSubmit={createHistoricalIntake} className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <div>
+            <p className="text-sm font-semibold text-blue-950">Add existing or inherited work</p>
+            <p className="mt-1 text-xs text-blue-800">This creates a historical research finding only. It does not create an active Project or label the work illegal.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1 text-xs font-medium">Work type<select value={intake.workType} onChange={(event) => setIntake((value) => ({ ...value, workType: event.target.value as PermitWorkType }))} className="h-10 w-full rounded-lg border bg-white px-2 text-xs">{Object.entries(WORK_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="space-y-1 text-xs font-medium">Disclosure priority<select value={intake.disclosureRisk} onChange={(event) => setIntake((value) => ({ ...value, disclosureRisk: event.target.value as PermitDisclosureRisk }))} className="h-10 w-full rounded-lg border bg-white px-2 text-xs"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></label>
+            <label className="space-y-1 text-xs font-medium">Who initiated it?<select value={intake.workOrigin} onChange={(event) => setIntake((value) => ({ ...value, workOrigin: event.target.value as typeof intake.workOrigin }))} className="h-10 w-full rounded-lg border bg-white px-2 text-xs"><option value="CURRENT_OWNER">Current owner</option><option value="PRIOR_OWNER">Prior owner</option><option value="UNKNOWN">Unknown</option></select></label>
+            <label className="space-y-1 text-xs font-medium">Stage when recorded<select value={intake.workStage} onChange={(event) => setIntake((value) => ({ ...value, workStage: event.target.value as typeof intake.workStage }))} className="h-10 w-full rounded-lg border bg-white px-2 text-xs"><option value="ALREADY_STARTED">Already started</option><option value="COMPLETED">Completed</option><option value="UNKNOWN">Unknown</option></select></label>
+            <label className="space-y-1 text-xs font-medium">Started<input type="date" value={intake.workStartedAt} onChange={(event) => setIntake((value) => ({ ...value, workStartedAt: event.target.value }))} className="h-10 w-full rounded-lg border px-2 text-xs" /></label>
+            <label className="space-y-1 text-xs font-medium">Completed<input type="date" value={intake.workCompletedAt} onChange={(event) => setIntake((value) => ({ ...value, workCompletedAt: event.target.value }))} className="h-10 w-full rounded-lg border px-2 text-xs" /></label>
+          </div>
+          <label className="block space-y-1 text-xs font-medium">What is known?<textarea value={intake.flagReason} onChange={(event) => setIntake((value) => ({ ...value, flagReason: event.target.value }))} rows={2} placeholder="Closing disclosure, visible addition, inherited equipment, work already underway…" className="w-full rounded-lg border px-3 py-2 text-xs" /></label>
+          <button disabled={creating} className="rounded-xl bg-blue-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{creating ? 'Creating…' : 'Create research finding'}</button>
+        </form>
+      )}
 
       {scanResult && (
         <div className={`rounded-2xl border p-3 text-sm ${scanResult.flagsCreated > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
           {scanResult.flagsCreated > 0
-            ? `${scanResult.flagsCreated} new flag${scanResult.flagsCreated !== 1 ? 's' : ''} detected.`
-            : 'No new flags detected.'}
+            ? `${scanResult.flagsCreated} new research finding${scanResult.flagsCreated !== 1 ? 's' : ''} created.`
+            : 'No new unmatched work was found in the records currently available.'}
         </div>
       )}
 
@@ -145,8 +204,13 @@ export default function FlagsPage() {
           {filtered.map((flag) => (
             <UnpermittedFlagCard
               key={flag.id}
+              propertyId={propertyId}
               flag={flag}
               onUpdate={(patch) => handleFlagUpdate(flag.id, patch)}
+              onCreateRemediationCase={async () => {
+                await api.createPermitFlagRemediationCase(propertyId, flag.id);
+                await load();
+              }}
             />
           ))}
         </div>
@@ -155,8 +219,8 @@ export default function FlagsPage() {
       <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
         <p className="text-xs text-[hsl(var(--mobile-text-muted))] flex items-start gap-2">
           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
-          Flags indicate potential gaps detected by cross-referencing your assets and permits.
-          They are not definitive — investigate each one and update the status when resolved.
+          “Not found in available records” describes a search result, not a legal conclusion.
+          Only documented professional or municipal outcomes should receive a definitive disposition.
         </p>
       </div>
     </div>

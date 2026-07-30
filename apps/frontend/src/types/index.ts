@@ -5508,10 +5508,27 @@ export type PermitInspectionStatus =
   | 'NOT_SCHEDULED' | 'SCHEDULED' | 'PASSED' | 'FAILED' | 'PARTIAL' | 'CANCELLED';
 
 export type PermitUnpermittedFlagStatus =
-  | 'FLAGGED' | 'INVESTIGATING' | 'CONFIRMED_PERMITTED' | 'CONFIRMED_UNPERMITTED'
+  | 'UNKNOWN' | 'FLAGGED' | 'INVESTIGATING' | 'CONFIRMED_PERMITTED' | 'CONFIRMED_UNPERMITTED'
   | 'WILL_REMEDIATE' | 'REMEDIATED' | 'DISMISSED';
 
 export type PermitDisclosureRisk = 'LOW' | 'MEDIUM' | 'HIGH';
+export type PermitHistoricalWorkOrigin = 'CURRENT_OWNER' | 'PRIOR_OWNER' | 'UNKNOWN';
+export type PermitHistoricalWorkStage = 'ALREADY_STARTED' | 'COMPLETED' | 'UNKNOWN';
+export type PermitRecordSearchOutcome =
+  | 'NOT_SEARCHED'
+  | 'MATCH_FOUND'
+  | 'NOT_FOUND_IN_AVAILABLE_RECORDS'
+  | 'RECORDS_UNAVAILABLE'
+  | 'INCONCLUSIVE';
+export type PermitEvidenceConfidence = 'LOW' | 'MEDIUM' | 'HIGH' | 'AUTHORITY_CONFIRMED';
+export type PermitResearchChannel =
+  | 'NONE'
+  | 'OPEN_DATA'
+  | 'DOCUMENT_REVIEW'
+  | 'LICENSED_PROFESSIONAL'
+  | 'MUNICIPAL_AUTHORITY'
+  | 'REAL_ESTATE_ATTORNEY'
+  | 'OTHER';
 
 export type PermitFetchJobStatus =
   | 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'NO_DATA_SOURCE';
@@ -5766,6 +5783,32 @@ export interface PermitFlagItem {
   resolvedByPermitId?: string;
   resolvedByPermitNumber?: string;
   resolutionNotes?: string;
+  workOrigin: PermitHistoricalWorkOrigin;
+  workStage: PermitHistoricalWorkStage;
+  workStartedAt?: string;
+  workCompletedAt?: string;
+  recordSearchOutcome: PermitRecordSearchOutcome;
+  recordsSearchedAt?: string;
+  recordsCoverageDescription?: string;
+  evidenceConfidence: PermitEvidenceConfidence;
+  evidenceDocumentIds: string[];
+  researchChannel: PermitResearchChannel;
+  researchSourceReference?: string;
+  authorityOutcome?: PermitUnpermittedFlagStatus;
+  authorityObservedAt?: string;
+  remediationCaseId?: string;
+  remediationCase?: { id: string; name: string; lifecycle: string };
+  dispositionAt?: string;
+  historyEvents?: Array<{
+    id: string;
+    eventType: string;
+    fromStatus?: PermitUnpermittedFlagStatus;
+    toStatus?: PermitUnpermittedFlagStatus;
+    evidenceDocumentIds: string[];
+    payload?: Record<string, unknown>;
+    occurredAt: string;
+  }>;
+  _count?: { historyEvents: number };
   createdAt: string;
   updatedAt: string;
 }
@@ -5865,13 +5908,34 @@ export interface UpdateFlagPayload {
   disclosureRisk?: PermitDisclosureRisk;
   resolvedByPermitId?: string;
   resolutionNotes?: string;
+  workOrigin?: PermitHistoricalWorkOrigin;
+  workStage?: PermitHistoricalWorkStage;
+  workStartedAt?: string;
+  workCompletedAt?: string;
+  recordSearchOutcome?: PermitRecordSearchOutcome;
+  recordsCoverageDescription?: string;
+  evidenceDocumentIds?: string[];
+  researchChannel?: PermitResearchChannel;
+  researchSourceReference?: string;
+  authorityOutcome?: 'CONFIRMED_PERMITTED' | 'CONFIRMED_UNPERMITTED';
+  authorityObservedAt?: string;
 }
 
 export interface CreateFlagPayload {
   workType: PermitWorkType;
-  flagReason: string;
+  flagReason?: string;
   disclosureRisk: PermitDisclosureRisk;
   inventoryItemId?: string;
+  resolutionNotes?: string;
+  workOrigin: PermitHistoricalWorkOrigin;
+  workStage: PermitHistoricalWorkStage;
+  workStartedAt?: string;
+  workCompletedAt?: string;
+  recordSearchOutcome?: PermitRecordSearchOutcome;
+  recordsCoverageDescription?: string;
+  evidenceDocumentIds?: string[];
+  researchChannel?: PermitResearchChannel;
+  researchSourceReference?: string;
 }
 
 // ─── Inspection Report Intelligence ─────────────────────────────────────────

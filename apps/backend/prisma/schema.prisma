@@ -13120,6 +13120,7 @@ enum RenovationCaseLinkType {
   INSPECTION_FINDING
   QUOTE_WORKSPACE
   CAPITAL_SCENARIO
+  UNPERMITTED_FLAG
 }
 
 enum RenovationCaseEventType {
@@ -13185,6 +13186,7 @@ model RenovationCase {
   requirementEvents   RenovationRequirementEvent[]
   complianceConditions RenovationComplianceCondition[]
   executionProject     ProjectRecord?
+  retroactivePermitFindings PermitUnpermittedFlag[]
 
   @@unique([propertyId, idempotencyKey])
   @@index([propertyId, lifecycle])
@@ -15761,6 +15763,7 @@ enum PermitInspectionStatus {
 }
 
 enum PermitUnpermittedFlagStatus {
+  UNKNOWN
   FLAGGED
   INVESTIGATING
   CONFIRMED_PERMITTED
@@ -15768,6 +15771,53 @@ enum PermitUnpermittedFlagStatus {
   WILL_REMEDIATE
   REMEDIATED
   DISMISSED
+}
+
+enum PermitHistoricalWorkOrigin {
+  CURRENT_OWNER
+  PRIOR_OWNER
+  UNKNOWN
+}
+
+enum PermitHistoricalWorkStage {
+  ALREADY_STARTED
+  COMPLETED
+  UNKNOWN
+}
+
+enum PermitRecordSearchOutcome {
+  NOT_SEARCHED
+  MATCH_FOUND
+  NOT_FOUND_IN_AVAILABLE_RECORDS
+  RECORDS_UNAVAILABLE
+  INCONCLUSIVE
+}
+
+enum PermitEvidenceConfidence {
+  LOW
+  MEDIUM
+  HIGH
+  AUTHORITY_CONFIRMED
+}
+
+enum PermitResearchChannel {
+  NONE
+  OPEN_DATA
+  DOCUMENT_REVIEW
+  LICENSED_PROFESSIONAL
+  MUNICIPAL_AUTHORITY
+  REAL_ESTATE_ATTORNEY
+  OTHER
+}
+
+enum PermitHistoricalFindingEventType {
+  DETECTED
+  INTAKE_CREATED
+  SEARCH_RECORDED
+  EVIDENCE_UPDATED
+  RESEARCH_STARTED
+  DISPOSITION_RECORDED
+  REMEDIATION_CASE_CREATED
 }
 
 enum PermitUnpermittedFlagTrigger {
@@ -16049,12 +16099,28 @@ model PermitUnpermittedFlag {
   workType       PermitWorkType
   triggerType    PermitUnpermittedFlagTrigger
   flagReason     String
-  status         PermitUnpermittedFlagStatus  @default(FLAGGED)
+  status         PermitUnpermittedFlagStatus  @default(UNKNOWN)
   disclosureRisk PermitDisclosureRisk
 
   inventoryItemId    String?
   resolvedByPermitId String?
   resolutionNotes    String?
+  workOrigin         PermitHistoricalWorkOrigin @default(UNKNOWN)
+  workStage          PermitHistoricalWorkStage @default(UNKNOWN)
+  workStartedAt      DateTime? @db.Date
+  workCompletedAt    DateTime? @db.Date
+  recordSearchOutcome PermitRecordSearchOutcome @default(NOT_SEARCHED)
+  recordsSearchedAt  DateTime?
+  recordsCoverageDescription String?
+  evidenceConfidence PermitEvidenceConfidence @default(LOW)
+  evidenceDocumentIds String[] @default([])
+  researchChannel    PermitResearchChannel @default(NONE)
+  researchSourceReference String?
+  authorityOutcome   PermitUnpermittedFlagStatus?
+  authorityObservedAt DateTime?
+  remediationCaseId  String?
+  dispositionAt      DateTime?
+  dispositionByUserId String?
 
   dedupeKey String @unique
 
@@ -16064,12 +16130,35 @@ model PermitUnpermittedFlag {
   property           Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   inventoryItem      InventoryItem?        @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   resolvedByPermit   PropertyPermitRecord? @relation("ResolvedByPermit", fields: [resolvedByPermitId], references: [id], onDelete: SetNull)
+  remediationCase    RenovationCase? @relation(fields: [remediationCaseId], references: [id], onDelete: SetNull)
   inspectionFindings InspectionFinding[]
+  historyEvents      PermitHistoricalFindingEvent[]
 
   @@index([propertyId, status])
   @@index([propertyId, disclosureRisk])
   @@index([inventoryItemId])
+  @@index([remediationCaseId])
+  @@index([propertyId, recordSearchOutcome])
   @@map("permit_unpermitted_flags")
+}
+
+model PermitHistoricalFindingEvent {
+  id          String @id @default(uuid())
+  flagId      String
+  propertyId  String
+  actorUserId String?
+  eventType   PermitHistoricalFindingEventType
+  fromStatus  PermitUnpermittedFlagStatus?
+  toStatus    PermitUnpermittedFlagStatus?
+  evidenceDocumentIds String[] @default([])
+  payload     Json?
+  occurredAt  DateTime @default(now())
+
+  flag PermitUnpermittedFlag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+
+  @@index([flagId, occurredAt])
+  @@index([propertyId, occurredAt])
+  @@map("permit_historical_finding_events")
 }
 
 // Append-only audit log of open data fetch attempts per property.

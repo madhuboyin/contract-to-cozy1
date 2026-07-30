@@ -937,7 +937,7 @@ export const complianceAssembler: PropertyContextAssembler = {
         take: 100,
       }),
       prisma.permitUnpermittedFlag.findMany({
-        where: { propertyId, status: { in: ['FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE'] } },
+        where: { propertyId, status: { in: ['UNKNOWN', 'FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE'] } },
         select: { id: true, workType: true, status: true, disclosureRisk: true, inventoryItemId: true, updatedAt: true },
         orderBy: { updatedAt: 'desc' },
         take: 100,

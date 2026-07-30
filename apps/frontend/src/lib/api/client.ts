@@ -5429,6 +5429,19 @@ class APIClient {
     return res.data.flag;
   }
 
+  async createPermitFlagRemediationCase(
+    propertyId: string,
+    flagId: string,
+    payload: { name?: string; objective?: string } = {},
+  ): Promise<{ id: string; name: string; lifecycle: string }> {
+    const res = await this.post<{ renovationCase: { id: string; name: string; lifecycle: string } }>(
+      `/api/properties/${propertyId}/permits/flags/${flagId}/remediation-case`,
+      payload,
+    );
+    if (!res.data?.renovationCase) throw new APIError('Failed to create remediation case', 500);
+    return res.data.renovationCase;
+  }
+
   async runPermitDetectionScan(propertyId: string): Promise<{ flagsCreated: number }> {
     const res = await this.post<{ flagsCreated: number }>(`/api/properties/${propertyId}/permits/flags/scan`, {});
     return res.data ?? { flagsCreated: 0 };

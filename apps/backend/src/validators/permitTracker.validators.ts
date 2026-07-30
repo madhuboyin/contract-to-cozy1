@@ -36,6 +36,24 @@ const permitInspectionStatus = z.enum([
 ]);
 
 const permitDisclosureRisk = z.enum(['LOW', 'MEDIUM', 'HIGH']);
+const historicalWorkOrigin = z.enum(['CURRENT_OWNER', 'PRIOR_OWNER', 'UNKNOWN']);
+const historicalWorkStage = z.enum(['ALREADY_STARTED', 'COMPLETED', 'UNKNOWN']);
+const recordSearchOutcome = z.enum([
+  'NOT_SEARCHED',
+  'MATCH_FOUND',
+  'NOT_FOUND_IN_AVAILABLE_RECORDS',
+  'RECORDS_UNAVAILABLE',
+  'INCONCLUSIVE',
+]);
+const researchChannel = z.enum([
+  'NONE',
+  'OPEN_DATA',
+  'DOCUMENT_REVIEW',
+  'LICENSED_PROFESSIONAL',
+  'MUNICIPAL_AUTHORITY',
+  'REAL_ESTATE_ATTORNEY',
+  'OTHER',
+]);
 
 const inspectionStageType = z.enum([
   'PLAN_REVIEW', 'PRE_CONSTRUCTION', 'FOUNDATION', 'FRAMING',
@@ -151,20 +169,56 @@ export const ListFlagsSchema = z.object({
 
 export const UpdateFlagSchema = z.object({
   status: z.enum([
-    'FLAGGED', 'INVESTIGATING', 'CONFIRMED_PERMITTED', 'CONFIRMED_UNPERMITTED',
+    'UNKNOWN', 'FLAGGED', 'INVESTIGATING', 'CONFIRMED_PERMITTED', 'CONFIRMED_UNPERMITTED',
     'WILL_REMEDIATE', 'REMEDIATED', 'DISMISSED',
   ]).optional(),
   disclosureRisk: permitDisclosureRisk.optional(),
   resolvedByPermitId: z.string().optional(),
-  resolutionNotes: z.string().optional(),
+  resolutionNotes: z.string().max(4000).optional(),
+  workOrigin: historicalWorkOrigin.optional(),
+  workStage: historicalWorkStage.optional(),
+  workStartedAt: z.string().date().optional(),
+  workCompletedAt: z.string().date().optional(),
+  recordSearchOutcome: recordSearchOutcome.optional(),
+  recordsCoverageDescription: z.string().min(1).max(2000).optional(),
+  evidenceDocumentIds: z.array(z.string().min(1)).max(50).optional(),
+  researchChannel: researchChannel.optional(),
+  researchSourceReference: z.string().max(1000).optional(),
+  authorityOutcome: z.enum(['CONFIRMED_PERMITTED', 'CONFIRMED_UNPERMITTED']).optional(),
+  authorityObservedAt: z.string().date().optional(),
 });
 
 export const CreateManualFlagSchema = z.object({
   workType: permitWorkType,
-  flagReason: z.string().min(1).max(500),
+  flagReason: z.string().min(1).max(2000).optional(),
   disclosureRisk: permitDisclosureRisk,
   inventoryItemId: z.string().optional(),
-  resolutionNotes: z.string().optional(),
+  resolutionNotes: z.string().max(4000).optional(),
+  workOrigin: historicalWorkOrigin,
+  workStage: historicalWorkStage,
+  workStartedAt: z.string().date().optional(),
+  workCompletedAt: z.string().date().optional(),
+  recordSearchOutcome: recordSearchOutcome.default('NOT_SEARCHED'),
+  recordsCoverageDescription: z.string().max(2000).optional(),
+  evidenceDocumentIds: z.array(z.string().min(1)).max(50).default([]),
+  researchChannel: researchChannel.default('NONE'),
+  researchSourceReference: z.string().max(1000).optional(),
+}).superRefine((value, ctx) => {
+  if (
+    value.recordSearchOutcome !== 'NOT_SEARCHED'
+    && !value.recordsCoverageDescription?.trim()
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['recordsCoverageDescription'],
+      message: 'Describe which records or documents were searched.',
+    });
+  }
+});
+
+export const CreateRemediationCaseSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  objective: z.string().min(1).max(2000).optional(),
 });
 
 export const AdminCreateDataSourceSchema = z.object({

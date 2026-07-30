@@ -26,6 +26,7 @@ import {
   getPermitFlag,
   updatePermitFlag,
   createManualFlag,
+  createFlagRemediationCase,
   runDetectionScan,
   requestDisclosureExport,
   getDisclosureExport,
@@ -51,6 +52,7 @@ import {
   UpdateInspectionMilestoneSchema,
   UpdateFlagSchema,
   CreateManualFlagSchema,
+  CreateRemediationCaseSchema,
   ListPermitsSchema,
   ListFlagsSchema,
   AdminCreateDataSourceSchema,
@@ -186,6 +188,12 @@ router.patch(
   propertyAuthMiddleware,
   validateBody(UpdateFlagSchema),
   updatePermitFlag,
+);
+router.post(
+  '/properties/:propertyId/permits/flags/:flagId/remediation-case',
+  propertyAuthMiddleware,
+  validateBody(CreateRemediationCaseSchema),
+  createFlagRemediationCase,
 );
 
 // ── Disclosure Export ──────────────────────────────────────────────────────────

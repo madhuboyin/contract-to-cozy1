@@ -45,15 +45,23 @@ async function buildDisclosureSnapshot(propertyId: string) {
       orderBy: { issueDate: 'desc' },
     }),
     (prisma as any).permitUnpermittedFlag.findMany({
-      where: {
-        propertyId,
-        status: { in: ['FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE'] },
-      },
+      where: { propertyId },
       select: {
         workType: true,
         flagReason: true,
         disclosureRisk: true,
         status: true,
+        workOrigin: true,
+        workStage: true,
+        recordSearchOutcome: true,
+        recordsCoverageDescription: true,
+        evidenceConfidence: true,
+        researchChannel: true,
+        researchSourceReference: true,
+        authorityOutcome: true,
+        resolutionNotes: true,
+        dispositionAt: true,
+        remediationCase: { select: { id: true, name: true, lifecycle: true } },
       },
     }),
   ]);
@@ -142,16 +150,21 @@ async function renderDisclosurePdf(
   }
 
   if (permits.length === 0) {
-    write('No permit records found.', leftMargin + 10, y, 10);
+    write('No permit records were found in the sources currently available.', leftMargin + 10, y, 10);
+    nextLine();
+    write('This does not establish that prior work was unpermitted or unlawful.', leftMargin + 10, y, 9);
     nextLine();
   }
 
   nextLine();
 
-  // Unpermitted Work Flags
-  write('UNPERMITTED WORK FLAGS', leftMargin, y, 13, true);
+  // Historical permit research findings
+  write('HISTORICAL PERMIT RESEARCH', leftMargin, y, 13, true);
   nextLine();
-  write(`Open flags: ${flags.length}`, leftMargin, y, 11);
+  const openFindingCount = flags.filter((flag: any) =>
+    ['UNKNOWN', 'FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE'].includes(flag.status),
+  ).length;
+  write(`Historical findings: ${flags.length} (${openFindingCount} open)`, leftMargin, y, 11);
   nextLine(1.5);
 
   for (const flag of flags) {
@@ -159,10 +172,20 @@ async function renderDisclosurePdf(
     nextLine();
     write(`  ${flag.flagReason.slice(0, 120)}`, leftMargin + 10, y, 9);
     nextLine();
+    write(`  Search: ${flag.recordSearchOutcome} · Evidence confidence: ${flag.evidenceConfidence}`, leftMargin + 10, y, 9);
+    nextLine();
+    if (flag.authorityOutcome) {
+      write(`  Authority outcome: ${flag.authorityOutcome}`, leftMargin + 10, y, 9);
+      nextLine();
+    }
+    if (flag.remediationCase) {
+      write(`  Remediation case: ${flag.remediationCase.name} (${flag.remediationCase.lifecycle})`, leftMargin + 10, y, 9);
+      nextLine();
+    }
   }
 
   if (flags.length === 0) {
-    write('No open unpermitted work flags.', leftMargin + 10, y, 10);
+    write('No open historical permit research findings.', leftMargin + 10, y, 10);
     nextLine();
   }
 
@@ -234,7 +257,9 @@ export async function generatePermitDisclosureJob(exportId: string): Promise<voi
         // permitTracker.service.ts#getDisclosureExport/listDisclosureExports.
         fileKey: uploaded.key,
         totalPermits: snapshot.permits.length,
-        openFlags: snapshot.flags.length,
+        openFlags: snapshot.flags.filter((flag: any) =>
+          ['UNKNOWN', 'FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE'].includes(flag.status),
+        ).length,
         snapshotJson: {
           ...snapshot,
           propertyContextVersion: contextCheck.contextVersion,
