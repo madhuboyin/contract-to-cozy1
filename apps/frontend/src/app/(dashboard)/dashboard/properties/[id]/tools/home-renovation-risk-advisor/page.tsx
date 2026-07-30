@@ -1,10 +1,10 @@
-import HomeRenovationRiskAdvisorPageClient from '@/app/(dashboard)/dashboard/home-renovation-risk-advisor/HomeRenovationRiskAdvisorPageClient';
+import { redirect } from 'next/navigation';
 
-export default async function HomeRenovationRiskAdvisorToolPage({
+export default async function RenovationAdvisorLegacyToolPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <HomeRenovationRiskAdvisorPageClient propertyId={id} />;
+  redirect(`/dashboard/properties/${encodeURIComponent(id)}/renovations`);
 }

@@ -109,7 +109,12 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
   '/dashboard/home-renovation-risk-advisor': {
     navTarget: 'home-renovation-risk-advisor',
     toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/tools/home-renovation-risk-advisor`, query),
+      buildHref(`/dashboard/properties/${propertyId}/renovations`, query),
+  },
+  '/dashboard/modifications': {
+    navTarget: 'home-renovation-risk-advisor',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/renovations`, query),
   },
   '/dashboard/replace-repair': {
     navTarget: 'replace-repair',
@@ -283,7 +288,7 @@ const NAV_TARGET_SUFFIXES: Record<string, string> = {
   'do-nothing': 'tools/do-nothing',
   'home-savings': 'tools/home-savings',
   'home-event-radar': 'tools/home-event-radar',
-  'home-renovation-risk-advisor': 'tools/home-renovation-risk-advisor',
+  'home-renovation-risk-advisor': 'renovations',
   'replace-repair': 'inventory?intent=replace-repair',
   inventory: 'inventory',
   'risk-radar': 'risk-assessment',

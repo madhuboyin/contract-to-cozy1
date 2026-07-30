@@ -24,7 +24,7 @@ const ROUTE_CONTEXT_PATTERNS: Array<{ context: PageContextId; pattern: RegExp }>
   { context: 'home-gazette', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/home-gazette(?:\/|$)/ },
   { context: 'home-habit-coach', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/home-habit-coach(?:\/|$)/ },
   { context: 'plant-advisor', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/plant-advisor(?:\/|$)/ },
-  { context: 'home-renovation-risk-advisor', pattern: /^\/dashboard\/(?:properties\/[^/]+\/tools\/home-renovation-risk-advisor|home-renovation-risk-advisor)(?:\/|$)/ },
+  { context: 'home-renovation-risk-advisor', pattern: /^\/dashboard\/(?:properties\/[^/]+\/(?:renovations|tools\/home-renovation-risk-advisor)|home-renovation-risk-advisor)(?:\/|$)/ },
   { context: 'mortgage-refinance-radar', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/mortgage-refinance-radar(?:\/|$)/ },
   { context: 'home-event-radar', pattern: /^\/dashboard\/(?:home-event-radar|properties\/[^/]+\/tools\/home-event-radar)(?:\/|$)/ },
   { context: 'status-board', pattern: /^\/dashboard\/properties\/[^/]+\/status-board(?:\/|$)/ },

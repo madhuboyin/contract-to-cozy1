@@ -173,7 +173,7 @@ const MATERIAL_TOOL_IDS = new Set([
   'replace-repair', 'sell-hold-rent', 'break-even', 'do-nothing-simulator',
   'property-tax', 'ownership-costs',
   'capital-timeline', 'reserve-fund', 'financing', 'mortgage-refinance-radar',
-  'savings-benefits',
+  'savings-benefits', 'home-renovation-risk-advisor', 'service-price-radar',
   // Mixed-consequence: the same route surfaces low-consequence record
   // projection and MATERIAL_FINANCIAL scenario computation (replacement
   // cost, savings, risk claims). See

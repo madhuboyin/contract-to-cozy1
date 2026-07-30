@@ -1276,6 +1276,12 @@ Exit criteria:
 
 **Goal:** present one best-in-class renovation experience.
 
+**Implementation status (2026-07-29):** Implemented. The canonical property-scoped workspace
+now owns stage navigation, lifecycle questions, one primary next action, progressive trust
+details, partial-failure handling, and specialist-record links. Discovery and Home Action
+routes resolve to the case workspace; Home Upgrades and Renovation Advisor survive only as
+compatibility redirects.
+
 Deliver:
 
 - Renovation workspace with stage navigation and one next action;

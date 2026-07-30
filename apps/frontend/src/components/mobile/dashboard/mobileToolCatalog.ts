@@ -14,7 +14,6 @@ export type MobileAiToolKey =
   | 'oracle'
   | 'budget'
   | 'climate'
-  | 'modifications'
   | 'appreciation'
   | 'energy'
   | 'visual-inspector'
@@ -123,13 +122,13 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   },
   {
     key: 'home-renovation-risk-advisor',
-    title: 'Renovation Advisor',
-    description: 'Check rules before major upgrades',
+    title: 'Renovations',
+    description: 'Plan and execute one governed renovation journey',
     href: '/dashboard/home-renovation-risk-advisor',
     icon: resolveToolIcon('home', 'home-renovation-risk-advisor'),
     emoji: '🏗️',
     group: 'core',
-    isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-renovation-risk-advisor|home-renovation-risk-advisor)(\/|$)/.test(pathname),
+    isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/renovations|home-renovation-risk-advisor)(\/|$)/.test(pathname),
   },
 
   // --- WEALTH & SAVINGS ---
@@ -365,17 +364,6 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     emoji: '⚖️',
     group: 'planning',
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/quote-comparison(\/|$)/.test(pathname),
-  },
-  {
-    key: 'modifications',
-    title: 'Home Upgrades',
-    description: 'Explore and compare options before creating a renovation plan',
-    href: '/dashboard/modifications',
-    icon: resolveToolIcon('ai', 'modifications'),
-    emoji: '🏗️',
-    group: 'planning',
-    isActive: (pathname) => /^\/dashboard\/modifications(\/|$)/.test(pathname)
-      || /^\/dashboard\/properties\/[^/]+\/renovations\/explore(\/|$)/.test(pathname),
   },
   {
     key: 'oracle',
@@ -772,13 +760,13 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-renovation-risk-advisor',
     group: 'renovation',
-    name: 'Renovation Risk Advisor',
-    description: "Check permit rules, tax impact, and contractor requirements before a major renovation.",
-    desktopDescription: "Check permits, tax impact, and contractor requirements before committing to major renovations.",
-    hrefSuffix: 'tools/home-renovation-risk-advisor',
+    name: 'Renovations',
+    description: "Plan and advance one renovation journey",
+    desktopDescription: "Explore, scope, approve, execute, and close out renovations with specialist records kept together.",
+    hrefSuffix: 'renovations',
     navTarget: 'tool:home-renovation-risk-advisor',
     icon: resolveToolIcon('home', 'home-renovation-risk-advisor'),
-    isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-renovation-risk-advisor|home-renovation-risk-advisor)(\/|$)/.test(pathname),
+    isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/renovations|home-renovation-risk-advisor)(\/|$)/.test(pathname),
   },
   {
     key: 'mortgage-refinance-radar',

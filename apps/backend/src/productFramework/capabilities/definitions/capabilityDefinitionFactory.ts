@@ -126,17 +126,20 @@ function governanceDefinition(
   const material = seed.safetyTier === 'MATERIAL_FINANCIAL';
   const regulated = seed.safetyTier === 'REGULATED_COVERAGE';
   const safety = seed.safetyTier === 'SAFETY_EMERGENCY';
+  const renovationCompliance = seed.id === 'home-renovation-risk-advisor';
   const commercialAction = seed.id === 'financing';
   const dataSensitivity =
     DATA_SENSITIVITY_BY_CAPABILITY_ID[seed.id] ?? 'STANDARD';
 
   return {
-    professionalBoundary: material
+    professionalBoundary: renovationCompliance
+      ? 'Renovation guidance organizes planning and evidence; verify permit, HOA, tax, safety, and professional requirements with the appropriate authority.'
+      : material
       ? 'Estimates and comparisons are educational planning inputs, not financial, tax, valuation, or investment advice.'
       : regulated
         ? 'Coverage information is educational and is not licensed insurance, legal, or coverage advice.'
         : null,
-    jurisdictionPolicy: regulated ? 'SOURCE_VERIFIED' : 'NOT_REQUIRED',
+    jurisdictionPolicy: regulated || renovationCompliance ? 'SOURCE_VERIFIED' : 'NOT_REQUIRED',
     conservativeFallback: safety
       ? 'Do not perform work or remain in an unsafe area when conditions may threaten people or property.'
       : null,
@@ -273,8 +276,9 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
   'home-renovation-risk-advisor': {
     sourceKinds: ['PROJECT'],
     triggerFamily: 'ACTIVE_PROJECT_MOMENT',
-    reason: 'An active renovation should be reviewed for permit, contractor, and execution risk.',
-    acceptedContext: ['PROPERTY', 'PROJECT', 'JOURNEY'],
+    reason: 'An actionable renovation change should advance through its canonical governed workspace.',
+    requiresExplicitTrigger: true,
+    acceptedContext: ['PROPERTY', 'HOME_ACTION', 'PROJECT', 'JOURNEY'],
   },
   'home-risk-replay': {
     sourceKinds: ['INCIDENT', 'GUIDANCE'],
@@ -416,7 +420,7 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'home-event-radar': ['home-risk-replay', 'home-timeline', 'status-board'],
   'home-gazette': ['home-event-radar', 'home-risk-replay', 'status-board'],
   'home-habit-coach': ['home-event-radar', 'home-timeline', 'status-board'],
-  'home-renovation-risk-advisor': ['capital-timeline', 'property-tax', 'home-digital-twin'],
+  'home-renovation-risk-advisor': ['project-tracker', 'permits', 'hoa-compliance'],
   'home-risk-replay': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-timeline': ['home-risk-replay', 'home-event-radar', 'seller-prep'],
   'material-specs': ['project-tracker', 'inspection-hub', 'home-digital-twin'],

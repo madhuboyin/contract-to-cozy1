@@ -1089,6 +1089,9 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
     const issue = project.issues[0];
     const governance = projectGovernance(project, issue);
     const isSafetyEmergency = governance.safetyTier === 'SAFETY_EMERGENCY';
+    const primaryHref = project.renovationCaseId
+      ? `/dashboard/properties/${propertyId}/renovations/${project.renovationCaseId}`
+      : `/dashboard/properties/${propertyId}/projects/${project.id}`;
     return adaptHomeActionSource('PROJECT', {
       id: `project:${project.id}`, propertyId,
       lineageId: project.guidanceJourneyId ?? `project:${project.id}`, sourceEntityId: project.id,
@@ -1105,8 +1108,14 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
       governance,
       primaryCta: {
         kind: isSafetyEmergency ? 'ESCALATE' : 'REVIEW',
-        label: isSafetyEmergency ? 'Review safety issue' : issue ? 'Review project issue' : 'Open project',
-        href: `/dashboard/properties/${propertyId}/projects/${project.id}`,
+        label: isSafetyEmergency
+          ? 'Review safety issue'
+          : project.renovationCaseId
+            ? 'Open renovation plan'
+            : issue
+              ? 'Review project issue'
+              : 'Open project',
+        href: primaryHref,
       },
       secondaryCtas: [], feedbackControls: RECOMMENDATION_FEEDBACK,
       relatedJourneyId: project.guidanceJourneyId ?? null,

@@ -1,9 +1,33 @@
-# Home Renovation Risk Advisor
+# Renovation Workspace and Requirements Advisor
 
-**Feature codename:** `renovation-advisor`
+**Feature codename:** `renovation-workspace` (requirements engine: `renovation-advisor`)
 **Status:** Production
-**Entry points:** Home Tools hub, Gemini chat, Home Timeline, Property Dashboard, Capital Planning, Risk Report
+**Canonical entry point:** `/dashboard/properties/[id]/renovations`
+**Legacy redirects:** `/dashboard/modifications`, `/dashboard/home-renovation-risk-advisor`, `/dashboard/properties/[id]/tools/home-renovation-risk-advisor`
 **Calculation version:** 1.0.0 | **Rules version:** 1.0.0-internal | **Disclaimer version:** 1.0.0
+
+---
+
+## Canonical product contract
+
+The former Home Upgrades and Renovation Risk Advisor destinations are now stages inside one
+property-scoped Renovation workspace. A durable `RenovationCase` is the governing plan.
+Exploration remains non-durable until the homeowner selects an option; requirements-advisor
+sessions provide evidence for case requirements and are not independent plans.
+
+The workspace exposes one homeowner question and one primary next action based on lifecycle:
+explore, scope, requirements, approvals, readiness, execution, or closeout. Permit, HOA,
+Projects, and Materials remain specialist property records linked from the case.
+
+The workspace composes existing authenticated APIs:
+
+- `GET /api/properties/:propertyId/renovation-cases`
+- `GET /api/properties/:propertyId/renovation-cases/:caseId`
+- `GET /api/properties/:propertyId/renovation-cases/:caseId/readiness`
+- `GET /api/properties/:propertyId/renovation-cases/:caseId/compliance-workflow`
+
+Supporting readiness or compliance calls may fail independently without hiding the governing
+case. API error semantics and role gates remain owned by the specialist endpoints.
 
 ---
 
@@ -34,7 +58,7 @@
 
 ## Overview
 
-The Home Renovation Risk Advisor helps homeowners understand the compliance landscape before (or after) starting a major renovation. Given a renovation type and property location, it evaluates three dimensions in parallel:
+Within the Renovation workspace, the requirements advisor helps homeowners understand the compliance landscape before (or after) starting a major renovation. Given a renovation type and property location, it evaluates three dimensions in parallel:
 
 - **Permit requirements** — whether a building permit is required, estimated cost and timeline, permit types, and inspection stages
 - **Property tax impact** — estimated monthly/annual tax increase, assessed value uplift, and reassessment trigger type

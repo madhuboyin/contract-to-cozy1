@@ -14,16 +14,16 @@
     "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
   ],
   "summary": {
-    "aiCatalogEntries": 32,
+    "aiCatalogEntries": 31,
     "homeCatalogEntries": 32,
     "overlappingEntries": 20,
-    "distinctCapabilities": 44,
-    "routeVerified": 44,
+    "distinctCapabilities": 43,
+    "routeVerified": 43,
     "canonicalRelationshipCoverage": 27,
     "contextualCapabilities": 22,
     "workflowOnly": 1,
-    "lifecycleCanonicalized": 44,
-    "catalogOnlyCapabilities": 21
+    "lifecycleCanonicalized": 43,
+    "catalogOnlyCapabilities": 20
   },
   "capabilities": [
     {
@@ -377,18 +377,18 @@
     },
     {
       "id": "home-renovation-risk-advisor",
-      "label": "Renovation Risk Advisor",
+      "label": "Renovations",
       "sources": [
         "home",
         "ai"
       ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/home-renovation-risk-advisor",
+      "canonicalRoute": "/dashboard/properties/[id]/renovations",
       "routeVerified": true,
       "workflowOnly": false,
       "outcomeCategory": "PLAN_BUDGET",
       "rolloutKey": "RENOVATION_RISK_ADVISOR",
       "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
+      "safetyTier": "MATERIAL_FINANCIAL",
       "completionKind": "PLAN_CREATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
@@ -466,24 +466,6 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
-    },
-    {
-      "id": "modifications",
-      "label": "Home Upgrades",
-      "sources": [
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/modifications",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "PLAN_BUDGET",
-      "rolloutKey": "HOME_UPGRADES",
-      "releaseStage": "BETA",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": false,
-      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "mortgage-refinance-radar",
@@ -674,7 +656,7 @@
     },
     {
       "id": "quote-comparison",
-      "label": "Quote Comparison",
+      "label": "Service Quote Decision",
       "sources": [
         "home",
         "ai"

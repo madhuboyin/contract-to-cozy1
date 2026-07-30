@@ -2461,6 +2461,9 @@ class APIClient {
   async getRenovationCase(propertyId: string, caseId: string): Promise<APIResponse<any>> {
     return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}`);
   }
+  async listRenovationCases(propertyId: string): Promise<APIResponse<any[]>> {
+    return this.request(`/api/properties/${propertyId}/renovation-cases`);
+  }
   async listRenovationRequirements(propertyId: string, caseId: string): Promise<APIResponse<any>> {
     return this.request(`/api/properties/${propertyId}/renovation-cases/${caseId}/requirements`);
   }
