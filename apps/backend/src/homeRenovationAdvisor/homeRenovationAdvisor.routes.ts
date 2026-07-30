@@ -9,8 +9,10 @@ import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { HomeRenovationAdvisorController } from './homeRenovationAdvisor.controller';
+import { renovationEvaluationRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
   createSessionSchema,
+  batchEvaluateSessionsSchema,
   evaluateSessionSchema,
   updateComplianceChecklistSchema,
   updateSessionSchema,
@@ -27,6 +29,15 @@ router.get(
   '/home-renovation-advisor/metadata',
   authenticate,
   HomeRenovationAdvisorController.getMetadata,
+);
+
+router.post(
+  '/properties/:propertyId/home-renovation-advisor/sessions/batch-evaluate',
+  authenticate,
+  propertyAuthMiddleware,
+  renovationEvaluationRateLimiter,
+  validateBody(batchEvaluateSessionsSchema),
+  HomeRenovationAdvisorController.batchEvaluateSessions,
 );
 
 // ---------------------------------------------------------------------------
@@ -53,6 +64,7 @@ router.patch(
 router.post(
   '/home-renovation-advisor/sessions/:id/evaluate',
   authenticate,
+  renovationEvaluationRateLimiter,
   validateBody(evaluateSessionSchema),
   HomeRenovationAdvisorController.evaluateSession,
 );

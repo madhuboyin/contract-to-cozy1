@@ -401,6 +401,34 @@ export const expensiveAiRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const renovationEvaluationWindowMs = Number(
+  process.env.RENOVATION_EVALUATION_RATE_LIMIT_WINDOW_MS || 60 * 60 * 1000,
+);
+const renovationEvaluationMax = Number(
+  process.env.RENOVATION_EVALUATION_RATE_LIMIT_MAX || 12,
+);
+
+/**
+ * Dedicated shared bucket for renovation authority/rules evaluation. This is
+ * intentionally independent from ordinary API and AI buckets because a full
+ * evaluation may fan out to several municipal authority adapters.
+ */
+export const renovationEvaluationRateLimiter = rateLimit({
+  windowMs: renovationEvaluationWindowMs,
+  max: renovationEvaluationMax,
+  keyGenerator: rateLimitKey,
+  store: new RedisRateLimitStore('renovation-evaluation', renovationEvaluationWindowMs),
+  message: {
+    success: false,
+    error: {
+      message: 'Renovation evaluation limit reached. Please try again later.',
+      code: 'RENOVATION_EVALUATION_RATE_LIMITED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const uploadWindowMs = 60 * 1000; // 1 minute
 
 /**

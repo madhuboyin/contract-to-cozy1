@@ -36,19 +36,26 @@ function loadService({
   aggregationDecisionStatus = 'APPLICABLE',
   lifecycle = [],
   homeownerProfile = { notificationPreferences: null },
+  existingDeduplicatedNotification = null,
 } = {}) {
-  const calls = { creates: [], deliveryUpdates: [], resolvePolicyArgs: null };
+  const calls = { creates: [], upserts: [], deliveryUpdates: [], resolvePolicyArgs: null };
+
+  const materializeNotification = (data) => ({
+    id: 'notification-1',
+    ...data,
+    deliveries: data.deliveries.create.map((d, i) => ({ id: `delivery-${i}`, ...d })),
+  });
 
   const prismaMock = {
     homeownerProfile: { findFirst: async () => homeownerProfile },
     notification: {
       create: async (args) => {
         calls.creates.push(args);
-        return {
-          id: 'notification-1',
-          ...args.data,
-          deliveries: args.data.deliveries.create.map((d, i) => ({ id: `delivery-${i}`, ...d })),
-        };
+        return materializeNotification(args.data);
+      },
+      upsert: async (args) => {
+        calls.upserts.push(args);
+        return existingDeduplicatedNotification ?? materializeNotification(args.create);
       },
     },
     notificationDelivery: {
@@ -152,6 +159,29 @@ test('creates a PENDING delivery row and enqueues EMAIL for an important notific
   assert.equal(emailDelivery.status, 'PENDING');
   assert.equal(enqueued.email.length, 1);
   assert.equal(calls.deliveryUpdates.length, 1, 'enqueuedAt must be stamped on the delivery row');
+});
+
+test('deduplicationKey upserts durably and does not re-enqueue an existing claimed delivery', async () => {
+  const { NotificationService, calls, enqueued } = loadService({
+    existingDeduplicatedNotification: {
+      id: 'notification-existing',
+      deduplicationKey: 'permit-requirement:1:2026-07-29',
+      deliveries: [
+        { id: 'delivery-in-app', channel: 'IN_APP', status: 'SENT', enqueuedAt: null },
+        { id: 'delivery-email', channel: 'EMAIL', status: 'PENDING', enqueuedAt: new Date() },
+      ],
+    },
+  });
+
+  const result = await NotificationService.create(baseInput({
+    deduplicationKey: 'permit-requirement:1:2026-07-29',
+  }));
+
+  assert.equal(result.id, 'notification-existing');
+  assert.equal(calls.upserts.length, 1);
+  assert.equal(calls.upserts[0].where.deduplicationKey, 'permit-requirement:1:2026-07-29');
+  assert.equal(calls.creates.length, 0);
+  assert.equal(enqueued.email.length, 0, 'an already-claimed durable delivery must not be sent twice');
 });
 
 test('transportEnabled=false still creates the PENDING delivery row but never enqueues it', async () => {

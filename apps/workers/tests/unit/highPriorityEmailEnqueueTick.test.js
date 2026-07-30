@@ -56,7 +56,7 @@ test('enqueues every HIGH-priority PENDING delivery and stamps enqueuedAt first'
   assert.equal(calls.added.length, 2);
   // enqueuedAt stamp must happen before queue.add is attempted (optimistic
   // dedup — see the source comment on why order matters here).
-  assert.deepEqual(calls.updateManyArgs[0].data, { enqueuedAt: calls.updateManyArgs[0].data.enqueuedAt });
+  assert.equal(calls.updateManyArgs[0].data.status, 'PENDING');
   assert.ok(calls.updateManyArgs[0].data.enqueuedAt instanceof Date);
 });
 
@@ -81,7 +81,9 @@ test('a failed queue.add rolls back enqueuedAt so the delivery is retried next t
   assert.equal(result.succeeded, 1);
   assert.equal(result.failed, 1);
   assert.equal(calls.added.length, 2, 'both must still be attempted, not an all-or-nothing batch');
-  const rollbackCall = calls.updateManyArgs.find((a) => a.where.id === 'delivery-2' && a.data.enqueuedAt === null);
+  const rollbackCall = calls.updateManyArgs.find(
+    (a) => a.where.id === 'delivery-2' && a.data.enqueuedAt === null && a.data.status === 'PENDING',
+  );
   assert.ok(rollbackCall, 'the failed delivery must have its enqueuedAt rolled back to null');
 });
 
@@ -93,4 +95,18 @@ test('returns zero counts and touches nothing when there are no pending HIGH-pri
   assert.deepEqual(result, { succeeded: 0, failed: 0 });
   assert.equal(calls.added.length, 0);
   assert.equal(calls.updateManyArgs.length, 0, 'must not touch enqueuedAt when nothing was fetched');
+});
+
+test('claims include stale PENDING and FAILED rows for durable replay', async () => {
+  const { highPriorityEmailEnqueueTick, calls, fakeQueue } = loadPoller({
+    pendingDeliveries: [{ id: 'delivery-stale' }],
+  });
+
+  await highPriorityEmailEnqueueTick(fakeQueue, 50);
+
+  const query = calls.updateManyArgs[0].where;
+  assert.ok(query.OR.some((branch) => branch.status?.in?.includes('FAILED')));
+  assert.ok(query.OR.some((branch) => branch.enqueuedAt?.lt instanceof Date));
+  assert.equal(calls.added[0].opts.attempts, 3);
+  assert.equal(calls.added[0].opts.backoff.type, 'exponential');
 });

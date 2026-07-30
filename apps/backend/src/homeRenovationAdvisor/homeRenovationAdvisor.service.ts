@@ -33,6 +33,7 @@ import {
   EvaluateSessionBody,
   UpdateComplianceChecklistBody,
   UpdateSessionBody,
+  BatchEvaluateSessionsBody,
 } from './validators/homeRenovationAdvisor.validators';
 import {
   EvaluationContext,
@@ -49,8 +50,62 @@ import {
 import { analyticsEmitter } from '../services/analytics/emitter';
 import { runPostEvaluationIntegrations } from './integrations/advisorIntegration.service';
 import { HomeRenovationType, RenovationAdvisorEntryPoint, RenovationAdvisorFlowType } from '@prisma/client';
+import { getRenovationEvaluationQueue } from '../services/JobQueue.service';
 
 export class HomeRenovationAdvisorService {
+  async enqueueBatchEvaluation(
+    userId: string,
+    propertyId: string,
+    input: BatchEvaluateSessionsBody,
+  ) {
+    const sessions = await Promise.all(
+      input.sessionIds.map(sessionId => this.getSessionAndVerifyAccess(sessionId, userId)),
+    );
+    if (sessions.some(session => session.propertyId !== propertyId)) {
+      throw new APIError(
+        'Every batch session must belong to the requested property.',
+        409,
+        'RENOVATION_BATCH_PROPERTY_MISMATCH',
+      );
+    }
+    const queue = getRenovationEvaluationQueue();
+    const jobs = await Promise.all(sessions.map(session =>
+      queue.add(
+        'evaluate-renovation-advisor-session',
+        {
+          sessionId: session.id,
+          requestedByUserId: userId,
+          forceRefresh: input.forceRefresh,
+          evaluationMode: input.evaluationMode,
+        },
+        {
+          // Deduplicate concurrent requests for the same session state while
+          // allowing a later retry after evaluation updates the session.
+          jobId: `renovation-evaluation-${session.id}-${session.updatedAt.getTime()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5_000 },
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      ),
+    ));
+    return {
+      accepted: jobs.length,
+      jobs: jobs.map((job, index) => ({
+        jobId: job.id,
+        sessionId: sessions[index].id,
+      })),
+    };
+  }
+
+  async evaluateSessionForAutomation(
+    requestedByUserId: string,
+    sessionId: string,
+    input: EvaluateSessionBody,
+  ) {
+    return this.evaluateSession(requestedByUserId, sessionId, input);
+  }
+
   // ============================================================================
   // CREATE SESSION
   // ============================================================================
@@ -383,6 +438,19 @@ export class HomeRenovationAdvisorService {
     const isOwner = await verifyPropertyOwnership(session.propertyId, userId);
     if (!isOwner) {
       throw new APIError('Access denied to this session', 403, 'ACCESS_DENIED');
+    }
+
+    if (
+      session.sessionExpiresAt
+      && session.sessionExpiresAt <= new Date()
+      && session.status !== RenovationAdvisorSessionStatus.ARCHIVED
+    ) {
+      await archiveSession(session.id);
+      throw new APIError(
+        'This renovation advisor session expired. Start a new review from the renovation workspace.',
+        410,
+        'RENOVATION_ADVISOR_SESSION_EXPIRED',
+      );
     }
 
     return session;

@@ -4958,6 +4958,25 @@ class APIClient {
     return res.data?.candidates ?? [];
   }
 
+  async batchEvaluateRenovationAdvisorSessions(
+    propertyId: string,
+    input: {
+      sessionIds: string[];
+      forceRefresh?: boolean;
+      evaluationMode?: 'FULL' | 'PERMIT_ONLY' | 'TAX_ONLY' | 'LICENSING_ONLY';
+    },
+  ): Promise<{ accepted: number; jobs: Array<{ jobId: string; sessionId: string }> }> {
+    const res = await this.post<{
+      accepted: number;
+      jobs: Array<{ jobId: string; sessionId: string }>;
+    }>(
+      `/api/properties/${propertyId}/home-renovation-advisor/sessions/batch-evaluate`,
+      input,
+    );
+    if (!res.data) throw new APIError('Batch evaluation could not be queued', 500);
+    return res.data;
+  }
+
   async updateRenovationAdvisorCompliance(
     sessionId: string,
     input: Partial<import('@/types').RenovationAdvisorComplianceChecklist>,

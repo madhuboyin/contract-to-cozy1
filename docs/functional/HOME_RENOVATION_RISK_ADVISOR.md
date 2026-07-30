@@ -914,7 +914,7 @@ npm run test:renovations:e2e
 
 7. **Retroactive candidate classification** — Timeline improvements can now enter an idempotent canonical historical-review case from the renovation workspace. Renovation-type suggestions still depend on recognized subtypes or event metadata; unrecognized improvements remain reviewable without an inferred type.
 
-8. **No background job queue** — Evaluations run synchronously. For large batch retroactive checks, this could time out.
+8. **Interactive evaluation remains synchronous** — Single-session evaluation returns in the request for compatibility. Property-scoped batches use the bounded `renovation-evaluation-queue` with retry and concurrency controls.
 
 ---
 
@@ -934,7 +934,7 @@ npm run test:renovations:e2e
 - [ ] **Cost estimation integration** — Pull from existing CtC provider quote data to pre-fill project cost
 - [ ] **Break-even pre-fill** — Auto-populate break-even tool with permit costs + tax increase from advisor
 - [ ] **TCO pre-fill** — Auto-populate TCO tool with advisor's tax impact estimate
-- [ ] **Permit reminder notifications** — BullMQ job to remind user if permit not confirmed within N days after evaluation
+- [x] **Permit reminder notifications** — Daily governed reminders for unresolved blocking permit requirements due within three days, with durable deduplication
 
 ### Intelligence
 - [ ] **ML confidence calibration** — Use historical evaluation accuracy data to calibrate confidence scores
@@ -946,5 +946,5 @@ npm run test:renovations:e2e
 - [ ] **Admin override panel** — Admin UI to override permit/tax/licensing rules for specific jurisdictions without a code deploy
 - [ ] **Rules versioning** — Track which rules version produced each evaluation for audit purposes
 - [ ] **Webhook on evaluation complete** — Allow external integrations to subscribe to evaluation completion events
-- [ ] **Rate limiting** — Dedicated rate limiter for evaluation endpoint (currently uses general API limiter)
-- [ ] **Session expiry** — Honor `sessionExpiresAt` field (currently populated but not enforced)
+- [x] **Rate limiting** — Dedicated Redis-backed evaluation limit plus BullMQ worker throughput control
+- [x] **Session expiry** — New sessions receive a configurable deadline; expired sessions are archived at access time and by a scheduled cleanup

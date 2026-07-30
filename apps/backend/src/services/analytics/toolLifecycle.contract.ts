@@ -82,7 +82,6 @@ const TOOL_ID_ALIASES: Record<string, string> = {
   'cost-explainer': 'ownership-costs',
   'cost-volatility': 'ownership-costs',
   'home-renovation-advisor': 'home-renovation-risk-advisor',
-  'home-upgrades': 'modifications',
   'insurance-cost-trend': 'coverage-intelligence',
   'insurance-trend': 'coverage-intelligence',
   'permit-tracker': 'permits',

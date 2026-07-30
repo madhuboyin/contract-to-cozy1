@@ -46,6 +46,14 @@ export type SessionWithIncludes = Prisma.HomeRenovationAdvisorSessionGetPayload<
   include: typeof SESSION_FULL_INCLUDE;
 }>;
 
+function sessionExpiryFrom(now = new Date()): Date {
+  const configured = Number(process.env.RENOVATION_ADVISOR_SESSION_TTL_DAYS || 30);
+  const ttlDays = Number.isFinite(configured) && configured > 0
+    ? Math.min(configured, 365)
+    : 30;
+  return new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
+}
+
 // ============================================================================
 // CREATE SESSION
 // ============================================================================
@@ -82,6 +90,7 @@ export async function createAdvisorSession(
       userConfirmedJurisdiction: input.userConfirmedJurisdiction ?? false,
       overallConfidence: 'UNAVAILABLE',
       overallRiskLevel: 'UNKNOWN',
+      sessionExpiresAt: sessionExpiryFrom(),
     },
     include: SESSION_FULL_INCLUDE,
   });

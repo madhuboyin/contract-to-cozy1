@@ -65,7 +65,6 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   DOCUMENT_VAULT:            { label: 'Document Vault',              defaultPct: 25  },
   BUDGET_PLANNER:            { label: 'Budget Planner',              defaultPct: 25  },
   CLIMATE_RISK:              { label: 'Climate Risk',                defaultPct: 10  },
-  HOME_UPGRADES:             { label: 'Home Upgrades',               defaultPct: 10  },
   COVERAGE_INTELLIGENCE:     { label: 'Coverage Intelligence',       defaultPct: 100 },
   RISK_PREMIUM_OPTIMIZER:    { label: 'Risk Premium Optimizer',      defaultPct: 100 },
   REPLACE_OR_REPAIR:         { label: 'Replace or Repair',           defaultPct: 100 },

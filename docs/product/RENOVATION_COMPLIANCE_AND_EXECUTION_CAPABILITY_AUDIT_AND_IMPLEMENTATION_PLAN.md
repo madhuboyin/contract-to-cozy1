@@ -1673,3 +1673,25 @@ Implemented July 29, 2026:
 Remaining rollout work is jurisdiction registration and source-specific contract
 certification. An unconfigured jurisdiction is a visible coverage gap, not a
 negative permit, tax, licensing, or zoning finding.
+
+---
+
+## 19. Implemented Slice 15 — Governed Automation and Legacy Retirement
+
+Implemented July 29, 2026:
+
+- a dedicated Redis-backed limit for interactive and batch advisor evaluation;
+- a property-scoped batch endpoint backed by a retryable BullMQ queue with
+  bounded worker concurrency and per-minute throughput;
+- configurable 30-day advisor-session deadlines, enforced during access and by
+  a governed scheduled archival job;
+- daily reminders for unresolved blocking permit requirements due within three
+  days, using stable notification deduplication keys;
+- replay of stale and failed high-priority notification delivery claims from
+  durable `NotificationDelivery` rows with bounded transport retries; and
+- removal of the obsolete `HOME_UPGRADES` rollout flag and `home-upgrades`
+  discovery/analytics aliases.
+
+The existing inspection-milestone reminder remains the authority for scheduled
+inspection dates. The new renovation reminder covers the earlier requirement
+research deadline and does not infer that a permit is required or issued.

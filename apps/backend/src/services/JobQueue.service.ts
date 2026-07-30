@@ -107,6 +107,13 @@ export interface GeneratePermitDisclosureJobPayload {
   propertyId: string;
 }
 
+export interface RenovationEvaluationJobPayload {
+  sessionId: string;
+  requestedByUserId: string;
+  forceRefresh: boolean;
+  evaluationMode: 'FULL' | 'PERMIT_ONLY' | 'TAX_ONLY' | 'LICENSING_ONLY';
+}
+
 export const getPermitFetchQueue = createLazyQueue<PermitFetchJobPayload>(
   () =>
     new Queue<PermitFetchJobPayload>('permit-fetch-queue', {
@@ -126,6 +133,14 @@ export const getDetectUnpermittedWorkQueue = createLazyQueue<DetectUnpermittedWo
 export const getGeneratePermitDisclosureQueue = createLazyQueue<GeneratePermitDisclosureJobPayload>(
   () =>
     new Queue<GeneratePermitDisclosureJobPayload>('generate-permit-disclosure-queue', {
+      connection,
+      defaultJobOptions: DEFAULT_JOB_RETENTION,
+    }),
+);
+
+export const getRenovationEvaluationQueue = createLazyQueue<RenovationEvaluationJobPayload>(
+  () =>
+    new Queue<RenovationEvaluationJobPayload>('renovation-evaluation-queue', {
       connection,
       defaultJobOptions: DEFAULT_JOB_RETENTION,
     }),

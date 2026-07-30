@@ -66,6 +66,14 @@ export const evaluateSessionSchema = z.object({
 
 export type EvaluateSessionBody = z.infer<typeof evaluateSessionSchema>;
 
+export const batchEvaluateSessionsSchema = z.object({
+  sessionIds: z.array(z.string().uuid()).min(1).max(50),
+  forceRefresh: z.boolean().default(false),
+  evaluationMode: z.enum(['FULL', 'PERMIT_ONLY', 'TAX_ONLY', 'LICENSING_ONLY']).default('FULL'),
+});
+
+export type BatchEvaluateSessionsBody = z.infer<typeof batchEvaluateSessionsSchema>;
+
 // ============================================================================
 // LIST SESSIONS QUERY
 // ============================================================================

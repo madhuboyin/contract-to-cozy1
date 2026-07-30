@@ -8,6 +8,7 @@ import { AuthRequest } from '../types/auth.types';
 import { HomeRenovationAdvisorService } from './homeRenovationAdvisor.service';
 import {
   CreateSessionBody,
+  BatchEvaluateSessionsBody,
   EvaluateSessionBody,
   UpdateComplianceChecklistBody,
   UpdateSessionBody,
@@ -21,6 +22,19 @@ import {
 const service = new HomeRenovationAdvisorService();
 
 export class HomeRenovationAdvisorController {
+  static async batchEvaluateSessions(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await service.enqueueBatchEvaluation(
+        req.user!.userId,
+        req.params.propertyId,
+        req.body as BatchEvaluateSessionsBody,
+      );
+      res.status(202).json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   // POST /api/home-renovation-advisor/sessions
   static async createSession(req: AuthRequest, res: Response, next: NextFunction) {
     try {

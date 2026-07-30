@@ -20,13 +20,25 @@ export async function highPriorityEmailEnqueueTick(
   queue: { add(name: string, data: unknown, opts?: unknown): Promise<unknown> },
   batchSize: number,
 ): Promise<{ succeeded: number; failed: number }> {
-  // Fetch PENDING email deliveries that are HIGH priority and not enqueued yet
+  const staleClaimBefore = new Date(
+    Date.now() - Number(process.env.NOTIFICATION_DELIVERY_CLAIM_TIMEOUT_MS || 15 * 60 * 1000),
+  );
+  // Fetch new or stale email deliveries that are HIGH priority.
   // @ts-ignore - enqueuedAt exists in schema but may not be in generated client types
   const deliveries = await (prisma as any).notificationDelivery.findMany({
     where: {
       channel: NotificationChannel.EMAIL,
-      status: DeliveryStatus.PENDING,
-      enqueuedAt: null,
+      OR: [
+        { status: DeliveryStatus.PENDING, enqueuedAt: null },
+        // A pod can die after claiming a delivery but before BullMQ durably
+        // accepts or executes it. Failed sends are also reclaimed after the
+        // same cooling-off period. The durable delivery row is the retry
+        // source of truth, not the lifetime of one Redis job.
+        {
+          status: { in: [DeliveryStatus.PENDING, DeliveryStatus.FAILED] },
+          enqueuedAt: { lt: staleClaimBefore },
+        },
+      ],
       notification: {
         metadata: {
           path: ['priority'],
@@ -44,15 +56,22 @@ export async function highPriorityEmailEnqueueTick(
   // Optimistically mark as enqueued to prevent duplicates
   const ids = deliveries.map((d: { id: string }) => d.id);
 
+  const claimedAt = new Date();
   // @ts-ignore - enqueuedAt exists in schema but may not be in generated client types
   await (prisma as any).notificationDelivery.updateMany({
     where: {
       id: { in: ids },
-      enqueuedAt: null,
-      status: DeliveryStatus.PENDING,
+      OR: [
+        { status: DeliveryStatus.PENDING, enqueuedAt: null },
+        {
+          status: { in: [DeliveryStatus.PENDING, DeliveryStatus.FAILED] },
+          enqueuedAt: { lt: staleClaimBefore },
+        },
+      ],
     },
     data: {
-      enqueuedAt: new Date(),
+      status: DeliveryStatus.PENDING,
+      enqueuedAt: claimedAt,
     },
   });
 
@@ -73,7 +92,13 @@ export async function highPriorityEmailEnqueueTick(
           { notificationDeliveryId: deliveryId },
           // BullMQ rejects ":" in custom job IDs ("Custom Id cannot contain :") —
           // confirmed live this was silently failing every single enqueue attempt.
-          { jobId: `email-${deliveryId}`, removeOnComplete: true, removeOnFail: false }
+          {
+            jobId: `email-${deliveryId}-${Date.now()}`,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 5_000 },
+            removeOnComplete: true,
+            removeOnFail: false,
+          }
         );
         succeeded++;
       } catch (err) {
@@ -85,8 +110,10 @@ export async function highPriorityEmailEnqueueTick(
         try {
           // @ts-ignore - enqueuedAt exists in schema but may not be in generated client types
           await (prisma as any).notificationDelivery.updateMany({
-            where: { id: deliveryId, enqueuedAt: { not: null } },
-            data: { enqueuedAt: null },
+            // Do not erase a newer claim if another poller reclaimed this row
+            // after our queue attempt timed out.
+            where: { id: deliveryId, status: DeliveryStatus.PENDING, enqueuedAt: claimedAt },
+            data: { status: DeliveryStatus.PENDING, enqueuedAt: null },
           });
         } catch (rollbackErr) {
           logger.error(

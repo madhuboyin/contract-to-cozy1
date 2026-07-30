@@ -64,6 +64,9 @@ import { fetchPermitHistoryJob, FETCH_PERMIT_HISTORY_JOB } from './jobs/fetchPer
 import { detectUnpermittedWorkJob, DETECT_UNPERMITTED_WORK_JOB } from './jobs/detectUnpermittedWork.job';
 import { generatePermitDisclosureJob, GENERATE_PERMIT_DISCLOSURE_JOB } from './jobs/generatePermitDisclosure.job';
 import { permitInspectionReminderJob } from './jobs/permitInspectionReminder.job';
+import { renovationAdvisorSessionExpiryJob } from './jobs/renovationAdvisorSessionExpiry.job';
+import { renovationPermitRequirementReminderJob } from './jobs/renovationPermitRequirementReminder.job';
+import { HomeRenovationAdvisorService } from '@worker-shared/homeRenovationAdvisor/homeRenovationAdvisor.service';
 import { savingsBenefitsDeadlineReminderJob } from './jobs/savingsBenefitsDeadlineReminder.job';
 import { savingsBenefitsFollowUpReminderJob } from './jobs/savingsBenefitsFollowUpReminder.job';
 import { savingsBenefitsSourceHealthAuditJob } from './jobs/savingsBenefitsSourceHealthAudit.job';
@@ -412,6 +415,8 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
   'permit-inspection-reminders':     async (opts) => permitInspectionReminderJob(opts),
+  'renovation-advisor-session-expiry': async (opts) => renovationAdvisorSessionExpiryJob(opts),
+  'renovation-permit-requirement-reminders': async (opts) => renovationPermitRequirementReminderJob(opts),
   'savings-benefits-deadline-reminders': async (opts) => savingsBenefitsDeadlineReminderJob(opts),
   'savings-benefits-follow-up-reminders': async (opts) => savingsBenefitsFollowUpReminderJob(opts),
   'savings-benefits-source-health-audit': async (opts) => savingsBenefitsSourceHealthAuditJob(opts),
@@ -1328,6 +1333,46 @@ permitDisclosureWorker.on('failed', (job, err) => {
 });
 registerShutdownHandler('permitDisclosureWorker', () => permitDisclosureWorker.close());
 
+const renovationAdvisorService = new HomeRenovationAdvisorService();
+const renovationEvaluationWorker = new Worker<{
+  sessionId: string;
+  requestedByUserId: string;
+  forceRefresh: boolean;
+  evaluationMode: 'FULL' | 'PERMIT_ONLY' | 'TAX_ONLY' | 'LICENSING_ONLY';
+}>(
+  'renovation-evaluation-queue',
+  async (job) => {
+    if (job.name !== 'evaluate-renovation-advisor-session') {
+      throw new Error(`[RENOVATION-EVALUATION-WORKER] Unknown job name: ${job.name}`);
+    }
+    await renovationAdvisorService.evaluateSessionForAutomation(
+      job.data.requestedByUserId,
+      job.data.sessionId,
+      {
+        forceRefresh: job.data.forceRefresh,
+        evaluationMode: job.data.evaluationMode,
+      },
+    );
+  },
+  {
+    connection: redisConnection,
+    concurrency: 3,
+    limiter: {
+      max: Number(process.env.RENOVATION_EVALUATION_WORKER_MAX_PER_MINUTE || 10),
+      duration: 60_000,
+    },
+  },
+);
+renovationEvaluationWorker.on('ready', () =>
+  logger.info('[RENOVATION-EVALUATION-WORKER] Ready on queue: renovation-evaluation-queue'));
+renovationEvaluationWorker.on('completed', (job) =>
+  logger.info(`[RENOVATION-EVALUATION-WORKER] session ${job.data.sessionId} completed`));
+renovationEvaluationWorker.on('failed', (job, err) => {
+  logger.error({ err }, `[RENOVATION-EVALUATION-WORKER] session ${job?.data?.sessionId} failed`);
+  void alertOnJobFailure('renovation-evaluation-queue', job, err);
+});
+registerShutdownHandler('renovationEvaluationWorker', () => renovationEvaluationWorker.close());
+
 // =============================================================================
 // GUARDRAIL: QA/E2E dummy-ingest jobs must never run in production. These
 // generate synthetic fixture data (RadarEvent, HomeRiskEvent, NeighborhoodEvent)
@@ -1594,6 +1639,7 @@ const KNOWN_QUEUE_NAMES = new Set<string>([
   'permit-fetch-queue',
   'detect-unpermitted-work-queue',
   'generate-permit-disclosure-queue',
+  'renovation-evaluation-queue',
   'cron-trigger-queue',
   RADAR_INGEST_QUEUE_NAME,
   RADAR_MATCH_QUEUE_NAME,

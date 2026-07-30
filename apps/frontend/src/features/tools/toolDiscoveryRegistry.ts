@@ -122,7 +122,6 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   documents: 'DOCUMENT_VAULT',
   budget: 'BUDGET_PLANNER',
   climate: 'CLIMATE_RISK',
-  modifications: 'HOME_UPGRADES',
   'coverage-intelligence': 'COVERAGE_INTELLIGENCE',
   'replace-repair': 'REPLACE_OR_REPAIR',
   'do-nothing-simulator': 'DO_NOTHING_SIMULATOR',
@@ -165,7 +164,7 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
 };
 
 const BETA_TOOL_IDS = new Set([
-  'emergency', 'documents', 'budget', 'climate', 'modifications', 'energy',
+  'emergency', 'documents', 'budget', 'climate', 'energy',
   'coverage-intelligence', 'neighborhood-change-radar', 'savings-benefits',
 ]);
 
@@ -342,7 +341,6 @@ const TOOL_ID_ALIASES: Record<string, string> = {
   'risk-premium-optimizer': 'coverage-intelligence',
   hoa: 'hoa-compliance',
   'home-capital-timeline': 'capital-timeline',
-  'home-upgrades': 'modifications',
   'permit-tracker': 'permits',
   vault: 'documents',
   'value-tracker': 'appreciation',

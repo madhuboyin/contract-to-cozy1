@@ -14,6 +14,7 @@ import { logger } from '../lib/logger';
 
 type CreateNotificationInput = {
   userId: string;
+  deduplicationKey?: string;
   type: string;
   title: string;
   message: string;
@@ -183,9 +184,9 @@ export class NotificationService {
     /**
      * 4️⃣ Create Notification + Delivery rows atomically
      */
-    const notification = await prisma.notification.create({
-      data: {
+    const notificationCreate = {
         userId: input.userId,
+        deduplicationKey: input.deduplicationKey,
         type: input.type,
         title: input.title,
         message: input.message,
@@ -203,9 +204,18 @@ export class NotificationService {
                 : DeliveryStatus.PENDING,
           })),
         },
-      },
-      include: { deliveries: true },
-    });
+      };
+    const notification = input.deduplicationKey
+      ? await prisma.notification.upsert({
+          where: { deduplicationKey: input.deduplicationKey },
+          update: {},
+          create: notificationCreate,
+          include: { deliveries: true },
+        })
+      : await prisma.notification.create({
+          data: notificationCreate,
+          include: { deliveries: true },
+        });
 
     /**
      * 5️⃣ Enqueue ONLY immediate (important) async deliveries
@@ -218,6 +228,10 @@ export class NotificationService {
       for (const delivery of notification.deliveries) {
         const channelPolicy = channels.find((candidate) => candidate.channel === delivery.channel);
         if (!channelPolicy?.deliverImmediately) continue;
+        // An idempotent upsert may return an existing notification. Never
+        // enqueue an already-sent or already-claimed delivery again here;
+        // stale/failed claims are replayed by the durable delivery poller.
+        if (delivery.status !== DeliveryStatus.PENDING || delivery.enqueuedAt) continue;
         try {
           switch (delivery.channel) {
           case NotificationChannel.EMAIL:
