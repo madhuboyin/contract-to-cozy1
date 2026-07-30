@@ -19,6 +19,7 @@ import { decidePhase6PilotAdmission, getPhase6PilotMetrics } from '../services/a
 import { getRefinanceRadarMetrics } from '../services/adminAnalytics/refinanceRadarMetricsService';
 import { HomeDigitalTwinService } from '../services/homeDigitalTwin.service';
 import { getServiceQuoteDecisionMetrics } from '../services/adminAnalytics/serviceQuoteDecisionMetricsService';
+import { getRenovationOperationalHealth } from '../services/adminAnalytics/renovationOperationalHealthService';
 
 const homeDigitalTwinService = new HomeDigitalTwinService();
 
@@ -104,6 +105,19 @@ export async function getFunnelHandler(
     const from = qDate(req.query.from);
     const to = qDate(req.query.to);
     const data = await getFunnelMetrics(from, to);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRenovationOperationalHealthHandler(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const data = await getRenovationOperationalHealth(qDate(req.query.from), qDate(req.query.to));
     res.json({ success: true, data });
   } catch (err) {
     next(err);

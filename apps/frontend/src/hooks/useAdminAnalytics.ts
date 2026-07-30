@@ -14,6 +14,7 @@ import {
   fetchAdminAnalyticsPhase6Pilot,
   fetchAdminToolLifecycleFunnel,
   fetchAdminServiceQuoteDecisionMetrics,
+  fetchAdminRenovationOperationalHealth,
 } from '@/lib/api/adminAnalytics';
 import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
 
@@ -23,6 +24,18 @@ export function useAdminAnalyticsOverview(filters: AdminAnalyticsFilters, enable
   return useQuery({
     queryKey: ['admin-analytics-overview', filters.from, filters.to],
     queryFn: () => fetchAdminAnalyticsOverview(filters),
+    staleTime: STALE,
+    enabled,
+  });
+}
+
+export function useAdminRenovationOperationalHealth(
+  filters: AdminAnalyticsFilters,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['admin-renovation-operational-health', filters.from, filters.to],
+    queryFn: () => fetchAdminRenovationOperationalHealth(filters),
     staleTime: STALE,
     enabled,
   });

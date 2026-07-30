@@ -14,6 +14,45 @@ export interface AdminAnalyticsFilters {
   moduleKey?: string;
 }
 
+export interface AdminRenovationOperationalHealthResponse {
+  generatedAt: string;
+  funnel: {
+    totalCases: number;
+    activeCases: number;
+    byLifecycle: Record<string, number>;
+    verifiedComplete: number;
+    completedWithOpenItems: number;
+    verifiedCloseoutRate: number | null;
+  };
+  trust: {
+    readinessNotEvaluated: number;
+    readinessBlocked: number;
+    unresolvedRequirements: number;
+    staleRequirements: number;
+    openBlockingConditions: number;
+    overdueBlockingConditions: number;
+    activeProjectsWithUnknownApplicability: number;
+    activeCasesWithoutScope: number;
+  };
+  operations: {
+    activeExecutionProjects: number;
+    projectionErrorProjects: number;
+    alertCount: number;
+    alerts: Array<{
+      key: string;
+      severity: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+      count: number;
+      label: string;
+      exactNextAction: string;
+    }>;
+  };
+  guardrails: {
+    officialStatusInferredFromMissingData: false;
+    readinessWithoutEvaluationCount: number;
+    completionWithOpenItemsCount: number;
+  };
+}
+
 // Overview
 export interface AdminOverviewResponse {
   period: { from: string; to: string };
@@ -321,6 +360,16 @@ export async function fetchAdminAnalyticsOverview(
   // undefined and React Query treats an undefined queryFn result as an error.
   const response = await api.get<AdminOverviewResponse>(
     '/api/admin/analytics/overview',
+    { params: buildParams(filters) },
+  );
+  return response.data;
+}
+
+export async function fetchAdminRenovationOperationalHealth(
+  filters: AdminAnalyticsFilters,
+): Promise<AdminRenovationOperationalHealthResponse> {
+  const response = await api.get<AdminRenovationOperationalHealthResponse>(
+    '/api/admin/analytics/renovation-operations',
     { params: buildParams(filters) },
   );
   return response.data;

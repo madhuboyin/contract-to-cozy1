@@ -29,6 +29,15 @@ The workspace composes existing authenticated APIs:
 Supporting readiness or compliance calls may fail independently without hiding the governing
 case. API error semantics and role gates remain owned by the specialist endpoints.
 
+Operational health is available to authorized administrators at:
+
+- `GET /api/admin/analytics/renovation-operations?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+The endpoint is read-only and inherits the Admin Analytics authentication, MFA, ADMIN-role,
+and `ANALYTICS_VIEW` capability gates. It returns lifecycle distribution, verified-closeout
+rate, readiness and requirement queues, blocking conditions, unknown execution applicability,
+projection failures, explicit guardrails, and deduplicated alert groups with next actions.
+
 ---
 
 ## Table of Contents

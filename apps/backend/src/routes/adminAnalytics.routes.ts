@@ -30,6 +30,7 @@ import {
   getToolLifecycleFunnelHandler,
   getRefinanceRadarMetricsHandler,
   getServiceQuoteDecisionMetricsHandler,
+  getRenovationOperationalHealthHandler,
   getHomeDigitalTwinDiagnosticsHandler,
 } from '../controllers/adminAnalytics.controller';
 
@@ -263,6 +264,24 @@ router.get(
   '/admin/analytics/service-quote-decisions',
   validate(OverviewQuerySchema),
   getServiceQuoteDecisionMetricsHandler,
+);
+
+/**
+ * @swagger
+ * /api/admin/analytics/renovation-operations:
+ *   get:
+ *     summary: Renovation lifecycle, trust, and reconciliation operational health
+ *     tags: [Admin Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Aggregate renovation funnel, trust defects, guardrails, and actionable alerts
+ */
+router.get(
+  '/admin/analytics/renovation-operations',
+  validate(OverviewQuerySchema),
+  getRenovationOperationalHealthHandler,
 );
 
 /**

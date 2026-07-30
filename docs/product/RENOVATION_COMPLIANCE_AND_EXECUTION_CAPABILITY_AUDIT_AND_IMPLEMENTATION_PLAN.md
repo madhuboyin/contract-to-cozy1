@@ -1304,6 +1304,34 @@ Exit criteria:
 - Home promotes only actionable changes; and
 - obsolete routes and contracts are no longer discoverable.
 
+### Slice 11 — Acceptance measurement and operational health
+
+**Goal:** make the acceptance, measurement, and operational requirements in
+Sections 11–13 inspectable without changing homeowner records.
+
+**Implementation status (2026-07-29):** Implemented.
+
+Deliver:
+
+- an admin-only renovation health read model using the existing analytics MFA,
+  ADMIN-role, and `ANALYTICS_VIEW` capability gates;
+- lifecycle distribution and verified-closeout measurement;
+- separate counts for not-evaluated readiness, blocking readiness, unresolved
+  and stale requirements, overdue conditions, unknown Project applicability,
+  missing scopes, and reconciliation failures;
+- deduplicated operational alerts with exact next actions;
+- explicit guardrails that keep completed-with-open-items separate from
+  verified completion; and
+- loading, failure, empty, and healthy states in Admin Analytics.
+
+Exit criteria:
+
+- operators can see the renovation funnel and current trust queues;
+- projection failures and overdue blockers are actionable;
+- missing data never appears as official status; and
+- the endpoint is read-only and covered by aggregation and authorization
+  contract tests.
+
 ---
 
 ## 11. Acceptance Strategy

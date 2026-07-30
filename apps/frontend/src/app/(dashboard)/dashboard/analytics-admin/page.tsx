@@ -8,10 +8,12 @@
 import React, { useState, useCallback } from 'react';
 import {
   Activity,
+  AlertTriangle,
   BarChart2,
   ChevronDown,
   Filter,
   Home,
+  Hammer,
   Info,
   Layers,
   RefreshCw,
@@ -43,6 +45,7 @@ import {
   useAdminAnalyticsPhase6Pilot,
   useAdminToolLifecycleFunnel,
   useAdminServiceQuoteDecisionMetrics,
+  useAdminRenovationOperationalHealth,
 } from '@/hooks/useAdminAnalytics';
 import AdminAnalyticsLineChart from '@/components/admin-analytics/AdminAnalyticsLineChart';
 import {
@@ -131,6 +134,127 @@ function ServiceQuoteDecisionSection({
             <p className="mb-0 text-xs text-slate-500">Manual review is required; this report never activates benchmark data.</p>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RenovationOperationalHealthSection({
+  filters,
+  enabled,
+}: {
+  filters: AdminAnalyticsFilters;
+  enabled: boolean;
+}) {
+  const query = useAdminRenovationOperationalHealth(filters, enabled);
+  if (query.isLoading) return <TableSkeleton rows={4} />;
+  if (query.isError) {
+    return (
+      <AdminRouteState
+        state="error"
+        title="Renovation operational health unavailable"
+        description="Lifecycle, trust, and reconciliation signals could not be loaded."
+      />
+    );
+  }
+  if (!query.data) return null;
+  const data = query.data;
+  const lifecycleRows = Object.entries(data.funnel.byLifecycle)
+    .sort((left, right) => right[1] - left[1]);
+
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Hammer className="h-4 w-4 text-indigo-600" aria-hidden="true" />
+              Renovation operational health
+            </CardTitle>
+            <CardDescription>
+              Current lifecycle funnel, trust defects, completion guardrails, and reconciliation alerts.
+            </CardDescription>
+          </div>
+          <Badge variant={data.operations.alertCount > 0 ? 'destructive' : 'outline'}>
+            {data.operations.alertCount > 0 ? `${data.operations.alertCount} alert groups` : 'Healthy'}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <OverviewCard
+            label="Active cases"
+            value={num(data.funnel.activeCases)}
+            sub={`${num(data.funnel.totalCases)} cases in window`}
+          />
+          <OverviewCard
+            label="Verified closeout"
+            value={pct(data.funnel.verifiedCloseoutRate)}
+            sub={`${num(data.funnel.verifiedComplete)} verified · ${num(data.funnel.completedWithOpenItems)} open`}
+          />
+          <OverviewCard
+            label="Blocked readiness"
+            value={num(data.trust.readinessBlocked)}
+            sub={`${num(data.trust.readinessNotEvaluated)} not evaluated`}
+          />
+          <OverviewCard
+            label="Projection errors"
+            value={num(data.operations.projectionErrorProjects)}
+            sub={`${num(data.operations.activeExecutionProjects)} active execution projects`}
+          />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="rounded-xl border border-slate-200">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h3 className="text-sm font-semibold text-slate-900">Lifecycle distribution</h3>
+            </div>
+            {lifecycleRows.length ? (
+              <div className="divide-y divide-slate-100">
+                {lifecycleRows.map(([lifecycle, count]) => (
+                  <div key={lifecycle} className="flex items-center justify-between gap-3 px-4 py-2 text-xs">
+                    <span className="text-slate-600">{lifecycle.replaceAll('_', ' ')}</span>
+                    <span className="font-semibold text-slate-900">{num(count)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="p-4 text-sm text-slate-500">No renovation cases changed in this window.</p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-slate-200">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h3 className="text-sm font-semibold text-slate-900">Trust queues</h3>
+            </div>
+            <dl className="grid grid-cols-2 gap-3 p-4 text-xs text-slate-600">
+              <div><dt>Unresolved requirements</dt><dd className="text-lg font-semibold text-slate-900">{num(data.trust.unresolvedRequirements)}</dd></div>
+              <div><dt>Stale requirements</dt><dd className="text-lg font-semibold text-slate-900">{num(data.trust.staleRequirements)}</dd></div>
+              <div><dt>Open blocking conditions</dt><dd className="text-lg font-semibold text-slate-900">{num(data.trust.openBlockingConditions)}</dd></div>
+              <div><dt>Unknown applicability</dt><dd className="text-lg font-semibold text-slate-900">{num(data.trust.activeProjectsWithUnknownApplicability)}</dd></div>
+            </dl>
+          </div>
+        </div>
+
+        {data.operations.alerts.length ? (
+          <div className="space-y-2" aria-label="Renovation operational alerts">
+            {data.operations.alerts.map(alert => (
+              <div key={alert.key} className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <div>
+                  <p className="font-semibold">{alert.count} {alert.label}</p>
+                  <p className="text-xs leading-5 text-amber-800">{alert.exactNextAction}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <AdminRouteState
+            state="empty"
+            title="No operational renovation alerts"
+            description="No stale requirements, overdue blockers, unknown execution applicability, missing scopes, or projection errors were found."
+          />
+        )}
       </CardContent>
     </Card>
   );
@@ -1544,6 +1668,12 @@ export default function AnalyticsAdminPage() {
           filters={filters}
           enabled={isAdmin}
           key={`service-quote-decisions-${refreshKey}`}
+        />
+
+        <RenovationOperationalHealthSection
+          filters={filters}
+          enabled={isAdmin}
+          key={`renovation-operations-${refreshKey}`}
         />
 
         {/* ── Phase 1 Pilot ── */}
