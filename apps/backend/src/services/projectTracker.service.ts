@@ -28,7 +28,8 @@ import { resolveWorkKey } from '../modules/homeOperations/domain/workKey';
 import { findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
-import { maintenanceTaskSourceAdapter } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
+import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
+import { resolveGuidanceJourneyWorkKey } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import { resolveInspectionFindingWorkKey, propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { invalidateStatusForInventoryItem } from './homeStatusBoard.service';
 import type { OperationalWorkItemState } from '@prisma/client';
@@ -147,12 +148,20 @@ async function assertMilestoneLinks(
 // so project-lifecycle events (handoff, verified completion, cancellation)
 // can transition it. Best-effort throughout: a sync failure must never
 // block the actual project mutation (Slice 2/3 precedent).
-export function resolveJourneyWorkKey(propertyId: string, journeyId: string): string {
-  return resolveWorkKey({
+// Home Operations Item #14 (Gap 3): async because a coverage-shaped journey
+// resolves to a different workKey shape (INVENTORY_ITEM/COVERAGE_ACTION)
+// than a plain one (PROPERTY/DECISION) — determining which requires a
+// lookup neither this function nor its callers previously had in scope.
+export async function resolveJourneyWorkKey(propertyId: string, journeyId: string): Promise<string> {
+  const journey = await prisma.guidanceJourney.findUnique({
+    where: { id: journeyId },
+    select: { journeyTypeKey: true, inventoryItemId: true },
+  });
+  return resolveGuidanceJourneyWorkKey({
     propertyId,
-    subject: { type: 'PROPERTY', id: propertyId },
-    obligationType: 'DECISION',
-    occurrence: { obligationSlug: `guidance-${journeyId}` },
+    journeyId,
+    journeyTypeKey: journey?.journeyTypeKey ?? null,
+    inventoryItemId: journey?.inventoryItemId ?? null,
   });
 }
 
@@ -166,7 +175,7 @@ export async function syncJourneyWorkItemForProjectEvent(
   if (!guidanceJourneyId) return;
   const actorType = actorUserId ? 'USER' : 'SYSTEM';
   try {
-    const workKey = resolveJourneyWorkKey(propertyId, guidanceJourneyId);
+    const workKey = await resolveJourneyWorkKey(propertyId, guidanceJourneyId);
     const workItem = await findWorkItemByWorkKey(propertyId, workKey);
     if (!workItem) return;
 
@@ -287,6 +296,46 @@ export async function syncFindingWorkItemForProjectHandoff(
         to: 'IN_PROJECT',
         actorType: 'SYSTEM',
         idempotencyKey: `finding-project-handoff:${workItem.id}:${projectId}`,
+      });
+    }
+    await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId });
+  } catch (err) {
+    logger.warn({ err, propertyId, sourceEntityId, projectId }, 'Home Operations work item sync failed; project creation proceeds regardless');
+  }
+}
+
+/**
+ * Home Operations Item #14 (Gap 2): the same handoff as
+ * syncFindingWorkItemForProjectHandoff above, for a Project created
+ * referencing a maintenance task (sourceEntityType === 'MAINTENANCE_TASK',
+ * the same convention diyLaunchContext.ts already uses for this entity type
+ * in the tool-launch-context passthrough family). No UI wires this today —
+ * closing the backend contract gap ahead of that UI existing, same as how
+ * the finding handoff was itself a generic capability before specific UI
+ * used it. Best-effort: never blocks project creation.
+ */
+export async function syncMaintenanceTaskWorkItemForProjectHandoff(
+  propertyId: string,
+  sourceEntityType: string | null | undefined,
+  sourceEntityId: string | null | undefined,
+  projectId: string,
+): Promise<void> {
+  if (sourceEntityType !== 'MAINTENANCE_TASK' || !sourceEntityId) return;
+  try {
+    const task = await prisma.propertyMaintenanceTask.findFirst({
+      where: { id: sourceEntityId, propertyId },
+      select: { id: true, inventoryItemId: true, actionKey: true },
+    });
+    if (!task) return;
+    const workKey = resolveMaintenanceTaskWorkKey(task, propertyId);
+    const workItem = await findWorkItemByWorkKey(propertyId, workKey);
+    if (!workItem) return;
+    if (['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE'].includes(workItem.state)) {
+      await transitionWorkItem({
+        workItemId: workItem.id,
+        to: 'IN_PROJECT',
+        actorType: 'SYSTEM',
+        idempotencyKey: `maintenance-task-project-handoff:${workItem.id}:${projectId}`,
       });
     }
     await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId });
@@ -845,6 +894,7 @@ export async function createProject(propertyId: string, data: any) {
 
   await syncJourneyWorkItemForProjectEvent(propertyId, project.guidanceJourneyId, project.id, 'HANDOFF', null);
   await syncFindingWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id);
+  await syncMaintenanceTaskWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id);
 
   return getProjectDetail(project.id, propertyId);
 }

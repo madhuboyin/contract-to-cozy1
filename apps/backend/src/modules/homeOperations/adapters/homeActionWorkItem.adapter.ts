@@ -1,6 +1,8 @@
 import type { HomeAction } from '../../../productFramework';
 import type { ProposedWorkItem } from '../domain/sourceAdapter';
 import type { WorkSubject } from '../domain/workKey';
+import { resolveWorkKey } from '../domain/workKey';
+import { listGuidanceSafetyClassifications } from '../../../services/guidanceEngine/guidanceGovernance.catalog';
 import type { OperationalObligationType, OperationalWorkSourceType } from '@prisma/client';
 
 /**
@@ -102,6 +104,75 @@ function resolveObligation(action: HomeAction): { obligationType: OperationalObl
   }
   // RECALL
   return { obligationType: 'INCIDENT_RESPONSE', obligationSlug: `recall-${action.source.entityId}` };
+}
+
+/**
+ * Home Operations Item #14 (Gap 3): the workKey a Guidance journey's own
+ * HomeAction resolves to via resolveSubject/resolveObligation above — but
+ * computable from just {journeyId, journeyTypeKey, inventoryItemId}, for
+ * callers (projectTracker.service.ts's project-lifecycle handoff) that only
+ * have the journey record, not a live HomeAction. Two independent checks,
+ * matching the two places the recommendation stage actually makes them:
+ *   - KEY SHAPE: safetyTier === 'REGULATED_COVERAGE' (all 8 journey types
+ *     that tier maps to), same broad check as isCoverageShaped above.
+ *   - SUBJECT ID: only journeyTypeKey === 'coverage_gap_resolution' uses the
+ *     real inventory item id as sourceEntityId (homeActionSourcePromotion
+ *     .service.ts's narrower isCoverageJourney check) — every other
+ *     REGULATED_COVERAGE type falls back to journey.id there, a fake
+ *     "inventory item id." Reproduced here deliberately, bug included: this
+ *     function's job is to agree with whatever key the recommendation stage
+ *     actually produced for every journey type, not to correct that
+ *     separate, pre-existing, out-of-scope inconsistency. Imports
+ *     listGuidanceSafetyClassifications rather than re-hardcoding the
+ *     REGULATED_COVERAGE journey-type list, so this stays in sync as that
+ *     table evolves.
+ */
+export function resolveGuidanceJourneyWorkKey(params: {
+  propertyId: string;
+  journeyId: string;
+  journeyTypeKey: string | null;
+  inventoryItemId: string | null;
+}): string {
+  const isCoverageJourneyType = params.journeyTypeKey === 'coverage_gap_resolution';
+  const sourceEntityId = isCoverageJourneyType && params.inventoryItemId
+    ? params.inventoryItemId
+    : params.journeyId;
+  const safetyTier = params.journeyTypeKey
+    ? listGuidanceSafetyClassifications()[params.journeyTypeKey]
+    : undefined;
+
+  if (safetyTier === 'REGULATED_COVERAGE') {
+    return resolveWorkKey({
+      propertyId: params.propertyId,
+      subject: { type: 'INVENTORY_ITEM', id: sourceEntityId },
+      obligationType: 'COVERAGE_ACTION',
+      occurrence: { obligationSlug: 'coverage-gap' },
+    });
+  }
+  return resolveWorkKey({
+    propertyId: params.propertyId,
+    subject: { type: 'PROPERTY', id: params.propertyId },
+    obligationType: 'DECISION',
+    occurrence: { obligationSlug: `guidance-${sourceEntityId}` },
+  });
+}
+
+/**
+ * Home Operations Item #14 (Gap 1): the recommendation-stage workKey a
+ * checklist/seasonal MAINTENANCE HomeAction resolves to — same shape as
+ * resolveObligation's MAINTENANCE branch above. Exposed so
+ * PropertyMaintenanceTask.service.ts's conversion path can look up (and
+ * reconcile onto) a CANDIDATE work item Slice 2 already resolved for the
+ * pre-conversion recommendation, instead of silently forking a second one
+ * at the task-stage key.
+ */
+export function resolveMaintenanceRecommendationWorkKey(propertyId: string, sourceEntityId: string): string {
+  return resolveWorkKey({
+    propertyId,
+    subject: { type: 'PROPERTY', id: propertyId },
+    obligationType: 'MAINTENANCE_TASK',
+    occurrence: { obligationSlug: `maintenance-${sourceEntityId}` },
+  });
 }
 
 const SOURCE_TYPE_BY_KIND: Partial<Record<HomeAction['source']['kind'], OperationalWorkSourceType>> = {

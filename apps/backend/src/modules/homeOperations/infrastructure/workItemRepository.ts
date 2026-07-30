@@ -281,6 +281,21 @@ export function findWorkItemsLinkedToExecution(
   });
 }
 
+/**
+ * Home Operations Item #14 (Gap 1): once a maintenance task has been
+ * reconciled onto a recommendation-stage work item (see
+ * PropertyMaintenanceTask.service.ts's resolveTaskWorkItem), that work
+ * item's own workKey no longer matches the task-stage key
+ * resolveMaintenanceTaskWorkKey would compute — this execution link is the
+ * only durable pointer back to it for every later sync call.
+ */
+export function findWorkItemsLinkedToMaintenanceTaskExecution(taskId: string) {
+  return prisma.operationalWorkExecution.findMany({
+    where: { executionType: 'MAINTENANCE_TASK', executionEntityId: taskId },
+    include: { workItem: true },
+  });
+}
+
 export function recordWorkEvidence(input: {
   workItemId: string;
   evidenceType: OperationalWorkEvidenceType;

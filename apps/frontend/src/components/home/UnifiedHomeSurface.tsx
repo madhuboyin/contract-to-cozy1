@@ -16,6 +16,7 @@ import {
   Home,
   MessageCircle,
   Milestone,
+  Radar,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -32,9 +33,55 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/components/ui/use-toast';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
 import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigation';
+import { buildHomeEventRadarHref } from '@/features/homeEventRadar/radarDeepLinks';
 import {
   RefinanceRadarPortfolioCard,
 } from '@/app/(dashboard)/dashboard/properties/[id]/components/RefinanceRadarDashboardCard';
+
+/**
+ * Home Operations Item #13 (§ launch-review gap): last carried by the
+ * deleted MobileDashboardHome.tsx (Slice 9) — UnifiedHomeSurface never
+ * picked it up when it replaced that component in Slice 2. Home Event
+ * Radar isn't a registered HOME_ACTION_SOURCE_KIND, so it can't appear via
+ * the ranked-action feed; it's fetched and rendered as its own standalone
+ * widget, same shape as RefinanceRadarPortfolioCard below.
+ */
+function HomeEventRadarTopMatchCard({ propertyId }: { propertyId: string }) {
+  const query = useQuery({
+    queryKey: ['home-event-radar-top-match', propertyId],
+    queryFn: () => api.getRadarEvents(propertyId, { limit: 20, state: ['new', 'seen', 'saved', 'acted_on'] }),
+    enabled: Boolean(propertyId),
+    staleTime: 3 * 60 * 1000,
+  });
+  const items = query.data?.items ?? [];
+  const topItem = items[0] ?? null;
+  if (!topItem) return null;
+
+  const href = buildHomeEventRadarHref({
+    propertyId,
+    view: topItem.matchLifecycleStatus,
+    family: topItem.sourceFamily,
+    matchId: topItem.propertyMatchId,
+    context: { launchSurface: 'unified_home' },
+  });
+  const newCount = items.filter((item) => item.userState === 'new').length;
+
+  return (
+    <Card className="rounded-[24px] border-slate-200 shadow-sm">
+      <CardContent className="flex items-center justify-between gap-3 p-5">
+        <div>
+          <p className="flex items-center gap-2 font-semibold text-slate-950">
+            <Radar className="h-4 w-4 text-slate-500" />Home Radar
+          </p>
+          <p className="mt-1 text-sm text-slate-600">{topItem.title}</p>
+        </div>
+        <Button asChild size="sm" variant="outline" className="shrink-0 rounded-full">
+          <Link href={href}>{newCount > 0 ? `${newCount} new` : 'Open Radar'}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 function priorityTone(priority: RankedHomeActionDTO['priority']) {
   if (priority === 'NOW') return 'border-rose-200 bg-rose-50 text-rose-700';
@@ -719,6 +766,8 @@ export function UnifiedHomeSurface({
       <RefinanceRadarPortfolioCard
         properties={properties.length > 0 ? properties : [{ id: propertyId, address: 'Selected home' }]}
       />
+
+      <HomeEventRadarTopMatchCard propertyId={propertyId} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="rounded-[24px] border-slate-200 shadow-sm">

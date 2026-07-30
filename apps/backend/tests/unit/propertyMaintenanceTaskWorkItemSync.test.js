@@ -73,12 +73,16 @@ const tasks = new Map();
 const workItems = new Map();
 const workSources = new Map();
 const workEvents = new Map();
+const workExecutions = new Map();
+const checklistItems = new Map();
 
 function reset() {
   tasks.clear();
   workItems.clear();
   workSources.clear();
   workEvents.clear();
+  workExecutions.clear();
+  checklistItems.clear();
   loggedWarnings.length = 0;
 }
 
@@ -164,6 +168,25 @@ const prismaMock = {
       return workEvents.get(`${k.workItemId}:${k.idempotencyKey}`) ?? null;
     },
   },
+  operationalWorkExecution: {
+    upsert: async ({ where, create, update }) => {
+      const k = where.workItemId_executionType_executionEntityId;
+      const key = `${k.workItemId}:${k.executionType}:${k.executionEntityId}`;
+      const existing = workExecutions.get(key);
+      const row = existing ? { ...existing, ...update } : { id: crypto.randomUUID(), ...create };
+      workExecutions.set(key, row);
+      return row;
+    },
+    findMany: async ({ where }) => {
+      return [...workExecutions.values()]
+        .filter((execution) => execution.executionType === where.executionType && execution.executionEntityId === where.executionEntityId)
+        .map((execution) => ({ ...execution, workItem: workItems.get(execution.workItemId) }));
+    },
+  },
+  checklistItem: {
+    findFirst: async ({ where }) =>
+      [...checklistItems.values()].find((item) => item.propertyId === where.propertyId && item.actionKey === where.actionKey) ?? null,
+  },
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
@@ -175,6 +198,7 @@ require.cache[prismaPath] = {
 };
 
 const { PropertyMaintenanceTaskService } = require('../../src/services/PropertyMaintenanceTask.service.ts');
+const { resolveMaintenanceRecommendationWorkKey } = require('../../src/modules/homeOperations/adapters/homeActionWorkItem.adapter.ts');
 
 function workItemFor(taskId) {
   return [...workItems.values()].find((w) => [...workSources.values()].some((s) => s.sourceEntityId === taskId));
@@ -238,6 +262,106 @@ test('cancelling a task with an existing work item closes it with disposition NO
   const item = workItemFor(task.id);
   assert.equal(item.state, 'CLOSED');
   assert.equal(item.disposition, 'NOT_RELEVANT');
+});
+
+// ── Home Operations Item #14 (Gap 1): recommendation -> task reconciliation ──
+
+test('converting a checklist-sourced recommendation reuses its existing CANDIDATE work item instead of forking a new one', async () => {
+  reset();
+  checklistItems.set('checklist-1', { id: 'checklist-1', propertyId: 'property-1', actionKey: 'ck-actionkey-1' });
+  const candidateKey = resolveMaintenanceRecommendationWorkKey('property-1', 'checklist-1');
+  const candidate = {
+    id: crypto.randomUUID(),
+    propertyId: 'property-1',
+    workKey: candidateKey,
+    subjectType: 'PROPERTY',
+    subjectId: 'property-1',
+    obligationType: 'MAINTENANCE_TASK',
+    state: 'CANDIDATE',
+    acceptanceState: 'PROPOSED',
+    disposition: null,
+    priority: 'PLAN',
+    safetyTier: 'LOW_CONSEQUENCE',
+    title: 'Replace HVAC filter',
+    homeownerReason: 'Recommended by the seasonal checklist.',
+    expectedOutcome: 'The filter is replaced.',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  workItems.set(candidate.id, candidate);
+
+  const { task } = await PropertyMaintenanceTaskService.createFromActionCenter('owner-1', 'property-1', {
+    title: 'Replace HVAC filter',
+    assetType: 'HVAC',
+    priority: 'MEDIUM',
+    nextDueDate: new Date().toISOString(),
+    actionKey: 'ck-actionkey-1',
+  });
+
+  assert.equal(workItems.size, 1, 'no second work item should be minted for the reconciled recommendation');
+  const item = workItems.get(candidate.id);
+  assert.equal(item.state, 'ACCEPTED', 'the reconciled candidate is accepted, not left as a stale candidate');
+
+  const linked = [...workExecutions.values()].find(
+    (execution) => execution.executionType === 'MAINTENANCE_TASK' && execution.executionEntityId === task.id,
+  );
+  assert.ok(linked, 'a MAINTENANCE_TASK execution link must be recorded back to the reconciled work item');
+  assert.equal(linked.workItemId, candidate.id);
+});
+
+test('a later status transition on a reconciled task still resolves the same reconciled work item', async () => {
+  reset();
+  checklistItems.set('checklist-1', { id: 'checklist-1', propertyId: 'property-1', actionKey: 'ck-actionkey-1' });
+  const candidateKey = resolveMaintenanceRecommendationWorkKey('property-1', 'checklist-1');
+  const candidate = {
+    id: crypto.randomUUID(),
+    propertyId: 'property-1',
+    workKey: candidateKey,
+    subjectType: 'PROPERTY',
+    subjectId: 'property-1',
+    obligationType: 'MAINTENANCE_TASK',
+    state: 'CANDIDATE',
+    acceptanceState: 'PROPOSED',
+    disposition: null,
+    priority: 'PLAN',
+    safetyTier: 'LOW_CONSEQUENCE',
+    title: 'Replace HVAC filter',
+    homeownerReason: 'Recommended by the seasonal checklist.',
+    expectedOutcome: 'The filter is replaced.',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  workItems.set(candidate.id, candidate);
+
+  const { task } = await PropertyMaintenanceTaskService.createFromActionCenter('owner-1', 'property-1', {
+    title: 'Replace HVAC filter',
+    assetType: 'HVAC',
+    priority: 'MEDIUM',
+    nextDueDate: new Date().toISOString(),
+    actionKey: 'ck-actionkey-1',
+  });
+
+  await PropertyMaintenanceTaskService.updateTaskStatus('owner-1', task.id, 'COMPLETED');
+
+  assert.equal(workItems.size, 1, 'the second sync call must still resolve the reconciled item, not mint another one');
+  assert.equal(workItems.get(candidate.id).state, 'VERIFIED');
+});
+
+test('a task with no matching checklist item keeps today\'s behavior: one new work item at the task-stage key', async () => {
+  reset();
+  const { task } = await PropertyMaintenanceTaskService.createFromActionCenter('owner-1', 'property-1', {
+    title: 'Replace HVAC filter',
+    assetType: 'HVAC',
+    priority: 'MEDIUM',
+    nextDueDate: new Date().toISOString(),
+    actionKey: 'ck-actionkey-unmatched',
+  });
+
+  assert.equal(workItems.size, 1);
+  const item = workItemFor(task.id);
+  assert.ok(item);
+  assert.equal(item.state, 'ACCEPTED');
+  assert.equal(workExecutions.size, 0, 'no execution link is needed when the normal workKey-based path already resolves the item');
 });
 
 test('a work-item sync failure does not block the task mutation itself', async () => {

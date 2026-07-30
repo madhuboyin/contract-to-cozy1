@@ -20,6 +20,13 @@ const LATER = new Date('2026-09-01T12:00:00.000Z');
 const workItems = new Map();
 const workExecutions = new Map();
 const workEvents = new Map();
+// Home Operations Item #14 (Gap 3): resolveJourneyWorkKey now looks this up
+// directly (it used to be a pure function of {propertyId, journeyId} only).
+// Keyed by journey id; defaults to a non-coverage journey unless a test
+// seeds otherwise via seedGuidanceJourney.
+const guidanceJourneys = new Map([
+  ['journey-1', { journeyTypeKey: 'asset_lifecycle_resolution', inventoryItemId: 'item-1' }],
+]);
 
 function resetWorkItemState() {
   workItems.clear();
@@ -27,7 +34,14 @@ function resetWorkItemState() {
   workEvents.clear();
 }
 
+function seedGuidanceJourney(journeyId, fields) {
+  guidanceJourneys.set(journeyId, fields);
+}
+
 const prismaMock = {
+  guidanceJourney: {
+    findUnique: async ({ where }) => guidanceJourneys.get(where.id) ?? null,
+  },
   operationalWorkItem: {
     findUnique: async ({ where }) => {
       if (where.propertyId_workKey) {
@@ -163,7 +177,7 @@ test('the PROJECT action with relatedJourneyId resolves to the SAME work-item id
     obligationType: proposal.obligationType,
     occurrence: proposal.occurrence,
   });
-  assert.equal(projectWorkKey, resolveJourneyWorkKey('property-1', 'journey-1'));
+  assert.equal(projectWorkKey, await resolveJourneyWorkKey('property-1', 'journey-1'));
 });
 
 test('a PROJECT action with no relatedJourneyId keeps its own independent execution identity', async () => {
@@ -180,11 +194,12 @@ test('a PROJECT action with no relatedJourneyId keeps its own independent execut
 
 // ---- Part 2: project-lifecycle work-item reconciliation (mocked prisma) ----
 
-function seedWorkItem(overrides = {}) {
+async function seedWorkItem(overrides = {}) {
   const id = overrides.id ?? crypto.randomUUID();
+  const journeyId = overrides.journeyId ?? 'journey-1';
   const row = {
     propertyId: 'property-1',
-    workKey: resolveJourneyWorkKey('property-1', 'journey-1'),
+    workKey: await resolveJourneyWorkKey('property-1', journeyId),
     state: 'ACCEPTED',
     acceptanceState: 'ACCEPTED',
     disposition: null,
@@ -193,13 +208,14 @@ function seedWorkItem(overrides = {}) {
     ...overrides,
     id,
   };
+  delete row.journeyId;
   workItems.set(id, row);
   return row;
 }
 
 test('HANDOFF transitions an ACCEPTED journey work item to IN_PROJECT and links the project execution', async () => {
   resetWorkItemState();
-  const item = seedWorkItem({ state: 'ACCEPTED', acceptanceState: 'ACCEPTED' });
+  const item = await seedWorkItem({ state: 'ACCEPTED', acceptanceState: 'ACCEPTED' });
 
   await syncJourneyWorkItemForProjectEvent('property-1', 'journey-1', 'project-1', 'HANDOFF', null);
 
@@ -212,7 +228,7 @@ test('HANDOFF transitions an ACCEPTED journey work item to IN_PROJECT and links 
 
 test('VERIFIED transitions an IN_PROJECT work item through REPORTED_COMPLETE to VERIFIED', async () => {
   resetWorkItemState();
-  const item = seedWorkItem({ state: 'IN_PROJECT', acceptanceState: 'ACCEPTED' });
+  const item = await seedWorkItem({ state: 'IN_PROJECT', acceptanceState: 'ACCEPTED' });
 
   await syncJourneyWorkItemForProjectEvent('property-1', 'journey-1', 'project-1', 'VERIFIED', 'user-1');
 
@@ -221,7 +237,7 @@ test('VERIFIED transitions an IN_PROJECT work item through REPORTED_COMPLETE to 
 
 test('CANCELLED reconciles an IN_PROJECT work item back to ACCEPTED', async () => {
   resetWorkItemState();
-  const item = seedWorkItem({ state: 'IN_PROJECT', acceptanceState: 'ACCEPTED' });
+  const item = await seedWorkItem({ state: 'IN_PROJECT', acceptanceState: 'ACCEPTED' });
 
   await syncJourneyWorkItemForProjectEvent('property-1', 'journey-1', 'project-1', 'CANCELLED', null);
 
@@ -242,9 +258,52 @@ test('a missing work item (no prior journey resolution) is a silent no-op, not a
 
 test('an illegal transition (e.g. already CLOSED) is swallowed — the project mutation is never blocked', async () => {
   resetWorkItemState();
-  seedWorkItem({ state: 'CLOSED', acceptanceState: 'DECLINED', disposition: 'NOT_RELEVANT' });
+  await seedWorkItem({ state: 'CLOSED', acceptanceState: 'DECLINED', disposition: 'NOT_RELEVANT' });
 
   await assert.doesNotReject(
     syncJourneyWorkItemForProjectEvent('property-1', 'journey-1', 'project-1', 'VERIFIED', 'user-1'),
   );
+});
+
+// ---- Item #14 (Gap 3): coverage-shaped journey key-shape agreement ----
+
+test('a coverage_gap_resolution journey resolves to the INVENTORY_ITEM/COVERAGE_ACTION key shape, and the handoff finds it', async () => {
+  resetWorkItemState();
+  seedGuidanceJourney('journey-coverage', { journeyTypeKey: 'coverage_gap_resolution', inventoryItemId: 'item-9' });
+
+  const key = await resolveJourneyWorkKey('property-1', 'journey-coverage');
+  assert.equal(key, resolveWorkKey({
+    propertyId: 'property-1',
+    subject: { type: 'INVENTORY_ITEM', id: 'item-9' },
+    obligationType: 'COVERAGE_ACTION',
+    occurrence: { obligationSlug: 'coverage-gap' },
+  }));
+
+  const item = await seedWorkItem({ journeyId: 'journey-coverage', state: 'ACCEPTED', acceptanceState: 'ACCEPTED' });
+  await syncJourneyWorkItemForProjectEvent('property-1', 'journey-coverage', 'project-1', 'HANDOFF', null);
+
+  assert.equal(workItems.get(item.id).state, 'IN_PROJECT', 'the coverage-shaped work item must be found and handed off, not orphaned');
+});
+
+test('a REGULATED_COVERAGE journey type other than coverage_gap_resolution still uses journey.id as the (fake) inventory-item subject', async () => {
+  resetWorkItemState();
+  // warranty_purchase_journey is REGULATED_COVERAGE, so isCoverageShaped
+  // (the broad check in homeActionWorkItem.adapter.ts) takes the
+  // INVENTORY_ITEM/COVERAGE_ACTION branch at recommendation time — but
+  // homeActionSourcePromotion.service.ts's narrower isCoverageJourney check
+  // only special-cases coverage_gap_resolution, so sourceEntityId falls back
+  // to journey.id (not a real inventory item id) for every other
+  // REGULATED_COVERAGE type. This is a separate, pre-existing
+  // recommendation-stage inconsistency (out of scope to fix here) — the
+  // handoff's job is only to agree with whatever key that stage actually
+  // produced, bug included, not to correct it.
+  seedGuidanceJourney('journey-warranty', { journeyTypeKey: 'warranty_purchase_journey', inventoryItemId: 'item-9' });
+
+  const key = await resolveJourneyWorkKey('property-1', 'journey-warranty');
+  assert.equal(key, resolveWorkKey({
+    propertyId: 'property-1',
+    subject: { type: 'INVENTORY_ITEM', id: 'journey-warranty' },
+    obligationType: 'COVERAGE_ACTION',
+    occurrence: { obligationSlug: 'coverage-gap' },
+  }));
 });

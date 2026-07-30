@@ -29,9 +29,14 @@ import {
 } from '../modules/homeEventRadar/services/radarPropertyReconciliation.service';
 import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
 import { propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
+import { resolveMaintenanceRecommendationWorkKey } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
-import { findWorkItemByWorkKey } from '../modules/homeOperations/infrastructure/workItemRepository';
+import {
+  findWorkItemByWorkKey,
+  findWorkItemsLinkedToMaintenanceTaskExecution,
+  linkWorkExecution,
+} from '../modules/homeOperations/infrastructure/workItemRepository';
 
   /**
    * Service for managing property maintenance tasks.
@@ -334,7 +339,20 @@ import { findWorkItemByWorkKey } from '../modules/homeOperations/infrastructure/
           title: task.title,
         }, '✅ Created PropertyMaintenanceTask with actionKey');
 
-        await this.syncTaskWorkItem(userId, task, false, false);
+        // Home Operations Item #14 (Gap 1): a checklist-sourced recommendation
+        // almost always already has a CANDIDATE work item at its own
+        // recommendation-stage key (linkWorkItemsAndReconcile runs on every
+        // Home-feed load) — reconcile onto it instead of forking a second one
+        // at this task's own key. Best-effort: a lookup failure here must not
+        // block task creation, which already succeeded above.
+        const originatingChecklistItem = data.actionKey
+          ? await prisma.checklistItem.findFirst({
+              where: { propertyId, actionKey: data.actionKey },
+              select: { id: true },
+            }).catch(() => null)
+          : null;
+
+        await this.syncTaskWorkItem(userId, task, false, false, originatingChecklistItem?.id ?? null);
         return { task, deduped: false };
       } catch (err: any) {
         // Handle unique constraint race condition
@@ -746,17 +764,47 @@ import { findWorkItemByWorkKey } from '../modules/homeOperations/infrastructure/
      * genuinely-new due date is therefore not reflected until a dedicated
      * refresh path is added — a follow-up, not solved here.
      */
+    /**
+     * Home Operations Item #14 (Gap 1): resolves the work item for a task,
+     * reconciling onto a recommendation-stage CANDIDATE work item when one
+     * was threaded in (see createFromActionCenter above) instead of letting
+     * resolveAndUpsertWorkItem fork a second one at the task-stage key. Once
+     * reconciled, the linked execution — not the task-stage workKey — is the
+     * durable pointer back to the resolved item on every later call, since
+     * the item's own workKey stays the recommendation-stage one.
+     */
+    private static async resolveTaskWorkItem(
+      task: PropertyMaintenanceTask,
+      proposal: NonNullable<ReturnType<typeof maintenanceTaskSourceAdapter.propose>>,
+      recommendationSourceEntityId?: string | null,
+    ) {
+      const linked = await findWorkItemsLinkedToMaintenanceTaskExecution(task.id);
+      if (linked.length > 0) return linked[0].workItem;
+
+      if (recommendationSourceEntityId) {
+        const candidateKey = resolveMaintenanceRecommendationWorkKey(task.propertyId, recommendationSourceEntityId);
+        const candidate = await findWorkItemByWorkKey(task.propertyId, candidateKey);
+        if (candidate && (candidate.state === 'CANDIDATE' || candidate.state === 'ACCEPTED')) {
+          await linkWorkExecution({ workItemId: candidate.id, executionType: 'MAINTENANCE_TASK', executionEntityId: task.id });
+          return candidate;
+        }
+      }
+      return resolveAndUpsertWorkItem(proposal);
+    }
+
     private static async syncTaskWorkItem(
       actorUserId: string | null,
       updatedTask: PropertyMaintenanceTask,
       wasCompleted: boolean,
       isNowCompleted: boolean,
+      recommendationSourceEntityId?: string | null,
     ): Promise<void> {
       const actorType = actorUserId ? 'USER' : 'SYSTEM';
       try {
         if (updatedTask.status === 'CANCELLED') {
+          const linked = await findWorkItemsLinkedToMaintenanceTaskExecution(updatedTask.id);
           const workKey = resolveMaintenanceTaskWorkKey(updatedTask, updatedTask.propertyId);
-          const existing = await findWorkItemByWorkKey(updatedTask.propertyId, workKey);
+          const existing = linked[0]?.workItem ?? await findWorkItemByWorkKey(updatedTask.propertyId, workKey);
           if (existing && existing.state !== 'CLOSED') {
             await transitionWorkItem({
               workItemId: existing.id,
@@ -772,7 +820,7 @@ import { findWorkItemByWorkKey } from '../modules/homeOperations/infrastructure/
 
         const proposal = maintenanceTaskSourceAdapter.propose(updatedTask, updatedTask.propertyId);
         if (!proposal) return;
-        let workItem = await resolveAndUpsertWorkItem(proposal);
+        let workItem = await this.resolveTaskWorkItem(updatedTask, proposal, recommendationSourceEntityId);
 
         // Creating a task is itself an acceptance act — nothing separately
         // "recommended" it as a candidate distinct from its own existence.
