@@ -38,10 +38,11 @@ const prismaMock = {
     },
   },
   operationalWorkExecution: {
-    upsert: async ({ where, create }) => {
+    upsert: async ({ where, create, update }) => {
       const key = where.workItemId_executionType_executionEntityId;
       const id = `${key.workItemId}:${key.executionType}:${key.executionEntityId}`;
-      const row = { id, ...create };
+      const existing = workExecutions.get(id);
+      const row = existing ? { ...existing, ...update } : { id, ...create };
       workExecutions.set(id, row);
       return row;
     },
@@ -66,6 +67,7 @@ require.cache[prismaPath] = {
 
 const {
   syncMaintenanceTaskWorkItemForProjectHandoff,
+  responsiblePartyForFulfillmentMode,
 } = require('../../src/services/projectTracker.service.ts');
 const {
   resolveMaintenanceTaskWorkKey,
@@ -106,6 +108,37 @@ test('a matching task with an ACCEPTED work item transitions to IN_PROJECT and l
   assert.ok(execution, 'expected a PROJECT execution link');
   assert.equal(execution.executionType, 'PROJECT');
   assert.equal(execution.executionEntityId, 'project-1');
+});
+
+// ── Home Operations Item #15: contractor/household responsibility state ──
+
+test('responsiblePartyForFulfillmentMode maps PROVIDER/DIY/unset to CONTRACTOR/HOUSEHOLD/UNKNOWN', () => {
+  assert.equal(responsiblePartyForFulfillmentMode('PROVIDER'), 'CONTRACTOR');
+  assert.equal(responsiblePartyForFulfillmentMode('DIY'), 'HOUSEHOLD');
+  assert.equal(responsiblePartyForFulfillmentMode(null), 'UNKNOWN');
+  assert.equal(responsiblePartyForFulfillmentMode(undefined), 'UNKNOWN');
+});
+
+test('a responsibleParty passed through the handoff is recorded on the execution link', async () => {
+  resetWorkItemState();
+  const task = seedTask({ id: 'task-1' });
+  const item = seedWorkItem(task);
+
+  await syncMaintenanceTaskWorkItemForProjectHandoff('property-1', 'MAINTENANCE_TASK', 'task-1', 'project-1', 'CONTRACTOR');
+
+  const execution = [...workExecutions.values()].find((e) => e.workItemId === item.id);
+  assert.equal(execution.responsibleParty, 'CONTRACTOR');
+});
+
+test('omitting responsibleParty defaults the new execution link to UNKNOWN, not left undefined', async () => {
+  resetWorkItemState();
+  const task = seedTask({ id: 'task-1' });
+  const item = seedWorkItem(task);
+
+  await syncMaintenanceTaskWorkItemForProjectHandoff('property-1', 'MAINTENANCE_TASK', 'task-1', 'project-1');
+
+  const execution = [...workExecutions.values()].find((e) => e.workItemId === item.id);
+  assert.equal(execution.responsibleParty, 'UNKNOWN');
 });
 
 test('sourceEntityType INSPECTION_FINDING is unaffected — the guard no-ops', async () => {

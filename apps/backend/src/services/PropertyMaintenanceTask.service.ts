@@ -785,7 +785,14 @@ import {
         const candidateKey = resolveMaintenanceRecommendationWorkKey(task.propertyId, recommendationSourceEntityId);
         const candidate = await findWorkItemByWorkKey(task.propertyId, candidateKey);
         if (candidate && (candidate.state === 'CANDIDATE' || candidate.state === 'ACCEPTED')) {
-          await linkWorkExecution({ workItemId: candidate.id, executionType: 'MAINTENANCE_TASK', executionEntityId: task.id });
+          // Home Operations Item #15: bookingId is the existing "hired a
+          // provider for this" signal already on the task.
+          await linkWorkExecution({
+            workItemId: candidate.id,
+            executionType: 'MAINTENANCE_TASK',
+            executionEntityId: task.id,
+            responsibleParty: task.bookingId ? 'CONTRACTOR' : 'HOUSEHOLD',
+          });
           return candidate;
         }
       }

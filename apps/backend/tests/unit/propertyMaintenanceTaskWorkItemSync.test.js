@@ -307,6 +307,11 @@ test('converting a checklist-sourced recommendation reuses its existing CANDIDAT
   );
   assert.ok(linked, 'a MAINTENANCE_TASK execution link must be recorded back to the reconciled work item');
   assert.equal(linked.workItemId, candidate.id);
+  // Home Operations Item #15: createFromActionCenter never accepts a
+  // bookingId (a booking can only be attached to a task after it exists),
+  // so this reconciliation moment always observes an unbooked task —
+  // HOUSEHOLD is the only value reachable through this call path.
+  assert.equal(linked.responsibleParty, 'HOUSEHOLD');
 });
 
 test('a later status transition on a reconciled task still resolves the same reconciled work item', async () => {

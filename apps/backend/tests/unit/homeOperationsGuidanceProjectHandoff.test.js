@@ -57,10 +57,11 @@ const prismaMock = {
     },
   },
   operationalWorkExecution: {
-    upsert: async ({ where, create }) => {
+    upsert: async ({ where, create, update }) => {
       const key = where.workItemId_executionType_executionEntityId;
       const id = `${key.workItemId}:${key.executionType}:${key.executionEntityId}`;
-      const row = { id, ...create };
+      const existing = workExecutions.get(id);
+      const row = existing ? { ...existing, ...update } : { id, ...create };
       workExecutions.set(id, row);
       return row;
     },
@@ -233,6 +234,29 @@ test('VERIFIED transitions an IN_PROJECT work item through REPORTED_COMPLETE to 
   await syncJourneyWorkItemForProjectEvent('property-1', 'journey-1', 'project-1', 'VERIFIED', 'user-1');
 
   assert.equal(workItems.get(item.id).state, 'VERIFIED');
+});
+
+// ── Home Operations Item #15: contractor/household responsibility state ──
+
+test('HANDOFF records the passed responsibleParty on the new execution link', async () => {
+  resetWorkItemState();
+  const item = await seedWorkItem({ state: 'ACCEPTED', acceptanceState: 'ACCEPTED' });
+
+  await syncJourneyWorkItemForProjectEvent('property-1', 'journey-1', 'project-1', 'HANDOFF', null, 'HOUSEHOLD');
+
+  const execution = [...workExecutions.values()].find((e) => e.workItemId === item.id);
+  assert.equal(execution.responsibleParty, 'HOUSEHOLD');
+});
+
+test('a later VERIFIED event that omits responsibleParty preserves the value HANDOFF already set', async () => {
+  resetWorkItemState();
+  const item = await seedWorkItem({ state: 'ACCEPTED', acceptanceState: 'ACCEPTED' });
+
+  await syncJourneyWorkItemForProjectEvent('property-1', 'journey-1', 'project-1', 'HANDOFF', null, 'CONTRACTOR');
+  await syncJourneyWorkItemForProjectEvent('property-1', 'journey-1', 'project-1', 'VERIFIED', 'user-1');
+
+  const execution = [...workExecutions.values()].find((e) => e.workItemId === item.id);
+  assert.equal(execution.responsibleParty, 'CONTRACTOR', 'VERIFIED must not clobber the value HANDOFF already recorded');
 });
 
 test('CANCELLED reconciles an IN_PROJECT work item back to ACCEPTED', async () => {

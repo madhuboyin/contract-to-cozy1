@@ -12,6 +12,7 @@ import type {
   OperationalWorkItemDisposition,
   OperationalWorkItemPriority,
   OperationalWorkItemState,
+  OperationalWorkResponsibleParty,
   OperationalWorkSourceRole,
   OperationalWorkSourceType,
   OperationalWorkSubjectType,
@@ -237,11 +238,20 @@ export function updateWorkItemState(workItemId: string, input: UpdateStateInput)
   });
 }
 
+/**
+ * Home Operations Item #15: responsibleParty is deliberately NOT reset to
+ * UNKNOWN on every re-link the way role always resets to its default — a
+ * later event (e.g. VERIFIED/CANCELLED reconciliation) that doesn't have a
+ * fresh signal to pass must not clobber a value an earlier call (e.g.
+ * HANDOFF, which had project.fulfillmentMode in scope) already established.
+ * Only overwritten when a caller explicitly passes one.
+ */
 export function linkWorkExecution(input: {
   workItemId: string;
   executionType: OperationalWorkExecutionType;
   executionEntityId: string;
   role?: OperationalWorkExecutionRole;
+  responsibleParty?: OperationalWorkResponsibleParty;
 }) {
   return prisma.operationalWorkExecution.upsert({
     where: {
@@ -256,8 +266,12 @@ export function linkWorkExecution(input: {
       executionType: input.executionType,
       executionEntityId: input.executionEntityId,
       role: input.role ?? 'PRIMARY',
+      responsibleParty: input.responsibleParty ?? 'UNKNOWN',
     },
-    update: { role: input.role ?? 'PRIMARY' },
+    update: {
+      role: input.role ?? 'PRIMARY',
+      ...(input.responsibleParty ? { responsibleParty: input.responsibleParty } : {}),
+    },
   });
 }
 

@@ -32,7 +32,7 @@ import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../
 import { resolveGuidanceJourneyWorkKey } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import { resolveInspectionFindingWorkKey, propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { invalidateStatusForInventoryItem } from './homeStatusBoard.service';
-import type { OperationalWorkItemState } from '@prisma/client';
+import type { OperationalWorkItemState, OperationalWorkResponsibleParty } from '@prisma/client';
 import { evaluateRequirementCompletionCheck } from './projectCompliance/completionPolicy';
 import {
   caseOutcomeForProjectOutcome,
@@ -165,12 +165,25 @@ export async function resolveJourneyWorkKey(propertyId: string, journeyId: strin
   });
 }
 
+// Home Operations Item #15: ProjectRecord.fulfillmentMode (PROVIDER/DIY) is
+// the existing, already-captured "who does the work" signal for a project —
+// this just maps it onto OperationalWorkExecution's responsibleParty rather
+// than introducing a second, competing concept.
+export function responsiblePartyForFulfillmentMode(
+  fulfillmentMode: 'PROVIDER' | 'DIY' | null | undefined,
+): OperationalWorkResponsibleParty {
+  if (fulfillmentMode === 'PROVIDER') return 'CONTRACTOR';
+  if (fulfillmentMode === 'DIY') return 'HOUSEHOLD';
+  return 'UNKNOWN';
+}
+
 export async function syncJourneyWorkItemForProjectEvent(
   propertyId: string,
   guidanceJourneyId: string | null | undefined,
   projectId: string,
   event: 'HANDOFF' | 'VERIFIED' | 'CANCELLED',
   actorUserId: string | null,
+  responsibleParty?: OperationalWorkResponsibleParty,
 ): Promise<void> {
   if (!guidanceJourneyId) return;
   const actorType = actorUserId ? 'USER' : 'SYSTEM';
@@ -189,7 +202,7 @@ export async function syncJourneyWorkItemForProjectEvent(
           idempotencyKey: `project-handoff:${workItem.id}:${projectId}`,
         });
       }
-      await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId });
+      await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId, responsibleParty });
       return;
     }
 
@@ -284,6 +297,7 @@ export async function syncFindingWorkItemForProjectHandoff(
   sourceEntityType: string | null | undefined,
   sourceEntityId: string | null | undefined,
   projectId: string,
+  responsibleParty?: OperationalWorkResponsibleParty,
 ): Promise<void> {
   if (sourceEntityType !== 'INSPECTION_FINDING' || !sourceEntityId) return;
   try {
@@ -298,7 +312,7 @@ export async function syncFindingWorkItemForProjectHandoff(
         idempotencyKey: `finding-project-handoff:${workItem.id}:${projectId}`,
       });
     }
-    await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId });
+    await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId, responsibleParty });
   } catch (err) {
     logger.warn({ err, propertyId, sourceEntityId, projectId }, 'Home Operations work item sync failed; project creation proceeds regardless');
   }
@@ -319,6 +333,7 @@ export async function syncMaintenanceTaskWorkItemForProjectHandoff(
   sourceEntityType: string | null | undefined,
   sourceEntityId: string | null | undefined,
   projectId: string,
+  responsibleParty?: OperationalWorkResponsibleParty,
 ): Promise<void> {
   if (sourceEntityType !== 'MAINTENANCE_TASK' || !sourceEntityId) return;
   try {
@@ -338,7 +353,7 @@ export async function syncMaintenanceTaskWorkItemForProjectHandoff(
         idempotencyKey: `maintenance-task-project-handoff:${workItem.id}:${projectId}`,
       });
     }
-    await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId });
+    await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId, responsibleParty });
   } catch (err) {
     logger.warn({ err, propertyId, sourceEntityId, projectId }, 'Home Operations work item sync failed; project creation proceeds regardless');
   }
@@ -892,9 +907,10 @@ export async function createProject(propertyId: string, data: any) {
     return created;
   });
 
-  await syncJourneyWorkItemForProjectEvent(propertyId, project.guidanceJourneyId, project.id, 'HANDOFF', null);
-  await syncFindingWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id);
-  await syncMaintenanceTaskWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id);
+  const responsibleParty = responsiblePartyForFulfillmentMode(project.fulfillmentMode);
+  await syncJourneyWorkItemForProjectEvent(propertyId, project.guidanceJourneyId, project.id, 'HANDOFF', null, responsibleParty);
+  await syncFindingWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id, responsibleParty);
+  await syncMaintenanceTaskWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id, responsibleParty);
 
   return getProjectDetail(project.id, propertyId);
 }
