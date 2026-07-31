@@ -49,7 +49,7 @@ test('legacy share code can revoke existing tokens but cannot create or serve th
 });
 
 test('worker image packages canonical Home Briefing instead of Gazette generation', () => {
-  const workerJob = readRepository('apps/workers/src/jobs/gazetteGeneration.job.ts');
+  const workerJob = readRepository('apps/workers/src/jobs/homeBriefingDelivery.job.ts');
   const dockerfile = readRepository('infrastructure/docker/workers/Dockerfile');
   assert.match(workerJob, /generateDueHomeBriefings/);
   assert.match(dockerfile, /homeBriefing\/homeBriefing\.service\.ts/);

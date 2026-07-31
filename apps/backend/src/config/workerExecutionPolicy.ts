@@ -102,6 +102,14 @@ export function normalizeJobEnvKey(jobKey: string): string {
   return `WORKER_JOB_${jobKey.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_ENABLED`;
 }
 
+const LEGACY_JOB_ENV_BASES: Readonly<Record<string, readonly string[]>> = {
+  'home-briefing-delivery': ['WORKER_JOB_HOME_GAZETTE_GENERATION'],
+};
+
+export function legacyJobEnvKeys(jobKey: string, suffix: string): string[] {
+  return (LEGACY_JOB_ENV_BASES[jobKey] ?? []).map((base) => `${base}_${suffix}`);
+}
+
 export interface JobOverride {
   value: boolean | undefined;
   malformed: boolean;
@@ -110,10 +118,14 @@ export interface JobOverride {
 
 export function getJobOverride(jobKey: string, env: NodeJS.ProcessEnv = process.env): JobOverride {
   const envKey = normalizeJobEnvKey(jobKey);
-  const raw = env[envKey];
-  if (raw === 'true') return { value: true, malformed: false, envKey };
-  if (raw === 'false') return { value: false, malformed: false, envKey };
-  return { value: undefined, malformed: raw !== undefined, envKey };
+  const candidates = [envKey, ...legacyJobEnvKeys(jobKey, 'ENABLED')];
+  for (const candidate of candidates) {
+    const raw = env[candidate];
+    if (raw === 'true') return { value: true, malformed: false, envKey: candidate };
+    if (raw === 'false') return { value: false, malformed: false, envKey: candidate };
+    if (raw !== undefined) return { value: undefined, malformed: true, envKey: candidate };
+  }
+  return { value: undefined, malformed: false, envKey };
 }
 
 export interface WorkerExecutionDecision {

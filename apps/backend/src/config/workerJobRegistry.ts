@@ -45,6 +45,14 @@ export interface JobRegistryEntry extends WorkerExecutionPolicy {
   triggerSupported: boolean;
 }
 
+export const LEGACY_WORKER_JOB_KEY_ALIASES: Readonly<Record<string, string>> = {
+  'home-gazette-generation': 'home-briefing-delivery',
+};
+
+export function canonicalWorkerJobKey(jobKey: string): string {
+  return LEGACY_WORKER_JOB_KEY_ALIASES[jobKey] ?? jobKey;
+}
+
 export const JOB_REGISTRY: JobRegistryEntry[] = [
   // ── Property Intelligence (BullMQ, event-driven) ──────────────────────────
   {
@@ -728,18 +736,18 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
 
   // ── Home Intelligence (cron) ──────────────────────────────────────────────
   {
-    key: 'home-gazette-generation',
+    key: 'home-briefing-delivery',
     name: 'Home Briefing Delivery',
     description:
       'Builds cadence-aware Home Briefing deliveries from eligible canonical Property Changes and Home Actions. ' +
       'Creates zero-to-many items, snapshots source health, and preserves delivery history. Idempotent — safe to re-run. ' +
-      'Override schedule via HOME_GAZETTE_GENERATION_CRON env var.',
+      'Override schedule via HOME_BRIEFING_DELIVERY_CRON env var.',
     category: 'HOME_INTELLIGENCE',
     schedule: 'Hourly; cadence rules suppress duplicate weekly, monthly, and important-only deliveries',
     cronExpression: '0 * * * *',
     type: 'cron',
     queueName: 'cron-trigger-queue',
-    jobName: 'home-gazette-generation',
+    jobName: 'home-briefing-delivery',
     triggerSupported: true,
     impact: 'HOMEOWNER_STATE',
     customerJob: 'STAY_AHEAD',

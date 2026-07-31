@@ -50,7 +50,7 @@ import { runHabitGenerationJob } from './jobs/habitGeneration.job';
 import { ingestMortgageRatesJob } from './jobs/ingestMortgageRates.job';
 import { evaluateRefinanceRadarForSnapshot } from './jobs/evaluateRefinanceRadar.job';
 import { evaluateRefinanceDataRequiredForSnapshot } from './jobs/evaluateRefinanceDataRequired.job';
-import { runGazetteGenerationJob } from './jobs/gazetteGeneration.job';
+import { runHomeBriefingDeliveryJob } from './jobs/homeBriefingDelivery.job';
 import { runWeeklyRetentionReportJob } from './jobs/weeklyRetentionReport.job';
 import { expireGuidanceSignalsJob } from './jobs/expireGuidanceSignals.job';
 import { runSharedDataBackfillJob } from './jobs/sharedDataBackfill.job';
@@ -86,7 +86,11 @@ import {
 } from './jobs/propertyIntelligence.job';
 import { captureWeeklyScoreSnapshotsJob } from './jobs/propertyScoreSnapshots.job';
 import { processMaintenanceReminders } from '@worker-shared/services/maintenanceReminder.service';
-import { JOB_REGISTRY, RUNNER_REGISTRY } from '@worker-shared/config/workerJobRegistry';
+import {
+  canonicalWorkerJobKey,
+  JOB_REGISTRY,
+  RUNNER_REGISTRY,
+} from '@worker-shared/config/workerJobRegistry';
 import {
   evaluateScopedDryRunExecution,
   evaluateWorkerExecution,
@@ -403,9 +407,9 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     );
     return result;
   },
-  'home-gazette-generation':         async (opts) => {
-    const result = await runGazetteGenerationJob(opts);
-    logger.info({ ...result }, `[home-gazette-generation] published=${result.published} skipped=${result.skipped} failed=${result.failed}`);
+  'home-briefing-delivery':          async (opts) => {
+    const result = await runHomeBriefingDeliveryJob(opts);
+    logger.info({ ...result }, `[home-briefing-delivery] published=${result.published} skipped=${result.skipped} failed=${result.failed}`);
     return result;
   },
   'shared-data-backfill':            async (opts) => { await runSharedDataBackfillJob(opts); },
@@ -470,7 +474,9 @@ const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'tax-assessment-ingest':      process.env.TAX_ASSESSMENT_INGEST_CRON,
   'radar-safety-net-reconciliation': process.env.RADAR_SAFETY_NET_RECONCILIATION_CRON,
   'inventory-draft-cleanup':    process.env.INVENTORY_DRAFT_CLEANUP_CRON,
-  'home-gazette-generation':    process.env.HOME_GAZETTE_GENERATION_CRON,
+  'home-briefing-delivery':
+    process.env.HOME_BRIEFING_DELIVERY_CRON
+    ?? process.env.HOME_GAZETTE_GENERATION_CRON,
   'shared-data-backfill':       process.env.SHARED_DATA_BACKFILL_CRON,
   'shared-data-consistency-audit': process.env.SHARED_DATA_CONSISTENCY_AUDIT_CRON,
   'shared-signal-refresh':      process.env.SHARED_SIGNAL_REFRESH_CRON,
@@ -1466,13 +1472,14 @@ if (neighborhoodDummyIngestEnabled) {
 
 // =============================================================================
 // CRON TRIGGER QUEUE — handles manual "Run Job" triggers from the admin UI
-// for cron-type jobs (e.g. home-gazette-generation, mortgage-rate-ingest).
+// for cron-type jobs (e.g. home-briefing-delivery, mortgage-rate-ingest).
 // =============================================================================
 
 const cronTriggerWorker = new Worker(
   'cron-trigger-queue',
   async (job) => {
-    const handler = CRON_HANDLERS[job.name];
+    const canonicalJobKey = canonicalWorkerJobKey(job.name);
+    const handler = CRON_HANDLERS[canonicalJobKey];
     if (!handler) {
       throw new Error(`[CRON-TRIGGER] No handler registered for job: ${job.name}`);
     }
@@ -1481,16 +1488,16 @@ const cronTriggerWorker = new Worker(
       typeof job.data?.propertyId === 'string' && job.data.propertyId ? job.data.propertyId : undefined;
     // Defense in depth: scoped dry runs use a narrow acceptance policy;
     // real manual runs use the ordinary activation policy.
-    const registryEntry = JOB_REGISTRY.find((j) => j.key === job.name);
+    const registryEntry = JOB_REGISTRY.find((j) => j.key === canonicalJobKey);
     if (registryEntry) {
       const ordinaryDecision = evaluateWorkerExecution(
-        job.name,
+        canonicalJobKey,
         'manual',
         registryEntry,
       );
       const decision = dryRun && !ordinaryDecision.allowed
         ? evaluateScopedDryRunExecution(
-          job.name,
+          canonicalJobKey,
           registryEntry,
           Boolean(propertyId),
         )
@@ -1521,7 +1528,10 @@ const cronTriggerWorker = new Worker(
     // registry entry — the two paths use the identical jobKey/entry.key —
     // so a manual trigger can no longer run concurrently with an in-flight
     // scheduled run of the same job, or vice versa.
-    const leaseOutcome = await runWithCronLease(job.name, () => handler({ dryRun, propertyId }));
+    const leaseOutcome = await runWithCronLease(
+      canonicalJobKey,
+      () => handler({ dryRun, propertyId }),
+    );
     if (leaseOutcome.status === 'skipped') {
       throw new Error(
         `[CRON-TRIGGER] "${job.name}" was not started — ${leaseOutcome.reason}. ` +
@@ -1539,7 +1549,7 @@ const cronTriggerWorker = new Worker(
   },
   {
     connection: redisConnection,
-    lockDuration: 300000, // 5 minutes — gazette generation can be slow
+    lockDuration: 300000, // 5 minutes — broad Home Briefing delivery can be slow
     lockRenewTime: 60000,
     concurrency: 1,
   },

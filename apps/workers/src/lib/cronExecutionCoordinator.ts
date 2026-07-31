@@ -17,7 +17,10 @@
 // can silently diverge — and it is used identically by both call sites.
 
 import { acquireCronLease, releaseCronLease, renewCronLease } from './cronLease';
-import { normalizeJobEnvKey } from '@worker-shared/config/workerExecutionPolicy';
+import {
+  legacyJobEnvKeys,
+  normalizeJobEnvKey,
+} from '@worker-shared/config/workerExecutionPolicy';
 import { logger } from './logger';
 
 // Crash-recovery safety net only — the lease is normally released explicitly
@@ -36,13 +39,16 @@ const MIN_RENEWAL_INTERVAL_MS = 1000;
  * mirroring the WORKER_JOB_<KEY>_ENABLED override pattern in
  * workerExecutionPolicy.ts (same normalizeJobEnvKey). Falls back to the
  * global default for any job that hasn't needed a longer budget yet — most
- * registry jobs finish in seconds; a handful (gazette generation, full
+ * registry jobs finish in seconds; a handful (Home Briefing delivery, full
  * property sweeps) may need to opt into a longer one as that's observed in
  * practice, without a code change.
  */
 function resolveLeaseTtlMs(jobKey: string): number {
-  const envKey = normalizeJobEnvKey(jobKey).replace(/_ENABLED$/, '_LEASE_TTL_MS');
-  const raw = process.env[envKey];
+  const envKeys = [
+    normalizeJobEnvKey(jobKey).replace(/_ENABLED$/, '_LEASE_TTL_MS'),
+    ...legacyJobEnvKeys(jobKey, 'LEASE_TTL_MS'),
+  ];
+  const raw = envKeys.map((key) => process.env[key]).find((value) => value !== undefined);
   const parsed = raw !== undefined ? Number(raw) : NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_LEASE_TTL_MS;
 }

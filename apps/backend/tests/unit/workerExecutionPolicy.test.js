@@ -229,6 +229,27 @@ test('normalizeJobEnvKey uppercases and replaces non-alphanumerics', () => {
   assert.equal(normalizeJobEnvKey('home-report-export-poller'), 'WORKER_JOB_HOME_REPORT_EXPORT_POLLER_ENABLED');
 });
 
+test('Home Briefing uses the canonical per-job flag with legacy Gazette fallback', () => {
+  const canonical = getJobOverride('home-briefing-delivery', {
+    WORKER_JOB_HOME_BRIEFING_DELIVERY_ENABLED: 'false',
+    WORKER_JOB_HOME_GAZETTE_GENERATION_ENABLED: 'true',
+  });
+  assert.deepEqual(canonical, {
+    value: false,
+    malformed: false,
+    envKey: 'WORKER_JOB_HOME_BRIEFING_DELIVERY_ENABLED',
+  });
+
+  const legacy = getJobOverride('home-briefing-delivery', {
+    WORKER_JOB_HOME_GAZETTE_GENERATION_ENABLED: 'true',
+  });
+  assert.deepEqual(legacy, {
+    value: true,
+    malformed: false,
+    envKey: 'WORKER_JOB_HOME_GAZETTE_GENERATION_ENABLED',
+  });
+});
+
 test('high-impact manual triggers are blocked while approvals are enforced with no workflow', () => {
   const env = { WORKER_AUTOMATION_ENABLED: 'true', WORKER_MANUAL_TRIGGERS_ENABLED: 'true' };
   const blocked = evaluateWorkerExecution(

@@ -118,11 +118,14 @@ test('sharing requires explicit selected eligible items and never returns a whol
   assert.match(routes, /WHOLE_EDITION_PUBLIC_ACCESS_RETIRED/);
 });
 
-test('worker uses canonical delivery service and no longer invokes Gazette generation pipeline', () => {
-  const worker = readRepository('apps/workers/src/jobs/gazetteGeneration.job.ts');
+test('worker uses canonical Home Briefing identity and delivery service', () => {
+  const worker = readRepository('apps/workers/src/jobs/homeBriefingDelivery.job.ts');
   const registry = readBackend('src/config/workerJobRegistry.ts');
   assert.match(worker, /generateDueHomeBriefings/);
   assert.doesNotMatch(worker, /GazetteGenerationJobRunnerService/);
+  assert.match(registry, /key: 'home-briefing-delivery'/);
+  assert.match(registry, /jobName: 'home-briefing-delivery'/);
+  assert.match(registry, /HOME_BRIEFING_DELIVERY_CRON/);
   assert.match(registry, /Home Briefing Delivery/);
   assert.match(registry, /cronExpression: '0 \* \* \* \*'/);
   const service = readBackend('src/homeBriefing/homeBriefing.service.ts');

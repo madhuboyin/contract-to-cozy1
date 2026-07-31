@@ -31,9 +31,12 @@ The legacy `/tools/home-gazette` route redirects there.
   policy and transport pipeline.
 - A zero-item delivery creates no outbound notification.
 
-The retained scheduler key is `home-gazette-generation` for deployment compatibility, but the job
-now calls `generateDueHomeBriefings()` rather than the Gazette signal collector, ranking engine, or
-AI editorial pipeline.
+The canonical scheduler and queue key is `home-briefing-delivery`; its schedule override is
+`HOME_BRIEFING_DELIVERY_CRON`, and its per-job launch flag is
+`WORKER_JOB_HOME_BRIEFING_DELIVERY_ENABLED`. The former `home-gazette-generation` queue key and
+`HOME_GAZETTE_GENERATION_CRON` / `WORKER_JOB_HOME_GAZETTE_GENERATION_*` variables are accepted only
+as bounded compatibility fallbacks for already-queued jobs and out-of-repository deployment
+configuration. Repository manifests use only the canonical identity.
 
 The legacy signal collector, candidate factory, ranking engine, edition assembler, publisher, and
 AI editorial implementation have been removed. Admin generation and regeneration URLs remain

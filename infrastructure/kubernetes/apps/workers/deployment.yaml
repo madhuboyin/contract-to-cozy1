@@ -151,11 +151,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_SEASONAL_CHECKLIST_GENERATION_ENABLED
-            - name: WORKER_JOB_HOME_GAZETTE_GENERATION_ENABLED
+            - name: WORKER_JOB_HOME_BRIEFING_DELIVERY_ENABLED
               valueFrom:
                 configMapKeyRef:
                   name: app-config
-                  key: WORKER_JOB_HOME_GAZETTE_GENERATION_ENABLED
+                  key: WORKER_JOB_HOME_BRIEFING_DELIVERY_ENABLED
             - name: WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED
               valueFrom:
                 configMapKeyRef:

@@ -43,6 +43,10 @@ function loadCoordinator({ acquireImpl, renewImpl, releaseImpl } = {}) {
     loaded: true,
     exports: {
       normalizeJobEnvKey: (jobKey) => `WORKER_JOB_${jobKey.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_ENABLED`,
+      legacyJobEnvKeys: (jobKey, suffix) =>
+        jobKey === 'home-briefing-delivery'
+          ? [`WORKER_JOB_HOME_GAZETTE_GENERATION_${suffix}`]
+          : [],
     },
   };
 
@@ -105,14 +109,14 @@ test('releases the lease even when fn throws, and the rejection propagates to th
 
   await assert.rejects(
     () =>
-      runWithCronLease('home-gazette-generation', async () => {
+      runWithCronLease('home-briefing-delivery', async () => {
         throw new Error('boom');
       }),
     /boom/,
   );
 
   assert.equal(calls.release.length, 1);
-  assert.equal(calls.release[0].jobKey, 'home-gazette-generation');
+  assert.equal(calls.release[0].jobKey, 'home-briefing-delivery');
 });
 
 test('uses the default TTL when no per-job override is set', async () => {
@@ -124,22 +128,32 @@ test('uses the default TTL when no per-job override is set', async () => {
 });
 
 test('a per-job WORKER_JOB_<KEY>_LEASE_TTL_MS override wins over the default', async () => {
-  await withEnv({ WORKER_JOB_HOME_GAZETTE_GENERATION_LEASE_TTL_MS: '90000' }, async () => {
+  await withEnv({ WORKER_JOB_HOME_BRIEFING_DELIVERY_LEASE_TTL_MS: '90000' }, async () => {
     const { runWithCronLease, calls } = loadCoordinator();
 
-    await runWithCronLease('home-gazette-generation', async () => {});
+    await runWithCronLease('home-briefing-delivery', async () => {});
 
     assert.equal(calls.acquire[0].ttlMs, 90_000);
   });
 });
 
 test('a malformed per-job TTL override falls back to the default instead of a NaN/zero TTL', async () => {
-  await withEnv({ WORKER_JOB_HOME_GAZETTE_GENERATION_LEASE_TTL_MS: 'not-a-number' }, async () => {
+  await withEnv({ WORKER_JOB_HOME_BRIEFING_DELIVERY_LEASE_TTL_MS: 'not-a-number' }, async () => {
     const { runWithCronLease, calls } = loadCoordinator();
 
-    await runWithCronLease('home-gazette-generation', async () => {});
+    await runWithCronLease('home-briefing-delivery', async () => {});
 
     assert.equal(calls.acquire[0].ttlMs, 10 * 60 * 1000);
+  });
+});
+
+test('legacy Gazette lease TTL remains a bounded fallback during scheduler migration', async () => {
+  await withEnv({ WORKER_JOB_HOME_GAZETTE_GENERATION_LEASE_TTL_MS: '75000' }, async () => {
+    const { runWithCronLease, calls } = loadCoordinator();
+
+    await runWithCronLease('home-briefing-delivery', async () => {});
+
+    assert.equal(calls.acquire[0].ttlMs, 75_000);
   });
 });
 

@@ -339,6 +339,8 @@ This pattern is consistent with how all other backend files shared with workers 
 | `REDIS_DB` | `0` | Worker | Redis database index |
 | `REDIS_PASSWORD` | — | Worker | Redis auth password |
 | `INVENTORY_DRAFT_CLEANUP_CRON` | `15 3 * * *` | Worker | Override cleanup cron expression |
+| `HOME_BRIEFING_DELIVERY_CRON` | `0 * * * *` | Worker | Override canonical Home Briefing delivery cadence |
+| `WORKER_JOB_HOME_BRIEFING_DELIVERY_ENABLED` | `true` | API + Worker | Per-job launch control for Home Briefing delivery |
 | `RADAR_DUMMY_INGEST_ENABLED` | `false` | Worker | Enable QA radar ingest (non-production) |
 | `RADAR_DUMMY_INGEST_CRON` | `*/30 * * * *` | Worker | QA radar ingest cron |
 | `NEIGHBORHOOD_DUMMY_INGEST_ENABLED` | `false` | Worker | Enable QA neighborhood ingest |

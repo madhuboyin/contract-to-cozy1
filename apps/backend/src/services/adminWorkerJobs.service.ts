@@ -6,7 +6,11 @@
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { connection } from './JobQueue.service';
-import { JOB_REGISTRY, RUNNER_REGISTRY } from '../config/workerJobRegistry';
+import {
+  canonicalWorkerJobKey,
+  JOB_REGISTRY,
+  RUNNER_REGISTRY,
+} from '../config/workerJobRegistry';
 import { DEFAULT_JOB_RETENTION } from '../config/queueDefaults';
 import {
   collectWorkerFlagDiagnostics,
@@ -281,7 +285,8 @@ export async function triggerJob(
   jobKey: string,
   options?: { dryRun?: boolean; propertyId?: string },
 ): Promise<{ queued: boolean; jobId?: string }> {
-  const entry = JOB_REGISTRY.find((j) => j.key === jobKey);
+  const canonicalJobKey = canonicalWorkerJobKey(jobKey);
+  const entry = JOB_REGISTRY.find((j) => j.key === canonicalJobKey);
   if (!entry) throw new Error(`Unknown job key: ${jobKey}`);
   if (!entry.triggerSupported) throw new Error(`Manual trigger not supported for job: ${jobKey}`);
   if (!entry.queueName || !entry.jobName) throw new Error(`Missing queue config for job: ${jobKey}`);
@@ -311,9 +316,9 @@ export async function triggerJob(
 
   // Scoped dry runs are acceptance operations, so they can validate a job
   // while its scheduled and real manual execution remains launch-closed.
-  const ordinaryDecision = evaluateWorkerExecution(jobKey, 'manual', entry);
+  const ordinaryDecision = evaluateWorkerExecution(canonicalJobKey, 'manual', entry);
   const decision = dryRun && !ordinaryDecision.allowed
-    ? evaluateScopedDryRunExecution(jobKey, entry, Boolean(propertyId))
+    ? evaluateScopedDryRunExecution(canonicalJobKey, entry, Boolean(propertyId))
     : ordinaryDecision;
   if (!decision.allowed) {
     throw new Error(`Manual trigger not supported for job: ${jobKey} (${decision.reason})`);
@@ -331,7 +336,7 @@ export async function triggerJob(
   const dedupBucket = Math.floor(Date.now() / MANUAL_TRIGGER_DEDUP_WINDOW_MS);
   // BullMQ rejects ":" in custom job IDs ("Custom Id cannot contain :") — see the
   // same note in workers/src/runners/highPriorityEmailEnqueue.poller.ts.
-  const jobId = `manual-${jobKey}-${dryRun}-${propertyId ?? 'none'}-${dedupBucket}`;
+  const jobId = `manual-${canonicalJobKey}-${dryRun}-${propertyId ?? 'none'}-${dedupBucket}`;
   const job = await q.add(
     entry.jobName,
     { dryRun, propertyId },

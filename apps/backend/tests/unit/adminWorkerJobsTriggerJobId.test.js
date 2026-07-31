@@ -87,7 +87,11 @@ function loadTriggerJob() {
     id: registryPath,
     filename: registryPath,
     loaded: true,
-    exports: { JOB_REGISTRY: [ENTRY], RUNNER_REGISTRY: [] },
+    exports: {
+      canonicalWorkerJobKey: (jobKey) => jobKey,
+      JOB_REGISTRY: [ENTRY],
+      RUNNER_REGISTRY: [],
+    },
   };
 
   const servicePath = require.resolve('../../src/services/adminWorkerJobs.service.ts');

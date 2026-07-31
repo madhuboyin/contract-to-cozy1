@@ -1,13 +1,11 @@
-// Home Briefing delivery job.
-// The legacy filename and registry key remain for scheduler compatibility;
-// generation now consumes canonical Property Changes and Home Actions.
+// Canonical Home Briefing delivery job.
 
 import { generateDueHomeBriefings } from '@worker-shared/homeBriefing/homeBriefing.service';
 import { isPropertyAllowlisted } from '@worker-shared/config/smokeTestConfig';
 import { generateSmokeCorrelationId } from '@worker-shared/lib/smokeTestCorrelation';
 import { logger } from '../lib/logger';
 
-export async function runGazetteGenerationJob(
+export async function runHomeBriefingDeliveryJob(
   opts?: { propertyId?: string },
 ): Promise<{
   published: number;
@@ -23,7 +21,7 @@ export async function runGazetteGenerationJob(
     );
   }
   const smokeCorrelationId = opts?.propertyId
-    ? generateSmokeCorrelationId('home-gazette-generation')
+    ? generateSmokeCorrelationId('home-briefing-delivery')
     : undefined;
   const results = await generateDueHomeBriefings(opts?.propertyId);
   const published = results.filter((result) =>

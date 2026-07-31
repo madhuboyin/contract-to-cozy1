@@ -58,7 +58,7 @@ For each: confirm the provider's API key/credential is actually configured in pr
 
 **`WORKER_MUTATING_SWEEPS_ENABLED=false` currently blocks 10 broad-sweep/destructive jobs:**
 
-`seasonal-checklist-generation`, `inventory-draft-cleanup`, `hidden-asset-refresh`, `provider-missing-credential-sweep`, `reserve-fund-recalculation`, `home-gazette-generation`, `shared-data-backfill`, `home-habit-generation`, `report-export-cleanup`, `material-spec-export-cleanup`.
+`seasonal-checklist-generation`, `inventory-draft-cleanup`, `hidden-asset-refresh`, `provider-missing-credential-sweep`, `reserve-fund-recalculation`, `home-briefing-delivery`, `shared-data-backfill`, `home-habit-generation`, `report-export-cleanup`, `material-spec-export-cleanup`.
 
 `shared-data-backfill` has W6 dry-run + smoke-checklist support — exercise that first. The rest: review manually, or treat this as a prioritized backlog for extending W6's pattern before flipping them on blind.
 

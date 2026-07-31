@@ -113,6 +113,7 @@ function loadTriggerJob({ addImpl } = {}) {
     filename: registryPath,
     loaded: true,
     exports: {
+      canonicalWorkerJobKey: (jobKey) => jobKey,
       JOB_REGISTRY: [
         DRY_RUN_SUPPORTED_ENTRY,
         DRY_RUN_UNSUPPORTED_ENTRY,

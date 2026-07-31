@@ -58,11 +58,11 @@ test('acquireCronLease: falls back to create() when no row exists yet, and wins'
     createImpl: (args) => ({ ...args.data }),
   });
 
-  const got = await acquireCronLease('home-gazette-generation', 60_000);
+  const got = await acquireCronLease('home-briefing-delivery', 60_000);
 
   assert.equal(got, true);
   assert.equal(calls.create.length, 1);
-  assert.equal(calls.create[0].data.jobKey, 'home-gazette-generation');
+  assert.equal(calls.create[0].data.jobKey, 'home-briefing-delivery');
 });
 
 test('acquireCronLease: loses gracefully when create() hits a unique-constraint race (P2002)', async () => {
@@ -75,7 +75,7 @@ test('acquireCronLease: loses gracefully when create() hits a unique-constraint 
     },
   });
 
-  const got = await acquireCronLease('home-gazette-generation', 60_000);
+  const got = await acquireCronLease('home-briefing-delivery', 60_000);
 
   assert.equal(got, false);
 });
@@ -87,7 +87,7 @@ test('acquireCronLease: an unexpected updateMany error fails closed (does not fa
     },
   });
 
-  const got = await acquireCronLease('home-gazette-generation', 60_000);
+  const got = await acquireCronLease('home-briefing-delivery', 60_000);
 
   assert.equal(got, false);
   assert.equal(calls.create.length, 0);
