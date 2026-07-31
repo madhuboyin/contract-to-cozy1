@@ -1,6 +1,7 @@
 import {
   IntelligenceCoverageGeographyType,
   IntelligenceCoverageStatus,
+  IntelligenceSourceFamily,
   IntelligenceSourceReviewStatus,
   IntelligenceSourceRunStatus,
   Prisma,
@@ -21,8 +22,37 @@ import {
   evaluateSourceActivation,
 } from './sourceGovernance';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
+import {
+  evaluateFamilyLaunchAuthorization,
+  observationWithinReviewedCoverage,
+  parseSourceFamilyLaunchPolicy,
+} from './launchGovernance';
 
 const normalizeKey = (value: string): string => value.trim().toUpperCase();
+const FAMILY_SETTING_PREFIX = 'property-intelligence:family-gate';
+
+function familySettingKey(environment: string, family: string) {
+  return `${FAMILY_SETTING_PREFIX}:${environment}:${family}`;
+}
+
+async function authorizedSourceFamilies(environment: string) {
+  const settings = await prisma.systemSetting.findMany({
+    where: { key: { startsWith: `${FAMILY_SETTING_PREFIX}:${environment}:` } },
+    select: { key: true, value: true },
+  });
+  return new Set(settings.flatMap((setting) => {
+    const family = setting.key.slice(setting.key.lastIndexOf(':') + 1);
+    if (!Object.values(IntelligenceSourceFamily).includes(
+      family as IntelligenceSourceFamily,
+    )) return [];
+    const authorization = evaluateFamilyLaunchAuthorization(
+      parseSourceFamilyLaunchPolicy(setting.value),
+    );
+    return authorization.authorized
+      ? [family as IntelligenceSourceFamily]
+      : [];
+  }));
+}
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -371,7 +401,18 @@ export async function ingestIntelligenceBatch(input: {
     source.coverages,
     input.environment,
   );
-  if (!activation.enabled) {
+  const familySetting = await prisma.systemSetting.findUnique({
+    where: { key: familySettingKey(input.environment, source.family) },
+    select: { value: true },
+  });
+  const familyAuthorization = evaluateFamilyLaunchAuthorization(
+    parseSourceFamilyLaunchPolicy(familySetting?.value),
+  );
+  const activationReasonCodes = [
+    ...activation.reasonCodes,
+    ...familyAuthorization.reasonCodes,
+  ];
+  if (!activation.enabled || !familyAuthorization.authorized) {
     await prisma.intelligenceSourceRun.create({
       data: {
         sourceId: source.id,
@@ -382,14 +423,14 @@ export async function ingestIntelligenceBatch(input: {
         recordsRead: input.observations.length,
         recordsRejected: input.observations.length,
         failureCode: 'SOURCE_ACTIVATION_REJECTED',
-        failureDetail: activation.reasonCodes.join(','),
+        failureDetail: activationReasonCodes.join(','),
       },
     });
     throw new APIError(
       'The source is not activated for ingestion.',
       409,
       'SOURCE_ACTIVATION_REJECTED',
-      { reasonCodes: activation.reasonCodes },
+      { reasonCodes: activationReasonCodes },
     );
   }
 
@@ -406,11 +447,18 @@ export async function ingestIntelligenceBatch(input: {
     const result = await prisma.$transaction(async (tx) => {
       let accepted = 0;
       let rejected = 0;
+      let rejectedOutsideReviewedGeography = 0;
+      let rejectedUnsupportedObservationType = 0;
       let unchanged = 0;
       let revisions = 0;
       let matches = 0;
 
       for (const observation of input.observations) {
+        if (!observationWithinReviewedCoverage(observation, source.coverages)) {
+          rejected += 1;
+          rejectedOutsideReviewedGeography += 1;
+          continue;
+        }
         try {
           assertObservationTypeSupported(
             source.supportedObservationTypes,
@@ -418,6 +466,7 @@ export async function ingestIntelligenceBatch(input: {
           );
         } catch {
           rejected += 1;
+          rejectedUnsupportedObservationType += 1;
           continue;
         }
 
@@ -521,9 +570,28 @@ export async function ingestIntelligenceBatch(input: {
           recordsAccepted: accepted,
           recordsRejected: rejected,
           coverageUpdated: true,
+          failureCode:
+            rejected > 0 ? 'RECORDS_REJECTED_BY_GOVERNANCE' : null,
+          failureDetail:
+            rejected > 0
+              ? JSON.stringify({
+                  outsideReviewedGeography: rejectedOutsideReviewedGeography,
+                  unsupportedObservationType: rejectedUnsupportedObservationType,
+                })
+              : null,
         },
       });
-      return { accepted, rejected, unchanged, revisions, matches };
+      return {
+        accepted,
+        rejected,
+        rejectionReasons: {
+          outsideReviewedGeography: rejectedOutsideReviewedGeography,
+          unsupportedObservationType: rejectedUnsupportedObservationType,
+        },
+        unchanged,
+        revisions,
+        matches,
+      };
     });
     return { runId: run.id, ...result, checkedThrough: input.checkedThrough };
   } catch (error) {
@@ -586,10 +654,13 @@ export async function getPropertyIntelligenceCoverage(
   if (!property) {
     throw new APIError('Property not found.', 404, 'PROPERTY_NOT_FOUND');
   }
+  const authorizedFamilies = await authorizedSourceFamilies(environment);
+  if (authorizedFamilies.size === 0) return [];
   const sources = await prisma.intelligenceSource.findMany({
     where: {
       reviewedStatus: IntelligenceSourceReviewStatus.APPROVED,
       enabledEnvironments: { has: environment },
+      family: { in: [...authorizedFamilies] },
     },
     include: {
       coverages: {
@@ -637,6 +708,8 @@ export async function getPropertyIntelligenceObservations(
   propertyId: string,
   environment: string,
 ) {
+  const authorizedFamilies = await authorizedSourceFamilies(environment);
+  if (authorizedFamilies.size === 0) return [];
   return prisma.propertyObservationMatch.findMany({
     where: {
       propertyId,
@@ -646,6 +719,7 @@ export async function getPropertyIntelligenceObservations(
           reviewedStatus: IntelligenceSourceReviewStatus.APPROVED,
           enabledEnvironments: { has: environment },
           pausedAt: null,
+          family: { in: [...authorizedFamilies] },
         },
       },
     },
@@ -697,18 +771,32 @@ export async function getPropertyIntelligenceObservations(
 }
 
 export async function getIntelligenceSourceHealth(environment: string) {
-  const sources = await prisma.intelligenceSource.findMany({
-    orderBy: { key: 'asc' },
-    include: {
-      coverages: { orderBy: { updatedAt: 'desc' } },
-      runs: { orderBy: { startedAt: 'desc' }, take: 10 },
-      _count: { select: { observations: true } },
-    },
-  });
+  const [sources, familySettings] = await Promise.all([
+    prisma.intelligenceSource.findMany({
+      orderBy: { key: 'asc' },
+      include: {
+        coverages: { orderBy: { updatedAt: 'desc' } },
+        runs: { orderBy: { startedAt: 'desc' }, take: 10 },
+        _count: { select: { observations: true } },
+      },
+    }),
+    prisma.systemSetting.findMany({
+      where: { key: { startsWith: `${FAMILY_SETTING_PREFIX}:${environment}:` } },
+      select: { key: true, value: true },
+    }),
+  ]);
+  const policyByFamily = new Map(
+    familySettings.map((setting) => [
+      setting.key.slice(setting.key.lastIndexOf(':') + 1),
+      parseSourceFamilyLaunchPolicy(setting.value),
+    ]),
+  );
   return sources.map((source) => {
     const refreshPolicy = source.refreshPolicy as {
       maxStalenessMinutes?: number;
     };
+    const familyPolicy = policyByFamily.get(source.family)
+      ?? parseSourceFamilyLaunchPolicy(null);
     return {
       ...source,
       activation: evaluateSourceActivation(
@@ -716,6 +804,10 @@ export async function getIntelligenceSourceHealth(environment: string) {
         source.coverages,
         environment,
       ),
+      familyLaunch: {
+        policy: familyPolicy,
+        authorization: evaluateFamilyLaunchAuthorization(familyPolicy),
+      },
       coverages: source.coverages.map((coverage) => ({
         ...coverage,
         health: deriveCoverageHealth({

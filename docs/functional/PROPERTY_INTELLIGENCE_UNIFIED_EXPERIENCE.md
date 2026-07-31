@@ -90,3 +90,7 @@ separate removal gates are met.
 - Questions about comprehensiveness: explain the checked providers, checked-
   through dates, geography, and listed limitations; do not describe quiet
   results as a universal all-clear.
+
+Launch stages, source-family measurement, operator containment, and legacy
+retirement are defined in
+[PROPERTY_INTELLIGENCE_LAUNCH_GOVERNANCE.md](./PROPERTY_INTELLIGENCE_LAUNCH_GOVERNANCE.md).

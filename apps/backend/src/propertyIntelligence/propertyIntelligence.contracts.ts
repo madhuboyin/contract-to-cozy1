@@ -39,6 +39,7 @@ export const intelligenceSourceInputSchema = z.object({
   refreshPolicy: z.object({
     cadenceMinutes: z.number().int().positive().max(525_600),
     maxStalenessMinutes: z.number().int().positive().max(1_051_200),
+    operationalResponseMinutes: z.number().int().positive().max(43_200).default(240),
   }),
   enabledEnvironments: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
 });
@@ -82,6 +83,36 @@ export const intelligenceCoverageReviewSchema = z.object({
   geographyKey: z.string().trim().min(1).max(240),
   decision: z.enum(['APPROVE', 'REJECT']),
   reason: z.string().trim().min(3).max(1000),
+});
+
+export const intelligenceFamilyGovernanceSchema = z.object({
+  environment: z.string().trim().min(1).max(80),
+  stage: z.enum(['DRAFT', 'PILOT', 'LIMITED', 'GENERAL', 'PAUSED']),
+  safetyApproved: z.boolean(),
+  privacyApproved: z.boolean(),
+  hazardLanguageApproved: z.boolean(),
+  reviewNote: z.string().trim().min(3).max(2000),
+  thresholds: z.object({
+    minimumCurrentCoveragePercent: z.number().min(0).max(100).default(95),
+    minimumBriefingResponses: z.number().int().min(0).max(100_000).default(5),
+    minimumUsefulnessRate: z.number().min(0).max(1).default(0.6),
+    minimumActionFollowThroughRate: z.number().min(0).max(1).default(0.25),
+    maximumFalsePositiveRate: z.number().min(0).max(1).default(0.15),
+  }),
+});
+
+export const intelligenceSourceControlSchema = z.object({
+  action: z.enum(['KILL_SWITCH', 'RESUME', 'ROLLBACK']),
+  reason: z.string().trim().min(3).max(2000),
+  targetRunId: z.string().uuid().optional(),
+}).superRefine((value, ctx) => {
+  if (value.action === 'ROLLBACK' && !value.targetRunId) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['targetRunId'],
+      message: 'ROLLBACK requires targetRunId.',
+    });
+  }
 });
 
 export const normalizedIntelligenceObservationSchema = z.object({

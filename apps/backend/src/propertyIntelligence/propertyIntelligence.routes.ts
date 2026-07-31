@@ -15,7 +15,10 @@ import {
   intelligenceCoverageInputSchema,
   intelligenceCoverageReviewSchema,
   aroundYourHomeInteractionSchema,
+  intelligenceFamilyGovernanceSchema,
   intelligenceIngestBatchSchema,
+  intelligenceSourceControlSchema,
+  intelligenceSourceFamilySchema,
   intelligenceSourceInputSchema,
   intelligenceSourceReviewSchema,
 } from './propertyIntelligence.contracts';
@@ -35,6 +38,11 @@ import {
   getAroundYourHomeSourceQuality,
   setAroundYourHomeInteraction,
 } from './aroundYourHome.service';
+import {
+  controlIntelligenceSource,
+  getPropertyIntelligenceGovernanceReport,
+  reviewIntelligenceSourceFamilyGate,
+} from './governance.service';
 
 const router = Router();
 const sourceKeySchema = z.string().trim().min(2).max(120);
@@ -198,6 +206,71 @@ router.get(
       return res.json({
         success: true,
         data: await getIntelligenceSourceHealth(currentEnvironment()),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/admin/property-intelligence/governance',
+  ...adminGuard,
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const windowDays = z.coerce.number().int().min(7).max(365)
+        .default(30)
+        .parse(req.query.windowDays);
+      return res.json({
+        success: true,
+        data: await getPropertyIntelligenceGovernanceReport(
+          currentEnvironment(),
+          windowDays,
+        ),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.put(
+  '/admin/property-intelligence/governance/families/:family',
+  ...adminGuard,
+  validateBody(intelligenceFamilyGovernanceSchema),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const reviewerId = req.user?.userId;
+      if (!reviewerId) return res.status(401).json({ success: false });
+      return res.json({
+        success: true,
+        data: await reviewIntelligenceSourceFamilyGate({
+          family: intelligenceSourceFamilySchema.parse(req.params.family),
+          reviewerId,
+          ...req.body,
+        }),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/admin/property-intelligence/sources/:sourceKey/control',
+  ...adminGuard,
+  validateBody(intelligenceSourceControlSchema),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const actorId = req.user?.userId;
+      if (!actorId) return res.status(401).json({ success: false });
+      return res.json({
+        success: true,
+        data: await controlIntelligenceSource({
+          sourceKey: sourceKeySchema.parse(req.params.sourceKey),
+          actorId,
+          ...req.body,
+        }),
       });
     } catch (error) {
       return next(error);
