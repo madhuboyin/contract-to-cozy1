@@ -8,6 +8,11 @@ export type HomeEventType =
   | 'NOTE' | 'MILESTONE' | 'OTHER';
 
 export type HomeEventImportance = 'LOW' | 'NORMAL' | 'HIGH' | 'HIGHLIGHT';
+export type HomeEventDatePrecision = 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';
+export type HomeEventObservationKind =
+  | 'OBSERVED' | 'USER_REPORTED' | 'EVIDENCE_DERIVED' | 'INFERRED' | 'SYSTEM_GENERATED';
+export type HomeEventVerificationStatus =
+  | 'UNVERIFIED' | 'PENDING_CONFIRMATION' | 'HOMEOWNER_CONFIRMED' | 'EVIDENCE_VERIFIED' | 'DISPUTED';
 
 export type HomeEventDocumentKind = 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER';
 
@@ -30,6 +35,11 @@ export interface HomeEvent {
   importance: HomeEventImportance;
   occurredAt: string;
   endAt: string | null;
+  datePrecision: HomeEventDatePrecision;
+  dateRangeStart: string | null;
+  dateRangeEnd: string | null;
+  observationKind: HomeEventObservationKind;
+  verificationStatus: HomeEventVerificationStatus;
   title: string;
   summary: string | null;
   amount: string | null;

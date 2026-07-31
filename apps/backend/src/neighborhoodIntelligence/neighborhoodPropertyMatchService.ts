@@ -59,9 +59,9 @@ export class NeighborhoodPropertyMatchService {
       },
     });
 
-    // Geographic relevance: prefer real geocoded distance within the event
-    // radius; fall back to city+state co-location (treated as 0.5 miles) only
-    // when the property has no coordinates.
+    // Distance-based relevance requires coordinates for both sides. A coarse
+    // city/state co-location is not a distance and must never be persisted as
+    // fabricated mileage.
     const eligibleProperties = properties
       .map((p) => {
         const locationDecision = evaluateNeighborhoodLocation(
@@ -78,10 +78,7 @@ export class NeighborhoodPropertyMatchService {
         if (geoDistance !== null) {
           return geoDistance <= radiusMiles ? { property: p, distanceMiles: geoDistance } : null;
         }
-        const sameCity =
-          p.city?.toLowerCase() === event.city?.toLowerCase() &&
-          p.state?.toLowerCase() === event.state?.toLowerCase();
-        return sameCity ? { property: p, distanceMiles: 0.5 } : null;
+        return null;
       })
       .filter((entry): entry is { property: (typeof properties)[number]; distanceMiles: number } => entry !== null);
 

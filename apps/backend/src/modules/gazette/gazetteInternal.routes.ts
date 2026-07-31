@@ -3,9 +3,7 @@
 
 import { Router } from 'express';
 import { authenticate, requireRole } from '../../middleware/auth.middleware';
-import { validateBody } from '../../middleware/validate.middleware';
 import { GazetteInternalController } from './controllers/gazetteInternal.controller';
-import { generateEditionSchema, gazetteJobsQuerySchema } from './validators/gazette.validators';
 import { UserRole } from '../../types/auth.types';
 
 const router = Router();
@@ -20,8 +18,13 @@ router.use('/internal/gazette', authenticate, requireRole(UserRole.ADMIN));
 // POST /internal/gazette/generate
 router.post(
   '/internal/gazette/generate',
-  validateBody(generateEditionSchema),
-  GazetteInternalController.generate.bind(GazetteInternalController),
+  (_req, res) => res.status(410).json({
+    success: false,
+    error: {
+      code: 'LEGACY_GAZETTE_GENERATION_RETIRED',
+      message: 'Legacy Gazette generation is retired. Home Briefing consumes canonical Property Changes.',
+    },
+  }),
 );
 
 // GET /internal/gazette/editions/:editionId/trace
@@ -39,7 +42,13 @@ router.get(
 // POST /internal/gazette/editions/:editionId/regenerate
 router.post(
   '/internal/gazette/editions/:editionId/regenerate',
-  GazetteInternalController.regenerate.bind(GazetteInternalController),
+  (_req, res) => res.status(410).json({
+    success: false,
+    error: {
+      code: 'LEGACY_GAZETTE_REGENERATION_RETIRED',
+      message: 'Legacy Gazette regeneration is retired. Edition history is archive-only.',
+    },
+  }),
 );
 
 // GET /internal/gazette/jobs

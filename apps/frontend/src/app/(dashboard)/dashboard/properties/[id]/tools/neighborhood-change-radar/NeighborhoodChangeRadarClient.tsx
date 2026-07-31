@@ -1,893 +1,350 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import * as React from 'react';
+import { useParams } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft,
-  Building2,
-  ChevronRight,
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
   ExternalLink,
+  Eye,
+  List,
+  Map,
   MapPin,
-  Radar,
-  TrendingDown,
-  TrendingUp,
-  Minus,
+  X,
 } from 'lucide-react';
-import Link from 'next/link';
-
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
   EmptyStateCard,
-  MetricRow,
   MobileCard,
-  MobileFilterSurface,
   MobilePageContainer,
-  MobilePageIntro,
   MobileSection,
   MobileSectionHeader,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import HomeToolsRail from '../../components/HomeToolsRail';
-import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import type {
-  NeighborhoodConfidenceBand,
-  NeighborhoodEventCard,
-  NeighborhoodEventDetailDTO,
-  NeighborhoodEventType,
-  NeighborhoodImpactCategory,
-  NeighborhoodImpactDirection,
-  NeighborhoodOverallEffect,
-} from '@/types';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
-  getNeighborhoodRadarEvents,
-  getNeighborhoodRadarEventDetail,
-  getNeighborhoodRadarSummary,
-  getNeighborhoodRadarTrends,
-} from './neighborhoodRadarApi';
-import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
-import { track } from '@/lib/analytics/events';
-import {
-  extractGuidanceContinuityContext,
-  hasGuidanceContinuityContext,
-} from '@/features/guidance/utils/guidanceContinuity';
-import { ScrollFadeX } from '@/components/ui/ScrollFadeX';
-import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
+  type AroundYourHomeItem,
+  getAroundYourHome,
+  updateAroundYourHomeInteraction,
+} from './aroundYourHomeApi';
 
-// ============================================================================
-// DISPLAY CONSTANTS
-// ============================================================================
-
-const EVENT_TYPE_LABEL: Record<NeighborhoodEventType, string> = {
-  TRANSIT_PROJECT: 'Transit Project',
-  HIGHWAY_PROJECT: 'Highway Project',
-  COMMERCIAL_DEVELOPMENT: 'Commercial Development',
-  RESIDENTIAL_DEVELOPMENT: 'Residential Development',
-  INDUSTRIAL_PROJECT: 'Industrial Project',
-  WAREHOUSE_PROJECT: 'Warehouse Project',
-  ZONING_CHANGE: 'Zoning Change',
-  SCHOOL_RATING_CHANGE: 'School Rating Change',
-  SCHOOL_BOUNDARY_CHANGE: 'School Boundary Change',
-  FLOOD_MAP_UPDATE: 'Flood Map Update',
-  UTILITY_INFRASTRUCTURE: 'Utility Infrastructure',
-  PARK_DEVELOPMENT: 'Park Development',
-  LARGE_CONSTRUCTION: 'Large Construction',
-};
-
-const IMPACT_CATEGORY_LABEL: Record<NeighborhoodImpactCategory, string> = {
-  PROPERTY_VALUE: 'Property Value',
-  RENTAL_DEMAND: 'Rental Demand',
-  TRAFFIC: 'Traffic',
-  NOISE: 'Noise',
-  AMENITIES: 'Amenities',
-  INSURANCE_RISK: 'Insurance Risk',
-  DEVELOPMENT_PRESSURE: 'Development Pressure',
-  LIVING_EXPERIENCE: 'Living Experience',
-};
-
-const DEMOGRAPHIC_SEGMENT_LABEL: Record<string, string> = {
-  YOUNG_PROFESSIONALS: 'Young professionals',
-  FAMILIES_WITH_CHILDREN: 'Families with children',
-  AFFLUENT_BUYERS: 'Affluent buyers',
-  RETIREES: 'Retirees',
-  STUDENTS: 'Students',
-  RENTERS: 'Renters',
-};
-
-type EffectTone = 'good' | 'elevated' | 'danger' | 'info';
-
-const EFFECT_TONE: Record<NeighborhoodOverallEffect, EffectTone> = {
-  HIGHLY_POSITIVE: 'good',
-  MODERATELY_POSITIVE: 'good',
-  MIXED: 'elevated',
-  NEUTRAL: 'info',
-  MODERATELY_NEGATIVE: 'danger',
-  HIGHLY_NEGATIVE: 'danger',
-};
-
-const EFFECT_LABEL: Record<NeighborhoodOverallEffect, string> = {
-  HIGHLY_POSITIVE: 'Positive',
-  MODERATELY_POSITIVE: 'Positive',
-  MIXED: 'Mixed',
-  NEUTRAL: 'Neutral',
-  MODERATELY_NEGATIVE: 'Negative',
-  HIGHLY_NEGATIVE: 'Negative',
-};
-
-type FilterEffect = 'ALL' | 'POSITIVE' | 'NEGATIVE' | 'MIXED';
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+function humanize(value: string) {
+  return value.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatDistance(miles: number): string {
-  if (miles < 0.1) return 'Very close';
-  return `${miles.toFixed(1)} mi away`;
+function formatDate(value: string | null) {
+  if (!value) return 'not provided';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
-// ============================================================================
-// SKELETON
-// ============================================================================
-
-function RadarSkeleton() {
-  return (
-    <div className="animate-pulse space-y-3">
-      <div className="h-28 rounded-[22px] bg-gray-100" />
-      <div className="h-8 w-2/3 rounded-full bg-gray-100" />
-      {[...Array(3)].map((_, i) => (
-        <div key={i} className="h-32 rounded-[22px] bg-gray-100" />
-      ))}
-    </div>
-  );
+function lifecycleTone(status: AroundYourHomeItem['observation']['lifecycleStatus']) {
+  if (status === 'ACTIVE' || status === 'APPROVED') return 'good' as const;
+  if (status === 'PROPOSED') return 'elevated' as const;
+  if (status === 'CANCELLED' || status === 'STALE') return 'danger' as const;
+  return 'info' as const;
 }
 
-// ============================================================================
-// OVERALL EFFECT BADGE
-// ============================================================================
-
-function EffectBadge({ effect }: { effect: NeighborhoodOverallEffect }) {
-  return (
-    <StatusChip tone={EFFECT_TONE[effect]}>{EFFECT_LABEL[effect]}</StatusChip>
-  );
-}
-
-// ============================================================================
-// CONFIDENCE LABEL — subtle inline text, not a flashy badge
-// ============================================================================
-
-const CONFIDENCE_LABEL: Record<NeighborhoodConfidenceBand, string> = {
-  HIGH: 'High confidence',
-  MEDIUM: 'Medium confidence',
-  PRELIMINARY: 'Preliminary signal',
-};
-
-const CONFIDENCE_COLOR: Record<NeighborhoodConfidenceBand, string> = {
-  HIGH: 'text-emerald-700',
-  MEDIUM: 'text-slate-500',
-  PRELIMINARY: 'text-amber-600',
-};
-
-function ConfidenceLabel({
-  band,
-  isStale,
-}: {
-  band: NeighborhoodConfidenceBand;
-  isStale: boolean;
-}) {
-  if (isStale) {
-    return (
-      <span className="text-[11px] text-amber-600">Older signal</span>
-    );
-  }
-  if (band === 'HIGH') return null; // High confidence needs no label — it's the default expectation
-  return (
-    <span className={cn('text-[11px]', CONFIDENCE_COLOR[band])}>
-      {CONFIDENCE_LABEL[band]}
-    </span>
-  );
-}
-
-// ============================================================================
-// FILTER TABS
-// ============================================================================
-
-function FilterTabs({
-  value,
-  onChange,
-}: {
-  value: FilterEffect;
-  onChange: (v: FilterEffect) => void;
-}) {
-  const tabs: { key: FilterEffect; label: string }[] = [
-    { key: 'ALL', label: 'All' },
-    { key: 'POSITIVE', label: 'Positive' },
-    { key: 'NEGATIVE', label: 'Negative' },
-    { key: 'MIXED', label: 'Mixed' },
-  ];
-
-  return (
-    <ScrollFadeX fromColor="from-white">
-    <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          onClick={() => onChange(tab.key)}
-          className={cn(
-            'shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors',
-            value === tab.key
-              ? 'border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] text-[hsl(var(--mobile-brand-strong))]'
-              : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]',
-          )}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-    </ScrollFadeX>
-  );
-}
-
-// ============================================================================
-// IMPACT ROW
-// ============================================================================
-
-function ImpactRow({
-  direction,
-  text,
-}: {
-  direction: NeighborhoodImpactDirection;
-  text: string;
-}) {
-  return (
-    <div className="flex items-start gap-2">
-      {direction === 'POSITIVE' ? (
-        <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
-      ) : direction === 'NEGATIVE' ? (
-        <TrendingDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" aria-hidden="true" />
-      ) : (
-        <Minus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-      )}
-      <p className="mb-0 text-[13px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
-        {text}
-      </p>
-    </div>
-  );
-}
-
-// ============================================================================
-// EVENT CARD
-// ============================================================================
-
-function NeighborhoodEventCardView({
-  event,
-  onClick,
-}: {
-  event: NeighborhoodEventCard;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full text-left"
-      aria-label={`View details for ${event.title}`}
-    >
-      <MobileCard
-        variant="standard"
-        className="space-y-2.5 transition-colors hover:bg-[hsl(var(--mobile-bg-muted))]"
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="mb-0 text-base font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
-              {event.title}
-            </p>
-          </div>
-          <div className="shrink-0">
-            <EffectBadge effect={event.overallEffect} />
-          </div>
-        </div>
-
-        {/* Meta row */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <StatusChip tone="info">{EVENT_TYPE_LABEL[event.eventType]}</StatusChip>
-          <span className="flex items-center gap-1 text-[12px] text-[hsl(var(--mobile-text-secondary))]">
-            <MapPin className="h-3 w-3" aria-hidden="true" />
-            {formatDistance(event.distanceMiles)}
-          </span>
-          {event.announcedDate && (
-            <span className="text-[12px] text-[hsl(var(--mobile-text-muted))]">
-              Announced {formatDate(event.announcedDate)}
-            </span>
-          )}
-          <ConfidenceLabel band={event.confidenceBand} isStale={event.isStale} />
-        </div>
-
-        {/* Short explanation */}
-        <p className="mb-0 text-[13px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
-          {event.shortExplanation}
-        </p>
-
-        {/* Impacts */}
-        {(event.topPositives.length > 0 || event.topNegatives.length > 0) && (
-          <div className="space-y-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-2.5">
-            {event.topPositives.slice(0, 2).map((imp) => (
-              <ImpactRow key={imp.category} direction="POSITIVE" text={imp.description} />
-            ))}
-            {event.topNegatives.slice(0, 2).map((imp) => (
-              <ImpactRow key={imp.category} direction="NEGATIVE" text={imp.description} />
-            ))}
-          </div>
-        )}
-
-        {/* Demographic signal */}
-        {event.demographicSignals.length > 0 && (
-          <p className="mb-0 text-[12px] text-[hsl(var(--mobile-text-muted))]">
-            Neighborhood shift: {event.demographicSignals[0].description}
-          </p>
-        )}
-
-        {/* View details CTA */}
-        <div className="flex items-center justify-end gap-1 text-[13px] font-medium text-[hsl(var(--mobile-brand-strong))]">
-          View details
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </div>
-      </MobileCard>
-    </button>
-  );
-}
-
-// ============================================================================
-// EVENT DETAIL SHEET
-// ============================================================================
-
-function EventDetailSheet({
+function ObservationCard({
+  item,
   propertyId,
-  eventId,
-  open,
-  onOpenChange,
-  onSourceOpen,
 }: {
+  item: AroundYourHomeItem;
   propertyId: string;
-  eventId: string | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSourceOpen: (detail: NeighborhoodEventDetailDTO) => void;
 }) {
-  const { data: detail, isLoading } = useQuery({
-    queryKey: ['neighborhood-radar-event', propertyId, eventId],
-    queryFn: () => getNeighborhoodRadarEventDetail(propertyId, eventId!),
-    enabled: open && !!eventId,
-    staleTime: 10 * 60 * 1000,
+  const queryClient = useQueryClient();
+  const interaction = useMutation({
+    mutationFn: (action: 'FOLLOW' | 'DISMISS' | 'NOT_RELEVANT' | 'MARK_SEEN') =>
+      updateAroundYourHomeInteraction(propertyId, item.propertyMatchId, { action }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['around-your-home', propertyId] }),
   });
+  const title = item.observation.facts.title
+    ?? humanize(item.observation.observationType);
+  const summary = item.observation.facts.summary
+    ?? item.observation.facts.description
+    ?? 'The source did not provide a public summary.';
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-        <SheetHeader className="border-b px-5 py-4">
-          <SheetTitle className="pr-8 text-base">
-            {detail ? detail.title : 'Neighborhood Change'}
-          </SheetTitle>
-          <SheetDescription className="sr-only">
-            Property-specific impact analysis for this nearby development.
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="flex-1 overflow-y-auto">
-          {isLoading || !detail ? (
-            <div className="space-y-3 p-5">
-              <div className="animate-pulse space-y-3">
-                <div className="h-16 rounded-2xl bg-gray-100" />
-                <div className="h-24 rounded-2xl bg-gray-100" />
-                <div className="h-32 rounded-2xl bg-gray-100" />
-              </div>
-            </div>
-          ) : (
-            <EventDetailContent detail={detail} onSourceOpen={onSourceOpen} />
-          )}
+    <MobileCard className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusChip tone={lifecycleTone(item.observation.lifecycleStatus)}>
+              {humanize(item.observation.lifecycleStatus)}
+            </StatusChip>
+            {item.interaction.disposition === 'FOLLOWING' ? (
+              <StatusChip tone="info">Following</StatusChip>
+            ) : null}
+            {item.interaction.hasMaterialUpdate ? (
+              <StatusChip tone="elevated">Material source update</StatusChip>
+            ) : null}
+          </div>
+          <h3 className="mt-2 text-base font-semibold text-slate-950">{title}</h3>
+          <p className="mt-1 text-sm text-slate-700">{summary}</p>
         </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function EventDetailContent({
-  detail,
-  onSourceOpen,
-}: {
-  detail: NeighborhoodEventDetailDTO;
-  onSourceOpen: (detail: NeighborhoodEventDetailDTO) => void;
-}) {
-  const positives = detail.allImpacts.filter((i) => i.direction === 'POSITIVE');
-  const negatives = detail.allImpacts.filter((i) => i.direction === 'NEGATIVE');
-
-  return (
-    <div className="space-y-5 px-5 py-5">
-      {/* Overview */}
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusChip tone="info">{EVENT_TYPE_LABEL[detail.eventType]}</StatusChip>
-          <EffectBadge effect={detail.overallEffect} />
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[hsl(var(--mobile-text-secondary))]">
-          <span className="flex items-center gap-1">
-            <MapPin className="h-3 w-3" aria-hidden="true" />
-            {formatDistance(detail.distanceMiles)}
-          </span>
-          {detail.city && detail.state && (
-            <span>{detail.city}, {detail.state}</span>
-          )}
-        </div>
-        <p className="mb-0 text-sm leading-relaxed text-[hsl(var(--mobile-text-secondary))]">
-          {detail.shortExplanation}
-        </p>
-        {detail.description && (
-          <p className="mb-0 text-sm leading-relaxed text-[hsl(var(--mobile-text-secondary))]">
-            {detail.description}
-          </p>
-        )}
       </div>
 
-      {/* Possible positive impacts */}
-      {positives.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold tracking-normal text-emerald-700">
-            Possible Upside
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p className="font-medium text-slate-950">Source fact and geography</p>
+          <p className="mt-1 text-slate-600">
+            <MapPin className="mr-1 inline h-3.5 w-3.5" />
+            {item.geography.matchedGeography} · {humanize(item.geography.precision)}
           </p>
-          <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
-            {positives.map((imp) => (
-              <div key={imp.category} className="flex items-start gap-2">
-                <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
-                <div>
-                  <p className="mb-0 text-[11px] font-medium tracking-normal text-emerald-700">
-                    {IMPACT_CATEGORY_LABEL[imp.category]}
-                  </p>
-                  <p className="mb-0 text-[13px] leading-snug text-slate-700">
-                    {imp.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Possible negative impacts */}
-      {negatives.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold tracking-normal text-rose-700">
-            Possible Downside
-          </p>
-          <div className="space-y-2 rounded-xl border border-rose-100 bg-rose-50/60 p-3">
-            {negatives.map((imp) => (
-              <div key={imp.category} className="flex items-start gap-2">
-                <TrendingDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" aria-hidden="true" />
-                <div>
-                  <p className="mb-0 text-[11px] font-medium tracking-normal text-rose-700">
-                    {IMPACT_CATEGORY_LABEL[imp.category]}
-                  </p>
-                  <p className="mb-0 text-[13px] leading-snug text-slate-700">
-                    {imp.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Demographic signals */}
-      {detail.allDemographics.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold tracking-normal text-slate-500">
-            Neighborhood Evolution
-          </p>
-          <div className="space-y-2 rounded-xl border border-sky-100 bg-sky-50/50 p-3">
-            {detail.allDemographics.map((d) => (
-              <div key={d.segment} className="flex items-start gap-2">
-                <span className="h-1.5 w-1.5 mt-1.5 shrink-0 rounded-full bg-sky-500" aria-hidden="true" />
-                <p className="mb-0 text-[13px] leading-snug text-slate-700">
-                  <span className="font-medium">{DEMOGRAPHIC_SEGMENT_LABEL[d.segment] ?? d.segment}:</span>{' '}
-                  {d.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Timeline */}
-      {(detail.announcedDate || detail.expectedStartDate || detail.expectedEndDate) && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold tracking-normal text-slate-500">
-            Timeline
-          </p>
-          <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3 space-y-1.5">
-            {detail.announcedDate && (
-              <MetricRow label="Announced" value={formatDate(detail.announcedDate)} />
-            )}
-            {detail.expectedStartDate && (
-              <MetricRow label="Expected start" value={formatDate(detail.expectedStartDate)} />
-            )}
-            {detail.expectedEndDate && (
-              <MetricRow label="Expected completion" value={formatDate(detail.expectedEndDate)} />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Why CtC flagged this */}
-      {detail.whyThisMatters && detail.whyThisMatters.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold tracking-normal text-slate-500">
-            Why this matters
-          </p>
-          <div className="space-y-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
-            {detail.whyThisMatters.map((reason, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <span
-                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--mobile-brand-strong))]"
-                  aria-hidden="true"
-                />
-                <p className="mb-0 text-[13px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
-                  {reason}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Source */}
-      {(detail.sourceName || detail.sourceUrl) && (
-        <div className="space-y-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
-          <p className="text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
-            Data Source
-          </p>
-          {detail.sourceName && (
-            <p className="mb-0 text-[13px] text-[hsl(var(--mobile-text-secondary))]">
-              {detail.sourceName}
+          {item.geography.distanceMiles != null ? (
+            <p className="mt-1 text-slate-600">
+              {item.geography.distanceMiles.toFixed(1)} miles from the sourced point
             </p>
+          ) : (
+            <p className="mt-1 text-slate-600">No exact point distance is available.</p>
           )}
-          {detail.sourceUrl && (
-            <a
-              href={detail.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => onSourceOpen(detail)}
-              className="inline-flex items-center gap-1 text-[13px] font-medium text-[hsl(var(--mobile-brand-strong))]"
-            >
-              View source
-              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-            </a>
-          )}
-          <p className="mb-0 mt-1.5 text-[11px] text-[hsl(var(--mobile-text-muted))]">
-            {detail.confidenceNote
-              ? detail.confidenceNote
-              : 'Insights are based on publicly available signals and are intended as general guidance only. Always verify with official sources.'}
+          <p className="mt-1 text-slate-600">
+            Effective {formatDate(item.observation.effectiveFrom)}
+            {item.observation.effectiveTo ? `–${formatDate(item.observation.effectiveTo)}` : ''}
           </p>
         </div>
-      )}
-
-      {/* Show confidence/source note even when there's no named source */}
-      {!detail.sourceName && !detail.sourceUrl && (
-        <p className="text-[11px] text-[hsl(var(--mobile-text-muted))]">
-          {detail.confidenceNote
-            ? detail.confidenceNote
-            : 'Insights are based on publicly available signals and are intended as general guidance only.'}
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// SUMMARY STRIP
-// ============================================================================
-
-function SummaryStrip({ propertyId }: { propertyId: string }) {
-  const { data: summary, isLoading } = useQuery({
-    queryKey: ['neighborhood-radar-summary', propertyId],
-    queryFn: () => getNeighborhoodRadarSummary(propertyId),
-    staleTime: 10 * 60 * 1000,
-  });
-
-  if (isLoading) {
-    return <div className="h-24 animate-pulse rounded-[22px] bg-gray-100" />;
-  }
-
-  if (!summary) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-3">
-      {summary.meaningfulChangeCount > 0 ? (
-      <MobileCard
-        variant="hero"
-        className="bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]"
-      >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="mb-1 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
-            Neighborhood Signals
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-sm">
+          <p className="font-medium text-slate-950">Possible relevance</p>
+          <p className="mt-1 text-slate-700">{item.possibleRelevance.explanation}</p>
+          <p className="mt-2 text-xs leading-relaxed text-slate-600">
+            {item.possibleRelevance.boundary}
           </p>
-          <p className="mb-0 text-[1.3rem] font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
-            {summary.meaningfulChangeCount} meaningful{' '}
-            {summary.meaningfulChangeCount === 1 ? 'change' : 'changes'} detected
-          </p>
-        </div>
-        <div className="shrink-0">
-          {summary.overallSentiment && (
-            <EffectBadge effect={summary.overallSentiment} />
-          )}
         </div>
       </div>
 
-      {summary.topHeadline && (
-        <p className="mt-2.5 mb-0 text-[13px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
-          {summary.topHeadline}
-        </p>
-      )}
-
-      {(summary.topPositiveThemes.length > 0 || summary.topNegativeThemes.length > 0) && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {summary.topPositiveThemes.slice(0, 2).map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+        <div className="text-xs text-slate-600">
+          <p>{item.source.provider} · revision {item.observation.revision}</p>
+          <p>Published {formatDate(item.source.publishedAt)} · checked {formatDate(item.source.lastCheckedAt)}</p>
+          {item.source.url ? (
+            <a
+              href={item.source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex items-center text-primary underline"
             >
-              <TrendingUp className="h-2.5 w-2.5" aria-hidden="true" />
-              {t}
-            </span>
-          ))}
-          {summary.topNegativeThemes.slice(0, 2).map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700"
-            >
-              <TrendingDown className="h-2.5 w-2.5" aria-hidden="true" />
-              {t}
-            </span>
-          ))}
+              Open exact source <ExternalLink className="ml-1 h-3.5 w-3.5" />
+            </a>
+          ) : (
+            <p className="mt-1">The provider supplied no public record URL.</p>
+          )}
         </div>
-      )}
-
-      {summary.lastScanAt && (
-        <p className="mt-2.5 mb-0 text-[11px] text-[hsl(var(--mobile-text-muted))]">
-          Last updated {formatDate(summary.lastScanAt)}
-        </p>
-      )}
-      </MobileCard>
-      ) : null}
-    </div>
-  );
-}
-
-// ============================================================================
-// TREND STRIP
-// ============================================================================
-
-function TrendStrip({ propertyId }: { propertyId: string }) {
-  const { data: trends } = useQuery({
-    queryKey: ['neighborhood-radar-trends', propertyId],
-    queryFn: () => getNeighborhoodRadarTrends(propertyId),
-    staleTime: 10 * 60 * 1000,
-  });
-
-  if (!trends || trends.pressureSignals.length === 0) return null;
-
-  return (
-    <MobileCard variant="compact" className="space-y-2">
-      <p className="text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
-        Neighborhood Trend
-      </p>
-      <p className="mb-0 text-[13px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
-        {trends.narrative}
-      </p>
-      {trends.pressureSignals.slice(0, 3).map((signal) => (
-        <div key={signal} className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--mobile-brand-strong))]" aria-hidden="true" />
-          <p className="mb-0 text-[13px] text-[hsl(var(--mobile-text-secondary))]">{signal}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={item.interaction.disposition === 'FOLLOWING' ? 'default' : 'outline'}
+            onClick={() => interaction.mutate('FOLLOW')}
+            disabled={interaction.isPending}
+          >
+            <Bell className="mr-1 h-3.5 w-3.5" /> Follow
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => interaction.mutate('MARK_SEEN')} disabled={interaction.isPending}>
+            <Eye className="mr-1 h-3.5 w-3.5" /> Mark seen
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => interaction.mutate('NOT_RELEVANT')} disabled={interaction.isPending}>
+            <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Not relevant
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => interaction.mutate('DISMISS')} disabled={interaction.isPending}>
+            <X className="mr-1 h-3.5 w-3.5" /> Dismiss
+          </Button>
         </div>
-      ))}
+      </div>
     </MobileCard>
   );
 }
 
-// ============================================================================
-// MAIN CLIENT
-// ============================================================================
+function CoordinateMap({
+  items,
+  property,
+  unplottedCount,
+  precisionNote,
+}: {
+  items: AroundYourHomeItem[];
+  property: { latitude: number | null; longitude: number | null };
+  unplottedCount: number;
+  precisionNote: string;
+}) {
+  const points = items.flatMap((item, index) =>
+    item.geography.point ? [{ item, index, ...item.geography.point }] : []);
+  const coordinates = [
+    ...points.map((point) => ({ latitude: point.latitude, longitude: point.longitude })),
+    ...(property.latitude != null && property.longitude != null
+      ? [{ latitude: property.latitude, longitude: property.longitude }]
+      : []),
+  ];
+  if (coordinates.length === 0) {
+    return (
+      <EmptyStateCard
+        title="No exact points to plot"
+        description="Available records use area-level geography. They remain in the list with their actual ZIP, county, state, or polygon label."
+      />
+    );
+  }
+  const lats = coordinates.map((point) => point.latitude);
+  const lons = coordinates.map((point) => point.longitude);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons);
+  const maxLon = Math.max(...lons);
+  const x = (longitude: number) =>
+    maxLon === minLon ? 50 : 8 + ((longitude - minLon) / (maxLon - minLon)) * 84;
+  const y = (latitude: number) =>
+    maxLat === minLat ? 50 : 92 - ((latitude - minLat) / (maxLat - minLat)) * 84;
+
+  return (
+    <MobileCard className="space-y-3">
+      <div className="relative aspect-[16/8] overflow-hidden rounded-xl border border-slate-200 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:32px_32px]">
+        {property.latitude != null && property.longitude != null ? (
+          <span
+            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-slate-950 px-2 py-1 text-[10px] font-semibold text-white shadow"
+            style={{ left: `${x(property.longitude)}%`, top: `${y(property.latitude)}%` }}
+          >
+            Home
+          </span>
+        ) : null}
+        {points.map((point) => (
+          <span
+            key={point.item.propertyMatchId}
+            title={point.item.observation.facts.title ?? point.item.observation.observationType}
+            className="absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-xs font-semibold text-white shadow"
+            style={{ left: `${x(point.longitude)}%`, top: `${y(point.latitude)}%` }}
+          >
+            {point.index + 1}
+          </span>
+        ))}
+      </div>
+      <p className="text-xs text-slate-600">{precisionNote}</p>
+      {unplottedCount > 0 ? (
+        <p className="text-xs text-slate-600">
+          {unplottedCount} area-level {unplottedCount === 1 ? 'record is' : 'records are'} shown only in the list.
+        </p>
+      ) : null}
+      <div className="space-y-1 text-xs text-slate-700">
+        {points.map((point) => (
+          <p key={point.item.propertyMatchId}>
+            {point.index + 1}. {point.item.observation.facts.title ?? humanize(point.item.observation.observationType)}
+            {' · '}{point.latitude.toFixed(4)}, {point.longitude.toFixed(4)}
+          </p>
+        ))}
+      </div>
+    </MobileCard>
+  );
+}
 
 export default function NeighborhoodChangeRadarClient() {
   const params = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
   const propertyId = params.id;
-  const guidanceContext = extractGuidanceContinuityContext(searchParams);
-  const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
-
-  useEffect(() => {
-    if (!propertyId) return;
-    track('workflow_started', {
-      tool: 'neighborhood-change-radar',
-      propertyId,
-      entryPoint: hasGuidanceContext ? 'guidance' : 'direct',
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId]);
-
-  const [filterEffect, setFilterEffect] = useState<FilterEffect>('ALL');
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [contextReady, setContextReady] = useState(false);
-
-  const eventsQuery = useQuery({
-    queryKey: ['neighborhood-radar-events', propertyId, filterEffect],
-    queryFn: () =>
-      getNeighborhoodRadarEvents(propertyId, {
-        filterEffect: filterEffect === 'ALL' ? undefined : filterEffect,
-        limit: 50,
-      }),
-    staleTime: 10 * 60 * 1000,
-    enabled: !!propertyId && contextReady,
+  const [view, setView] = React.useState<'LIST' | 'MAP'>('LIST');
+  const query = useQuery({
+    queryKey: ['around-your-home', propertyId],
+    queryFn: () => getAroundYourHome(propertyId),
+    enabled: Boolean(propertyId),
   });
 
-  const events = eventsQuery.data?.events ?? [];
-  const total = eventsQuery.data?.total ?? 0;
-
-  function recordNeighborhoodGuidanceProgress(args: {
-    ctaKey: string;
-    eventId?: string | null;
-    sourceUrl?: string | null;
-  }) {
-    if (!hasGuidanceContext || !guidanceContext.guidanceJourneyId || !guidanceContext.guidanceStepKey) return;
-
-    const proofId = args.eventId ?? args.sourceUrl ?? `${propertyId}:${args.ctaKey}`;
-
-    void recordGuidanceToolStatus(propertyId, {
-      journeyId: guidanceContext.guidanceJourneyId,
-      stepKey: guidanceContext.guidanceStepKey,
-      signalIntentFamily: guidanceContext.guidanceSignalIntentFamily ?? undefined,
-      sourceToolKey: 'neighborhood-change-radar',
-      sourceEntityType: args.eventId ? 'NEIGHBORHOOD_EVENT' : 'EXTERNAL_SOURCE',
-      sourceEntityId: args.eventId ?? args.sourceUrl ?? undefined,
-      status: 'IN_PROGRESS',
-      producedData: {
-        proofType: 'cta_engagement',
-        proofId: String(proofId),
-        ctaKey: args.ctaKey,
-        eventId: args.eventId ?? null,
-        sourceUrl: args.sourceUrl ?? null,
-        openedAt: new Date().toISOString(),
-      },
-    }).catch((error) => {
-      console.warn('[neighborhood-radar] guidance progress hook failed:', error);
-    });
-  }
-
-  function openDetail(eventId: string) {
-    recordNeighborhoodGuidanceProgress({
-      ctaKey: 'open_event_detail',
-      eventId,
-    });
-    setSelectedEventId(eventId);
-    setSheetOpen(true);
-  }
-
   return (
-    <MobilePageContainer className="space-y-4 pt-4 lg:max-w-7xl lg:px-8 lg:pb-10">
-      {/* Back nav */}
-      <div>
-        <Link
-          href={`/dashboard/properties/${propertyId}`}
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Back to property
-        </Link>
-      </div>
+    <MobilePageContainer className="space-y-6">
+      <HomeToolHeader
+        toolId="neighborhood-change-radar"
+        propertyId={propertyId}
+        backHref={`/dashboard/properties/${propertyId}`}
+        backLabel="Back to property"
+        showBackLink
+      />
 
-      <div className="space-y-4 lg:grid lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-6 lg:space-y-0">
-        {/* Page intro — full width on desktop */}
-        <div className="lg:col-span-2">
-          <MobilePageIntro
-            eyebrow="Home tools"
-            title="Neighborhood Change Radar"
-            subtitle="Track major external changes near your home and understand how they may affect value, demand, and livability."
-           className="lg:hidden"/>
-        </div>
+      <MobileCard className="border-indigo-200 bg-indigo-50/50">
+        <h1 className="text-xl font-semibold text-slate-950">Around Your Home</h1>
+        <p className="mt-1 text-sm text-slate-700">
+          Follow factual planning, infrastructure, land-use, flood-map, and school updates from reviewed sources.
+        </p>
+        <p className="mt-2 text-xs leading-relaxed text-slate-600">
+          Possible relevance is shown separately. This view does not predict property value, demand,
+          insurance cost, or household impact.
+        </p>
+      </MobileCard>
 
-        <div className="lg:col-span-2">
-          <HomeToolHeader
-            toolId="neighborhood-change-radar"
-            propertyId={propertyId}
-          />
-        </div>
-
-        <div className="lg:col-span-2">
-          <PropertyContextCapturePanel
-            propertyId={propertyId}
-            featureKey="NEIGHBORHOOD_RADAR"
-            operationKey="VIEW_RADAR"
-            onReady={() => setContextReady(true)}
-          />
-        </div>
-
-        {/* Left column: summary + trend. Tools rail hidden on desktop (header above replaces it). */}
-        {contextReady ? <div className="space-y-4 lg:space-y-5">
-          <SummaryStrip propertyId={propertyId} />
-
-          <div className="lg:hidden">
-            <HomeToolsRail propertyId={propertyId} context="neighborhood-change-radar" />
-          </div>
-
-          <TrendStrip propertyId={propertyId} />
-        </div> : null}
-
-        {/* Right column: event list */}
-        {contextReady ? <div className="space-y-4 lg:col-start-2">
+      {query.isLoading ? (
+        <EmptyStateCard title="Checking reviewed local sources" description="Loading source coverage and matched records." />
+      ) : query.isError || !query.data ? (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Around Your Home is unavailable</AlertTitle>
+          <AlertDescription>
+            Reviewed source coverage could not be loaded. This is not an all-clear.
+            <Button className="ml-2" size="sm" variant="outline" onClick={() => query.refetch()}>Try again</Button>
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
           <MobileSection>
-            <MobileSectionHeader
-              title="Nearby Changes"
-              subtitle={total > 0 ? `${total} development${total !== 1 ? 's' : ''} detected` : undefined}
-            />
+            <MobileSectionHeader title="Source coverage" subtitle="Only reviewed providers and QA-reviewed geographies can appear here." />
+            <MobileCard className="space-y-3">
+              <StatusChip tone={query.data.coverage.state === 'CURRENT' ? 'good' : 'elevated'}>
+                {humanize(query.data.coverage.state)}
+              </StatusChip>
+              {query.data.coverage.sources.map((source) => (
+                <div key={source.source.key} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <p className="font-medium text-slate-950">{source.source.provider}</p>
+                  <p className="mt-1 text-slate-600">
+                    {humanize(source.source.family)} · {source.geography
+                      ? `${humanize(source.geography.type)} ${source.geography.key ?? ''}`
+                      : 'No reviewed property coverage'}
+                    {' · '}{humanize(source.state)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">Checked through {formatDate(source.checkedThrough)}</p>
+                </div>
+              ))}
+              {query.data.coverage.limitations.map((limitation) => (
+                <p key={limitation} className="text-xs text-slate-600">• {limitation}</p>
+              ))}
+            </MobileCard>
+          </MobileSection>
 
-            {/* Filters */}
-            <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-              <FilterTabs value={filterEffect} onChange={setFilterEffect} />
-            </MobileFilterSurface>
-
-            {/* Event list */}
-            {eventsQuery.isLoading ? (
-              <RadarSkeleton />
-            ) : events.length === 0 ? (
-              <EmptyStateCard
-                title="No major changes detected"
-                description="We will continue monitoring meaningful external changes near this property."
+          <MobileSection>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <MobileSectionHeader
+                title="Local source records"
+                subtitle="Followed updates first, then new and active records; completed or dismissed records remain available."
               />
-            ) : (
-              <div className="space-y-3">
-                {events.map((event) => (
-                  <NeighborhoodEventCardView
-                    key={event.id}
-                    event={event}
-                    onClick={() => openDetail(event.eventId)}
-                  />
+              <div className="flex gap-2">
+                <Button size="sm" variant={view === 'LIST' ? 'default' : 'outline'} onClick={() => setView('LIST')}>
+                  <List className="mr-1 h-4 w-4" /> List
+                </Button>
+                <Button size="sm" variant={view === 'MAP' ? 'default' : 'outline'} onClick={() => setView('MAP')}>
+                  <Map className="mr-1 h-4 w-4" /> Map
+                </Button>
+              </div>
+            </div>
+            {view === 'MAP' ? (
+              <CoordinateMap
+                items={query.data.map.points}
+                property={query.data.property}
+                unplottedCount={query.data.map.unplottedCount}
+                precisionNote={query.data.map.precisionNote}
+              />
+            ) : query.data.items.length > 0 ? (
+              <div className="space-y-4">
+                {query.data.items.map((item) => (
+                  <ObservationCard key={item.propertyMatchId} item={item} propertyId={propertyId} />
                 ))}
               </div>
+            ) : (
+              <EmptyStateCard
+                title="No matched local-change records"
+                description="No reviewed source records are currently linked to this property. Coverage may be unavailable or incomplete, so this is not an all-clear."
+              />
             )}
           </MobileSection>
-        </div> : null}
-      </div>
 
-      {/* Detail sheet */}
-      <EventDetailSheet
-        propertyId={propertyId}
-        eventId={selectedEventId}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        onSourceOpen={(detail) => {
-          recordNeighborhoodGuidanceProgress({
-            ctaKey: 'open_external_source',
-            eventId: detail.eventId,
-            sourceUrl: detail.sourceUrl ?? null,
-          });
-        }}
-      />
+          <Alert>
+            <MapPin className="h-4 w-4" />
+            <AlertTitle>Interpretation boundary</AlertTitle>
+            <AlertDescription>{query.data.interpretationBoundary}</AlertDescription>
+          </Alert>
+        </>
+      )}
     </MobilePageContainer>
   );
 }

@@ -1,8 +1,8 @@
 # Environment Report — Functional Requirements Document
 
-**Version:** 1.3
-**Last Updated:** 2026-07-24
-**Status:** Implemented, including property-aware weather preparation checklists
+**Version:** 1.4
+**Last Updated:** 2026-07-30
+**Status:** Implemented, including property-aware preparation and governed long-term hazard context
 **Audience:** Product, design, frontend engineering, backend engineering, data engineering, QA, support
 
 ---
@@ -56,7 +56,21 @@ The report is available at:
 
 It is also discoverable from the property dashboard and the Climate experience.
 
-### 1.1 Product Positioning
+### 1.1 Environmental authority boundaries
+
+Environment Report is the authority for current environmental conditions and
+long-term hazard context. Its long-term section reads reviewed common
+intelligence coverage and observations, displays hazard-specific source facts,
+geography, time horizon, checked-through date, and limitations, and never
+averages unrelated hazards into a composite score.
+
+Past event records and household-confirmed effects remain in Past Hazard
+Exposure. Active warnings remain in Incidents/Home Event Radar. The report must
+not infer property damage, insurance premium changes, or property-value effects
+from regional exposure. Missing, stale, degraded, or failed source coverage is
+shown explicitly and never rendered as an all-clear.
+
+### 1.2 Product Positioning
 
 The report must behave as a **home protection advisor supported by environmental data**, not as a standalone collection of tables. Raw measurements remain available, but the primary hierarchy is:
 
@@ -68,7 +82,7 @@ Environmental signal
   → Time-bound preparation checklist or other relevant workflow
 ```
 
-### 1.2 Design Principles
+### 1.3 Design Principles
 
 - **Homeowner first:** Explain implications before exposing raw measurements.
 - **Property scoped:** Every report is tied to one authorized property.

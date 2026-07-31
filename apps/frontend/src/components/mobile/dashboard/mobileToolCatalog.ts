@@ -13,7 +13,6 @@ export type MobileAiToolKey =
   | 'documents'
   | 'oracle'
   | 'budget'
-  | 'climate'
   | 'appreciation'
   | 'energy'
   | 'visual-inspector'
@@ -30,8 +29,9 @@ export type MobileAiToolKey =
   | 'guidance-overview'
   | 'plant-advisor'
   | 'home-event-radar'
-  | 'home-gazette'
+  | 'home-briefing'
   | 'home-risk-replay'
+  | 'property-brief'
   | 'service-price-radar'
   | 'price-finalization'
   | 'quote-comparison'
@@ -191,20 +191,9 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-event-radar|home-event-radar)(\/|$)/.test(pathname),
   },
   {
-    key: 'climate',
-    title: 'Climate Risk',
-    description: 'Weather and climate exposure trends',
-    href: '/dashboard/climate',
-    icon: resolveToolIcon('ai', 'climate'),
-    emoji: '🌧️',
-    group: 'monitoring',
-    artworkKey: 'climate-risk',
-    isActive: (pathname) => /^\/dashboard\/climate(\/|$)/.test(pathname),
-  },
-  {
     key: 'neighborhood-change-radar',
-    title: 'Neighborhood Radar',
-    description: 'Track external changes affecting home value',
+    title: 'Around Your Home',
+    description: 'Review sourced planning, infrastructure, and local changes',
     href: '/dashboard/neighborhood-change-radar',
     icon: resolveToolIcon('home', 'neighborhood-change-radar'),
     emoji: '🏘️',
@@ -244,8 +233,8 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   },
   {
     key: 'home-risk-replay',
-    title: 'Risk Replay',
-    description: 'See what your home has been through',
+    title: 'Past Hazard Exposure',
+    description: 'Review sourced historical hazards near this property',
     href: '/dashboard/home-risk-replay',
     icon: resolveToolIcon('home', 'home-risk-replay'),
     emoji: '⏪',
@@ -306,14 +295,14 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-habit-coach(\/|$)/.test(pathname),
   },
   {
-    key: 'home-gazette',
-    title: 'Home Gazette',
-    description: 'Your weekly home intelligence briefing',
-    href: '/dashboard/home-gazette',
-    icon: resolveToolIcon('home', 'home-gazette'),
-    emoji: '🗞️',
+    key: 'home-briefing',
+    title: 'Home Briefing',
+    description: 'Meaningful changes since your last review',
+    href: '/dashboard/home-briefing',
+    icon: resolveToolIcon('home', 'home-briefing'),
+    emoji: '📰',
     group: 'planning',
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-gazette(\/|$)/.test(pathname),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-briefing(\/|$)/.test(pathname),
   },
   {
     key: 'home-digital-will',
@@ -482,8 +471,8 @@ export const MOBILE_HOME_TOOL_GROUPS: Array<{
   },
   {
     key: 'history',
-    title: 'History + Replay',
-    summary: 'See what your home has already been through',
+    title: 'Property History',
+    summary: 'Separate durable home history from external hazard context',
   },
   {
     key: 'negotiation',
@@ -532,9 +521,9 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-risk-replay',
     group: 'history',
-    name: 'Home Risk Replay',
-    description: "See what your home has already been through",
-    desktopDescription: "Replay major events your home has already been through and understand impact over time.",
+    name: 'Past Hazard Exposure',
+    description: "Review sourced historical hazards near this property",
+    desktopDescription: "See which reviewed historical hazard records matched the property while keeping proximity separate from confirmed damage.",
     hrefSuffix: 'tools/home-risk-replay?launchSurface=home_tools',
     navTarget: 'tool:home-risk-replay',
     icon: resolveToolIcon('home', 'home-risk-replay'),
@@ -665,7 +654,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-timeline',
-    group: 'timeline',
+    group: 'history',
     name: 'Home Timeline',
     description: "Track milestones over time",
     desktopDescription: "Track key milestones, major work, and ownership events over your home timeline.",
@@ -697,6 +686,17 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-will(\/|$)/.test(pathname),
   },
   {
+    key: 'property-brief',
+    group: 'records',
+    name: 'Property Brief',
+    description: "Prepare a selective evidence-backed property summary",
+    desktopDescription: "Create a purpose-specific brief from selected verified facts, history, evidence, and explicit unknowns.",
+    hrefSuffix: 'property-brief',
+    navTarget: 'property-brief',
+    icon: resolveToolIcon('home', 'property-brief'),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/property-brief(\/|$)/.test(pathname),
+  },
+  {
     key: 'savings-benefits',
     group: 'ownership',
     name: 'Savings and Benefits',
@@ -724,9 +724,9 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'neighborhood-change-radar',
     group: 'monitoring',
-    name: 'Neighborhood Change Radar',
-    description: "Track major external changes near your home and understand how they may affect value, demand, and livability.",
-    desktopDescription: "Track major nearby changes and understand potential effects on value, demand, and livability.",
+    name: 'Around Your Home',
+    description: "Review sourced planning, infrastructure, land-use, and other local changes.",
+    desktopDescription: "Review factual local changes and their lifecycle while keeping possible relevance separate from unsupported value predictions.",
     hrefSuffix: 'tools/neighborhood-change-radar',
     navTarget: 'tool:neighborhood-change-radar',
     icon: resolveToolIcon('home', 'neighborhood-change-radar'),
@@ -793,16 +793,16 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
       /^\/dashboard\/(properties\/[^/]+\/tools\/financing|financing)(\/|$)/.test(pathname),
   },
   {
-    key: 'home-gazette',
+    key: 'home-briefing',
     group: 'monitoring',
-    name: 'Home Gazette',
-    description: "Your weekly home intelligence briefing — risks, maintenance, finances, and more.",
-    desktopDescription: "Your weekly home intelligence briefing covering risk, maintenance priorities, and financial signals.",
-    hrefSuffix: 'tools/home-gazette',
-    navTarget: 'tool:home-gazette',
-    icon: resolveToolIcon('home', 'home-gazette'),
+    name: 'Home Briefing',
+    description: "Review meaningful changes since your last engagement.",
+    desktopDescription: "Review new canonical property changes, Home Actions, and source-health limitations without filler.",
+    hrefSuffix: 'tools/home-briefing',
+    navTarget: 'tool:home-briefing',
+    icon: resolveToolIcon('home', 'home-briefing'),
     isActive: (pathname) =>
-      /^\/dashboard\/properties\/[^/]+\/tools\/home-gazette(\/|$)/.test(pathname),
+      /^\/dashboard\/properties\/[^/]+\/tools\/home-briefing(\/|$)/.test(pathname),
   },
   {
     key: 'guidance-overview',

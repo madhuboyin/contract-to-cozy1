@@ -485,7 +485,7 @@ export class NeighborhoodRadarQueryService {
 
   private buildNarrative(cards: NeighborhoodEventCard[], signals: string[]): string {
     if (cards.length === 0) {
-      return 'No significant neighborhood changes have been detected near this property.';
+      return 'No matched neighborhood records are available for this property. This is not an all-clear; source coverage may be unavailable or incomplete.';
     }
 
     const active = cards.filter((c) => !c.isStale);
@@ -494,7 +494,7 @@ export class NeighborhoodRadarQueryService {
     const count = active.length;
 
     if (count === 0) {
-      return `${staleCount} older signal${staleCount !== 1 ? 's' : ''} on record. No recent neighborhood activity has been detected.`;
+      return `${staleCount} older signal${staleCount !== 1 ? 's' : ''} on record. No newer matched records are available; this does not confirm that no neighborhood activity occurred.`;
     }
 
     const positiveCount = active.filter((c) => c.overallEffect.includes('POSITIVE')).length;

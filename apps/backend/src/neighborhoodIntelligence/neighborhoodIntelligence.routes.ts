@@ -3,22 +3,19 @@
 import { Router } from 'express';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { UserRole } from '../types/auth.types';
-import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
-import { validateBody } from '../middleware/validate.middleware';
-import { ingestEventBodySchema } from './neighborhoodIntelligence.validators';
+import { requireReviewedIntelligenceCoverage } from '../middleware/intelligenceCoverage.middleware';
 import {
   getNeighborhoodRadarSummary,
   getNeighborhoodRadarEvents,
   getNeighborhoodRadarEventDetail,
   getNeighborhoodRadarTrends,
   getNeighborhoodSignals,
-  ingestNeighborhoodEvent,
-  recomputeEventMatches,
-  recomputePropertyRadar,
 } from './neighborhoodIntelligence.controller';
 
 const router = Router();
+const requireReviewedCoverage = requireReviewedIntelligenceCoverage('NEIGHBORHOOD_RADAR');
 
 router.use(apiRateLimiter);
 router.use(authenticate);
@@ -36,6 +33,7 @@ router.use(authenticate);
 router.get(
   '/properties/:propertyId/neighborhood-radar/summary',
   propertyAuthMiddleware,
+  requireReviewedCoverage,
   getNeighborhoodRadarSummary,
 );
 
@@ -54,6 +52,7 @@ router.get(
 router.get(
   '/properties/:propertyId/neighborhood-radar/events',
   propertyAuthMiddleware,
+  requireReviewedCoverage,
   getNeighborhoodRadarEvents,
 );
 
@@ -66,6 +65,7 @@ router.get(
 router.get(
   '/properties/:propertyId/neighborhood-radar/events/:eventId',
   propertyAuthMiddleware,
+  requireReviewedCoverage,
   getNeighborhoodRadarEventDetail,
 );
 
@@ -78,6 +78,7 @@ router.get(
 router.get(
   '/properties/:propertyId/neighborhood-radar/trends',
   propertyAuthMiddleware,
+  requireReviewedCoverage,
   getNeighborhoodRadarTrends,
 );
 
@@ -90,6 +91,7 @@ router.get(
 router.get(
   '/properties/:propertyId/neighborhood-radar/signals',
   propertyAuthMiddleware,
+  requireReviewedCoverage,
   getNeighborhoodSignals,
 );
 
@@ -106,8 +108,13 @@ router.get(
 router.post(
   '/properties/:propertyId/neighborhood-radar/recompute',
   propertyAuthMiddleware,
-  requireHouseholdRole('OWNER'),
-  recomputePropertyRadar,
+  (_req, res) => res.status(410).json({
+    success: false,
+    error: {
+      code: 'LEGACY_NEIGHBORHOOD_RECOMPUTE_RETIRED',
+      message: 'Manual radar recompute is retired. Around Your Home updates only when a reviewed source publishes a new or materially revised record.',
+    },
+  }),
 );
 
 // ============================================================================
@@ -126,8 +133,13 @@ router.post(
   '/neighborhood-intelligence/ingest',
   requireRole(UserRole.ADMIN),
   requireMfa,
-  validateBody(ingestEventBodySchema),
-  ingestNeighborhoodEvent,
+  (_req, res) => res.status(410).json({
+    success: false,
+    error: {
+      code: 'LEGACY_NEIGHBORHOOD_INGEST_RETIRED',
+      message: 'Use the reviewed property-intelligence source ingestion API.',
+    },
+  }),
 );
 
 /**
@@ -140,7 +152,13 @@ router.post(
   '/neighborhood-intelligence/events/:eventId/recompute',
   requireRole(UserRole.ADMIN),
   requireMfa,
-  recomputeEventMatches,
+  (_req, res) => res.status(410).json({
+    success: false,
+    error: {
+      code: 'LEGACY_NEIGHBORHOOD_EVENT_RECOMPUTE_RETIRED',
+      message: 'Manual event recompute is retired. Reviewed source revisions drive matching.',
+    },
+  }),
 );
 
 export default router;

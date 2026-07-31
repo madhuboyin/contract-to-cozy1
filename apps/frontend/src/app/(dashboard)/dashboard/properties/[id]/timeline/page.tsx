@@ -36,6 +36,26 @@ function formatDate(iso: string) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function formatEventDate(event: any) {
+  const date = new Date(event.occurredAt);
+  if (Number.isNaN(date.getTime())) return event.occurredAt;
+
+  switch (event.datePrecision) {
+    case 'MONTH':
+      return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+    case 'YEAR':
+      return String(date.getFullYear());
+    case 'RANGE':
+      return event.dateRangeStart && event.dateRangeEnd
+        ? `${formatDate(event.dateRangeStart)} – ${formatDate(event.dateRangeEnd)}`
+        : `Around ${formatDate(event.occurredAt)}`;
+    case 'UNKNOWN':
+      return 'Date unknown';
+    default:
+      return formatDate(event.occurredAt);
+  }
+}
+
 function iconForType(type?: string) {
   switch (type) {
     case 'PURCHASE': return '🛒';
@@ -84,6 +104,13 @@ function toTimelineEvent(entry: TimelineProjectionEntry) {
       sourceModel: entry.sourceModel,
       signalKey: entry.signalKey,
     },
+    datePrecision: entry.payloadJson?.datePrecision ?? 'EXACT_DATE',
+    observationKind: entry.payloadJson?.observationKind ?? (
+      entry.kind === 'SIGNAL' ? 'INFERRED' : 'SYSTEM_GENERATED'
+    ),
+    verificationStatus: entry.payloadJson?.verificationStatus ?? (
+      entry.kind === 'SIGNAL' ? 'PENDING_CONFIRMATION' : 'UNVERIFIED'
+    ),
   };
 }
 
@@ -184,11 +211,16 @@ function TimelineEventRow({
               <div className="font-medium truncate">{e.title}</div>
 
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span>{formatDate(e.occurredAt)}</span>
+                <span>{formatEventDate(e)}</span>
                 {e.type && <Badge>{formatEnumLabel(e.type)}</Badge>}
                 {e.importance === 'HIGHLIGHT' && <Badge>Highlight</Badge>}
                 {e.subtype && e.subtype !== e.type && (
                   <Badge>{formatEnumLabel(e.subtype)}</Badge>
+                )}
+                {e.observationKind && <Badge>{formatEnumLabel(e.observationKind)}</Badge>}
+                {e.verificationStatus && <Badge>{formatEnumLabel(e.verificationStatus)}</Badge>}
+                {e.datePrecision && e.datePrecision !== 'EXACT_DATE' && (
+                  <Badge>{formatEnumLabel(e.datePrecision)}</Badge>
                 )}
               </div>
 
@@ -562,12 +594,12 @@ export default function Page() {
             status={<StatusChip tone={isFetching ? 'info' : 'good'}>{isFetching ? 'Refreshing' : 'Synced'}</StatusChip>}
             summary={
               replayOn
-                ? `Replay ${replayRunning ? 'running' : 'paused'}${replayProgress ? ` • ${replayProgress}` : ''}`
-                : 'Replay is off'
+                ? `Story playback ${replayRunning ? 'running' : 'paused'}${replayProgress ? ` • ${replayProgress}` : ''}`
+                : 'Story playback is off'
             }
             highlights={[
               typeLabel,
-              `Mode: ${mode === 'VISUAL' ? 'Visual replay' : 'List view'}`,
+              `Mode: ${mode === 'VISUAL' ? 'Visual history' : 'List view'}`,
               hasCustomLimit ? `Showing up to ${limit} events` : 'Showing default event volume',
             ]}
           />
@@ -702,7 +734,7 @@ export default function Page() {
               </select>
             </>
           }
-          secondaryLabel="Replay controls"
+          secondaryLabel="Story playback controls"
           secondaryFilters={
             mode === 'VISUAL' ? (
               <>
@@ -720,7 +752,7 @@ export default function Page() {
                     }
                   }}
                 >
-                  Replay: {replayOn ? 'On' : 'Off'}
+                  Story playback: {replayOn ? 'On' : 'Off'}
                 </button>
 
                 {replayOn ? (
@@ -731,7 +763,7 @@ export default function Page() {
                         className="min-h-[40px] rounded-lg bg-[hsl(var(--mobile-brand-strong))] px-3 text-sm font-semibold text-white"
                         onClick={() => setReplayRunning((v) => !v)}
                       >
-                        {replayRunning ? 'Pause Replay' : 'Resume Replay'}
+                        {replayRunning ? 'Pause Story' : 'Resume Story'}
                       </button>
                     }
                     secondaryActions={
@@ -750,7 +782,7 @@ export default function Page() {
                           className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
                           value={replaySpeedMs}
                           onChange={(e) => setReplaySpeedMs(Number(e.target.value))}
-                          title="Replay speed"
+                          title="Story playback speed"
                         >
                           <option value={950}>Slow</option>
                           <option value={650}>Calm</option>
@@ -777,7 +809,7 @@ export default function Page() {
               <StatusChip tone={mode === 'VISUAL' ? 'protected' : 'good'}>
                 {mode === 'VISUAL' ? 'Visual mode' : 'List mode'}
               </StatusChip>
-              {replayOn ? <StatusChip tone={replayRunning ? 'protected' : 'elevated'}>Replay active</StatusChip> : null}
+              {replayOn ? <StatusChip tone={replayRunning ? 'protected' : 'elevated'}>Story active</StatusChip> : null}
             </>
           }
           actions={

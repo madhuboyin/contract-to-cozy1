@@ -1895,6 +1895,14 @@ model User {
   inventoryDraftItems       InventoryDraftItem[]
   inventoryRoomScanSessions InventoryRoomScanSession[]
   homeEvents                HomeEvent[]
+  homeEventDeletions        HomeEvent[]                      @relation("HomeEventDeletedBy")
+  homeEventConfirmations    HomeEvent[]                      @relation("HomeEventConfirmedBy")
+  homeEventEvidenceAdded    HomeEventEvidence[]              @relation("HomeEventEvidenceAddedBy")
+  homeEventVerifications    HomeEventVerificationRecord[]    @relation("HomeEventVerificationActor")
+  hazardOutcomesConfirmed   PropertyHazardOutcome[]          @relation("PropertyHazardOutcomeConfirmer")
+  hazardEvidenceLinked      PropertyHazardEvidenceLink[]     @relation("PropertyHazardEvidenceLinker")
+  hazardOutcomeAssertions   PropertyHazardOutcomeAssertion[]
+  localObservationStates    PropertyLocalObservationState[]
   dailySnapshots            PropertyDailySnapshot[]
   microActions              PropertyMicroAction[]
   streaks                   PropertyStreak[]
@@ -1967,6 +1975,10 @@ model User {
   // Home Operations — durable operational work identity (Slice 1)
   operationalWorkItemsOwned   OperationalWorkItem[]        @relation("OperationalWorkItemOwner")
   operationalWorkItemsWatched OperationalWorkItemWatcher[] @relation("OperationalWorkItemWatcher")
+  propertyChangeAudienceStates PropertyChangeAudienceState[]
+  homeBriefingPreferences      HomeBriefingPreference[]
+  homeBriefingDeliveries       HomeBriefingDelivery[]
+  homeBriefingSharesCreated    HomeBriefingShare[]          @relation("HomeBriefingShareCreator")
 
   // Home Improvement Financing Center
   financingScenarios FinancingScenario[]
@@ -2855,6 +2867,7 @@ model Property {
   homePlants               HomePlant[]
   gardenZones              GardenZone[]
   homeEvents               HomeEvent[]
+  hazardOutcomes           PropertyHazardOutcome[]
   toolOverrides            ToolOverride[]
 
   roomScanSessions                InventoryRoomScanSession[]
@@ -2918,6 +2931,8 @@ model Property {
   hiddenAssetScanRuns PropertyHiddenAssetScanRun[]
 
   neighborhoodEvents PropertyNeighborhoodEvent[]
+  intelligenceObservationMatches PropertyObservationMatch[]
+  localObservationStates         PropertyLocalObservationState[]
 
   // Analytics activation state
   activatedAt      DateTime?
@@ -3010,6 +3025,10 @@ model Property {
 
   // Home Operations — durable operational work identity (Slice 1)
   operationalWorkItems OperationalWorkItem[]
+  propertyChanges       PropertyChange[]
+  propertyChangeCursors PropertyChangeSourceCursor[]
+  homeBriefingPreferences HomeBriefingPreference[]
+  homeBriefingDeliveries  HomeBriefingDelivery[]
 
   // Neighbourhood Trust Network
   neighbourhoodEndorsements NeighbourhoodEndorsement[]
@@ -3637,6 +3656,8 @@ model Document {
   homeReportExports          HomeReportExport[]
   claimDocuments             ClaimDocument[]
   homeEventLinks             HomeEventDocument[]
+  homeEventEvidence                    HomeEventEvidence[]
+  hazardEvidenceLinks                  PropertyHazardEvidenceLink[]
   riskMitigationPlanItems    RiskMitigationPlanItem[]
   capitalTimelineItems       HomeCapitalTimelineItem[]
   negotiationShieldDocuments NegotiationShieldDocument[]
@@ -5722,6 +5743,51 @@ enum HomeEventDocumentKind {
   OTHER
 }
 
+enum HomeEventObservationKind {
+  OBSERVED
+  USER_REPORTED
+  EVIDENCE_DERIVED
+  INFERRED
+  SYSTEM_GENERATED
+}
+
+enum HomeEventDatePrecision {
+  EXACT_DATE
+  MONTH
+  YEAR
+  RANGE
+  UNKNOWN
+}
+
+enum HomeEventVerificationStatus {
+  UNVERIFIED
+  PENDING_CONFIRMATION
+  HOMEOWNER_CONFIRMED
+  EVIDENCE_VERIFIED
+  DISPUTED
+}
+
+enum HomeEventSourceType {
+  USER
+  DOMAIN_ENTITY
+  DOCUMENT
+  PUBLIC_RECORD
+  SYSTEM_AUTOMATION
+  INFERENCE
+}
+
+enum HomeEventEvidenceType {
+  DOCUMENT
+  PHOTO
+  RECEIPT
+  INVOICE
+  INSPECTION
+  CLAIM
+  REPAIR_RECORD
+  USER_ATTESTATION
+  DOMAIN_RECORD
+}
+
 enum HomeScoreProvenanceBadge {
   VERIFIED
   DOCUMENT_BACKED
@@ -5749,6 +5815,9 @@ model HomeEvent {
 
   occurredAt DateTime
   endAt      DateTime?
+  datePrecision  HomeEventDatePrecision @default(EXACT_DATE)
+  dateRangeStart DateTime?
+  dateRangeEnd   DateTime?
 
   title   String
   summary String?
@@ -5764,6 +5833,23 @@ model HomeEvent {
   sourceBadge     HomeScoreProvenanceBadge @default(USER_REPORTED)
   confidenceScore Int?
   provenanceId    String?
+  observationKind    HomeEventObservationKind    @default(SYSTEM_GENERATED)
+  verificationStatus HomeEventVerificationStatus @default(UNVERIFIED)
+  sourceType         HomeEventSourceType         @default(SYSTEM_AUTOMATION)
+  sourceEntityType   String?
+  sourceEntityId     String?
+  sourceAsOf         DateTime?
+  revision           Int                         @default(1)
+  supersedesEventId  String?
+  isCurrent          Boolean                     @default(true)
+  parentEventId      String?
+  groupType          String?
+  correctionReason   String?
+  confirmedAt        DateTime?
+  confirmedByUserId  String?
+  deletedAt          DateTime?
+  deletedByUserId    String?
+  deletionReason     String?
 
   // ---------------------------------------------------------------------------
   // FRD-FR-03/FR-04: 2-Year Lookback & Journey Linkage
@@ -5795,10 +5881,22 @@ model HomeEvent {
   project         ProjectRecord?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   provenance      SignalProvenance? @relation("HomeEventProvenance", fields: [provenanceId], references: [id], onDelete: SetNull)
   guidanceJourney GuidanceJourney?  @relation(fields: [guidanceJourneyId], references: [id], onDelete: SetNull)
+  supersedesEvent    HomeEvent?        @relation("HomeEventRevision", fields: [supersedesEventId], references: [id], onDelete: SetNull)
+  supersededByEvents HomeEvent[]       @relation("HomeEventRevision")
+  parentEvent        HomeEvent?        @relation("HomeEventGroup", fields: [parentEventId], references: [id], onDelete: SetNull)
+  childEvents        HomeEvent[]       @relation("HomeEventGroup")
+  confirmedBy        User?             @relation("HomeEventConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  deletedBy          User?             @relation("HomeEventDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
 
   documents               HomeEventDocument[]
   riskMitigationPlanItems RiskMitigationPlanItem[]
   capitalTimelineItems    HomeCapitalTimelineItem[]
+  propertyChanges         PropertyChange[]
+  homeBriefingItems       HomeBriefingItem[]
+  evidence                HomeEventEvidence[]
+  verificationRecords     HomeEventVerificationRecord[]
+  hazardOutcomes          PropertyHazardOutcome[]       @relation("PropertyHazardOutcomeTimelineEvent")
+  hazardEvidenceLinks     PropertyHazardEvidenceLink[]
 
   @@unique([propertyId, idempotencyKey])
   @@index([propertyId, occurredAt])
@@ -5812,7 +5910,52 @@ model HomeEvent {
   @@index([provenanceId])
   @@index([propertyId, guidanceJourneyId]) // FRD-FR-11: journey → events lookup
   @@index([propertyId, isRetrospective, occurredAt]) // FRD-FR-03: lookback query filter
+  @@index([propertyId, isCurrent, deletedAt, occurredAt(sort: Desc)])
+  @@index([propertyId, observationKind, verificationStatus])
+  @@index([supersedesEventId])
+  @@index([parentEventId])
+  @@index([sourceType, sourceEntityType, sourceEntityId])
   @@map("home_events")
+}
+
+model HomeEventEvidence {
+  id               String                @id @default(uuid())
+  eventId          String
+  evidenceType     HomeEventEvidenceType
+  evidenceKey      String
+  documentId       String?
+  sourceEntityType String?
+  sourceEntityId   String?
+  observedAt       DateTime?
+  note             String?
+  addedByUserId    String?
+  createdAt        DateTime              @default(now())
+
+  event    HomeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  addedBy  User?     @relation("HomeEventEvidenceAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, evidenceKey])
+  @@index([eventId, createdAt])
+  @@index([documentId])
+  @@index([sourceEntityType, sourceEntityId])
+  @@map("home_event_evidence")
+}
+
+model HomeEventVerificationRecord {
+  id          String                      @id @default(uuid())
+  eventId     String
+  status      HomeEventVerificationStatus
+  actorUserId String?
+  reason      String?
+  createdAt   DateTime                    @default(now())
+
+  event HomeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  actor User?     @relation("HomeEventVerificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt(sort: Desc)])
+  @@index([actorUserId])
+  @@map("home_event_verification_records")
 }
 
 model HomeEventDocument {
@@ -6740,6 +6883,7 @@ model Claim {
   documents      ClaimDocument[]
   timelineEvents ClaimTimelineEvent[]
   homeEvents     HomeEvent[]
+  hazardEvidenceLinks PropertyHazardEvidenceLink[]
 
   @@index([propertyId, status])
   @@index([createdBy, status])
@@ -8426,9 +8570,9 @@ model HomeSavingsOpportunityOutcome {
 
   documents Document[] @relation("HomeSavingsOpportunityOutcomeDocuments")
 
+  @@unique([opportunityId, idempotencyKey])
   @@index([opportunityId])
   @@index([actionId])
-  @@unique([opportunityId, idempotencyKey])
   @@index([opportunityId, recordedAt])
   @@index([opportunityId, verificationState])
   @@map("home_savings_opportunity_outcomes")
@@ -11766,9 +11910,9 @@ model SavingsBenefitAction {
   homeSavingsOutcomes    HomeSavingsOpportunityOutcome[]
   complaints             SavingsBenefitPartnerComplaint[]
 
+  @@unique([propertyId, idempotencyKey])
   @@index([propertyId, state])
   @@index([state, followUpAt, followUpNotificationSentAt])
-  @@unique([propertyId, idempotencyKey])
   @@index([hiddenAssetMatchId])
   @@index([homeSavingsOpportunityId])
   @@index([partnerId, handoffStatus])
@@ -11891,9 +12035,9 @@ model HiddenAssetMatchOutcome {
 
   documents Document[] @relation("HiddenAssetMatchOutcomeDocuments")
 
+  @@unique([matchId, idempotencyKey])
   @@index([matchId])
   @@index([actionId])
-  @@unique([matchId, idempotencyKey])
   @@index([matchId, recordedAt])
   @@index([matchId, verificationState])
   @@map("hidden_asset_match_outcomes")
@@ -12609,6 +12753,637 @@ model PropertyNeighborhoodEvent {
   @@index([propertyId])
   @@index([eventId])
   @@map("property_neighborhood_events")
+}
+
+// ============================================================================
+// PROPERTY INTELLIGENCE — SHARED SOURCE, COVERAGE, AND OBSERVATION FOUNDATION
+// ============================================================================
+
+enum IntelligenceSourceFamily {
+  HAZARD
+  PLANNING
+  INFRASTRUCTURE
+  LAND_USE
+  FLOOD_MAP
+  SCHOOL
+  ENVIRONMENTAL
+  OTHER
+}
+
+enum IntelligenceSourceReviewStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  PAUSED
+  REJECTED
+}
+
+enum IntelligenceCoverageGeographyType {
+  POINT_RADIUS
+  POLYGON
+  ZIP
+  COUNTY
+  STATE
+  NATIONAL
+}
+
+enum IntelligenceCoverageStatus {
+  CONFIGURED
+  ACTIVE
+  DEGRADED
+  STALE
+  UNAVAILABLE
+}
+
+enum IntelligenceSourceRunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  REJECTED
+}
+
+enum IntelligenceObservationLifecycleStatus {
+  PROPOSED
+  APPROVED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  STALE
+  UNKNOWN
+}
+
+enum IntelligencePropertyMatchMethod {
+  EXACT_POINT_DISTANCE
+  POLYGON_OVERLAP
+  ZIP
+  COUNTY
+  STATE
+}
+
+enum IntelligenceGeographicPrecision {
+  EXACT
+  PARCEL
+  POINT
+  POLYGON
+  ZIP
+  COUNTY
+  STATE
+}
+
+enum IntelligenceAssessmentRelevance {
+  UNKNOWN
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IntelligenceAssessmentMateriality {
+  INFORMATIONAL
+  MEANINGFUL
+  IMPORTANT
+  URGENT
+}
+
+enum PropertyLocalObservationDisposition {
+  DEFAULT
+  FOLLOWING
+  DISMISSED
+  NOT_RELEVANT
+}
+
+model IntelligenceSource {
+  id                        String                         @id @default(uuid())
+  key                       String                         @unique
+  family                    IntelligenceSourceFamily
+  provider                  String
+  reviewedStatus            IntelligenceSourceReviewStatus @default(DRAFT)
+  termsVersion              String?
+  supportedObservationTypes String[]                       @default([])
+  refreshPolicy             Json
+  enabledEnvironments       String[]                       @default([])
+  reviewedAt                DateTime?
+  reviewedBy                String?
+  pausedAt                  DateTime?
+  pauseReason               String?
+  createdAt                 DateTime                       @default(now())
+  updatedAt                 DateTime                       @updatedAt
+
+  coverages    IntelligenceSourceCoverage[]
+  runs         IntelligenceSourceRun[]
+  observations IntelligenceObservation[]
+
+  @@index([family, reviewedStatus])
+  @@index([provider])
+  @@map("intelligence_sources")
+}
+
+model IntelligenceSourceCoverage {
+  id                  String                            @id @default(uuid())
+  sourceId            String
+  geographyType       IntelligenceCoverageGeographyType
+  geographyKey        String?
+  geometryJson        Json?
+  validFrom           DateTime?
+  validThrough        DateTime?
+  checkedThrough      DateTime?
+  coverageLimitations String?
+  status              IntelligenceCoverageStatus        @default(CONFIGURED)
+  qaReviewedAt        DateTime?
+  qaReviewedBy        String?
+  qaReviewNote        String?
+  lastSuccessfulRunAt DateTime?
+  lastFailureAt       DateTime?
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+
+  source IntelligenceSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, geographyType, geographyKey])
+  @@index([sourceId, status, checkedThrough])
+  @@index([geographyType, geographyKey])
+  @@index([validThrough])
+  @@map("intelligence_source_coverages")
+}
+
+model IntelligenceSourceRun {
+  id              String                      @id @default(uuid())
+  sourceId        String
+  startedAt       DateTime                    @default(now())
+  completedAt     DateTime?
+  status          IntelligenceSourceRunStatus @default(RUNNING)
+  recordsRead     Int                         @default(0)
+  recordsAccepted Int                         @default(0)
+  recordsRejected Int                         @default(0)
+  coverageUpdated Boolean                     @default(false)
+  failureCode     String?
+  failureDetail   String?
+  environment     String
+  correlationId   String?                     @unique
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  source       IntelligenceSource        @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  observations IntelligenceObservation[]
+
+  @@index([sourceId, startedAt(sort: Desc)])
+  @@index([status, startedAt(sort: Desc)])
+  @@map("intelligence_source_runs")
+}
+
+model IntelligenceObservation {
+  id                      String                                 @id @default(uuid())
+  sourceId                String
+  sourceRunId             String
+  externalId              String
+  observationType         String
+  lifecycleStatus         IntelligenceObservationLifecycleStatus
+  observedAt              DateTime?
+  effectiveFrom           DateTime?
+  effectiveTo             DateTime?
+  latitude                Float?
+  longitude               Float?
+  geographyType           IntelligenceCoverageGeographyType
+  geographyKey            String?
+  geometryJson            Json?
+  matchRadiusMiles        Float?
+  sourceUrl               String?
+  sourcePublishedAt       DateTime?
+  lastVerifiedAt          DateTime
+  revision                Int                                    @default(1)
+  supersedesObservationId String?
+  factualPayload          Json
+  contentHash             String
+  createdAt               DateTime                               @default(now())
+  updatedAt               DateTime                               @updatedAt
+
+  source          IntelligenceSource         @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sourceRun       IntelligenceSourceRun      @relation(fields: [sourceRunId], references: [id], onDelete: Restrict)
+  supersedes      IntelligenceObservation?   @relation("IntelligenceObservationRevision", fields: [supersedesObservationId], references: [id], onDelete: SetNull)
+  supersededBy    IntelligenceObservation[]  @relation("IntelligenceObservationRevision")
+  propertyMatches PropertyObservationMatch[]
+
+  @@unique([sourceId, externalId, revision])
+  @@unique([sourceId, externalId, contentHash])
+  @@index([sourceId, externalId, revision(sort: Desc)])
+  @@index([sourceRunId])
+  @@index([observationType, lifecycleStatus])
+  @@index([geographyType, geographyKey])
+  @@index([lastVerifiedAt])
+  @@map("intelligence_observations")
+}
+
+model PropertyObservationMatch {
+  id                  String                          @id @default(uuid())
+  propertyId          String
+  observationId       String
+  matchMethod         IntelligencePropertyMatchMethod
+  distanceMiles       Float?
+  overlapRatio        Float?
+  geographicPrecision IntelligenceGeographicPrecision
+  matchConfidence     Float
+  matchedGeography    String
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+
+  property      Property                        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  observation   IntelligenceObservation         @relation(fields: [observationId], references: [id], onDelete: Cascade)
+  assessments   PropertyImpactAssessment[]
+  hazardOutcome PropertyHazardOutcome?
+  localStates   PropertyLocalObservationState[]
+
+  @@unique([propertyId, observationId])
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([observationId])
+  @@index([matchMethod, geographicPrecision])
+  @@map("property_observation_matches")
+}
+
+model PropertyLocalObservationState {
+  id               String                              @id @default(uuid())
+  propertyId       String
+  propertyMatchId  String
+  userId           String
+  disposition      PropertyLocalObservationDisposition @default(DEFAULT)
+  lastSeenRevision Int?
+  seenAt           DateTime?
+  followedAt       DateTime?
+  dismissedAt      DateTime?
+  notRelevantAt    DateTime?
+  reason           String?
+  createdAt        DateTime                            @default(now())
+  updatedAt        DateTime                            @updatedAt
+
+  property      Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyMatch PropertyObservationMatch @relation(fields: [propertyMatchId], references: [id], onDelete: Cascade)
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyMatchId, userId])
+  @@index([propertyId, userId, disposition])
+  @@map("property_local_observation_states")
+}
+
+model PropertyImpactAssessment {
+  id                 String                            @id @default(uuid())
+  propertyMatchId    String
+  rulesVersion       String
+  affectedEntities   String[]                          @default([])
+  relevance          IntelligenceAssessmentRelevance   @default(UNKNOWN)
+  materiality        IntelligenceAssessmentMateriality @default(INFORMATIONAL)
+  confidence         Float
+  knownFactsUsed     Json
+  missingFacts       String[]                          @default([])
+  boundedExplanation String
+  supersededAt       DateTime?
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+
+  propertyMatch PropertyObservationMatch @relation(fields: [propertyMatchId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyMatchId, rulesVersion])
+  @@index([propertyMatchId, supersededAt])
+  @@index([materiality, relevance])
+  @@map("property_impact_assessments")
+}
+
+enum PropertyHazardEffectStatus {
+  UNKNOWN
+  NO_OBSERVED_EFFECT
+  OBSERVED_EFFECT_CONFIRMED
+}
+
+enum PropertyHazardEvidenceKind {
+  CLAIM
+  INSPECTION
+  REPAIR
+  PHOTO
+  DOCUMENT
+  USER_ATTESTATION
+}
+
+model PropertyHazardOutcome {
+  id                       String                     @id @default(uuid())
+  propertyId               String
+  propertyMatchId          String                     @unique
+  status                   PropertyHazardEffectStatus @default(UNKNOWN)
+  effectObservedAt         DateTime?
+  note                     String?
+  confirmedAt              DateTime?
+  confirmedByUserId        String?
+  canonicalActionId        String?
+  canonicalTimelineEventId String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+
+  property      Property                         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyMatch PropertyObservationMatch         @relation(fields: [propertyMatchId], references: [id], onDelete: Cascade)
+  confirmedBy   User?                            @relation("PropertyHazardOutcomeConfirmer", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  timelineEvent HomeEvent?                       @relation("PropertyHazardOutcomeTimelineEvent", fields: [canonicalTimelineEventId], references: [id], onDelete: SetNull)
+  evidence      PropertyHazardEvidenceLink[]
+  assertions    PropertyHazardOutcomeAssertion[]
+
+  @@index([propertyId, status, updatedAt(sort: Desc)])
+  @@index([canonicalActionId])
+  @@index([canonicalTimelineEventId])
+  @@map("property_hazard_outcomes")
+}
+
+model PropertyHazardOutcomeAssertion {
+  id               String                     @id @default(uuid())
+  outcomeId        String
+  status           PropertyHazardEffectStatus
+  effectObservedAt DateTime?
+  note             String?
+  assertedByUserId String
+  createdAt        DateTime                   @default(now())
+
+  outcome    PropertyHazardOutcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  assertedBy User                  @relation(fields: [assertedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([outcomeId, createdAt(sort: Desc)])
+  @@index([assertedByUserId])
+  @@map("property_hazard_outcome_assertions")
+}
+
+model PropertyHazardEvidenceLink {
+  id             String                     @id @default(uuid())
+  outcomeId      String
+  kind           PropertyHazardEvidenceKind
+  entityKey      String
+  claimId        String?
+  homeEventId    String?
+  documentId     String?
+  entityType     String?
+  entityId       String?
+  note           String?
+  linkedByUserId String?
+  createdAt      DateTime                   @default(now())
+
+  outcome   PropertyHazardOutcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  claim     Claim?                @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  homeEvent HomeEvent?            @relation(fields: [homeEventId], references: [id], onDelete: SetNull)
+  document  Document?             @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  linkedBy  User?                 @relation("PropertyHazardEvidenceLinker", fields: [linkedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([outcomeId, entityKey])
+  @@index([claimId])
+  @@index([homeEventId])
+  @@index([documentId])
+  @@index([entityType, entityId])
+  @@map("property_hazard_evidence_links")
+}
+
+enum PropertyChangeType {
+  SOURCE_RECORD_CREATED
+  SOURCE_RECORD_REVISED
+  SOURCE_LIFECYCLE_CHANGED
+  PROPERTY_FACT_CHANGED
+  ACTION_STATE_CHANGED
+  OUTCOME_CONFIRMED
+  SOURCE_HEALTH_CHANGED
+}
+
+enum PropertyChangeBriefingEligibility {
+  ELIGIBLE
+  DEFERRED
+  INELIGIBLE
+}
+
+model PropertyChange {
+  id                      String                            @id @default(uuid())
+  propertyId              String
+  sourceType              String
+  sourceEntityId          String
+  sourceRevision          String
+  sourceRevisionOrdinal   Int
+  changeType              PropertyChangeType
+  occurredAt              DateTime?
+  detectedAt              DateTime                          @default(now())
+  materiality             IntelligenceAssessmentMateriality
+  materialityRank         Int
+  materialityReasonCodes  String[]                          @default([])
+  materialityRulesVersion String
+  confidence              Float?
+  canonicalActionId       String?
+  canonicalEventId        String?
+  deduplicationKey        String
+  briefingEligibility     PropertyChangeBriefingEligibility
+  briefingReasonCodes     String[]                          @default([])
+  briefingEvaluatedAt     DateTime
+  briefingRulesVersion    String
+  supersededByChangeId    String?
+  supersededAt            DateTime?
+  createdAt               DateTime                          @default(now())
+  updatedAt               DateTime                          @updatedAt
+
+  property          Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  canonicalAction   OperationalWorkItem?          @relation(fields: [canonicalActionId], references: [id], onDelete: SetNull)
+  canonicalEvent    HomeEvent?                    @relation(fields: [canonicalEventId], references: [id], onDelete: SetNull)
+  supersededBy      PropertyChange?               @relation("PropertyChangeSupersession", fields: [supersededByChangeId], references: [id], onDelete: SetNull)
+  supersedes        PropertyChange[]              @relation("PropertyChangeSupersession")
+  audienceStates    PropertyChangeAudienceState[]
+  briefingItems     HomeBriefingItem[]
+  sourceCursorHeads PropertyChangeSourceCursor[]  @relation("PropertyChangeSourceCursorHead")
+
+  @@unique([propertyId, sourceType, sourceEntityId, sourceRevision])
+  @@unique([propertyId, deduplicationKey])
+  @@index([propertyId, detectedAt(sort: Desc)])
+  @@index([propertyId, briefingEligibility, materialityRank(sort: Desc), detectedAt(sort: Desc)])
+  @@index([sourceType, sourceEntityId, sourceRevisionOrdinal(sort: Desc)])
+  @@index([canonicalActionId])
+  @@index([canonicalEventId])
+  @@index([supersededByChangeId])
+  @@map("property_changes")
+}
+
+model PropertyChangeAudienceState {
+  id               String    @id @default(uuid())
+  propertyChangeId String
+  userId           String
+  firstDeliveredAt DateTime?
+  lastDeliveredAt  DateTime?
+  openedAt         DateTime?
+  seenAt           DateTime?
+  actedAt          DateTime?
+  dismissedAt      DateTime?
+  notUsefulAt      DateTime?
+  dismissalReason  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  propertyChange PropertyChange @relation(fields: [propertyChangeId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyChangeId, userId])
+  @@index([userId, seenAt, dismissedAt])
+  @@index([propertyChangeId, lastDeliveredAt])
+  @@map("property_change_audience_states")
+}
+
+enum HomeBriefingCadence {
+  IMMEDIATE
+  WEEKLY
+  MONTHLY
+  IMPORTANT_ONLY
+}
+
+enum HomeBriefingChannel {
+  IN_APP
+  EMAIL
+  PUSH
+}
+
+enum HomeBriefingDeliveryStatus {
+  GENERATED
+  DELIVERED
+  OPENED
+  ARCHIVED
+}
+
+enum HomeBriefingShareStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+model HomeBriefingPreference {
+  id         String               @id @default(uuid())
+  propertyId String
+  userId     String
+  cadence    HomeBriefingCadence  @default(WEEKLY)
+  topics     String[]             @default([])
+  channels   HomeBriefingChannel[] @default([IN_APP])
+  enabled    Boolean              @default(true)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, userId])
+  @@index([userId, enabled, cadence])
+  @@map("home_briefing_preferences")
+}
+
+model HomeBriefingDelivery {
+  id                   String                      @id @default(uuid())
+  deliveryKey          String                      @unique
+  propertyId           String
+  userId               String
+  cadence              HomeBriefingCadence
+  channels             HomeBriefingChannel[]
+  windowStart          DateTime
+  windowEnd            DateTime
+  status               HomeBriefingDeliveryStatus @default(GENERATED)
+  itemCount            Int                         @default(0)
+  sourceHealthSnapshot Json
+  quietReasonCodes     String[]                    @default([])
+  baselineVersion      String                      @default("home-briefing-deterministic-v1")
+  generatedAt          DateTime                    @default(now())
+  deliveredAt          DateTime?
+  openedAt             DateTime?
+  archivedAt           DateTime?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  property Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items    HomeBriefingItem[]
+  shares   HomeBriefingShare[]
+
+  @@index([propertyId, userId, generatedAt(sort: Desc)])
+  @@index([userId, status, itemCount])
+  @@map("home_briefing_deliveries")
+}
+
+model HomeBriefingItem {
+  id                 String   @id @default(uuid())
+  deliveryId         String
+  propertyChangeId   String
+  canonicalActionId  String?
+  canonicalEventId   String?
+  topic              String
+  title              String
+  summary            String   @db.Text
+  materiality        IntelligenceAssessmentMateriality
+  primaryDeepLink    String
+  sourceLineage      Json
+  shareEligible      Boolean  @default(false)
+  openedAt           DateTime?
+  seenAt             DateTime?
+  actedAt            DateTime?
+  dismissedAt        DateTime?
+  notUsefulAt        DateTime?
+  outcomeNote        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  delivery       HomeBriefingDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  propertyChange PropertyChange       @relation(fields: [propertyChangeId], references: [id], onDelete: Restrict)
+  canonicalAction OperationalWorkItem? @relation(fields: [canonicalActionId], references: [id], onDelete: SetNull)
+  canonicalEvent  HomeEvent?           @relation(fields: [canonicalEventId], references: [id], onDelete: SetNull)
+  sharedIn         HomeBriefingSharedItem[]
+
+  @@unique([deliveryId, propertyChangeId])
+  @@index([propertyChangeId])
+  @@index([canonicalActionId])
+  @@index([canonicalEventId])
+  @@index([deliveryId, dismissedAt, seenAt])
+  @@map("home_briefing_items")
+}
+
+model HomeBriefingShare {
+  id              String                   @id @default(uuid())
+  deliveryId      String
+  propertyId      String
+  createdByUserId String
+  tokenHash       String                   @unique
+  status          HomeBriefingShareStatus @default(ACTIVE)
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  lastViewedAt    DateTime?
+  viewCount       Int                      @default(0)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  delivery  HomeBriefingDelivery   @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  createdBy User                   @relation("HomeBriefingShareCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  items     HomeBriefingSharedItem[]
+
+  @@index([propertyId, status])
+  @@index([deliveryId, status])
+  @@map("home_briefing_shares")
+}
+
+model HomeBriefingSharedItem {
+  shareId String
+  itemId  String
+
+  share HomeBriefingShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  item  HomeBriefingItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([shareId, itemId])
+  @@index([itemId])
+  @@map("home_briefing_shared_items")
+}
+
+model PropertyChangeSourceCursor {
+  id                    String   @id @default(uuid())
+  propertyId            String
+  sourceType            String
+  sourceEntityId        String
+  latestRevision        String
+  latestRevisionOrdinal Int
+  latestChangeId        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  property     Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  latestChange PropertyChange? @relation("PropertyChangeSourceCursorHead", fields: [latestChangeId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, sourceType, sourceEntityId])
+  @@index([latestChangeId])
+  @@map("property_change_source_cursors")
 }
 
 // Stores predicted impacts from a neighborhood event.
@@ -17038,11 +17813,11 @@ model ProjectMilestone {
   triggeredPayments ProjectPayment[]     @relation("PaymentTriggerMilestone")
   progressLogs      ProjectProgressLog[]
 
+  @@unique([projectId, executionSourceType, executionSourceId])
   @@index([projectId, position])
   @@index([projectId, status])
   @@index([dependsOnMilestoneId])
   @@index([linkedPermitMilestoneId])
-  @@unique([projectId, executionSourceType, executionSourceId])
   @@index([projectId, reconciliationStatus])
   @@map("project_milestones")
 }
@@ -17194,10 +17969,10 @@ model ProjectIssue {
   project    ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
   resolvedBy User?         @relation("ProjectIssueResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
 
+  @@unique([projectId, sourceEntityType, sourceEntityId])
   @@index([projectId, status])
   @@index([projectId, severity])
   @@index([resolvedByUserId])
-  @@unique([projectId, sourceEntityType, sourceEntityId])
   @@map("project_issues")
 }
 
@@ -19220,6 +19995,7 @@ enum OperationalWorkSourceType {
   GUIDANCE
   PROJECT
   INCIDENT
+  HAZARD_OBSERVATION
   RECALL
   COVERAGE
   INSPECTION_FINDING
@@ -19242,6 +20018,19 @@ enum OperationalWorkExecutionType {
 enum OperationalWorkExecutionRole {
   PRIMARY
   SUPPORTING
+}
+
+// Home Operations Item #15 (Slice 8's smallest deferred item): who is
+// actually carrying out this execution — a licensed contractor/provider or
+// the household itself. UNKNOWN (not nullable) matches this codebase's
+// explicit-unknown-state convention elsewhere (e.g. PropertyFact's KNOWN/
+// UNKNOWN states) — most executions don't have a derivable signal yet and
+// that should read as "not yet known," not silently absent.
+enum OperationalWorkResponsibleParty {
+  HOUSEHOLD
+  CONTRACTOR
+  SHARED
+  UNKNOWN
 }
 
 enum OperationalWorkEventType {
@@ -19342,6 +20131,8 @@ model OperationalWorkItem {
   events     OperationalWorkEvent[]
   evidence   OperationalWorkEvidence[]
   watchers   OperationalWorkItemWatcher[]
+  propertyChanges PropertyChange[]
+  homeBriefingItems HomeBriefingItem[]
 
   @@unique([propertyId, workKey])
   @@index([propertyId, state])
@@ -19382,6 +20173,9 @@ model OperationalWorkExecution {
   executionType     OperationalWorkExecutionType
   executionEntityId String
   role              OperationalWorkExecutionRole @default(PRIMARY)
+
+  // Home Operations Item #15
+  responsibleParty OperationalWorkResponsibleParty @default(UNKNOWN)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

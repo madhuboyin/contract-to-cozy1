@@ -5,6 +5,7 @@ export * from './homeAssetDisplay';
 export * from './outcomeLineage.contract';
 export * from './recommendationGovernance.contract';
 export * from './recommendationResponse.contract';
+export * from './propertyIntelligenceOwnership.contract';
 export * from './recommendationIncident.contract';
 export * from './notificationPolicy.contract';
 export * from './groundedAsk.contract';

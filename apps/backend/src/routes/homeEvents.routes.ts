@@ -13,6 +13,10 @@ import {
   deleteHomeEvent,
   attachHomeEventDocument,
   detachHomeEventDocument,
+  confirmHomeEvent,
+  addHomeEventEvidence,
+  exportHomeEvents,
+  getHomeEventAnnualRecap,
 } from '../controllers/homeEvents.controller';
 
 import {
@@ -20,6 +24,10 @@ import {
   updateHomeEventBodySchema,
   attachHomeEventDocumentBodySchema,
   listHomeEventsQuerySchema,
+  deleteHomeEventBodySchema,
+  confirmHomeEventBodySchema,
+  addHomeEventEvidenceBodySchema,
+  exportHomeEventsBodySchema,
 } from '../validators/homeEvents.validators';
 
 const router = Router();
@@ -34,6 +42,19 @@ router.get(
   propertyAuthMiddleware,
   validate(listHomeEventsQuerySchema.transform((query) => ({ query }))), // optional, safe
   listHomeEvents
+);
+
+router.get(
+  '/properties/:propertyId/home-events/annual-recap',
+  propertyAuthMiddleware,
+  getHomeEventAnnualRecap,
+);
+
+router.post(
+  '/properties/:propertyId/home-events/export',
+  propertyAuthMiddleware,
+  validateBody(exportHomeEventsBodySchema),
+  exportHomeEvents,
 );
 
 router.get('/properties/:propertyId/home-events/:eventId', propertyAuthMiddleware, getHomeEvent);
@@ -58,7 +79,24 @@ router.delete(
   '/properties/:propertyId/home-events/:eventId',
   propertyAuthMiddleware,
   requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(deleteHomeEventBodySchema),
   deleteHomeEvent,
+);
+
+router.post(
+  '/properties/:propertyId/home-events/:eventId/confirmation',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(confirmHomeEventBodySchema),
+  confirmHomeEvent,
+);
+
+router.post(
+  '/properties/:propertyId/home-events/:eventId/evidence',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(addHomeEventEvidenceBodySchema),
+  addHomeEventEvidence,
 );
 
 // documents attach/detach

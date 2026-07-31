@@ -100,12 +100,15 @@ const DATA_SENSITIVITY_BY_CAPABILITY_ID: Record<
   'hoa-compliance': 'SENSITIVE',
   'home-digital-twin': 'SENSITIVE',
   'home-digital-will': 'HIGHLY_SENSITIVE',
+  'home-briefing': 'SENSITIVE',
+  'home-risk-replay': 'SENSITIVE',
   'inspection-hub': 'SENSITIVE',
   'insurance-trend': 'SENSITIVE',
   'mortgage-refinance-radar': 'HIGHLY_SENSITIVE',
   'ownership-costs': 'HIGHLY_SENSITIVE',
   permits: 'SENSITIVE',
   'project-tracker': 'HIGHLY_SENSITIVE',
+  'property-brief': 'HIGHLY_SENSITIVE',
   'property-tax': 'SENSITIVE',
   'quote-comparison': 'SENSITIVE',
   'risk-premium-optimizer': 'SENSITIVE',
@@ -127,12 +130,15 @@ function governanceDefinition(
   const regulated = seed.safetyTier === 'REGULATED_COVERAGE';
   const safety = seed.safetyTier === 'SAFETY_EMERGENCY';
   const renovationCompliance = seed.id === 'home-renovation-risk-advisor';
+  const propertyBrief = seed.id === 'property-brief';
   const commercialAction = seed.id === 'financing';
   const dataSensitivity =
     DATA_SENSITIVITY_BY_CAPABILITY_ID[seed.id] ?? 'STANDARD';
 
   return {
-    professionalBoundary: renovationCompliance
+    professionalBoundary: propertyBrief
+      ? 'A Property Brief is homeowner-assembled information, not an inspection, appraisal, certification, title report, comprehensive disclosure, or professional opinion.'
+      : renovationCompliance
       ? 'Renovation guidance organizes planning and evidence; verify permit, HOA, tax, safety, and professional requirements with the appropriate authority.'
       : material
       ? 'Estimates and comparisons are educational planning inputs, not financial, tax, valuation, or investment advice.'
@@ -167,8 +173,9 @@ function governanceDefinition(
       dataSensitivity,
       allowedPurpose:
         'Use the minimum property and workflow data needed to provide the homeowner-requested capability.',
-      sharingBoundary:
-        'Do not share capability data outside authorized household access and required service processors.',
+      sharingBoundary: propertyBrief
+        ? 'Share only homeowner-selected sections with an explicitly previewed recipient scope, expiration, revocation, access log, and sensitive-field warnings.'
+        : 'Do not share capability data outside authorized household access and required service processors.',
       retentionBoundary:
         'Retain capability data only under the applicable account, property record, and verified privacy-request policy.',
     },
@@ -282,8 +289,17 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
   },
   'home-risk-replay': {
     sourceKinds: ['INCIDENT', 'GUIDANCE'],
-    triggerFamily: 'SAFETY_SIGNAL_ACTIVE',
-    reason: 'Recent risk and safety signals can clarify mitigation priorities.',
+    triggerFamily: 'PAST_HAZARD_EVIDENCE_UPDATED',
+    reason: 'Reviewed hazard coverage, a property fact, or linked evidence changed the bounded historical interpretation.',
+    requiresExplicitTrigger: true,
+    acceptedContext: ['PROPERTY', 'HOME_ACTION', 'DOCUMENT', 'ISSUE'],
+  },
+  'home-briefing': {
+    sourceKinds: ['GUIDANCE', 'MAINTENANCE', 'INCIDENT', 'SYSTEM', 'PROJECT'],
+    triggerFamily: 'MATERIAL_PROPERTY_CHANGE_UNSEEN',
+    reason: 'A new material canonical property change has not yet been reviewed.',
+    requiresExplicitTrigger: true,
+    acceptedContext: ['PROPERTY', 'HOME_ACTION', 'DOCUMENT', 'PROJECT', 'ISSUE', 'JOURNEY'],
   },
   'inspection-hub': {
     sourceKinds: ['GUIDANCE', 'PROJECT'],
@@ -309,8 +325,16 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
   },
   'neighborhood-change-radar': {
     sourceKinds: ['GUIDANCE', 'PERSONALIZATION'],
-    triggerFamily: 'NEIGHBORHOOD_SIGNAL_ACTIVE',
-    reason: 'External neighborhood changes may affect home value or livability.',
+    triggerFamily: 'REVIEWED_LOCAL_OBSERVATION_UPDATED',
+    reason: 'A followed or materially relevant reviewed local observation is new or has changed lifecycle state.',
+    requiresExplicitTrigger: true,
+    acceptedContext: ['PROPERTY', 'HOME_ACTION', 'DOCUMENT'],
+    readinessRequirements: [
+      {
+        kind: 'JURISDICTION',
+        reason: 'Confirm precise or honestly bounded property geography before showing local observations.',
+      },
+    ],
   },
   permits: {
     sourceKinds: ['PROJECT'],
@@ -418,11 +442,11 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'home-digital-twin': ['capital-timeline', 'status-board', 'home-risk-replay'],
   'home-digital-will': ['home-event-radar', 'home-risk-replay', 'status-board'],
   'home-event-radar': ['home-risk-replay', 'home-timeline', 'status-board'],
-  'home-gazette': ['home-event-radar', 'home-risk-replay', 'status-board'],
+  'home-briefing': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-habit-coach': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-renovation-risk-advisor': ['project-tracker', 'permits', 'hoa-compliance'],
   'home-risk-replay': ['home-event-radar', 'home-timeline', 'status-board'],
-  'home-timeline': ['home-risk-replay', 'home-event-radar', 'seller-prep'],
+  'home-timeline': ['property-brief', 'home-risk-replay', 'seller-prep'],
   'material-specs': ['project-tracker', 'inspection-hub', 'home-digital-twin'],
   'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'ownership-costs'],
   'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
@@ -437,6 +461,7 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'seller-prep': ['sell-hold-rent', 'home-timeline', 'capital-timeline'],
   'service-price-radar': ['negotiation-shield', 'quote-comparison', 'ownership-costs'],
   'status-board': ['home-event-radar', 'home-risk-replay', 'home-timeline'],
+  'property-brief': ['home-timeline', 'documents', 'status-board'],
 };
 
 function completionSignal(seed: CapabilitySeed): string {

@@ -729,15 +729,14 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
   // ── Home Intelligence (cron) ──────────────────────────────────────────────
   {
     key: 'home-gazette-generation',
-    name: 'Home Gazette Generation',
+    name: 'Home Briefing Delivery',
     description:
-      'Generates the weekly Home Gazette edition for every active property. ' +
-      'Collects signals, ranks candidates, assembles edition, runs AI editorial enrichment, ' +
-      'and publishes or skips each edition based on available signals. Idempotent — safe to re-run. ' +
+      'Builds cadence-aware Home Briefing deliveries from eligible canonical Property Changes and Home Actions. ' +
+      'Creates zero-to-many items, snapshots source health, and preserves delivery history. Idempotent — safe to re-run. ' +
       'Override schedule via HOME_GAZETTE_GENERATION_CRON env var.',
     category: 'HOME_INTELLIGENCE',
-    schedule: 'Mondays at 6:00 AM EST',
-    cronExpression: '0 6 * * 1',
+    schedule: 'Hourly; cadence rules suppress duplicate weekly, monthly, and important-only deliveries',
+    cronExpression: '0 * * * *',
     type: 'cron',
     queueName: 'cron-trigger-queue',
     jobName: 'home-gazette-generation',

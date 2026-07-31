@@ -1,4 +1,5 @@
 // apps/backend/src/services/homeEvents.service.ts
+import { createHash } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { markReplaceRepairStale } from './replaceRepairAnalysis.service';
@@ -28,6 +29,22 @@ type ListQuery = {
 function moneyToDecimalString(n?: number | null) {
   if (n === undefined || n === null) return null;
   return Number(n).toFixed(2);
+}
+
+function homeEventEvidenceKey(input: {
+  documentId?: string | null;
+  sourceEntityType?: string | null;
+  sourceEntityId?: string | null;
+  evidenceType: string;
+  note?: string | null;
+}) {
+  if (input.documentId) return `document:${input.documentId}`;
+  if (input.sourceEntityType && input.sourceEntityId) {
+    return `source:${input.sourceEntityType}:${input.sourceEntityId}`;
+  }
+  return `attestation:${createHash('sha256')
+    .update(`${input.evidenceType}:${input.note ?? ''}`)
+    .digest('hex')}`;
 }
 
 function shouldInvalidateReplaceRepair(args: {
@@ -89,6 +106,15 @@ export class HomeEventsService {
     if (!ok) throw new APIError('Expense not found', 404, 'EXPENSE_NOT_FOUND');
   }
 
+  private async assertParentEventBelongs(propertyId: string, parentEventId?: string | null) {
+    if (!parentEventId) return;
+    const ok = await prisma.homeEvent.findFirst({
+      where: { id: parentEventId, propertyId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!ok) throw new APIError('Parent event not found', 404, 'PARENT_EVENT_NOT_FOUND');
+  }
+
   // Document is property-scoped OR (propertyId null AND uploadedBy matches current homeownerProfile)
   private async assertDocumentAttachAllowed(args: {
     propertyId: string;
@@ -124,7 +150,7 @@ export class HomeEventsService {
       !query.from &&
       !query.to;
 
-    const where: any = { propertyId };
+    const where: any = { propertyId, isCurrent: true, deletedAt: null };
 
     if (query.type) where.type = query.type;
     if (query.importance) where.importance = query.importance;
@@ -152,6 +178,8 @@ export class HomeEventsService {
         inventoryItem: {
           select: { id: true, name: true, sourceHash: true },
         },
+        evidence: { orderBy: { createdAt: 'asc' } },
+        verificationRecords: { orderBy: { createdAt: 'desc' }, take: 10 },
       },
     });
 
@@ -166,7 +194,9 @@ export class HomeEventsService {
     });
 
     const projectedEvents = sorted.slice(0, take).map(({ inventoryItem, ...event }) => event);
-    const includeSignals = query.includeSignals !== false;
+    // Analytical signals are not durable property history. They are available
+    // only to explicit legacy/debug callers and never enter the default view.
+    const includeSignals = query.includeSignals === true;
 
     const signalEvents = includeSignals
       ? await this.buildSignalTimelineEntries(propertyId, take)
@@ -194,6 +224,10 @@ export class HomeEventsService {
         importance: event.importance ?? null,
         amount: event.amount ?? null,
         currency: event.currency ?? null,
+        observationKind: event.observationKind,
+        datePrecision: event.datePrecision,
+        verificationStatus: event.verificationStatus,
+        sourceType: event.sourceType,
       },
     });
 
@@ -319,7 +353,8 @@ export class HomeEventsService {
         const applianceType = majorApplianceTypeFromSourceHash(appliance.sourceHash);
         if (!applianceType || existingTypes.has(applianceType)) return null;
 
-        const referenceDate = appliance.installedOn ?? appliance.purchasedOn ?? appliance.createdAt;
+        const referenceDate = appliance.installedOn ?? appliance.purchasedOn;
+        if (!referenceDate) return null;
 
         return {
           id: `synthetic-appliance-${applianceType.toLowerCase()}`,
@@ -348,6 +383,16 @@ export class HomeEventsService {
           groupKey: null,
           idempotencyKey: null,
           sourceBadge: 'INFERRED',
+          observationKind: 'INFERRED',
+          datePrecision: 'EXACT_DATE',
+          verificationStatus: 'PENDING_CONFIRMATION',
+          sourceType: 'INFERENCE',
+          sourceEntityType: 'InventoryItem',
+          sourceEntityId: appliance.id,
+          sourceAsOf: appliance.createdAt,
+          revision: 1,
+          isCurrent: true,
+          deletedAt: null,
           confidenceScore: null,
           provenanceId: null,
           createdAt: referenceDate,
@@ -373,6 +418,24 @@ export class HomeEventsService {
           include: { document: true },
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
+        evidence: {
+          include: { document: true, addedBy: { select: { id: true, firstName: true, lastName: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+        verificationRecords: { orderBy: { createdAt: 'desc' } },
+        supersedesEvent: {
+          select: { id: true, revision: true, correctionReason: true, updatedAt: true },
+        },
+        supersededByEvents: {
+          select: { id: true, revision: true, correctionReason: true, updatedAt: true },
+          orderBy: { revision: 'asc' },
+        },
+        parentEvent: { select: { id: true, title: true, groupType: true } },
+        childEvents: {
+          where: { deletedAt: null },
+          select: { id: true, title: true, occurredAt: true, datePrecision: true },
+          orderBy: { occurredAt: 'asc' },
+        },
       },
     });
     if (!event) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
@@ -386,6 +449,7 @@ export class HomeEventsService {
     await this.assertItemBelongs(propertyId, body.inventoryItemId ?? null);
     await this.assertClaimBelongs(propertyId, body.claimId ?? null);
     await this.assertExpenseBelongs(propertyId, body.expenseId ?? null);
+    await this.assertParentEventBelongs(propertyId, body.parentEventId ?? null);
 
     // If idempotencyKey provided, try to return existing first (clean UX)
     if (body.idempotencyKey) {
@@ -409,6 +473,9 @@ export class HomeEventsService {
 
           occurredAt: new Date(body.occurredAt),
           endAt: body.endAt ? new Date(body.endAt) : null,
+          datePrecision: body.datePrecision ?? 'EXACT_DATE',
+          dateRangeStart: body.dateRangeStart ? new Date(body.dateRangeStart) : null,
+          dateRangeEnd: body.dateRangeEnd ? new Date(body.dateRangeEnd) : null,
 
           title: body.title,
           summary: body.summary ?? null,
@@ -425,6 +492,14 @@ export class HomeEventsService {
           meta: body.meta ?? undefined,
           groupKey: body.groupKey ?? null,
           idempotencyKey: body.idempotencyKey ?? null,
+          observationKind: 'USER_REPORTED',
+          verificationStatus: 'UNVERIFIED',
+          sourceType: 'USER',
+          sourceEntityType: 'User',
+          sourceEntityId: userId ?? null,
+          sourceAsOf: new Date(),
+          parentEventId: body.parentEventId ?? null,
+          groupType: body.groupType ?? null,
         },
         include: {
           documents: {
@@ -460,10 +535,10 @@ export class HomeEventsService {
     }
   }
 
-  async updateHomeEvent(propertyId: string, eventId: string, patch: any) {
+  async updateHomeEvent(propertyId: string, eventId: string, patch: any, userId: string) {
     const existing = await prisma.homeEvent.findFirst({
-      where: { id: eventId, propertyId },
-      select: { id: true, inventoryItemId: true, type: true, subtype: true, title: true },
+      where: { id: eventId, propertyId, isCurrent: true, deletedAt: null },
+      include: { documents: true, evidence: true },
     });
     if (!existing) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
 
@@ -472,40 +547,96 @@ export class HomeEventsService {
     await this.assertItemBelongs(propertyId, patch.inventoryItemId ?? undefined);
     await this.assertClaimBelongs(propertyId, patch.claimId ?? undefined);
     await this.assertExpenseBelongs(propertyId, patch.expenseId ?? undefined);
+    await this.assertParentEventBelongs(propertyId, patch.parentEventId ?? undefined);
 
-    const updated = await prisma.homeEvent.update({
-      where: { id: eventId },
-      data: {
-        type: patch.type ?? undefined,
-        subtype: patch.subtype ?? undefined,
-        importance: patch.importance ?? undefined,
-        visibility: patch.visibility ?? undefined,
-
-        occurredAt: patch.occurredAt ? new Date(patch.occurredAt) : undefined,
-        endAt: patch.endAt ? new Date(patch.endAt) : (patch.endAt === null ? null : undefined),
-
-        title: patch.title ?? undefined,
-        summary: patch.summary ?? undefined,
-
-        currency: patch.currency ?? undefined,
-        amount: patch.amount !== undefined ? moneyToDecimalString(patch.amount) : undefined,
-        valueDelta: patch.valueDelta !== undefined ? moneyToDecimalString(patch.valueDelta) : undefined,
-
-        roomId: patch.roomId !== undefined ? patch.roomId : undefined,
-        inventoryItemId: patch.inventoryItemId !== undefined ? patch.inventoryItemId : undefined,
-        claimId: patch.claimId !== undefined ? patch.claimId : undefined,
-        expenseId: patch.expenseId !== undefined ? patch.expenseId : undefined,
-
-        meta: patch.meta ?? undefined,
-        groupKey: patch.groupKey ?? undefined,
-        idempotencyKey: patch.idempotencyKey ?? undefined,
-      },
-      include: {
-        documents: {
-          include: { document: true },
-          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.homeEvent.update({
+        where: { id: existing.id },
+        data: {
+          isCurrent: false,
+          projectId: null,
+          idempotencyKey: null,
         },
-      },
+      });
+      return tx.homeEvent.create({
+        data: {
+          propertyId,
+          createdById: userId,
+          roomId: patch.roomId !== undefined ? patch.roomId : existing.roomId,
+          inventoryItemId: patch.inventoryItemId !== undefined
+            ? patch.inventoryItemId : existing.inventoryItemId,
+          claimId: patch.claimId !== undefined ? patch.claimId : existing.claimId,
+          expenseId: patch.expenseId !== undefined ? patch.expenseId : existing.expenseId,
+          projectId: existing.projectId,
+          type: patch.type ?? existing.type,
+          subtype: patch.subtype !== undefined ? patch.subtype : existing.subtype,
+          importance: patch.importance ?? existing.importance,
+          visibility: patch.visibility ?? existing.visibility,
+          occurredAt: patch.occurredAt ? new Date(patch.occurredAt) : existing.occurredAt,
+          endAt: patch.endAt !== undefined
+            ? (patch.endAt ? new Date(patch.endAt) : null) : existing.endAt,
+          datePrecision: patch.datePrecision ?? existing.datePrecision,
+          dateRangeStart: patch.dateRangeStart !== undefined
+            ? (patch.dateRangeStart ? new Date(patch.dateRangeStart) : null)
+            : existing.dateRangeStart,
+          dateRangeEnd: patch.dateRangeEnd !== undefined
+            ? (patch.dateRangeEnd ? new Date(patch.dateRangeEnd) : null)
+            : existing.dateRangeEnd,
+          title: patch.title ?? existing.title,
+          summary: patch.summary !== undefined ? patch.summary : existing.summary,
+          amount: patch.amount !== undefined ? moneyToDecimalString(patch.amount) : existing.amount,
+          currency: patch.currency !== undefined ? patch.currency : existing.currency,
+          valueDelta: patch.valueDelta !== undefined
+            ? moneyToDecimalString(patch.valueDelta) : existing.valueDelta,
+          meta: patch.meta !== undefined ? patch.meta : (existing.meta ?? undefined),
+          groupKey: patch.groupKey !== undefined ? patch.groupKey : existing.groupKey,
+          idempotencyKey: existing.idempotencyKey,
+          sourceBadge: 'USER_REPORTED',
+          confidenceScore: existing.confidenceScore,
+          provenanceId: existing.provenanceId,
+          guidanceJourneyId: existing.guidanceJourneyId,
+          isRetrospective: existing.isRetrospective,
+          observationKind: 'USER_REPORTED',
+          verificationStatus: existing.verificationStatus === 'EVIDENCE_VERIFIED'
+            ? 'PENDING_CONFIRMATION' : 'UNVERIFIED',
+          sourceType: 'USER',
+          sourceEntityType: 'HomeEvent',
+          sourceEntityId: existing.id,
+          sourceAsOf: new Date(),
+          revision: existing.revision + 1,
+          supersedesEventId: existing.id,
+          parentEventId: patch.parentEventId !== undefined
+            ? patch.parentEventId : existing.parentEventId,
+          groupType: patch.groupType !== undefined ? patch.groupType : existing.groupType,
+          correctionReason: patch.correctionReason,
+          documents: {
+            create: existing.documents.map((document) => ({
+              documentId: document.documentId,
+              kind: document.kind,
+              caption: document.caption,
+              sortOrder: document.sortOrder,
+            })),
+          },
+          evidence: {
+            create: existing.evidence.map((evidence) => ({
+              evidenceType: evidence.evidenceType,
+              evidenceKey: evidence.evidenceKey,
+              documentId: evidence.documentId,
+              sourceEntityType: evidence.sourceEntityType,
+              sourceEntityId: evidence.sourceEntityId,
+              observedAt: evidence.observedAt,
+              note: evidence.note,
+              addedByUserId: evidence.addedByUserId,
+            })),
+          },
+        },
+        include: {
+          documents: {
+            include: { document: true },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          },
+        },
+      });
     });
 
     const touchedItemIds = new Set<string>();
@@ -541,14 +672,46 @@ export class HomeEventsService {
     return updated;
   }
 
-  async deleteHomeEvent(propertyId: string, eventId: string) {
+  async deleteHomeEvent(args: {
+    propertyId: string;
+    eventId: string;
+    userId: string;
+    householdRole?: string;
+    reason: string;
+  }) {
     const existing = await prisma.homeEvent.findFirst({
-      where: { id: eventId, propertyId },
-      select: { id: true, inventoryItemId: true, type: true, subtype: true, title: true },
+      where: { id: args.eventId, propertyId: args.propertyId, isCurrent: true, deletedAt: null },
+      select: {
+        id: true,
+        createdById: true,
+        observationKind: true,
+        verificationStatus: true,
+        inventoryItemId: true,
+        type: true,
+        subtype: true,
+        title: true,
+      },
     });
     if (!existing) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
-
-    await prisma.homeEvent.delete({ where: { id: eventId } });
+    const canDelete = existing.observationKind === 'USER_REPORTED'
+      && existing.verificationStatus !== 'EVIDENCE_VERIFIED'
+      && (existing.createdById === args.userId || args.householdRole === 'OWNER');
+    if (!canDelete) {
+      throw new APIError(
+        'Verified, inferred, and system records must be corrected or superseded, not deleted.',
+        409,
+        'HOME_EVENT_DELETE_REQUIRES_CORRECTION',
+      );
+    }
+    await prisma.homeEvent.update({
+      where: { id: existing.id },
+      data: {
+        deletedAt: new Date(),
+        deletedByUserId: args.userId,
+        deletionReason: args.reason,
+        isCurrent: false,
+      },
+    });
 
     if (
       shouldInvalidateReplaceRepair({
@@ -559,9 +722,174 @@ export class HomeEventsService {
       }) &&
       existing.inventoryItemId
     ) {
-      await markReplaceRepairStale(propertyId, existing.inventoryItemId);
-      await markDoNothingRunsStale(propertyId);
+      await markReplaceRepairStale(args.propertyId, existing.inventoryItemId);
+      await markDoNothingRunsStale(args.propertyId);
     }
+  }
+
+  async confirmHomeEvent(args: {
+    propertyId: string;
+    eventId: string;
+    userId: string;
+    status: 'HOMEOWNER_CONFIRMED' | 'DISPUTED';
+    reason: string;
+  }) {
+    const event = await prisma.homeEvent.findFirst({
+      where: {
+        id: args.eventId,
+        propertyId: args.propertyId,
+        isCurrent: true,
+        deletedAt: null,
+      },
+    });
+    if (!event) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
+    if (!['INFERRED', 'USER_REPORTED', 'SYSTEM_GENERATED'].includes(event.observationKind)) {
+      throw new APIError(
+        'Observed or evidence-derived records require evidence review, not attestation.',
+        409,
+        'HOME_EVENT_CONFIRMATION_NOT_APPLICABLE',
+      );
+    }
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.homeEvent.update({
+        where: { id: event.id },
+        data: {
+          verificationStatus: args.status,
+          confirmedAt: args.status === 'HOMEOWNER_CONFIRMED' ? new Date() : null,
+          confirmedByUserId: args.status === 'HOMEOWNER_CONFIRMED' ? args.userId : null,
+        },
+      });
+      await tx.homeEventVerificationRecord.create({
+        data: {
+          eventId: event.id,
+          status: args.status,
+          actorUserId: args.userId,
+          reason: args.reason,
+        },
+      });
+      return updated;
+    });
+  }
+
+  async addEvidence(args: {
+    propertyId: string;
+    eventId: string;
+    userId: string;
+    homeownerProfileId?: string | null;
+    evidenceType: string;
+    documentId?: string | null;
+    sourceEntityType?: string | null;
+    sourceEntityId?: string | null;
+    observedAt?: string | null;
+    note?: string | null;
+  }) {
+    const event = await prisma.homeEvent.findFirst({
+      where: { id: args.eventId, propertyId: args.propertyId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!event) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
+    if (args.documentId) {
+      await this.assertDocumentAttachAllowed({
+        propertyId: args.propertyId,
+        documentId: args.documentId,
+        homeownerProfileId: args.homeownerProfileId ?? null,
+      });
+    }
+    return prisma.$transaction(async (tx) => {
+      const evidence = await tx.homeEventEvidence.create({
+        data: {
+          eventId: event.id,
+          evidenceType: args.evidenceType as any,
+          evidenceKey: homeEventEvidenceKey(args),
+          documentId: args.documentId ?? null,
+          sourceEntityType: args.sourceEntityType ?? null,
+          sourceEntityId: args.sourceEntityId ?? null,
+          observedAt: args.observedAt ? new Date(args.observedAt) : null,
+          note: args.note ?? null,
+          addedByUserId: args.userId,
+        },
+        include: { document: true },
+      });
+      await tx.homeEvent.update({
+        where: { id: event.id },
+        data: { verificationStatus: 'PENDING_CONFIRMATION' },
+      });
+      await tx.homeEventVerificationRecord.create({
+        data: {
+          eventId: event.id,
+          status: 'PENDING_CONFIRMATION',
+          actorUserId: args.userId,
+          reason: 'Evidence added for review.',
+        },
+      });
+      return evidence;
+    });
+  }
+
+  async exportSelectedEvents(propertyId: string, eventIds: string[]) {
+    const events = await prisma.homeEvent.findMany({
+      where: { propertyId, id: { in: [...new Set(eventIds)] }, deletedAt: null },
+      orderBy: { occurredAt: 'asc' },
+      include: {
+        documents: { include: { document: true } },
+        evidence: { include: { document: true } },
+        verificationRecords: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (events.length !== new Set(eventIds).size) {
+      throw new APIError(
+        'One or more selected events were not found.',
+        404,
+        'HOME_EVENT_EXPORT_SELECTION_INVALID',
+      );
+    }
+    return {
+      generatedAt: new Date(),
+      propertyId,
+      selectedEventCount: events.length,
+      events,
+      limitations: [
+        'This is a selected home-history export, not a comprehensive property record.',
+        'Date precision, observation kind, verification, revisions, and sources must be interpreted per event.',
+      ],
+    };
+  }
+
+  async getAnnualRecap(propertyId: string, year: number) {
+    const from = new Date(Date.UTC(year, 0, 1));
+    const to = new Date(Date.UTC(year + 1, 0, 1));
+    const events = await prisma.homeEvent.findMany({
+      where: {
+        propertyId,
+        isCurrent: true,
+        deletedAt: null,
+        occurredAt: { gte: from, lt: to },
+      },
+      orderBy: { occurredAt: 'asc' },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        occurredAt: true,
+        datePrecision: true,
+        observationKind: true,
+        verificationStatus: true,
+        groupKey: true,
+        parentEventId: true,
+      },
+    });
+    return {
+      propertyId,
+      year,
+      eventCount: events.length,
+      verifiedCount: events.filter((event) =>
+        ['HOMEOWNER_CONFIRMED', 'EVIDENCE_VERIFIED'].includes(event.verificationStatus)).length,
+      inferredCount: events.filter((event) => event.observationKind === 'INFERRED').length,
+      events,
+      limitations: events.length === 0
+        ? ['No recorded current events fall within this year; this is not confirmation that nothing occurred.']
+        : ['This recap reflects selected current Home Timeline records only.'],
+    };
   }
 
   async attachDocument(args: {
@@ -572,6 +900,7 @@ export class HomeEventsService {
     caption?: string | null;
     sortOrder?: number;
     homeownerProfileId?: string | null;
+    userId?: string | null;
   }) {
     const event = await prisma.homeEvent.findFirst({
       where: { id: args.eventId, propertyId: args.propertyId },
@@ -600,6 +929,22 @@ export class HomeEventsService {
         sortOrder: args.sortOrder !== undefined ? args.sortOrder : undefined,
       },
       include: { document: true },
+    });
+    await prisma.homeEventEvidence.upsert({
+      where: {
+        eventId_evidenceKey: {
+          eventId: args.eventId,
+          evidenceKey: `document:${args.documentId}`,
+        },
+      },
+      create: {
+        eventId: args.eventId,
+        evidenceType: 'DOCUMENT',
+        evidenceKey: `document:${args.documentId}`,
+        documentId: args.documentId,
+        addedByUserId: args.userId ?? null,
+      },
+      update: {},
     });
 
     return link;

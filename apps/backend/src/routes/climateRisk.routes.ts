@@ -5,16 +5,16 @@ import { Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { AuthRequest } from '../types/auth.types';
-import { climateRiskPredictorService } from '../services/climateRiskPredictor.service';
 import { logger } from '../lib/logger';
 
 const router = Router();
+const ENVIRONMENT_REPORT_ROUTE = '/dashboard/properties/[propertyId]/environment-report';
 
 /**
  * @swagger
  * /api/climate/analyze/{propertyId}:
  *   get:
- *     summary: Generate AI-powered climate risk analysis
+ *     summary: Retired climate-risk analysis endpoint
  *     tags: [Climate Risk]
  *     security:
  *       - bearerAuth: []
@@ -25,32 +25,25 @@ const router = Router();
  *         schema:
  *           type: string
  *     responses:
- *       200:
- *         description: Climate risk report generated
+ *       410:
+ *         description: Standalone climate-risk analysis has been retired
  */
 router.get('/analyze/:propertyId', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user!.userId;
-    const { propertyId } = req.params;
+  const { propertyId } = req.params;
+  const redirectTo = ENVIRONMENT_REPORT_ROUTE.replace('[propertyId]', propertyId);
 
-    logger.info({ propertyId }, '[CLIMATE-RISK] Generating report for property');
+  logger.warn(
+    { propertyId, userId: req.user!.userId, redirectTo },
+    '[CLIMATE-RISK] Blocked retired standalone climate-risk output',
+  );
 
-    const report = await climateRiskPredictorService.generateClimateReport(propertyId, userId);
-
-    res.json({
-      success: true,
-      data: report
-    });
-
-  } catch (error: any) {
-    logger.error({ err: error }, '[CLIMATE-RISK] Error');
-    res.status(error?.statusCode ?? 500).json({
-      success: false,
-      code: error?.code,
-      details: error?.details,
-      message: error.message || 'Failed to generate climate risk report'
-    });
-  }
+  res.status(410).json({
+    success: false,
+    code: 'CLIMATE_RISK_RETIRED',
+    message:
+      'Standalone climate-risk scoring is unavailable because the prior estimates were not grounded in reviewed property-appropriate sources.',
+    redirectTo,
+  });
 });
 
 export default router;

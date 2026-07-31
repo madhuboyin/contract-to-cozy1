@@ -46,6 +46,22 @@ function shortImportanceLabel(importance: HomeEvent['importance'] | null | undef
   return importance === 'HIGHLIGHT' ? 'Highlight' : null;
 }
 
+function formatHomeEventDate(event: HomeEvent) {
+  const date = new Date(event.occurredAt);
+  if (Number.isNaN(date.getTime())) return event.occurredAt;
+  if (event.datePrecision === 'MONTH') {
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+  }
+  if (event.datePrecision === 'YEAR') return String(date.getFullYear());
+  if (event.datePrecision === 'RANGE') {
+    return event.dateRangeStart && event.dateRangeEnd
+      ? `${formatDate(event.dateRangeStart)} – ${formatDate(event.dateRangeEnd)}`
+      : `Around ${formatDate(event.occurredAt)}`;
+  }
+  if (event.datePrecision === 'UNKNOWN') return 'Date unknown';
+  return formatDate(event.occurredAt);
+}
+
 function groupEventsByYear(events: HomeEvent[]): Array<{ year: number; events: HomeEvent[] }> {
   const map = new Map<number, HomeEvent[]>();
   for (const e of events) {
@@ -65,6 +81,13 @@ function toHomeEventFromTimelineEntry(entry: TimelineProjectionEntry): HomeEvent
     importance: 'NORMAL',
     occurredAt: entry.occurredAt,
     endAt: null,
+    datePrecision: (entry.payloadJson?.datePrecision as HomeEvent['datePrecision']) ?? 'EXACT_DATE',
+    dateRangeStart: null,
+    dateRangeEnd: null,
+    observationKind: (entry.payloadJson?.observationKind as HomeEvent['observationKind'])
+      ?? (entry.kind === 'SIGNAL' ? 'INFERRED' : 'SYSTEM_GENERATED'),
+    verificationStatus: (entry.payloadJson?.verificationStatus as HomeEvent['verificationStatus'])
+      ?? (entry.kind === 'SIGNAL' ? 'PENDING_CONFIRMATION' : 'UNVERIFIED'),
     title: entry.title,
     summary: entry.summary ?? null,
     amount: null,
@@ -224,7 +247,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                 <span>{event.title}</span>
               </span>
             )}
-            subtitle={(event) => formatDate(event.occurredAt)}
+            subtitle={(event) => formatHomeEventDate(event)}
             columns={[
               {
                 key: 'classification',
@@ -234,6 +257,11 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                     {event.type ? <Badge>{formatEnumLabel(event.type)}</Badge> : null}
                     {shortImportanceLabel(event.importance) ? <Badge>{shortImportanceLabel(event.importance)}</Badge> : null}
                     {event.subtype && event.subtype !== event.type ? <Badge>{formatEnumLabel(event.subtype)}</Badge> : null}
+                    <Badge>{formatEnumLabel(event.observationKind)}</Badge>
+                    <Badge>{formatEnumLabel(event.verificationStatus)}</Badge>
+                    {event.datePrecision !== 'EXACT_DATE' ? (
+                      <Badge>{formatEnumLabel(event.datePrecision)}</Badge>
+                    ) : null}
                   </div>
                 ),
               },

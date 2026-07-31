@@ -53,6 +53,13 @@ export class HomeEventsAutoGen {
 
     meta?: any;
     groupKey?: string | null;
+    groupType?: string | null;
+    datePrecision?: 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';
+    observationKind?: 'OBSERVED' | 'USER_REPORTED' | 'EVIDENCE_DERIVED' | 'INFERRED' | 'SYSTEM_GENERATED';
+    verificationStatus?: 'UNVERIFIED' | 'PENDING_CONFIRMATION' | 'HOMEOWNER_CONFIRMED' | 'EVIDENCE_VERIFIED' | 'DISPUTED';
+    sourceType?: 'USER' | 'DOMAIN_ENTITY' | 'DOCUMENT' | 'PUBLIC_RECORD' | 'SYSTEM_AUTOMATION' | 'INFERENCE';
+    sourceEntityType?: string | null;
+    sourceEntityId?: string | null;
 
     idempotencyKey: string; // REQUIRED for autogen
   }) {
@@ -87,8 +94,21 @@ export class HomeEventsAutoGen {
 
         meta: args.meta ?? undefined,
         groupKey: args.groupKey ?? null,
+        groupType: args.groupType
+          ?? (args.claimId ? 'CLAIM' : args.inventoryItemId ? 'INVENTORY_ITEM'
+            : args.expenseId ? 'EXPENSE' : null),
 
         idempotencyKey: args.idempotencyKey,
+        datePrecision: args.datePrecision ?? 'EXACT_DATE',
+        observationKind: args.observationKind ?? 'SYSTEM_GENERATED',
+        verificationStatus: args.verificationStatus ?? 'UNVERIFIED',
+        sourceType: args.sourceType ?? 'DOMAIN_ENTITY',
+        sourceEntityType: args.sourceEntityType
+          ?? (args.claimId ? 'Claim' : args.inventoryItemId ? 'InventoryItem'
+            : args.expenseId ? 'Expense' : null),
+        sourceEntityId: args.sourceEntityId
+          ?? args.claimId ?? args.inventoryItemId ?? args.expenseId ?? null,
+        sourceAsOf: new Date(),
       },
       select: { id: true },
     });
@@ -163,7 +183,9 @@ export class HomeEventsAutoGen {
     upc?: string | null;
     sku?: string | null;
   }) {
-    const occurredAt = safeDate(args.purchasedOn) ?? new Date();
+    const occurredAt = safeDate(args.purchasedOn);
+    // Creating an inventory row is not evidence of a purchase date.
+    if (!occurredAt) return null;
     const normalizedCategory = normalizeInventoryCategory(args.category);
     const applianceType =
       normalizedCategory === 'APPLIANCE' ? inferMajorApplianceType(args.name) : null;
@@ -206,6 +228,11 @@ export class HomeEventsAutoGen {
         upc: args.upc ?? null,
         sku: args.sku ?? null,
       },
+      observationKind: 'USER_REPORTED',
+      verificationStatus: 'UNVERIFIED',
+      sourceType: 'DOMAIN_ENTITY',
+      sourceEntityType: 'InventoryItem',
+      sourceEntityId: args.itemId,
     });
   }
 
@@ -282,6 +309,11 @@ export class HomeEventsAutoGen {
         expenseId: args.expenseId,
         category: args.category ?? null,
       },
+      observationKind: 'USER_REPORTED',
+      verificationStatus: 'UNVERIFIED',
+      sourceType: 'DOMAIN_ENTITY',
+      sourceEntityType: 'Expense',
+      sourceEntityId: args.expenseId,
     });
   }
   
@@ -393,6 +425,11 @@ export class HomeEventsAutoGen {
   
       idempotencyKey: `doc:${args.documentId}:created`,
       groupKey: `doc:${args.createdAt.toISOString().slice(0, 10)}`,
+      observationKind: 'EVIDENCE_DERIVED',
+      verificationStatus: 'EVIDENCE_VERIFIED',
+      sourceType: 'DOCUMENT',
+      sourceEntityType: 'Document',
+      sourceEntityId: args.documentId,
       meta: {
         documentId: args.documentId,
         docType: args.docType,

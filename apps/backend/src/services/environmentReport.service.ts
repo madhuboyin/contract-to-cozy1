@@ -39,11 +39,22 @@ import {
 } from '../modules/propertyContext';
 import { knownContextValue } from './propertyContextDecision';
 import { evaluateEnvironmentApplicability } from './environment/applicabilityPolicy';
+import { getPastHazardExposure } from '../propertyIntelligence/pastHazardExposure.service';
 
 export interface ClimateSectionData {
   normals: SectionResult<ClimateNormalsData>;
   hardinessZone: SectionResult<HardinessZoneData>;
 }
+
+type PastHazardExposureResult = Awaited<ReturnType<typeof getPastHazardExposure>>;
+type EnvironmentLongTermHazardContext = {
+  coverage: Omit<PastHazardExposureResult['coverage'], 'checkedThrough'> & {
+    checkedThrough: Date | null;
+  };
+  hazards: PastHazardExposureResult['longTermContext'];
+  emptyState: string | null;
+  pastHazardHref: string;
+};
 
 export interface EnvironmentReportDTO {
   propertyId: string;
@@ -68,6 +79,7 @@ export interface EnvironmentReportDTO {
   insights: EnvironmentInsight[];
   questions: EnvironmentQuestion[];
   plantAdvisorModules: PlantAdvisorWeatherModule[];
+  longTermHazardContext: EnvironmentLongTermHazardContext;
   sections: {
     weather: SectionResult<WeatherReportData>;
     airQuality: SectionResult<AirQualityData>;
@@ -185,6 +197,31 @@ export async function getEnvironmentReport(
   property: GeocodableProperty,
   context: PropertyContextSnapshot,
 ): Promise<EnvironmentReportDTO> {
+  const longTermHazardContextPromise: Promise<EnvironmentLongTermHazardContext> = getPastHazardExposure(property.id)
+    .then((exposure) => ({
+      coverage: exposure.coverage,
+      hazards: exposure.longTermContext,
+      emptyState: exposure.emptyState,
+      pastHazardHref: `/dashboard/properties/${property.id}/tools/home-risk-replay`,
+    }))
+    .catch((error) => {
+      logger.error({ err: error }, '[ENV_REPORT] Long-term hazard context unavailable');
+      return {
+        coverage: {
+          state: 'UNAVAILABLE' as const,
+          comprehensive: false as const,
+          checkedThrough: null,
+          sources: [],
+          limitations: [
+            'Reviewed long-term hazard context could not be loaded. This is not an all-clear.',
+          ],
+        },
+        hazards: [],
+        emptyState:
+          'Long-term hazard context is temporarily unavailable. Current conditions may still be available below.',
+        pastHazardHref: `/dashboard/properties/${property.id}/tools/home-risk-replay`,
+      };
+    });
   const applicability = evaluateEnvironmentApplicability(context);
   const contextualProperty: GeocodableProperty = {
     ...property,
@@ -217,6 +254,7 @@ export async function getEnvironmentReport(
       insights: [],
       questions: [],
       plantAdvisorModules: [],
+      longTermHazardContext: await longTermHazardContextPromise,
       sections: {
         weather: unavailable<WeatherReportData>(reason),
         airQuality: unavailable<AirQualityData>(reason),
@@ -342,6 +380,7 @@ export async function getEnvironmentReport(
     insights,
     questions,
     plantAdvisorModules,
+    longTermHazardContext: await longTermHazardContextPromise,
     sections,
   };
 }

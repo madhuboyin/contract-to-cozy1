@@ -16,6 +16,7 @@ export const CAPABILITY_GOLDEN_FIXTURES: readonly CapabilityGoldenFixture[] = [
       'savings-benefits',
       'home-digital-twin',
       'home-event-radar',
+      'home-briefing',
       'home-habit-coach',
       'home-risk-replay',
       'neighborhood-change-radar',

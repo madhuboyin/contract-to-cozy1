@@ -388,38 +388,12 @@ Return as JSON array of strings (no markdown):
     return 'LOW';
   }
 
-  private getInsuranceImpact(level: string, risks: ClimateRisk[]): string {
-    const hasFlood = risks.some(r => r.category === 'Flooding' && r.score >= 50);
-    const hasHurricane = risks.some(r => r.category === 'Hurricanes' && r.score >= 50);
-    const hasWildfire = risks.some(r => r.category === 'Wildfires' && r.score >= 50);
-
-    if (level === 'SEVERE') {
-      return 'High-risk area: Expect 20-40% higher premiums. Additional coverage strongly recommended.';
-    }
-    if (level === 'HIGH') {
-      let impact = 'Elevated risk area: Premiums may be 10-25% higher.';
-      if (hasFlood) impact += ' Flood insurance required.';
-      if (hasHurricane) impact += ' Hurricane coverage essential.';
-      if (hasWildfire) impact += ' Fire insurance critical.';
-      return impact;
-    }
-    if (level === 'MODERATE') {
-      return 'Moderate risk: Standard premiums. Review coverage limits annually.';
-    }
-    return 'Low risk: Standard premiums apply. Maintain basic coverage.';
+  private getInsuranceImpact(_level: string, _risks: ClimateRisk[]): string {
+    return 'No premium or coverage conclusion is available from this estimate. Review current policy terms and qualified, property-specific sources.';
   }
 
-  private getPropertyValueImpact(level: string): string {
-    if (level === 'SEVERE') {
-      return 'Property values may decrease 5-15% due to climate risk. Mitigation improvements can help.';
-    }
-    if (level === 'HIGH') {
-      return 'Some impact on property values (2-8%). Climate-resilient upgrades increase appeal.';
-    }
-    if (level === 'MODERATE') {
-      return 'Minimal impact on property values. Market awareness increasing.';
-    }
-    return 'No significant impact on property values from climate risk.';
+  private getPropertyValueImpact(_level: string): string {
+    return 'No property-value conclusion is available from this estimate. Market effects require appropriately governed local evidence.';
   }
 }
 

@@ -4,8 +4,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import ClimateRiskPredictor from '@/components/ClimateRiskPredictor';
-import { ArrowLeft, ArrowRight, Cloud, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Cloud, Loader2, ShieldCheck } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
@@ -65,8 +64,8 @@ function ClimateContent() {
         </Button>
       )}
       <MobilePageIntro
-        title="Climate Risk Analyzer"
-        subtitle="AI-powered climate risk assessment for your property."
+        title="Environmental context"
+        subtitle="Review sourced current conditions and environmental preparation for your property."
         action={
           <div className="rounded-xl border border-sky-200 bg-sky-50 p-2.5 text-sky-700">
             <Cloud className="h-5 w-5" />
@@ -95,22 +94,33 @@ function ClimateContent() {
         </MobileFilterSurface>
       )}
 
-      {/* Climate Risk Component */}
       {selectedPropertyId ? (
-        <>
-          <ClimateRiskPredictor propertyId={selectedPropertyId} />
+        <div className="space-y-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+              <div>
+                <h2 className="font-semibold text-amber-950">Standalone climate scoring has been retired</h2>
+                <p className="mt-1 text-sm text-amber-900">
+                  We no longer generate composite climate scores, insurance-premium ranges, or property-value
+                  predictions from unreviewed estimates. Use Environment Report for sourced conditions,
+                  preparation guidance, freshness, and limitations.
+                </p>
+              </div>
+            </div>
+          </div>
           <Link
             href={`/dashboard/properties/${selectedPropertyId}/environment-report`}
-            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            className="flex items-center justify-between rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm font-semibold text-sky-900 transition-colors hover:bg-sky-100"
           >
-            <span>View full Environment Report — live weather, air quality, flood, drought &amp; more</span>
+            <span>Open Environment Report</span>
             <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
           </Link>
-        </>
+        </div>
       ) : (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <Cloud className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">Select a property to view climate risk analysis</p>
+          <p className="text-gray-600">Select a property to open its Environment Report</p>
         </div>
       )}
     </div>
@@ -124,14 +134,3 @@ export default function ClimatePage() {
     </Suspense>
   );
 }
-
-// ========================================
-// API CLIENT METHODS
-// Add to apps/frontend/src/lib/api/client.ts
-// ========================================
-
-/*
-  async getClimateRisk(propertyId: string): Promise<APIResponse<any>> {
-    return this.request(`/api/climate/analyze/${propertyId}`);
-  }
-*/

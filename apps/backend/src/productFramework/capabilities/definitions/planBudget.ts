@@ -8,7 +8,6 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   ['emergency', 'Emergency Help', 'Access rapid guidance for urgent home incidents.', '/dashboard/emergency', 'EMERGENCY_HELP', 'BETA', 'SAFETY_EMERGENCY', 'CATALOG_ONLY'],
   ['hoa-compliance', 'HOA Compliance', 'Track HOA approvals and compliance requirements.', '/dashboard/properties/[id]/tools/hoa', 'HOA_COMPLIANCE', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['home-renovation-risk-advisor', 'Renovations', 'Explore, plan, approve, execute, and close out one governed renovation journey.', '/dashboard/properties/[id]/renovations', 'RENOVATION_RISK_ADVISOR', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
-  ['home-timeline', 'Home Timeline', 'Review major events and plans across home ownership.', '/dashboard/properties/[id]/timeline', 'HOME_TIMELINE', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['inspection-hub', 'Inspection Hub', 'Organize inspection reports and track open findings.', '/dashboard/properties/[id]/inspection-hub', 'INSPECTION_HUB', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['oracle', 'Appliance Oracle', 'Review appliance lifespan and replacement timing.', '/dashboard/oracle', 'APPLIANCE_ORACLE', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['permits', 'Permit Tracker', 'Track permits, inspections, and disclosure records.', '/dashboard/properties/[id]/tools/permits', 'PERMITS', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],

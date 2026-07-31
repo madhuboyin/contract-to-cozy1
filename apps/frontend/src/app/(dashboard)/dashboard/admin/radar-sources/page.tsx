@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Pause, Play, Radar, RefreshCw, RotateCcw, TestTube2 } from 'lucide-react';
 import { AdminConsoleShell, AdminRouteState } from '@/components/ops/AdminConsoleShell';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,36 @@ import {
   useAdminRadarSources,
 } from '@/hooks/useAdminRadarSources';
 import type { RadarSourceAdmin } from '@/lib/api/adminRadarSources';
+import { api } from '@/lib/api/client';
+
+type LocalChangeQuality = {
+  pilotFamilies: string[];
+  syntheticCoverageAllowed: false;
+  activationRule: string;
+  sources: Array<{
+    id: string;
+    key: string;
+    family: string;
+    provider: string;
+    reviewedStatus: string;
+    activation: { enabled: boolean; reasonCodes: string[] };
+    _count: { observations: number };
+    coverages: Array<{
+      id: string;
+      geographyType: string;
+      geographyKey: string | null;
+      status: string;
+      health: { state: string; checkedThrough: string | null; reasonCodes: string[] };
+    }>;
+    runs: Array<{
+      id: string;
+      status: string;
+      startedAt: string;
+      recordsAccepted: number;
+      recordsRejected: number;
+    }>;
+  }>;
+};
 
 const HEALTH_CLASS: Record<string, string> = {
   healthy: 'bg-emerald-50 text-emerald-700',
@@ -153,12 +184,21 @@ export default function RadarSourcesPage() {
   });
   const sources = useAdminRadarSources(guard.isAdmin);
   const anomalies = useAdminRadarAnomalies(guard.isAdmin);
+  const localChangeQuality = useQuery({
+    queryKey: ['admin-around-your-home-quality'],
+    queryFn: async () => {
+      const response = await api.get('/api/admin/around-your-home/quality');
+      return response.data as LocalChangeQuality;
+    },
+    enabled: guard.isAdmin,
+  });
   const { toast } = useToast();
   const lineage = useAdminRadarCommand().lineage;
   const [eventId, setEventId] = useState('');
   const refresh = () => {
     sources.refetch();
     anomalies.refetch();
+    localChangeQuality.refetch();
   };
   const onError = (error: any) => toast({
     title: 'Radar operation failed',
@@ -175,6 +215,89 @@ export default function RadarSourcesPage() {
       actions={<Button variant="outline" size="sm" onClick={refresh} disabled={sources.isFetching}><RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${sources.isFetching ? 'animate-spin' : ''}`} />Refresh</Button>}
       chips={<><span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold">{sources.data?.length ?? 0} sources</span><span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">{anomalies.data?.anomalies.length ?? 0} anomalies</span></>}
     >
+      <section className="mb-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Around Your Home source quality</h2>
+            <p className="mt-1 max-w-3xl text-xs text-slate-600">
+              Planning, infrastructure, land-use, flood-map, and school sources on the reviewed
+              Property Intelligence foundation.
+            </p>
+          </div>
+          <span className="rounded bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">
+            Synthetic coverage prohibited
+          </span>
+        </div>
+        {localChangeQuality.isLoading ? (
+          <p className="mt-3 text-xs text-slate-500">Loading reviewed local-change sources…</p>
+        ) : localChangeQuality.isError ? (
+          <p className="mt-3 text-xs text-rose-700">
+            Quality data is unavailable. Confirm MFA and the INTEGRATION_MANAGE capability.
+          </p>
+        ) : (
+          <>
+            <p className="mt-3 text-xs text-slate-600">
+              {localChangeQuality.data?.activationRule}
+            </p>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {(localChangeQuality.data?.sources ?? []).map((source) => {
+                const rejected = source.runs.reduce(
+                  (total, run) => total + run.recordsRejected,
+                  0,
+                );
+                return (
+                  <article key={source.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-xs font-semibold text-slate-900">{source.provider}</h3>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {source.key} · {source.family} · {source.reviewedStatus}
+                        </p>
+                      </div>
+                      <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
+                        source.activation.enabled
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {source.activation.enabled ? 'Activated' : 'Blocked'}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+                      <div><span className="text-slate-400">Observations</span><p className="font-semibold">{source._count.observations}</p></div>
+                      <div><span className="text-slate-400">Coverage</span><p className="font-semibold">{source.coverages.length}</p></div>
+                      <div><span className="text-slate-400">Rejected</span><p className="font-semibold">{rejected}</p></div>
+                    </div>
+                    <ul className="mt-3 space-y-1 text-[11px] text-slate-600">
+                      {source.coverages.map((coverage) => (
+                        <li key={coverage.id} className="rounded bg-slate-50 px-2 py-1">
+                          {coverage.geographyType} {coverage.geographyKey ?? 'missing key'}
+                          {' · '}{coverage.health.state}
+                          {coverage.health.checkedThrough
+                            ? ` · checked ${formatDate(coverage.health.checkedThrough)}`
+                            : ' · never checked'}
+                        </li>
+                      ))}
+                      {!source.coverages.length ? <li>No QA-reviewed geography is configured.</li> : null}
+                    </ul>
+                    {!source.activation.enabled ? (
+                      <p className="mt-2 text-[11px] text-amber-800">
+                        {source.activation.reasonCodes.join(', ')}
+                      </p>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+            {!localChangeQuality.data?.sources.length ? (
+              <p className="mt-3 rounded-lg bg-white p-3 text-xs text-slate-600">
+                No local-change pilot source is registered. Register an authoritative provider;
+                do not substitute fixture or synthetic coverage.
+              </p>
+            ) : null}
+          </>
+        )}
+      </section>
+
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <h2 className="text-xs font-semibold text-slate-800">Event lineage inspector</h2>
         <form

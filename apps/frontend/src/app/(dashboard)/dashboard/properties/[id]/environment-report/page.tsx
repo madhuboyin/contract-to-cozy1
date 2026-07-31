@@ -27,7 +27,96 @@ import type {
   EnvironmentInsight,
   EnvironmentQuestion,
   PlantAdvisorWeatherModule,
+  EnvironmentLongTermHazardContext,
 } from '@/types';
+
+function LongTermHazardContextSection({
+  context,
+}: {
+  context: EnvironmentLongTermHazardContext;
+}) {
+  const coverageTone = context.coverage.state === 'CURRENT'
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+    : 'border-amber-200 bg-amber-50 text-amber-900';
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-600" />
+              Long-term hazard context
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Reviewed, hazard-specific source context. These records are not averaged into a home score
+              and do not establish damage to this property.
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className={coverageTone}>
+            Coverage: {context.coverage.state.replace(/_/g, ' ').toLowerCase()}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {context.hazards.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {context.hazards.map((hazard) => (
+              <div key={hazard.propertyMatchId} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">{hazard.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {hazard.hazardLabel} · {hazard.geography.matchedGeography}
+                    </p>
+                  </div>
+                  <Badge variant="secondary">{hazard.lifecycleStatus.replace(/_/g, ' ')}</Badge>
+                </div>
+                {hazard.factualSummary ? (
+                  <p className="mt-3 text-sm leading-relaxed text-slate-700">{hazard.factualSummary}</p>
+                ) : null}
+                <p className="mt-3 text-xs leading-relaxed text-slate-600">
+                  {hazard.interpretation.boundedExplanation}
+                </p>
+                <div className="mt-3 border-t pt-3 text-xs text-slate-500">
+                  <p>
+                    Source: {hazard.source.provider} · checked{' '}
+                    {new Date(hazard.source.lastVerifiedAt).toLocaleDateString()}
+                  </p>
+                  <p className="mt-1">
+                    Geography precision: {hazard.geography.precision.replace(/_/g, ' ').toLowerCase()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
+            {context.emptyState
+              ?? 'No reviewed long-term hazard observations are available for this property geography.'}
+          </div>
+        )}
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+          {context.coverage.limitations.map((limitation) => (
+            <p key={limitation}>• {limitation}</p>
+          ))}
+          {context.coverage.checkedThrough ? (
+            <p className="mt-2 font-medium text-slate-700">
+              Sources checked through {new Date(context.coverage.checkedThrough).toLocaleDateString()}.
+            </p>
+          ) : null}
+        </div>
+
+        <Button asChild variant="outline">
+          <Link href={context.pastHazardHref}>
+            Review past hazard exposure <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 function InlineInsightQuestions({
   propertyId,
@@ -927,6 +1016,13 @@ export default function EnvironmentReportPage() {
           }}
         />
         <HomeSystemsOutlook insights={report.insights ?? []} />
+        <LongTermHazardContextSection context={report.longTermHazardContext} />
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">Current environmental conditions</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Current and near-term conditions are shown separately from long-term context and past events.
+          </p>
+        </div>
         <WeatherSection result={sections.weather} climate={sections.climate} />
         <AirQualitySection result={sections.airQuality} />
         <FloodElevationSection result={sections.floodElevation} />

@@ -22,7 +22,6 @@ const EXISTING_STABLE_KEYS = {
   'replace-repair': 'REPLACE_REPAIR',
   'coverage-intelligence': 'COVERAGE_INTELLIGENCE',
   'do-nothing-simulator': 'DO_NOTHING_SIMULATOR',
-  climate: 'CLIMATE_RISK',
   budget: 'BUDGET_PLANNER',
   oracle: 'APPLIANCE_ORACLE',
   documents: 'DOCUMENT_VAULT',
@@ -77,12 +76,12 @@ test('registry-owned ProductTool fields match canonical capability metadata', ()
   }
 });
 
-test('Knowledge Hub seed preserves three explicit platform entries without deleting capabilities', () => {
-  assert.equal(PRODUCT_TOOL_SEEDS.length, 46);
+test('Knowledge Hub seed preserves explicit platform entries without reviving retired capabilities', () => {
+  assert.equal(PRODUCT_TOOL_SEEDS.length, 45);
   const keys = new Set(PRODUCT_TOOL_SEEDS.map((seed) => seed.key));
   assert.equal(keys.size, PRODUCT_TOOL_SEEDS.length);
   assert.equal(keys.has('SEASONAL_MAINTENANCE'), true);
-  assert.equal(keys.has('HOME_SCORE_REPORT'), true);
+  assert.equal(keys.has('HOME_SCORE_REPORT'), false);
   assert.equal(keys.has('REPORT_PACK'), true);
   for (const capabilitySeed of buildCapabilityProductToolSeeds()) {
     assert.equal(keys.has(capabilitySeed.key), true);

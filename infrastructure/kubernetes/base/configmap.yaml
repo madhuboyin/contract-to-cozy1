@@ -6,6 +6,10 @@ metadata:
 data:
   # Application
   NODE_ENV: "production"
+  # Property-intelligence source coverage remains fail-closed until reviewed
+  # live providers and their geographic/time coverage contracts are approved.
+  HOME_RISK_REPLAY_REVIEWED_COVERAGE_ENABLED: "false"
+  NEIGHBORHOOD_REVIEWED_COVERAGE_ENABLED: "false"
   LOG_LEVEL: "info"
   
   # API Configuration

@@ -15,8 +15,8 @@ describe('homeRiskReplayUi', () => {
           windowEnd: '',
         })
       ).toEqual({
-        windowStart: 'Choose a start date for the replay window.',
-        windowEnd: 'Choose an end date for the replay window.',
+        windowStart: 'Choose a start date for the source window.',
+        windowEnd: 'Choose an end date for the source window.',
       });
     });
 
@@ -45,7 +45,7 @@ describe('homeRiskReplayUi', () => {
     it('returns a calm retry message for network generation failures', () => {
       expect(
         getHomeRiskReplayUserMessage(new Error('Network request failed'), 'generate')
-      ).toBe('We could not generate the replay right now. Check your connection and try again.');
+      ).toBe('We could not check reviewed source records right now. Check your connection and try again.');
     });
 
     it('returns a property-specific message for missing replay details', () => {
@@ -59,7 +59,7 @@ describe('homeRiskReplayUi', () => {
       };
 
       expect(getHomeRiskReplayUserMessage(error, 'detail')).toBe(
-        'We could not open that replay anymore. Choose another run or generate a fresh replay.'
+        'We could not open that saved legacy result. Return to the current sourced exposure view.'
       );
     });
   });
@@ -81,10 +81,10 @@ describe('homeRiskReplayUi', () => {
           timelineEvents: [],
         })
       ).toEqual({
-        title: 'No significant events found',
+        title: 'No matched events in available records',
         description:
-          'We found no significant historical events for this property in the selected period. That is still useful context, and it does not rule out normal wear or isolated issues.',
-        tone: 'good',
+          'No events matched this property in the records currently available for the selected period. Source coverage is not yet comprehensive, so this is not an all-clear or proof that no event occurred.',
+        tone: 'info',
       });
     });
 

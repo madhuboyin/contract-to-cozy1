@@ -108,6 +108,7 @@ const HOME_OUTCOME_BY_GROUP: Record<MobileHomeToolGroupKey, ToolOutcomeCategory>
 
 const HOME_OUTCOME_BY_TOOL: Partial<Record<string, ToolOutcomeCategory>> = {
   'home-digital-twin': 'DECIDE_COMPARE',
+  'home-timeline': 'UNDERSTAND_HOME',
 };
 
 const AI_OUTCOME_BY_GROUP: Record<MobileAiToolGroup, ToolOutcomeCategory> = {
@@ -121,7 +122,6 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   emergency: 'EMERGENCY_HELP',
   documents: 'DOCUMENT_VAULT',
   budget: 'BUDGET_PLANNER',
-  climate: 'CLIMATE_RISK',
   'coverage-intelligence': 'COVERAGE_INTELLIGENCE',
   'replace-repair': 'REPLACE_OR_REPAIR',
   'do-nothing-simulator': 'DO_NOTHING_SIMULATOR',
@@ -145,7 +145,7 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'home-digital-twin': 'HOME_DIGITAL_TWIN',
   'home-habit-coach': 'HOME_HABIT_COACH',
   'mortgage-refinance-radar': 'MORTGAGE_REFINANCE_RADAR',
-  'home-gazette': 'HOME_GAZETTE',
+  'home-briefing': 'HOME_BRIEFING',
   'home-renovation-risk-advisor': 'RENOVATION_RISK_ADVISOR',
   'plant-advisor': 'PLANT_ADVISOR',
   'neighborhood-change-radar': 'NEIGHBORHOOD_CHANGE_RADAR',
@@ -154,6 +154,7 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'quote-comparison': 'QUOTE_COMPARISON',
   'reserve-fund': 'RESERVE_FUND',
   'home-timeline': 'HOME_TIMELINE',
+  'property-brief': 'PROPERTY_BRIEF',
   financing: 'FINANCING',
   'material-specs': 'MATERIAL_SPECS',
   diy: 'DIY',
@@ -164,8 +165,9 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
 };
 
 const BETA_TOOL_IDS = new Set([
-  'emergency', 'documents', 'budget', 'climate', 'energy',
+  'emergency', 'documents', 'budget', 'energy',
   'coverage-intelligence', 'neighborhood-change-radar', 'savings-benefits',
+  'home-briefing', 'home-risk-replay', 'property-brief',
 ]);
 
 const MATERIAL_TOOL_IDS = new Set([
@@ -173,6 +175,7 @@ const MATERIAL_TOOL_IDS = new Set([
   'property-tax', 'ownership-costs',
   'capital-timeline', 'reserve-fund', 'financing', 'mortgage-refinance-radar',
   'savings-benefits', 'home-renovation-risk-advisor', 'service-price-radar',
+  'property-brief',
   // Mixed-consequence: the same route surfaces low-consequence record
   // projection and MATERIAL_FINANCIAL scenario computation (replacement
   // cost, savings, risk claims). See
@@ -225,6 +228,11 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   // OUTPUT_VIEWED), matching the backend registry correction.
   'status-board': 'OUTPUT_VIEWED',
   'guidance-overview': 'DECISION_RECORDED',
+  'home-briefing': 'DECISION_RECORDED',
+  'home-risk-replay': 'DECISION_RECORDED',
+  'home-timeline': 'ARTIFACT_CREATED',
+  'neighborhood-change-radar': 'DECISION_RECORDED',
+  'property-brief': 'ARTIFACT_CREATED',
 };
 
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {
@@ -262,7 +270,7 @@ function policyFor(id: string, category: ToolOutcomeCategory) {
       ? 'REGULATED_COVERAGE'
       : MATERIAL_TOOL_IDS.has(id)
         ? 'MATERIAL_FINANCIAL'
-        : id === 'emergency'
+        : id === 'emergency' || id === 'home-risk-replay'
           ? 'SAFETY_EMERGENCY'
           : 'LOW_CONSEQUENCE') as ToolSafetyTier,
     requirements: {
@@ -331,7 +339,9 @@ const DISCOVERABLE_TOOLS = [...homeTools, ...aiOnlyTools];
 
 const TOOL_ID_ALIASES: Record<string, string> = {
   'budget-planner': 'budget',
-  'climate-risk': 'climate',
+  'climate-risk': 'environment-report',
+  'home-gazette': 'home-briefing',
+  'home-score': 'property-brief',
   'coverage-analysis': 'coverage-intelligence',
   'coverage-options': 'coverage-intelligence',
   'document-vault': 'documents',

@@ -5,525 +5,333 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarRange,
-  Clock3,
-  History,
-  Home,
-  Loader2,
-  Play,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
+  CheckCircle2,
+  ExternalLink,
+  FileCheck2,
+  MapPin,
+  ShieldAlert,
 } from 'lucide-react';
-import { api } from '@/lib/api/client';
-import { track } from '@/lib/analytics/events';
-import type { Property } from '@/types';
-import { cn } from '@/lib/utils';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
-  CompactEntityRow,
   EmptyStateCard,
-  IconBadge,
-  MobileActionRow,
   MobileCard,
-  MobileKpiStrip,
-  MobileKpiTile,
+  MobileFilterSurface,
   MobilePageContainer,
   MobileSection,
   MobileSectionHeader,
-  MobileFilterSurface,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
-import { MOBILE_CARD_RADIUS, MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ReplayDetailSheet } from '@/components/features/homeRiskReplay/ReplayDetailSheet';
-import { ReplayTimelineItem } from '@/components/features/homeRiskReplay/ReplayTimelineItem';
-import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { Label } from '@/components/ui/label';
 import {
-  formatDriverCode,
-  formatReplayDate,
-  formatReplayDateRange,
-  formatWindowType,
-} from '@/components/features/homeRiskReplay/ReplayUtils';
-import type {
-  HomeRiskReplayDetail,
-  HomeRiskReplayRunSummary,
-  HomeRiskReplayTimelineEvent,
-  HomeRiskReplayWindowType,
-} from '@/components/features/homeRiskReplay/types';
-import {
-  generateHomeRiskReplay,
-  getHomeRiskReplayDetail,
-  type HomeRiskReplayLaunchSurface,
-  listHomeRiskReplayRuns,
-  trackHomeRiskReplayEvent,
+  getPastHazardExposure,
+  linkPastHazardEvidence,
+  type PastHazardExposureItem,
+  type PropertyHazardEffectStatus,
+  type PropertyHazardEvidenceKind,
+  recordPastHazardOutcome,
 } from './homeRiskReplayApi';
-import TrustStrip from '../../components/route-templates/TrustStrip';
-import {
-  buildEventLocationNote,
-  buildHomeRiskReplayGuardrail,
-  buildHomeRiskReplayValidationErrors,
-  getHomeRiskReplayUserMessage,
-} from './homeRiskReplayUi';
 
-type WindowOption = {
-  key: HomeRiskReplayWindowType;
-  label: string;
-  description: string;
+const EFFECT_LABELS: Record<PropertyHazardEffectStatus, string> = {
+  UNKNOWN: 'Effect unknown',
+  NO_OBSERVED_EFFECT: 'No observed effect reported',
+  OBSERVED_EFFECT_CONFIRMED: 'Observed effect reported',
 };
 
-const WINDOW_OPTIONS: WindowOption[] = [
-  {
-    key: 'since_built',
-    label: 'Since built',
-    description: 'Replay the property story from the home’s build year when available.',
-  },
-  {
-    key: 'last_5_years',
-    label: 'Last 5 years',
-    description: 'A shorter lookback for recent exposure patterns.',
-  },
-  {
-    key: 'custom_range',
-    label: 'Custom range',
-    description: 'Choose exact dates for a focused historical replay.',
-  },
+const EVIDENCE_KINDS: PropertyHazardEvidenceKind[] = [
+  'CLAIM',
+  'INSPECTION',
+  'REPAIR',
+  'PHOTO',
+  'DOCUMENT',
+  'USER_ATTESTATION',
 ];
 
-function isWindowType(value: string | null): value is HomeRiskReplayWindowType {
-  return value === 'since_built' || value === 'last_5_years' || value === 'custom_range';
+function humanize(value: string) {
+  return value.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function normalizeLaunchSurface(value: string | null): HomeRiskReplayLaunchSurface {
-  switch (value) {
-    case 'home_tools':
-    case 'property_hub':
-    case 'property_summary':
-    case 'roof_page':
-    case 'plumbing_page':
-    case 'electrical_page':
-    case 'insights_strip':
-    case 'system_detail':
-      return value;
-    default:
-      return 'unknown';
-  }
+function formatDate(value: string | null) {
+  if (!value) return 'Date not provided';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
-function bucketTotalEvents(value: number): '0' | '1' | '2_5' | '6_10' | '10_plus' {
-  if (value <= 0) return '0';
-  if (value === 1) return '1';
-  if (value <= 5) return '2_5';
-  if (value <= 10) return '6_10';
-  return '10_plus';
+function effectTone(status: PropertyHazardEffectStatus): 'good' | 'elevated' | 'danger' {
+  if (status === 'NO_OBSERVED_EFFECT') return 'good';
+  if (status === 'OBSERVED_EFFECT_CONFIRMED') return 'danger';
+  return 'elevated';
 }
 
-function bucketImpactEvents(value: number): '0' | '1' | '2_5' | '6_plus' {
-  if (value <= 0) return '0';
-  if (value === 1) return '1';
-  if (value <= 5) return '2_5';
-  return '6_plus';
-}
-
-function classifyReplayError(error: unknown): 'network' | 'validation' | 'unauthorized' | 'unknown' {
-  const status = typeof error === 'object' && error !== null && 'status' in error
-    ? Number((error as { status?: number | string }).status)
-    : NaN;
-  const payloadCode = typeof error === 'object' && error !== null
-    ? String(((error as { payload?: { error?: { code?: string } } }).payload?.error?.code ?? '')).toUpperCase()
-    : '';
-
-  if (status === 401 || payloadCode === 'AUTH_REQUIRED' || payloadCode === 'INVALID_TOKEN') return 'unauthorized';
-  if (status === 400 || payloadCode === 'VALIDATION_ERROR') return 'validation';
-  if (status === 0 || status === 502 || status === 503 || payloadCode === 'NETWORK_ERROR') return 'network';
-  return 'unknown';
-}
-
-function deviceContext(): 'mobile' | 'desktop' {
-  if (typeof window === 'undefined') return 'desktop';
-  return window.matchMedia('(max-width: 1023px)').matches ? 'mobile' : 'desktop';
-}
-
-function compactPropertyLabel(property: Property | null | undefined): string {
-  if (!property) return 'Property unavailable';
-  return property.name?.trim() || property.address;
-}
-
-function compactPropertyLocation(property: Property | null | undefined): string {
-  if (!property) return '';
-  return [property.city, property.state, property.zipCode].filter(Boolean).join(', ').replace(', ,', ', ');
-}
-
-function buildPropertyContextNote(property: Property | null | undefined): string {
-  if (!property) return 'Replay uses the selected property and any available system context.';
-
-  const notes: string[] = [];
-  if (property.yearBuilt) notes.push(`Built ${property.yearBuilt}`);
-  if (property.roofReplacementYear) notes.push(`Roof updated ${property.roofReplacementYear}`);
-  if (property.hvacInstallYear) notes.push(`HVAC context from ${property.hvacInstallYear}`);
-  if (property.hasDrainageIssues) notes.push('Drainage issues on record');
-  if (property.hasSumpPump === true && property.hasSumpPumpBackup === false) notes.push('No sump backup recorded');
-
-  if (notes.length === 0) {
-    return 'Replay uses location history and any available home system details.';
-  }
-
-  return notes.slice(0, 3).join(' • ');
-}
-
-function runStatusTone(status: HomeRiskReplayRunSummary['status']): 'good' | 'elevated' | 'danger' | 'info' {
-  if (status === 'completed') return 'good';
-  if (status === 'failed') return 'danger';
-  if (status === 'pending') return 'elevated';
-  return 'info';
-}
-
-function historyButtonLabel(run: HomeRiskReplayRunSummary, activeRunId: string | null): string {
-  if (run.id === activeRunId) return 'Loaded';
-  if (run.status === 'failed') return 'Review';
-  return 'Open';
-}
-
-function ReplayIntroCard({
-  property,
+function HazardCard({
+  item,
+  propertyId,
 }: {
-  property: Property | null | undefined;
+  item: PastHazardExposureItem;
+  propertyId: string;
 }) {
-  return (
-    <div
-      className={cn(
-        MOBILE_CARD_RADIUS,
-        'border border-[hsl(var(--mobile-border-subtle))]',
-        'bg-[linear-gradient(150deg,#ffffff,hsl(var(--mobile-brand-soft)))] px-4 py-4',
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <IconBadge tone="brand">
-          <History className="h-4 w-4" />
-        </IconBadge>
-        <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
-            Home tool
-          </p>
-          <h1 className="mb-0 mt-1 text-[1.1rem] font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
-            Home Risk Replay
-          </h1>
-          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
-            See what your home has already been through.
-          </p>
-          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-            Replay historical weather and stress events that may have affected this property.
-          </p>
-          {property ? (
-            <p className={cn('mb-0 mt-2 text-[hsl(var(--mobile-brand-strong))]', MOBILE_TYPE_TOKENS.caption)}>
-              {compactPropertyLabel(property)}
-            </p>
-          ) : null}
-        </div>
-      </div>
-    </div>
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = React.useState(false);
+  const [status, setStatus] = React.useState<PropertyHazardEffectStatus>(item.propertyEffect.status);
+  const [note, setNote] = React.useState(item.propertyEffect.note ?? '');
+  const [effectObservedAt, setEffectObservedAt] = React.useState(
+    item.propertyEffect.effectObservedAt?.slice(0, 10) ?? '',
   );
-}
+  const [evidenceKind, setEvidenceKind] = React.useState<PropertyHazardEvidenceKind>('DOCUMENT');
+  const [evidenceId, setEvidenceId] = React.useState('');
+  const [evidenceNote, setEvidenceNote] = React.useState('');
 
-function PropertyContextStrip({
-  property,
-  isLoading,
-}: {
-  property: Property | null | undefined;
-  isLoading: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <MobileCard variant="compact" className="animate-pulse">
-        <div className="h-3 w-28 rounded-full bg-slate-200" />
-        <div className="mt-2 h-4 w-48 rounded-full bg-slate-200" />
-        <div className="mt-2 h-3 w-40 rounded-full bg-slate-100" />
-      </MobileCard>
-    );
-  }
+  const outcomeMutation = useMutation({
+    mutationFn: () => recordPastHazardOutcome(propertyId, item.propertyMatchId, {
+      status,
+      effectObservedAt: effectObservedAt
+        ? new Date(`${effectObservedAt}T12:00:00Z`).toISOString()
+        : null,
+      note,
+    }),
+    onSuccess: async () => {
+      setEditing(false);
+      await queryClient.invalidateQueries({ queryKey: ['past-hazard-exposure', propertyId] });
+    },
+  });
 
-  return (
-    <CompactEntityRow
-      leading={
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] text-[hsl(var(--mobile-text-primary))]">
-          <Home className="h-4 w-4" />
-        </span>
+  const evidenceMutation = useMutation({
+    mutationFn: () => {
+      if (!item.propertyEffect.outcomeId) throw new Error('Record an outcome first.');
+      const common = { kind: evidenceKind, note: evidenceNote || null };
+      if (evidenceKind === 'CLAIM') {
+        return linkPastHazardEvidence(propertyId, item.propertyEffect.outcomeId, {
+          ...common,
+          claimId: evidenceId,
+        });
       }
-      title={compactPropertyLabel(property)}
-      subtitle={compactPropertyLocation(property)}
-      meta="Replaying this property"
-      className="bg-[hsl(var(--mobile-card-bg))]"
-    />
-  );
-}
-
-function WindowPicker({
-  value,
-  onChange,
-}: {
-  value: HomeRiskReplayWindowType;
-  onChange: (value: HomeRiskReplayWindowType) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      {WINDOW_OPTIONS.map((option) => {
-        const isActive = value === option.key;
-        return (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => onChange(option.key)}
-            role="radio"
-            aria-checked={isActive}
-            className={cn(
-              'w-full rounded-2xl border px-3.5 py-3 text-left transition-colors',
-              isActive
-                ? 'border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))]'
-                : 'border-[hsl(var(--mobile-border-subtle))] bg-white hover:bg-[hsl(var(--mobile-bg-muted))]'
-            )}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
-                  {option.label}
-                </p>
-                <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-                  {option.description}
-                </p>
-              </div>
-              {isActive ? <StatusChip tone="info">Selected</StatusChip> : null}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function SummaryCard({
-  replay,
-  activeRunSummary,
-}: {
-  replay: HomeRiskReplayDetail;
-  activeRunSummary: HomeRiskReplayRunSummary | null;
-}) {
-  const totalEvents = Math.max(0, Number(replay.totalEvents ?? 0));
-  const highImpactEvents = Math.max(0, Number(replay.highImpactEvents ?? 0));
-  const moderateImpactEvents = Math.max(0, Number(replay.moderateImpactEvents ?? 0));
-  const topDrivers = replay.summaryJson?.topDrivers ?? [];
-  const guardrail = buildHomeRiskReplayGuardrail(replay);
-  const summaryText = replay.status === 'failed'
-    ? 'This replay did not finish successfully. You can review prior runs or try a fresh run.'
-    : totalEvents === 0
-    ? 'We found no significant historical events for this property in the selected period.'
-    : replay.summaryText || replay.summaryJson?.timelineSummary || 'Replay results are ready for review.';
+      if (evidenceKind === 'INSPECTION' || evidenceKind === 'REPAIR') {
+        return linkPastHazardEvidence(propertyId, item.propertyEffect.outcomeId, {
+          ...common,
+          homeEventId: evidenceId,
+        });
+      }
+      if (evidenceKind === 'PHOTO' || evidenceKind === 'DOCUMENT') {
+        return linkPastHazardEvidence(propertyId, item.propertyEffect.outcomeId, {
+          ...common,
+          documentId: evidenceId,
+        });
+      }
+      return linkPastHazardEvidence(propertyId, item.propertyEffect.outcomeId, {
+        ...common,
+        entityType: 'PropertyHazardOutcome',
+        entityId: item.propertyEffect.outcomeId,
+      });
+    },
+    onSuccess: async () => {
+      setEvidenceId('');
+      setEvidenceNote('');
+      await queryClient.invalidateQueries({ queryKey: ['past-hazard-exposure', propertyId] });
+    },
+  });
 
   return (
     <MobileCard className="space-y-4">
-      <PropertyContextStatusNotice context={replay.propertyContext} title="Replay property context" />
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
-            Replay summary
-          </p>
-          <h2 className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>
-            {formatWindowType(replay.windowType)}
-          </h2>
-          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-            {formatReplayDateRange(replay.windowStart, replay.windowEnd)}
-            {activeRunSummary?.createdAt ? ` • Generated ${formatReplayDate(activeRunSummary.createdAt)}` : ''}
+        <div>
+          <p className="text-base font-semibold text-slate-950">{item.title}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            {item.hazardLabel} · {formatDate(item.observedAt ?? item.effectiveFrom)}
           </p>
         </div>
-        <StatusChip tone={replay.status === 'completed' ? 'good' : replay.status === 'failed' ? 'danger' : 'elevated'}>
-          {replay.status}
+        <StatusChip tone={effectTone(item.propertyEffect.status)}>
+          {EFFECT_LABELS[item.propertyEffect.status]}
         </StatusChip>
       </div>
 
-      <MobileKpiStrip className="sm:grid-cols-3">
-        <MobileKpiTile
-          label="Total events"
-          value={totalEvents}
-          hint="Matched historical events"
-        />
-        <MobileKpiTile
-          label="High impact"
-          value={highImpactEvents}
-          hint="Strong stress signals"
-          tone={highImpactEvents > 0 ? 'danger' : 'neutral'}
-        />
-        <MobileKpiTile
-          label="Moderate impact"
-          value={moderateImpactEvents}
-          hint="Worth reviewing"
-          tone={moderateImpactEvents > 0 ? 'warning' : 'neutral'}
-        />
-      </MobileKpiStrip>
+      {item.factualSummary ? <p className="text-sm text-slate-700">{item.factualSummary}</p> : null}
 
-      <div
-        className={cn(
-          MOBILE_CARD_RADIUS,
-          'border border-[hsl(var(--mobile-border-subtle))] bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))] p-4'
-        )}
-      >
-        <div className="flex items-start gap-2">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-brand-strong))]" />
-          <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
-            {summaryText}
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm md:grid-cols-2">
+        <div>
+          <p className="font-medium text-slate-900">Source observation and match</p>
+          <p className="mt-1 text-slate-600">
+            <MapPin className="mr-1 inline h-3.5 w-3.5" />
+            {item.geography.matchedGeography} · {humanize(item.geography.precision)}
           </p>
+          {item.geography.distanceMiles != null ? (
+            <p className="mt-1 text-slate-600">
+              {item.geography.distanceMiles.toFixed(1)} miles from the sourced point
+            </p>
+          ) : null}
+        </div>
+        <div>
+          <p className="font-medium text-slate-900">{item.source.provider}</p>
+          <p className="mt-1 text-slate-600">
+            Checked {formatDate(item.source.lastVerifiedAt)} · revision {item.source.revision}
+          </p>
+          {item.source.url ? (
+            <a
+              href={item.source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex items-center text-primary underline"
+            >
+              Open source <ExternalLink className="ml-1 h-3.5 w-3.5" />
+            </a>
+          ) : null}
         </div>
       </div>
 
-      {guardrail ? (
-        <div
-          className={cn(
-            MOBILE_CARD_RADIUS,
-            'border px-4 py-3',
-            guardrail.tone === 'good'
-              ? 'border-emerald-200 bg-emerald-50/70'
-              : 'border-slate-200 bg-slate-50'
-          )}
-        >
-          <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
-            {guardrail.title}
-          </p>
-          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-            {guardrail.description}
-          </p>
+      <Alert>
+        <ShieldAlert className="h-4 w-4" />
+        <AlertTitle>Property effect is separate from geographic exposure</AlertTitle>
+        <AlertDescription>
+          {item.interpretation.boundedExplanation} {item.propertyEffect.explanation}
+        </AlertDescription>
+      </Alert>
+
+      {item.propertyEffect.note ? (
+        <div className="rounded-xl border border-slate-200 p-3 text-sm">
+          <p className="font-medium text-slate-900">Household record</p>
+          <p className="mt-1 text-slate-700">{item.propertyEffect.note}</p>
         </div>
       ) : null}
 
-      {topDrivers.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {topDrivers.map((driver) => (
-            <StatusChip key={driver} tone="info">
-              {formatDriverCode(driver)}
-            </StatusChip>
-          ))}
-        </div>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" onClick={() => setEditing((value) => !value)}>
+          {editing ? 'Cancel' : 'Confirm or update outcome'}
+        </Button>
+        {item.propertyEffect.canonicalActionId ? (
+          <Button asChild variant="outline">
+            <Link href="/dashboard/actions">
+              Open Home Action
+            </Link>
+          </Button>
+        ) : null}
+      </div>
 
-      {replay.summaryJson?.notes?.[0] ? (
-        <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-          {replay.summaryJson.notes[0]}
-        </p>
-      ) : null}
-    </MobileCard>
-  );
-}
-
-function TimelineSection({
-  replay,
-  onOpenEvent,
-}: {
-  replay: HomeRiskReplayDetail;
-  onOpenEvent: (event: HomeRiskReplayTimelineEvent, index: number) => void;
-}) {
-  if (replay.totalEvents === 0) {
-    return (
-      <EmptyStateCard
-        title="No significant events found in this window"
-        description="We found no significant historical events for this property in the selected period. You can still try a longer window if you want broader context."
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {replay.timelineEvents.map((event, index) => (
-        <ReplayTimelineItem
-          key={event.id}
-          event={event}
-          isLast={index === replay.timelineEvents.length - 1}
-          onOpen={(nextEvent) => onOpenEvent(nextEvent, index)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function HistorySection({
-  runs,
-  activeRunId,
-  onSelect,
-  isLoading,
-}: {
-  runs: HomeRiskReplayRunSummary[];
-  activeRunId: string | null;
-  onSelect: (run: HomeRiskReplayRunSummary, index: number) => void;
-  isLoading: boolean;
-}) {
-  if (isLoading && runs.length === 0) {
-    return (
-      <MobileCard className="space-y-3">
-        <div className="h-4 w-32 animate-pulse rounded-full bg-slate-200" />
-        <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
-        <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
-      </MobileCard>
-    );
-  }
-
-  if (runs.length === 0) {
-    return (
-      <EmptyStateCard
-        title="No prior replays yet"
-        description="Generate your first replay above. Older runs will collect here for quick comparison."
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-2.5">
-      {runs.map((run, index) => (
-        <button
-          key={run.id}
-          type="button"
-          onClick={() => onSelect(run, index)}
-          className={cn(
-            'w-full rounded-2xl border px-3.5 py-3 text-left transition-colors',
-            run.id === activeRunId
-              ? 'border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))]'
-              : 'border-[hsl(var(--mobile-border-subtle))] bg-white hover:bg-[hsl(var(--mobile-bg-muted))]'
-          )}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
-                {formatWindowType(run.windowType)}
-              </p>
-          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-            {formatReplayDate(run.createdAt)} • {formatReplayDateRange(run.windowStart, run.windowEnd)}
-          </p>
-            </div>
-            <StatusChip tone={runStatusTone(run.status)}>
-              {historyButtonLabel(run, activeRunId)}
-            </StatusChip>
+      {editing ? (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+          <div>
+            <Label htmlFor={`status-${item.propertyMatchId}`}>What is known about this home?</Label>
+            <select
+              id={`status-${item.propertyMatchId}`}
+              value={status}
+              onChange={(event) => setStatus(event.target.value as PropertyHazardEffectStatus)}
+              className="mt-1 min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+            >
+              <option value="UNKNOWN">Effect is unknown</option>
+              <option value="NO_OBSERVED_EFFECT">No observed effect was found or reported</option>
+              <option value="OBSERVED_EFFECT_CONFIRMED">An effect was observed</option>
+            </select>
           </div>
-
-          <div className="mt-2 flex flex-wrap gap-2">
-            <StatusChip tone="info">{run.totalEvents} events</StatusChip>
-            <StatusChip tone={run.highImpactEvents > 0 ? 'danger' : 'good'}>
-              {run.highImpactEvents} high impact
-            </StatusChip>
-            <StatusChip tone={run.moderateImpactEvents > 0 ? 'elevated' : 'info'}>
-              {run.moderateImpactEvents} moderate
-            </StatusChip>
+          <div>
+            <Label htmlFor={`effect-date-${item.propertyMatchId}`}>Observed date, if known</Label>
+            <Input
+              id={`effect-date-${item.propertyMatchId}`}
+              type="date"
+              value={effectObservedAt}
+              onChange={(event) => setEffectObservedAt(event.target.value)}
+            />
           </div>
-
-          {run.summaryText ? (
-            <p className={cn('mb-0 mt-2 line-clamp-2 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-              {run.summaryText}
-            </p>
-          ) : run.status === 'failed' ? (
-            <p className={cn('mb-0 mt-2 line-clamp-2 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-              This replay did not finish successfully. Open it to retry or review the saved state.
+          <div>
+            <Label htmlFor={`note-${item.propertyMatchId}`}>
+              What was checked or observed? Do not infer the cause.
+            </Label>
+            <textarea
+              id={`note-${item.propertyMatchId}`}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              className="mt-1 min-h-24 w-full rounded-md border border-slate-300 p-3 text-sm"
+              maxLength={1200}
+            />
+          </div>
+          {outcomeMutation.isError ? (
+            <p className="text-sm text-red-700">
+              {outcomeMutation.error instanceof Error
+                ? outcomeMutation.error.message
+                : 'Unable to save this outcome.'}
             </p>
           ) : null}
-        </button>
-      ))}
-    </div>
+          <Button
+            type="button"
+            disabled={note.trim().length < 3 || outcomeMutation.isPending}
+            onClick={() => outcomeMutation.mutate()}
+          >
+            {outcomeMutation.isPending ? 'Saving…' : 'Save household outcome'}
+          </Button>
+        </div>
+      ) : null}
+
+      {item.propertyEffect.outcomeId ? (
+        <div className="space-y-3 border-t pt-4">
+          <div>
+            <p className="font-medium text-slate-900">Linked evidence</p>
+            <p className="text-sm text-slate-600">
+              Link a claim, inspection, repair, photo, or document. Evidence describes what is
+              documented; it does not make the external event the proven cause.
+            </p>
+          </div>
+          {item.propertyEffect.evidence.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {item.propertyEffect.evidence.map((evidence) => (
+                <StatusChip key={evidence.id} tone="good">
+                  <FileCheck2 className="mr-1 h-3.5 w-3.5" />
+                  {humanize(evidence.kind)}
+                </StatusChip>
+              ))}
+            </div>
+          ) : null}
+          <div className="grid gap-2 md:grid-cols-[180px_1fr_1fr_auto]">
+            <select
+              value={evidenceKind}
+              onChange={(event) => setEvidenceKind(event.target.value as PropertyHazardEvidenceKind)}
+              className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+            >
+              {EVIDENCE_KINDS.map((kind) => (
+                <option key={kind} value={kind}>{humanize(kind)}</option>
+              ))}
+            </select>
+            {evidenceKind !== 'USER_ATTESTATION' ? (
+              <Input
+                value={evidenceId}
+                onChange={(event) => setEvidenceId(event.target.value)}
+                placeholder={
+                  evidenceKind === 'CLAIM'
+                    ? 'Claim ID'
+                    : evidenceKind === 'INSPECTION' || evidenceKind === 'REPAIR'
+                      ? 'Timeline event ID'
+                      : 'Document ID'
+                }
+              />
+            ) : <div />}
+            <Input
+              value={evidenceNote}
+              onChange={(event) => setEvidenceNote(event.target.value)}
+              placeholder="Evidence note (optional)"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={
+                evidenceMutation.isPending
+                || (evidenceKind !== 'USER_ATTESTATION' && !evidenceId)
+              }
+              onClick={() => evidenceMutation.mutate()}
+            >
+              Link
+            </Button>
+          </div>
+          {evidenceMutation.isError ? (
+            <p className="text-sm text-red-700">
+              {evidenceMutation.error instanceof Error
+                ? evidenceMutation.error.message
+                : 'Unable to link this evidence.'}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </MobileCard>
   );
 }
 
@@ -531,551 +339,171 @@ export default function HomeRiskReplayClient() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const propertyId = params.id;
-  const queryClient = useQueryClient();
-  const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
-  const prefilledWindowType = searchParams.get('windowType');
-  const contextualFocus = searchParams.get('focus');
-  const openedScreenKeyRef = React.useRef<string | null>(null);
-  const viewedRunIdsRef = React.useRef<Set<string>>(new Set());
-  const emptyViewedRunIdsRef = React.useRef<Set<string>>(new Set());
-  const trackedDetailErrorsRef = React.useRef<Set<string>>(new Set());
-  const trackedHistoryErrorsRef = React.useRef<Set<string>>(new Set());
-  const trackedOpenErrorsRef = React.useRef<Set<string>>(new Set());
+  const [from, setFrom] = React.useState('');
+  const [to, setTo] = React.useState('');
+  const [hazardType, setHazardType] = React.useState(searchParams.get('focus') ?? '');
 
-  React.useEffect(() => {
-    if (!propertyId) return;
-    track('workflow_started', { tool: 'home-risk-replay', propertyId, entryPoint: launchSurface ?? 'direct' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId]);
-
-  const [windowType, setWindowType] = React.useState<HomeRiskReplayWindowType>(() => {
-    return isWindowType(prefilledWindowType) ? prefilledWindowType : 'since_built';
-  });
-  const [windowStart, setWindowStart] = React.useState('');
-  const [windowEnd, setWindowEnd] = React.useState('');
-  const [selectedRunId, setSelectedRunId] = React.useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = React.useState<HomeRiskReplayTimelineEvent | null>(null);
-  const [formError, setFormError] = React.useState<string | null>(null);
-
-  const propertyQuery = useQuery({
-    queryKey: ['property', propertyId],
-    queryFn: async () => {
-      const response = await api.getProperty(propertyId);
-      return response.success ? response.data : null;
-    },
-    enabled: !!propertyId,
-  });
-
-  const historyQuery = useQuery({
-    queryKey: ['home-risk-replay-runs', propertyId],
-    queryFn: async () => listHomeRiskReplayRuns(propertyId),
-    enabled: !!propertyId,
-    staleTime: 60 * 1000,
-  });
-
-  const activeRunId = selectedRunId ?? historyQuery.data?.[0]?.id ?? null;
-
-  const detailQuery = useQuery({
-    queryKey: ['home-risk-replay-detail', propertyId, activeRunId],
-    queryFn: async () => {
-      if (!activeRunId) return null;
-      return getHomeRiskReplayDetail(propertyId, activeRunId);
-    },
-    enabled: !!propertyId && !!activeRunId,
-    staleTime: 60 * 1000,
-  });
-
-  const trackReplayEvent = React.useCallback((
-    event: string,
-    section?: string,
-    metadata?: Record<string, unknown>,
-  ) => {
-    if (!propertyId) return;
-    trackHomeRiskReplayEvent(propertyId, {
-      event,
-      section,
-      metadata: {
-        tool_name: 'home_risk_replay',
-        property_id: propertyId,
-        launch_surface: launchSurface,
-        contextual_focus_present: Boolean(contextualFocus),
-        ...metadata,
-      },
-    }).catch(() => undefined);
-  }, [contextualFocus, launchSurface, propertyId]);
-
-  const generateMutation = useMutation({
-    mutationFn: async (options: { forceRegenerate?: boolean }) => generateHomeRiskReplay(propertyId, {
-      windowType,
-      windowStart: windowType === 'custom_range' ? new Date(`${windowStart}T00:00:00.000Z`).toISOString() : null,
-      windowEnd: windowType === 'custom_range' ? new Date(`${windowEnd}T23:59:59.999Z`).toISOString() : null,
-      forceRegenerate: options.forceRegenerate ?? false,
+  const exposureQuery = useQuery({
+    queryKey: ['past-hazard-exposure', propertyId, from, to, hazardType],
+    queryFn: () => getPastHazardExposure(propertyId, {
+      from: from || undefined,
+      to: to || undefined,
+      hazardType: hazardType || undefined,
     }),
-    onSuccess: async ({ replay }) => {
-      setSelectedRunId(replay.id);
-      setSelectedEvent(null);
-      queryClient.setQueryData(['home-risk-replay-detail', propertyId, replay.id], replay);
-      await queryClient.invalidateQueries({ queryKey: ['home-risk-replay-runs', propertyId] });
-      if (propertyId) {
-        track('action_completed', { tool: 'home-risk-replay', actionType: 'generate_replay', propertyId });
-      }
-    },
-    onError: (error) => {
-      trackReplayEvent('ERROR', 'controls', {
-        stage: 'generate',
-        error_type: classifyReplayError(error),
-        window_type: windowType,
-      });
-    },
+    enabled: Boolean(propertyId),
   });
 
-  const currentReplay = detailQuery.data ?? null;
-  const activeRunSummary = React.useMemo(() => {
-    if (!activeRunId) return null;
-    return historyQuery.data?.find((run) => run.id === activeRunId) ?? null;
-  }, [activeRunId, historyQuery.data]);
-  const property = propertyQuery.data;
-
-  React.useEffect(() => {
-    const requestedRunId = searchParams.get('runId');
-    if (requestedRunId) {
-      setSelectedRunId((current) => (current === requestedRunId ? current : requestedRunId));
-    }
-
-    const requestedWindowType = searchParams.get('windowType');
-    if (isWindowType(requestedWindowType)) {
-      setWindowType((current) => (current === requestedWindowType ? current : requestedWindowType));
-    }
-  }, [searchParams]);
-
-  React.useEffect(() => {
-    if (!historyQuery.data) return;
-    if (!selectedRunId) return;
-    if (historyQuery.data.some((run) => run.id === selectedRunId)) return;
-
-    setSelectedRunId(historyQuery.data[0]?.id ?? null);
-  }, [historyQuery.data, selectedRunId]);
-
-  React.useEffect(() => {
-    if (!propertyId || propertyQuery.isLoading) return;
-
-    const openKey = `${propertyId}:${launchSurface}:${prefilledWindowType ?? 'none'}`;
-    if (openedScreenKeyRef.current === openKey) return;
-
-    openedScreenKeyRef.current = openKey;
-    trackReplayEvent('OPENED', 'page', {
-      has_property_context: Boolean(property),
-      prefilled_window_type: isWindowType(prefilledWindowType) ? prefilledWindowType : null,
-      device_context: deviceContext(),
-    });
-  }, [launchSurface, prefilledWindowType, property, propertyId, propertyQuery.isLoading, trackReplayEvent]);
-
-  React.useEffect(() => {
-    if (!propertyQuery.isError) return;
-
-    const errorKey = `${propertyId}:open`;
-    if (trackedOpenErrorsRef.current.has(errorKey)) return;
-
-    trackedOpenErrorsRef.current.add(errorKey);
-    trackReplayEvent('ERROR', 'page', {
-      stage: 'open',
-      error_type: classifyReplayError(propertyQuery.error),
-      window_type: windowType,
-    });
-  }, [propertyId, propertyQuery.error, propertyQuery.isError, trackReplayEvent, windowType]);
-
-  React.useEffect(() => {
-    if (!historyQuery.isError) return;
-
-    const errorKey = `${propertyId}:history`;
-    if (trackedHistoryErrorsRef.current.has(errorKey)) return;
-
-    trackedHistoryErrorsRef.current.add(errorKey);
-    trackReplayEvent('ERROR', 'history', {
-      stage: 'history',
-      error_type: classifyReplayError(historyQuery.error),
-      window_type: windowType,
-    });
-  }, [historyQuery.error, historyQuery.isError, propertyId, trackReplayEvent, windowType]);
-
-  React.useEffect(() => {
-    if (!detailQuery.isError || !activeRunId) return;
-
-    const errorKey = `${propertyId}:${activeRunId}`;
-    if (trackedDetailErrorsRef.current.has(errorKey)) return;
-
-    trackedDetailErrorsRef.current.add(errorKey);
-    trackReplayEvent('ERROR', 'detail', {
-      stage: 'detail',
-      error_type: classifyReplayError(detailQuery.error),
-      replay_run_id: activeRunId,
-      window_type: activeRunSummary?.windowType ?? windowType,
-    });
-  }, [activeRunId, activeRunSummary?.windowType, detailQuery.error, detailQuery.isError, propertyId, trackReplayEvent, windowType]);
-
-  React.useEffect(() => {
-    if (!currentReplay) return;
-    if (viewedRunIdsRef.current.has(currentReplay.id)) return;
-
-    viewedRunIdsRef.current.add(currentReplay.id);
-    trackReplayEvent('VIEWED', 'summary', {
-      replay_run_id: currentReplay.id,
-      window_type: currentReplay.windowType,
-      total_events_bucket: bucketTotalEvents(currentReplay.totalEvents),
-      high_impact_events_bucket: bucketImpactEvents(currentReplay.highImpactEvents),
-      moderate_impact_events_bucket: bucketImpactEvents(currentReplay.moderateImpactEvents),
-      has_events: currentReplay.totalEvents > 0,
-      has_high_impact_events: currentReplay.highImpactEvents > 0,
-      engine_version: currentReplay.engineVersion ?? null,
-    });
-
-    if (currentReplay.totalEvents === 0 && !emptyViewedRunIdsRef.current.has(currentReplay.id)) {
-      emptyViewedRunIdsRef.current.add(currentReplay.id);
-      trackReplayEvent('EMPTY_VIEWED', 'timeline', {
-        replay_run_id: currentReplay.id,
-        window_type: currentReplay.windowType,
-      });
-    }
-  }, [currentReplay, trackReplayEvent]);
-
-  function validateInputs(): boolean {
-    const errors = buildHomeRiskReplayValidationErrors({
-      windowType,
-      windowStart,
-      windowEnd,
-    });
-
-    const nextError = errors.windowStart || errors.windowEnd || null;
-    setFormError(nextError);
-    return !nextError;
-  }
-
-  function handleGenerate(forceRegenerate = false) {
-    if (!validateInputs()) return;
-    trackReplayEvent('GENERATION_STARTED', 'controls', {
-      window_type: windowType,
-      custom_range_used: windowType === 'custom_range',
-    });
-    generateMutation.mutate({ forceRegenerate });
-  }
-
-  function handleSelectHistoryRun(run: HomeRiskReplayRunSummary, index: number) {
-    if (run.id !== activeRunId) {
-      trackReplayEvent('HISTORY_ITEM_OPENED', 'history', {
-        replay_run_id: run.id,
-        window_type: run.windowType,
-        total_events_bucket: bucketTotalEvents(run.totalEvents),
-        high_impact_events_bucket: bucketImpactEvents(run.highImpactEvents),
-        source_list_position: index + 1,
-      });
-    }
-
-    setSelectedRunId(run.id);
-  }
-
-  function handleOpenTimelineEvent(event: HomeRiskReplayTimelineEvent, index: number) {
-    trackReplayEvent('EVENT_OPENED', 'timeline', {
-      replay_run_id: currentReplay?.id ?? activeRunId,
-      replay_event_match_id: event.id,
-      risk_event_id: event.homeRiskEventId,
-      event_type: event.eventType,
-      severity: event.severity,
-      impact_level: event.impactLevel,
-      opened_from: 'timeline',
-      event_position: index + 1,
-    });
-    setSelectedEvent(event);
-  }
-
-  const propertyMissing = !propertyQuery.isLoading && !property;
-  const generationErrorMessage = generateMutation.isError
-    ? getHomeRiskReplayUserMessage(generateMutation.error, 'generate')
-    : null;
-  const historyErrorMessage = historyQuery.isError
-    ? getHomeRiskReplayUserMessage(historyQuery.error, 'history')
-    : null;
-  const detailErrorMessage = detailQuery.isError
-    ? getHomeRiskReplayUserMessage(detailQuery.error, 'detail')
-    : null;
-  const propertyErrorMessage = propertyQuery.isError
-    ? getHomeRiskReplayUserMessage(propertyQuery.error, 'open')
-    : null;
-  const noPropertyContextMessage = propertyQuery.isLoading
-    ? 'Loading the property context used for this replay.'
-    : propertyErrorMessage || 'Home Risk Replay needs a property context before it can build a historical stress timeline.';
-  const replayMethodNote = currentReplay && currentReplay.totalEvents > 0
-    ? buildEventLocationNote({
-        impactFactorsJson: currentReplay.timelineEvents?.[0]?.impactFactorsJson ?? null,
-      })
-    : null;
+  const exposure = exposureQuery.data;
+  const hazardTypes = React.useMemo(
+    () => [...new Set([
+      ...(exposure?.pastEvents ?? []),
+      ...(exposure?.longTermContext ?? []),
+    ].map((item) => item.hazardType))].sort(),
+    [exposure],
+  );
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to property
-        </Link>
-      </Button>
-
-      <div className="space-y-5 lg:grid lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-5 lg:space-y-0">
-        <div className="lg:col-span-2 lg:hidden">
-          <ReplayIntroCard property={property} />
-        </div>
-
-        <div className="lg:col-span-2 lg:hidden">
-          <PropertyContextStrip property={property} isLoading={propertyQuery.isLoading} />
-        </div>
-
-        <div className="lg:col-span-2">
-          <HomeToolHeader
-            toolId="home-risk-replay"
-            propertyId={propertyId}
-          />
-        </div>
-
-        <div className="lg:col-span-2">
-          <TrustStrip
-            variant="footnote"
-            confidenceLabel={currentReplay ? `${currentReplay.totalEvents} matched events in selected window` : 'Confidence improves after first replay run'}
-            freshnessLabel={activeRunSummary?.createdAt ? `Latest run ${formatReplayDate(activeRunSummary.createdAt)}` : 'Run replay to refresh'}
-            sourceLabel="Historical weather/risk events + property location + recorded home details"
-          />
-        </div>
-
-        <div className="space-y-5 lg:col-start-1">
-          <MobileSection>
-            <MobileSectionHeader
-              title="Replay controls"
-              subtitle="Choose how far back to look, then generate or reload a replay."
-            />
-            <MobileFilterSurface>
-              <div role="radiogroup" aria-label="Replay window">
-                <WindowPicker value={windowType} onChange={(nextValue) => {
-                  setWindowType(nextValue);
-                  setFormError(null);
-                }} />
-              </div>
-
-              {windowType === 'custom_range' ? (
-                <div
-                  className="grid gap-3 sm:grid-cols-2"
-                  aria-describedby={formError ? 'home-risk-replay-form-error' : undefined}
-                >
-                  <label htmlFor="home-risk-replay-start" className="space-y-1.5">
-                    <span className={cn('text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>Start date</span>
-                    <Input
-                      id="home-risk-replay-start"
-                      type="date"
-                      value={windowStart}
-                      aria-invalid={Boolean(formError)}
-                      aria-describedby={formError ? 'home-risk-replay-form-error' : undefined}
-                      onChange={(event) => setWindowStart(event.target.value)}
-                    />
-                  </label>
-                  <label htmlFor="home-risk-replay-end" className="space-y-1.5">
-                    <span className={cn('text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>End date</span>
-                    <Input
-                      id="home-risk-replay-end"
-                      type="date"
-                      value={windowEnd}
-                      aria-invalid={Boolean(formError)}
-                      aria-describedby={formError ? 'home-risk-replay-form-error' : undefined}
-                      onChange={(event) => setWindowEnd(event.target.value)}
-                    />
-                  </label>
-                </div>
-              ) : null}
-
-              {formError ? (
-                <p id="home-risk-replay-form-error" className="mb-0 text-sm text-rose-600" role="alert">
-                  {formError}
-                </p>
-              ) : (
-                <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-                  {windowType === 'since_built'
-                    ? property?.yearBuilt
-                      ? `Starts from ${property.yearBuilt} using the property year built as a reference point.`
-                      : 'Uses a safe fallback lookback when year built is missing.'
-                    : windowType === 'last_5_years'
-                    ? 'A compact view for recent stress history.'
-                    : 'Custom windows keep the replay focused and easier to scan.'}
-                </p>
-              )}
-
-              <MobileActionRow className="pt-1">
-                <Button
-                  type="button"
-                  className="min-h-[46px] flex-1"
-                  disabled={generateMutation.isPending || propertyMissing}
-                  aria-busy={generateMutation.isPending}
-                  onClick={() => handleGenerate(false)}
-                >
-                  {generateMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )}
-                  {generateMutation.isPending ? 'Generating replay...' : 'Replay history'}
-                </Button>
-
-                {currentReplay ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-h-[46px]"
-                    disabled={generateMutation.isPending || propertyMissing}
-                    onClick={() => handleGenerate(true)}
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Fresh run
-                  </Button>
-                ) : null}
-              </MobileActionRow>
-              {generateMutation.isPending ? (
-                <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)} role="status" aria-live="polite">
-                  Building a replay from historical events and the details already recorded for this property.
-                </p>
-              ) : null}
-            </MobileFilterSurface>
-          </MobileSection>
-
-          <MobileSection>
-            <MobileSectionHeader
-              title="Prior replay runs"
-              subtitle="Open an earlier replay when you want to compare windows or rerun history."
-            />
-            {historyQuery.isError ? (
-              <Alert variant="destructive" className="mb-3">
-                <AlertTitle>Could not load replay history</AlertTitle>
-                <AlertDescription className="flex items-center justify-between gap-3">
-                  <span>{historyErrorMessage}</span>
-                  <Button type="button" size="sm" variant="outline" onClick={() => historyQuery.refetch()}>
-                    Try again
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {!historyQuery.isError ? (
-              <HistorySection
-                runs={historyQuery.data ?? []}
-                activeRunId={activeRunId}
-                onSelect={handleSelectHistoryRun}
-                isLoading={historyQuery.isLoading}
-              />
-            ) : null}
-          </MobileSection>
-        </div>
-
-        <div className="space-y-5 lg:col-start-2">
-          {propertyMissing ? (
-            <EmptyStateCard
-              title="Property not available"
-              description={noPropertyContextMessage}
-            />
-          ) : null}
-
-          {generateMutation.isError ? (
-            <Alert variant="destructive">
-              <AlertTitle>Replay generation failed</AlertTitle>
-              <AlertDescription className="flex items-center justify-between gap-3">
-                <span>{generationErrorMessage}</span>
-                <Button type="button" size="sm" variant="outline" onClick={() => handleGenerate(false)}>
-                  Try again
-                </Button>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {!currentReplay && !detailQuery.isLoading && !propertyMissing ? (
-            <EmptyStateCard
-              title={historyQuery.data?.length ? 'Choose a replay to review' : 'Generate your first replay'}
-              description={historyQuery.data?.length
-                ? 'Your prior replay runs are ready below. Open one, or generate a new window above.'
-                : 'Home Risk Replay builds a calm historical timeline from matched risk events and the details already recorded for this property.'}
-              action={
-                historyQuery.data?.length ? undefined : (
-                  <Button type="button" onClick={() => handleGenerate(false)} disabled={generateMutation.isPending || propertyQuery.isLoading}>
-                    <CalendarRange className="h-4 w-4" />
-                    Generate replay
-                  </Button>
-                )
-              }
-            />
-          ) : null}
-
-          {detailQuery.isLoading && activeRunId ? (
-            <MobileCard className="space-y-4 animate-pulse" aria-hidden="true">
-              <div className="h-3 w-28 rounded-full bg-slate-200" />
-              <div className="h-5 w-52 rounded-full bg-slate-200" />
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                <div className="h-20 rounded-2xl bg-slate-100" />
-                <div className="h-20 rounded-2xl bg-slate-100" />
-                <div className="h-20 rounded-2xl bg-slate-100" />
-              </div>
-              <div className="h-24 rounded-2xl bg-slate-100" />
-            </MobileCard>
-          ) : null}
-
-          {detailQuery.isError ? (
-            <Alert variant="destructive">
-              <AlertTitle>Could not load replay detail</AlertTitle>
-              <AlertDescription className="flex items-center justify-between gap-3">
-                <span>{detailErrorMessage}</span>
-                <Button type="button" size="sm" variant="outline" onClick={() => detailQuery.refetch()}>
-                  Try again
-                </Button>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {currentReplay ? (
-            <MobileSection>
-              <MobileSectionHeader
-                title="Replay summary"
-                subtitle="A compact read on the historical stress signals we found for this property."
-                action={
-                  <StatusChip tone="info">
-                    <Clock3 className="mr-1 h-3.5 w-3.5" />
-                    {currentReplay.engineVersion || 'Current version'}
-                  </StatusChip>
-                }
-              />
-              <SummaryCard replay={currentReplay} activeRunSummary={activeRunSummary} />
-              {replayMethodNote ? (
-                <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-                  {replayMethodNote}
-                </p>
-              ) : null}
-            </MobileSection>
-          ) : null}
-
-          {currentReplay ? (
-            <MobileSection>
-              <MobileSectionHeader
-                title="Historical timeline"
-                subtitle="Newest events first, with explainable property notes and details on tap."
-                action={
-                  <StatusChip tone="good">
-                    <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                    {currentReplay.totalEvents} matched
-                  </StatusChip>
-                }
-              />
-              <TimelineSection replay={currentReplay} onOpenEvent={handleOpenTimelineEvent} />
-            </MobileSection>
-          ) : null}
-        </div>
-      </div>
-
-      <p className={cn('mb-0 text-center text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-        This replay is based on historical events matched to your property location and recorded home details.
-      </p>
-
-      <ReplayDetailSheet
-        event={selectedEvent}
-        onClose={() => setSelectedEvent(null)}
+    <MobilePageContainer className="space-y-6">
+      <HomeToolHeader
+        toolId="home-risk-replay"
+        propertyId={propertyId}
+        backHref={`/dashboard/properties/${propertyId}`}
+        backLabel="Back to property"
+        showBackLink
       />
+
+      <MobileCard className="border-amber-200 bg-amber-50/50">
+        <div className="flex items-start gap-3">
+          <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-700" />
+          <div>
+            <h1 className="text-xl font-semibold text-slate-950">Past Hazard Exposure</h1>
+            <p className="mt-1 text-sm text-slate-700">
+              Review sourced historical hazards matched to this property geography, then record what
+              is actually known about the home.
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-slate-600">
+              A nearby event or geographic match does not prove damage, causation, insurance coverage,
+              or a change in property value.
+            </p>
+          </div>
+        </div>
+      </MobileCard>
+
+      <MobileFilterSurface>
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="text-sm font-medium text-slate-800">
+            From
+            <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          </label>
+          <label className="text-sm font-medium text-slate-800">
+            To
+            <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          </label>
+          <label className="text-sm font-medium text-slate-800">
+            Hazard type
+            <select
+              value={hazardType}
+              onChange={(event) => setHazardType(event.target.value)}
+              className="mt-1 min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+            >
+              <option value="">All reviewed hazard types</option>
+              {hazardTypes.map((type) => <option key={type} value={type}>{humanize(type)}</option>)}
+            </select>
+          </label>
+        </div>
+      </MobileFilterSurface>
+
+      {exposureQuery.isLoading ? (
+        <EmptyStateCard title="Loading reviewed source records" description="Checking hazard observations and source coverage." />
+      ) : exposureQuery.isError || !exposure ? (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Past hazard exposure is unavailable</AlertTitle>
+          <AlertDescription>
+            Reviewed source coverage could not be loaded. This is not an all-clear.
+            <Button className="ml-2" size="sm" variant="outline" onClick={() => exposureQuery.refetch()}>
+              Try again
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          <MobileSection>
+            <MobileSectionHeader
+              title="Source coverage"
+              subtitle="The providers, geography, and checked-through dates that bound this view."
+            />
+            <MobileCard className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusChip tone={exposure.coverage.state === 'CURRENT' ? 'good' : 'elevated'}>
+                  {humanize(exposure.coverage.state)}
+                </StatusChip>
+                <span className="text-sm text-slate-600">
+                  {exposure.coverage.checkedThrough
+                    ? `Checked through ${formatDate(exposure.coverage.checkedThrough)}`
+                    : 'No checked-through date is available'}
+                </span>
+              </div>
+              {exposure.coverage.sources.map((source) => (
+                <div key={source.source.key} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <p className="font-medium text-slate-950">{source.source.provider}</p>
+                  <p className="mt-1 text-slate-600">
+                    {source.geography
+                      ? `${humanize(source.geography.type)} ${source.geography.key ?? ''}`
+                      : 'No reviewed coverage for this property geography'}
+                    {' · '}{humanize(source.state)}
+                  </p>
+                </div>
+              ))}
+              {exposure.coverage.limitations.map((limitation) => (
+                <p key={limitation} className="text-xs text-slate-600">• {limitation}</p>
+              ))}
+            </MobileCard>
+          </MobileSection>
+
+          <MobileSection>
+            <MobileSectionHeader
+              title="Past event records"
+              subtitle="External observations first; household outcomes and evidence are shown separately."
+            />
+            {exposure.pastEvents.length > 0 ? (
+              <div className="space-y-4">
+                {exposure.pastEvents.map((item) => (
+                  <HazardCard key={item.propertyMatchId} item={item} propertyId={propertyId} />
+                ))}
+              </div>
+            ) : (
+              <EmptyStateCard
+                title="No matched records to show"
+                description={exposure.emptyState
+                  ?? 'No records matched the selected filters within reviewed source coverage.'}
+              />
+            )}
+          </MobileSection>
+
+          <MobileSection>
+            <MobileSectionHeader
+              title="Long-term context belongs in Environment Report"
+              subtitle="Long-term exposure is kept separate from historical event records and current conditions."
+            />
+            <MobileCard>
+              <Button asChild variant="outline">
+                <Link href={`/dashboard/properties/${propertyId}/environment-report`}>
+                  <CalendarRange className="mr-2 h-4 w-4" />
+                  Open Environment Report
+                </Link>
+              </Button>
+            </MobileCard>
+          </MobileSection>
+        </>
+      )}
+
+      <Link
+        href={`/dashboard/properties/${propertyId}`}
+        className="inline-flex items-center text-sm text-slate-600 underline"
+      >
+        <ArrowLeft className="mr-1 h-4 w-4" /> Return to property
+      </Link>
     </MobilePageContainer>
   );
 }

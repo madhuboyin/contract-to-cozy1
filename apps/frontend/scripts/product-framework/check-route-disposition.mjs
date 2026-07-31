@@ -126,7 +126,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'home-record',
     disposition: 'MERGE_HOME_RECORD',
     rationale: 'Property identity, systems, evidence, history, records, rooms, and household artifacts converge in Home Record.',
-    matches: matches(/^\/dashboard\/properties(?:\/new|\/\[id\](?:\/|$))?$|^\/dashboard\/properties\/\[id\]\/(documents|edit|inventory|maintenance|rooms|timeline|reports|vault|materials|home-score|health-score|environment-report)(?:\/|$)|^\/dashboard\/(expenses|insurance|warranties|financing)(?:\/|$)/),
+    matches: matches(/^\/dashboard\/properties(?:\/new|\/\[id\](?:\/|$))?$|^\/dashboard\/properties\/\[id\]\/(documents|edit|inventory|maintenance|rooms|timeline|reports|vault|materials|property-brief|home-score|health-score|environment-report)(?:\/|$)|^\/dashboard\/(expenses|insurance|warranties|financing)(?:\/|$)/),
   },
   {
     id: 'home-attention',

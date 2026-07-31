@@ -1,6 +1,11 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/page.tsx
-import HomeGazetteClient from './HomeGazetteClient';
+import { redirect } from 'next/navigation';
 
-export default function HomeGazettePage() {
-  return <HomeGazetteClient />;
+type LegacyHomeGazettePageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function LegacyHomeGazettePage({ params }: LegacyHomeGazettePageProps) {
+  const { id } = await params;
+  redirect(`/dashboard/properties/${encodeURIComponent(id)}/tools/home-briefing`);
 }

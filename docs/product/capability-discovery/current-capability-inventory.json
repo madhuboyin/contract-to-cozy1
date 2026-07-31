@@ -14,16 +14,16 @@
     "apps/frontend/src/features/tools/capabilityIconRegistry.ts"
   ],
   "summary": {
-    "aiCatalogEntries": 31,
-    "homeCatalogEntries": 32,
+    "aiCatalogEntries": 30,
+    "homeCatalogEntries": 33,
     "overlappingEntries": 20,
     "distinctCapabilities": 43,
     "routeVerified": 43,
-    "canonicalRelationshipCoverage": 27,
-    "contextualCapabilities": 22,
+    "canonicalRelationshipCoverage": 28,
+    "contextualCapabilities": 23,
     "workflowOnly": 1,
     "lifecycleCanonicalized": 43,
-    "catalogOnlyCapabilities": 20
+    "catalogOnlyCapabilities": 19
   },
   "capabilities": [
     {
@@ -99,24 +99,6 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
-    },
-    {
-      "id": "climate",
-      "label": "Climate Risk",
-      "sources": [
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/climate",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "PROTECT_MONITOR",
-      "rolloutKey": "CLIMATE_RISK",
-      "releaseStage": "BETA",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_VIEWED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": false,
-      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "coverage-intelligence",
@@ -282,6 +264,25 @@
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
+      "id": "home-briefing",
+      "label": "Home Briefing",
+      "sources": [
+        "home",
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-briefing",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "HOME_BRIEFING",
+      "releaseStage": "BETA",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "DECISION_RECORDED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": true,
+      "recommendationDisposition": "CONTEXTUAL_CANONICAL"
+    },
+    {
       "id": "home-digital-twin",
       "label": "Home Upgrade Planner",
       "sources": [
@@ -338,25 +339,6 @@
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
-      "id": "home-gazette",
-      "label": "Home Gazette",
-      "sources": [
-        "home",
-        "ai"
-      ],
-      "canonicalRoute": "/dashboard/properties/[id]/tools/home-gazette",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "PROTECT_MONITOR",
-      "rolloutKey": "HOME_GAZETTE",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_VIEWED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
-      "recommendationDisposition": "CATALOG_ONLY"
-    },
-    {
       "id": "home-habit-coach",
       "label": "Home Habit Coach",
       "sources": [
@@ -396,7 +378,7 @@
     },
     {
       "id": "home-risk-replay",
-      "label": "Home Risk Replay",
+      "label": "Past Hazard Exposure",
       "sources": [
         "home",
         "ai"
@@ -406,9 +388,9 @@
       "workflowOnly": false,
       "outcomeCategory": "UNDERSTAND_HOME",
       "rolloutKey": "HOME_RISK_REPLAY",
-      "releaseStage": "ACTIVE",
+      "releaseStage": "BETA",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_VIEWED",
+      "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
@@ -422,11 +404,11 @@
       "canonicalRoute": "/dashboard/properties/[id]/timeline",
       "routeVerified": true,
       "workflowOnly": false,
-      "outcomeCategory": "PLAN_BUDGET",
+      "outcomeCategory": "UNDERSTAND_HOME",
       "rolloutKey": "HOME_TIMELINE",
       "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
+      "completionKind": "ARTIFACT_CREATED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
@@ -507,7 +489,7 @@
     },
     {
       "id": "neighborhood-change-radar",
-      "label": "Neighborhood Change Radar",
+      "label": "Around Your Home",
       "sources": [
         "home",
         "ai"
@@ -519,7 +501,7 @@
       "rolloutKey": "NEIGHBORHOOD_CHANGE_RADAR",
       "releaseStage": "BETA",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "OUTPUT_VIEWED",
+      "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
@@ -634,6 +616,24 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
+    },
+    {
+      "id": "property-brief",
+      "label": "Property Brief",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/property-brief",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "UNDERSTAND_HOME",
+      "rolloutKey": "PROPERTY_BRIEF",
+      "releaseStage": "BETA",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "ARTIFACT_CREATED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": true,
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "property-tax",

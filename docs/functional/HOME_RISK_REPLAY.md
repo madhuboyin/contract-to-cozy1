@@ -1,4 +1,20 @@
-# Home Risk Replay
+# Past Hazard Exposure
+
+> **Current contract (2026-07-30):** The homeowner experience at the legacy
+> `home-risk-replay` route is now Past Hazard Exposure. It reads only reviewed
+> `IntelligenceSource`, `IntelligenceSourceCoverage`,
+> `IntelligenceObservation`, and `PropertyObservationMatch` records. Manual
+> replay generation, composite impact scoring, inferred system stress, and
+> analysis-run history are no longer homeowner-authoritative. Legacy
+> `HomeRiskEvent` and replay-run tables remain dormant for compatibility and
+> must not be presented as property history.
+>
+> The view separates source observation, geographic match, property
+> vulnerability/missing facts, and the household-confirmed outcome. A matched
+> hazard is never described as property damage without an explicit outcome and
+> linked evidence. Long-term hazard context belongs to Environment Report;
+> current conditions belong to Environment Report and Incidents; follow-up
+> obligations belong to Home Actions.
 
 ## Overview
 

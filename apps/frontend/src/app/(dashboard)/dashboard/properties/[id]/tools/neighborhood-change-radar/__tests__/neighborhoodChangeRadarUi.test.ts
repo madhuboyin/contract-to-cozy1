@@ -100,10 +100,10 @@ describe('neighborhoodChangeRadarUi', () => {
           totalCount: 0,
         }),
       ).toEqual({
-        title: 'No neighborhood changes detected',
+        title: 'No matched neighborhood records',
         description:
-          'We found no significant neighborhood events for this property yet. That is still useful context — we will notify you as new developments are linked to your home.',
-        tone: 'good',
+          'No neighborhood records are currently linked to this property. Source coverage may be unavailable or incomplete, so this is not an all-clear.',
+        tone: 'info',
       });
     });
 

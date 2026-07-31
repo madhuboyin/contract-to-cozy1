@@ -654,7 +654,6 @@ function EditionDetailPanel({
   const [edition, setEdition] = useState<GazetteEditionDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showShare, setShowShare] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -695,15 +694,6 @@ function EditionDetailPanel({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {edition?.status === 'PUBLISHED' && (
-              <button
-                onClick={() => setShowShare(true)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200/70 bg-white/80 px-3 text-xs font-medium text-slate-600 dark:border-slate-700/70 dark:bg-slate-800/55 dark:text-slate-300"
-              >
-                <Share2 className="h-3.5 w-3.5" />
-                Share
-              </button>
-            )}
             <button
               onClick={onClose}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -770,9 +760,6 @@ function EditionDetailPanel({
         </div>
       </div>
 
-      {showShare && edition && (
-        <ShareModal editionId={edition.id} onClose={() => setShowShare(false)} />
-      )}
     </div>
   );
 }
@@ -785,13 +772,13 @@ function BootstrapState({ propertyId }: { propertyId: string }) {
       <div className="p-8 text-center">
         <Sparkles className="mx-auto mb-4 h-12 w-12 text-slate-300 dark:text-slate-600" />
         <h3 className="mb-2 text-base font-semibold text-slate-900 dark:text-slate-100">
-          Your Home Gazette is being set up
+          Your Home Briefing is being set up
         </h3>
         <p className="mx-auto mb-5 max-w-sm text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-          The Gazette will automatically generate a weekly edition summarising what&apos;s been happening with your home — risks, maintenance, financials, and more.
+          We are establishing a trustworthy baseline. Future briefings will appear only when a meaningful canonical property change is available.
         </p>
         <p className="text-xs text-slate-400 dark:text-slate-500">
-          Check back after the next weekly generation run.
+          Source coverage and unavailable inputs will be shown explicitly.
         </p>
       </div>
     </GlassCard>
@@ -804,12 +791,12 @@ function SkippedState({ edition }: { edition: GazetteEditionDto }) {
       <div className="p-6 text-center">
         <Info className="mx-auto mb-4 h-10 w-10 text-slate-300 dark:text-slate-600" />
         <h3 className="mb-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
-          Quiet week
+          No briefing published
         </h3>
         <p className="mx-auto max-w-sm text-sm text-slate-500 dark:text-slate-400">
           {edition.skippedReason === 'NOT_ENOUGH_SIGNALS'
-            ? 'Not enough new signals this week to generate an edition. Nothing urgent to report.'
-            : 'No edition was generated this week.'}
+            ? 'The legacy edition did not contain enough qualified records. This is not an all-clear and does not confirm that every source was available.'
+            : 'No briefing was published for this period. Review source health before interpreting this as no meaningful change.'}
         </p>
         <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
           {fmtDateRange(edition.weekStart, edition.weekEnd)}
@@ -844,7 +831,6 @@ export default function HomeGazetteClient() {
   const [loading, setLoading] = useState(false);
   const [edition, setEdition] = useState<GazetteEditionDto | null | 'none'>('none');
   const [error, setError] = useState<string | null>(null);
-  const [showShare, setShowShare] = useState(false);
   const [selectedEditionId, setSelectedEditionId] = useState<string | null>(null);
   const [storyExpanded, setStoryExpanded] = useState(false);
 
@@ -864,7 +850,7 @@ export default function HomeGazetteClient() {
       }
     } catch (e: unknown) {
       if (reqId !== reqRef.current) return;
-      setError(e instanceof Error ? e.message : 'Failed to load Gazette');
+      setError(e instanceof Error ? e.message : 'Failed to load Home Briefing');
     } finally {
       if (reqId === reqRef.current) setLoading(false);
     }
@@ -922,18 +908,18 @@ export default function HomeGazetteClient() {
       {/* Page intro */}
       <MobilePageIntro
         eyebrow="Home tool"
-        title="Home Gazette"
-        subtitle="Your weekly home intelligence briefing — risks, maintenance, finances, and more."
+        title="Home Briefing"
+        subtitle="Meaningful changes since your last review, linked to their canonical source or Home Action."
        className="lg:hidden"/>
 
-      <PropertyContextStatusNotice context={currentEdition?.propertyContext} title="Gazette context" />
+      <PropertyContextStatusNotice context={currentEdition?.propertyContext} title="Briefing context" />
 
       {/* Filter surface: tool rail + tabs + actions */}
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail
           propertyId={propertyId}
-          context="home-gazette"
-          currentToolId="home-gazette"
+          context="home-briefing"
+          currentToolId="home-briefing"
         />
 
         <MobileActionRow className="justify-between">
@@ -1034,13 +1020,6 @@ export default function HomeGazetteClient() {
                     </p>
                   )}
                 </div>
-                <button
-                  onClick={() => setShowShare(true)}
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-slate-200/70 bg-white/80 px-3 text-xs font-medium text-slate-600 transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                  Share
-                </button>
               </div>
 
               {/* Ticker */}
@@ -1109,11 +1088,6 @@ export default function HomeGazetteClient() {
           propertyId={propertyId}
           onSelectEdition={(id) => setSelectedEditionId(id)}
         />
-      )}
-
-      {/* Share modal (current edition) */}
-      {showShare && currentEdition && (
-        <ShareModal editionId={currentEdition.id} onClose={() => setShowShare(false)} />
       )}
 
       {/* Edition detail panel (history) */}

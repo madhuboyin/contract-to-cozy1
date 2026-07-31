@@ -2,6 +2,8 @@
 import { z } from 'zod';
 import {
   HomeEventDocumentKind,
+  HomeEventDatePrecision,
+  HomeEventEvidenceType,
   HomeEventImportance,
   HomeEventType,
   HomeEventVisibility,
@@ -11,6 +13,8 @@ const HomeEventTypeSchema = z.nativeEnum(HomeEventType);
 const HomeEventImportanceSchema = z.nativeEnum(HomeEventImportance);
 const HomeEventVisibilitySchema = z.nativeEnum(HomeEventVisibility);
 const HomeEventDocumentKindSchema = z.nativeEnum(HomeEventDocumentKind);
+const HomeEventDatePrecisionSchema = z.nativeEnum(HomeEventDatePrecision);
+const HomeEventEvidenceTypeSchema = z.nativeEnum(HomeEventEvidenceType);
 
 export const createHomeEventBodySchema = z.object({
   type: HomeEventTypeSchema,
@@ -20,6 +24,9 @@ export const createHomeEventBodySchema = z.object({
 
   occurredAt: z.string().datetime(),
   endAt: z.string().datetime().optional().nullable(),
+  datePrecision: HomeEventDatePrecisionSchema.optional(),
+  dateRangeStart: z.string().datetime().optional().nullable(),
+  dateRangeEnd: z.string().datetime().optional().nullable(),
 
   title: z.string().min(1).max(140),
   summary: z.string().max(500).optional().nullable(),
@@ -40,9 +47,52 @@ export const createHomeEventBodySchema = z.object({
   // FRD-FR-03: guidance journey linkage for retrospective history records
   guidanceJourneyId: z.string().uuid().optional().nullable(),
   isRetrospective: z.boolean().optional(),
+  parentEventId: z.string().uuid().optional().nullable(),
+  groupType: z.string().min(1).max(80).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.datePrecision === HomeEventDatePrecision.RANGE) {
+    if (!value.dateRangeStart || !value.dateRangeEnd) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dateRangeStart'],
+        message: 'RANGE precision requires dateRangeStart and dateRangeEnd.',
+      });
+    }
+  }
 });
 
-export const updateHomeEventBodySchema = createHomeEventBodySchema.partial();
+export const updateHomeEventBodySchema = createHomeEventBodySchema
+  .omit({ idempotencyKey: true })
+  .partial()
+  .extend({
+    correctionReason: z.string().trim().min(3).max(500),
+  });
+
+export const deleteHomeEventBodySchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const confirmHomeEventBodySchema = z.object({
+  status: z.enum(['HOMEOWNER_CONFIRMED', 'DISPUTED']),
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const addHomeEventEvidenceBodySchema = z.object({
+  evidenceType: HomeEventEvidenceTypeSchema,
+  documentId: z.string().uuid().optional().nullable(),
+  sourceEntityType: z.string().trim().min(1).max(120).optional().nullable(),
+  sourceEntityId: z.string().trim().min(1).max(300).optional().nullable(),
+  observedAt: z.string().datetime().optional().nullable(),
+  note: z.string().trim().max(1000).optional().nullable(),
+}).refine(
+  (value) => value.documentId || (value.sourceEntityType && value.sourceEntityId)
+    || value.evidenceType === HomeEventEvidenceType.USER_ATTESTATION,
+  { message: 'Evidence requires a document, a source entity, or user attestation.' },
+);
+
+export const exportHomeEventsBodySchema = z.object({
+  eventIds: z.array(z.string().uuid()).min(1).max(200),
+});
 
 export const attachHomeEventDocumentBodySchema = z.object({
   documentId: z.string().uuid(),
@@ -60,7 +110,10 @@ export const listHomeEventsQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
-  includeSignals: z.coerce.boolean().optional(),
+  includeSignals: z.union([
+    z.boolean(),
+    z.enum(['true', 'false']).transform((value) => value === 'true'),
+  ]).optional(),
 }).superRefine((query, ctx) => {
   if (!query.from || !query.to) return;
 

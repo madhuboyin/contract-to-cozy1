@@ -75,7 +75,12 @@ export async function updateHomeEvent(req: CustomRequest, res: Response, next: N
     const propertyId = req.params.propertyId;
     const eventId = req.params.eventId;
 
-    const event = await service.updateHomeEvent(propertyId, eventId, req.body);
+    const event = await service.updateHomeEvent(
+      propertyId,
+      eventId,
+      req.body,
+      req.user!.userId,
+    );
     res.json({ success: true, data: { event } });
   } catch (err) {
     next(err);
@@ -87,7 +92,13 @@ export async function deleteHomeEvent(req: CustomRequest, res: Response, next: N
     const propertyId = req.params.propertyId;
     const eventId = req.params.eventId;
 
-    await service.deleteHomeEvent(propertyId, eventId);
+    await service.deleteHomeEvent({
+      propertyId,
+      eventId,
+      userId: req.user!.userId,
+      householdRole: req.householdRole,
+      reason: req.body.reason,
+    });
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -109,11 +120,70 @@ export async function attachHomeEventDocument(req: CustomRequest, res: Response,
       caption: req.body.caption ?? null,
       sortOrder: req.body.sortOrder,
       homeownerProfileId,
+      userId: req.user?.userId ?? null,
     });
 
     res.status(201).json({ success: true, data: { link } });
   } catch (err) {
     next(err);
+  }
+}
+
+export async function confirmHomeEvent(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const event = await service.confirmHomeEvent({
+      propertyId: req.params.propertyId,
+      eventId: req.params.eventId,
+      userId: req.user!.userId,
+      status: req.body.status,
+      reason: req.body.reason,
+    });
+    res.json({ success: true, data: { event } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function addHomeEventEvidence(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const evidence = await service.addEvidence({
+      propertyId: req.params.propertyId,
+      eventId: req.params.eventId,
+      userId: req.user!.userId,
+      homeownerProfileId: req.user?.homeownerProfile?.id ?? null,
+      ...req.body,
+    });
+    res.status(201).json({ success: true, data: { evidence } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function exportHomeEvents(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const data = await service.exportSelectedEvents(
+      req.params.propertyId,
+      req.body.eventIds,
+    );
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getHomeEventAnnualRecap(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const year = Number(req.query.year ?? new Date().getUTCFullYear());
+    if (!Number.isInteger(year) || year < 1900 || year > 2200) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'year must be between 1900 and 2200.' },
+      });
+    }
+    const data = await service.getAnnualRecap(req.params.propertyId, year);
+    return res.json({ success: true, data });
+  } catch (err) {
+    return next(err);
   }
 }
 
