@@ -22,8 +22,13 @@ type CapabilitySeed = {
   iconName?: ToolCapabilityDefinition['presentation']['iconName'];
   intentAliases?: ToolCapabilityDefinition['presentation']['intentAliases'];
   homeownerOutcome?: string;
+  expectedTimeToValue?: string;
   livingHomeRecordReads?: ToolCapabilityDefinition['productFramework']['livingHomeRecordReads'];
   livingHomeRecordWrites?: ToolCapabilityDefinition['productFramework']['livingHomeRecordWrites'];
+  acceptedContext?: ToolCapabilityDefinition['destination']['acceptedContext'];
+  triggerFamilies?: ToolCapabilityDefinition['recommendation']['triggerFamilies'];
+  reasonTemplates?: ToolCapabilityDefinition['recommendation']['reasonTemplates'];
+  readinessRequirements?: ToolCapabilityDefinition['recommendation']['readinessRequirements'];
   expectedOutput?: string;
   completionSignal?: string;
   outputEntityTypes?: ToolCapabilityDefinition['lifecycle']['outputEntityTypes'];
@@ -489,7 +494,7 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
 
   const primaryJob = JOB_BY_OUTCOME[seed.outcomeCategory];
   const requiresProperty = seed.routeTemplate.includes('[id]');
-  const acceptedContext = contextual?.acceptedContext ?? ['PROPERTY'];
+  const acceptedContext = seed.acceptedContext ?? contextual?.acceptedContext ?? ['PROPERTY'];
   const output = OUTPUT_BY_OUTCOME[seed.outcomeCategory];
 
   return defineToolCapability({
@@ -513,7 +518,7 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       secondaryJobs: [],
       primaryDestination: DESTINATION_BY_OUTCOME[seed.outcomeCategory],
       homeownerOutcome: seed.homeownerOutcome ?? output,
-      expectedTimeToValue: '2–5 minutes',
+      expectedTimeToValue: seed.expectedTimeToValue ?? '2–5 minutes',
       livingHomeRecordReads:
         seed.livingHomeRecordReads
         ?? (requiresProperty ? ['property-context'] : []),
@@ -530,20 +535,20 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       mode: seed.mode,
       sourceKinds: contextual?.sourceKinds ?? [],
       jobs: contextual ? [primaryJob] : [],
-      triggerFamilies: contextual
+      triggerFamilies: seed.triggerFamilies ?? (contextual
         ? contextual.triggerFamilies ?? [contextual.triggerFamily]
-        : [],
+        : []),
       recommendationDefinitionCodes:
         contextual?.recommendationDefinitionCodes ?? [],
-      reasonTemplates: contextual
+      reasonTemplates: seed.reasonTemplates ?? (contextual
         ? contextual.reasonTemplates ?? { [contextual.triggerFamily]: contextual.reason }
-        : {},
+        : {}),
       expectedOutcome: seed.homeownerOutcome ?? output,
       readinessRequirements: [
         ...(requiresProperty
           ? [{ kind: 'PROPERTY' as const, reason: 'Select a property first.' }]
           : []),
-        ...(contextual?.readinessRequirements ?? []),
+        ...(seed.readinessRequirements ?? contextual?.readinessRequirements ?? []),
       ],
       safePartialValue: contextual?.safePartialValue ?? false,
       requiresExplicitTrigger: contextual?.requiresExplicitTrigger ?? false,

@@ -29,7 +29,7 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
   releaseStage,
   safetyTier,
   completionKind:
-    id === 'coverage-intelligence' || id === 'ownership-costs' || id === 'property-tax' || id === 'savings-benefits'
+    id === 'coverage-intelligence' || id === 'mortgage-refinance-radar' || id === 'ownership-costs' || id === 'property-tax' || id === 'savings-benefits'
       ? 'DECISION_RECORDED' as const
       : 'OUTPUT_GENERATED' as const,
   ...(id === 'property-tax' ? {
@@ -46,6 +46,56 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
     expectedOutput:
       'A saved decision, application/switch state, or verified realized outcome tied to a reviewed source and current property context.',
     completionSignal: 'savings_benefit_decision_or_external_action_recorded',
+  } : {}),
+  ...(id === 'mortgage-refinance-radar' ? {
+    version: 2,
+    description:
+      'Watch this mortgage for a refinance opportunity and compare the real tradeoffs.',
+    homeownerOutcome:
+      'Understand a property-specific refinance opportunity, review realistic alternatives, and record a homeowner-controlled decision.',
+    expectedTimeToValue:
+      'Passive monitoring; under one minute to understand an alert; comparison time varies.',
+    livingHomeRecordReads: [
+      'property-context',
+      'financing-profile',
+      'property-valuation',
+      'property-liens',
+      'mortgage-document',
+      'refinance-scenario',
+      'loan-estimate-comparison',
+      'refinance-decision',
+    ],
+    livingHomeRecordWrites: [
+      'financing-profile',
+      'refinance-scenario',
+      'loan-estimate-comparison',
+      'refinance-decision',
+      'refinance-outcome',
+    ],
+    acceptedContext: ['PROPERTY', 'HOME_ACTION', 'DOCUMENT', 'JOURNEY'] as const,
+    triggerFamilies: [
+      'REFINANCE_OPPORTUNITY_OPENED',
+      'REFINANCE_OPPORTUNITY_UPDATED',
+      'REFINANCE_DATA_REQUIRED',
+    ],
+    reasonTemplates: {
+      REFINANCE_OPPORTUNITY_OPENED:
+        'Current mortgage and benchmark-rate evidence indicate that a refinance comparison may be worthwhile.',
+      REFINANCE_OPPORTUNITY_UPDATED:
+        'A material change to the current refinance opportunity needs review.',
+      REFINANCE_DATA_REQUIRED:
+        'A meaningful rate change makes missing mortgage facts useful to correct.',
+    },
+    readinessRequirements: [{
+      kind: 'KNOWN_FACTS' as const,
+      minimum: 3,
+      reason:
+        'Mortgage status, current balance, interest rate, and remaining term determine whether a bounded refinance estimate is available; freshness is evaluated separately.',
+    }],
+    expectedOutput:
+      'A property-specific opportunity conclusion, reviewed alternatives, and a recorded refinance decision; verified outcomes can update Financing.',
+    completionSignal: 'refinance_decision_recorded',
+    outputEntityTypes: ['REFINANCE_DECISION'] as const,
   } : {}),
   ...(id === 'ownership-costs' ? {
     version: 2,

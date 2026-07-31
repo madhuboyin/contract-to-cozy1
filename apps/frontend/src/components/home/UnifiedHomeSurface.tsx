@@ -35,9 +35,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
 import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigation';
 import { buildHomeEventRadarHref } from '@/features/homeEventRadar/radarDeepLinks';
-import {
-  RefinanceRadarPortfolioCard,
-} from '@/app/(dashboard)/dashboard/properties/[id]/components/RefinanceRadarDashboardCard';
 import { WorkItemManageDrawer } from '@/components/home/WorkItemManageDrawer';
 
 /**
@@ -46,7 +43,7 @@ import { WorkItemManageDrawer } from '@/components/home/WorkItemManageDrawer';
  * picked it up when it replaced that component in Slice 2. Home Event
  * Radar isn't a registered HOME_ACTION_SOURCE_KIND, so it can't appear via
  * the ranked-action feed; it's fetched and rendered as its own standalone
- * widget, same shape as RefinanceRadarPortfolioCard below.
+ * widget until it has its own canonical source adapter.
  */
 function HomeEventRadarTopMatchCard({ propertyId }: { propertyId: string }) {
   const query = useQuery({
@@ -799,10 +796,6 @@ export function UnifiedHomeSurface({
           />
         ))}
       </section>
-
-      <RefinanceRadarPortfolioCard
-        properties={properties.length > 0 ? properties : [{ id: propertyId, address: 'Selected home' }]}
-      />
 
       <HomeEventRadarTopMatchCard propertyId={propertyId} />
 

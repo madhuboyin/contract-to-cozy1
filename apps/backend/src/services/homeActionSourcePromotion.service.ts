@@ -15,6 +15,7 @@ import { isProgramActionableNow } from './hiddenAssets/sourceFreshness';
 import {
   resolveOwnershipCostCategoryAction,
 } from './ownershipCosts/ownershipCostDecision.service';
+import { buildRefinanceFreshness } from '../refinanceRadar/refinanceFreshness';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -31,7 +32,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1255,6 +1256,200 @@ async function loadRefinanceDataRequiredActions(
   })];
 }
 
+function refinanceConfidence(level: 'WEAK' | 'GOOD' | 'STRONG'): {
+  score: number;
+  label: HomeAction['confidence']['label'];
+} {
+  if (level === 'STRONG') return { score: 0.9, label: 'HIGH' };
+  if (level === 'GOOD') return { score: 0.75, label: 'MEDIUM' };
+  return { score: 0.55, label: 'MEDIUM' };
+}
+
+function refinanceActionWindowId(propertyId: string, openedAt: Date): string {
+  return `refinance-opportunity:${propertyId}:${openedAt.getTime()}`;
+}
+
+/**
+ * Promote only the current OPEN refinance window. The opening timestamp makes
+ * the action stable across material updates while allowing a genuinely new
+ * window to return after a prior CLOSED transition.
+ */
+export async function loadRefinanceOpportunityActions(
+  propertyId: string,
+  db: HomeActionSourceDb,
+  evaluatedAt = new Date(),
+): Promise<HomeAction[]> {
+  if (!db.propertyRefinanceRadarState || !db.propertyFinancingProfile) return [];
+  const [state, profile] = await Promise.all([
+    db.propertyRefinanceRadarState.findUnique({
+      where: { propertyId },
+      select: {
+        id: true,
+        radarState: true,
+        lastOpenedAt: true,
+        lastEvaluatedAt: true,
+        updatedAt: true,
+        lastRateSnapshot: {
+          select: { date: true, source: true },
+        },
+        currentOpportunity: {
+          select: {
+            id: true,
+            monthlySavings: true,
+            breakEvenMonths: true,
+            lifetimeSavings: true,
+            marketRate: true,
+            currentRate: true,
+            confidenceLevel: true,
+            evaluationDate: true,
+            updatedAt: true,
+          },
+        },
+      },
+    }),
+    db.propertyFinancingProfile.findUnique({
+      where: { propertyId },
+      select: {
+        mortgageStatus: true,
+        currentMortgageBalanceCents: true,
+        interestRateBps: true,
+        remainingTermMonths: true,
+        mortgageBalanceAsOfDate: true,
+      },
+    }),
+  ]);
+  const completeMortgage =
+    profile &&
+    profile.mortgageStatus !== 'NO_MORTGAGE' &&
+    profile.currentMortgageBalanceCents != null &&
+    profile.interestRateBps != null &&
+    profile.remainingTermMonths != null;
+  const freshness = buildRefinanceFreshness({
+    mortgageDataAsOf: profile?.mortgageBalanceAsOfDate?.toISOString() ?? null,
+    marketDataAsOf: state?.lastRateSnapshot?.date?.toISOString() ?? null,
+    marketDataSource: state?.lastRateSnapshot?.source ?? null,
+  }, evaluatedAt);
+  if (
+    !state ||
+    !completeMortgage ||
+    freshness.alertReadiness !== 'READY' ||
+    state.radarState !== 'OPEN' ||
+    !state.lastOpenedAt ||
+    !state.currentOpportunity
+  ) {
+    return [];
+  }
+
+  const opportunity = state.currentOpportunity;
+  const monthlySavings = Number(opportunity.monthlySavings);
+  const lifetimeSavings = Number(opportunity.lifetimeSavings);
+  const confidence = refinanceConfidence(opportunity.confidenceLevel);
+  const actionId = refinanceActionWindowId(propertyId, state.lastOpenedAt);
+  const breakEven = opportunity.breakEvenMonths > 0
+    ? `${opportunity.breakEvenMonths} months`
+    : 'not yet established';
+
+  return [adaptHomeActionSource('SYSTEM', {
+    id: actionId,
+    propertyId,
+    lineageId: `refinance-opportunity:${propertyId}`,
+    sourceEntityId: state.id,
+    sourceVersion: state.updatedAt.toISOString(),
+    job: 'DECIDE',
+    state: 'OPEN',
+    priority: 'CONSIDER',
+    signal:
+      `A refinance comparison may be worthwhile at the current national benchmark rate of ${opportunity.marketRate.toFixed(3)}%.`,
+    whyItMatters:
+      `The current estimate is about $${Math.round(monthlySavings).toLocaleString()} per month in savings, with break-even ${breakEven}. Actual lender pricing, eligibility, fees, and timing may differ.`,
+    recommendedAction: 'Review this refinance opportunity',
+    expectedOutcome:
+      'Understand the estimated benefit, assumptions, and alternatives before deciding whether to compare official lender offers.',
+    timing: {
+      dueAt: null,
+      windowStart: state.lastOpenedAt.toISOString(),
+      windowEnd: null,
+      rationale:
+        'This action remains current only while the property-specific refinance window is OPEN.',
+    },
+    evidence: [{
+      id: opportunity.id,
+      type: 'SYSTEM_DERIVATION',
+      label: 'Current property-specific refinance evaluation',
+      source: 'Mortgage Refinance Radar using a national mortgage-rate benchmark',
+      observedAt: opportunity.evaluationDate.toISOString(),
+      freshness: 'CURRENT',
+      confidence: confidence.score,
+    }],
+    assumptions: [{
+      key: 'benchmark_not_offer',
+      label: 'Benchmark rate is not a lender offer',
+      value:
+        `The estimate compares the recorded ${opportunity.currentRate.toFixed(3)}% mortgage rate with a ${opportunity.marketRate.toFixed(3)}% national benchmark and modeled costs.`,
+      source: 'SYSTEM_DEFAULT',
+      editable: true,
+    }],
+    options: [
+      {
+        id: 'review_refinance',
+        label: 'Explore refinance options',
+        summary: 'Review scenarios and compare official Loan Estimates before choosing a lender or loan.',
+        recommended: true,
+      },
+      {
+        id: 'keep_current_loan',
+        label: 'Keep the current mortgage',
+        summary: 'Continue the current loan and let monitoring check for a later opportunity.',
+        recommended: false,
+      },
+      {
+        id: 'decide_later',
+        label: 'Decide later',
+        summary: 'Defer this comparison while preserving passive monitoring.',
+        recommended: false,
+      },
+    ],
+    tradeoffs: [
+      {
+        optionId: 'review_refinance',
+        dimension: 'COST',
+        summary:
+          `Modeled lifetime savings are about $${Math.round(lifetimeSavings).toLocaleString()}, but closing costs and lender-specific terms can change the result.`,
+      },
+      {
+        optionId: 'keep_current_loan',
+        dimension: 'EFFORT',
+        summary: 'Avoids application and closing effort but does not capture the modeled payment change.',
+      },
+    ],
+    confidence: {
+      ...confidence,
+      missing: [],
+    },
+    governance: materialFinancialGovernance('mortgage-refinance-radar-v2'),
+    primaryCta: {
+      kind: 'REVIEW',
+      label: 'Review opportunity',
+      href: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`,
+    },
+    secondaryCtas: [{
+      kind: 'CORRECT_FACT',
+      label: 'Review mortgage details',
+      href: `/dashboard/properties/${propertyId}/tools/financing/profile`,
+    }],
+    feedbackControls: [
+      'DEFER',
+      'SNOOZE',
+      'DISMISS',
+      'NOT_RELEVANT',
+      'CORRECT_FACT',
+    ],
+    relatedJourneyId: null,
+    createdAt: state.lastOpenedAt.toISOString(),
+    lastEvaluatedAt: (state.lastEvaluatedAt ?? opportunity.updatedAt).toISOString(),
+  })];
+}
+
 function ownershipChangeEvidence(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, any>
@@ -2106,6 +2301,7 @@ export async function getPromotedHomeActions(
     loadInspectionFindingActions(propertyId, db),
     options.includePersonalization === false ? Promise.resolve([]) : loadPersonalizationActions(propertyId, db),
     loadRefinanceDataRequiredActions(propertyId, db),
+    loadRefinanceOpportunityActions(propertyId, db, options.evaluatedAt),
     loadHomeDigitalTwinFactReviewActions(propertyId, db),
     loadHomeCapitalTimelineMaterialWindowActions(propertyId, db),
     loadPropertyTaxAppealCaseActions(propertyId, db),

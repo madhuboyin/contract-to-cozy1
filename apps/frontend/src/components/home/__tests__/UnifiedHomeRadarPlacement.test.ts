@@ -12,6 +12,10 @@ describe('Unified Home Radar product-framework placement', () => {
     expect(surfaceSource).not.toContain('HomeEventRadarSummaryCard');
   });
 
+  it('does not render a parallel refinance portfolio card', () => {
+    expect(surfaceSource).not.toContain('RefinanceRadarPortfolioCard');
+  });
+
   it('keeps actionable monitoring in ranked attention and passive discovery in Home Tools', () => {
     expect(surfaceSource).toContain('CriticalWeatherActionCard');
     expect(surfaceSource).toContain('EnvironmentActionCard');
