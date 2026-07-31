@@ -1,20 +1,9 @@
-import { Router } from 'express';
+import { Request, Response, Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { requireReviewedIntelligenceCoverage } from '../middleware/intelligenceCoverage.middleware';
-import {
-  getHomeRiskReplayDetail,
-  listHomeRiskReplayRuns,
-  trackHomeRiskReplayEvent,
-} from '../controllers/homeRiskReplay.controller';
-import {
-  homeRiskReplayPropertyParamsSchema,
-  homeRiskReplayRunParamsSchema,
-  listHomeRiskReplayRunsQuerySchema,
-  trackHomeRiskReplayEventBodySchema,
-} from '../validators/homeRiskReplay.validators';
 import {
   getPastHazardExposureView,
   linkPastHazardEvidence,
@@ -30,6 +19,15 @@ import {
 
 const router = Router();
 const requireReviewedCoverage = requireReviewedIntelligenceCoverage('HOME_RISK_REPLAY');
+const legacyRiskReplayRetired = (_req: Request, res: Response) => {
+  res.status(410).json({
+    success: false,
+    code: 'LEGACY_RISK_REPLAY_RETIRED',
+    message:
+      'Home Risk Replay has been retired. Use the reviewed Past Hazard Exposure source view.',
+    replacement: '/api/properties/:propertyId/past-hazard-exposure',
+  });
+};
 
 router.use(apiRateLimiter);
 router.use(authenticate);
@@ -64,43 +62,30 @@ router.post(
 
 router.post(
   '/properties/:propertyId/risk-replay/runs',
-  validate(homeRiskReplayPropertyParamsSchema),
+  validate(pastHazardExposureParamsSchema),
   propertyAuthMiddleware,
-  requireReviewedCoverage,
-  (_req, res) => {
-    res.status(410).json({
-      success: false,
-      code: 'LEGACY_RISK_REPLAY_GENERATION_RETIRED',
-      message:
-        'Manual replay generation has been retired. Use the reviewed Past Hazard Exposure source view.',
-    });
-  },
+  legacyRiskReplayRetired,
 );
 
 router.get(
   '/properties/:propertyId/risk-replay/runs',
-  validate(homeRiskReplayPropertyParamsSchema.extend({
-    query: listHomeRiskReplayRunsQuerySchema,
-  })),
+  validate(pastHazardExposureParamsSchema),
   propertyAuthMiddleware,
-  requireReviewedCoverage,
-  listHomeRiskReplayRuns,
+  legacyRiskReplayRetired,
 );
 
 router.get(
   '/properties/:propertyId/risk-replay/runs/:replayRunId',
-  validate(homeRiskReplayRunParamsSchema),
+  validate(pastHazardExposureParamsSchema),
   propertyAuthMiddleware,
-  requireReviewedCoverage,
-  getHomeRiskReplayDetail,
+  legacyRiskReplayRetired,
 );
 
 router.post(
   '/properties/:propertyId/risk-replay/events',
-  validate(homeRiskReplayPropertyParamsSchema),
+  validate(pastHazardExposureParamsSchema),
   propertyAuthMiddleware,
-  validateBody(trackHomeRiskReplayEventBodySchema),
-  trackHomeRiskReplayEvent,
+  legacyRiskReplayRetired,
 );
 
 export default router;

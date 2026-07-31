@@ -342,7 +342,6 @@ This pattern is consistent with how all other backend files shared with workers 
 | `RADAR_DUMMY_INGEST_ENABLED` | `false` | Worker | Enable QA radar ingest (non-production) |
 | `RADAR_DUMMY_INGEST_CRON` | `*/30 * * * *` | Worker | QA radar ingest cron |
 | `NEIGHBORHOOD_DUMMY_INGEST_ENABLED` | `false` | Worker | Enable QA neighborhood ingest |
-| `HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED` | `false` | Worker | Enable QA home risk replay ingest |
 | `WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED` | `false` | API + Worker | Per-job override for AirNow ingestion; requires `AIRNOW_API_KEY` and acceptance before enabling |
 | `WORKER_JOB_USGS_EARTHQUAKES_ENABLED` | `false` | API + Worker | Per-job override for keyless USGS earthquake ingestion; keep disabled until scoped acceptance passes |
 | `WORKER_JOB_OPENFEMA_DECLARATIONS_ENABLED` | `false` | API + Worker | Per-job override for keyless OpenFEMA declaration ingestion; keep disabled until scoped acceptance passes |

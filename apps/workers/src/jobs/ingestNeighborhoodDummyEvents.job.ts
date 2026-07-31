@@ -2,7 +2,7 @@
 //
 // Dummy neighborhood event ingest job for QA / E2E testing.
 //
-// Mirrors the pattern of ingestRadarSignals.job.ts and ingestHomeRiskEventsJob.
+// Mirrors the isolated QA fixture pattern used by radar ingestion.
 //
 // Calls fetchDummyNeighborhoodEvents() → upserts NeighborhoodEvent records
 // directly via Prisma (avoiding the express-dependent NeighborhoodIntelligenceService)

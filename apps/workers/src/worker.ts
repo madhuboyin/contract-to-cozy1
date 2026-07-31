@@ -41,7 +41,6 @@ import { openFemaDeclarationsJob } from './jobs/openFemaDeclarations.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { ingestTaxAssessmentEventsJob } from './jobs/ingestTaxAssessmentEvents.job';
-import { ingestHomeRiskEventsJob } from './jobs/ingestHomeRiskEvents.job';
 import { radarSafetyNetReconciliationJob } from './jobs/radarSafetyNetReconciliation.job';
 import { runHiddenAssetRefreshJob } from './jobs/hiddenAssetRefresh.job';
 import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.job';
@@ -1383,7 +1382,6 @@ registerShutdownHandler('renovationEvaluationWorker', () => renovationEvaluation
 // =============================================================================
 const DUMMY_INGEST_ENV_FLAGS = [
   'RADAR_DUMMY_INGEST_ENABLED',
-  'HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED',
   'NEIGHBORHOOD_DUMMY_INGEST_ENABLED',
 ] as const;
 
@@ -1425,32 +1423,6 @@ if (radarDummyIngestEnabled) {
   if (process.env.RADAR_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
     void ingestRadarSignalsJob().catch((err) => {
       logger.error({ err }, '[RADAR-DUMMY-INGEST] Startup run failed');
-    });
-  }
-}
-
-// =============================================================================
-// DUMMY HOME RISK REPLAY INGEST (QA / E2E)
-// =============================================================================
-const homeRiskReplayDummyIngestEnabled = process.env.HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED === 'true';
-const homeRiskReplayDummyIngestCron = process.env.HOME_RISK_REPLAY_DUMMY_INGEST_CRON || '15 */6 * * *';
-
-if (homeRiskReplayDummyIngestEnabled) {
-  const homeRiskReplayDummyIngestTask = cron.schedule(homeRiskReplayDummyIngestCron, async () => {
-    try {
-      logger.info('[HOME-RISK-INGEST] Running dummy home risk event ingest job...');
-      await ingestHomeRiskEventsJob();
-    } catch (err) {
-      logger.error({ err }, '[HOME-RISK-INGEST] Job failed');
-    }
-  }, { timezone: 'America/New_York' });
-  registerShutdownHandler('home-risk-replay-dummy-ingest-cron', () => homeRiskReplayDummyIngestTask.stop());
-
-  logger.info(`[HOME-RISK-INGEST] Dummy home risk ingest scheduled for: ${homeRiskReplayDummyIngestCron} America/New_York`);
-
-  if (process.env.HOME_RISK_REPLAY_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
-    void ingestHomeRiskEventsJob().catch((err) => {
-      logger.error({ err }, '[HOME-RISK-INGEST] Startup run failed');
     });
   }
 }

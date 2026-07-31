@@ -27,7 +27,6 @@ import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { WelcomeModal } from './components/WelcomeModal';
 
-import AhaHero from './components/AhaHero';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
 import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard';
@@ -1146,7 +1145,7 @@ export default function DashboardPage() {
     // 7. Default: health-score-aware fallback
     const score = healthScore ?? 0;
     const isHealthy = score >= 75;
-    const impactLabel = isHealthy ? 'HomeScore up to date' : `Score at ${score} / 100`;
+    const impactLabel = isHealthy ? 'Home status current' : `Health at ${score} / 100`;
     const etaLabel = 'ETA 1 min';
     return {
       badgeLabel: buildDefaultBadgeLabel(),

@@ -100,7 +100,8 @@ test('phase-three generation and aggregation paths reuse the context boundary', 
   const climateSource = fs.readFileSync(path.resolve(__dirname, '../../src/services/climateRiskPredictor.service.ts'), 'utf8');
   const oracleSource = fs.readFileSync(path.resolve(__dirname, '../../src/services/applianceOracle.service.ts'), 'utf8');
   const visualSource = fs.readFileSync(path.resolve(__dirname, '../../src/services/visualInspector.service.ts'), 'utf8');
-  const replaySource = fs.readFileSync(path.resolve(__dirname, '../../src/services/homeRiskReplay.service.ts'), 'utf8');
+  const replayRoutes = fs.readFileSync(path.resolve(__dirname, '../../src/routes/homeRiskReplay.routes.ts'), 'utf8');
+  const pastHazardSource = fs.readFileSync(path.resolve(__dirname, '../../src/propertyIntelligence/pastHazardExposure.service.ts'), 'utf8');
   assert.match(riskSource, /await this\.requireApplicableContext\(propertyId, actorUserId\)/);
   assert.match(riskSource, /evaluateProtectionContext/);
   assert.match(homeScoreSource, /getProtectionContextDecisions/);
@@ -110,5 +111,6 @@ test('phase-three generation and aggregation paths reuse the context boundary', 
   assert.match(climateSource, /getProtectionContextDecisions/);
   assert.match(oracleSource, /getProtectionContextDecisions/);
   assert.match(visualSource, /getProtectionContextDecisions/);
-  assert.match(replaySource, /propertyContextVersion/);
+  assert.match(replayRoutes, /LEGACY_RISK_REPLAY_RETIRED/);
+  assert.match(pastHazardSource, /getPropertyIntelligenceObservations/);
 });

@@ -85,7 +85,9 @@ test('resolved sources and duplicate guidance signals are reconciled out', () =>
 test('generation, notification, and UI paths enforce the completion boundary', () => {
   const read = (file) => fs.readFileSync(path.resolve(__dirname, file), 'utf8');
   assert.match(read('../../src/services/riskPremiumOptimizer.service.ts'), /generatedContextVersion/);
-  assert.match(read('../../src/services/homeRiskReplay.service.ts'), /attachReplayContext/);
+  const replayRoutes = read('../../src/routes/homeRiskReplay.routes.ts');
+  assert.match(replayRoutes, /LEGACY_RISK_REPLAY_RETIRED/);
+  assert.match(replayRoutes, /past-hazard-exposure/);
   assert.match(read('../../src/services/incidents/integrations/incidentNotification.service.ts'), /incidentNotifications/);
   assert.match(read('../../../workers/src/recalls/recallFollowups.service.ts'), /inspectionFindings/);
   assert.match(read('../../../frontend/src/components/property-context/PropertyContextStatusNotice.tsx'), /correctionPaths/);

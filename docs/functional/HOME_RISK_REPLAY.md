@@ -18,6 +18,8 @@
 >
 > The implementation detail below the current-contract note is retained as a
 > historical migration record. It is not the homeowner-serving contract. See
+> [Property Intelligence legacy retirement](./PROPERTY_INTELLIGENCE_LEGACY_RETIREMENT.md)
+> for the data-removal gate.
 > [PROPERTY_INTELLIGENCE_UNIFIED_EXPERIENCE.md](./PROPERTY_INTELLIGENCE_UNIFIED_EXPERIENCE.md)
 > for current navigation, trust presentation, and support behavior.
 
@@ -602,17 +604,11 @@ Current default QA ZIPs:
 - `08536`
 - `10019`
 
-### Worker Environment Variables
+### Retired Worker Environment Variables
 
-| Env var | Purpose | Current default |
-|---|---|---|
-| `HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED` | Enables worker-based canonical event ingest | `false` |
-| `HOME_RISK_REPLAY_DUMMY_INGEST_CRON` | Cron schedule for ingest | `15 */6 * * *` |
-| `HOME_RISK_REPLAY_DUMMY_INGEST_RUN_ON_STARTUP` | Runs one ingest pass when worker starts | `false` |
-| `HOME_RISK_REPLAY_DUMMY_FIXTURE_SET` | `property_scoped` or `zip_scoped` | `zip_scoped` |
-| `HOME_RISK_REPLAY_DUMMY_TARGET_ZIPS` | ZIP allowlist for ZIP-mode seeding | `08536,10019` |
-| `HOME_RISK_REPLAY_DUMMY_TARGET_PROPERTY_IDS` | Explicit property allowlist | unset |
-| `HOME_RISK_REPLAY_DUMMY_MAX_PROPERTIES` | Optional target-property cap | unset |
+The former `HOME_RISK_REPLAY_DUMMY_*` worker variables are retired and ignored.
+Past Hazard Exposure test data must enter through the reviewed Property
+Intelligence fixture and ingestion contracts.
 
 ## Future-Proof E2E Testing
 
@@ -632,18 +628,9 @@ Home Risk Replay now supports a future-proof E2E path similar to Home Event Rada
 
 ### Best QA Configuration
 
-Recommended settings:
-
-- `HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED=true`
-- `HOME_RISK_REPLAY_DUMMY_INGEST_RUN_ON_STARTUP=true`
-- `HOME_RISK_REPLAY_DUMMY_FIXTURE_SET=zip_scoped`
-- `HOME_RISK_REPLAY_DUMMY_TARGET_ZIPS=08536,10019`
-
-For retesting after new seeds:
-
-- generate with `forceRegenerate=true`
-
-This matters because the replay service may reuse a prior completed replay for the same property/window if regeneration is not forced.
+The legacy dummy replay ingest and replay generation procedure are no longer
+supported. Use reviewed Property Intelligence fixtures scoped to an approved
+test environment.
 
 ### Best Canonical Event Scopes for QA
 

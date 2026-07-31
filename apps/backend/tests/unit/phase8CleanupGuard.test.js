@@ -91,8 +91,7 @@ test('generic assistant and persisted response snapshots use bounded canonical c
 
   const canonicalSnapshotSources = [
     read('../../src/services/propertyInsight.service.ts'),
-    read('../../src/services/homeRiskReplay.service.ts'),
-    read('../../src/services/homeRiskReplay.engine.ts'),
+    read('../../src/propertyIntelligence/pastHazardExposure.service.ts'),
     read('../../src/services/servicePriceRadar.engine.ts'),
     read('../../src/services/homeEventRadarMatcher.service.ts'),
   ];

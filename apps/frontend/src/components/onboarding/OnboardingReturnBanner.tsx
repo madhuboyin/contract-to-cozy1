@@ -24,7 +24,7 @@ export default function OnboardingReturnBanner() {
     if (searchParams.get('fromHomeScore') === '1') {
       return {
         href: raw,
-        label: 'Back to HomeScore',
+        label: 'Back to property brief',
       };
     }
 

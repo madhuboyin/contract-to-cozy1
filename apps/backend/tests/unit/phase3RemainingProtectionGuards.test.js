@@ -27,11 +27,13 @@ test('recall follow-ups require confirmation or verified exact item identity', (
   assert.match(followups, /inspectionFindings/);
 });
 
-test('event radar and replay enforce event validity and context-version reuse', () => {
+test('event radar enforces validity and replay is retired behind the canonical hazard view', () => {
   const radar = source('../../src/services/homeEventRadar.service.ts');
-  const replay = source('../../src/services/homeRiskReplay.service.ts');
+  const replayRoutes = source('../../src/routes/homeRiskReplay.routes.ts');
+  const pastHazard = source('../../src/propertyIntelligence/pastHazardExposure.service.ts');
   assert.match(radar, /status: \{ in: \['active', 'updated'\] \}/);
   assert.match(radar, /visibleUntil: \{ gt: now \}/);
   assert.match(radar, /decisions\.eventRadar/);
-  assert.match(replay, /snapshot\?\.propertyContextVersion === protectionContext\.contextVersion/);
+  assert.match(replayRoutes, /LEGACY_RISK_REPLAY_RETIRED/);
+  assert.match(pastHazard, /getPropertyIntelligenceCoverage/);
 });
