@@ -160,6 +160,7 @@ export const AnalyticsFeature = {
   HOME_RISK_REPLAY:    'home_risk_replay',
   HOME_SCORE_REPORT:   'home_score_report',
   HOME_SCORE_SHARE:    'home_score_share',
+  PROPERTY_BRIEF:      'property_brief',
 
   // Inspection
   INSPECTION_HUB:        'inspection_hub',

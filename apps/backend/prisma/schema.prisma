@@ -1979,6 +1979,8 @@ model User {
   homeBriefingPreferences      HomeBriefingPreference[]
   homeBriefingDeliveries       HomeBriefingDelivery[]
   homeBriefingSharesCreated    HomeBriefingShare[]          @relation("HomeBriefingShareCreator")
+  propertyBriefsCreated        PropertyBrief[]              @relation("PropertyBriefCreator")
+  propertyBriefSharesCreated   PropertyBriefShare[]         @relation("PropertyBriefShareCreator")
 
   // Home Improvement Financing Center
   financingScenarios FinancingScenario[]
@@ -3029,6 +3031,7 @@ model Property {
   propertyChangeCursors PropertyChangeSourceCursor[]
   homeBriefingPreferences HomeBriefingPreference[]
   homeBriefingDeliveries  HomeBriefingDelivery[]
+  propertyBriefs          PropertyBrief[]
 
   // Neighbourhood Trust Network
   neighbourhoodEndorsements NeighbourhoodEndorsement[]
@@ -13365,6 +13368,151 @@ model HomeBriefingSharedItem {
   @@id([shareId, itemId])
   @@index([itemId])
   @@map("home_briefing_shared_items")
+}
+
+enum PropertyBriefPurpose {
+  HOMEOWNER_REFERENCE
+  CONTRACTOR_SERVICE_PROFESSIONAL
+  HOUSEHOLD_TRUSTED_CONTACT
+  INSURER_CLAIM_SUPPORT
+  PROSPECTIVE_BUYER
+}
+
+enum PropertyBriefSectionType {
+  PROPERTY_FACTS
+  VERIFIED_HISTORY
+  DOCUMENTS
+  OPEN_UNKNOWNS
+  CLAIMS
+  INSURANCE
+}
+
+enum PropertyBriefStatus {
+  DRAFT
+  READY
+  SHARED
+  REVOKED
+  ARCHIVED
+}
+
+enum PropertyBriefDownloadPolicy {
+  VIEW_ONLY
+  ALLOW_DOWNLOAD
+}
+
+enum PropertyBriefShareStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum PropertyBriefAccessKind {
+  VIEW
+  DOWNLOAD
+  DENIED
+}
+
+model PropertyBrief {
+  id                  String                     @id @default(uuid())
+  propertyId          String
+  createdByUserId     String
+  purpose             PropertyBriefPurpose
+  title               String
+  status              PropertyBriefStatus        @default(READY)
+  selectedSections    PropertyBriefSectionType[]
+  excludedSections    PropertyBriefSectionType[]
+  limitationStatement String                     @db.Text
+  templateVersion     String                     @default("property-brief-v1")
+  asOf                DateTime
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  property  Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy User                   @relation("PropertyBriefCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  sections  PropertyBriefSection[]
+  shares    PropertyBriefShare[]
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([createdByUserId, status])
+  @@map("property_briefs")
+}
+
+model PropertyBriefSection {
+  id          String                   @id @default(uuid())
+  briefId     String
+  sectionType PropertyBriefSectionType
+  title       String
+  payload     Json
+  sensitive   Boolean                  @default(false)
+  sortOrder   Int
+  asOf        DateTime
+  createdAt   DateTime                 @default(now())
+
+  brief         PropertyBrief               @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  evidenceLinks PropertyBriefEvidenceLink[]
+
+  @@unique([briefId, sectionType])
+  @@index([briefId, sortOrder])
+  @@map("property_brief_sections")
+}
+
+model PropertyBriefEvidenceLink {
+  id               String   @id @default(uuid())
+  sectionId        String
+  itemKey          String
+  sourceEntityType String
+  sourceEntityId   String
+  sourceLabel      String
+  sourceAsOf       DateTime
+  verification     String
+  documentId       String?
+  createdAt        DateTime @default(now())
+
+  section PropertyBriefSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([sectionId, itemKey, sourceEntityType, sourceEntityId])
+  @@index([sectionId, itemKey])
+  @@index([documentId])
+  @@map("property_brief_evidence_links")
+}
+
+model PropertyBriefShare {
+  id              String                      @id @default(uuid())
+  briefId         String
+  propertyId      String
+  createdByUserId String
+  tokenHash       String                      @unique
+  status          PropertyBriefShareStatus    @default(ACTIVE)
+  downloadPolicy  PropertyBriefDownloadPolicy @default(VIEW_ONLY)
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  lastAccessedAt  DateTime?
+  accessCount     Int                         @default(0)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  brief     PropertyBrief             @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  createdBy User                      @relation("PropertyBriefShareCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  accesses  PropertyBriefAccessLog[]
+
+  @@index([propertyId, status])
+  @@index([briefId, status])
+  @@map("property_brief_shares")
+}
+
+model PropertyBriefAccessLog {
+  id            String                  @id @default(uuid())
+  shareId       String
+  kind          PropertyBriefAccessKind
+  occurredAt    DateTime                @default(now())
+  ipHash        String?
+  userAgentHash String?
+  reason        String?
+
+  share PropertyBriefShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
+  @@index([shareId, occurredAt(sort: Desc)])
+  @@map("property_brief_access_logs")
 }
 
 model PropertyChangeSourceCursor {
