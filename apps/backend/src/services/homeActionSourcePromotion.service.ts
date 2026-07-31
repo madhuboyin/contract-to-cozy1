@@ -32,7 +32,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1280,7 +1280,7 @@ export async function loadRefinanceOpportunityActions(
   evaluatedAt = new Date(),
 ): Promise<HomeAction[]> {
   if (!db.propertyRefinanceRadarState || !db.propertyFinancingProfile) return [];
-  const [state, profile] = await Promise.all([
+  const [state, profile, decision] = await Promise.all([
     db.propertyRefinanceRadarState.findUnique({
       where: { propertyId },
       select: {
@@ -1317,6 +1317,18 @@ export async function loadRefinanceOpportunityActions(
         mortgageBalanceAsOfDate: true,
       },
     }),
+    db.refinanceDecision?.findFirst({
+      where: { propertyId, currentKey: propertyId },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        status: true,
+        radarOpportunityId: true,
+        nextReviewAt: true,
+        version: true,
+        updatedAt: true,
+      },
+    }) ?? null,
   ]);
   const completeMortgage =
     profile &&
@@ -1341,10 +1353,26 @@ export async function loadRefinanceOpportunityActions(
   }
 
   const opportunity = state.currentOpportunity;
+  const appliesToCurrentWindow = decision?.radarOpportunityId === opportunity.id;
+  const deferredReviewDue = Boolean(
+    appliesToCurrentWindow &&
+    decision?.status === 'DEFERRED' &&
+    decision.nextReviewAt &&
+    decision.nextReviewAt <= evaluatedAt,
+  );
+  if (
+    appliesToCurrentWindow &&
+    decision?.status !== 'EXPLORING' &&
+    !deferredReviewDue
+  ) {
+    return [];
+  }
   const monthlySavings = Number(opportunity.monthlySavings);
   const lifetimeSavings = Number(opportunity.lifetimeSavings);
   const confidence = refinanceConfidence(opportunity.confidenceLevel);
-  const actionId = refinanceActionWindowId(propertyId, state.lastOpenedAt);
+  const actionId = deferredReviewDue && decision?.nextReviewAt
+    ? `refinance-decision-review:${decision.id}:${decision.nextReviewAt.getTime()}`
+    : refinanceActionWindowId(propertyId, state.lastOpenedAt);
   const breakEven = opportunity.breakEvenMonths > 0
     ? `${opportunity.breakEvenMonths} months`
     : 'not yet established';
@@ -1353,24 +1381,30 @@ export async function loadRefinanceOpportunityActions(
     id: actionId,
     propertyId,
     lineageId: `refinance-opportunity:${propertyId}`,
-    sourceEntityId: state.id,
-    sourceVersion: state.updatedAt.toISOString(),
+    sourceEntityId: deferredReviewDue && decision ? decision.id : state.id,
+    sourceVersion: (deferredReviewDue && decision ? decision.updatedAt : state.updatedAt).toISOString(),
     job: 'DECIDE',
     state: 'OPEN',
     priority: 'CONSIDER',
-    signal:
-      `A refinance comparison may be worthwhile at the current national benchmark rate of ${opportunity.marketRate.toFixed(3)}%.`,
+    signal: deferredReviewDue
+      ? 'Your planned refinance review date has arrived while this opportunity remains open.'
+      : `A refinance comparison may be worthwhile at the current national benchmark rate of ${opportunity.marketRate.toFixed(3)}%.`,
     whyItMatters:
       `The current estimate is about $${Math.round(monthlySavings).toLocaleString()} per month in savings, with break-even ${breakEven}. Actual lender pricing, eligibility, fees, and timing may differ.`,
-    recommendedAction: 'Review this refinance opportunity',
+    recommendedAction: deferredReviewDue
+      ? 'Revisit your deferred refinance decision'
+      : 'Review this refinance opportunity',
     expectedOutcome:
       'Understand the estimated benefit, assumptions, and alternatives before deciding whether to compare official lender offers.',
     timing: {
-      dueAt: null,
+      dueAt: deferredReviewDue && decision?.nextReviewAt
+        ? decision.nextReviewAt.toISOString()
+        : null,
       windowStart: state.lastOpenedAt.toISOString(),
       windowEnd: null,
-      rationale:
-        'This action remains current only while the property-specific refinance window is OPEN.',
+      rationale: deferredReviewDue
+        ? 'You chose this date to revisit the decision; the original opportunity is still OPEN.'
+        : 'This action remains current only while the property-specific refinance window is OPEN.',
     },
     evidence: [{
       id: opportunity.id,
@@ -1429,7 +1463,7 @@ export async function loadRefinanceOpportunityActions(
     governance: materialFinancialGovernance('mortgage-refinance-radar-v2'),
     primaryCta: {
       kind: 'REVIEW',
-      label: 'Review opportunity',
+      label: deferredReviewDue ? 'Revisit decision' : 'Review opportunity',
       href: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`,
     },
     secondaryCtas: [{

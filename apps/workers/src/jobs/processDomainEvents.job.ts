@@ -18,6 +18,10 @@ type DomainEventType =
   | 'REFINANCE_OPPORTUNITY_UPDATED'
   | 'REFINANCE_OPPORTUNITY_CLOSED'
   | 'REFINANCE_DATA_REQUIRED'
+  | 'REFINANCE_DECISION_RECORDED'
+  | 'REFINANCE_DECISION_CHANGED'
+  | 'REFINANCE_NEXT_STEP_STARTED'
+  | 'REFINANCE_OUTCOME_COMPLETED'
   | 'RADAR_PROPERTY_RECONCILIATION_REQUESTED';
 
 export const MAX_DOMAIN_EVENT_ATTEMPTS = 8;
@@ -313,6 +317,13 @@ export async function processDomainEventsJob(
           break;
         case 'REFINANCE_DATA_REQUIRED':
           handleRefinanceDataRequired(ev);
+          break;
+        case 'REFINANCE_DECISION_RECORDED':
+        case 'REFINANCE_DECISION_CHANGED':
+        case 'REFINANCE_NEXT_STEP_STARTED':
+        case 'REFINANCE_OUTCOME_COMPLETED':
+          // Durable internal lifecycle signals. They feed Home/analytics and
+          // deliberately do not contact lenders or trigger external delivery.
           break;
         case 'RADAR_PROPERTY_RECONCILIATION_REQUESTED':
           processingOutcome = await (

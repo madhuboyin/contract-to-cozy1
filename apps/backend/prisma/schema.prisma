@@ -2966,6 +2966,7 @@ model Property {
   refinanceEvaluationClaims RefinanceEvaluationClaim[]
   refinanceScenarios        RefinanceScenarioSnapshot[]
   refinanceLoanEstimateComparisons RefinanceLoanEstimateComparisonSnapshot[]
+  refinanceDecisions        RefinanceDecision[]
   preferenceProfiles        PreferenceProfile[]
   assumptionSets            AssumptionSet[]
   signals                   Signal[]
@@ -6830,6 +6831,10 @@ enum DomainEventType {
   REFINANCE_OPPORTUNITY_UPDATED
   REFINANCE_OPPORTUNITY_CLOSED
   REFINANCE_DATA_REQUIRED
+  REFINANCE_DECISION_RECORDED
+  REFINANCE_DECISION_CHANGED
+  REFINANCE_NEXT_STEP_STARTED
+  REFINANCE_OUTCOME_COMPLETED
   RADAR_PROPERTY_RECONCILIATION_REQUESTED
 }
 
@@ -15211,6 +15216,19 @@ enum RefinanceScenarioTerm {
   FIFTEEN_YEAR
 }
 
+enum RefinanceDecisionStatus {
+  EXPLORING
+  DEFERRED
+  KEEP_CURRENT_LOAN
+  PROCEEDING
+  OFFER_SELECTED
+  APPLICATION_IN_PROGRESS
+  CLOSED
+  DECLINED
+  ABANDONED
+  SUPERSEDED
+}
+
 // --- Models ---
 
 // A. Periodic market mortgage rate snapshot.
@@ -15271,6 +15289,7 @@ model RefinanceOpportunity {
 
   // Back-reference from the radar state that treats this as the current opportunity
   radarStateCurrentRef PropertyRefinanceRadarState? @relation("CurrentRefinanceOpportunity")
+  decisions            RefinanceDecision[]
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([propertyId, radarState])
@@ -15360,7 +15379,8 @@ model RefinanceScenarioSnapshot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property  Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  decisions RefinanceDecision[]
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([propertyId, isSaved])
@@ -15380,10 +15400,65 @@ model RefinanceLoanEstimateComparisonSnapshot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property  Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  decisions RefinanceDecision[]
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@map("refinance_loan_estimate_comparison_snapshots")
+}
+
+// F. Homeowner-controlled refinance decision and completion journey.
+// Facts remain owned by Financing; this record owns the decision lifecycle.
+model RefinanceDecision {
+  id                       String                   @id @default(uuid())
+  propertyId               String
+  currentKey               String?                  @unique
+  recordedByUserId         String
+  status                   RefinanceDecisionStatus @default(EXPLORING)
+  radarOpportunityId       String?
+  scenarioSnapshotId       String?
+  loanEstimateComparisonId String?
+  selectedOfferId          String?
+  rationale                String?
+  nextReviewAt             DateTime?
+  decidedAt                DateTime                 @default(now())
+  completedAt              DateTime?
+  version                  Int                      @default(1)
+  metadataJson             Json?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+
+  property               Property                                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  radarOpportunity       RefinanceOpportunity?                     @relation(fields: [radarOpportunityId], references: [id], onDelete: SetNull)
+  scenarioSnapshot       RefinanceScenarioSnapshot?                @relation(fields: [scenarioSnapshotId], references: [id], onDelete: SetNull)
+  loanEstimateComparison RefinanceLoanEstimateComparisonSnapshot? @relation(fields: [loanEstimateComparisonId], references: [id], onDelete: SetNull)
+  history                RefinanceDecisionHistory[]
+
+  @@index([propertyId, updatedAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@index([recordedByUserId])
+  @@index([radarOpportunityId])
+  @@index([scenarioSnapshotId])
+  @@index([loanEstimateComparisonId])
+  @@map("refinance_decisions")
+}
+
+model RefinanceDecisionHistory {
+  id               String                    @id @default(uuid())
+  decisionId       String
+  actorUserId      String
+  fromStatus       RefinanceDecisionStatus?
+  toStatus         RefinanceDecisionStatus
+  rationale        String?
+  clientMutationId String                    @unique
+  metadataJson     Json?
+  occurredAt       DateTime                  @default(now())
+
+  decision RefinanceDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@index([decisionId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@map("refinance_decision_history")
 }
 
 // ============================================================================

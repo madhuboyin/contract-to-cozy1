@@ -308,6 +308,43 @@ export type RefinanceAlertPreferenceDTO = {
   recipientInRolloutCohort: boolean;
 };
 
+export type RefinanceDecisionStatus =
+  | 'EXPLORING'
+  | 'DEFERRED'
+  | 'KEEP_CURRENT_LOAN'
+  | 'PROCEEDING'
+  | 'OFFER_SELECTED'
+  | 'APPLICATION_IN_PROGRESS'
+  | 'CLOSED'
+  | 'DECLINED'
+  | 'ABANDONED'
+  | 'SUPERSEDED';
+
+export type RefinanceDecisionDTO = {
+  id: string;
+  propertyId: string;
+  recordedByUserId: string;
+  status: RefinanceDecisionStatus;
+  radarOpportunityId: string | null;
+  scenarioSnapshotId: string | null;
+  loanEstimateComparisonId: string | null;
+  selectedOfferId: string | null;
+  rationale: string | null;
+  nextReviewAt: string | null;
+  decidedAt: string;
+  completedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  history: Array<{
+    id: string;
+    fromStatus: RefinanceDecisionStatus | null;
+    toStatus: RefinanceDecisionStatus;
+    rationale: string | null;
+    occurredAt: string;
+  }>;
+};
+
 export type RefinanceLoanEstimateInput = {
   id: string;
   lenderName: string;
@@ -444,6 +481,49 @@ export async function evaluateRadar(propertyId: string): Promise<RadarStatusDTO 
   const res = await api.post(`/api/properties/${propertyId}/refinance-radar/evaluate`, {});
   const status = res.data?.radarStatus as RadarStatusDTO | undefined;
   return status ? { ...status, propertyContext: res.data?.propertyContext } : null;
+}
+
+export async function getRefinanceDecision(
+  propertyId: string,
+): Promise<RefinanceDecisionDTO | null> {
+  const res = await api.get(`/api/properties/${propertyId}/refinance-radar/decision`);
+  return (res.data?.decision as RefinanceDecisionDTO | null) ?? null;
+}
+
+export async function recordRefinanceDecision(
+  propertyId: string,
+  body: {
+    status: RefinanceDecisionStatus;
+    clientMutationId: string;
+    expectedVersion?: number;
+    scenarioSnapshotId?: string;
+    loanEstimateComparisonId?: string;
+    selectedOfferId?: string;
+    rationale?: string;
+    nextReviewAt?: string;
+    completedMortgage?: {
+      currentMortgageBalanceUsd: number;
+      interestRatePct: number;
+      remainingTermMonths: number;
+      monthlyPaymentUsd?: number;
+      mortgageBalanceAsOfDate: string;
+    };
+  },
+): Promise<RefinanceDecisionDTO> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/refinance-radar/decision`,
+    body,
+  );
+  return res.data.decision as RefinanceDecisionDTO;
+}
+
+export async function deleteRefinanceDecision(
+  propertyId: string,
+  decisionId: string,
+): Promise<void> {
+  await api.delete(
+    `/api/properties/${propertyId}/refinance-radar/decision/${decisionId}`,
+  );
 }
 
 export async function getOpportunityHistory(

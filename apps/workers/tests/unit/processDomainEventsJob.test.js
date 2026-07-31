@@ -172,6 +172,26 @@ test('acknowledges a valid REFINANCE_DATA_REQUIRED event without external delive
   assert.equal(terminal.args.data.status, 'PROCESSED');
 });
 
+for (const type of [
+  'REFINANCE_DECISION_RECORDED',
+  'REFINANCE_DECISION_CHANGED',
+  'REFINANCE_NEXT_STEP_STARTED',
+  'REFINANCE_OUTCOME_COMPLETED',
+]) {
+  test(`acknowledges internal ${type} without external delivery`, async () => {
+    const { deps, calls } = fakeDeps({
+      pendingEvents: [eventFixture({
+        type,
+        payload: { propertyId: 'property-1', decisionId: 'decision-1', version: 1 },
+      })],
+    });
+    const result = await processDomainEventsJob(undefined, deps);
+    assert.equal(result.processed, 1);
+    assert.equal(calls.creates.length, 0);
+    assert.equal(calls.refinanceAlerts.length, 0);
+  });
+}
+
 test('processes Radar property reconciliation and persists its structured outcome', async () => {
   const radarEvent = eventFixture({
     type: 'RADAR_PROPERTY_RECONCILIATION_REQUESTED',

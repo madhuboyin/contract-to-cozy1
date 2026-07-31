@@ -20,6 +20,7 @@ import {
   Mail,
   Smartphone,
   Download,
+  CheckCircle2,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
@@ -30,9 +31,13 @@ import {
   getRefinanceAlertPreference,
   getFinancingMortgageProfile,
   getRadarStatus,
+  getRefinanceDecision,
   getRateHistory,
+  getSavedRefinanceLoanEstimateComparisons,
+  getSavedScenarios,
   runScenario,
   recordRefinanceFeedback,
+  recordRefinanceDecision,
   saveFinancingProfile,
   updateRefinanceAlertPreference,
   type RefinanceAlertPreferenceDTO,
@@ -43,6 +48,10 @@ import {
   type RefinanceScenarioResult,
   type RefinanceScenarioTerm,
   type RefinanceObjective,
+  type RefinanceDecisionDTO,
+  type RefinanceDecisionStatus,
+  type RefinanceScenarioSnapshotDTO,
+  type SavedRefinanceLoanEstimateComparison,
 } from './mortgageRefinanceRadarApi';
 import type { PropertyFinancingProfile } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -1967,6 +1976,308 @@ function UnavailableCard({ reason }: { reason: string }) {
   );
 }
 
+const DECISION_STATUS_LABELS: Record<RefinanceDecisionStatus, string> = {
+  EXPLORING: 'Exploring options',
+  DEFERRED: 'Decide later',
+  KEEP_CURRENT_LOAN: 'Keep current loan',
+  PROCEEDING: 'Proceeding',
+  OFFER_SELECTED: 'Offer selected',
+  APPLICATION_IN_PROGRESS: 'Application in progress',
+  CLOSED: 'Refinance closed',
+  DECLINED: 'Application declined',
+  ABANDONED: 'Stopped pursuing refinance',
+  SUPERSEDED: 'Replaced by a newer decision',
+};
+
+function decisionMutationId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `refinance-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function defaultReviewDate(): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + 30);
+  return date.toISOString().slice(0, 10);
+}
+
+function RefinanceDecisionTracker({
+  propertyId,
+  onFinancingUpdated,
+}: {
+  propertyId: string;
+  onFinancingUpdated: () => Promise<void>;
+}) {
+  const [decision, setDecision] = useState<RefinanceDecisionDTO | null>(null);
+  const [loadingDecision, setLoadingDecision] = useState(true);
+  const [savingDecision, setSavingDecision] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [savedScenarios, setSavedScenarios] = useState<RefinanceScenarioSnapshotDTO[]>([]);
+  const [savedComparisons, setSavedComparisons] = useState<SavedRefinanceLoanEstimateComparison[]>([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState('');
+  const [selectedComparisonId, setSelectedComparisonId] = useState('');
+  const [selectedOfferId, setSelectedOfferId] = useState('');
+  const [rationale, setRationale] = useState('');
+  const [nextReviewDate, setNextReviewDate] = useState(defaultReviewDate);
+  const [closingBalance, setClosingBalance] = useState('');
+  const [closingRate, setClosingRate] = useState('');
+  const [closingTerm, setClosingTerm] = useState('360');
+  const [closingPayment, setClosingPayment] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setLoadingDecision(true);
+    Promise.all([
+      getRefinanceDecision(propertyId),
+      getSavedScenarios(propertyId).catch(() => []),
+      getSavedRefinanceLoanEstimateComparisons(propertyId).catch(() => []),
+    ])
+      .then(([value, scenarios, comparisons]) => {
+        if (!active) return;
+        setDecision(value);
+        setSavedScenarios(scenarios);
+        setSavedComparisons(comparisons);
+        setSelectedScenarioId(value?.scenarioSnapshotId ?? '');
+        setSelectedComparisonId(value?.loanEstimateComparisonId ?? '');
+        setSelectedOfferId(value?.selectedOfferId ?? '');
+      })
+      .catch((error: unknown) => {
+        if (active) setDecisionError(error instanceof Error ? error.message : 'Decision history could not be loaded.');
+      })
+      .finally(() => {
+        if (active) setLoadingDecision(false);
+      });
+    return () => { active = false; };
+  }, [propertyId]);
+
+  async function transition(
+    status: RefinanceDecisionStatus,
+    extra: Partial<Parameters<typeof recordRefinanceDecision>[1]> = {},
+  ) {
+    setSavingDecision(true);
+    setDecisionError(null);
+    try {
+      const updated = await recordRefinanceDecision(propertyId, {
+        status,
+        clientMutationId: decisionMutationId(),
+        ...(decision ? { expectedVersion: decision.version } : {}),
+        ...(rationale.trim() ? { rationale: rationale.trim() } : {}),
+        ...extra,
+      });
+      setDecision(updated);
+      setRationale('');
+      if (status === 'CLOSED') await onFinancingUpdated();
+    } catch (error: unknown) {
+      setDecisionError(error instanceof Error ? error.message : 'The refinance decision could not be saved.');
+    } finally {
+      setSavingDecision(false);
+    }
+  }
+
+  async function recordClosing() {
+    const balance = Number(closingBalance);
+    const rate = Number(closingRate);
+    const term = Number(closingTerm);
+    const payment = closingPayment.trim() ? Number(closingPayment) : undefined;
+    if (
+      !Number.isFinite(balance) || balance < 0 ||
+      !Number.isFinite(rate) || rate <= 0 ||
+      !Number.isInteger(term) || term < 1 ||
+      (payment != null && (!Number.isFinite(payment) || payment < 0))
+    ) {
+      setDecisionError('Enter valid new loan balance, rate, and remaining term before confirming the closing.');
+      return;
+    }
+    await transition('CLOSED', {
+      completedMortgage: {
+        currentMortgageBalanceUsd: balance,
+        interestRatePct: rate,
+        remainingTermMonths: term,
+        ...(payment == null ? {} : { monthlyPaymentUsd: payment }),
+        mortgageBalanceAsOfDate: new Date().toISOString(),
+      },
+    });
+  }
+
+  const status = decision?.status ?? null;
+  const canChoosePrimary = status == null || status === 'EXPLORING';
+  const canResume = status === 'DEFERRED' || status === 'KEEP_CURRENT_LOAN' || status === 'DECLINED' || status === 'ABANDONED';
+  const canStartApplication = status === 'PROCEEDING' || status === 'OFFER_SELECTED';
+  const canComplete = status === 'APPLICATION_IN_PROGRESS';
+  const selectedComparison = savedComparisons.find(
+    (comparison) => comparison.id === selectedComparisonId,
+  ) ?? null;
+
+  return (
+    <GlassCard>
+      <section id="refinance-decision" aria-labelledby="refinance-decision-title" className="space-y-4 p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">Decide and track</p>
+            <h2 id="refinance-decision-title" className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">
+              Record what you want to do
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
+              This stays in your Home record. ContractToCozy will not contact a lender or submit an application.
+            </p>
+          </div>
+          {decision && (
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300">
+              {DECISION_STATUS_LABELS[decision.status]}
+            </span>
+          )}
+        </div>
+
+        {loadingDecision ? (
+          <p className="text-sm text-slate-500">Loading your saved decision…</p>
+        ) : (
+          <>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Note (optional)
+              <textarea
+                value={rationale}
+                onChange={(event) => setRationale(event.target.value)}
+                maxLength={2000}
+                rows={2}
+                placeholder="What matters most in this decision?"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+
+            {(savedScenarios.length > 0 || savedComparisons.length > 0) && (
+              <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-2 dark:border-slate-700 dark:bg-slate-900/40">
+                {savedScenarios.length > 0 && (
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    Saved scenario (optional)
+                    <select value={selectedScenarioId} onChange={(event) => setSelectedScenarioId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+                      <option value="">No scenario linked</option>
+                      {savedScenarios.map((scenario) => (
+                        <option key={scenario.id} value={scenario.id}>{TERM_LABELS[scenario.targetTerm]} at {scenario.targetRatePct.toFixed(3)}%</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {savedComparisons.length > 0 && (
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    Reviewed Loan Estimate comparison (optional)
+                    <select
+                      value={selectedComparisonId}
+                      onChange={(event) => {
+                        setSelectedComparisonId(event.target.value);
+                        setSelectedOfferId('');
+                      }}
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                    >
+                      <option value="">No comparison linked</option>
+                      {savedComparisons.map((comparison) => (
+                        <option key={comparison.id} value={comparison.id}>{comparison.label || `Comparison from ${new Date(comparison.createdAt).toLocaleDateString()}`}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+
+            {canChoosePrimary && (
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Button type="button" variant="outline" disabled={savingDecision} onClick={() => transition('KEEP_CURRENT_LOAN')}>
+                  Keep current loan
+                </Button>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    aria-label="Review refinance decision on"
+                    value={nextReviewDate}
+                    onChange={(event) => setNextReviewDate(event.target.value)}
+                    className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                  />
+                  <Button type="button" variant="outline" disabled={savingDecision || !nextReviewDate} onClick={() => transition('DEFERRED', { nextReviewAt: new Date(`${nextReviewDate}T12:00:00.000Z`).toISOString() })}>
+                    Decide later
+                  </Button>
+                </div>
+                <Button type="button" disabled={savingDecision} onClick={() => transition('PROCEEDING', selectedScenarioId ? { scenarioSnapshotId: selectedScenarioId } : {})}>
+                  Proceed with this option
+                </Button>
+              </div>
+            )}
+
+            {canResume && (
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" disabled={savingDecision} onClick={() => transition('EXPLORING')}>Explore again</Button>
+                {(status === 'DEFERRED' || status === 'KEEP_CURRENT_LOAN') && (
+                  <Button type="button" disabled={savingDecision} onClick={() => transition('PROCEEDING', selectedScenarioId ? { scenarioSnapshotId: selectedScenarioId } : {})}>Proceed now</Button>
+                )}
+              </div>
+            )}
+
+            {canStartApplication && (
+              <div className="space-y-3">
+                {status === 'PROCEEDING' && selectedComparison && (
+                  <div className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-end dark:border-slate-700">
+                    <label className="flex-1 text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Homeowner-selected offer
+                      <select value={selectedOfferId} onChange={(event) => setSelectedOfferId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+                        <option value="">Choose an offer</option>
+                        {selectedComparison.offers.map((offer) => <option key={offer.id} value={offer.id}>{offer.lenderName} — {offer.noteRatePct.toFixed(3)}%</option>)}
+                      </select>
+                    </label>
+                    <Button type="button" variant="outline" disabled={savingDecision || !selectedOfferId} onClick={() => transition('OFFER_SELECTED', { loanEstimateComparisonId: selectedComparison.id, selectedOfferId })}>Record selected offer</Button>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" disabled={savingDecision} onClick={() => transition('APPLICATION_IN_PROGRESS')}>Mark application started</Button>
+                  <Button type="button" variant="outline" disabled={savingDecision} onClick={() => transition('ABANDONED')}>Stop pursuing</Button>
+                </div>
+              </div>
+            )}
+
+            {canComplete && (
+              <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+                <div>
+                  <p className="font-semibold text-emerald-900 dark:text-emerald-200">Record the verified result</p>
+                  <p className="text-xs text-emerald-800 dark:text-emerald-300">If the refinance closed, confirm the new terms before updating Financing.</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <input aria-label="New mortgage balance" type="number" min="0" value={closingBalance} onChange={(event) => setClosingBalance(event.target.value)} placeholder="New balance ($)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
+                  <input aria-label="New interest rate" type="number" min="0.001" step="0.001" value={closingRate} onChange={(event) => setClosingRate(event.target.value)} placeholder="New rate (%)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
+                  <input aria-label="New remaining term" type="number" min="1" max="600" value={closingTerm} onChange={(event) => setClosingTerm(event.target.value)} placeholder="Term (months)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
+                  <input aria-label="New monthly payment" type="number" min="0" value={closingPayment} onChange={(event) => setClosingPayment(event.target.value)} placeholder="Payment (optional)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" disabled={savingDecision} onClick={recordClosing}>Confirm closed and update Financing</Button>
+                  <Button type="button" variant="outline" disabled={savingDecision} onClick={() => transition('DECLINED')}>Record declined</Button>
+                  <Button type="button" variant="outline" disabled={savingDecision} onClick={() => transition('ABANDONED')}>Record abandoned</Button>
+                </div>
+              </div>
+            )}
+
+            {status === 'CLOSED' && (
+              <p className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+                <CheckCircle2 className="h-4 w-4" /> Closing recorded and canonical Financing facts updated.
+              </p>
+            )}
+
+            {decision?.nextReviewAt && status === 'DEFERRED' && (
+              <p className="text-sm text-slate-600 dark:text-slate-300">Review scheduled for {new Date(decision.nextReviewAt).toLocaleDateString()}.</p>
+            )}
+            {decision && decision.history.length > 0 && (
+              <details className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <summary className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-200">Decision history ({decision.history.length})</summary>
+                <ol className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                  {decision.history.map((item) => (
+                    <li key={item.id}>{new Date(item.occurredAt).toLocaleString()} — {DECISION_STATUS_LABELS[item.toStatus]}</li>
+                  ))}
+                </ol>
+              </details>
+            )}
+          </>
+        )}
+        {decisionError && <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">{decisionError}</p>}
+      </section>
+    </GlassCard>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MortgageRefinanceRadarClient() {
@@ -2187,6 +2498,14 @@ export default function MortgageRefinanceRadarClient() {
 
           {/* 2. Key metrics */}
           <KeyMetricsCard data={available} />
+
+          <RefinanceDecisionTracker
+            propertyId={propertyId}
+            onFinancingUpdated={async () => {
+              await handleEvaluate();
+              setMortgageProfile(await getFinancingMortgageProfile(propertyId).catch(() => null));
+            }}
+          />
 
           {/* 3. Data freshness and monitoring readiness */}
           {available.alertReadiness && (

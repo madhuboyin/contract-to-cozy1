@@ -91,6 +91,73 @@ export const runScenarioSchema = z
 
 export type RunScenarioBody = z.infer<typeof runScenarioSchema>;
 
+export const refinanceDecisionStatuses = [
+  'EXPLORING',
+  'DEFERRED',
+  'KEEP_CURRENT_LOAN',
+  'PROCEEDING',
+  'OFFER_SELECTED',
+  'APPLICATION_IN_PROGRESS',
+  'CLOSED',
+  'DECLINED',
+  'ABANDONED',
+  'SUPERSEDED',
+] as const;
+
+const completedMortgageSchema = z.object({
+  currentMortgageBalanceUsd: z.number().min(0).max(10_000_000),
+  interestRatePct: z.number().positive().max(30),
+  remainingTermMonths: z.number().int().min(1).max(600),
+  monthlyPaymentUsd: z.number().min(0).max(1_000_000).optional(),
+  mortgageBalanceAsOfDate: z.string().datetime({ offset: true }),
+}).strict();
+
+export const recordRefinanceDecisionSchema = z.object({
+  status: z.enum(refinanceDecisionStatuses),
+  clientMutationId: z.string().trim().min(8).max(120),
+  expectedVersion: z.number().int().positive().optional(),
+  radarOpportunityId: z.string().uuid().optional(),
+  scenarioSnapshotId: z.string().uuid().optional(),
+  loanEstimateComparisonId: z.string().uuid().optional(),
+  selectedOfferId: z.string().trim().min(1).max(80).optional(),
+  rationale: z.string().trim().max(2000).optional(),
+  nextReviewAt: z.string().datetime({ offset: true }).optional(),
+  completedMortgage: completedMortgageSchema.optional(),
+}).strict().superRefine((value, ctx) => {
+  if (value.status === 'DEFERRED' && !value.nextReviewAt) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['nextReviewAt'],
+      message: 'A deferred decision requires a future review date.',
+    });
+  }
+  if (value.status === 'OFFER_SELECTED' && !value.selectedOfferId) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['selectedOfferId'],
+      message: 'Selecting an offer requires its reviewed offer reference.',
+    });
+  }
+  if (value.status === 'CLOSED' && !value.completedMortgage) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['completedMortgage'],
+      message: 'A verified closing requires the new mortgage facts.',
+    });
+  }
+  if (value.status !== 'CLOSED' && value.completedMortgage) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['completedMortgage'],
+      message: 'New mortgage facts may be recorded only with a verified closing.',
+    });
+  }
+});
+
+export type RecordRefinanceDecisionBody = z.infer<
+  typeof recordRefinanceDecisionSchema
+>;
+
 const loanEstimateDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date in YYYY-MM-DD format.')

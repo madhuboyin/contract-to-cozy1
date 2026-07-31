@@ -16,6 +16,7 @@ import {
   RefinancePushSubscriptionBody,
   RefinancePushSubscriptionRevokeBody,
   RefinanceFeedbackBody,
+  RecordRefinanceDecisionBody,
   RefinanceTelemetryBody,
   RunScenarioBody,
   SaveLoanEstimateComparisonBody,
@@ -49,6 +50,11 @@ import {
   buildRefinanceLoanEstimateComparisonMarkdown,
   buildRefinanceLoanEstimateHandoffMarkdown,
 } from './refinanceLoanEstimateMarkdown';
+import {
+  deleteRefinanceDecision,
+  getCurrentRefinanceDecision,
+  recordRefinanceDecision,
+} from './refinanceDecision.service';
 
 const service = new RefinanceRadarService();
 
@@ -59,6 +65,68 @@ function requireUserId(req: AuthRequest): string {
 }
 
 export class RefinanceRadarController {
+  static async getDecision(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      requireUserId(req);
+      const decision = await getCurrentRefinanceDecision(req.params.propertyId);
+      res.json({ success: true, data: { decision } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async recordDecision(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = requireUserId(req);
+      const { propertyId } = req.params;
+      const result = await recordRefinanceDecision({
+        propertyId,
+        userId,
+        body: req.body as RecordRefinanceDecisionBody,
+      });
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.ACTION_COMPLETED,
+        eventName: result.decision.completedAt
+          ? 'refinance_outcome_completed'
+          : result.idempotent
+            ? 'refinance_decision_idempotent_replay'
+            : 'refinance_decision_recorded',
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.FINANCIAL,
+        featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR,
+        source: 'refinance_decision',
+        metadataJson: {
+          status: result.decision.status,
+          version: result.decision.version,
+          linkedScenario: Boolean(result.decision.scenarioSnapshotId),
+          linkedComparison: Boolean(result.decision.loanEstimateComparisonId),
+          canonicalFinancingUpdated: result.decision.status === 'CLOSED',
+          idempotent: result.idempotent,
+        },
+      });
+      res.status(result.idempotent ? 200 : 201).json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async deleteDecision(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      requireUserId(req);
+      const deleted = await deleteRefinanceDecision(
+        req.params.propertyId,
+        req.params.decisionId,
+      );
+      if (!deleted) {
+        throw new APIError('Refinance decision not found.', 404, 'REFINANCE_DECISION_NOT_FOUND');
+      }
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async extractLoanEstimate(
     req: AuthRequest,
     res: Response,

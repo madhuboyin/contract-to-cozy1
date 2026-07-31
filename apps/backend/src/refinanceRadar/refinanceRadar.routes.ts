@@ -27,6 +27,7 @@ import {
   refinancePushSubscriptionSchema,
   refinanceFeedbackSchema,
   refinanceTelemetrySchema,
+  recordRefinanceDecisionSchema,
   runScenarioSchema,
   saveLoanEstimateComparisonSchema,
 } from './validators/refinanceRadar.validators';
@@ -104,6 +105,28 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   RefinanceRadarController.evaluate,
+);
+
+router.get(
+  '/properties/:propertyId/refinance-radar/decision',
+  authenticate,
+  propertyAuthMiddleware,
+  RefinanceRadarController.getDecision,
+);
+
+router.post(
+  '/properties/:propertyId/refinance-radar/decision',
+  authenticate,
+  propertyAuthMiddleware,
+  validateBody(recordRefinanceDecisionSchema),
+  RefinanceRadarController.recordDecision,
+);
+
+router.delete(
+  '/properties/:propertyId/refinance-radar/decision/:decisionId',
+  authenticate,
+  propertyAuthMiddleware,
+  RefinanceRadarController.deleteDecision,
 );
 
 router.get(

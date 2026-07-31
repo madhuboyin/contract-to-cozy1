@@ -155,3 +155,49 @@ test('OPEN fails closed when mortgage facts or market evidence are stale', async
   );
   assert.deepEqual(incomplete, []);
 });
+
+test('a decision suppresses the current OPEN action and deferred review returns once due', async () => {
+  const reviewAt = new Date('2026-08-01T12:00:00.000Z');
+  const deferredDb = dbForState();
+  deferredDb.refinanceDecision = {
+    findFirst: async () => ({
+      id: 'decision-1',
+      status: 'DEFERRED',
+      radarOpportunityId: 'opportunity-2',
+      nextReviewAt: reviewAt,
+      version: 1,
+      updatedAt: EVALUATED_AT,
+    }),
+  };
+  const beforeReview = await loadRefinanceOpportunityActions(
+    'property-1',
+    deferredDb,
+    new Date('2026-07-30T12:00:00.000Z'),
+  );
+  assert.deepEqual(beforeReview, []);
+
+  const due = await loadRefinanceOpportunityActions(
+    'property-1',
+    deferredDb,
+    reviewAt,
+  );
+  assert.equal(due.length, 1);
+  assert.equal(due[0].id, `refinance-decision-review:decision-1:${reviewAt.getTime()}`);
+  assert.equal(due[0].timing.dueAt, reviewAt.toISOString());
+  assert.match(due[0].recommendedAction, /Revisit/);
+
+  deferredDb.refinanceDecision.findFirst = async () => ({
+    id: 'decision-1',
+    status: 'PROCEEDING',
+    radarOpportunityId: 'opportunity-2',
+    nextReviewAt: null,
+    version: 2,
+    updatedAt: EVALUATED_AT,
+  });
+  const proceeding = await loadRefinanceOpportunityActions(
+    'property-1',
+    deferredDb,
+    reviewAt,
+  );
+  assert.deepEqual(proceeding, []);
+});
