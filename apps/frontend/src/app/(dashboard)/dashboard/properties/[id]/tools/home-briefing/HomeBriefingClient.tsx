@@ -135,7 +135,7 @@ function BriefingItemCard({
                 href={source.url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-1 inline-flex items-center text-primary underline"
+                className="no-brand-style mt-1 inline-flex items-center font-medium text-slate-700 underline hover:text-slate-950"
               >
                 Open exact source <ExternalLink className="ml-1 h-3.5 w-3.5" />
               </a>
@@ -170,9 +170,13 @@ function BriefingItemCard({
   );
 }
 
-export default function HomeBriefingClient() {
+export default function HomeBriefingClient({
+  propertyId: explicitPropertyId,
+}: {
+  propertyId?: string;
+} = {}) {
   const params = useParams<{ id: string }>();
-  const propertyId = params.id;
+  const propertyId = explicitPropertyId ?? params.id;
   const queryClient = useQueryClient();
   const [showPreferences, setShowPreferences] = React.useState(false);
   const [selectedItems, setSelectedItems] = React.useState<string[]>([]);

@@ -46,6 +46,7 @@ import { runHiddenAssetRefreshJob } from './jobs/hiddenAssetRefresh.job';
 import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.job';
 import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNotification.job';
 import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummyEvents.job';
+import { runNycZapPlanningIngestJob } from './jobs/nycZapPlanningIngest.job';
 import { runHabitGenerationJob } from './jobs/habitGeneration.job';
 import { ingestMortgageRatesJob } from './jobs/ingestMortgageRates.job';
 import { evaluateRefinanceRadarForSnapshot } from './jobs/evaluateRefinanceRadar.job';
@@ -351,6 +352,14 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     logger.info({ ...result }, `[neighborhood-radar-refresh] examined=${result.examined} refreshed=${result.refreshed}`);
     return result;
   },
+  'nyc-zap-planning-ingest':         async (opts) => {
+    const result = await runNycZapPlanningIngestJob(opts);
+    logger.info(
+      { ...result },
+      `[nyc-zap-planning-ingest] examined=${result.examined} created=${result.created ?? 0} refreshed=${result.refreshed ?? 0}`,
+    );
+    return result;
+  },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
   'home-habit-generation':           async (opts) => {
     const result = await runHabitGenerationJob(opts);
@@ -468,6 +477,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
 
 // Per-job cron expression overrides (env-var-based schedules)
 const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
+  'nyc-zap-planning-ingest':   process.env.NYC_ZAP_PLANNING_INGEST_CRON,
   'airnow-air-quality':         process.env.AIRNOW_AIR_QUALITY_CRON,
   'usgs-earthquakes':           process.env.USGS_EARTHQUAKE_CRON,
   'openfema-declarations':      process.env.OPEN_FEMA_DECLARATIONS_CRON,

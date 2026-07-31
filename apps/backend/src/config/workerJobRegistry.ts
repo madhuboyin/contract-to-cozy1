@@ -562,6 +562,28 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
 
   // ── Neighborhood (cron) ───────────────────────────────────────────────────
   {
+    key: 'nyc-zap-planning-ingest',
+    name: 'NYC ZAP Planning Ingest',
+    description:
+      'Fetches public NYC Department of City Planning ZAP project lifecycle records for explicitly reviewed pilot counties, normalizes them into canonical Property Intelligence observations, and preserves county-level precision. ' +
+      'Requires NYC_ZAP_PILOT_ENABLED plus named review evidence; optional NYC_OPEN_DATA_APP_TOKEN raises Socrata API limits.',
+    category: 'NEIGHBORHOOD',
+    schedule: 'Daily at 3:35 AM EST; source data is published monthly',
+    cronExpression: '35 3 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'nyc-zap-planning-ingest',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: false,
+    supportsDryRun: true,
+    supportsPropertyScope: false,
+    broadSweep: true,
+    externalProvider: 'New York City Department of City Planning',
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'neighborhood-radar-refresh',
     name: 'Neighborhood Radar Refresh',
     description:

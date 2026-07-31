@@ -32,6 +32,26 @@ usefulness evidence. The family report remains failing until coverage and
 operational SLOs are current. Promotion to `LIMITED` or `GENERAL` is rejected by
 the API unless the candidate policy passes every applicable gate.
 
+### Active reviewed pilot
+
+The production manifest activates one bounded Planning-family pilot:
+
+- source: New York City Department of City Planning, Zoning Application Portal
+  project data (`hgx4-8ukb`);
+- geography: Manhattan / `NEW YORK COUNTY`;
+- precision: county only; no point, parcel, polygon, or distance claim;
+- lifecycle: filed/noticed, active review, approved, completed, cancelled, or
+  unknown based only on published source fields;
+- cadence: daily check against a source documented as monthly;
+- source limitation: a ZAP project record does not establish construction at a
+  specific property or any effect on value, demand, insurance, or a household;
+- terms: NYC Open Data terms reviewed July 30, 2026; and
+- rollback: the existing source kill switch or Planning-family pause.
+
+The activation is fail-closed unless `NYC_ZAP_PILOT_REVIEWED_BY` and
+`NYC_ZAP_PILOT_REVIEW_REFERENCE` accompany the enable flag. A paused source or
+family cannot be resumed by worker startup.
+
 ## Geography containment
 
 Every ingested observation must fit an active QA-reviewed coverage row:

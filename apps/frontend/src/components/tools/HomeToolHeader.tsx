@@ -71,7 +71,7 @@ export default function HomeToolHeader({
       {showBackLink && resolvedBackHref ? (
         <Link
           href={resolvedBackHref}
-          className="no-brand-style inline-flex min-h-[40px] w-fit items-center gap-2 text-sm font-medium text-[hsl(var(--mobile-brand-strong))] hover:text-[hsl(var(--mobile-brand-strong))]/90"
+          className="no-brand-style inline-flex min-h-[40px] w-fit items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-950"
         >
           <ArrowLeft className="h-4 w-4" />
           {backLabel}

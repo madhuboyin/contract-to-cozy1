@@ -138,7 +138,7 @@ function ObservationCard({
               href={item.source.url}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-flex items-center text-primary underline"
+              className="no-brand-style mt-1 inline-flex items-center font-medium text-slate-700 underline hover:text-slate-950"
             >
               Open exact source <ExternalLink className="ml-1 h-3.5 w-3.5" />
             </a>
@@ -248,9 +248,13 @@ function CoordinateMap({
   );
 }
 
-export default function NeighborhoodChangeRadarClient() {
+export default function NeighborhoodChangeRadarClient({
+  propertyId: explicitPropertyId,
+}: {
+  propertyId?: string;
+} = {}) {
   const params = useParams<{ id: string }>();
-  const propertyId = params.id;
+  const propertyId = explicitPropertyId ?? params.id;
   const [view, setView] = React.useState<'LIST' | 'MAP'>('LIST');
   const query = useQuery({
     queryKey: ['around-your-home', propertyId],

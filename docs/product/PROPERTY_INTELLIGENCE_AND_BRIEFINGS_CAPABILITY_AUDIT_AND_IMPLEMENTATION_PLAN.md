@@ -1257,6 +1257,19 @@ Work:
 - define launch gates by source family, not route completeness; and
 - remove old models and flags after acceptance.
 
+Implementation progress (July 30, 2026):
+
+- the production NYC Department of City Planning ZAP adapter now emits typed,
+  factual planning observations from the official public dataset;
+- the reviewed Manhattan pilot activation is encoded as an audited,
+  county-scoped `PILOT` family gate with source/family kill switches and
+  fail-closed treatment of paused or rejected sources;
+- the scheduled worker uses the canonical ingestion pipeline, supports
+  non-persisting dry runs, and exposes a per-job production rollback flag; and
+- a fixture-gated desktop/mobile browser suite now covers source disclosure,
+  geographic precision, follow/seen outcomes, canonical-owner handoff,
+  degraded-source truthfulness, and automated accessibility.
+
 **Exit gate:** Each launched source family meets coverage, freshness, trust,
 usefulness, and operational-response thresholds.
 

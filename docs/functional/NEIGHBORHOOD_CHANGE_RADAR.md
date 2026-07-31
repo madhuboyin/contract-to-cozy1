@@ -23,11 +23,16 @@ homeowner experience and all new writes no longer use that model.
   neighborhood sentiment.
 - Synthetic source coverage is prohibited.
 
-Operational pilot activation therefore requires an actual authoritative provider contract and an
-explicit reviewed geography. The repository does not pre-approve a provider or invent a pilot
-record. Administrators use the shared `/api/admin/property-intelligence/sources` review, coverage,
-and ingest endpoints; `/api/admin/around-your-home/quality` provides the filtered pilot-family
-quality view.
+The first production adapter is the NYC Department of City Planning Zoning Application Portal
+(ZAP) project dataset. Its reviewed pilot is limited to Manhattan/New York County and preserves
+county-level precision because the source does not provide project coordinates in this feed.
+Activation requires named review evidence in deployment configuration and writes the source,
+coverage, Planning-family `PILOT` gate, and audit record before ingestion. The source and family
+kill switches remain authoritative and cannot be cleared by worker startup.
+
+Administrators can still use the shared `/api/admin/property-intelligence/sources` review,
+coverage, and ingest endpoints; `/api/admin/around-your-home/quality` provides the filtered
+pilot-family quality view.
 
 ## Source and revision flow
 

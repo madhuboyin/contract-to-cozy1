@@ -152,6 +152,15 @@ data:
   # permit-fetch, generate-diy-ai-guide) without review.
   WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED: "true"
   WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED: "true"
+  # Reviewed public-data pilot: NYC Department of City Planning ZAP projects,
+  # limited to Manhattan/New York County and county-level matching. The job
+  # persists the source, family PILOT gate, and audit evidence before ingest.
+  WORKER_JOB_NYC_ZAP_PLANNING_INGEST_ENABLED: "true"
+  NYC_ZAP_PILOT_ENABLED: "true"
+  NYC_ZAP_PILOT_COUNTIES: "NEW YORK COUNTY"
+  NYC_ZAP_PILOT_REVIEWED_BY: "property-intelligence-plan-review"
+  NYC_ZAP_PILOT_REVIEW_REFERENCE: "PIB-2026-07-30-NYC-ZAP-MANHATTAN"
+  NYC_ZAP_PLANNING_INGEST_CRON: "35 3 * * *"
   # Launch closed until AIRNOW_API_KEY is added to app-secrets and an
   # allowlisted dry run confirms the 2026 latitudeLongitude endpoints.
   WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED: "false"

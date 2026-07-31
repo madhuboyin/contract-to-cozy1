@@ -8,6 +8,24 @@ The architecture is built on a **shared registry** (`workerJobRegistry.ts`) that
 
 ---
 
+## NYC ZAP Planning Ingest
+
+`nyc-zap-planning-ingest` checks the public NYC Department of City Planning ZAP
+project dataset for the explicitly reviewed Manhattan/New York County pilot.
+It normalizes public application lifecycle facts into canonical Property
+Intelligence observations, preserves county-level precision, and relies on the
+common revision, matching, Property Change, source-health, and kill-switch
+contracts.
+
+The job is enabled only when both
+`WORKER_JOB_NYC_ZAP_PLANNING_INGEST_ENABLED=true` and
+`NYC_ZAP_PILOT_ENABLED=true`. Named review ownership and a durable review
+reference are mandatory. The default schedule is daily at 03:35
+America/New_York and can be overridden with
+`NYC_ZAP_PLANNING_INGEST_CRON`.
+
+---
+
 ## Architecture
 
 ```
