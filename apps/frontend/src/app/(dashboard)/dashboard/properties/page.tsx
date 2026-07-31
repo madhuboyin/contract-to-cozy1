@@ -105,7 +105,7 @@ export default function PropertiesPage() {
     'seller-prep': 'Home tools > Seller Prep',
     'home-timeline': 'Home tools > Home Timeline',
     'status-board': 'Home tools > Status Board',
-    'home-score': 'Reports > Home Score Report',
+    'home-score': 'Property Intelligence > Property Brief',
     reports: 'Home Admin > Reports',
     ...HOME_TOOL_NAV_LABELS,
   };
@@ -128,7 +128,7 @@ export default function PropertiesPage() {
     if (navTarget === 'seller-prep') return appendForwardedQuery(`/dashboard/properties/${propertyId}/seller-prep`);
     if (navTarget === 'home-timeline') return appendForwardedQuery(`/dashboard/properties/${propertyId}/timeline`);
     if (navTarget === 'status-board') return appendForwardedQuery(`/dashboard/properties/${propertyId}/status-board`);
-    if (navTarget === 'home-score') return appendForwardedQuery(`/dashboard/properties/${propertyId}/home-score`);
+    if (navTarget === 'home-score') return appendForwardedQuery(`/dashboard/properties/${propertyId}/property-brief`);
     if (navTarget === 'reports') return appendForwardedQuery(`/dashboard/properties/${propertyId}/reports`);
     if (navTarget === 'protect') return appendForwardedQuery(`/dashboard/properties/${propertyId}/protect`);
     if (navTarget === 'save') return appendForwardedQuery(`/dashboard/properties/${propertyId}/save`);

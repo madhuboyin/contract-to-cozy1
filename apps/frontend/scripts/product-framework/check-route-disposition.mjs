@@ -76,7 +76,7 @@ export const ROUTE_DISPOSITION_RULES = [
     id: 'public-core',
     disposition: 'KEEP_PUBLIC',
     rationale: 'Public acquisition, authentication, legal, invitation, and controlled-share routes remain public.',
-    matches: matches(/^\/$|^\/(login|signup|forgot-password|reset-password|verify-email|privacy|terms|cookies|offline)(?:\/|$)|^\/(invite|knowledge|gazette\/share|home-score\/share|reports\/share|renovation-closeout\/share|vault\/\[propertyId\])(?:\/|$)/),
+    matches: matches(/^\/$|^\/(login|signup|forgot-password|reset-password|verify-email|privacy|terms|cookies|offline)(?:\/|$)|^\/(invite|knowledge|gazette\/share|home-briefing\/share|home-score\/share|property-brief\/share|reports\/share|renovation-closeout\/share|vault\/\[propertyId\])(?:\/|$)/),
   },
   {
     id: 'onboarding-entry',

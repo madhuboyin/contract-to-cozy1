@@ -59,17 +59,15 @@ import {
   MobileSectionHeader,
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
-import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
 import { SmartContextToolsSection } from './components/SmartContextToolsSection';
 import PlantAdvisorDashboardCard from './components/PlantAdvisorDashboardCard';
 import EnvironmentReportDashboardCard from './components/EnvironmentReportDashboardCard';
-import GazetteDashboardCard from './components/GazetteDashboardCard';
+import MeaningfulChangeHomeCard from './components/MeaningfulChangeHomeCard';
 import RefinanceRadarDashboardCard from './components/RefinanceRadarDashboardCard';
 import HomeRecordReadinessCard from './components/HomeRecordReadinessCard';
 import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner';
 import PropertyHubTemplate from './components/PropertyHubTemplate';
-import { HomeScoreReportCard } from '../../components/HomeScoreReportCard';
 import { buildHealthInsightResolutionHref } from '@/lib/navigation/healthInsightRouting';
 
 
@@ -418,10 +416,9 @@ const PropertyOverview = ({ property }: { property: Property }) => {
 
   return (
     <div className="space-y-6">
-      {/* 1. HomeScore Hero */}
-      <HomeScoreReportCard propertyId={property.id} />
+      <MeaningfulChangeHomeCard propertyId={property.id} />
 
-      {/* 2. Property snapshot and contextual dashboard cards */}
+      {/* Property snapshot and contextual dashboard cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <MobileCard className="bg-white border-2 border-slate-50 shadow-sm p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -468,8 +465,6 @@ const PropertyOverview = ({ property }: { property: Property }) => {
         <HomeRecordReadinessCard propertyId={property.id} />
 
         <EnvironmentReportDashboardCard propertyId={property.id} />
-
-        <GazetteDashboardCard propertyId={property.id} />
 
         <RefinanceRadarDashboardCard propertyId={property.id} />
 

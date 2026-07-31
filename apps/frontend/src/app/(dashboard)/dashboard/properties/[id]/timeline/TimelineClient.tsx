@@ -10,6 +10,11 @@ import { formatEnumLabel } from '@/lib/utils/formatters';
 import { EmptyStateCard } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../components/route-templates/DetailTemplate';
 import TableToMobileCards from '../components/route-templates/TableToMobileCards';
+import {
+  DatePrecisionLabel,
+  PropertyIntelligenceJourneyLinks,
+  TruthStateBadge,
+} from '@/components/property-intelligence/PropertyIntelligencePrimitives';
 
 // Optional: if you have shared UI components already, feel free to swap these out.
 // Keeping it plain + drop-in.
@@ -258,10 +263,8 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                     {shortImportanceLabel(event.importance) ? <Badge>{shortImportanceLabel(event.importance)}</Badge> : null}
                     {event.subtype && event.subtype !== event.type ? <Badge>{formatEnumLabel(event.subtype)}</Badge> : null}
                     <Badge>{formatEnumLabel(event.observationKind)}</Badge>
-                    <Badge>{formatEnumLabel(event.verificationStatus)}</Badge>
-                    {event.datePrecision !== 'EXACT_DATE' ? (
-                      <Badge>{formatEnumLabel(event.datePrecision)}</Badge>
-                    ) : null}
+                    <TruthStateBadge state={event.verificationStatus} />
+                    <DatePrecisionLabel value={event.occurredAt} precision={event.datePrecision} />
                   </div>
                 ),
               },
@@ -339,6 +342,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
       >
         {filters}
         {body}
+        <PropertyIntelligenceJourneyLinks propertyId={propertyId} current="TIMELINE" />
       </DetailTemplate>
     )
   );

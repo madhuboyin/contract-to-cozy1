@@ -27,7 +27,7 @@ function propertyChooserFallback(href: string): string {
   }
 
   if (/^\/dashboard\/properties\/:propertyId\/home-score(\/|$)/.test(href)) {
-    return '/dashboard/properties?navTarget=home-score';
+    return '/dashboard/properties?navTarget=property-brief';
   }
 
   return '/dashboard/properties';

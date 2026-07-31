@@ -15,6 +15,11 @@
 > linked evidence. Long-term hazard context belongs to Environment Report;
 > current conditions belong to Environment Report and Incidents; follow-up
 > obligations belong to Home Actions.
+>
+> The implementation detail below the current-contract note is retained as a
+> historical migration record. It is not the homeowner-serving contract. See
+> [PROPERTY_INTELLIGENCE_UNIFIED_EXPERIENCE.md](./PROPERTY_INTELLIGENCE_UNIFIED_EXPERIENCE.md)
+> for current navigation, trust presentation, and support behavior.
 
 ## Overview
 

@@ -96,6 +96,7 @@ export type ToolReadiness = {
 };
 
 const HOME_OUTCOME_BY_GROUP: Record<MobileHomeToolGroupKey, ToolOutcomeCategory> = {
+  intelligence: 'UNDERSTAND_HOME',
   monitoring: 'PROTECT_MONITOR',
   history: 'UNDERSTAND_HOME',
   negotiation: 'DECIDE_COMPARE',
@@ -109,6 +110,10 @@ const HOME_OUTCOME_BY_GROUP: Record<MobileHomeToolGroupKey, ToolOutcomeCategory>
 const HOME_OUTCOME_BY_TOOL: Partial<Record<string, ToolOutcomeCategory>> = {
   'home-digital-twin': 'DECIDE_COMPARE',
   'home-timeline': 'UNDERSTAND_HOME',
+  'home-briefing': 'PROTECT_MONITOR',
+  'home-risk-replay': 'UNDERSTAND_HOME',
+  'neighborhood-change-radar': 'PROTECT_MONITOR',
+  'property-brief': 'UNDERSTAND_HOME',
 };
 
 const AI_OUTCOME_BY_GROUP: Record<MobileAiToolGroup, ToolOutcomeCategory> = {

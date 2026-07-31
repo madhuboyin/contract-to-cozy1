@@ -29,6 +29,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  MissingFactPrompt,
+  PropertyIntelligenceJourneyLinks,
+  SourceCoverageSummary,
+  TruthStateBadge,
+  WhyThisMatters,
+} from '@/components/property-intelligence/PropertyIntelligencePrimitives';
+import {
   getPastHazardExposure,
   linkPastHazardEvidence,
   type PastHazardExposureItem,
@@ -36,12 +43,6 @@ import {
   type PropertyHazardEvidenceKind,
   recordPastHazardOutcome,
 } from './homeRiskReplayApi';
-
-const EFFECT_LABELS: Record<PropertyHazardEffectStatus, string> = {
-  UNKNOWN: 'Effect unknown',
-  NO_OBSERVED_EFFECT: 'No observed effect reported',
-  OBSERVED_EFFECT_CONFIRMED: 'Observed effect reported',
-};
 
 const EVIDENCE_KINDS: PropertyHazardEvidenceKind[] = [
   'CLAIM',
@@ -60,12 +61,6 @@ function formatDate(value: string | null) {
   if (!value) return 'Date not provided';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
-}
-
-function effectTone(status: PropertyHazardEffectStatus): 'good' | 'elevated' | 'danger' {
-  if (status === 'NO_OBSERVED_EFFECT') return 'good';
-  if (status === 'OBSERVED_EFFECT_CONFIRMED') return 'danger';
-  return 'elevated';
 }
 
 function HazardCard({
@@ -144,9 +139,7 @@ function HazardCard({
             {item.hazardLabel} · {formatDate(item.observedAt ?? item.effectiveFrom)}
           </p>
         </div>
-        <StatusChip tone={effectTone(item.propertyEffect.status)}>
-          {EFFECT_LABELS[item.propertyEffect.status]}
-        </StatusChip>
+        <TruthStateBadge state={item.propertyEffect.status} />
       </div>
 
       {item.factualSummary ? <p className="text-sm text-slate-700">{item.factualSummary}</p> : null}
@@ -182,13 +175,15 @@ function HazardCard({
         </div>
       </div>
 
-      <Alert>
-        <ShieldAlert className="h-4 w-4" />
-        <AlertTitle>Property effect is separate from geographic exposure</AlertTitle>
-        <AlertDescription>
-          {item.interpretation.boundedExplanation} {item.propertyEffect.explanation}
-        </AlertDescription>
-      </Alert>
+      <WhyThisMatters boundary={item.interpretation.boundedExplanation}>
+        {item.propertyEffect.explanation}
+      </WhyThisMatters>
+
+      <MissingFactPrompt
+        propertyId={propertyId}
+        facts={item.interpretation.missingFacts}
+        benefit="Adding these facts can improve relevance, but it will never turn a nearby event into evidence of property damage."
+      />
 
       {item.propertyEffect.note ? (
         <div className="rounded-xl border border-slate-200 p-3 text-sm">
@@ -433,32 +428,13 @@ export default function HomeRiskReplayClient() {
               title="Source coverage"
               subtitle="The providers, geography, and checked-through dates that bound this view."
             />
-            <MobileCard className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusChip tone={exposure.coverage.state === 'CURRENT' ? 'good' : 'elevated'}>
-                  {humanize(exposure.coverage.state)}
-                </StatusChip>
-                <span className="text-sm text-slate-600">
-                  {exposure.coverage.checkedThrough
-                    ? `Checked through ${formatDate(exposure.coverage.checkedThrough)}`
-                    : 'No checked-through date is available'}
-                </span>
-              </div>
-              {exposure.coverage.sources.map((source) => (
-                <div key={source.source.key} className="rounded-lg border border-slate-200 p-3 text-sm">
-                  <p className="font-medium text-slate-950">{source.source.provider}</p>
-                  <p className="mt-1 text-slate-600">
-                    {source.geography
-                      ? `${humanize(source.geography.type)} ${source.geography.key ?? ''}`
-                      : 'No reviewed coverage for this property geography'}
-                    {' · '}{humanize(source.state)}
-                  </p>
-                </div>
-              ))}
-              {exposure.coverage.limitations.map((limitation) => (
-                <p key={limitation} className="text-xs text-slate-600">• {limitation}</p>
-              ))}
-            </MobileCard>
+            <SourceCoverageSummary
+              state={exposure.coverage.state}
+              checkedThrough={exposure.coverage.checkedThrough}
+              comprehensive={exposure.coverage.comprehensive}
+              sources={exposure.coverage.sources}
+              limitations={exposure.coverage.limitations}
+            />
           </MobileSection>
 
           <MobileSection>
@@ -497,6 +473,8 @@ export default function HomeRiskReplayClient() {
           </MobileSection>
         </>
       )}
+
+      <PropertyIntelligenceJourneyLinks propertyId={propertyId} current="SOURCE_VIEW" />
 
       <Link
         href={`/dashboard/properties/${propertyId}`}

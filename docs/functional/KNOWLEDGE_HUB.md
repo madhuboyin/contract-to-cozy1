@@ -799,8 +799,8 @@ Examples:
 
 - `/knowledge?propertyId=<id>`
 - `/knowledge/top-homeowner-concerns-in-2026?propertyId=<id>`
-- `/dashboard/properties/<id>/home-score`
-- `/dashboard/properties?navTarget=home-score` when no active property exists
+- `/dashboard/properties/<id>/property-brief`
+- `/dashboard/properties?navTarget=property-brief` when no active property exists
 
 ## Current Content / Seeded Demo State
 

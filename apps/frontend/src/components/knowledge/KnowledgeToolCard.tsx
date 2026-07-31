@@ -15,16 +15,19 @@ type KnowledgeToolCardProps = {
 
 function getDefaultButtonLabel(toolLink: KnowledgeArticleToolLink) {
   const tool = toolLink.productTool;
-  const isHomeScoreTool = tool.slug === 'home-score-report' || /home score/i.test(tool.name);
+  const isPropertyBriefTool =
+    tool.slug === 'home-score-report'
+    || tool.slug === 'property-brief'
+    || /home score|property brief/i.test(tool.name);
 
   if (toolLink.ctaLabel) {
     return toolLink.ctaLabel;
   }
 
-  if (isHomeScoreTool) {
-    if (toolLink.placement === 'HERO') return 'Run your Home Score';
-    if (toolLink.placement === 'INLINE') return 'Open Home Score';
-    if (toolLink.placement === 'END_OF_ARTICLE') return 'Get your Home Score';
+  if (isPropertyBriefTool) {
+    if (toolLink.placement === 'HERO') return 'Prepare a Property Brief';
+    if (toolLink.placement === 'INLINE') return 'Open Property Brief';
+    if (toolLink.placement === 'END_OF_ARTICLE') return 'Create a Property Brief';
   }
 
   if (toolLink.placement === 'INLINE') {

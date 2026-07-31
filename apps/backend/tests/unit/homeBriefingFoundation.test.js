@@ -140,13 +140,13 @@ test('legacy Gazette writes are archive-only and cannot generate new editions', 
 
 test('Home card renders only for unread material and homeowner UI exposes canonical actions and preferences', () => {
   const dashboard = readRepository(
-    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/GazetteDashboardCard.tsx',
+    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/MeaningfulChangeHomeCard.tsx',
   );
   const client = readRepository(
     'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-briefing/HomeBriefingClient.tsx',
   );
   assert.match(dashboard, /unreadMaterialCount === 0\) return null/);
-  assert.doesNotMatch(dashboard, /being set up|Quiet week/);
+  assert.doesNotMatch(dashboard, /being set up|Quiet week|all-clear/i);
   assert.match(client, /Open canonical owner/);
   assert.match(client, /Source lineage/);
   assert.match(client, /Delivery preferences/);

@@ -150,8 +150,8 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                 ) : null}
                 {propertyId ? (
                   <p className="max-w-[54rem] text-[14px] leading-7 text-slate-500 md:text-[15px]">
-                    If you&apos;ve added your home to Contract-to-Cozy, your Home Score report evaluates these same
-                    factors against your systems, maintenance history, and climate exposure.
+                    If you&apos;ve added your home to Contract-to-Cozy, a selective Property Brief can include
+                    relevant verified facts and history with explicit sources, as-of dates, and unknowns.
                   </p>
                 ) : null}
                 {article.excerpt ? (

@@ -28,6 +28,10 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
+  PropertyIntelligenceJourneyLinks,
+  SourceCoverageSummary,
+} from '@/components/property-intelligence/PropertyIntelligencePrimitives';
+import {
   createHomeBriefingShare,
   generateHomeBriefing,
   getHomeBriefing,
@@ -357,23 +361,19 @@ export default function HomeBriefingClient() {
 
           <MobileSection>
             <MobileSectionHeader title="Source health snapshot" subtitle="Captured with this delivery; coverage is never presented as comprehensive." />
-            <MobileCard className="space-y-2">
-              {query.data.current.sourceHealthSnapshot.sources.map((source) => (
-                <div key={source.source.key} className="rounded-lg border border-slate-200 p-3 text-sm">
-                  <p className="font-medium text-slate-950">{source.source.provider}</p>
-                  <p className="mt-1 text-slate-600">
-                    {humanize(source.source.family)} · {humanize(source.state)}
-                    {' · '}checked through {formatDate(source.checkedThrough)}
-                  </p>
-                </div>
-              ))}
-              {!query.data.current.sourceHealthSnapshot.sources.length ? (
-                <p className="text-sm text-slate-600">No reviewed Property Intelligence source coverage was configured.</p>
-              ) : null}
-              {query.data.current.sourceHealthSnapshot.scopeLimitations.map((limitation) => (
-                <p key={limitation} className="text-xs text-slate-600">• {limitation}</p>
-              ))}
-            </MobileCard>
+            <SourceCoverageSummary
+              state={
+                query.data.current.sourceHealthSnapshot.sources.length === 0
+                  ? 'NOT_CONFIGURED'
+                  : query.data.current.sourceHealthSnapshot.sources.every((source) => source.state === 'CURRENT')
+                    ? 'CURRENT'
+                    : 'DEGRADED'
+              }
+              comprehensive={query.data.current.sourceHealthSnapshot.comprehensive}
+              sources={query.data.current.sourceHealthSnapshot.sources}
+              limitations={query.data.current.sourceHealthSnapshot.scopeLimitations}
+              title="Delivery source-health snapshot"
+            />
           </MobileSection>
 
           {selectedItems.length > 0 ? (
@@ -416,6 +416,7 @@ export default function HomeBriefingClient() {
           </MobileSection>
         </>
       )}
+      <PropertyIntelligenceJourneyLinks propertyId={propertyId} current="BRIEFING" />
     </MobilePageContainer>
   );
 }

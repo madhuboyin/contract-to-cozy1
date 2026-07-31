@@ -898,7 +898,7 @@ export default function PropertyHealthDetailPage() {
             </Link>
           )}
           <Link
-            href={`/dashboard/properties/${propertyId}/home-score`}
+            href={`/dashboard/properties/${propertyId}/timeline`}
             className="inline-flex items-center gap-1 font-medium text-teal-600 hover:underline"
           >
             See full system history
@@ -1365,9 +1365,9 @@ export default function PropertyHealthDetailPage() {
                   )}
                 </div>
               </Link>
-              <Link href={`/dashboard/properties/${propertyId}/home-score`} className="block">
+              <Link href={`/dashboard/properties/${propertyId}/property-brief`} className="block">
                 <div className="rounded-xl border border-teal-200/60 bg-teal-50/60 hover:bg-teal-50 active:scale-[0.99] transition-all px-3 py-2 cursor-pointer flex items-center justify-between gap-2">
-                  <p className="text-[12px] font-medium text-teal-700">View Full Home Score Report</p>
+                  <p className="text-[12px] font-medium text-teal-700">Prepare a Property Brief</p>
                   <ArrowRight className="h-3.5 w-3.5 text-teal-600 shrink-0" />
                 </div>
               </Link>
@@ -1657,14 +1657,14 @@ export default function PropertyHealthDetailPage() {
                 <FileText className="h-6 w-6 text-teal-700" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-base font-semibold text-slate-900">Want the full picture?</h4>
+                <h4 className="text-base font-semibold text-slate-900">Need a selective shareable snapshot?</h4>
                 <p className="text-sm text-slate-500 mt-0.5 leading-snug">
-                  The Home Score Report includes your property timeline, benchmark comparison, system health details, and a personalised improvement plan.
+                  Property Brief lets you choose verified facts, history, evidence, and explicit unknowns for a declared recipient purpose.
                 </p>
               </div>
-              <Link href={`/dashboard/properties/${propertyId}/home-score`} className="shrink-0">
+              <Link href={`/dashboard/properties/${propertyId}/property-brief`} className="shrink-0">
                 <Button className="bg-teal-700 hover:bg-teal-600 text-white whitespace-nowrap">
-                  View Full Home Score Report <ArrowRight className="h-4 w-4 ml-1.5" />
+                  Prepare Property Brief <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               </Link>
             </div>
@@ -1689,11 +1689,11 @@ export default function PropertyHealthDetailPage() {
           </p>
           <div className="mt-4 pt-3 border-t border-slate-100">
             <Link
-              href={`/dashboard/properties/${propertyId}/home-score`}
+              href={`/dashboard/properties/${propertyId}/timeline`}
               onClick={() => setShowScoreModal(false)}
               className="text-sm text-teal-600 font-medium hover:underline flex items-center gap-1"
             >
-              View full Home Score Report — timeline, benchmarks &amp; improvement plan
+              Open verified Home Timeline
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>

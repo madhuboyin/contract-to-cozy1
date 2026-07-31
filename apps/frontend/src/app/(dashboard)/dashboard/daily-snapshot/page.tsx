@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, Clock3, ShieldAlert, Sparkles, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock3, Sparkles, XCircle } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
   completeMicroAction,
@@ -12,7 +12,6 @@ import {
   getDailySnapshot,
   type PulseSummaryKind,
 } from '@/lib/api/dailySnapshotApi';
-import { api } from '@/lib/api/client';
 import {
   CompactInsightStrip,
   EmptyStateCard,
@@ -20,7 +19,6 @@ import {
   MobilePageContainer,
   MobileSection,
   MobileSectionHeader,
-  PreviewListRow,
   StatusChip,
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
@@ -59,16 +57,6 @@ export default function DailySnapshotPage() {
     },
     enabled: !!propertyId,
     staleTime: 30 * 1000,
-  });
-
-  const historyQuery = useQuery({
-    queryKey: ['daily-snapshot-history', propertyId],
-    queryFn: async () => {
-      if (!propertyId) return [];
-      return (await api.getHomeScoreHistory(propertyId, 12)) || [];
-    },
-    enabled: !!propertyId,
-    staleTime: 5 * 60 * 1000,
   });
 
   const completeMutation = useMutation({
@@ -216,22 +204,6 @@ export default function DailySnapshotPage() {
             </SummaryCard>
           </MobileSection>
 
-          <MobileSection>
-            <SummaryCard
-              title="Weekly Trend Log"
-              subtitle="Recent HomeScore changes"
-              action={<StatusChip tone="info">{historyQuery.data?.length || 0} points</StatusChip>}
-            >
-              {(historyQuery.data || []).slice(-5).reverse().map((point) => (
-                <PreviewListRow
-                  key={point.weekStart}
-                  title={new Date(point.weekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  subtitle={`Home ${Math.round(point.homeScore)} • Health ${Math.round(point.healthScore || 0)} • Risk ${Math.round(point.riskScore || 0)}`}
-                  icon={<ShieldAlert className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
-                />
-              ))}
-            </SummaryCard>
-          </MobileSection>
         </>
       ) : (
         <EmptyStateCard title="Snapshot unavailable" description="Could not load the daily snapshot for this property." />

@@ -43,7 +43,7 @@ export const TOOL_ICON_MAP = {
     'savings-benefits': { concept: 'recommendations', icon: 'sparkles', category: 'home' },
     'home-digital-twin': { concept: 'property', icon: 'building-2', category: 'home' },
     'plant-advisor': { concept: 'recommendations', icon: 'sparkles', category: 'home' },
-    'home-gazette': { concept: 'documents', icon: 'file-text', category: 'home' },
+    'home-briefing': { concept: 'documents', icon: 'file-text', category: 'home' },
   },
   insights: {
     'daily-snapshot': { concept: 'calendar', icon: 'calendar-days', category: 'insight' },

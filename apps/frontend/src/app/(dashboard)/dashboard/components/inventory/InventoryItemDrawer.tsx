@@ -65,9 +65,7 @@ import {
   buildServicePriceRadarHref,
   inferServicePriceRadarCategoryFromInventoryItem,
 } from '@/lib/routes/servicePriceRadar';
-import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { resolveInventoryItemRoomId } from '@/lib/inventory/resolveInventoryItemRoomId';
-import { trackHomeRiskReplayEvent } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-risk-replay/homeRiskReplayApi';
 
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
 
@@ -148,32 +146,14 @@ function pct(n?: number) {
   return `${Math.round(v * 100)}%`;
 }
 
-function inferReplayWindowFromInventoryItem(item: Pick<InventoryItem, 'category' | 'name'>): 'since_built' | 'last_5_years' {
-  const text = `${item.category || ''} ${item.name || ''}`.toLowerCase();
-  if (/(electric|panel|breaker|outlet|wiring|generator|surge|hvac|furnace|heat pump|ac\b|air conditioning|thermostat)/.test(text)) {
-    return 'last_5_years';
-  }
-  return 'since_built';
-}
-
-function getReplayLabelForInventoryItem(item: Pick<InventoryItem, 'category' | 'name'>): string {
+function getHazardHistoryLabelForInventoryItem(item: Pick<InventoryItem, 'category' | 'name'>): string {
   const text = `${item.category || ''} ${item.name || ''}`.toLowerCase();
 
-  if (/(roof|shingle|gutter|exterior|siding|flashing)/.test(text)) return 'Roof history';
-  if (/(plumb|pipe|drain|water heater|leak|sump|basement|flood|sewer)/.test(text)) return 'Water stress';
+  if (/(roof|shingle|gutter|exterior|siding|flashing)/.test(text)) return 'Roof hazard history';
+  if (/(plumb|pipe|drain|water heater|leak|sump|basement|flood|sewer)/.test(text)) return 'Water hazard history';
   if (/(electric|panel|breaker|outlet|wiring|generator|surge)/.test(text)) return 'Outage history';
-  if (/(hvac|furnace|heat pump|ac\b|air conditioning|thermostat)/.test(text)) return 'Heat stress';
-  return 'Replay history';
-}
-
-function getReplayLinkedSystemType(item: Pick<InventoryItem, 'category' | 'name'>): string {
-  const text = `${item.category || ''} ${item.name || ''}`.toLowerCase();
-
-  if (/(roof|shingle|gutter|exterior|siding|flashing)/.test(text)) return 'roof';
-  if (/(plumb|pipe|drain|water heater|leak|sump|basement|sewer)/.test(text)) return 'plumbing';
-  if (/(electric|panel|breaker|outlet|wiring|generator|surge)/.test(text)) return 'electrical';
-  if (/(hvac|furnace|heat pump|ac\b|air conditioning|thermostat)/.test(text)) return 'hvac';
-  return String(item.category || 'system').toLowerCase();
+  if (/(hvac|furnace|heat pump|ac\b|air conditioning|thermostat)/.test(text)) return 'Weather exposure';
+  return 'Past hazard exposure';
 }
 
 export default function InventoryItemDrawer(props: {
@@ -963,26 +943,11 @@ useEffect(() => {
     );
   }
 
-  function openHomeRiskReplay() {
+  function openPastHazardExposure() {
     if (!props.initialItem) return;
     props.onClose();
-    trackHomeRiskReplayEvent(props.propertyId, {
-      event: 'CONTEXTUAL_ENTRY_CLICKED',
-      section: 'entry',
-      metadata: {
-        tool_name: 'home_risk_replay',
-        property_id: props.propertyId,
-        launch_surface: 'system_detail',
-        suggested_focus_type: null,
-        linked_system_type: getReplayLinkedSystemType(props.initialItem),
-      },
-    }).catch(() => undefined);
     router.push(
-      buildHomeRiskReplayHref({
-        propertyId: props.propertyId,
-        windowType: inferReplayWindowFromInventoryItem(props.initialItem),
-        launchSurface: 'system_detail',
-      })
+      `/dashboard/properties/${props.propertyId}/tools/home-risk-replay?launchSurface=system_detail`
     );
   }
 
@@ -1522,13 +1487,13 @@ useEffect(() => {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={openHomeRiskReplay}
+                    onClick={openPastHazardExposure}
                     disabled={!isEdit}
                     title={!isEdit ? 'Save this item first to view matched history' : undefined}
                     className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
                   >
                     <History className="h-3.5 w-3.5" />
-                    {props.initialItem ? getReplayLabelForInventoryItem(props.initialItem) : 'Replay history'}
+                    {props.initialItem ? getHazardHistoryLabelForInventoryItem(props.initialItem) : 'Past hazard exposure'}
                   </button>
                   <button
                     type="button"

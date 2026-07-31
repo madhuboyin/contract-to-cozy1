@@ -26,6 +26,13 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
+  MissingFactPrompt,
+  PropertyIntelligenceJourneyLinks,
+  SourceCoverageSummary,
+  TruthStateBadge,
+  WhyThisMatters,
+} from '@/components/property-intelligence/PropertyIntelligencePrimitives';
+import {
   type AroundYourHomeItem,
   getAroundYourHome,
   updateAroundYourHomeInteraction,
@@ -106,14 +113,21 @@ function ObservationCard({
             {item.observation.effectiveTo ? `–${formatDate(item.observation.effectiveTo)}` : ''}
           </p>
         </div>
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-sm">
-          <p className="font-medium text-slate-950">Possible relevance</p>
-          <p className="mt-1 text-slate-700">{item.possibleRelevance.explanation}</p>
-          <p className="mt-2 text-xs leading-relaxed text-slate-600">
-            {item.possibleRelevance.boundary}
-          </p>
+        <div className="space-y-2">
+          <TruthStateBadge
+            state={item.possibleRelevance.relevance === 'UNKNOWN' ? 'UNKNOWN' : 'INFERRED'}
+          />
+          <WhyThisMatters boundary={item.possibleRelevance.boundary}>
+            {item.possibleRelevance.explanation}
+          </WhyThisMatters>
         </div>
       </div>
+
+      <MissingFactPrompt
+        propertyId={propertyId}
+        facts={item.possibleRelevance.missingFacts}
+        benefit="More property context can refine possible relevance. It does not create a value, demand, insurance, or household-impact prediction."
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
         <div className="text-xs text-slate-600">
@@ -280,27 +294,21 @@ export default function NeighborhoodChangeRadarClient() {
         <>
           <MobileSection>
             <MobileSectionHeader title="Source coverage" subtitle="Only reviewed providers and QA-reviewed geographies can appear here." />
-            <MobileCard className="space-y-3">
-              <StatusChip tone={query.data.coverage.state === 'CURRENT' ? 'good' : 'elevated'}>
-                {humanize(query.data.coverage.state)}
-              </StatusChip>
-              {query.data.coverage.sources.map((source) => (
-                <div key={source.source.key} className="rounded-lg border border-slate-200 p-3 text-sm">
-                  <p className="font-medium text-slate-950">{source.source.provider}</p>
-                  <p className="mt-1 text-slate-600">
-                    {humanize(source.source.family)} · {source.geography
-                      ? `${humanize(source.geography.type)} ${source.geography.key ?? ''}`
-                      : 'No reviewed property coverage'}
-                    {' · '}{humanize(source.state)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">Checked through {formatDate(source.checkedThrough)}</p>
-                </div>
-              ))}
-              {query.data.coverage.limitations.map((limitation) => (
-                <p key={limitation} className="text-xs text-slate-600">• {limitation}</p>
-              ))}
-            </MobileCard>
+            <SourceCoverageSummary
+              state={query.data.coverage.state}
+              comprehensive={query.data.coverage.comprehensive}
+              sources={query.data.coverage.sources}
+              limitations={query.data.coverage.limitations}
+            />
           </MobileSection>
+
+          {query.data.property.latitude == null || query.data.property.longitude == null ? (
+            <MissingFactPrompt
+              propertyId={propertyId}
+              facts={['property coordinates']}
+              benefit="A verified property location allows exact point and polygon matching. Without it, only honest area-level context can be shown."
+            />
+          ) : null}
 
           <MobileSection>
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -345,6 +353,7 @@ export default function NeighborhoodChangeRadarClient() {
           </Alert>
         </>
       )}
+      <PropertyIntelligenceJourneyLinks propertyId={propertyId} current="SOURCE_VIEW" />
     </MobilePageContainer>
   );
 }

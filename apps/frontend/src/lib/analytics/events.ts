@@ -121,7 +121,7 @@ export type CtcTool =
   | 'hoa'
   | 'home-digital-twin'
   | 'home-digital-will'
-  | 'home-gazette'
+  | 'home-briefing'
   | 'home-habit-coach'
   | 'home-renovation-risk-advisor'
   | 'home-risk-replay'

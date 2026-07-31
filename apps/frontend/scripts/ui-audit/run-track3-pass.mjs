@@ -93,6 +93,8 @@ function classify(route) {
     route.startsWith('/knowledge') ||
     route.startsWith('/marketplace') ||
     route.startsWith('/gazette/share') ||
+    route.startsWith('/home-briefing/share') ||
+    route.startsWith('/property-brief/share') ||
     route.startsWith('/reports/share') ||
     route.startsWith('/vault/');
   const isPropertyTool = route.startsWith('/dashboard/properties/[id]/tools/');

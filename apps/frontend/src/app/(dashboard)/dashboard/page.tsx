@@ -33,7 +33,6 @@ import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCaro
 import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard';
 import HomeSavingsCheckToolCard from './components/HomeSavingsCheckToolCard';
 import MorningHomePulseCard from './components/MorningHomePulseCard';
-import { HomeScoreReportCard } from './components/HomeScoreReportCard';
 import { ShareVaultButton } from './components/ShareVaultButton';
 import PriorityAlertBanner from '@/components/dashboard/PriorityAlertBanner';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -284,11 +283,11 @@ function buildBackendSignalBadgeLabel(reasonCode: BackendSignalReasonCode) {
 }
 
 function buildBackendSignalActionMeta(reasonCode: BackendSignalReasonCode, detail: string) {
-  const toolLabel = reasonCode === 'RISK_SPIKE' ? 'Home Risk Replay'
+  const toolLabel = reasonCode === 'RISK_SPIKE' ? 'Past Hazard Exposure'
     : reasonCode === 'COST_PRESSURE' ? 'Break-Even Tool'
     : 'Financial Scenario';
   const supportingText = reasonCode === 'RISK_SPIKE'
-    ? 'Open to replay recent conditions and understand what changed in your risk profile.'
+    ? 'Open sourced past hazard records and confirm what is actually known about this home.'
     : reasonCode === 'COST_PRESSURE'
     ? 'Open to validate break-even timing with your current financial assumptions.'
     : 'Return to your in-progress financial scenario to continue where you left off.';

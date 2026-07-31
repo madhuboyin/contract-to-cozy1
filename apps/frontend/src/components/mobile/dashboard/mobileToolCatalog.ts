@@ -437,6 +437,7 @@ export const MOBILE_HOME_AI_TILE_KEYS: MobileAiToolKey[] = [
 ];
 
 export type MobileHomeToolGroupKey =
+  | 'intelligence'
   | 'monitoring'
   | 'history'
   | 'negotiation'
@@ -464,6 +465,11 @@ export const MOBILE_HOME_TOOL_GROUPS: Array<{
   title: string;
   summary: string;
 }> = [
+  {
+    key: 'intelligence',
+    title: 'Property Intelligence',
+    summary: 'Understand meaningful changes, source context, verified history, and selective sharing',
+  },
   {
     key: 'monitoring',
     title: 'Monitoring + Awareness',
@@ -520,7 +526,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-risk-replay',
-    group: 'history',
+    group: 'intelligence',
     name: 'Past Hazard Exposure',
     description: "Review sourced historical hazards near this property",
     desktopDescription: "See which reviewed historical hazard records matched the property while keeping proximity separate from confirmed damage.",
@@ -654,7 +660,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-timeline',
-    group: 'history',
+    group: 'intelligence',
     name: 'Home Timeline',
     description: "Track milestones over time",
     desktopDescription: "Track key milestones, major work, and ownership events over your home timeline.",
@@ -687,7 +693,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'property-brief',
-    group: 'records',
+    group: 'intelligence',
     name: 'Property Brief',
     description: "Prepare a selective evidence-backed property summary",
     desktopDescription: "Create a purpose-specific brief from selected verified facts, history, evidence, and explicit unknowns.",
@@ -723,7 +729,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'neighborhood-change-radar',
-    group: 'monitoring',
+    group: 'intelligence',
     name: 'Around Your Home',
     description: "Review sourced planning, infrastructure, land-use, and other local changes.",
     desktopDescription: "Review factual local changes and their lifecycle while keeping possible relevance separate from unsupported value predictions.",
@@ -794,7 +800,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   },
   {
     key: 'home-briefing',
-    group: 'monitoring',
+    group: 'intelligence',
     name: 'Home Briefing',
     description: "Review meaningful changes since your last engagement.",
     desktopDescription: "Review new canonical property changes, Home Actions, and source-health limitations without filler.",

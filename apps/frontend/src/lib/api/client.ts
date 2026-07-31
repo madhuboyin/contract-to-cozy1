@@ -44,10 +44,6 @@ import {
   AssetRiskDetail,
   PrimaryRiskSummary, // [NEW IMPORT]
   PropertyScoreSnapshotSummary,
-  HomeScoreReport,
-  HomeScoreCorrection,
-  HomeScoreReason,
-  HomeScoreTrendPoint,
   // [NEW IMPORTS] for AI Report Typing
   OracleReport, 
   BudgetForecast,
@@ -2036,13 +2032,6 @@ class APIClient {
     return null;
   }
   
-  /**
-   * Get AI-generated climate risk insights for a property
-   */
-  async getClimateRiskSummary(propertyId: string): Promise<APIResponse<any>> {
-    return this.request(`/api/risk/${propertyId}/ai/climate-risk`);
-  }
-
   async getPrimaryRiskSummary(): Promise<PrimaryRiskSummary | null> {
     // Uses the request helper since the new endpoint returns the standard { success: true, data: ... } wrapper
     const response = await this.request<PrimaryRiskSummary>('/api/risk/summary/primary');
@@ -2074,120 +2063,6 @@ class APIClient {
       return response.data;
     }
     return null;
-  }
-
-  async getHomeScoreReport(
-    propertyId: string,
-    weeks = 26
-  ): Promise<HomeScoreReport | null> {
-    const response = await this.request<{ report: HomeScoreReport }>(
-      `/api/properties/${propertyId}/home-score/report?weeks=${weeks}`
-    );
-
-    if (response.success && response.data?.report) {
-      return response.data.report;
-    }
-    return null;
-  }
-
-  async refreshHomeScoreReport(
-    propertyId: string,
-    weeks = 26
-  ): Promise<HomeScoreReport | null> {
-    const response = await this.request<{ report: HomeScoreReport }>(
-      `/api/properties/${propertyId}/home-score/report/refresh?weeks=${weeks}`,
-      {
-        method: 'POST',
-        body: {},
-      }
-    );
-
-    if (response.success && response.data?.report) {
-      return response.data.report;
-    }
-    return null;
-  }
-
-  async getHomeScoreHistory(
-    propertyId: string,
-    weeks = 52
-  ): Promise<HomeScoreTrendPoint[] | null> {
-    const response = await this.request<{ history: HomeScoreTrendPoint[] }>(
-      `/api/properties/${propertyId}/home-score/history?weeks=${weeks}`
-    );
-
-    if (response.success && Array.isArray(response.data?.history)) {
-      return response.data.history;
-    }
-    return null;
-  }
-
-  async getHomeScoreFactors(
-    propertyId: string,
-    weeks = 26
-  ): Promise<HomeScoreReason[] | null> {
-    const response = await this.request<{ factors: HomeScoreReason[] }>(
-      `/api/properties/${propertyId}/home-score/factors?weeks=${weeks}`
-    );
-
-    if (response.success && Array.isArray(response.data?.factors)) {
-      return response.data.factors;
-    }
-    return null;
-  }
-
-  async getHomeScoreCorrections(
-    propertyId: string,
-    limit = 20
-  ): Promise<HomeScoreCorrection[] | null> {
-    const response = await this.request<{ corrections: HomeScoreCorrection[] }>(
-      `/api/properties/${propertyId}/home-score/corrections?limit=${limit}`
-    );
-
-    if (response.success && Array.isArray(response.data?.corrections)) {
-      return response.data.corrections;
-    }
-    return null;
-  }
-
-  async submitHomeScoreCorrection(
-    propertyId: string,
-    payload: {
-      fieldKey: string;
-      title?: string;
-      detail: string;
-      proposedValue?: string;
-    }
-  ): Promise<HomeScoreCorrection | null> {
-    const response = await this.request<{ correction: HomeScoreCorrection }>(
-      `/api/properties/${propertyId}/home-score/corrections`,
-      {
-        method: 'POST',
-        body: payload,
-      }
-    );
-
-    if (response.success && response.data?.correction) {
-      return response.data.correction;
-    }
-    return null;
-  }
-
-  async trackHomeScoreEvent(
-    propertyId: string,
-    payload: {
-      event: string;
-      section?: string;
-      metadata?: Record<string, unknown>;
-    }
-  ): Promise<void> {
-    await this.request<{ ok: true }>(
-      `/api/properties/${propertyId}/home-score/events`,
-      {
-        method: 'POST',
-        body: payload,
-      }
-    );
   }
 
   async trackNegotiationShieldEvent(
@@ -2234,23 +2109,6 @@ class APIClient {
   ): Promise<void> {
     await this.request<{ ok: true }>(
       `/api/properties/${propertyId}/radar/analytics-events`,
-      {
-        method: 'POST',
-        body: payload,
-      }
-    );
-  }
-
-  async trackHomeRiskReplayEvent(
-    propertyId: string,
-    payload: {
-      event: string;
-      section?: string;
-      metadata?: Record<string, unknown>;
-    }
-  ): Promise<void> {
-    await this.request<{ ok: true }>(
-      `/api/properties/${propertyId}/risk-replay/events`,
       {
         method: 'POST',
         body: payload,
@@ -6177,19 +6035,6 @@ class APIClient {
     return this.request(`/api/bookings/${bookingId}/endorsement`);
   }
 
-  async createBuyerShareToken(
-    propertyId: string
-  ): Promise<APIResponse<{ shareUrl: string; expiresAt: string; token: string }>> {
-    return this.request(`/api/properties/${propertyId}/home-score/share`, { method: 'POST' });
-  }
-
-  async revokeBuyerShareToken(propertyId: string): Promise<APIResponse<void>> {
-    return this.request(`/api/properties/${propertyId}/home-score/share/revoke`, { method: 'POST' });
-  }
-
-  async getBuyerReportPreview(propertyId: string): Promise<APIResponse<{ report: import('@/types').BuyerReportData }>> {
-    return this.request(`/api/properties/${propertyId}/home-score/buyer-preview`);
-  }
 }
 
 // Export singleton instance

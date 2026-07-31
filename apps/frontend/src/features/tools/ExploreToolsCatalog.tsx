@@ -40,6 +40,14 @@ type ExploreCapability = {
   readiness: { state: 'READY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE'; reasons: string[] };
 };
 
+const PROPERTY_INTELLIGENCE_TOOL_IDS = new Set([
+  'home-briefing',
+  'home-risk-replay',
+  'home-timeline',
+  'neighborhood-change-radar',
+  'property-brief',
+]);
+
 function ExploreCapabilityTile({
   tool,
   propertyId,
@@ -130,17 +138,32 @@ export function ExploreToolsCatalog({
     })),
     [catalogQuery.data?.capabilities, context, launchContext, propertyId],
   );
-  const groupedTools = CAPABILITY_OUTCOME_CATEGORIES.map((category) => ({
+  const matchesQuery = React.useCallback((tool: ExploreCapability, groupTitle: string) => {
+    if (!normalizedQuery) return true;
+    return [...tool.searchTerms, groupTitle]
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedQuery);
+  }, [normalizedQuery]);
+  const propertyIntelligenceGroup = {
+    key: 'PROPERTY_INTELLIGENCE',
+    title: 'Property Intelligence',
+    summary: 'Move from a meaningful change to source context, action, verified history, or a selective brief.',
+    items: tools.filter((tool) =>
+      PROPERTY_INTELLIGENCE_TOOL_IDS.has(tool.id) && matchesQuery(tool, 'Property Intelligence')),
+  };
+  const outcomeGroups = CAPABILITY_OUTCOME_CATEGORIES.map((category) => ({
     ...category,
     items: tools.filter((tool) => {
+      if (PROPERTY_INTELLIGENCE_TOOL_IDS.has(tool.id)) return false;
       if (tool.outcomeCategory !== category.key) return false;
-      if (!normalizedQuery) return true;
-      return [...tool.searchTerms, category.title]
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedQuery);
+      return matchesQuery(tool, category.title);
     }),
   })).filter((group) => group.items.length > 0);
+  const groupedTools = [
+    ...(propertyIntelligenceGroup.items.length > 0 ? [propertyIntelligenceGroup] : []),
+    ...outcomeGroups,
+  ];
   const visibleTools = groupedTools.flatMap((group) => group.items);
 
   React.useEffect(() => {

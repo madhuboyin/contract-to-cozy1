@@ -249,9 +249,9 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
       buildHref(`/dashboard/properties/${propertyId}/tools/plant-advisor`, query),
   },
   '/dashboard/home-gazette': {
-    navTarget: 'home-gazette',
+    navTarget: 'home-briefing',
     toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/tools/home-gazette`, query),
+      buildHref(`/dashboard/properties/${propertyId}/tools/home-briefing`, query),
   },
   '/dashboard/home-digital-will': {
     navTarget: 'home-digital-will',
@@ -305,7 +305,7 @@ const NAV_TARGET_SUFFIXES: Record<string, string> = {
   'break-even': 'tools/break-even',
   'capital-timeline': 'tools/capital-timeline',
   'plant-advisor': 'tools/plant-advisor',
-  'home-gazette': 'tools/home-gazette',
+  'home-gazette': 'tools/home-briefing',
   'home-digital-will': 'tools/home-digital-will',
   'price-finalization': 'tools/price-finalization',
   'quote-comparison': 'tools/quote-comparison',
