@@ -7,7 +7,7 @@ import { APIError } from '../../../middleware/error.middleware';
 import { prisma } from '../../../lib/prisma';
 import { GazetteMapper } from '../mappers/gazette.mapper';
 import { GazetteShareService } from '../services/gazetteShare.service';
-import { shareTokenSchema, editionIdParamSchema } from '../validators/gazette.validators';
+import { shareTokenSchema } from '../validators/gazette.validators';
 import { GazetteEdition } from '@prisma/client';
 import { analyticsEmitter } from '../../../services/analytics/emitter';
 import { AnalyticsModule, AnalyticsFeature, AnalyticsSource, ProductAnalyticsEventType } from '../../../services/analytics/taxonomy';
@@ -159,49 +159,6 @@ export class GazetteController {
   }
 
   /**
-   * POST /api/gazette/editions/:editionId/share
-   * Create a share link for a published edition.
-   */
-  static async createShare(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const { editionId } = req.params;
-
-      const edition = await GazetteController.verifyEditionOwnership(
-        editionId,
-        req.user!.userId,
-      );
-
-      const { rawToken, shareLink } = await GazetteShareService.createShareLink(
-        editionId,
-        edition.propertyId,
-        req.body?.metadata,
-      );
-
-      // Analytics — share created
-      analyticsEmitter.track({
-        eventType: ProductAnalyticsEventType.TOOL_USED,
-        userId: req.user!.userId,
-        propertyId: edition.propertyId,
-        moduleKey: AnalyticsModule.GAZETTE,
-        featureKey: AnalyticsFeature.GAZETTE_SHARE,
-        source: AnalyticsSource.HOME_TOOLS,
-        metadataJson: { editionId },
-      });
-
-      return res.status(201).json({
-        success: true,
-        data: {
-          shareLink: GazetteMapper.toShareLinkDto(shareLink, rawToken),
-          shareUrl: `/gazette/share/${rawToken}`,
-          note: 'Store the rawToken securely — it will not be shown again.',
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  /**
    * POST /api/gazette/share/:token/revoke
    * Revoke a share link by its raw token.
    */
@@ -228,41 +185,6 @@ export class GazetteController {
       return res.json({
         success: true,
         data: GazetteMapper.toShareLinkDto(shareLink),
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  /**
-   * GET /api/gazette/share/:token (public — no auth required)
-   * Return a share-safe view of an edition using a raw share token.
-   */
-  static async getPublicEdition(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const { token } = req.params;
-
-      if (!token) {
-        throw new APIError('Token is required', 400, 'MISSING_TOKEN');
-      }
-
-      // Validate token format before hitting the DB — prevents timing attacks on arbitrary strings
-      const tokenParse = shareTokenSchema.safeParse(token);
-      if (!tokenParse.success) {
-        throw new APIError('Share link not found or expired', 404, 'SHARE_LINK_NOT_FOUND');
-      }
-
-      const { edition, shareLink } = await GazetteShareService.getPublicEdition(token);
-
-      return res.json({
-        success: true,
-        data: {
-          edition,
-          shareInfo: {
-            viewCount: shareLink.viewCount,
-            expiresAt: shareLink.expiresAt,
-          },
-        },
       });
     } catch (err) {
       next(err);

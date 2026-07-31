@@ -16,7 +16,7 @@ deleted by application cleanup.
 | Home Risk Replay dummy ingest | Worker job, fixtures, schedule, and environment flags removed | Existing synthetic records require an audited identification/export plan before deletion |
 | Neighborhood Change Radar client | Unused frontend client and DTO layer removed; use Around Your Home | Legacy neighborhood models remain while canonical observation migration is verified |
 | Home Score | Legacy score/report consumers still exist and are outside this cleanup | All report, certification, evidence, source-run, forecast, benchmark, share, and export records remain |
-| Home Gazette | Compatibility and archive paths remain; generation is backed by Home Briefing | Gazette edition, story, candidate, trace, job, and share records remain |
+| Home Gazette | Collector, ranking, assembly, publishing, and AI editorial code removed; write/public-share URLs return `410 Gone`; archive reads and existing-token revocation remain; delivery is backed by Home Briefing | Gazette edition, story, candidate, trace, job, and share records remain |
 
 ## Data retirement gate
 

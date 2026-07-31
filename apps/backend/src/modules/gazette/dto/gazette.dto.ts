@@ -84,8 +84,6 @@ export interface GazetteShareLinkDto {
   viewCount: number;
   createdAt: Date;
   updatedAt: Date;
-  // rawToken is only present immediately after creation — never stored
-  rawToken?: string;
 }
 
 export interface GazetteCandidateDto {

@@ -310,27 +310,23 @@ COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts \
 COPY apps/backend/src/refinanceRadar/config/refinanceRadar.config.ts src/shared/backend/refinanceRadar/config/
 COPY apps/backend/src/refinanceRadar/types/refinanceRadar.types.ts src/shared/backend/refinanceRadar/types/
 COPY apps/backend/src/refinanceRadar/mappers/refinanceRadar.mapper.ts src/shared/backend/refinanceRadar/mappers/
-# Copy gazette module files needed by gazetteGeneration.job.ts
-COPY apps/backend/src/modules/gazette/services/gazetteGenerationJobRunner.service.ts \
-     apps/backend/src/modules/gazette/services/gazetteSignalCollector.service.ts \
-     apps/backend/src/modules/gazette/services/gazetteCandidateFactory.service.ts \
-     apps/backend/src/modules/gazette/services/gazetteRankingEngine.service.ts \
-     apps/backend/src/modules/gazette/services/gazetteEditionAssembler.service.ts \
-     apps/backend/src/modules/gazette/services/gazettePublish.service.ts \
-     src/shared/backend/modules/gazette/services/
-COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialService.ts \
-     apps/backend/src/modules/gazette/editorial/GazetteHeadlineGenerator.ts \
-     apps/backend/src/modules/gazette/editorial/GazetteSummaryGenerator.ts \
-     apps/backend/src/modules/gazette/editorial/GazetteEditorialFallbackBuilder.ts \
-     apps/backend/src/modules/gazette/editorial/GazetteEditorialPromptBuilder.ts \
-     apps/backend/src/modules/gazette/editorial/GazetteEditorialValidator.ts \
-     apps/backend/src/modules/gazette/editorial/GazetteEditorialTypes.ts \
-     apps/backend/src/modules/gazette/editorial/GazetteTickerGenerator.ts \
-     apps/backend/src/modules/gazette/editorial/gazetteFallbackEditorial.ts \
-     src/shared/backend/modules/gazette/editorial/
-COPY apps/backend/src/modules/gazette/types/gazette.types.ts src/shared/backend/modules/gazette/types/
-COPY apps/backend/src/modules/gazette/dto/gazette.dto.ts src/shared/backend/modules/gazette/dto/
-COPY apps/backend/src/modules/gazette/mappers/gazette.mapper.ts src/shared/backend/modules/gazette/mappers/
+# Home Briefing delivery is the canonical successor to Gazette generation.
+COPY apps/backend/src/homeBriefing/homeBriefing.service.ts \
+     apps/backend/src/homeBriefing/homeBriefing.contracts.ts \
+     src/shared/backend/homeBriefing/
+COPY apps/backend/src/propertyIntelligence/propertyIntelligence.service.ts \
+     apps/backend/src/propertyIntelligence/propertyIntelligence.contracts.ts \
+     apps/backend/src/propertyIntelligence/coverageHealth.ts \
+     apps/backend/src/propertyIntelligence/geoMatching.ts \
+     apps/backend/src/propertyIntelligence/impactBoundaries.ts \
+     apps/backend/src/propertyIntelligence/observationIdentity.ts \
+     apps/backend/src/propertyIntelligence/sourceGovernance.ts \
+     apps/backend/src/propertyIntelligence/launchGovernance.ts \
+     src/shared/backend/propertyIntelligence/
+COPY apps/backend/src/propertyChanges/propertyChange.service.ts \
+     apps/backend/src/propertyChanges/propertyChange.contracts.ts \
+     apps/backend/src/propertyChanges/propertyChangePolicy.ts \
+     src/shared/backend/propertyChanges/
 COPY apps/backend/src/config/ai-constants.ts src/shared/backend/config/
 # Copy guidance engine service files needed by coverageLapseIncidents, freezeRiskIncidents,
 # neighborhoodChangeNotification jobs and by incident.service.ts

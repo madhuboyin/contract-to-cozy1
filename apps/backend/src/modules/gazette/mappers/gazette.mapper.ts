@@ -193,13 +193,9 @@ export class GazetteMapper {
   }
 
   /**
-   * Map a GazetteShareLink to a GazetteShareLinkDto.
-   * Optionally include the rawToken (only available immediately after creation).
+   * Map an existing Gazette share record after owner revocation.
    */
-  static toShareLinkDto(
-    shareLink: GazetteShareLink,
-    rawToken?: string,
-  ): GazetteShareLinkDto {
+  static toShareLinkDto(shareLink: GazetteShareLink): GazetteShareLinkDto {
     return {
       id: shareLink.id,
       editionId: shareLink.editionId,
@@ -212,68 +208,7 @@ export class GazetteMapper {
       viewCount: shareLink.viewCount,
       createdAt: shareLink.createdAt,
       updatedAt: shareLink.updatedAt,
-      ...(rawToken !== undefined ? { rawToken } : {}),
     };
   }
 
-  /**
-   * Map an edition for public share view — only include share-safe stories.
-   * Strips internal fields (rankExplanation, aiPromptVersion, etc.).
-   */
-  static toPublicEditionDto(
-    edition: GazetteEdition & { stories: GazetteStory[] },
-  ): GazetteEditionDto {
-    const safestories = edition.stories.filter((s) => s.shareSafe);
-
-    return {
-      id: edition.id,
-      propertyId: edition.propertyId,
-      weekStart: edition.weekStart,
-      weekEnd: edition.weekEnd,
-      publishDate: edition.publishDate,
-      status: edition.status as string,
-      minQualifiedNeeded: edition.minQualifiedNeeded,
-      qualifiedCount: edition.qualifiedCount,
-      selectedCount: edition.selectedCount,
-      skippedReason: null, // don't expose internal skip reason publicly
-      heroStoryId: edition.heroStoryId,
-      summaryHeadline: edition.summaryHeadline,
-      summaryDeck: edition.summaryDeck,
-      tickerJson: edition.tickerJson,
-      generationVersion: null, // don't expose version publicly
-      publishedAt: edition.publishedAt,
-      createdAt: edition.createdAt,
-      updatedAt: edition.updatedAt,
-      stories: safestories.map((story) => ({
-        id: story.id,
-        editionId: story.editionId,
-        propertyId: story.propertyId,
-        sourceFeature: story.sourceFeature,
-        sourceEventId: null, // strip internal source ref
-        storyCategory: story.storyCategory as string,
-        storyTag: story.storyTag,
-        entityType: story.entityType,
-        entityId: story.entityId,
-        priority: story.priority as string,
-        rank: story.rank,
-        isHero: story.isHero,
-        headline: story.headline,
-        dek: story.dek,
-        summary: story.summary,
-        supportingFactsJson: null, // strip internal facts from public view
-        urgencyScore: null,
-        financialImpactEstimate: null,
-        confidenceScore: null,
-        noveltyScore: null,
-        engagementScore: null,
-        compositeScore: null,
-        primaryDeepLink: story.primaryDeepLink,
-        secondaryDeepLink: story.secondaryDeepLink,
-        shareSafe: story.shareSafe,
-        aiStatus: story.aiStatus as string,
-        createdAt: story.createdAt,
-        updatedAt: story.updatedAt,
-      })),
-    };
-  }
 }

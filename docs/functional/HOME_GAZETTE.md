@@ -35,6 +35,13 @@ The retained scheduler key is `home-gazette-generation` for deployment compatibi
 now calls `generateDueHomeBriefings()` rather than the Gazette signal collector, ranking engine, or
 AI editorial pipeline.
 
+The legacy signal collector, candidate factory, ranking engine, edition assembler, publisher, and
+AI editorial implementation have been removed. Admin generation and regeneration URLs remain
+authenticated `410 Gone` compatibility boundaries. Existing editions, candidates, selection
+traces, generation jobs, stories, and share links remain archive data; operators can inspect those
+records, and owners can revoke an existing share token, but no new Gazette record is generated or
+shared.
+
 ## Deterministic baseline
 
 `home-briefing-deterministic-v1` is the trusted editorial baseline.

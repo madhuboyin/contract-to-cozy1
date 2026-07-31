@@ -148,8 +148,8 @@ test('Phase 7 archetypes retain the same surface readiness when required facts a
 });
 
 test('remaining Phase 7 API, UI, and worker consumers use shared contracts', () => {
-  const gazette = read('../../src/modules/gazette/services/gazetteGenerationJobRunner.service.ts');
-  assert.ok(gazette.includes("'HOME_GAZETTE'"));
+  const gazetteArchive = read('../../src/modules/gazette/controllers/gazette.controller.ts');
+  assert.ok(gazetteArchive.includes("'HOME_GAZETTE'"));
   const knowledge = read('../../src/controllers/knowledgeHub.controller.ts');
   assert.ok(knowledge.includes("'KNOWLEDGE_TARGETING'"));
   const assistant = read('../../src/services/gemini.service.ts');
@@ -162,11 +162,11 @@ test('remaining Phase 7 API, UI, and worker consumers use shared contracts', () 
   const workerPolicy = read('../../../workers/src/services/aggregationDeliveryPolicy.ts');
   assert.ok(workerPolicy.includes("getAggregationContextBatch(scoped, 'NOTIFICATIONS'"));
   const gazetteWorker = read('../../../workers/src/jobs/gazetteGeneration.job.ts');
-  assert.ok(gazetteWorker.includes('getAggregationContextBatch'));
+  assert.ok(gazetteWorker.includes('generateDueHomeBriefings'));
   const knowledgeUi = read('../../../frontend/src/components/knowledge/KnowledgeTargetingNotice.tsx');
   assert.ok(knowledgeUi.includes('PropertyContextStatusNotice'));
-  const gazetteUi = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/HomeGazetteClient.tsx');
-  assert.ok(gazetteUi.includes('Gazette context'));
+  const briefingUi = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-briefing/HomeBriefingClient.tsx');
+  assert.ok(briefingUi.includes('Source lineage'));
 });
 
 test('production personalization entries pass actor identity into Property Context trait evaluation', () => {

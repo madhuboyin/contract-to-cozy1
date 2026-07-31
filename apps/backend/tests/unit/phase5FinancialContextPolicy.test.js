@@ -106,18 +106,15 @@ test('mortgage consumers are routed through PropertyFinancingProfile', () => {
   assert.doesNotMatch(refinance, /PropertyFinanceSnapshot/);
 });
 
-test('refinance home signals use only the current open radar opportunity', () => {
-  const collector = read('../../src/modules/gazette/services/gazetteSignalCollector.service.ts');
-  const refinanceCollector = collector.slice(
-    collector.indexOf('private static async _collectRefinance'),
-    collector.indexOf('private static async _collectNeighborhood'),
-  );
+test('briefing consumes canonical changes instead of rebuilding refinance signals', () => {
+  const briefing = read('../../src/homeBriefing/homeBriefing.service.ts');
+  assert.match(briefing, /prisma\.propertyChange\.findMany/);
+  assert.doesNotMatch(briefing, /refinanceOpportunity|propertyRefinanceRadarState/);
 
-  assert.match(refinanceCollector, /propertyRefinanceRadarState\.findUnique/);
-  assert.match(refinanceCollector, /radarState\?\.radarState === 'OPEN'/);
-  assert.match(refinanceCollector, /radarState\.currentOpportunity/);
-  assert.doesNotMatch(refinanceCollector, /refinanceOpportunity\.findFirst/);
-  assert.match(refinanceCollector, /tools\/mortgage-refinance-radar/);
+  const refinance = read('../../src/refinanceRadar/refinanceRadar.service.ts');
+  assert.match(refinance, /propertyRefinanceRadarState/);
+  assert.match(refinance, /REFINANCE_OPPORTUNITY_OPENED/);
+  assert.match(refinance, /REFINANCE_OPPORTUNITY_UPDATED/);
 });
 
 test('FINANCIAL context exposes canonical facts without projecting scenario assumptions', () => {
