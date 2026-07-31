@@ -175,6 +175,23 @@ export function resolveMaintenanceRecommendationWorkKey(propertyId: string, sour
   });
 }
 
+/**
+ * Home Operations Item #18 (§13.2 "Project scope coverage"): the workKey a
+ * Project's own top-level work item resolves to via resolveSubject/
+ * resolveObligation's PROJECT-with-no-relatedJourneyId branch above — but
+ * computable from just {propertyId, projectId}, for
+ * projectTracker.service.ts's completion/cancellation handoff, which only
+ * has the project record, not a live HomeAction.
+ */
+export function resolveProjectExecutionWorkKey(propertyId: string, projectId: string): string {
+  return resolveWorkKey({
+    propertyId,
+    subject: { type: 'PROJECT', id: projectId },
+    obligationType: 'PROJECT_EXECUTION',
+    occurrence: { obligationSlug: 'execution' },
+  });
+}
+
 const SOURCE_TYPE_BY_KIND: Partial<Record<HomeAction['source']['kind'], OperationalWorkSourceType>> = {
   MAINTENANCE: 'MAINTENANCE',
   GUIDANCE: 'GUIDANCE',

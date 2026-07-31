@@ -29,7 +29,7 @@ import { findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperati
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
-import { resolveGuidanceJourneyWorkKey } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
+import { resolveGuidanceJourneyWorkKey, resolveProjectExecutionWorkKey } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import { resolveInspectionFindingWorkKey, propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { invalidateStatusForInventoryItem } from './homeStatusBoard.service';
 import type { OperationalWorkItemState, OperationalWorkResponsibleParty } from '@prisma/client';
@@ -241,6 +241,64 @@ export async function syncJourneyWorkItemForProjectEvent(
     }
   } catch (err) {
     logger.warn({ err, propertyId, guidanceJourneyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
+  }
+}
+
+/**
+ * Home Operations Item #18 (§13.2 "Project scope coverage"): a Project's
+ * own top-level work item (subject PROJECT, obligation PROJECT_EXECUTION —
+ * only created for a Project with no relatedJourneyId, see
+ * homeActionWorkItem.adapter.ts's resolveSubject) is created passively
+ * whenever the Home feed resolves it, but — unlike journeys, findings, and
+ * maintenance tasks — nothing ever transitioned it on completion or
+ * cancellation. Best-effort: never blocks the project mutation.
+ */
+export async function syncProjectExecutionWorkItemOnCompletion(
+  propertyId: string,
+  projectId: string,
+  event: 'VERIFIED' | 'CANCELLED',
+): Promise<void> {
+  try {
+    const workKey = resolveProjectExecutionWorkKey(propertyId, projectId);
+    const workItem = await findWorkItemByWorkKey(propertyId, workKey);
+    if (!workItem) return;
+
+    if (event === 'VERIFIED') {
+      let state: OperationalWorkItemState = workItem.state;
+      if (state !== 'REPORTED_COMPLETE' && state !== 'VERIFIED') {
+        const reported = await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'REPORTED_COMPLETE',
+          actorType: 'SYSTEM',
+          idempotencyKey: `project-execution-verified-reported:${workItem.id}:${projectId}`,
+        });
+        state = reported.state;
+      }
+      if (state === 'REPORTED_COMPLETE') {
+        await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'VERIFIED',
+          actorType: 'SYSTEM',
+          idempotencyKey: `project-execution-verified:${workItem.id}:${projectId}`,
+        });
+      }
+      return;
+    }
+
+    // CANCELLED — the project itself no longer exists as an active
+    // obligation, unlike a cancelled project's journey (which hands back
+    // to the active backlog since the journey's own obligation persists).
+    if (workItem.state !== 'CLOSED') {
+      await transitionWorkItem({
+        workItemId: workItem.id,
+        to: 'CLOSED',
+        disposition: 'NOT_RELEVANT',
+        actorType: 'SYSTEM',
+        idempotencyKey: `project-execution-cancelled:${workItem.id}:${projectId}`,
+      });
+    }
+  } catch (err) {
+    logger.warn({ err, propertyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
   }
 }
 
@@ -993,6 +1051,7 @@ export async function cancelProject(projectId: string, propertyId: string) {
     data: { status: 'CANCELLED' },
   });
   await syncJourneyWorkItemForProjectEvent(propertyId, cancelled.guidanceJourneyId, projectId, 'CANCELLED', null);
+  await syncProjectExecutionWorkItemOnCompletion(propertyId, projectId, 'CANCELLED');
   return cancelled;
 }
 
@@ -2833,6 +2892,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
   }
   if (verifiedSuccess) {
     await syncJourneyWorkItemForProjectEvent(propertyId, result.project.guidanceJourneyId, projectId, 'VERIFIED', userId);
+    await syncProjectExecutionWorkItemOnCompletion(propertyId, projectId, 'VERIFIED');
     await propagateFindingResolutionFromExecution('PROJECT', projectId);
   }
   if (result.futureCareTaskIds?.length) {
