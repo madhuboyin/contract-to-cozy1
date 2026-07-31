@@ -1,6 +1,7 @@
 import type { OperationalWorkActorType, OperationalWorkEventType, OperationalWorkItemDisposition, OperationalWorkItemState } from '@prisma/client';
 import { applyTransition } from '../domain/transitions';
 import { findWorkItemById, recordWorkEvent, updateWorkItemState } from '../infrastructure/workItemRepository';
+import { emitWorkItemLifecycleChange } from '../infrastructure/workItemChangeEmitter';
 
 /**
  * Maps a legal state transition to the event vocabulary the parent plan
@@ -60,7 +61,7 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
     : undefined;
   const updated = await updateWorkItemState(input.workItemId, { ...result, timestampValue });
 
-  await recordWorkEvent({
+  const event = await recordWorkEvent({
     workItemId: input.workItemId,
     eventType: eventTypeForTransition(result.state, result.disposition),
     actorType: input.actorType,
@@ -68,6 +69,14 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
     idempotencyKey: input.idempotencyKey,
     payload: { from: workItem.state, to: result.state, disposition: result.disposition, ...(input.payload ?? {}) },
   });
+
+  // Item #20 (Slice 8: "digest limited to changed or due work") — best-effort,
+  // see workItemChangeEmitter.ts. event is nullable in type only for a
+  // theoretical race on the idempotent-retry lookup; recordWorkEvent always
+  // returns a row in practice for a freshly-issued idempotencyKey.
+  if (event) {
+    await emitWorkItemLifecycleChange(updated, event);
+  }
 
   return updated;
 }

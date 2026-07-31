@@ -218,6 +218,28 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'home-operations-due-digest',
+    name: 'Home Operations Due Digest',
+    description:
+      'Item #20 (Slice 8: "digest limited to changed or due work"). Emits a canonical PropertyChange for every ' +
+      'OperationalWorkItem entering its reminder-policy due window, so it surfaces on the next hourly ' +
+      'home-briefing-delivery run. Writes no user-facing state directly and is idempotent per (property, work ' +
+      'item, dueAt) — safe to re-run.',
+    category: 'NOTIFICATIONS',
+    schedule: 'Daily at 7:00 AM EST',
+    cronExpression: '0 7 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'home-operations-due-digest',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'weekly-retention-report',
     name: 'Weekly Retention Report',
     description: 'Emails a weekly activation/retention/engagement summary (ProductAnalyticsEvent) to RETENTION_REPORT_EMAIL.',

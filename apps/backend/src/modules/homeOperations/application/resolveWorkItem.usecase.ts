@@ -9,6 +9,7 @@ import {
   updateWorkItemDueFields,
   upsertWorkSource,
 } from '../infrastructure/workItemRepository';
+import { emitWorkItemLifecycleChange } from '../infrastructure/workItemChangeEmitter';
 
 /**
  * The identity resolver (parent plan section 7.5, rule 2: "an identity
@@ -60,13 +61,20 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
       missingContext: proposal.missingContext,
       sourceVersion: proposal.source.sourceVersion,
     });
-    await recordWorkEvent({
+    const event = await recordWorkEvent({
       workItemId: workItem.id,
       eventType: 'WORK_CANDIDATE_DETECTED',
       actorType: 'SYSTEM',
       idempotencyKey: `created:${workKey}`,
       payload: { sourceType: proposal.source.sourceType, sourceEntityId: proposal.source.sourceEntityId },
     });
+    // Item #20 (Slice 8: "digest limited to changed or due work") —
+    // best-effort, see workItemChangeEmitter.ts. Only the brand-new-item
+    // branch emits; a source-driven due-field refresh (Item #19 Slice 2) on
+    // an existing item is not a household-visible lifecycle event.
+    if (event) {
+      await emitWorkItemLifecycleChange(workItem, event);
+    }
   } else {
     if (canRefreshPresentationFromSource(workItem.state)) {
       workItem = await refreshWorkItemPresentation(workItem.id, {
