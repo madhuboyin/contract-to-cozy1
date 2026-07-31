@@ -161,6 +161,47 @@ test('once accepted, further resolves stop rewriting presentation fields', async
   assert.equal(sourceRow.sourceVersion, 'v3');
 });
 
+// Item #19 (§5.15) Slice 2: due-window fields refresh on a wider gate than
+// presentation fields — the confirmed bug this slice fixes.
+
+test('once accepted, further resolves keep refreshing due-window fields even though presentation fields stay frozen', async () => {
+  reset();
+  const created = await resolveAndUpsertWorkItem(proposal({
+    dueWindowStart: new Date('2026-07-25T00:00:00.000Z'),
+    dueAt: new Date('2026-08-01T00:00:00.000Z'),
+    dueWindowEnd: new Date('2026-08-08T00:00:00.000Z'),
+  }));
+  workItems.set(created.id, { ...created, state: 'ACCEPTED', acceptanceState: 'ACCEPTED' });
+
+  const resolved = await resolveAndUpsertWorkItem(proposal({
+    title: 'A completely different title',
+    dueWindowStart: new Date('2026-08-22T00:00:00.000Z'),
+    dueAt: new Date('2026-08-29T00:00:00.000Z'),
+    dueWindowEnd: new Date('2026-09-05T00:00:00.000Z'),
+    source: { sourceType: 'MAINTENANCE', sourceEntityId: 'task-1', sourceVersion: 'v3', sourceRole: 'TRIGGER' },
+  }));
+
+  assert.equal(resolved.title, 'Replace HVAC filter', 'presentation must stay frozen once accepted');
+  assert.equal(resolved.dueAt.getTime(), new Date('2026-08-29T00:00:00.000Z').getTime(), 'dueAt must refresh from source even once accepted');
+  assert.equal(resolved.dueWindowStart.getTime(), new Date('2026-08-22T00:00:00.000Z').getTime());
+  assert.equal(resolved.dueWindowEnd.getTime(), new Date('2026-09-05T00:00:00.000Z').getTime());
+});
+
+test('once CLOSED, resolves stop refreshing due-window fields too', async () => {
+  reset();
+  const created = await resolveAndUpsertWorkItem(proposal({
+    dueAt: new Date('2026-08-01T00:00:00.000Z'),
+  }));
+  workItems.set(created.id, { ...created, state: 'CLOSED', acceptanceState: 'ACCEPTED', disposition: null });
+
+  const resolved = await resolveAndUpsertWorkItem(proposal({
+    dueAt: new Date('2026-09-01T00:00:00.000Z'),
+    source: { sourceType: 'MAINTENANCE', sourceEntityId: 'task-1', sourceVersion: 'v2', sourceRole: 'TRIGGER' },
+  }));
+
+  assert.equal(resolved.dueAt.getTime(), new Date('2026-08-01T00:00:00.000Z').getTime(), 'a CLOSED item must not have its due date resurrected');
+});
+
 test('different property, subject, or obligation never merge into one work item', async () => {
   reset();
   await resolveAndUpsertWorkItem(proposal());

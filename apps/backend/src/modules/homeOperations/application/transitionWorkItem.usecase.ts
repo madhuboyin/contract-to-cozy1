@@ -26,6 +26,13 @@ function eventTypeForTransition(to: OperationalWorkItemState, disposition: Opera
   }
 }
 
+// Item #19 (§5.15) Slice 1: only these two timestamp fields represent a
+// forward-looking "check back on this" moment (deferredUntil/nextReviewAt)
+// rather than an as-of-now entry marker (acceptedAt, startedAt, etc.) — a
+// caller-supplied timestampValue is only ever honored for these, so a
+// mistaken future date can't silently rewrite historical entry timestamps.
+const FORWARD_LOOKING_TIMESTAMP_FIELDS = new Set(['deferredUntil', 'nextReviewAt']);
+
 export interface TransitionWorkItemInput {
   workItemId: string;
   to: OperationalWorkItemState;
@@ -34,6 +41,12 @@ export interface TransitionWorkItemInput {
   actorUserId?: string | null;
   idempotencyKey: string;
   payload?: Record<string, unknown> | null;
+  /**
+   * A real future date for DEFERRED (deferredUntil) or BLOCKED
+   * (nextReviewAt) — e.g. "defer until next month," not "defer as of right
+   * now." Ignored for every other target state.
+   */
+  timestampValue?: Date;
 }
 
 export async function transitionWorkItem(input: TransitionWorkItemInput) {
@@ -42,7 +55,10 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
 
   const result = applyTransition(workItem, input.to, { disposition: input.disposition });
 
-  const updated = await updateWorkItemState(input.workItemId, result);
+  const timestampValue = result.timestampField && FORWARD_LOOKING_TIMESTAMP_FIELDS.has(result.timestampField)
+    ? input.timestampValue
+    : undefined;
+  const updated = await updateWorkItemState(input.workItemId, { ...result, timestampValue });
 
   await recordWorkEvent({
     workItemId: input.workItemId,

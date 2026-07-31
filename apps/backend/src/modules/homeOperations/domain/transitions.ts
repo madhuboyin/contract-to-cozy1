@@ -112,13 +112,31 @@ export function assertClosurePairing(
 
 /**
  * Only a CANDIDATE work item's presentation fields (title/reason/expected
- * outcome/priority/safetyTier/due window/confidence/missingContext) may be
- * silently rewritten on source recalculation. Once accepted, recalculation
- * must stop overwriting homeowner-visible state — see
- * resolveWorkItem.usecase.ts.
+ * outcome/priority/safetyTier/confidence/missingContext) may be silently
+ * rewritten on source recalculation. Once accepted, recalculation must stop
+ * overwriting homeowner-visible state — see resolveWorkItem.usecase.ts.
  */
-export function canRefreshFromSource(state: OperationalWorkItemState): boolean {
+export function canRefreshPresentationFromSource(state: OperationalWorkItemState): boolean {
   return state === 'CANDIDATE';
+}
+
+/**
+ * Item #19 (§5.15) Slice 2: due-window fields (dueWindowStart/dueAt/
+ * dueWindowEnd) are a narrower, separate gate from presentation fields.
+ * Unlike title/reason/priority, a due date going stale relative to its
+ * source is a correctness bug, not a rug-pull — so this stays true across
+ * every open state, only stopping once the item is CLOSED.
+ *
+ * Known limitation, not solved by this slice: if a human has explicitly
+ * rescheduled a work item (rescheduleWorkItem.usecase.ts) and the source
+ * later recalculates to a different date, this will silently overwrite the
+ * human's reschedule back to the source's value. Detecting "has a human
+ * override since occurred" needs a persisted signal this slice doesn't add
+ * (no schema change was scoped here) — revisit if this proves to matter in
+ * practice, most naturally alongside Slice 3's RecurrencePolicy work.
+ */
+export function canRefreshDueFieldsFromSource(state: OperationalWorkItemState): boolean {
+  return state !== 'CLOSED';
 }
 
 const TIMESTAMP_FIELD_BY_STATE: Partial<Record<OperationalWorkItemState, TransitionResult['timestampField']>> = {

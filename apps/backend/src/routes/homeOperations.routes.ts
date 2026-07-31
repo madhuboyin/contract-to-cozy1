@@ -10,6 +10,8 @@ import {
   addWatcherHandler,
   removeWatcherHandler,
   transitionWorkItemHandler,
+  snoozeWorkItemHandler,
+  rescheduleWorkItemHandler,
   recordDuplicateDecisionHandler,
   recordEvidenceHandler,
 } from '../modules/homeOperations/api/homeOperations.controller';
@@ -17,6 +19,8 @@ import {
   AssignOwnerSchema,
   AddWatcherSchema,
   TransitionWorkItemSchema,
+  SnoozeWorkItemSchema,
+  RescheduleWorkItemSchema,
   RecordDuplicateDecisionSchema,
   RecordEvidenceSchema,
 } from '../modules/homeOperations/api/homeOperations.validators';
@@ -56,6 +60,18 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(TransitionWorkItemSchema),
   transitionWorkItemHandler,
+);
+router.post(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/snooze',
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(SnoozeWorkItemSchema),
+  snoozeWorkItemHandler,
+);
+router.post(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/reschedule',
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(RescheduleWorkItemSchema),
+  rescheduleWorkItemHandler,
 );
 router.post(
   '/properties/:propertyId/home-operations/work-items/:workItemId/duplicate',

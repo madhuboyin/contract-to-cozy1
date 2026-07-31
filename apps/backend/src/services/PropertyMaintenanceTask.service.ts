@@ -757,12 +757,14 @@ import {
      *
      * Known simplification: a recurring task's work item cycles back through
      * FOLLOW_UP_DUE -> ACCEPTED for its next occurrence rather than minting a
-     * new work item, but its presentation fields (including dueAt) are not
-     * refreshed at that point — canRefreshFromSource() only allows silent
-     * refresh while still CANDIDATE, by design, to protect homeowner-visible
-     * state from being rewritten out from under them. A recurring task's
-     * genuinely-new due date is therefore not reflected until a dedicated
-     * refresh path is added — a follow-up, not solved here.
+     * new work item. Its presentation fields (title/reason/etc.) stay as
+     * originally accepted — canRefreshPresentationFromSource() only allows
+     * silent refresh while still CANDIDATE, by design, to protect
+     * homeowner-visible state from being rewritten out from under them. Its
+     * due date, however, does keep refreshing post-acceptance (Item #19
+     * §5.15 Slice 2, canRefreshDueFieldsFromSource) — a stale due date is a
+     * correctness bug, not a rug-pull, so the recurring task's genuinely-new
+     * due date is reflected on the very next resolveAndUpsertWorkItem call.
      */
     /**
      * Home Operations Item #14 (Gap 1): resolves the work item for a task,

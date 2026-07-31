@@ -7,7 +7,8 @@ const {
   canTransition,
   assertTransition,
   assertClosurePairing,
-  canRefreshFromSource,
+  canRefreshPresentationFromSource,
+  canRefreshDueFieldsFromSource,
   applyTransition,
   closureDispositionRuleFor,
   IllegalWorkItemTransitionError,
@@ -57,11 +58,20 @@ test('closureDispositionRuleFor: REQUIRED from CANDIDATE, FORBIDDEN from VERIFIE
   }
 });
 
-test('canRefreshFromSource is true only for CANDIDATE', () => {
-  assert.equal(canRefreshFromSource('CANDIDATE'), true);
+test('canRefreshPresentationFromSource is true only for CANDIDATE', () => {
+  assert.equal(canRefreshPresentationFromSource('CANDIDATE'), true);
   for (const state of ['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'REPORTED_COMPLETE', 'VERIFIED', 'CLOSED']) {
-    assert.equal(canRefreshFromSource(state), false, `${state} must not be refreshable`);
+    assert.equal(canRefreshPresentationFromSource(state), false, `${state} must not be refreshable`);
   }
+});
+
+// Item #19 (§5.15) Slice 2: due-window fields refresh on a wider gate than
+// presentation fields — every open state, not just CANDIDATE.
+test('canRefreshDueFieldsFromSource is true for every state except CLOSED', () => {
+  for (const state of ['CANDIDATE', 'ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'REOPENED', 'VERIFIED', 'FOLLOW_UP_DUE']) {
+    assert.equal(canRefreshDueFieldsFromSource(state), true, `${state} should be refreshable`);
+  }
+  assert.equal(canRefreshDueFieldsFromSource('CLOSED'), false);
 });
 
 test('applyTransition to ACCEPTED sets acceptanceState and acceptedAt', () => {

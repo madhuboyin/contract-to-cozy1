@@ -30,7 +30,29 @@ export const AddWatcherSchema = z.object({
 export const TransitionWorkItemSchema = z.object({
   to: z.nativeEnum(OperationalWorkItemState),
   disposition: z.nativeEnum(OperationalWorkItemDisposition).optional(),
+  // Item #19 (§5.15) Slice 1: a real future date for DEFERRED (deferredUntil)
+  // or BLOCKED (nextReviewAt) — e.g. "defer until next month," not "defer as
+  // of right now." Ignored by the usecase for every other target state.
+  deferUntil: z.string().datetime().optional(),
 });
+
+// Item #19 (§5.15) Slice 1: snooze vs. reschedule vs. defer are distinct
+// operations — see the item's plan. Snooze never touches state or due
+// fields; reschedule deliberately overwrites the commitment; defer routes
+// through TransitionWorkItemSchema above (a state change to DEFERRED).
+
+export const SnoozeWorkItemSchema = z.object({
+  snoozedUntil: z.string().datetime().nullable(),
+});
+
+export const RescheduleWorkItemSchema = z.object({
+  dueWindowStart: z.string().datetime().nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  dueWindowEnd: z.string().datetime().nullable().optional(),
+}).refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'At least one of dueWindowStart, dueAt, or dueWindowEnd must be provided.' },
+);
 
 export const RecordDuplicateDecisionSchema = z.object({
   supersededByWorkItemId: z.string().trim().min(1),

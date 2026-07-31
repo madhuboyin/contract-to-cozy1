@@ -46,6 +46,11 @@ export const guidanceJourneySourceAdapter: WorkItemSourceAdapter<GuidanceJourney
       expectedOutcome: 'A clear next step is chosen and recorded.',
       priority: journey.status === 'ACTIVE' ? 'SOON' : 'PLAN',
       safetyTier: journey.currentStepSafetyTier ?? 'LOW_CONSEQUENCE',
+      // Item #19 (§5.15): intentionally no dueWindowStart/dueAt/dueWindowEnd
+      // — a guidance DECISION obligation has no execution-date concept by
+      // design (see the plan's non-goals). It gets only the next-review
+      // half of the model (nextReviewAt on BLOCKED), not this half. Not
+      // fabricated here to force uniformity with the other five systems.
       confidence: journey.isLowContext ? 0.4 : null,
       missingContext: journey.missingContextKeys,
       source: {

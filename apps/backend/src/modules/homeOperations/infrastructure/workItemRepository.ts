@@ -44,9 +44,6 @@ export interface RefreshWorkItemPresentationInput {
   title: string;
   homeownerReason: string;
   expectedOutcome: string;
-  dueWindowStart?: Date | null;
-  dueAt?: Date | null;
-  dueWindowEnd?: Date | null;
   confidence?: number | null;
   missingContext?: string[];
   sourceVersion?: string | null;
@@ -146,7 +143,13 @@ export async function createWorkItem(input: CreateWorkItemInput) {
   }
 }
 
-/** Only ever called when the item is still CANDIDATE (see canRefreshFromSource). */
+/**
+ * Item #19 (§5.15) Slice 2: presentation fields only now — due-window
+ * fields have their own gate/update path (canRefreshDueFieldsFromSource /
+ * updateWorkItemDueFields) since they refresh on a different, wider
+ * schedule. Only ever called when the item is still CANDIDATE (see
+ * canRefreshPresentationFromSource).
+ */
 export function refreshWorkItemPresentation(workItemId: string, input: RefreshWorkItemPresentationInput) {
   return prisma.operationalWorkItem.update({
     where: { id: workItemId },
@@ -156,9 +159,6 @@ export function refreshWorkItemPresentation(workItemId: string, input: RefreshWo
       title: input.title,
       homeownerReason: input.homeownerReason,
       expectedOutcome: input.expectedOutcome,
-      dueWindowStart: input.dueWindowStart ?? null,
-      dueAt: input.dueAt ?? null,
-      dueWindowEnd: input.dueWindowEnd ?? null,
       confidence: input.confidence ?? null,
       missingContext: input.missingContext ?? [],
       sourceVersion: input.sourceVersion ?? null,
@@ -234,6 +234,42 @@ export function updateWorkItemState(workItemId: string, input: UpdateStateInput)
       acceptanceState: input.acceptanceState,
       disposition: input.disposition,
       ...(input.timestampField ? { [input.timestampField]: input.timestampValue ?? new Date() } : {}),
+    },
+  });
+}
+
+/**
+ * Item #19 (§5.15) Slice 1: snooze never touches state or the due fields —
+ * it is purely a reminders/visibility suppression, fully reversible by
+ * passing null to clear it early (same nullable-clear convention as
+ * assignWorkItemOwner).
+ */
+export function updateWorkItemSnooze(workItemId: string, snoozedUntil: Date | null) {
+  return prisma.operationalWorkItem.update({
+    where: { id: workItemId },
+    data: { snoozedUntil },
+  });
+}
+
+export interface UpdateDueFieldsInput {
+  dueWindowStart?: Date | null;
+  dueAt?: Date | null;
+  dueWindowEnd?: Date | null;
+}
+
+/**
+ * Item #19 (§5.15) Slice 1: reschedule deliberately overwrites the
+ * commitment itself — unlike snooze, this changes what "due" means for the
+ * item. Only the fields explicitly passed are updated (a caller rescheduling
+ * just dueAt shouldn't accidentally null out an existing window).
+ */
+export function updateWorkItemDueFields(workItemId: string, input: UpdateDueFieldsInput) {
+  return prisma.operationalWorkItem.update({
+    where: { id: workItemId },
+    data: {
+      ...('dueWindowStart' in input ? { dueWindowStart: input.dueWindowStart } : {}),
+      ...('dueAt' in input ? { dueAt: input.dueAt } : {}),
+      ...('dueWindowEnd' in input ? { dueWindowEnd: input.dueWindowEnd } : {}),
     },
   });
 }

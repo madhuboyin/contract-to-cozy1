@@ -43,6 +43,8 @@ test('every Home Operations write route requires CONTRIBUTOR', () => {
     "'/properties/:propertyId/home-operations/work-items/:workItemId/watchers',",
     "'/properties/:propertyId/home-operations/work-items/:workItemId/watchers/:userId',",
     "'/properties/:propertyId/home-operations/work-items/:workItemId/transition',",
+    "'/properties/:propertyId/home-operations/work-items/:workItemId/snooze',",
+    "'/properties/:propertyId/home-operations/work-items/:workItemId/reschedule',",
     "'/properties/:propertyId/home-operations/work-items/:workItemId/duplicate',",
     "'/properties/:propertyId/home-operations/work-items/:workItemId/evidence',",
   ]) {

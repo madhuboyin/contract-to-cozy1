@@ -87,6 +87,11 @@ export const inspectionFindingSourceAdapter: WorkItemSourceAdapter<FindingWithRe
       expectedOutcome: 'The finding is addressed and the inspection record reflects the verified outcome.',
       priority: PRIORITY_MAP[finding.severity],
       safetyTier: resolveSafetyTier(finding),
+      // Item #19 (§5.15) Slice 2: intentionally no dueWindowStart/dueAt/
+      // dueWindowEnd. InspectionFinding has no calendar-due-date concept —
+      // urgency here is fully carried by severity (via priority/safetyTier
+      // above), not a deadline. Per the target model's own principle, this
+      // is a genuine "no due date" case, not a gap to fabricate a value for.
       confidence: null,
       missingContext: [],
       source: {
