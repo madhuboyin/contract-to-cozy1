@@ -128,13 +128,18 @@ const TIMESTAMP_FIELD_BY_STATE: Partial<Record<OperationalWorkItemState, Transit
   VERIFIED: 'verifiedAt',
   DEFERRED: 'deferredUntil',
   CLOSED: 'closedAt',
+  // Item #19 (§5.15) Slice 0: BLOCKED previously wrote no timestamp field
+  // at all. nextReviewAt is the shared "check back on this" field (see
+  // domain/reminderPolicy.ts) — BLOCKED is a next-review state, same
+  // family as DEFERRED, distinct from dueAt ("next execution").
+  BLOCKED: 'nextReviewAt',
 };
 
 export interface TransitionResult {
   state: OperationalWorkItemState;
   acceptanceState: OperationalWorkItemAcceptanceState;
   disposition: OperationalWorkItemDisposition | null;
-  timestampField: 'acceptedAt' | 'startedAt' | 'reportedCompletedAt' | 'verifiedAt' | 'deferredUntil' | 'dismissedAt' | 'closedAt' | null;
+  timestampField: 'acceptedAt' | 'startedAt' | 'reportedCompletedAt' | 'verifiedAt' | 'deferredUntil' | 'dismissedAt' | 'closedAt' | 'nextReviewAt' | null;
 }
 
 export function applyTransition(

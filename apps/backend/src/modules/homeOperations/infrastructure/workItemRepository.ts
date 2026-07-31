@@ -222,7 +222,7 @@ export interface UpdateStateInput {
   state: OperationalWorkItemState;
   acceptanceState: OperationalWorkItemAcceptanceState;
   disposition: OperationalWorkItemDisposition | null;
-  timestampField: 'acceptedAt' | 'startedAt' | 'reportedCompletedAt' | 'verifiedAt' | 'deferredUntil' | 'dismissedAt' | 'closedAt' | null;
+  timestampField: 'acceptedAt' | 'startedAt' | 'reportedCompletedAt' | 'verifiedAt' | 'deferredUntil' | 'dismissedAt' | 'closedAt' | 'nextReviewAt' | null;
   timestampValue?: Date;
 }
 

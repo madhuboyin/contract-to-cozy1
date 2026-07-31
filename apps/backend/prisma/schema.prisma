@@ -20200,6 +20200,11 @@ enum OperationalWorkEventType {
   FOLLOW_UP_CREATED
   WATCHER_ADDED
   WATCHER_REMOVED
+  // Item #19 (§5.15) Slice 0: snooze/reschedule are distinct operations
+  // from the DEFERRED state transition above — see domain/reminderPolicy.ts
+  // and the Slice 1 usecases that will emit these.
+  WORK_SNOOZED
+  WORK_RESCHEDULED
 }
 
 enum OperationalWorkActorType {
@@ -20263,6 +20268,17 @@ model OperationalWorkItem {
   deferredUntil       DateTime?
   dismissedAt         DateTime?
   closedAt            DateTime?
+
+  // Item #19 (§5.15) Slice 0: "next review" vs "next execution" (dueAt).
+  // nextReviewAt is the shared "check back on this" timestamp — populated
+  // for DEFERRED (mirrors deferredUntil), BLOCKED (previously wrote no
+  // timestamp at all), and Guidance DECISION obligations, which have no
+  // execution-date concept and only ever get this half of the model.
+  nextReviewAt DateTime?
+  // Snooze is deliberately distinct from defer: it never changes state or
+  // dueAt/window, is fully reversible, and only suppresses reminders/
+  // visibility until this timestamp passes.
+  snoozedUntil DateTime?
 
   // Durable, reversible duplicate/supersession decision (doc rule: "deduplication
   // decisions are durable and reversible").

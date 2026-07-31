@@ -72,6 +72,15 @@ test('applyTransition to ACCEPTED sets acceptanceState and acceptedAt', () => {
   assert.equal(result.timestampField, 'acceptedAt');
 });
 
+// Item #19 (§5.15) Slice 0: BLOCKED previously wrote no timestamp field at
+// all. nextReviewAt is the shared "check back on this" field — same family
+// as deferredUntil, distinct from dueAt ("next execution").
+test('applyTransition to BLOCKED sets nextReviewAt as its timestamp field', () => {
+  const result = applyTransition({ state: 'ACCEPTED', acceptanceState: 'ACCEPTED' }, 'BLOCKED');
+  assert.equal(result.state, 'BLOCKED');
+  assert.equal(result.timestampField, 'nextReviewAt');
+});
+
 test('applyTransition closing from CANDIDATE with a disposition declines acceptance', () => {
   const result = applyTransition({ state: 'CANDIDATE', acceptanceState: 'PROPOSED' }, 'CLOSED', { disposition: 'NOT_RELEVANT' });
   assert.equal(result.state, 'CLOSED');
