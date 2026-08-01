@@ -18,6 +18,7 @@ const nullQueue: Queue = null as unknown as Queue;
 export const getPropertyIntelligenceQueue = (): Queue => nullQueue;
 export const getPermitFetchQueue = (): Queue => nullQueue;
 export const getDetectUnpermittedWorkQueue = (): Queue => nullQueue;
+export const getRenovationEvaluationQueue = (): Queue => nullQueue;
 
 // Used by diyAiGuide.service.ts to create its own Queue instance at runtime.
 export const connection = {

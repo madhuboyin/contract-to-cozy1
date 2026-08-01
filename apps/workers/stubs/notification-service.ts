@@ -22,13 +22,19 @@ export class NotificationService {
     category?: string;
     urgency?: string;
     requiredChannels?: string[];
+    deduplicationKey?: string;
     // Accepted for type parity with the real notification.service.ts
     // (WKR-002 — apps/backend/src/config/workerExecutionPolicy.ts) but
     // unused here: this stub never enqueues a channel transport in the
     // first place, only persists the canonical in-app notification.
     transportEnabled?: boolean;
   }) {
-    const existing = input.entityType && input.entityId
+    const existing = input.deduplicationKey
+      ? await prisma.notification.findUnique({
+        where: { deduplicationKey: input.deduplicationKey },
+        include: { deliveries: true },
+      })
+      : input.entityType && input.entityId
       ? await prisma.notification.findFirst({
         where: {
           userId: input.userId,
@@ -51,6 +57,7 @@ export class NotificationService {
         entityType: input.entityType,
         entityId: input.entityId,
         recallMatchId: input.recallMatchId,
+        deduplicationKey: input.deduplicationKey,
         metadata: {
           ...input.metadata,
           category: input.category,

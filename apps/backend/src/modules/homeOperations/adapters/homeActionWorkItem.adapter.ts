@@ -1,4 +1,4 @@
-import type { HomeAction } from '../../../productFramework';
+import type { HomeAction } from '../../../productFramework/homeAction.contract';
 import type { ProposedWorkItem } from '../domain/sourceAdapter';
 import type { WorkSubject } from '../domain/workKey';
 import { resolveWorkKey } from '../domain/workKey';

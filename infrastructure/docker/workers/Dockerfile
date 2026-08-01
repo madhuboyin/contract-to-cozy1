@@ -85,6 +85,8 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/modules/homeOperations/domain \
              src/shared/backend/modules/homeOperations/infrastructure \
              src/shared/backend/neighborhoodIntelligence \
+             src/shared/backend/propertyIntelligence/pilots \
+             src/shared/backend/homeRenovationAdvisor \
              src/shared/backend/refinanceRadar/engine \
              src/shared/backend/refinanceRadar/config \
              src/shared/backend/refinanceRadar/mappers \
@@ -211,6 +213,7 @@ COPY apps/backend/src/services/projectCompliance/applicabilityPolicy.ts \
      apps/backend/src/services/projectCompliance/workScope.ts \
      apps/backend/src/services/projectCompliance/reconciliation.ts \
      apps/backend/src/services/projectCompliance/permitWorkerContext.service.ts \
+     apps/backend/src/services/projectCompliance/retroactiveCompliancePolicy.ts \
      src/shared/backend/services/projectCompliance/
 COPY apps/backend/src/services/financialContext/applicabilityPolicy.ts \
      apps/backend/src/services/financialContext/context.ts \
@@ -241,6 +244,8 @@ COPY apps/backend/src/modules/propertyContext/infrastructure/prismaAssemblers.ts
 COPY apps/backend/src/modules/propertyContext/policies/featurePolicy.ts src/shared/backend/modules/propertyContext/policies/
 # Canonical maintenance work-item projection used by PropertyMaintenanceTask.service.ts.
 COPY apps/backend/src/modules/homeOperations/adapters/maintenanceTask.adapter.ts \
+     apps/backend/src/modules/homeOperations/adapters/inspectionFinding.adapter.ts \
+     apps/backend/src/modules/homeOperations/adapters/homeActionWorkItem.adapter.ts \
      src/shared/backend/modules/homeOperations/adapters/
 COPY apps/backend/src/modules/homeOperations/application/resolveWorkItem.usecase.ts \
      apps/backend/src/modules/homeOperations/application/transitionWorkItem.usecase.ts \
@@ -325,6 +330,8 @@ COPY apps/backend/src/propertyIntelligence/propertyIntelligence.service.ts \
      apps/backend/src/propertyIntelligence/sourceGovernance.ts \
      apps/backend/src/propertyIntelligence/launchGovernance.ts \
      src/shared/backend/propertyIntelligence/
+COPY apps/backend/src/propertyIntelligence/pilots/nycZapPilot.ts \
+     src/shared/backend/propertyIntelligence/pilots/
 COPY apps/backend/src/propertyChanges/propertyChange.service.ts \
      apps/backend/src/propertyChanges/propertyChange.contracts.ts \
      apps/backend/src/propertyChanges/propertyChangePolicy.ts \
@@ -355,6 +362,8 @@ COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts \
 # (riskAssetApplicability.ts, inventoryCoverageState.service.ts, lib/prisma.ts)
 # are already copied above.
 COPY apps/backend/src/services/coverageJourneyReconciliation.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/homeStatusBoard.service.ts src/shared/backend/services/
+COPY apps/backend/src/validators/homeStatusBoard.validators.ts src/shared/backend/validators/
 # Product-framework contracts used by guidance governance and analytics lineage.
 COPY apps/backend/src/productFramework/recommendationGovernance.contract.ts \
      apps/backend/src/productFramework/recommendationResponse.contract.ts \
@@ -434,9 +443,18 @@ COPY apps/backend/src/services/propertyTax/propertyTaxSourceIngestion.service.ts
 # submission) is only used by backend routes/controllers, not worker jobs.
 COPY apps/backend/src/services/providerCompliance.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/newHomeWarrantyDeadline.service.ts src/shared/backend/services/
+# Renovation evaluation runs in-process in the worker. The Docker-only
+# tsconfig excludes this module's HTTP controller/routes and export mapper.
+COPY apps/backend/src/homeRenovationAdvisor/ src/shared/backend/homeRenovationAdvisor/
+COPY apps/backend/src/services/renovationAuthorityIntegration.service.ts \
+     apps/backend/src/services/renovationCase.service.ts \
+     src/shared/backend/services/
+COPY apps/backend/src/services/renovationCase/ src/shared/backend/services/renovationCase/
+COPY apps/backend/src/config/database.ts src/shared/backend/config/
 COPY apps/backend/src/services/incidents/integrations/providerCredentialLapse.adapter.ts src/shared/backend/services/incidents/integrations/
 # Stubs: replace backend-only deps with workers-safe equivalents
 COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
+COPY apps/workers/stubs/admin-audit-service.ts src/shared/backend/services/adminAudit.service.ts
 COPY apps/workers/stubs/notification-service.ts src/shared/backend/services/notification.service.ts
 COPY apps/workers/stubs/gemini-service.ts src/shared/backend/services/gemini.service.ts
 # Copy worker source code + TS config
