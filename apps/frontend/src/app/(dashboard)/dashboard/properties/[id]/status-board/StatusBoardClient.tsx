@@ -140,12 +140,6 @@ const RECOMMENDATION_COLORS: Record<StatusBoardRecommendation, string> = {
     "bg-gradient-to-r from-rose-50 via-red-50 to-orange-100 text-red-800 border-red-300 dark:from-rose-950/40 dark:via-red-950/40 dark:to-orange-950/30 dark:text-red-300 dark:border-red-800",
 };
 
-const RECOMMENDATION_PRIORITY: Record<StatusBoardRecommendation, number> = {
-  REPLACE_SOON: 3,
-  REPAIR: 2,
-  OK: 1,
-};
-
 const WARRANTY_COLORS: Record<WarrantyBadge, string> = {
   active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
   expiring_soon: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
@@ -542,50 +536,30 @@ export default function StatusBoardClient() {
     () => items.find((item) => item.needsInstallDateForPrediction) ?? null,
     [items]
   );
-  const priorityActionItem = useMemo(() => {
-    const urgentItems = items
-      .filter((item) => item.condition === "ACTION_NEEDED" && !item.needsInstallDateForPrediction)
-      .sort((a, b) => {
-        const recommendationDelta =
-          RECOMMENDATION_PRIORITY[b.recommendation] - RECOMMENDATION_PRIORITY[a.recommendation];
-        if (recommendationDelta !== 0) return recommendationDelta;
-        if (a.isPinned !== b.isPinned) return Number(b.isPinned) - Number(a.isPinned);
-        return (b.ageYears ?? 0) - (a.ageYears ?? 0);
-      });
-    return urgentItems[0] ?? null;
-  }, [items]);
   const pendingInstallDateCount = useMemo(
     () => items.filter((item) => item.needsInstallDateForPrediction).length,
     [items]
   );
-  const priorityActionTitle = priorityActionItem
-    ? `${formatDisplayName(priorityActionItem.displayName)} needs attention`
-    : pendingInstallDateCount > 0
+  const priorityActionTitle = pendingInstallDateCount > 0
       ? "Add missing install dates to improve confidence"
       : isApplianceActionFilter
         ? "No appliances currently need action"
         : hasNoMatchingItems
           ? "No items match these filters"
       : "No urgent status actions detected";
-  const priorityActionDescription = priorityActionItem
-    ? "Focus this item first to reduce near-term risk and keep cascading replacement costs contained."
-    : pendingInstallDateCount > 0
+  const priorityActionDescription = pendingInstallDateCount > 0
       ? `${pendingInstallDateCount} item${pendingInstallDateCount === 1 ? "" : "s"} still need install dates for stronger lifecycle predictions.`
       : isApplianceActionFilter
         ? "Your tracked appliances are not currently flagged for urgent action. Show all appliances to review their health and lifecycle details."
         : hasNoMatchingItems
           ? "Clear the active filters to return to all monitored home items."
       : "Everything is currently in a stable window. Review monitor items for preventative upkeep.";
-  const priorityImpactLabel = priorityActionItem
-    ? `${RECOMMENDATION_LABELS[priorityActionItem.recommendation]} · ${CONDITION_LABELS[priorityActionItem.condition]}`
-    : pendingInstallDateCount > 0
+  const priorityImpactLabel = pendingInstallDateCount > 0
       ? `${pendingInstallDateCount} forecast gap${pendingInstallDateCount === 1 ? "" : "s"}`
       : hasNoMatchingItems
         ? "0 matching items"
       : "Stable status profile";
-  const priorityActionCtaLabel = priorityActionItem
-    ? `Review ${formatDisplayName(priorityActionItem.displayName)}`
-    : missingInstallDateItem
+  const priorityActionCtaLabel = missingInstallDateItem
       ? `Add install date for ${formatDisplayName(missingInstallDateItem.displayName)}`
       : isApplianceActionFilter
         ? "Show all appliances"
@@ -604,14 +578,6 @@ export default function StatusBoardClient() {
   }, []);
 
   const handlePriorityAction = useCallback(() => {
-    if (priorityActionItem) {
-      setConditionFilter("ACTION_NEEDED");
-      setGroupBy("none");
-      setPage(1);
-      setExpandedId(priorityActionItem.id);
-      return;
-    }
-
     if (missingInstallDateItem) {
       setConditionFilter("all");
       setGroupBy("none");
@@ -639,7 +605,6 @@ export default function StatusBoardClient() {
     hasNoMatchingItems,
     isApplianceActionFilter,
     missingInstallDateItem,
-    priorityActionItem,
   ]);
 
   // Card handlers for new card layout
@@ -1439,7 +1404,7 @@ export default function StatusBoardClient() {
           intro={
             <MobilePageIntro
               title="Home Status Board"
-              subtitle="Track item condition, priority actions, and health signals."
+              subtitle="Track item condition, readiness, and contributing health signals. Home Operations owns work priority."
               action={
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" asChild>
@@ -1800,7 +1765,7 @@ export default function StatusBoardClient() {
             description={priorityActionDescription}
             impactLabel={priorityImpactLabel}
             confidenceLabel={`${summary.total} ${resultCountLabel}`}
-            variant={priorityActionItem ? 'warning' : 'default'}
+            variant="default"
             primaryAction={(
               <Button className="w-full sm:w-auto" onClick={handlePriorityAction}>
                 {priorityActionCtaLabel}

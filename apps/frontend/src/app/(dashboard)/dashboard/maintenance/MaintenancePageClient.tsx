@@ -95,6 +95,7 @@ export default function MaintenancePage() {
   const returnTo = searchParams.get('returnTo');
   const priorityOnly = searchParams.get('priority') === 'true';
   const filterOverdue = searchParams.get('filter') === 'overdue';
+  const filterSeasonal = searchParams.get('filter') === 'seasonal';
   const from = searchParams.get('from');
 
   const view: ViewMode = normalizeView(searchParams.get('view'));
@@ -212,8 +213,11 @@ export default function MaintenancePage() {
   });
 
   const allMaintenanceTasks = useMemo(
-    () => (Array.isArray(tasksQuery.data) ? tasksQuery.data : []),
-    [tasksQuery.data]
+    () => {
+      const tasks = Array.isArray(tasksQuery.data) ? tasksQuery.data : [];
+      return filterSeasonal ? tasks.filter((task) => Boolean(task.seasonalChecklistItemId)) : tasks;
+    },
+    [filterSeasonal, tasksQuery.data]
   );
   const isInitialLoading =
     propertiesQuery.isLoading || (Boolean(effectivePropertyId) && tasksQuery.isLoading);

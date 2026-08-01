@@ -15,6 +15,8 @@ import {
   type HomeOperationsTabKey,
 } from './HomeOperationsTabs';
 import type { RankedHomeActionDTO } from '@/types';
+import type { WorkItemListEntryDTO } from '@/types';
+import { CanonicalWorkPortfolio, classifyCanonicalWorkItem } from './CanonicalWorkPortfolio';
 
 function SkeletonBlock({ className }: { className: string }) {
   return (
@@ -115,7 +117,7 @@ export default function HomeOperationsPage() {
   const searchParams = useSearchParams();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const focusActionId = searchParams.get('focusActionId');
-  const focusWorkItemId = searchParams.get('focusWorkItemId');
+  const focusWorkItemId = searchParams.get('focusWorkItemId') ?? searchParams.get('workItemId');
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ['home-action-plan', propertyId],
@@ -123,11 +125,40 @@ export default function HomeOperationsPage() {
     enabled: Boolean(propertyId),
     staleTime: 2 * 60 * 1000,
   });
+  const workItemsQuery = useQuery({
+    queryKey: ['home-operations-work-items', propertyId],
+    queryFn: async () => {
+      const response = await api.listWorkItems(propertyId);
+      if (!response.success) throw new Error(response.message || 'Unable to load the work portfolio.');
+      return response.data.items;
+    },
+    enabled: Boolean(propertyId) && query.isSuccess,
+    staleTime: 30_000,
+  });
+  const reconciliationsQuery = useQuery({
+    queryKey: ['home-operations-reconciliations', propertyId],
+    queryFn: async () => {
+      const response = await api.listHomeOperationsReconciliations(propertyId);
+      if (!response.success) throw new Error(response.message || 'Unable to load synchronization status.');
+      return response.data.reconciliations;
+    },
+    enabled: Boolean(propertyId),
+    refetchInterval: 30_000,
+  });
   const [showSlowLoadingRecovery, setShowSlowLoadingRecovery] = useState(false);
   const [activeTab, setActiveTab] = useState<HomeOperationsTabKey>('today');
   const [hasAppliedFocusTab, setHasAppliedFocusTab] = useState(false);
 
-  const byTab = useMemo(() => tabCounts(query.data?.actions ?? []), [query.data]);
+  const workItems: WorkItemListEntryDTO[] = workItemsQuery.data ?? [];
+  const canonicalByTab = useMemo(() => {
+    const result: Record<HomeOperationsTabKey, WorkItemListEntryDTO[]> = { today: [], upcoming: [], waiting: [], projects: [], routines: [], completed: [] };
+    for (const item of workItems) result[classifyCanonicalWorkItem(item)].push(item);
+    return result;
+  }, [workItems]);
+  const advisoryByTab = useMemo(() => {
+    const result = tabCounts((query.data?.actions ?? []).filter((action) => !action.workItem));
+    return result;
+  }, [query.data]);
 
   // Deep-link support: land on whichever tab actually contains the focused
   // action/work item, then scroll to it — the "focused deep link by
@@ -135,6 +166,12 @@ export default function HomeOperationsPage() {
   // both need to open on a tab that's showing the item, not just Today.
   useEffect(() => {
     if (hasAppliedFocusTab || (!focusActionId && !focusWorkItemId) || !query.data) return;
+    const canonicalMatch = focusWorkItemId ? workItems.find((item) => item.id === focusWorkItemId) : null;
+    if (canonicalMatch) {
+      setActiveTab(classifyCanonicalWorkItem(canonicalMatch));
+      setHasAppliedFocusTab(true);
+      return;
+    }
     const match = query.data.actions.find((action) =>
       (focusWorkItemId && action.workItem?.id === focusWorkItemId) ||
       (focusActionId && (
@@ -145,7 +182,7 @@ export default function HomeOperationsPage() {
     );
     if (match) setActiveTab(classifyHomeOperationsTab(match));
     setHasAppliedFocusTab(true);
-  }, [focusActionId, focusWorkItemId, hasAppliedFocusTab, query.data]);
+  }, [focusActionId, focusWorkItemId, hasAppliedFocusTab, query.data, workItems]);
 
   useEffect(() => {
     if (!focusActionId && !focusWorkItemId) return;
@@ -166,8 +203,8 @@ export default function HomeOperationsPage() {
     return () => window.clearTimeout(timer);
   }, [query.isLoading]);
 
-  if (query.isLoading) {
-    return <HomeOperationsSkeleton showRecovery={showSlowLoadingRecovery} onRetry={() => void query.refetch()} />;
+  if (query.isLoading || workItemsQuery.isLoading) {
+    return <HomeOperationsSkeleton showRecovery={showSlowLoadingRecovery} onRetry={() => void Promise.all([query.refetch(), workItemsQuery.refetch()])} />;
   }
 
   if (query.isError || !query.data) {
@@ -179,10 +216,20 @@ export default function HomeOperationsPage() {
     );
   }
 
+  if (workItemsQuery.isError) {
+    return (
+      <div className="mx-auto max-w-6xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center">
+        <p className="font-semibold text-amber-900">Your ranked suggestions loaded, but the work portfolio did not.</p>
+        <p className="mt-1 text-sm text-amber-800">No work has been removed. Retry to restore the canonical view.</p>
+        <Button variant="outline" className="mt-3 rounded-full bg-white" onClick={() => workItemsQuery.refetch()}>Retry work portfolio</Button>
+      </div>
+    );
+  }
+
   const feed = query.data;
   const urgentCount = feed.actions.filter((action) => action.priority === 'NOW' || action.priority === 'SOON').length;
   const refreshPlan = async () => {
-    await query.refetch();
+    await Promise.all([query.refetch(), workItemsQuery.refetch(), reconciliationsQuery.refetch()]);
     await queryClient.invalidateQueries({ queryKey: ['unified-home', propertyId] });
   };
 
@@ -214,9 +261,31 @@ export default function HomeOperationsPage() {
         </div>
       </header>
 
+      {(reconciliationsQuery.data?.length ?? 0) > 0 ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3" role="status">
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Finishing {reconciliationsQuery.data?.length} work update{reconciliationsQuery.data?.length === 1 ? '' : 's'}</p>
+            <p className="text-xs text-amber-800">Your source activity is saved. Home Operations will keep retrying automatically.</p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-full border-amber-300 bg-white"
+            onClick={async () => {
+              const rows = reconciliationsQuery.data ?? [];
+              await Promise.allSettled(rows.map((row) => api.retryHomeOperationsReconciliation(propertyId, row.id)));
+              await refreshPlan();
+            }}
+          >
+            Retry now
+          </Button>
+        </section>
+      ) : null}
+
       <nav aria-label="Home Operations views" className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
         {HOME_OPERATIONS_TABS.map((tab) => {
-          const count = byTab[tab.key].length;
+          const count = canonicalByTab[tab.key].length + advisoryByTab[tab.key].length;
           const isActive = activeTab === tab.key;
           return (
             <button
@@ -231,22 +300,27 @@ export default function HomeOperationsPage() {
               }`}
             >
               {tab.label}
-              {tab.key !== 'routines' ? <span className="ml-1.5 opacity-80">{count}</span> : null}
+              <span className="ml-1.5 opacity-80">{count}</span>
             </button>
           );
         })}
       </nav>
 
       <section aria-live="polite">
-        <HomeOperationsTabPanel
-          tab={activeTab}
-          actions={byTab[activeTab]}
-          propertyId={propertyId}
-          onChanged={refreshPlan}
-          focusActionId={focusActionId}
-          focusWorkItemId={focusWorkItemId}
-          emptyStateReason={feed.diagnostics.emptyStateReason}
-        />
+        <div className="space-y-3">
+          <CanonicalWorkPortfolio items={workItems} tab={activeTab} propertyId={propertyId} onChanged={refreshPlan} />
+          {(advisoryByTab[activeTab].length > 0 || canonicalByTab[activeTab].length === 0) ? (
+            <HomeOperationsTabPanel
+              tab={activeTab}
+              actions={advisoryByTab[activeTab]}
+              propertyId={propertyId}
+              onChanged={refreshPlan}
+              focusActionId={focusActionId}
+              focusWorkItemId={focusWorkItemId}
+              emptyStateReason={feed.diagnostics.emptyStateReason}
+            />
+          ) : null}
+        </div>
       </section>
     </main>
   );

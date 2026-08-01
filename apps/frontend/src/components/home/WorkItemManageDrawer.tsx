@@ -12,7 +12,7 @@ import type {
   Document as PropertyDocument,
 } from '@/types';
 import { api } from '@/lib/api/client';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -103,6 +103,7 @@ export function WorkItemManageDrawer({
 
   const [duplicatePickerOpen, setDuplicatePickerOpen] = useState(false);
   const [duplicatePending, setDuplicatePending] = useState<string | null>(null);
+  const [duplicateUndoPending, setDuplicateUndoPending] = useState(false);
 
   const [evidenceType, setEvidenceType] = useState<OperationalWorkEvidenceType>('DOCUMENT');
   const [evidenceEntityId, setEvidenceEntityId] = useState('');
@@ -231,7 +232,7 @@ export function WorkItemManageDrawer({
   const handleMarkDuplicate = async (candidate: WorkItemListEntryDTO) => {
     const confirmed = await requestConfirmation({
       title: 'Mark as duplicate?',
-      description: `"${detail?.title}" will be treated as superseded by "${candidate.title}". You can still find it, and this is reversible in the data even though there's no undo button here yet.`,
+      description: `"${detail?.title}" will be treated as superseded by "${candidate.title}" and moved to Completed. You can undo this later.`,
       confirmLabel: 'Mark as duplicate',
     });
     if (!confirmed) return;
@@ -247,6 +248,20 @@ export function WorkItemManageDrawer({
       toast({ title: 'Unable to mark as duplicate', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
     } finally {
       setDuplicatePending(null);
+    }
+  };
+
+  const handleUndoDuplicate = async () => {
+    setDuplicateUndoPending(true);
+    try {
+      const res = await api.reverseWorkItemDuplicateDecision(propertyId, workItemId);
+      if (!res.success) throw new Error(res.message || 'Unable to undo the duplicate decision.');
+      toast({ title: 'Duplicate decision undone' });
+      await refresh();
+    } catch (error) {
+      toast({ title: 'Unable to undo duplicate', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
+    } finally {
+      setDuplicateUndoPending(false);
     }
   };
 
@@ -281,6 +296,7 @@ export function WorkItemManageDrawer({
         <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl">
           <SheetHeader className="border-b border-slate-100 p-6 pb-4">
             <SheetTitle>Manage work item</SheetTitle>
+            <SheetDescription>Assign, schedule, defer, or add evidence. Completion and verification are controlled by the linked execution record.</SheetDescription>
           </SheetHeader>
 
           {loading || !detail ? (
@@ -402,12 +418,16 @@ export function WorkItemManageDrawer({
               <section className="space-y-2 border-t border-slate-100 pt-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-slate-900">Duplicate</h4>
-                  <Button size="sm" variant="ghost" onClick={() => setDuplicatePickerOpen((v) => !v)}>Mark as duplicate…</Button>
+                  {detail.supersededByWorkItemId ? (
+                    <Button size="sm" variant="ghost" disabled={duplicateUndoPending} onClick={handleUndoDuplicate}>{duplicateUndoPending ? 'Undoing…' : 'Undo duplicate'}</Button>
+                  ) : (
+                    <Button size="sm" variant="ghost" onClick={() => setDuplicatePickerOpen((v) => !v)}>Mark as duplicate…</Button>
+                  )}
                 </div>
                 {detail.supersededByWorkItemId && (
                   <p className="text-sm text-slate-500">Already marked as superseded by another work item.</p>
                 )}
-                {duplicatePickerOpen && (
+                {duplicatePickerOpen && !detail.supersededByWorkItemId && (
                   <WorkItemDuplicatePicker
                     propertyId={propertyId}
                     excludeWorkItemId={workItemId}
@@ -474,7 +494,9 @@ export function WorkItemManageDrawer({
                   <Select value={evidenceVerification} onValueChange={(value) => setEvidenceVerification(value as OperationalWorkEvidenceVerificationStatus)}>
                     <SelectTrigger><SelectValue placeholder="Verification status (optional)" /></SelectTrigger>
                     <SelectContent>
-                      {VERIFICATION_STATUS_OPTIONS.map((value) => (
+                      {VERIFICATION_STATUS_OPTIONS.filter((value) =>
+                        value !== 'VERIFIED' || (evidenceType === 'USER_ATTESTATION' && detail.safetyTier === 'LOW_CONSEQUENCE')
+                      ).map((value) => (
                         <SelectItem key={value} value={value}>{value.charAt(0) + value.slice(1).toLowerCase()}</SelectItem>
                       ))}
                     </SelectContent>

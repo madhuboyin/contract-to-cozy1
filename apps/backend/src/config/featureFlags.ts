@@ -90,6 +90,8 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   HIDDEN_ASSET_FINDER:       { label: 'Hidden Asset Finder',         defaultPct: 100 },
   HOME_DIGITAL_TWIN:         { label: 'Home Digital Twin',           defaultPct: 100 },
   HOME_HABIT_COACH:          { label: 'Home Habit Coach',            defaultPct: 100 },
+  HOME_OPERATIONS:           { label: 'Home Operations',             defaultPct: 100 },
+  MAINTENANCE:               { label: 'Maintenance',                 defaultPct: 100 },
   MORTGAGE_REFINANCE_RADAR:  { label: 'Mortgage Refinance Radar',    defaultPct: 100 },
   HOME_BRIEFING:             { label: 'Home Briefing',               defaultPct: 0   },
   RENOVATION_RISK_ADVISOR:   { label: 'Renovation Risk Advisor',     defaultPct: 100 },

@@ -76,4 +76,19 @@ export const RecordEvidenceSchema = z.object({
   evidenceEntityId: z.string().trim().min(1),
   verificationStatus: z.nativeEnum(OperationalWorkEvidenceVerificationStatus).optional(),
   observedAt: z.string().datetime().optional(),
+}).superRefine((value, ctx) => {
+  if (value.verificationStatus === 'VERIFIED' && value.evidenceType !== 'USER_ATTESTATION') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['verificationStatus'],
+      message: 'Only a low-risk homeowner self-attestation can be verified at submission. Other evidence is reviewed by its authoritative domain.',
+    });
+  }
+  if (value.evidenceType === 'DOMAIN_COMPLETION_RECORD' || value.evidenceType === 'SYSTEM_DERIVATION') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['evidenceType'],
+      message: 'Domain completion and system-derived evidence can only be published by the authoritative service.',
+    });
+  }
 });

@@ -25,7 +25,7 @@ import { APIError } from '../middleware/error.middleware';
 import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
 import JobQueueService from './JobQueue.service';
 import { resolveWorkKey } from '../modules/homeOperations/domain/workKey';
-import { findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
+import { findAllWorkItemsLinkedToExecution, findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
@@ -41,6 +41,7 @@ import {
   VERIFIED_CLOSEOUT_REFRESH_TARGETS,
 } from './projectCompliance/closeoutPolicy';
 import { createHash, randomBytes } from 'node:crypto';
+import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -184,12 +185,15 @@ export async function syncJourneyWorkItemForProjectEvent(
   event: 'HANDOFF' | 'VERIFIED' | 'CANCELLED',
   actorUserId: string | null,
   responsibleParty?: OperationalWorkResponsibleParty,
+  throwOnFailure: boolean = false,
 ): Promise<void> {
   if (!guidanceJourneyId) return;
   const actorType = actorUserId ? 'USER' : 'SYSTEM';
   try {
+    const linkedJourneyItems = await findAllWorkItemsLinkedToExecution('GUIDANCE', guidanceJourneyId);
     const workKey = await resolveJourneyWorkKey(propertyId, guidanceJourneyId);
-    const workItem = await findWorkItemByWorkKey(propertyId, workKey);
+    const workItem = linkedJourneyItems.find((entry) => entry.workItem.propertyId === propertyId)?.workItem
+      ?? await findWorkItemByWorkKey(propertyId, workKey);
     if (!workItem) return;
 
     if (event === 'HANDOFF') {
@@ -226,6 +230,17 @@ export async function syncJourneyWorkItemForProjectEvent(
           idempotencyKey: `project-verified:${workItem.id}:${projectId}`,
         });
       }
+      const now = new Date();
+      const completedJourney = await prisma.guidanceJourney.updateMany({
+        where: { id: guidanceJourneyId, propertyId, status: { in: ['NOT_STARTED', 'ACTIVE'] } },
+        data: { status: 'COMPLETED', completedAt: now, lastTransitionAt: now, version: { increment: 1 } },
+      });
+      if (completedJourney.count > 0) {
+        await prisma.guidanceSignal.updateMany({
+          where: { journeys: { some: { id: guidanceJourneyId } }, status: 'ACTIVE' },
+          data: { status: 'RESOLVED', resolvedAt: now },
+        });
+      }
       return;
     }
 
@@ -240,7 +255,17 @@ export async function syncJourneyWorkItemForProjectEvent(
       });
     }
   } catch (err) {
+    await recordReconciliationFailure({
+      propertyId,
+      operation: 'PROJECT_JOURNEY_SYNC',
+      sourceType: 'PROJECT',
+      sourceEntityId: projectId,
+      idempotencyKey: `project-journey-sync:${projectId}:${guidanceJourneyId}:${event}`,
+      payload: { guidanceJourneyId, projectId, event, actorUserId, responsibleParty },
+      error: err,
+    }).catch(() => null);
     logger.warn({ err, propertyId, guidanceJourneyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
+    if (throwOnFailure) throw err;
   }
 }
 
@@ -257,6 +282,7 @@ export async function syncProjectExecutionWorkItemOnCompletion(
   propertyId: string,
   projectId: string,
   event: 'VERIFIED' | 'CANCELLED',
+  throwOnFailure: boolean = false,
 ): Promise<void> {
   try {
     const workKey = resolveProjectExecutionWorkKey(propertyId, projectId);
@@ -298,7 +324,17 @@ export async function syncProjectExecutionWorkItemOnCompletion(
       });
     }
   } catch (err) {
+    await recordReconciliationFailure({
+      propertyId,
+      operation: 'PROJECT_EXECUTION_SYNC',
+      sourceType: 'PROJECT',
+      sourceEntityId: projectId,
+      idempotencyKey: `project-execution-sync:${projectId}:${event}`,
+      payload: { projectId, event },
+      error: err,
+    }).catch(() => null);
     logger.warn({ err, propertyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
+    if (throwOnFailure) throw err;
   }
 }
 

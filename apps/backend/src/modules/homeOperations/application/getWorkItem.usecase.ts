@@ -1,9 +1,34 @@
 import { getWorkItemGraph } from '../infrastructure/workItemRepository';
-import { LEGAL_TRANSITIONS, closureDispositionRuleFor } from '../domain/transitions';
+import { closureDispositionRuleFor } from '../domain/transitions';
+import { legalUserWorkItemTransitions } from '../domain/userGovernance';
+import { prisma } from '../../../lib/prisma';
 
 export async function getWorkItem(workItemId: string) {
   const item = await getWorkItemGraph(workItemId);
   if (!item) return null;
+  const maintenanceTaskIds = item.executions
+    .filter((execution) => execution.executionType === 'MAINTENANCE_TASK')
+    .map((execution) => execution.executionEntityId);
+  const canLoadMaintenance = typeof prisma.propertyMaintenanceTask?.findFirst === 'function';
+  const canLoadReconciliation = typeof prisma.operationalWorkReconciliation?.findFirst === 'function';
+  const [routineTask, reconciliation] = await Promise.all([
+    maintenanceTaskIds.length > 0 && canLoadMaintenance
+      ? prisma.propertyMaintenanceTask.findFirst({
+        where: {
+          id: { in: maintenanceTaskIds },
+          OR: [
+            { isRecurring: true },
+            { adoptedByHabit: { isNot: null } },
+          ],
+        },
+        select: { id: true },
+      })
+      : Promise.resolve(null),
+    canLoadReconciliation ? prisma.operationalWorkReconciliation.findFirst({
+      where: { workItemId, status: { in: ['PENDING', 'RETRYING', 'FAILED'] } },
+      select: { id: true },
+    }) : Promise.resolve(null),
+  ]);
 
   return {
     id: item.id,
@@ -47,6 +72,7 @@ export async function getWorkItem(workItemId: string) {
       executionType: e.executionType,
       executionEntityId: e.executionEntityId,
       role: e.role,
+      responsibleParty: e.responsibleParty,
     })),
     evidence: item.evidence.map((e) => ({
       evidenceType: e.evidenceType,
@@ -55,9 +81,12 @@ export async function getWorkItem(workItemId: string) {
       observedAt: e.observedAt,
     })),
     watchers: item.watchers.map((w) => ({ userId: w.userId, addedAt: w.addedAt })),
+    snoozedUntil: item.snoozedUntil,
+    isRoutine: Boolean(routineTask),
+    reconciliationPending: Boolean(reconciliation),
     // Home Operations Item #16: computed so the write-API frontend never
     // needs its own copy of the state machine.
-    legalNextStates: LEGAL_TRANSITIONS[item.state],
+    legalNextStates: legalUserWorkItemTransitions(item),
     closureDispositionRule: item.state === 'CLOSED' ? null : closureDispositionRuleFor(item.state),
   };
 }

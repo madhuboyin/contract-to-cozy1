@@ -9,10 +9,14 @@ import { transitionWorkItem } from '../application/transitionWorkItem.usecase';
 import { snoozeWorkItem } from '../application/snoozeWorkItem.usecase';
 import { rescheduleWorkItem } from '../application/rescheduleWorkItem.usecase';
 import { batchTransitionWorkItems } from '../application/batchTransitionWorkItems.usecase';
-import { recordDuplicateDecision } from '../application/recordDuplicateDecision.usecase';
+import { recordDuplicateDecision, reverseDuplicateDecision } from '../application/recordDuplicateDecision.usecase';
 import { recordEvidence } from '../application/recordEvidence.usecase';
 import { IllegalWorkItemTransitionError, InvalidClosureDispositionError } from '../domain/transitions';
+import { assertUserWorkItemTransition, GovernedWorkItemTransitionError } from '../domain/userGovernance';
 import { ListWorkItemsQuerySchema } from './homeOperations.validators';
+import { prisma } from '../../../lib/prisma';
+import { listPendingReconciliations } from '../infrastructure/reconciliationRepository';
+import { retryHomeOperationsReconciliation } from '../../../services/homeOperationsReconciliation.service';
 
 function homeOperationsContext(req: CustomRequest, res: Response): { propertyId: string } | null {
   const propertyId = req.params.propertyId;
@@ -48,6 +52,22 @@ export async function getWorkItemHandler(req: CustomRequest, res: Response) {
   return res.json({ success: true, data: item });
 }
 
+export async function listReconciliationsHandler(req: CustomRequest, res: Response) {
+  const context = homeOperationsContext(req, res);
+  if (!context) return;
+  const reconciliations = await listPendingReconciliations(context.propertyId);
+  return res.json({ success: true, data: { reconciliations } });
+}
+
+export async function retryReconciliationHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const reconciliation = await retryHomeOperationsReconciliation(context.propertyId, req.params.reconciliationId);
+    return res.json({ success: true, data: reconciliation });
+  } catch (err) { next(err); }
+}
+
 // ── Home Operations Slice 8: write API ──────────────────────────────────────
 
 /**
@@ -70,6 +90,9 @@ function handleWorkItemMutationError(err: unknown, res: Response) {
   }
   if (err instanceof InvalidClosureDispositionError) {
     return res.status(400).json({ success: false, error: { code: 'INVALID_CLOSURE_DISPOSITION', message: err.message } });
+  }
+  if (err instanceof GovernedWorkItemTransitionError) {
+    return res.status(409).json({ success: false, error: { code: 'GOVERNED_TRANSITION_REQUIRED', message: err.message } });
   }
   throw err;
 }
@@ -136,6 +159,7 @@ export async function transitionWorkItemHandler(req: CustomRequest, res: Respons
     if (!item) return;
 
     try {
+      assertUserWorkItemTransition(item, req.body.to, req.body.disposition);
       await transitionWorkItem({
         workItemId: item.id,
         to: req.body.to,
@@ -220,6 +244,13 @@ export async function recordDuplicateDecisionHandler(req: CustomRequest, res: Re
     if (!context) return;
     const item = await loadWorkItemForMutation(req, res, context);
     if (!item) return;
+    if (req.body.supersededByWorkItemId === item.id) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_DUPLICATE_TARGET', message: 'A work item cannot supersede itself.' } });
+    }
+    const target = await loadWorkItem(req.body.supersededByWorkItemId);
+    if (!target || target.propertyId !== context.propertyId) {
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'The duplicate target was not found for this property.' } });
+    }
 
     await recordDuplicateDecision({
       workItemId: item.id,
@@ -232,12 +263,47 @@ export async function recordDuplicateDecisionHandler(req: CustomRequest, res: Re
   } catch (err) { next(err); }
 }
 
+export async function reverseDuplicateDecisionHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+    await reverseDuplicateDecision({ workItemId: item.id, actorUserId: req.user!.userId, idempotencyKey: crypto.randomUUID() });
+    return res.json({ success: true, data: await loadWorkItem(item.id) });
+  } catch (err) { next(err); }
+}
+
 export async function recordEvidenceHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
   try {
     const context = homeOperationsContext(req, res);
     if (!context) return;
     const item = await loadWorkItemForMutation(req, res, context);
     if (!item) return;
+
+    if (req.body.verificationStatus === 'VERIFIED' && item.safetyTier !== 'LOW_CONSEQUENCE') {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'AUTHORITATIVE_VERIFICATION_REQUIRED',
+          message: 'Material, regulated, and safety work must be verified by its authoritative execution domain.',
+        },
+      });
+    }
+
+    const evidenceExists = req.body.evidenceType === 'DOCUMENT'
+      ? Boolean(await prisma.document.findFirst({ where: { id: req.body.evidenceEntityId, propertyId: context.propertyId }, select: { id: true } }))
+      : req.body.evidenceType === 'HOME_EVENT'
+        ? Boolean(await prisma.homeEvent.findFirst({ where: { id: req.body.evidenceEntityId, propertyId: context.propertyId }, select: { id: true } }))
+        : req.body.evidenceType === 'PROPERTY_FACT'
+          ? Boolean(await prisma.propertyFactEvidence.findFirst({ where: { id: req.body.evidenceEntityId, propertyId: context.propertyId }, select: { id: true } }))
+          : true;
+    if (!evidenceExists) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_EVIDENCE_REFERENCE', message: 'The evidence record does not belong to this property.' },
+      });
+    }
 
     await recordEvidence({
       workItemId: item.id,

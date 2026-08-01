@@ -98,7 +98,7 @@ const TAB_EMPTY_STATE: Record<HomeOperationsTabKey, { title: string; body: strin
   upcoming: { title: 'Nothing scheduled yet', body: 'Accepted work with a future date, and new recommendations, will appear here.' },
   waiting: { title: 'Nothing is blocked or deferred', body: 'Work you’ve paused or that’s waiting on someone else shows up here.' },
   projects: { title: 'No active projects', body: 'Contractor projects and their milestones will appear here once one is underway.' },
-  routines: { title: 'Routines aren’t available yet', body: 'This becomes the Home Habit Coach’s home in a later update — it isn’t wired into Home Operations yet.' },
+  routines: { title: 'No adopted routines yet', body: 'Use Home Habit Coach to add a routine. Its recurring Maintenance work will appear here automatically.' },
   completed: { title: 'Nothing completed recently', body: 'Verified and reported-complete work from the last 30 days shows up here.' },
 };
 

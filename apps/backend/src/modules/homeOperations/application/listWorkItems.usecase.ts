@@ -1,5 +1,6 @@
 import type { OperationalObligationType, OperationalWorkItemState, OperationalWorkSubjectType } from '@prisma/client';
 import { listWorkItemsForProperty } from '../infrastructure/workItemRepository';
+import { prisma } from '../../../lib/prisma';
 
 export interface ListWorkItemsInput {
   propertyId: string;
@@ -12,6 +13,26 @@ export interface ListWorkItemsInput {
 
 export async function listWorkItems(input: ListWorkItemsInput) {
   const items = await listWorkItemsForProperty(input);
+  const maintenanceTaskIds = items.flatMap((item) => item.executions
+    .filter((execution) => execution.executionType === 'MAINTENANCE_TASK')
+    .map((execution) => execution.executionEntityId));
+  const [recurringTasks, adoptedHabits, pendingReconciliations] = await Promise.all([
+    maintenanceTaskIds.length > 0
+      ? prisma.propertyMaintenanceTask.findMany({ where: { id: { in: maintenanceTaskIds }, propertyId: input.propertyId, isRecurring: true }, select: { id: true } })
+      : Promise.resolve([]),
+    maintenanceTaskIds.length > 0
+      ? prisma.propertyHabit.findMany({ where: { propertyId: input.propertyId, linkedMaintenanceTaskId: { in: maintenanceTaskIds } }, select: { linkedMaintenanceTaskId: true } })
+      : Promise.resolve([]),
+    prisma.operationalWorkReconciliation.findMany({
+      where: { propertyId: input.propertyId, status: { in: ['PENDING', 'RETRYING', 'FAILED'] }, workItemId: { not: null } },
+      select: { workItemId: true },
+    }),
+  ]);
+  const routineTaskIds = new Set([
+    ...recurringTasks.map((task) => task.id),
+    ...adoptedHabits.flatMap((habit) => habit.linkedMaintenanceTaskId ? [habit.linkedMaintenanceTaskId] : []),
+  ]);
+  const pendingWorkItemIds = new Set(pendingReconciliations.flatMap((entry) => entry.workItemId ? [entry.workItemId] : []));
   return items.map((item) => ({
     id: item.id,
     workKey: item.workKey,
@@ -32,6 +53,16 @@ export async function listWorkItems(input: ListWorkItemsInput) {
     ownerUserId: item.ownerUserId,
     confidence: item.confidence,
     missingContext: item.missingContext,
+    snoozedUntil: item.snoozedUntil,
+    isRoutine: item.executions.some((execution) => execution.executionType === 'MAINTENANCE_TASK' && routineTaskIds.has(execution.executionEntityId)),
+    executions: item.executions.map((execution) => ({
+      executionType: execution.executionType,
+      executionEntityId: execution.executionEntityId,
+      role: execution.role,
+      responsibleParty: execution.responsibleParty,
+    })),
+    reconciliationPending: pendingWorkItemIds.has(item.id),
+    supersededByWorkItemId: item.supersededByWorkItemId,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   }));

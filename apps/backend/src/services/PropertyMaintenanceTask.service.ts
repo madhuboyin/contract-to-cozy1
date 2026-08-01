@@ -33,10 +33,12 @@ import { resolveMaintenanceRecommendationWorkKey } from '../modules/homeOperatio
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import {
+  findWorkItemById,
   findWorkItemByWorkKey,
   findWorkItemsLinkedToMaintenanceTaskExecution,
   linkWorkExecution,
 } from '../modules/homeOperations/infrastructure/workItemRepository';
+import { markReconciliationResolved, recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 
   /**
    * Service for managing property maintenance tasks.
@@ -156,6 +158,7 @@ import {
         frequency?: RecurrenceFrequency;
         nextDueDate?: string;
         templateId?: string;
+        canonicalWorkItemId?: string;
       }
     ): Promise<PropertyMaintenanceTask> {
       // Verify property access (CONTRIBUTOR+ required to create tasks)
@@ -258,7 +261,7 @@ import {
         },
       });
 
-      await this.syncTaskWorkItem(userId, task, false, task.status === 'COMPLETED');
+      await this.syncTaskWorkItem(userId, task, false, task.status === 'COMPLETED', null, data.canonicalWorkItemId);
       return task;
     }
   
@@ -779,9 +782,24 @@ import {
       task: PropertyMaintenanceTask,
       proposal: NonNullable<ReturnType<typeof maintenanceTaskSourceAdapter.propose>>,
       recommendationSourceEntityId?: string | null,
+      canonicalWorkItemId?: string | null,
     ) {
       const linked = await findWorkItemsLinkedToMaintenanceTaskExecution(task.id);
       if (linked.length > 0) return linked[0].workItem;
+
+      if (canonicalWorkItemId) {
+        const canonical = await findWorkItemById(canonicalWorkItemId);
+        if (!canonical || canonical.propertyId !== task.propertyId) {
+          throw new Error('Canonical work item does not belong to this maintenance task property.');
+        }
+        await linkWorkExecution({
+          workItemId: canonical.id,
+          executionType: 'MAINTENANCE_TASK',
+          executionEntityId: task.id,
+          responsibleParty: task.bookingId ? 'CONTRACTOR' : 'HOUSEHOLD',
+        });
+        return canonical;
+      }
 
       if (recommendationSourceEntityId) {
         const candidateKey = resolveMaintenanceRecommendationWorkKey(task.propertyId, recommendationSourceEntityId);
@@ -807,8 +825,11 @@ import {
       wasCompleted: boolean,
       isNowCompleted: boolean,
       recommendationSourceEntityId?: string | null,
+      canonicalWorkItemId?: string | null,
+      throwOnFailure: boolean = false,
     ): Promise<void> {
       const actorType = actorUserId ? 'USER' : 'SYSTEM';
+      const reconciliationKey = `maintenance-task-sync:${updatedTask.id}:${updatedTask.updatedAt.toISOString()}`;
       try {
         if (updatedTask.status === 'CANCELLED') {
           const linked = await findWorkItemsLinkedToMaintenanceTaskExecution(updatedTask.id);
@@ -824,12 +845,13 @@ import {
               idempotencyKey: `maintenance-task-cancelled:${updatedTask.id}:${updatedTask.updatedAt.toISOString()}`,
             });
           }
+          await markReconciliationResolved(reconciliationKey);
           return;
         }
 
         const proposal = maintenanceTaskSourceAdapter.propose(updatedTask, updatedTask.propertyId);
         if (!proposal) return;
-        let workItem = await this.resolveTaskWorkItem(updatedTask, proposal, recommendationSourceEntityId);
+        let workItem = await this.resolveTaskWorkItem(updatedTask, proposal, recommendationSourceEntityId, canonicalWorkItemId);
 
         // Creating a task is itself an acceptance act — nothing separately
         // "recommended" it as a candidate distinct from its own existence.
@@ -864,6 +886,58 @@ import {
               actorType: 'SYSTEM',
               idempotencyKey: `maintenance-task-verified:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
             });
+            const completedAt = updatedTask.lastCompletedDate ?? new Date();
+            const timelineIdempotencyKey = `maintenance-completion:${updatedTask.id}:${completedAt.toISOString()}`;
+            const timelineEvent = await prisma.homeEvent.upsert({
+              where: {
+                propertyId_idempotencyKey: {
+                  propertyId: updatedTask.propertyId,
+                  idempotencyKey: timelineIdempotencyKey,
+                },
+              },
+              create: {
+                propertyId: updatedTask.propertyId,
+                createdById: actorUserId,
+                type: 'MAINTENANCE',
+                occurredAt: completedAt,
+                title: updatedTask.title,
+                summary: updatedTask.description ?? 'Maintenance task completed.',
+                idempotencyKey: timelineIdempotencyKey,
+                sourceBadge: 'USER_REPORTED',
+                observationKind: 'USER_REPORTED',
+                verificationStatus: 'HOMEOWNER_CONFIRMED',
+                sourceType: 'DOMAIN_ENTITY',
+                sourceEntityType: 'PROPERTY_MAINTENANCE_TASK',
+                sourceEntityId: updatedTask.id,
+                sourceAsOf: completedAt,
+                confirmedAt: completedAt,
+                confirmedByUserId: actorUserId,
+              },
+              update: {
+                title: updatedTask.title,
+                summary: updatedTask.description ?? 'Maintenance task completed.',
+                occurredAt: completedAt,
+              },
+            });
+            const existingTimelineEvidence = await prisma.operationalWorkEvidence.findFirst({
+              where: {
+                workItemId: workItem.id,
+                evidenceType: 'HOME_EVENT',
+                evidenceEntityId: timelineEvent.id,
+              },
+              select: { id: true },
+            });
+            if (!existingTimelineEvidence) {
+              await prisma.operationalWorkEvidence.create({
+                data: {
+                  workItemId: workItem.id,
+                  evidenceType: 'HOME_EVENT',
+                  evidenceEntityId: timelineEvent.id,
+                  verificationStatus: 'VERIFIED',
+                  observedAt: completedAt,
+                },
+              });
+            }
             // Home Operations Slice 5: this task may have been created by
             // accepting an Inspection Finding as work — a no-op otherwise.
             await propagateFindingResolutionFromExecution('MAINTENANCE_TASK', updatedTask.id);
@@ -892,9 +966,26 @@ import {
             idempotencyKey: `maintenance-task-reopened:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
           });
         }
+        await markReconciliationResolved(reconciliationKey);
       } catch (err) {
+        await recordReconciliationFailure({
+          propertyId: updatedTask.propertyId,
+          operation: 'MAINTENANCE_TASK_SYNC',
+          sourceType: 'MAINTENANCE',
+          sourceEntityId: updatedTask.id,
+          idempotencyKey: reconciliationKey,
+          payload: { taskId: updatedTask.id, actorUserId, wasCompleted, isNowCompleted },
+          error: err,
+        }).catch(() => null);
         logger.warn({ err, taskId: updatedTask.id }, 'Home Operations work item sync failed; maintenance task mutation proceeds regardless');
+        if (throwOnFailure) throw err;
       }
+    }
+
+    static async retryWorkItemReconciliation(taskId: string): Promise<void> {
+      const task = await prisma.propertyMaintenanceTask.findUnique({ where: { id: taskId } });
+      if (!task) throw new Error('Maintenance task no longer exists.');
+      await this.syncTaskWorkItem(null, task, false, task.status === 'COMPLETED', null, null, true);
     }
 
     static async updateTaskStatus(

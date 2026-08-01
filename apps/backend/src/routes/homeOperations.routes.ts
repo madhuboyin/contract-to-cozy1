@@ -14,7 +14,10 @@ import {
   rescheduleWorkItemHandler,
   batchTransitionWorkItemsHandler,
   recordDuplicateDecisionHandler,
+  reverseDuplicateDecisionHandler,
   recordEvidenceHandler,
+  listReconciliationsHandler,
+  retryReconciliationHandler,
 } from '../modules/homeOperations/api/homeOperations.controller';
 import {
   AssignOwnerSchema,
@@ -39,6 +42,17 @@ router.use('/properties/:propertyId/home-operations', propertyAuthMiddleware);
 
 router.get('/properties/:propertyId/home-operations/work-items', listWorkItemsHandler);
 router.get('/properties/:propertyId/home-operations/work-items/:workItemId', getWorkItemHandler);
+router.get('/properties/:propertyId/home-operations/reconciliations', listReconciliationsHandler);
+router.post(
+  '/properties/:propertyId/home-operations/reconciliations/:reconciliationId/retry',
+  requireHouseholdRole('CONTRIBUTOR'),
+  retryReconciliationHandler,
+);
+router.delete(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/duplicate',
+  requireHouseholdRole('CONTRIBUTOR'),
+  reverseDuplicateDecisionHandler,
+);
 
 router.post(
   '/properties/:propertyId/home-operations/work-items/:workItemId/assign',

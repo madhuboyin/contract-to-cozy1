@@ -331,6 +331,21 @@ export function findWorkItemsLinkedToExecution(
   });
 }
 
+/** Reverse lookup for lifecycle handoffs that must preserve any originating
+ * subject (for example FINDING -> GUIDANCE -> PROJECT), not just a workKey
+ * re-derived from the child execution record. */
+export function findAllWorkItemsLinkedToExecution(
+  executionType: OperationalWorkExecutionType,
+  executionEntityId: string,
+) {
+  if (typeof prisma.operationalWorkExecution.findMany !== 'function') return Promise.resolve([]);
+  return prisma.operationalWorkExecution.findMany({
+    where: { executionType, executionEntityId },
+    include: { workItem: true },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
 /**
  * Home Operations Item #14 (Gap 1): once a maintenance task has been
  * reconciled onto a recommendation-stage work item (see
@@ -410,6 +425,7 @@ export function listWorkItemsForProperty(filter: ListWorkItemsFilter) {
       subjectType: filter.subjectType,
       subjectId: filter.subjectId,
     },
+    include: { executions: true },
     orderBy: [{ priority: 'asc' }, { updatedAt: 'desc' }],
   });
 }

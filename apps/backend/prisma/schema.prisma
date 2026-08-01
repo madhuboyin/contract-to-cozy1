@@ -3028,6 +3028,7 @@ model Property {
 
   // Home Operations — durable operational work identity (Slice 1)
   operationalWorkItems OperationalWorkItem[]
+  operationalWorkReconciliations OperationalWorkReconciliation[]
   propertyChanges       PropertyChange[]
   propertyChangeCursors PropertyChangeSourceCursor[]
   homeBriefingPreferences HomeBriefingPreference[]
@@ -20302,6 +20303,13 @@ enum OperationalWorkEvidenceVerificationStatus {
   REJECTED
 }
 
+enum OperationalWorkReconciliationStatus {
+  PENDING
+  RETRYING
+  RESOLVED
+  FAILED
+}
+
 model OperationalWorkItem {
   id         String @id @default(uuid())
   propertyId String
@@ -20372,6 +20380,7 @@ model OperationalWorkItem {
   watchers   OperationalWorkItemWatcher[]
   propertyChanges PropertyChange[]
   homeBriefingItems HomeBriefingItem[]
+  reconciliations OperationalWorkReconciliation[]
 
   @@unique([propertyId, workKey])
   @@index([propertyId, state])
@@ -20480,4 +20489,31 @@ model OperationalWorkItemWatcher {
   @@unique([workItemId, userId])
   @@index([userId])
   @@map("operational_work_item_watchers")
+}
+
+model OperationalWorkReconciliation {
+  id             String @id @default(uuid())
+  propertyId     String
+  workItemId     String?
+  operation      String
+  sourceType     String?
+  sourceEntityId String?
+  idempotencyKey String @unique
+  status         OperationalWorkReconciliationStatus @default(PENDING)
+  attempts       Int @default(1)
+  errorMessage   String? @db.Text
+  payload        Json?
+  nextRetryAt    DateTime?
+  lastAttemptAt  DateTime @default(now())
+  resolvedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  workItem OperationalWorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, status, nextRetryAt])
+  @@index([workItemId, status])
+  @@index([sourceType, sourceEntityId])
+  @@map("operational_work_reconciliations")
 }

@@ -9,6 +9,9 @@ import { logger } from '../lib/logger';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateSeasonalTemplateApplicability } from './seasonal/applicabilityPolicy';
 import { supportsOwnershipCare } from './entryContextPolicy';
+import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
+import { findWorkItemsLinkedToMaintenanceTaskExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
+import { snoozeWorkItem } from '../modules/homeOperations/application/snoozeWorkItem.usecase';
 
 export class SeasonalChecklistService {
   private static async assertPropertyOwnership(propertyId: string, userId: string) {
@@ -517,7 +520,7 @@ export class SeasonalChecklistService {
           },
         },
       },
-      select: { id: true, priority: true, seasonalChecklistId: true },
+      select: { id: true, priority: true, seasonalChecklistId: true, maintenanceTask: { select: { id: true } } },
     });
 
     if (!item) {
@@ -526,6 +529,10 @@ export class SeasonalChecklistService {
 
     if (!isDismissibleSeasonalPriority(item.priority)) {
       throw new Error('Critical tasks cannot be dismissed');
+    }
+
+    if (item.maintenanceTask) {
+      await PropertyMaintenanceTaskService.updateTaskStatus(userId, item.maintenanceTask.id, 'CANCELLED');
     }
 
     const updated = await prisma.seasonalChecklistItem.update({
@@ -556,7 +563,7 @@ export class SeasonalChecklistService {
           },
         },
       },
-      select: { id: true, status: true, seasonalChecklistId: true },
+      select: { id: true, status: true, seasonalChecklistId: true, maintenanceTask: { select: { id: true, status: true } } },
     });
 
     if (!item) {
@@ -574,6 +581,10 @@ export class SeasonalChecklistService {
         dismissedAt: null,
       },
     });
+
+    if (item.maintenanceTask?.status === 'CANCELLED') {
+      await PropertyMaintenanceTaskService.updateTaskStatus(userId, item.maintenanceTask.id, 'PENDING');
+    }
 
     // Reactivating re-enters the item into the checklist's scope; a season
     // that was fully completed reopens.
@@ -625,7 +636,7 @@ export class SeasonalChecklistService {
           },
         },
       },
-      select: { id: true },
+      select: { id: true, maintenanceTask: { select: { id: true } } },
     });
 
     if (!item) {
@@ -642,6 +653,18 @@ export class SeasonalChecklistService {
         snoozedUntil,
       },
     });
+
+    if (item.maintenanceTask) {
+      const linked = await findWorkItemsLinkedToMaintenanceTaskExecution(item.maintenanceTask.id);
+      for (const entry of linked) {
+        await snoozeWorkItem({
+          workItemId: entry.workItemId,
+          snoozedUntil,
+          actorUserId: userId,
+          idempotencyKey: `seasonal-snooze:${seasonalItemId}:${snoozedUntil.toISOString()}`,
+        });
+      }
+    }
 
     return updated;
   }

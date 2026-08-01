@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { HomeAction } from '../productFramework';
+import { adaptHomeActionSource, type HomeAction } from '../productFramework';
 import { prisma } from '../lib/prisma';
 import { emitHomeActionsSurfaced, emitNorthStarLineageEvent } from './analytics';
 import {
@@ -49,8 +49,9 @@ import {
 } from './coverageLifecycle.service';
 import { proposeWorkItemFromHomeAction } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
+import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 import { hasAcceptedWorkItemForProperty } from '../modules/homeOperations/application/hasAcceptedWorkItem.usecase';
-import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition, OperationalWorkItemState } from '@prisma/client';
+import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition, OperationalWorkItemState, Prisma } from '@prisma/client';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -450,6 +451,22 @@ export async function linkWorkItemsAndReconcile(propertyId: string, actions: Ran
         workItem: { id: item.id, workKey: item.workKey, state: item.state, acceptanceState: item.acceptanceState, disposition: item.disposition },
       };
     } catch (err) {
+      await recordReconciliationFailure({
+        propertyId,
+        operation: 'HOME_ACTION_RESOLVE',
+        sourceType: proposal.source.sourceType,
+        sourceEntityId: proposal.source.sourceEntityId,
+        idempotencyKey: `home-action-resolve:${proposal.source.sourceType}:${proposal.source.sourceEntityId}`,
+        payload: JSON.parse(JSON.stringify({
+          proposal: {
+            ...proposal,
+            dueWindowStart: proposal.dueWindowStart?.toISOString() ?? null,
+            dueAt: proposal.dueAt?.toISOString() ?? null,
+            dueWindowEnd: proposal.dueWindowEnd?.toISOString() ?? null,
+          },
+        })) as Prisma.InputJsonValue,
+        error: err,
+      }).catch((ledgerError) => logger.error({ err: ledgerError, actionId: action.id, propertyId }, 'Unable to record Home Operations reconciliation failure'));
       logger.warn({ err, actionId: action.id, propertyId }, 'Home Operations work item resolution failed; action stays unlinked this request');
       return { action, workItem: null as HomeActionWorkItemLink | null };
     }
@@ -485,6 +502,98 @@ export async function linkWorkItemsAndReconcile(propertyId: string, actions: Ran
       },
       workItem,
     }));
+}
+
+async function appendAcceptedOperationalWork(
+  propertyId: string,
+  actions: RankedHomeAction[],
+): Promise<RankedHomeAction[]> {
+  const represented = new Set(actions.flatMap((action) => action.workItem ? [action.workItem.id] : []));
+  const items = await prisma.operationalWorkItem.findMany({
+    where: {
+      propertyId,
+      acceptanceState: 'ACCEPTED',
+      state: { notIn: ['VERIFIED', 'CLOSED'] },
+      supersededByWorkItemId: null,
+      OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }],
+    },
+    include: { executions: true },
+  });
+  const projected: RankedHomeAction[] = [];
+  for (const item of items) {
+    if (represented.has(item.id)) continue;
+    const primaryExecution = item.executions.find((entry) => entry.role === 'PRIMARY') ?? item.executions[0];
+    const sourceKind: HomeAction['source']['kind'] = primaryExecution?.executionType === 'PROJECT'
+      ? 'PROJECT'
+      : primaryExecution?.executionType === 'GUIDANCE'
+        ? 'GUIDANCE'
+        : 'MAINTENANCE';
+    const href = `/dashboard/properties/${propertyId}/home-operations?focusWorkItemId=${encodeURIComponent(item.id)}`;
+    const material = item.safetyTier === 'MATERIAL_FINANCIAL' || item.safetyTier === 'REGULATED_COVERAGE';
+    const now = new Date().toISOString();
+    const homeAction = adaptHomeActionSource(sourceKind, {
+      id: `operational-work:${item.id}`,
+      propertyId,
+      lineageId: `operational-work:${item.id}`,
+      sourceEntityId: primaryExecution?.executionEntityId ?? item.id,
+      sourceVersion: item.sourceVersion,
+      state: item.state === 'DEFERRED' ? 'DEFERRED' : item.state === 'IN_PROGRESS' || item.state === 'IN_PROJECT' || item.state === 'IN_GUIDANCE' ? 'IN_PROGRESS' : 'OPEN',
+      priority: item.priority,
+      signal: item.title,
+      whyItMatters: item.homeownerReason,
+      recommendedAction: item.expectedOutcome,
+      expectedOutcome: item.expectedOutcome,
+      timing: {
+        dueAt: item.dueAt?.toISOString() ?? null,
+        windowStart: item.dueWindowStart?.toISOString() ?? null,
+        windowEnd: item.dueWindowEnd?.toISOString() ?? null,
+        rationale: item.dueAt ? 'This timing comes from your accepted work plan.' : 'This accepted work remains active until its execution record is resolved.',
+      },
+      evidence: [{
+        id: item.id,
+        type: 'SYSTEM_DERIVATION',
+        label: 'Accepted Home Operations work',
+        source: 'Operational Work Item',
+        observedAt: item.updatedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence: item.confidence,
+      }],
+      assumptions: material ? [{ key: 'execution-scope', label: 'Execution scope', value: 'Review the linked work record before committing funds or coverage changes.', source: 'UNKNOWN', editable: true }] : [],
+      options: material ? [
+        { id: 'continue', label: 'Continue the accepted plan', summary: 'Open the linked execution and review its current scope.', recommended: true },
+        { id: 'review', label: 'Review before continuing', summary: 'Pause execution and confirm facts, scope, and professional advice.', recommended: false },
+      ] : [],
+      tradeoffs: material ? [{ optionId: 'continue', dimension: 'TIMING', summary: 'Continuing may preserve timing, while reviewing may reduce decision risk.' }] : [],
+      confidence: { score: item.confidence, label: item.confidence != null && item.confidence >= 0.8 ? 'HIGH' : item.confidence != null && item.confidence >= 0.5 ? 'MEDIUM' : 'LOW', missing: item.missingContext },
+      governance: {
+        safetyTier: item.safetyTier,
+        professionalBoundary: item.safetyTier === 'LOW_CONSEQUENCE' ? null : 'Use the linked governed execution path and an appropriate qualified professional for material, regulated, or safety work.',
+        jurisdictionCheck: item.safetyTier === 'REGULATED_COVERAGE'
+          ? { status: 'VERIFIED', jurisdiction: 'Recorded on accepted work', checkedAt: (item.acceptedAt ?? item.updatedAt).toISOString(), source: 'Accepted Home Operations governance record' }
+          : { status: 'NOT_REQUIRED', jurisdiction: null, checkedAt: null, source: null },
+        conservativeFallback: item.safetyTier === 'SAFETY_EMERGENCY' ? 'Pause work and avoid the affected area if there may be immediate danger.' : null,
+        emergencyEscalation: item.safetyTier === 'SAFETY_EMERGENCY' ? 'For immediate danger, leave the area and contact emergency services or the appropriate utility.' : null,
+        commercialDisclosure: { involvesCommercialAction: false, relationshipType: 'NONE', compensationMayOccur: false, rankingInfluenced: false, summary: 'No provider ranking is created by this portfolio projection.', selectionCriteria: [], nonCommercialAlternatives: [] },
+        reviewedBy: [],
+        policyVersion: 'home-operations-v1',
+      },
+      primaryCta: { kind: item.safetyTier === 'SAFETY_EMERGENCY' ? 'ESCALATE' : 'REVIEW', label: 'Open work', href },
+      secondaryCtas: [],
+      feedbackControls: ['CORRECT_FACT', 'SNOOZE'],
+      relatedJourneyId: primaryExecution?.executionType === 'GUIDANCE' ? primaryExecution.executionEntityId : null,
+      createdAt: item.createdAt.toISOString(),
+      lastEvaluatedAt: now,
+    });
+    projected.push({
+      ...homeAction,
+      ranking: { rank: 0, score: 0, explanation: 'Accepted work continuity', components: { consequence: 0, urgency: 0, confidence: 0, householdRelevance: 0, actionability: 0, missingContextPenalty: 0 } },
+      deduplication: { canonicalKey: item.workKey, mergedActionIds: [] },
+      workItem: { id: item.id, workKey: item.workKey, state: item.state, acceptanceState: item.acceptanceState, disposition: item.disposition },
+    });
+  }
+  return [...actions, ...projected]
+    .sort((a, b) => HOME_ACTION_PRIORITY_ORDER[a.priority] - HOME_ACTION_PRIORITY_ORDER[b.priority] || b.ranking.score - a.ranking.score)
+    .map((action, index) => ({ ...action, ranking: { ...action.ranking, rank: index + 1 } }));
 }
 
 export async function getHomeActionFeed(propertyId: string, userId: string) {
@@ -531,7 +640,8 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   const candidates = reconcileCoverageHomeActions(governedCoverage.actions, coverageStates);
   const coverageConflictSuppressedCount = governedCoverage.actions.length - candidates.length;
 
-  const actions = await linkWorkItemsAndReconcile(propertyId, rankAndDeduplicateHomeActions(candidates));
+  const linkedActions = await linkWorkItemsAndReconcile(propertyId, rankAndDeduplicateHomeActions(candidates));
+  const actions = await appendAcceptedOperationalWork(propertyId, linkedActions);
   emitHomeActionsSurfaced({ propertyId, userId, actions, source: 'phase2_home_actions' });
   for (const action of actions) {
     for (const supersededActionId of action.deduplication.mergedActionIds) {

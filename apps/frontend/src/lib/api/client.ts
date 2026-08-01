@@ -3095,6 +3095,27 @@ class APIClient {
     );
   }
 
+  async listHomeOperationsReconciliations(propertyId: string) {
+    return this.request<{
+      reconciliations: Array<{
+        id: string;
+        workItemId?: string | null;
+        operation: string;
+        status: 'PENDING' | 'RETRYING' | 'FAILED';
+        errorMessage?: string | null;
+        attempts: number;
+        nextRetryAt?: string | null;
+      }>;
+    }>(`/api/properties/${encodeURIComponent(propertyId)}/home-operations/reconciliations`);
+  }
+
+  async retryHomeOperationsReconciliation(propertyId: string, reconciliationId: string) {
+    return this.request<{ id: string; status: string }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/reconciliations/${encodeURIComponent(reconciliationId)}/retry`,
+      { method: 'POST' },
+    );
+  }
+
   async getWorkItem(propertyId: string, workItemId: string) {
     return this.request<WorkItemDetailDTO>(
       `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}`,
@@ -3150,6 +3171,13 @@ class APIClient {
     return this.request<WorkItemDetailDTO>(
       `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/duplicate`,
       { method: 'POST', body: JSON.stringify({ supersededByWorkItemId }) },
+    );
+  }
+
+  async reverseWorkItemDuplicateDecision(propertyId: string, workItemId: string) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/duplicate`,
+      { method: 'DELETE' },
     );
   }
 

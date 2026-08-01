@@ -8,6 +8,7 @@ import { inspectionFindingSourceAdapter, resolveInspectionFindingWorkKey } from 
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
+import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 
 // ── Home Operations Slice 5: finding -> work policy mapping ────────────────────
 
@@ -70,6 +71,15 @@ async function closeFindingWorkItemBestEffort(
       idempotencyKey: `inspection-finding-dismissed:${workItem.id}`,
     });
   } catch (err) {
+    await recordReconciliationFailure({
+      propertyId,
+      operation: 'INSPECTION_DISMISS_SYNC',
+      sourceType: 'INSPECTION',
+      sourceEntityId: findingId,
+      idempotencyKey: `inspection-dismiss-sync:${findingId}`,
+      payload: { findingId, actorUserId },
+      error: err,
+    }).catch((ledgerError) => logger.error({ err: ledgerError, findingId }, 'Unable to record inspection reconciliation failure'));
     logger.warn({ err, findingId }, 'Home Operations work item sync failed; finding dismissal proceeds regardless');
   }
 }
@@ -192,6 +202,7 @@ export async function acceptFindingAsWork(
     description: finding.inspectorDescription,
     priority: maintenancePriorityForFinding(finding.severity),
     estimatedCost: finding.estimatedCostCentsHigh != null ? finding.estimatedCostCentsHigh / 100 : undefined,
+    canonicalWorkItemId: workItem.id,
   });
   await linkWorkExecution({ workItemId: workItem.id, executionType: 'MAINTENANCE_TASK', executionEntityId: task.id });
   return { workItem, policy, execution: { executionType: 'MAINTENANCE_TASK' as const, executionEntityId: task.id }, created: true };

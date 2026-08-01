@@ -53,6 +53,7 @@ import { evaluateRefinanceRadarForSnapshot } from './jobs/evaluateRefinanceRadar
 import { evaluateRefinanceDataRequiredForSnapshot } from './jobs/evaluateRefinanceDataRequired.job';
 import { runHomeBriefingDeliveryJob } from './jobs/homeBriefingDelivery.job';
 import { runHomeOperationsDueDigest } from './jobs/homeOperationsDueDigest.job';
+import { runHomeOperationsReconciliation } from './jobs/homeOperationsReconciliation.job';
 import { runWeeklyRetentionReportJob } from './jobs/weeklyRetentionReport.job';
 import { expireGuidanceSignalsJob } from './jobs/expireGuidanceSignals.job';
 import { runSharedDataBackfillJob } from './jobs/sharedDataBackfill.job';
@@ -423,6 +424,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     return result;
   },
   'home-operations-due-digest':      async () => runHomeOperationsDueDigest(),
+  'home-operations-reconciliation':  async (opts) => runHomeOperationsReconciliation(opts),
   'shared-data-backfill':            async (opts) => { await runSharedDataBackfillJob(opts); },
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },

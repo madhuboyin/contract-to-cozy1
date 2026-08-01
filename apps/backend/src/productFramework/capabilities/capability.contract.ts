@@ -33,6 +33,8 @@ export const CAPABILITY_CONTEXT_TYPES = [
   'SERVICE',
   'JOURNEY',
   'COVERAGE_DECISION',
+  'WORK_ITEM',
+  'FINDING',
 ] as const;
 
 export const CAPABILITY_RECOMMENDATION_MODES = [

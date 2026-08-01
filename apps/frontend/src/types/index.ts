@@ -319,6 +319,11 @@ export type WorkItemListEntryDTO = {
   ownerUserId: string | null;
   confidence: number | null;
   missingContext: string[];
+  snoozedUntil: string | null;
+  isRoutine: boolean;
+  executions: Array<{ executionType: string; executionEntityId: string; role: string; responsibleParty: string }>;
+  reconciliationPending: boolean;
+  supersededByWorkItemId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -331,9 +336,8 @@ export type WorkItemDetailDTO = WorkItemListEntryDTO & {
   deferredUntil: string | null;
   dismissedAt: string | null;
   closedAt: string | null;
-  supersededByWorkItemId: string | null;
   sources: Array<{ sourceType: string; sourceEntityId: string; sourceVersion: string | null; sourceRole: string; active: boolean }>;
-  executions: Array<{ executionType: string; executionEntityId: string; role: string }>;
+  executions: Array<{ executionType: string; executionEntityId: string; role: string; responsibleParty: string }>;
   evidence: Array<{
     evidenceType: OperationalWorkEvidenceType;
     evidenceEntityId: string;

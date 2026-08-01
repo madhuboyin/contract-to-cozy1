@@ -36,6 +36,8 @@ const nextConfig = {
       { source: '/dashboard/properties/:id/inventory/coverage', destination: '/dashboard/properties/:id/inventory?tab=coverage', permanent: false },
       // Home Operations Slice 2: Prioritized Action Plan renamed to Home Operations
       { source: '/dashboard/properties/:id/action-plan', destination: '/dashboard/properties/:id/home-operations', permanent: false },
+      // Seasonal applicability remains a source, but task execution lives in Maintenance.
+      { source: '/dashboard/seasonal', destination: '/dashboard/maintenance?filter=seasonal', permanent: false },
 
       // Vault consolidation
       { source: '/dashboard/inventory', destination: '/dashboard/vault?tab=assets', permanent: false },
