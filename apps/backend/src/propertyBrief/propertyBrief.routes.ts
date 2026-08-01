@@ -15,6 +15,7 @@ import {
   getPropertyBriefPreview,
   getPropertyBriefTemplates,
   getSharedPropertyBrief,
+  listEligiblePropertyBriefDocuments,
   listPropertyBriefs,
   revokePropertyBriefShare,
 } from './propertyBrief.service';
@@ -47,6 +48,39 @@ router.get('/property-briefs/shares/:token', async (req: Request, res: Response,
     return next(error);
   }
 });
+
+router.get('/property-briefs/shares/:token/download', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const brief = await getSharedPropertyBrief({
+      token: token.parse(req.params.token),
+      accessKind: 'DOWNLOAD',
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+    const filename = `${brief.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'property-brief'}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(JSON.stringify(brief, null, 2));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get(
+  '/properties/:propertyId/property-briefs/eligible-documents',
+  authenticate,
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      return res.json({
+        success: true,
+        data: await listEligiblePropertyBriefDocuments(req.params.propertyId),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
 
 router.get(
   '/properties/:propertyId/property-briefs',

@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, FileCheck2, LockKeyhole } from 'lucide-react';
+import { AlertTriangle, Download, FileCheck2, LockKeyhole } from 'lucide-react';
 import { api } from '@/lib/api/client';
 
 type SharedBrief = {
@@ -82,6 +82,14 @@ export default function SharedPropertyBriefPage() {
             ? brief.excludedSections.map(humanize).join(', ')
             : 'No template sections'}.
         </p>
+        {brief.downloadPolicy === 'ALLOW_DOWNLOAD' && (
+          <a
+            href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/property-briefs/shares/${encodeURIComponent(params.token)}/download`}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            <Download className="h-4 w-4" /> Download this snapshot
+          </a>
+        )}
       </header>
 
       {brief.sections.map((section) => {

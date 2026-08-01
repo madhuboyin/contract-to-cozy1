@@ -13,6 +13,8 @@ import { APIError } from '../middleware/error.middleware';
 import { getPropertyIntelligenceCoverage } from '../propertyIntelligence/propertyIntelligence.service';
 import type { HomeBriefingTopic } from './homeBriefing.contracts';
 import { NotificationService } from '../services/notification.service';
+import { reconcileCanonicalPropertyChanges } from '../propertyChanges/canonicalChangeReconciliation.service';
+import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
 
 export const HOME_BRIEFING_BASELINE_VERSION = 'home-briefing-deterministic-v1';
 
@@ -216,7 +218,7 @@ async function notifyHomeBriefingDelivery(input: {
     item.materiality === IntelligenceAssessmentMateriality.URGENT);
   await NotificationService.create({
     userId: input.userId,
-    deduplicationKey: input.deliveryKey,
+    deduplicationKey: `${input.deliveryKey}:v${input.delivery.itemCount}`,
     type: 'HOME_BRIEFING_DELIVERED',
     title: `${input.delivery.itemCount} meaningful home ${input.delivery.itemCount === 1 ? 'change' : 'changes'}`,
     message: 'Your Home Briefing links each update to its canonical source or next step.',
@@ -282,17 +284,11 @@ export async function generateHomeBriefing(input: {
     where: { deliveryKey },
     include: { items: { orderBy: [{ materiality: 'desc' }, { createdAt: 'desc' }] } },
   });
-  if (existing) {
-    await notifyHomeBriefingDelivery({
-      delivery: existing,
-      deliveryKey,
-      propertyId: input.propertyId,
-      userId: input.userId,
-      cadence: preference.cadence,
-      channels: preference.channels,
-    });
-    return existing;
-  }
+  await reconcileCanonicalPropertyChanges({
+    propertyId: input.propertyId,
+    since: window.start,
+    through: window.end,
+  });
 
   const [changes, sourceCoverage] = await Promise.all([
     prisma.propertyChange.findMany({
@@ -383,6 +379,13 @@ export async function generateHomeBriefing(input: {
             geographyKey: sourceDetail.geographyKey,
           }
         : null,
+      safetyTier: derivePropertyIntelligenceSafetyTier({
+        possibleStructuralStress:
+          topic === 'HAZARD'
+          && change.materiality === IntelligenceAssessmentMateriality.URGENT,
+        insuranceOrValueImplication: topic === 'HAZARD' || topic === 'LOCAL_CHANGE',
+        verifiedHistoryRead: topic === 'HOME_HISTORY',
+      }),
     };
     const shareEligible =
       topic === 'LOCAL_CHANGE'
@@ -396,6 +399,85 @@ export async function generateHomeBriefing(input: {
       shareEligible,
     };
   }));
+
+  if (existing) {
+    const delivery = await prisma.$transaction(async (tx) => {
+      for (const item of preparedItems) {
+        await tx.homeBriefingItem.upsert({
+          where: {
+            deliveryId_propertyChangeId: {
+              deliveryId: existing.id,
+              propertyChangeId: item.change.id,
+            },
+          },
+          create: {
+            deliveryId: existing.id,
+            propertyChangeId: item.change.id,
+            canonicalActionId: item.change.canonicalActionId,
+            canonicalEventId: item.change.canonicalEventId,
+            topic: item.topic,
+            title: item.copy.title,
+            summary: item.copy.summary,
+            materiality: item.change.materiality,
+            primaryDeepLink: item.primaryDeepLink,
+            sourceLineage: json(item.sourceLineage),
+            shareEligible: item.shareEligible,
+          },
+          update: {},
+        });
+        await tx.propertyChangeAudienceState.upsert({
+          where: {
+            propertyChangeId_userId: {
+              propertyChangeId: item.change.id,
+              userId: input.userId,
+            },
+          },
+          create: {
+            propertyChangeId: item.change.id,
+            userId: input.userId,
+            firstDeliveredAt: now,
+            lastDeliveredAt: now,
+          },
+          update: { lastDeliveredAt: now },
+        });
+      }
+      const itemCount = await tx.homeBriefingItem.count({
+        where: { deliveryId: existing.id },
+      });
+      await tx.homeBriefingDelivery.update({
+        where: { id: existing.id },
+        data: {
+          itemCount,
+          windowEnd: now,
+          sourceHealthSnapshot: json({
+            comprehensive: false,
+            capturedAt: now,
+            sources: sourceCoverage,
+            scopeLimitations: [
+              'This snapshot covers reviewed Property Intelligence providers only.',
+              'Canonical domains without a source-health contract are not treated as verified quiet.',
+            ],
+          }),
+          quietReasonCodes: itemCount > 0 ? [] : quietReasonCodes,
+        },
+      });
+      return tx.homeBriefingDelivery.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: { items: { orderBy: [{ materiality: 'desc' }, { createdAt: 'desc' }] } },
+      });
+    });
+    if (preparedItems.length > 0) {
+      await notifyHomeBriefingDelivery({
+        delivery,
+        deliveryKey,
+        propertyId: input.propertyId,
+        userId: input.userId,
+        cadence: preference.cadence,
+        channels: preference.channels,
+      });
+    }
+    return delivery;
+  }
 
   let delivery;
   try {

@@ -10,6 +10,7 @@ import {
   getPropertyIntelligenceCoverage,
   getPropertyIntelligenceObservations,
 } from './propertyIntelligence.service';
+import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
 
 export const AROUND_YOUR_HOME_SOURCE_FAMILIES = [
   IntelligenceSourceFamily.PLANNING,
@@ -167,6 +168,9 @@ export async function getAroundYourHome(
       },
       possibleRelevance: assessment
         ? {
+            safetyTier: derivePropertyIntelligenceSafetyTier({
+              insuranceOrValueImplication: match.observation.source.family === IntelligenceSourceFamily.FLOOD_MAP,
+            }),
             relevance: assessment.relevance,
             materiality: assessment.materiality,
             confidence: assessment.confidence,
@@ -175,6 +179,9 @@ export async function getAroundYourHome(
             boundary: 'Possible relevance only. This does not predict property value, demand, insurance cost, or household impact.',
           }
         : {
+            safetyTier: derivePropertyIntelligenceSafetyTier({
+              insuranceOrValueImplication: match.observation.source.family === IntelligenceSourceFamily.FLOOD_MAP,
+            }),
             relevance: 'UNKNOWN',
             materiality: 'INFORMATIONAL',
             confidence: 0,

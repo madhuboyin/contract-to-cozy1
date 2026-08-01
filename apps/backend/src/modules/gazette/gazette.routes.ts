@@ -1,7 +1,7 @@
 // apps/backend/src/modules/gazette/gazette.routes.ts
 // Homeowner-facing Express routes for the Home Gazette feature.
 
-import { Router } from 'express';
+import { Request, Response, Router } from 'express';
 import { authenticate } from '../../middleware/auth.middleware';
 import { apiRateLimiter } from '../../middleware/rateLimiter.middleware';
 import { GazetteController } from './controllers/gazette.controller';
@@ -9,13 +9,22 @@ import { GazetteController } from './controllers/gazette.controller';
 const router = Router();
 
 // GET /gazette/current?propertyId=xxx
-router.get('/gazette/current', authenticate, GazetteController.getCurrent.bind(GazetteController));
+const retiredGazetteRead = (_req: Request, res: Response) => res.status(410).json({
+  success: false,
+  error: {
+    code: 'GAZETTE_RETIRED',
+    message: 'Home Gazette has been retired. Use Home Briefing for current, source-linked property changes.',
+    replacement: '/api/properties/:propertyId/home-briefings',
+  },
+});
+
+router.get('/gazette/current', authenticate, retiredGazetteRead);
 
 // GET /gazette/editions?propertyId=xxx&page=1&pageSize=10
-router.get('/gazette/editions', authenticate, GazetteController.getEditions.bind(GazetteController));
+router.get('/gazette/editions', authenticate, retiredGazetteRead);
 
 // GET /gazette/editions/:editionId
-router.get('/gazette/editions/:editionId', authenticate, GazetteController.getEdition.bind(GazetteController));
+router.get('/gazette/editions/:editionId', authenticate, retiredGazetteRead);
 
 // POST /gazette/editions/:editionId/share
 router.post('/gazette/editions/:editionId/share', authenticate, (_req, res) =>

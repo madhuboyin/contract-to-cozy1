@@ -107,23 +107,23 @@ async function assembleSections(input: {
   if (!property) throw new APIError('Property not found.', 404, 'PROPERTY_NOT_FOUND');
 
   const factDefinitions: Array<{ key: string; label: string; value: unknown }> = [
-    { key: 'address', label: 'Address', value: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` },
-    { key: 'dwellingType', label: 'Dwelling type', value: property.dwellingType },
-    { key: 'ownershipForm', label: 'Ownership form', value: property.ownershipForm },
-    { key: 'propertyUse', label: 'Property use', value: property.propertyUse },
-    { key: 'occupancyStatus', label: 'Occupancy status', value: property.occupancyStatus },
-    { key: 'propertySize', label: 'Property size', value: property.propertySize },
-    { key: 'yearBuilt', label: 'Year built', value: property.yearBuilt },
-    { key: 'bedrooms', label: 'Bedrooms', value: property.bedrooms },
-    { key: 'bathrooms', label: 'Bathrooms', value: property.bathrooms },
-    { key: 'roofType', label: 'Roof type', value: property.roofType },
-    { key: 'roofReplacementYear', label: 'Roof replacement year', value: property.roofReplacementYear },
-    { key: 'heatingType', label: 'Heating type', value: property.heatingType },
-    { key: 'coolingType', label: 'Cooling type', value: property.coolingType },
-    { key: 'waterHeaterType', label: 'Water heater type', value: property.waterHeaterType },
-    { key: 'hvacInstallYear', label: 'HVAC install year', value: property.hvacInstallYear },
-    { key: 'waterHeaterInstallYear', label: 'Water heater install year', value: property.waterHeaterInstallYear },
-    { key: 'foundationType', label: 'Foundation type', value: property.foundationType },
+    { key: 'location.address', label: 'Address', value: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` },
+    { key: 'core.dwellingType', label: 'Dwelling type', value: property.dwellingType },
+    { key: 'core.ownershipForm', label: 'Ownership form', value: property.ownershipForm },
+    { key: 'core.propertyUse', label: 'Property use', value: property.propertyUse },
+    { key: 'core.occupancyStatus', label: 'Occupancy status', value: property.occupancyStatus },
+    { key: 'core.propertySizeSqFt', label: 'Property size', value: property.propertySize },
+    { key: 'core.yearBuilt', label: 'Year built', value: property.yearBuilt },
+    { key: 'core.bedrooms', label: 'Bedrooms', value: property.bedrooms },
+    { key: 'core.bathrooms', label: 'Bathrooms', value: property.bathrooms },
+    { key: 'structure.roofType', label: 'Roof type', value: property.roofType },
+    { key: 'structure.roofReplacementYear', label: 'Roof replacement year', value: property.roofReplacementYear },
+    { key: 'systems.heatingType', label: 'Heating type', value: property.heatingType },
+    { key: 'systems.coolingType', label: 'Cooling type', value: property.coolingType },
+    { key: 'systems.waterHeaterType', label: 'Water heater type', value: property.waterHeaterType },
+    { key: 'systems.hvacInstallYear', label: 'HVAC install year', value: property.hvacInstallYear },
+    { key: 'systems.waterHeaterInstallYear', label: 'Water heater install year', value: property.waterHeaterInstallYear },
+    { key: 'structure.foundationType', label: 'Foundation type', value: property.foundationType },
   ];
   const knownFacts = factDefinitions.filter((fact) =>
     fact.value !== null && fact.value !== undefined && fact.value !== 'UNKNOWN');
@@ -135,22 +135,28 @@ async function assembleSections(input: {
       propertyId: input.propertyId,
       factKey: { in: knownFacts.map((fact) => fact.key) },
       supersededAt: null,
+      verifiedAt: { not: null },
     },
     orderBy: { observedAt: 'desc' },
   });
-  const evidenceByFact = new Map(evidence.map((item) => [item.factKey, item]));
+  const evidenceByFact = new Map<string, (typeof evidence)[number]>();
+  for (const item of evidence) {
+    if (!evidenceByFact.has(item.factKey)) evidenceByFact.set(item.factKey, item);
+  }
+  const verifiedFacts = knownFacts.filter((fact) => evidenceByFact.has(fact.key));
+  const knownButUnverifiedFacts = knownFacts.filter((fact) => !evidenceByFact.has(fact.key));
   const sections: SectionSeed[] = [];
 
   if (input.selectedSections.includes('PROPERTY_FACTS')) {
-    const items = knownFacts.map((fact) => {
-      const proof = evidenceByFact.get(fact.key);
+    const items = verifiedFacts.map((fact) => {
+      const proof = evidenceByFact.get(fact.key)!;
       return {
         key: fact.key,
         label: fact.label,
         value: serialize(fact.value),
-        source: proof ? proof.sourceType : 'CANONICAL_PROPERTY_RECORD',
-        verification: proof?.verifiedAt ? 'VERIFIED' : proof?.observationState ?? 'HOMEOWNER_RECORD',
-        asOf: (proof?.observedAt ?? property.updatedAt).toISOString(),
+        source: proof.sourceType,
+        verification: 'VERIFIED',
+        asOf: proof.observedAt.toISOString(),
       };
     });
     sections.push({
@@ -163,10 +169,10 @@ async function assembleSections(input: {
         const proof = evidenceByFact.get(item.key);
         return {
           itemKey: item.key,
-          sourceEntityType: proof?.sourceEntityType ?? 'PROPERTY',
-          sourceEntityId: proof?.sourceEntityId ?? property.id,
-          sourceLabel: proof ? `Property fact evidence: ${proof.sourceType}` : 'Canonical homeowner property record',
-          sourceAsOf: proof?.observedAt ?? property.updatedAt,
+          sourceEntityType: proof?.sourceEntityType ?? 'PROPERTY_FACT_EVIDENCE',
+          sourceEntityId: proof?.sourceEntityId ?? proof!.id,
+          sourceLabel: `Verified property fact evidence: ${proof!.sourceType}`,
+          sourceAsOf: proof!.observedAt,
           verification: item.verification,
         };
       }),
@@ -260,13 +266,22 @@ async function assembleSections(input: {
   }
 
   if (input.selectedSections.includes('OPEN_UNKNOWNS')) {
-    const items = unknownFacts.map((fact) => ({
+    const items = [
+      ...unknownFacts.map((fact) => ({
       key: fact.key,
       label: fact.label,
       state: 'UNKNOWN_OR_NOT_RECORDED',
       source: 'CANONICAL_PROPERTY_RECORD',
       asOf: property.updatedAt.toISOString(),
-    }));
+      })),
+      ...knownButUnverifiedFacts.map((fact) => ({
+        key: fact.key,
+        label: fact.label,
+        state: 'KNOWN_NOT_VERIFIED',
+        source: 'CANONICAL_PROPERTY_RECORD',
+        asOf: property.updatedAt.toISOString(),
+      })),
+    ];
     sections.push({
       sectionType: PropertyBriefSectionType.OPEN_UNKNOWNS,
       title: sectionTitle('OPEN_UNKNOWNS'),
@@ -355,6 +370,22 @@ export async function getPropertyBriefTemplates() {
     purpose,
     ...template,
   }));
+}
+
+export async function listEligiblePropertyBriefDocuments(propertyId: string) {
+  return prisma.document.findMany({
+    where: { propertyId, verificationStatus: DocumentVerificationStatus.VERIFIED },
+    orderBy: { verifiedAt: 'desc' },
+    take: 100,
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      description: true,
+      verifiedAt: true,
+      updatedAt: true,
+    },
+  });
 }
 
 export async function listPropertyBriefs(propertyId: string, userId: string) {

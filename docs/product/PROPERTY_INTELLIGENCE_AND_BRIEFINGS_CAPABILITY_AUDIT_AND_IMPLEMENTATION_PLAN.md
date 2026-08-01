@@ -1668,3 +1668,34 @@ Reviewed source or canonical home change
 That loop gives the homeowner a reason to return: something real changed,
 ContractToCozy can explain it, the homeowner has control over the response, and
 the outcome becomes part of a home record that grows more useful over time.
+
+---
+
+## 16. Functionality Closure Update — 2026-08-01
+
+The functionality-focused closure pass is implemented in code:
+
+- canonical Timeline, property-fact evidence, verified Vault document, claim,
+  project, and maintenance changes are reconciled into `PropertyChange` before
+  briefing selection;
+- an existing weekly, monthly, or immediate briefing is incrementally extended
+  when later changes arrive in the same cadence bucket, with versioned
+  notification deduplication;
+- USGS earthquakes have a reviewed, fail-closed adapter into the common source,
+  coverage, observation, match, assessment, and change pipeline;
+- Timeline exposes date precision, parent/milestone grouping, correction
+  revisions, confirmation/dispute, evidence, selected export, and annual recap;
+- Property Brief includes only evidence-verified property facts in its fact
+  section, exposes verified-document selection, configurable expiry and download
+  policy, an audited download endpoint, and share revocation/access counts;
+- result instances now derive safety tier for hazard, local-change, briefing, and
+  confirmed-effect action paths; and
+- legacy Home Score snapshot execution is removed, Gazette read surfaces return
+  a canonical Home Briefing retirement response, and replacement capabilities
+  are available through rollout controls.
+
+Production activation of the USGS source is intentionally operational, not a
+code default: deployment must set `USGS_PROPERTY_INTELLIGENCE_PILOT_ENABLED=true`
+with `USGS_PROPERTY_INTELLIGENCE_REVIEWED_BY` and
+`USGS_PROPERTY_INTELLIGENCE_REVIEW_REFERENCE`. A paused source or hazard-family
+policy cannot be re-enabled by environment configuration.

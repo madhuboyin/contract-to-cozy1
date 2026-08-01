@@ -36,7 +36,6 @@ import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
 import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 import { severeWeatherAlertsJob } from './jobs/severeWeatherAlerts.job';
 import { airNowAirQualityJob } from './jobs/airNowAirQuality.job';
-import { usgsEarthquakeJob } from './jobs/usgsEarthquake.job';
 import { openFemaDeclarationsJob } from './jobs/openFemaDeclarations.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
@@ -47,6 +46,7 @@ import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.j
 import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNotification.job';
 import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummyEvents.job';
 import { runNycZapPlanningIngestJob } from './jobs/nycZapPlanningIngest.job';
+import { runUsgsHazardIntelligenceIngestJob } from './jobs/usgsHazardIntelligenceIngest.job';
 import { runHabitGenerationJob } from './jobs/habitGeneration.job';
 import { ingestMortgageRatesJob } from './jobs/ingestMortgageRates.job';
 import { evaluateRefinanceRadarForSnapshot } from './jobs/evaluateRefinanceRadar.job';
@@ -87,7 +87,6 @@ import {
   PropertyIntelligenceJobType,
   PropertyIntelligenceJobPayload,
 } from './jobs/propertyIntelligence.job';
-import { captureWeeklyScoreSnapshotsJob } from './jobs/propertyScoreSnapshots.job';
 import { processMaintenanceReminders } from '@worker-shared/services/maintenanceReminder.service';
 import {
   canonicalWorkerJobKey,
@@ -260,7 +259,6 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
     return result;
   },
   'seasonal-notifications':          async () => sendSeasonalNotifications(),
-  'weekly-score-snapshots':          async () => { await captureWeeklyScoreSnapshotsJob(); },
   // WKR-008: this handler and the four below it (neighborhood-radar-refresh,
   // home-habit-generation, reserve-fund-recalculation,
   // provider-missing-credential-sweep) each already isolate per-item
@@ -316,22 +314,6 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
       smokeCorrelationId: result.smokeCorrelationId,
     };
   },
-  'usgs-earthquakes':                async (opts) => {
-    const result = await usgsEarthquakeJob(opts);
-    logger.info(
-      { ...result },
-      `[usgs-earthquakes] status=${result.sourceRunStatus} actionable=${result.actionableEvents ?? 0} matched=${result.matchedEvents ?? 0} queued=${result.queued}`,
-    );
-    return {
-      examined: result.propertiesEvaluated ?? 0,
-      refreshed: result.createdOrUpdated,
-      failed: result.sourceRunStatus === 'failed'
-        ? 1
-        : result.sourceRunStatus === 'partial' ? Math.max(1, result.rejected ?? 0) : 0,
-      reason: result.failed > 0 ? `${result.failed} USGS fetch or record failure(s)` : undefined,
-      smokeCorrelationId: result.smokeCorrelationId,
-    };
-  },
   'openfema-declarations':           async (opts) => {
     const result = await openFemaDeclarationsJob(opts);
     logger.info(
@@ -360,6 +342,11 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
       { ...result },
       `[nyc-zap-planning-ingest] examined=${result.examined} created=${result.created ?? 0} refreshed=${result.refreshed ?? 0}`,
     );
+    return result;
+  },
+  'usgs-hazard-intelligence-ingest': async (opts) => {
+    const result = await runUsgsHazardIntelligenceIngestJob(opts);
+    logger.info({ ...result }, '[usgs-hazard-intelligence-ingest] common hazard observation ingest completed');
     return result;
   },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
@@ -482,8 +469,8 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
 // Per-job cron expression overrides (env-var-based schedules)
 const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'nyc-zap-planning-ingest':   process.env.NYC_ZAP_PLANNING_INGEST_CRON,
+  'usgs-hazard-intelligence-ingest': process.env.USGS_HAZARD_INTELLIGENCE_INGEST_CRON,
   'airnow-air-quality':         process.env.AIRNOW_AIR_QUALITY_CRON,
-  'usgs-earthquakes':           process.env.USGS_EARTHQUAKE_CRON,
   'openfema-declarations':      process.env.OPEN_FEMA_DECLARATIONS_CRON,
   'tax-assessment-ingest':      process.env.TAX_ASSESSMENT_INGEST_CRON,
   'radar-safety-net-reconciliation': process.env.RADAR_SAFETY_NET_RECONCILIATION_CRON,
@@ -503,7 +490,6 @@ const RADAR_SOURCE_JOB_KEYS = new Set([
   'severe-weather-alerts',
   'freeze-risk-incidents',
   'airnow-air-quality',
-  'usgs-earthquakes',
   'openfema-declarations',
   'tax-assessment-ingest',
 ]);

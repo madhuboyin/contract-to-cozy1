@@ -18,6 +18,7 @@ import {
   createPropertyBriefShare,
   getPropertyBriefPreview,
   getPropertyBriefTemplates,
+  listEligiblePropertyBriefDocuments,
   listPropertyBriefs,
   revokePropertyBriefShare,
   type PropertyBrief,
@@ -108,6 +109,10 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
     queryKey: ['property-briefs', propertyId],
     queryFn: () => listPropertyBriefs(propertyId),
   });
+  const eligibleDocumentsQuery = useQuery({
+    queryKey: ['property-brief-eligible-documents', propertyId],
+    queryFn: () => listEligiblePropertyBriefDocuments(propertyId),
+  });
   const [purpose, setPurpose] = React.useState<PropertyBriefPurpose>('HOMEOWNER_REFERENCE');
   const [selectedSections, setSelectedSections] = React.useState<PropertyBriefSectionType[]>([
     'PROPERTY_FACTS',
@@ -118,6 +123,9 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
   const [selectedBriefId, setSelectedBriefId] = React.useState<string | null>(null);
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
   const [copyComplete, setCopyComplete] = React.useState(false);
+  const [selectedDocumentIds, setSelectedDocumentIds] = React.useState<string[]>([]);
+  const [expiresInDays, setExpiresInDays] = React.useState(14);
+  const [downloadPolicy, setDownloadPolicy] = React.useState<'VIEW_ONLY' | 'ALLOW_DOWNLOAD'>('VIEW_ONLY');
 
   const currentTemplate = templatesQuery.data?.find((item) => item.purpose === purpose);
   const previewQuery = useQuery({
@@ -131,7 +139,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
       purpose,
       selectedSections,
       acknowledgeSensitiveSections: sensitiveAcknowledged,
-      documentIds: [],
+      documentIds: selectedSections.includes('DOCUMENTS') ? selectedDocumentIds : [],
     }),
     onSuccess: async (brief) => {
       setSelectedBriefId(brief.id);
@@ -141,8 +149,8 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
   });
   const shareMutation = useMutation({
     mutationFn: () => createPropertyBriefShare(propertyId, selectedBriefId as string, {
-      expiresInDays: 14,
-      downloadPolicy: 'VIEW_ONLY',
+      expiresInDays,
+      downloadPolicy,
       previewAcknowledged: true,
       limitationAcknowledged: true,
     }),
@@ -236,6 +244,32 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                 );
               })}
             </fieldset>
+
+            {selectedSections.includes('DOCUMENTS') && (
+              <fieldset className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Verified Vault documents</legend>
+                {eligibleDocumentsQuery.isLoading && <p className="text-xs text-slate-600">Loading eligible documents…</p>}
+                {(eligibleDocumentsQuery.data ?? []).length === 0 && !eligibleDocumentsQuery.isLoading && (
+                  <p className="text-xs leading-5 text-slate-600">No verified documents are eligible. Verify a Vault document before including it.</p>
+                )}
+                {(eligibleDocumentsQuery.data ?? []).map((document) => (
+                  <label key={document.id} className="flex cursor-pointer items-start gap-3 rounded-lg bg-white p-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedDocumentIds.includes(document.id)}
+                      onChange={() => setSelectedDocumentIds((current) => current.includes(document.id)
+                        ? current.filter((id) => id !== document.id)
+                        : [...current, document.id])}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="text-sm text-slate-800">
+                      <span className="block font-medium">{document.name}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{humanize(document.type)} · verified {new Date(document.verifiedAt ?? document.updatedAt).toLocaleDateString()}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
 
             {selectedSensitive && (
               <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -339,8 +373,22 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="font-semibold text-slate-950">2. Share this exact snapshot</h3>
                 <p className="mt-1 text-xs leading-5 text-slate-600">
-                  The link expires in 14 days, is view-only, and logs access. Creating a new Property Brief is required to change its contents.
+                  Choose a short expiration and whether the recipient may download this immutable snapshot. Every view and download is logged.
                 </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-600">
+                    Expires after
+                    <select value={expiresInDays} onChange={(event) => setExpiresInDays(Number(event.target.value))} className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900">
+                      <option value={1}>1 day</option><option value={3}>3 days</option><option value={7}>7 days</option><option value={14}>14 days</option><option value={30}>30 days</option><option value={90}>90 days</option>
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Recipient permissions
+                    <select value={downloadPolicy} onChange={(event) => setDownloadPolicy(event.target.value as typeof downloadPolicy)} className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900">
+                      <option value="VIEW_ONLY">View only</option><option value="ALLOW_DOWNLOAD">View and download</option>
+                    </select>
+                  </label>
+                </div>
                 <button
                   type="button"
                   disabled={shareMutation.isPending}

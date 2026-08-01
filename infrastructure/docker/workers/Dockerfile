@@ -331,10 +331,12 @@ COPY apps/backend/src/propertyIntelligence/propertyIntelligence.service.ts \
      apps/backend/src/propertyIntelligence/launchGovernance.ts \
      src/shared/backend/propertyIntelligence/
 COPY apps/backend/src/propertyIntelligence/pilots/nycZapPilot.ts \
+     apps/backend/src/propertyIntelligence/pilots/usgsHazardPilot.ts \
      src/shared/backend/propertyIntelligence/pilots/
 COPY apps/backend/src/propertyChanges/propertyChange.service.ts \
      apps/backend/src/propertyChanges/propertyChange.contracts.ts \
      apps/backend/src/propertyChanges/propertyChangePolicy.ts \
+     apps/backend/src/propertyChanges/canonicalChangeReconciliation.service.ts \
      src/shared/backend/propertyChanges/
 COPY apps/backend/src/config/ai-constants.ts src/shared/backend/config/
 # Copy guidance engine service files needed by coverageLapseIncidents, freezeRiskIncidents,
@@ -370,6 +372,7 @@ COPY apps/backend/src/productFramework/recommendationGovernance.contract.ts \
      apps/backend/src/productFramework/homeAction.contract.ts \
      apps/backend/src/productFramework/homeAssetDisplay.ts \
      apps/backend/src/productFramework/outcomeLineage.contract.ts \
+     apps/backend/src/productFramework/propertyIntelligenceOwnership.contract.ts \
      src/shared/backend/productFramework/
 # Capability registry/catalog barrel (used by toolLifecycle.ts analytics
 # lineage). Pure data/logic — no route/controller/Prisma coupling — so it's

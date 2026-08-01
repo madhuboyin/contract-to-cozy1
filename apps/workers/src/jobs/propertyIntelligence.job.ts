@@ -11,7 +11,6 @@ import { prisma } from '../lib/prisma';
 import { logger, AppLogger } from '../lib/logger';
 import { HiddenAssetService } from '@worker-shared/services/hiddenAssets.service';
 import RiskAssessmentService from '@worker-shared/services/RiskAssessment.service';
-import { capturePropertyScoreSnapshots } from './propertyScoreSnapshots.job';
 import { HomeDigitalTwinService } from '@worker-shared/services/homeDigitalTwin.service';
 import { HomeDigitalTwinScenarioService } from '@worker-shared/services/homeDigitalTwinScenario.service';
 
@@ -37,19 +36,15 @@ const hiddenAssetService = new HiddenAssetService();
 // is injected as a plain function reference (its own deps default to the real
 // implementations independently) rather than trying to match its Deps shape here.
 export interface PropertyIntelligenceDeps {
-  prisma: Pick<typeof prisma, 'property'>;
   logger: AppLogger;
   riskAssessmentService: Pick<typeof RiskAssessmentService, 'calculateAndSaveReport'>;
   hiddenAssetService: Pick<HiddenAssetService, 'refreshMatchesInternal'>;
-  capturePropertyScoreSnapshots: typeof capturePropertyScoreSnapshots;
 }
 
 const defaultDeps: PropertyIntelligenceDeps = {
-  prisma,
   logger,
   riskAssessmentService: RiskAssessmentService,
   hiddenAssetService,
-  capturePropertyScoreSnapshots,
 };
 
 export interface HomeDigitalTwinJobDeps {
@@ -78,7 +73,7 @@ export async function processRiskCalculation(
   jobData: PropertyIntelligenceJobPayload,
   deps: PropertyIntelligenceDeps = defaultDeps,
 ) {
-  const { prisma, logger, riskAssessmentService, capturePropertyScoreSnapshots } = deps;
+  const { logger, riskAssessmentService } = deps;
   const { propertyId } = jobData;
   logger.info(`[${new Date().toISOString()}] Processing risk calculation for property ${propertyId}...`);
 
@@ -88,20 +83,6 @@ export async function processRiskCalculation(
   } catch (error) {
     logger.error({ err: error }, '❌ Error calculating risk assessment');
     throw error;
-  }
-
-  // Score snapshot update is best-effort — failure here must not re-queue the job
-  try {
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId },
-      select: { homeownerProfileId: true },
-    });
-    if (property?.homeownerProfileId) {
-      await capturePropertyScoreSnapshots(propertyId, property.homeownerProfileId);
-      logger.info(`[SCORE-SNAPSHOT] Updated weekly snapshots from risk calculation for property ${propertyId}.`);
-    }
-  } catch (snapshotError) {
-    logger.error({ err: snapshotError }, `[SCORE-SNAPSHOT] Failed to update snapshots for property ${propertyId} — risk report was saved successfully`);
   }
 }
 

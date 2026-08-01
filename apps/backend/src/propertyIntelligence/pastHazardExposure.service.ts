@@ -11,6 +11,7 @@ import {
   getPropertyIntelligenceCoverage,
   getPropertyIntelligenceObservations,
 } from './propertyIntelligence.service';
+import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
 
 const HAZARD_SOURCE_FAMILIES = new Set<IntelligenceSourceFamily>([
   IntelligenceSourceFamily.HAZARD,
@@ -113,6 +114,10 @@ export async function getPastHazardExposure(
     const outcome = outcomeByMatchId.get(row.id);
     const status = outcome?.status ?? PropertyHazardEffectStatus.UNKNOWN;
     const assessment = row.assessments[0] ?? null;
+    const safetyTier = derivePropertyIntelligenceSafetyTier({
+      possibleStructuralStress: status === PropertyHazardEffectStatus.OBSERVED_EFFECT_CONFIRMED,
+      insuranceOrValueImplication: false,
+    });
     return {
       propertyMatchId: row.id,
       hazardType: observation.observationType,
@@ -145,6 +150,7 @@ export async function getPastHazardExposure(
         revision: observation.revision,
       },
       interpretation: {
+        safetyTier,
         relevance: assessment?.relevance ?? 'UNKNOWN',
         confidence: assessment?.confidence ?? row.matchConfidence,
         missingFacts: assessment?.missingFacts ?? ['PROPERTY_EFFECT_EVIDENCE'],
@@ -484,7 +490,7 @@ export async function linkPropertyHazardEvidence(input: {
         expectedOutcome:
           'The confirmed outcome and evidence are reviewed, with any necessary follow-up tracked once in Home Actions.',
         priority: 'SOON',
-        safetyTier: 'LOW_CONSEQUENCE',
+        safetyTier: derivePropertyIntelligenceSafetyTier({ possibleStructuralStress: true }),
         confidence: 1,
         source: {
           sourceType: 'HAZARD_OBSERVATION',

@@ -117,6 +117,9 @@ export type TimelineClientProps = {
   error?: unknown;
   isFetching?: boolean;
   onRefresh?: () => void;
+  onSelectEvent?: (event: HomeEvent) => void;
+  selectedEventIds?: string[];
+  onToggleSelected?: (eventId: string) => void;
 
   // Optional UI controls (useful when embedded)
   hideHeader?: boolean;
@@ -155,6 +158,10 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
   });
 
   const events: HomeEvent[] = isControlled ? (props.events ?? []) : (query.data ?? []);
+  const eventById = useMemo(
+    () => new Map(events.map((event) => [event.id, event])),
+    [events],
+  );
   const isLoading = isControlled ? !!props.isLoading : query.isLoading;
   const error = isControlled ? props.error : query.error;
   const isFetching = isControlled ? !!props.isFetching : query.isFetching;
@@ -247,13 +254,46 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
             rows={yearEvents}
             getRowKey={(event) => event.id}
             title={(event) => (
-              <span className="inline-flex items-center gap-2">
+              <span className={event.parentEventId ? 'inline-flex items-start gap-2 pl-4' : 'inline-flex items-start gap-2'}>
                 <span aria-hidden>{iconForType(event.type)}</span>
-                <span>{event.title}</span>
+                <span>
+                  <span className="block">{event.title}</span>
+                  {event.parentEventId && (
+                    <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                      Milestone in {eventById.get(event.parentEventId)?.title ?? 'grouped home story'}
+                    </span>
+                  )}
+                </span>
               </span>
             )}
             subtitle={(event) => formatHomeEventDate(event)}
             columns={[
+              {
+                key: 'actions',
+                label: 'History controls',
+                render: (event) => (
+                  <div className="flex flex-wrap gap-2">
+                    {props.onToggleSelected ? (
+                      <button
+                        type="button"
+                        className="rounded-md border px-2 py-1 text-xs"
+                        onClick={() => props.onToggleSelected?.(event.id)}
+                      >
+                        {props.selectedEventIds?.includes(event.id) ? 'Remove from export' : 'Select for export'}
+                      </button>
+                    ) : null}
+                    {props.onSelectEvent ? (
+                      <button
+                        type="button"
+                        className="rounded-md border px-2 py-1 text-xs font-medium"
+                        onClick={() => props.onSelectEvent?.(event)}
+                      >
+                        Review or correct
+                      </button>
+                    ) : null}
+                  </div>
+                ),
+              },
               {
                 key: 'classification',
                 label: 'Classification',

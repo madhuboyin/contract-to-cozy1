@@ -228,6 +228,10 @@ export class HomeEventsService {
         datePrecision: event.datePrecision,
         verificationStatus: event.verificationStatus,
         sourceType: event.sourceType,
+        parentEventId: event.parentEventId ?? null,
+        groupType: event.groupType ?? null,
+        revision: event.revision ?? 1,
+        correctionReason: event.correctionReason ?? null,
       },
     });
 

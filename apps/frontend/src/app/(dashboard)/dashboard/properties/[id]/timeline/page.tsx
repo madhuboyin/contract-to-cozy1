@@ -8,7 +8,20 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import TimelineClient from './TimelineClient';
-import { listHomeEvents, createHomeEvent, TimelineProjectionEntry, HomeEventType } from './homeEventsApi';
+import {
+  addHomeEventEvidence,
+  confirmHomeEvent,
+  correctHomeEvent,
+  createHomeEvent,
+  exportHomeEvents,
+  getHomeEvent,
+  getHomeEventAnnualRecap,
+  listHomeEvents,
+  type HomeEvent,
+  type HomeEventDatePrecision,
+  TimelineProjectionEntry,
+  HomeEventType,
+} from './homeEventsApi';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
   ActionPriorityRow,
@@ -79,7 +92,7 @@ function Badge({ children }: { children: React.ReactNode }) {
   );
 }
 
-function toTimelineEvent(entry: TimelineProjectionEntry) {
+function toTimelineEvent(entry: TimelineProjectionEntry): HomeEvent {
   const signalKey = entry.signalKey ?? undefined;
   const derivedImportance =
     entry.kind === 'SIGNAL' && (signalKey === 'RISK_SPIKE' || signalKey === 'COST_ANOMALY' || signalKey === 'COVERAGE_GAP')
@@ -88,7 +101,8 @@ function toTimelineEvent(entry: TimelineProjectionEntry) {
 
   return {
     id: entry.id,
-    type: entry.eventType ?? 'MILESTONE',
+    propertyId: '',
+    type: (entry.eventType as HomeEventType) ?? 'MILESTONE',
     subtype: entry.kind === 'SIGNAL' ? signalKey ?? null : entry.eventType,
     importance: derivedImportance,
     occurredAt: entry.occurredAt,
@@ -99,16 +113,27 @@ function toTimelineEvent(entry: TimelineProjectionEntry) {
     amount: (entry.payloadJson?.amount as string | null) ?? null,
     valueDelta: (entry.payloadJson?.valueDelta as string | null) ?? null,
     documents: [],
+    endAt: null,
+    dateRangeStart: null,
+    dateRangeEnd: null,
+    currency: null,
+    groupKey: null,
+    createdAt: entry.occurredAt,
+    updatedAt: entry.occurredAt,
+    parentEventId: (entry.payloadJson?.parentEventId as string | null) ?? null,
+    groupType: (entry.payloadJson?.groupType as string | null) ?? null,
+    revision: (entry.payloadJson?.revision as number | undefined) ?? 1,
+    correctionReason: (entry.payloadJson?.correctionReason as string | null) ?? null,
     meta: {
       timelineProjectionKind: entry.kind,
       sourceModel: entry.sourceModel,
       signalKey: entry.signalKey,
     },
-    datePrecision: entry.payloadJson?.datePrecision ?? 'EXACT_DATE',
-    observationKind: entry.payloadJson?.observationKind ?? (
+    datePrecision: (entry.payloadJson?.datePrecision as HomeEventDatePrecision) ?? 'EXACT_DATE',
+    observationKind: (entry.payloadJson?.observationKind as HomeEvent['observationKind']) ?? (
       entry.kind === 'SIGNAL' ? 'INFERRED' : 'SYSTEM_GENERATED'
     ),
-    verificationStatus: entry.payloadJson?.verificationStatus ?? (
+    verificationStatus: (entry.payloadJson?.verificationStatus as HomeEvent['verificationStatus']) ?? (
       entry.kind === 'SIGNAL' ? 'PENDING_CONFIRMATION' : 'UNVERIFIED'
     ),
   };
@@ -471,8 +496,21 @@ export default function Page() {
   const [logDate, setLogDate] = useState('');
   const [logAmount, setLogAmount] = useState('');
   const [logSummary, setLogSummary] = useState('');
+  const [logDatePrecision, setLogDatePrecision] = useState<HomeEventDatePrecision>('EXACT_DATE');
+  const [logParentEventId, setLogParentEventId] = useState('');
   const [logSubmitting, setLogSubmitting] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
+  const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
+  const [activeEvent, setActiveEvent] = useState<HomeEvent | null>(null);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [correctedTitle, setCorrectedTitle] = useState('');
+  const [correctedDate, setCorrectedDate] = useState('');
+  const [correctedPrecision, setCorrectedPrecision] = useState<HomeEventDatePrecision>('EXACT_DATE');
+  const [evidenceType, setEvidenceType] = useState<'DOCUMENT' | 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'INSPECTION' | 'CLAIM' | 'REPAIR_RECORD' | 'USER_ATTESTATION' | 'DOMAIN_RECORD'>('USER_ATTESTATION');
+  const [evidenceEntityId, setEvidenceEntityId] = useState('');
+  const [evidenceNote, setEvidenceNote] = useState('');
+  const [timelineActionError, setTimelineActionError] = useState<string | null>(null);
+  const [annualRecap, setAnnualRecap] = useState<any>(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -522,6 +560,40 @@ export default function Page() {
     );
   }, [events, search]);
 
+  const activeEventQuery = useQuery({
+    queryKey: ['homeEvent', propertyId, activeEvent?.id],
+    queryFn: () => getHomeEvent(propertyId, activeEvent!.id),
+    enabled: Boolean(activeEvent?.id),
+  });
+
+  function openEvent(event: HomeEvent) {
+    setActiveEvent(event);
+    setCorrectedTitle(event.title);
+    setCorrectedDate(event.occurredAt.slice(0, 10));
+    setCorrectedPrecision(event.datePrecision);
+    setCorrectionReason('');
+    setTimelineActionError(null);
+  }
+
+  async function refreshTimeline() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['homeEvents', propertyId] }),
+      activeEvent?.id
+        ? queryClient.invalidateQueries({ queryKey: ['homeEvent', propertyId, activeEvent.id] })
+        : Promise.resolve(),
+    ]);
+  }
+
+  function downloadJson(filename: string, value: unknown) {
+    const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleLogSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!logTitle.trim() || !logDate) return;
@@ -534,10 +606,15 @@ export default function Page() {
         occurredAt: new Date(logDate).toISOString(),
         summary: logSummary.trim() || null,
         amount: logAmount ? parseFloat(logAmount) : null,
+        datePrecision: logDatePrecision,
+        parentEventId: logParentEventId || null,
+        groupType: logParentEventId ? 'HOME_HISTORY_STORY' : null,
       });
       setLogTitle('');
       setLogDate('');
       setLogAmount('');
+      setLogDatePrecision('EXACT_DATE');
+      setLogParentEventId('');
       setLogSummary('');
       setShowLogForm(false);
       queryClient.invalidateQueries({ queryKey: ['homeEvents', propertyId] });
@@ -874,6 +951,35 @@ export default function Page() {
               </div>
             </div>
 
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">Date precision</label>
+                <select
+                  value={logDatePrecision}
+                  onChange={(event) => setLogDatePrecision(event.target.value as HomeEventDatePrecision)}
+                  className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                >
+                  <option value="EXACT_DATE">Exact date</option>
+                  <option value="MONTH">Month known</option>
+                  <option value="YEAR">Year known</option>
+                  <option value="UNKNOWN">Date uncertain</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">Part of a larger story (optional)</label>
+                <select
+                  value={logParentEventId}
+                  onChange={(event) => setLogParentEventId(event.target.value)}
+                  className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                >
+                  <option value="">Standalone event</option>
+                  {events.filter((event) => !event.parentEventId).map((event) => (
+                    <option key={event.id} value={event.id}>{event.title}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div>
               <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">
                 Title <span className="text-red-500">*</span>
@@ -948,6 +1054,105 @@ export default function Page() {
         </div>
       )}
 
+      {filteredEvents.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4">
+          <button
+            type="button"
+            disabled={selectedEventIds.length === 0}
+            onClick={async () => {
+              try {
+                setTimelineActionError(null);
+                const payload = await exportHomeEvents(propertyId, selectedEventIds);
+                downloadJson(`home-timeline-${today}.json`, payload);
+              } catch { setTimelineActionError('The selected timeline events could not be exported.'); }
+            }}
+            className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            Export selected ({selectedEventIds.length})
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setTimelineActionError(null);
+                const payload = await getHomeEventAnnualRecap(propertyId, new Date().getFullYear());
+                setAnnualRecap(payload);
+              } catch { setTimelineActionError('The annual recap could not be prepared.'); }
+            }}
+            className="rounded-lg border px-3 py-2 text-sm font-medium"
+          >
+            Prepare {new Date().getFullYear()} recap
+          </button>
+          {annualRecap && (
+            <button type="button" onClick={() => downloadJson(`home-recap-${new Date().getFullYear()}.json`, annualRecap)} className="rounded-lg border px-3 py-2 text-sm font-medium">
+              Download recap
+            </button>
+          )}
+          {timelineActionError && <p className="w-full text-xs text-rose-700">{timelineActionError}</p>}
+        </div>
+      )}
+
+      {activeEvent && (
+        <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Event history and evidence</p>
+              <h2 className="mt-1 font-semibold text-slate-950">{activeEventQuery.data?.title ?? activeEvent.title}</h2>
+              <p className="mt-1 text-xs text-slate-600">Revision {activeEventQuery.data?.revision ?? activeEvent.revision ?? 1} · {formatEnumLabel(activeEventQuery.data?.verificationStatus ?? activeEvent.verificationStatus)}</p>
+            </div>
+            <button type="button" onClick={() => setActiveEvent(null)} className="rounded-lg border bg-white p-2" aria-label="Close event review"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <form className="space-y-2 rounded-xl bg-white p-3" onSubmit={async (event) => {
+              event.preventDefault();
+              try {
+                setTimelineActionError(null);
+                const corrected = await correctHomeEvent(propertyId, activeEvent.id, {
+                  title: correctedTitle.trim(), occurredAt: new Date(correctedDate).toISOString(),
+                  datePrecision: correctedPrecision, correctionReason: correctionReason.trim(),
+                });
+                openEvent(corrected);
+                await refreshTimeline();
+              } catch { setTimelineActionError('The correction could not be saved.'); }
+            }}>
+              <p className="text-sm font-semibold">Create a traceable correction</p>
+              <input value={correctedTitle} onChange={(event) => setCorrectedTitle(event.target.value)} className="min-h-[40px] w-full rounded-lg border px-3 text-sm" aria-label="Corrected title" />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" value={correctedDate} onChange={(event) => setCorrectedDate(event.target.value)} className="min-h-[40px] rounded-lg border px-3 text-sm" aria-label="Corrected date" />
+                <select value={correctedPrecision} onChange={(event) => setCorrectedPrecision(event.target.value as HomeEventDatePrecision)} className="min-h-[40px] rounded-lg border px-3 text-sm" aria-label="Corrected date precision">
+                  <option value="EXACT_DATE">Exact date</option><option value="MONTH">Month</option><option value="YEAR">Year</option><option value="UNKNOWN">Unknown</option>
+                </select>
+              </div>
+              <textarea value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="Why is this correction needed?" className="min-h-[76px] w-full rounded-lg border p-3 text-sm" required minLength={3} />
+              <button type="submit" className="rounded-lg bg-sky-700 px-3 py-2 text-sm font-semibold text-white">Save correction</button>
+            </form>
+            <div className="space-y-3 rounded-xl bg-white p-3">
+              <p className="text-sm font-semibold">Confirm or add evidence</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={async () => { await confirmHomeEvent(propertyId, activeEvent.id, 'HOMEOWNER_CONFIRMED', 'Confirmed by homeowner in Timeline review.'); await refreshTimeline(); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Confirm event</button>
+                <button type="button" onClick={async () => { await confirmHomeEvent(propertyId, activeEvent.id, 'DISPUTED', 'Disputed by homeowner in Timeline review.'); await refreshTimeline(); }} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700">Mark disputed</button>
+              </div>
+              <select value={evidenceType} onChange={(event) => setEvidenceType(event.target.value as typeof evidenceType)} className="min-h-[40px] w-full rounded-lg border px-3 text-sm">
+                <option value="USER_ATTESTATION">Homeowner attestation</option><option value="DOCUMENT">Vault document</option><option value="RECEIPT">Receipt</option><option value="INVOICE">Invoice</option><option value="INSPECTION">Inspection</option><option value="CLAIM">Claim</option><option value="REPAIR_RECORD">Repair record</option>
+              </select>
+              {evidenceType !== 'USER_ATTESTATION' && <input value={evidenceEntityId} onChange={(event) => setEvidenceEntityId(event.target.value)} placeholder="Linked record ID" className="min-h-[40px] w-full rounded-lg border px-3 text-sm" />}
+              <textarea value={evidenceNote} onChange={(event) => setEvidenceNote(event.target.value)} placeholder="Evidence note" className="min-h-[70px] w-full rounded-lg border p-3 text-sm" />
+              <button type="button" onClick={async () => {
+                try {
+                  setTimelineActionError(null);
+                  await addHomeEventEvidence(propertyId, activeEvent.id, {
+                    evidenceType,
+                    ...(evidenceType === 'DOCUMENT' ? { documentId: evidenceEntityId } : evidenceType !== 'USER_ATTESTATION' ? { sourceEntityType: evidenceType, sourceEntityId: evidenceEntityId } : {}),
+                    note: evidenceNote || null,
+                  });
+                  setEvidenceEntityId(''); setEvidenceNote(''); await refreshTimeline();
+                } catch { setTimelineActionError('The evidence link could not be saved.'); }
+              }} className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Add evidence</button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {isLoading ? (
         <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
           Loading timeline…
@@ -989,6 +1194,9 @@ export default function Page() {
           onRefresh={() => refetch()}
           hideHeader
           hideFilters
+          onSelectEvent={openEvent}
+          selectedEventIds={selectedEventIds}
+          onToggleSelected={(eventId) => setSelectedEventIds((current) => current.includes(eventId) ? current.filter((id) => id !== eventId) : [...current, eventId])}
         />
       ) : (
         <TimelineVisual

@@ -75,6 +75,15 @@ export type PropertyBrief = {
   property?: { name: string | null; address: string; city: string; state: string; zipCode: string };
 };
 
+export type EligiblePropertyBriefDocument = {
+  id: string;
+  name: string;
+  type: string;
+  description: string | null;
+  verifiedAt: string | null;
+  updatedAt: string;
+};
+
 export async function getPropertyBriefTemplates() {
   const response = await api.get('/api/property-briefs/templates');
   return response.data as PropertyBriefTemplate[];
@@ -83,6 +92,11 @@ export async function getPropertyBriefTemplates() {
 export async function listPropertyBriefs(propertyId: string) {
   const response = await api.get(`/api/properties/${propertyId}/property-briefs`);
   return response.data as PropertyBrief[];
+}
+
+export async function listEligiblePropertyBriefDocuments(propertyId: string) {
+  const response = await api.get(`/api/properties/${propertyId}/property-briefs/eligible-documents`);
+  return response.data as EligiblePropertyBriefDocument[];
 }
 
 export async function createPropertyBrief(
