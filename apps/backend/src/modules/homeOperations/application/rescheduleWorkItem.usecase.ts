@@ -24,7 +24,7 @@ export async function rescheduleWorkItem(input: {
   if ('dueAt' in input) dueFields.dueAt = input.dueAt;
   if ('dueWindowEnd' in input) dueFields.dueWindowEnd = input.dueWindowEnd;
 
-  const updated = await updateWorkItemDueFields(input.workItemId, dueFields);
+  const updated = await updateWorkItemDueFields(input.workItemId, dueFields, { userOverride: true });
   await recordWorkEvent({
     workItemId: input.workItemId,
     eventType: 'WORK_RESCHEDULED',

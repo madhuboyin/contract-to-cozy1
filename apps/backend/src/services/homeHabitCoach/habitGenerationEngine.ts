@@ -280,7 +280,9 @@ export async function generateHabitsForProperty(
 
   // 3. Load templates
   const templates = await prisma.habitTemplate.findMany({
-    where: { isActive: true },
+    // Habits are lightweight behavior prompts. Material, regulated, safety-
+    // emergency, and one-time obligations belong in governed operational work.
+    where: { isActive: true, safetyTier: 'LOW_CONSEQUENCE', cadence: { not: 'AD_HOC' } },
     orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
   });
 

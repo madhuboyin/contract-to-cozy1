@@ -3,6 +3,7 @@ import { resolveWorkKey } from '../domain/workKey';
 import { canRefreshPresentationFromSource, canRefreshDueFieldsFromSource } from '../domain/transitions';
 import {
   createWorkItem,
+  findWorkSource,
   findWorkItemByWorkKey,
   recordWorkEvent,
   refreshWorkItemPresentation,
@@ -10,6 +11,7 @@ import {
   upsertWorkSource,
 } from '../infrastructure/workItemRepository';
 import { emitWorkItemLifecycleChange } from '../infrastructure/workItemChangeEmitter';
+import { transitionWorkItem } from './transitionWorkItem.usecase';
 
 /**
  * The identity resolver (parent plan section 7.5, rule 2: "an identity
@@ -42,6 +44,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
   const existing = await findWorkItemByWorkKey(proposal.propertyId, workKey);
 
   let workItem = existing;
+  let sourceRemainsActive = true;
   if (!workItem) {
     workItem = await createWorkItem({
       propertyId: proposal.propertyId,
@@ -60,6 +63,8 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
       confidence: proposal.confidence,
       missingContext: proposal.missingContext,
       sourceVersion: proposal.source.sourceVersion,
+      recurrenceTemplateKey: proposal.occurrence.occurrenceKey ? proposal.occurrence.obligationSlug : null,
+      occurrenceKey: proposal.occurrence.occurrenceKey ?? null,
     });
     const event = await recordWorkEvent({
       workItemId: workItem.id,
@@ -76,6 +81,33 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
       await emitWorkItemLifecycleChange(workItem, event);
     }
   } else {
+    if (workItem.state === 'CLOSED') sourceRemainsActive = false;
+    // A previously verified occurrence becoming observable again is new live
+    // work, not a passive source refresh. Reopen it before reconciling the
+    // source so the item and its active source cannot disagree.
+    const priorSource = workItem.state === 'VERIFIED'
+      ? await findWorkSource({
+          workItemId: workItem.id,
+          sourceType: proposal.source.sourceType,
+          sourceEntityId: proposal.source.sourceEntityId,
+          sourceRole: proposal.source.sourceRole,
+        })
+      : null;
+    const sourceChanged = priorSource == null || (proposal.source.sourceVersion != null &&
+      priorSource.sourceVersion !== proposal.source.sourceVersion);
+    if (workItem.state === 'VERIFIED' && sourceChanged) {
+      workItem = await transitionWorkItem({
+        workItemId: workItem.id,
+        to: 'REOPENED',
+        actorType: 'SYSTEM',
+        idempotencyKey: `source-reopened:${proposal.source.sourceType}:${proposal.source.sourceEntityId}:${proposal.source.sourceVersion ?? 'none'}`,
+        payload: { reason: 'source_condition_observed_again' },
+      });
+    } else if (workItem.state === 'VERIFIED') {
+      // An idempotent retry of the same already-reconciled observation must
+      // not silently reactivate the source beneath a verified item.
+      sourceRemainsActive = false;
+    }
     if (canRefreshPresentationFromSource(workItem.state)) {
       workItem = await refreshWorkItemPresentation(workItem.id, {
         priority: proposal.priority,
@@ -88,7 +120,10 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
         sourceVersion: proposal.source.sourceVersion,
       });
     }
-    if (canRefreshDueFieldsFromSource(workItem.state)) {
+    // An explicit homeowner reschedule owns the current occurrence timing.
+    // Source recalculation may refresh dates again after completion clears
+    // the override, but never silently reverses the homeowner's commitment.
+    if (!workItem.scheduleOverrideAt && canRefreshDueFieldsFromSource(workItem.state)) {
       workItem = await updateWorkItemDueFields(workItem.id, {
         dueWindowStart: proposal.dueWindowStart ?? null,
         dueAt: proposal.dueAt ?? null,
@@ -103,6 +138,7 @@ export async function resolveAndUpsertWorkItem(proposal: ProposedWorkItem) {
     sourceEntityId: proposal.source.sourceEntityId,
     sourceVersion: proposal.source.sourceVersion,
     sourceRole: proposal.source.sourceRole,
+    active: sourceRemainsActive,
   });
 
   // Idempotent per (source, version): re-resolving the same source at the

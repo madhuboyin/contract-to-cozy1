@@ -3197,6 +3197,18 @@ class APIClient {
     );
   }
 
+  async approveMaterialWorkItem(
+    propertyId: string,
+    workItemId: string,
+    evidenceId: string,
+    decisionNote: string,
+  ) {
+    return this.request<WorkItemDetailDTO>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/approve`,
+      { method: 'POST', body: JSON.stringify({ evidenceId, decisionNote }) },
+    );
+  }
+
   /**
    * Lightweight orchestration count for dashboard badges.
    * Non-breaking, optional convenience method.
@@ -5488,6 +5500,23 @@ class APIClient {
 
   async dismissInspectionFinding(propertyId: string, reportId: string, findingId: string, reason?: string): Promise<void> {
     await this.post(`/api/properties/${propertyId}/inspection-hub/reports/${reportId}/findings/${findingId}/dismiss`, { reason });
+  }
+
+  async setInspectionFindingWorkDisposition(
+    propertyId: string,
+    reportId: string,
+    findingId: string,
+    input: {
+      disposition: Exclude<import('@/types').InspectionWorkDisposition, 'PENDING_REVIEW'>;
+      notes?: string;
+      duplicateOfWorkItemId?: string;
+      nextReviewAt?: string;
+    },
+  ): Promise<void> {
+    await this.post(
+      `/api/properties/${propertyId}/inspection-hub/reports/${reportId}/findings/${findingId}/work-disposition`,
+      input,
+    );
   }
 
   async getInspectionWriteBackPreview(propertyId: string, reportId: string): Promise<import('@/types').InspectionWriteBackPreview> {

@@ -25,7 +25,7 @@ import { APIError } from '../middleware/error.middleware';
 import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
 import JobQueueService from './JobQueue.service';
 import { resolveWorkKey } from '../modules/homeOperations/domain/workKey';
-import { findAllWorkItemsLinkedToExecution, findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
+import { findAllWorkItemsLinkedToExecution, findWorkItemByWorkKey, linkWorkExecution, recordWorkEvent } from '../modules/homeOperations/infrastructure/workItemRepository';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
@@ -42,6 +42,7 @@ import {
 } from './projectCompliance/closeoutPolicy';
 import { createHash, randomBytes } from 'node:crypto';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
+import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -212,6 +213,26 @@ export async function syncJourneyWorkItemForProjectEvent(
 
     if (event === 'VERIFIED') {
       let state: OperationalWorkItemState = workItem.state;
+      if (state === 'CANDIDATE' || state === 'FOLLOW_UP_DUE') {
+        const accepted = await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'ACCEPTED',
+          actorType,
+          actorUserId,
+          idempotencyKey: `project-verified-accepted:${workItem.id}:${projectId}`,
+        });
+        state = accepted.state;
+      }
+      if (state === 'BLOCKED' || state === 'DEFERRED') {
+        const progressing = await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'IN_PROGRESS',
+          actorType,
+          actorUserId,
+          idempotencyKey: `project-verified-progress:${workItem.id}:${projectId}`,
+        });
+        state = progressing.state;
+      }
       if (state !== 'REPORTED_COMPLETE' && state !== 'VERIFIED') {
         const reported = await transitionWorkItem({
           workItemId: workItem.id,
@@ -291,6 +312,24 @@ export async function syncProjectExecutionWorkItemOnCompletion(
 
     if (event === 'VERIFIED') {
       let state: OperationalWorkItemState = workItem.state;
+      if (state === 'CANDIDATE' || state === 'FOLLOW_UP_DUE') {
+        const accepted = await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'ACCEPTED',
+          actorType: 'SYSTEM',
+          idempotencyKey: `project-execution-verified-accepted:${workItem.id}:${projectId}`,
+        });
+        state = accepted.state;
+      }
+      if (state === 'BLOCKED' || state === 'DEFERRED') {
+        const progressing = await transitionWorkItem({
+          workItemId: workItem.id,
+          to: 'IN_PROGRESS',
+          actorType: 'SYSTEM',
+          idempotencyKey: `project-execution-verified-progress:${workItem.id}:${projectId}`,
+        });
+        state = progressing.state;
+      }
       if (state !== 'REPORTED_COMPLETE' && state !== 'VERIFIED') {
         const reported = await transitionWorkItem({
           workItemId: workItem.id,
@@ -335,6 +374,115 @@ export async function syncProjectExecutionWorkItemOnCompletion(
     }).catch(() => null);
     logger.warn({ err, propertyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
     if (throwOnFailure) throw err;
+  }
+}
+
+/**
+ * A verified project outcome closes every canonical obligation linked to the
+ * project execution, irrespective of whether that obligation originated in
+ * Guidance, Maintenance, an inspection finding, or the project itself.
+ * This reverse-link traversal is the authoritative closure fan-out; workKey
+ * re-derivation is intentionally not used because reconciled items retain
+ * their original recommendation-stage key.
+ */
+export async function syncAllProjectLinkedWorkItemsOnCompletion(
+  propertyId: string,
+  projectId: string,
+  actorUserId: string | null,
+): Promise<void> {
+  const links = await findAllWorkItemsLinkedToExecution('PROJECT', projectId);
+  const actorType = actorUserId ? 'USER' : 'SYSTEM';
+  for (const { workItem } of links) {
+    if (workItem.propertyId !== propertyId || workItem.state === 'CLOSED') continue;
+    try {
+      const existingOutcomeEvidence = await prisma.operationalWorkEvidence.findFirst({
+        where: { workItemId: workItem.id, evidenceType: 'DOMAIN_COMPLETION_RECORD', evidenceEntityId: projectId },
+        select: { id: true },
+      });
+      if (!existingOutcomeEvidence) {
+        await prisma.operationalWorkEvidence.create({
+          data: {
+            workItemId: workItem.id,
+            evidenceType: 'DOMAIN_COMPLETION_RECORD',
+            evidenceEntityId: projectId,
+            verificationStatus: 'VERIFIED',
+            observedAt: new Date(),
+          },
+        });
+        await recordWorkEvent({
+          workItemId: workItem.id,
+          eventType: 'OUTCOME_EVIDENCE_ADDED',
+          actorType: 'SYSTEM',
+          idempotencyKey: `project-outcome-evidence:${workItem.id}:${projectId}`,
+          payload: { projectId, verificationStatus: 'VERIFIED' },
+        });
+      }
+      if (workItem.state === 'VERIFIED') continue;
+      let current = workItem;
+      if (current.state === 'CANDIDATE') {
+        current = await transitionWorkItem({
+          workItemId: current.id,
+          to: 'ACCEPTED',
+          actorType,
+          actorUserId,
+          idempotencyKey: `project-outcome-accepted:${current.id}:${projectId}`,
+        });
+      }
+      if (current.state === 'BLOCKED' || current.state === 'DEFERRED' || current.state === 'REOPENED') {
+        current = await transitionWorkItem({
+          workItemId: current.id,
+          to: 'IN_PROGRESS',
+          actorType,
+          actorUserId,
+          idempotencyKey: `project-outcome-progress:${current.id}:${projectId}`,
+        });
+      }
+      if (current.state !== 'REPORTED_COMPLETE') {
+        current = await transitionWorkItem({
+          workItemId: current.id,
+          to: 'REPORTED_COMPLETE',
+          actorType,
+          actorUserId,
+          idempotencyKey: `project-outcome-reported:${current.id}:${projectId}`,
+        });
+      }
+      if (current.state === 'REPORTED_COMPLETE') {
+        await transitionWorkItem({
+          workItemId: current.id,
+          to: 'VERIFIED',
+          actorType: 'SYSTEM',
+          idempotencyKey: `project-outcome-verified:${current.id}:${projectId}`,
+        });
+      }
+
+      const maintenanceExecutions = await prisma.operationalWorkExecution.findMany({
+        where: { workItemId: current.id, executionType: 'MAINTENANCE_TASK' },
+        select: { executionEntityId: true },
+      });
+      if (actorUserId && maintenanceExecutions.length > 0) {
+        const tasks = await prisma.propertyMaintenanceTask.findMany({
+          where: { propertyId, id: { in: maintenanceExecutions.map((entry) => entry.executionEntityId) } },
+          select: { id: true, status: true },
+        });
+        for (const task of tasks) {
+          if (task.status !== 'COMPLETED') {
+            await PropertyMaintenanceTaskService.updateTaskStatus(actorUserId, task.id, 'COMPLETED');
+          }
+        }
+      }
+    } catch (err) {
+      await recordReconciliationFailure({
+        propertyId,
+        workItemId: workItem.id,
+        operation: 'PROJECT_LINKED_SOURCE_CLOSURE',
+        sourceType: 'PROJECT',
+        sourceEntityId: projectId,
+        idempotencyKey: `project-linked-source-closure:${projectId}:${workItem.id}`,
+        payload: { projectId, workItemId: workItem.id },
+        error: err,
+      }).catch(() => null);
+      logger.warn({ err, propertyId, projectId, workItemId: workItem.id }, 'Project outcome source closure deferred to reconciliation');
+    }
   }
 }
 
@@ -2929,6 +3077,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
   if (verifiedSuccess) {
     await syncJourneyWorkItemForProjectEvent(propertyId, result.project.guidanceJourneyId, projectId, 'VERIFIED', userId);
     await syncProjectExecutionWorkItemOnCompletion(propertyId, projectId, 'VERIFIED');
+    await syncAllProjectLinkedWorkItemsOnCompletion(propertyId, projectId, userId);
     await propagateFindingResolutionFromExecution('PROJECT', projectId);
   }
   if (result.futureCareTaskIds?.length) {

@@ -9,6 +9,8 @@ import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { findWorkItemByWorkKey, linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
+import { recordDuplicateDecision } from '../modules/homeOperations/application/recordDuplicateDecision.usecase';
+import { createProject } from './projectTracker.service';
 
 // ── Home Operations Slice 5: finding -> work policy mapping ────────────────────
 
@@ -21,8 +23,8 @@ const MATERIAL_COST_THRESHOLD_CENTS = 150_000;
  * is trivially testable. SAFETY routes to Guidance (matches the real-world
  * judgment buyerAcquisition.service.ts's dispositionFinding already makes:
  * safety issues need Guidance's structured decision flow, not a bare task).
- * A materially expensive MAJOR finding routes to Project — but this slice
- * does not auto-create the project itself (see acceptFindingAsWork).
+ * A materially expensive MAJOR finding routes directly to a draft Project
+ * with scope/evidence milestones, preserving the same work identity.
  */
 export function resolveFindingWorkPolicy(
   finding: Pick<InspectionFindingRecord, 'severity' | 'estimatedCostCentsHigh'>,
@@ -142,6 +144,15 @@ export async function acceptFindingAsWork(
     });
   }
 
+  await prisma.inspectionFinding.update({
+    where: { id: finding.id },
+    data: {
+      workDisposition: 'ACCEPTED',
+      workDispositionAt: new Date(),
+      workDispositionByUserId: actorUserId,
+    },
+  });
+
   const policy = resolveFindingWorkPolicy(finding);
 
   const existingExecutions = await prisma.operationalWorkExecution.findMany({
@@ -152,11 +163,32 @@ export async function acceptFindingAsWork(
   }
 
   if (policy === 'PROJECT') {
-    // No auto-created project — a project needs contractor/scope/schedule
-    // details a finding alone doesn't have. The work item stays ACCEPTED,
-    // ready for the homeowner to create a project through the normal
-    // Project Tracker flow (documented non-goal, Slice 5 plan).
-    return { workItem, policy, execution: null, created: false };
+    const project = await createProject(propertyId, {
+      name: `${finding.homeSystem}: inspection follow-up`,
+      projectType: 'GENERAL_REPAIR',
+      description: `${finding.inspectorDescription}\n\nInspector recommendation: ${finding.inspectorRecommendation}`,
+      sourceType: 'MANUAL',
+      sourceEntityType: 'INSPECTION_FINDING',
+      sourceEntityId: finding.id,
+      inventoryItemId: finding.inventoryItemId ?? undefined,
+      fulfillmentMode: 'PROVIDER',
+      fundingMode: 'SELF_PAID',
+      complexity: 'MAJOR',
+      permitApplicability: 'UNKNOWN',
+      hoaApplicability: 'UNKNOWN',
+      contractAmountCents: 0,
+      startDate: new Date().toISOString().slice(0, 10),
+      homeSystemsAffected: [],
+      milestones: [
+        { name: 'Confirm scope and qualified provider', position: 0, requiresPhotoEvidence: false },
+        { name: 'Complete repair and capture proof', position: 1, requiresPhotoEvidence: true },
+        { name: 'Verify inspection finding is resolved', position: 2, requiresPhotoEvidence: true },
+      ],
+    });
+    const projectId = project?.id;
+    if (!projectId) throw new APIError('Unable to create project for this finding', 503, 'PROJECT_CREATION_FAILED');
+    await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId, responsibleParty: 'CONTRACTOR' });
+    return { workItem: { ...workItem, state: 'IN_PROJECT' }, policy, execution: { executionType: 'PROJECT' as const, executionEntityId: projectId }, created: true };
   }
 
   if (policy === 'GUIDANCE') {
@@ -206,6 +238,92 @@ export async function acceptFindingAsWork(
   });
   await linkWorkExecution({ workItemId: workItem.id, executionType: 'MAINTENANCE_TASK', executionEntityId: task.id });
   return { workItem, policy, execution: { executionType: 'MAINTENANCE_TASK' as const, executionEntityId: task.id }, created: true };
+}
+
+export async function dispositionFindingAsWork(
+  findingId: string,
+  reportId: string,
+  propertyId: string,
+  actorUserId: string,
+  input: {
+    disposition: 'ACCEPTED' | 'MONITOR' | 'DUPLICATE' | 'ALREADY_RESOLVED' | 'NOT_APPLICABLE' | 'CORRECTION_REQUESTED';
+    notes?: string;
+    duplicateOfWorkItemId?: string;
+    nextReviewAt?: string;
+  },
+) {
+  if (input.disposition === 'ACCEPTED') {
+    return acceptFindingAsWork(findingId, reportId, propertyId, actorUserId);
+  }
+
+  const finding = await prisma.inspectionFinding.findFirst({
+    where: { id: findingId, reportId, propertyId },
+    include: { report: { select: { status: true } } },
+  });
+  if (!finding) throw new APIError('Finding not found', 404, 'NOT_FOUND');
+  if (finding.report.status !== 'CONFIRMED') {
+    throw new APIError('Confirm the inspection report before reviewing work disposition', 409, 'REPORT_NOT_CONFIRMED');
+  }
+
+  const proposal = inspectionFindingSourceAdapter.propose(finding as any, propertyId);
+  const workItem = proposal ? await resolveAndUpsertWorkItem(proposal) : null;
+  const now = new Date();
+
+  if (input.disposition === 'MONITOR' && workItem) {
+    let current = workItem;
+    if (current.state === 'CANDIDATE') {
+      current = await transitionWorkItem({
+        workItemId: current.id,
+        to: 'ACCEPTED',
+        actorType: 'USER',
+        actorUserId,
+        idempotencyKey: `inspection-monitor-accepted:${current.id}`,
+      });
+    }
+    if (current.state === 'ACCEPTED') {
+      await transitionWorkItem({
+        workItemId: current.id,
+        to: 'DEFERRED',
+        actorType: 'USER',
+        actorUserId,
+        idempotencyKey: `inspection-monitor-deferred:${current.id}:${input.nextReviewAt ?? 'default'}`,
+        timestampValue: input.nextReviewAt ? new Date(input.nextReviewAt) : new Date(now.getTime() + 90 * 86_400_000),
+      });
+    }
+  } else if (input.disposition === 'DUPLICATE' && workItem && input.duplicateOfWorkItemId) {
+    await recordDuplicateDecision({
+      workItemId: workItem.id,
+      supersededByWorkItemId: input.duplicateOfWorkItemId,
+      actorUserId,
+      idempotencyKey: `inspection-finding-duplicate:${workItem.id}:${input.duplicateOfWorkItemId}`,
+    });
+  } else if ((input.disposition === 'ALREADY_RESOLVED' || input.disposition === 'NOT_APPLICABLE') && workItem && workItem.state !== 'CLOSED') {
+    await transitionWorkItem({
+      workItemId: workItem.id,
+      to: 'CLOSED',
+      disposition: 'NOT_RELEVANT',
+      actorType: 'USER',
+      actorUserId,
+      idempotencyKey: `inspection-finding-${input.disposition.toLowerCase()}:${workItem.id}`,
+    });
+  }
+
+  const updated = await prisma.inspectionFinding.update({
+    where: { id: findingId },
+    data: {
+      workDisposition: input.disposition,
+      workDispositionNotes: input.notes ?? null,
+      workDispositionAt: now,
+      workDispositionByUserId: actorUserId,
+      ...(input.disposition === 'ALREADY_RESOLVED'
+        ? { status: 'RESOLVED', resolvedAt: now, resolutionNotes: input.notes ?? 'Already resolved before work acceptance.' }
+        : input.disposition === 'NOT_APPLICABLE'
+          ? { status: 'DISMISSED', resolvedAt: now, resolutionMethod: 'DISMISSED', resolutionNotes: input.notes ?? 'Not applicable to this home.' }
+          : {}),
+    },
+  });
+  await _syncOpenFindingsCount(reportId);
+  return { finding: updated, workItem };
 }
 
 function toArr(val: string | string[] | undefined): string[] {

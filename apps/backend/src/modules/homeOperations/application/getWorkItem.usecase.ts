@@ -48,6 +48,9 @@ export async function getWorkItem(workItemId: string) {
     dueWindowStart: item.dueWindowStart,
     dueAt: item.dueAt,
     dueWindowEnd: item.dueWindowEnd,
+    scheduleOverrideAt: item.scheduleOverrideAt,
+    recurrenceTemplateKey: item.recurrenceTemplateKey,
+    occurrenceKey: item.occurrenceKey,
     ownerUserId: item.ownerUserId,
     confidence: item.confidence,
     missingContext: item.missingContext,
@@ -75,6 +78,7 @@ export async function getWorkItem(workItemId: string) {
       responsibleParty: e.responsibleParty,
     })),
     evidence: item.evidence.map((e) => ({
+      id: e.id,
       evidenceType: e.evidenceType,
       evidenceEntityId: e.evidenceEntityId,
       verificationStatus: e.verificationStatus,
@@ -82,6 +86,10 @@ export async function getWorkItem(workItemId: string) {
     })),
     watchers: item.watchers.map((w) => ({ userId: w.userId, addedAt: w.addedAt })),
     snoozedUntil: item.snoozedUntil,
+    understoodAt: item.understoodAt,
+    materialApprovalRequired: item.materialApprovalRequired,
+    materialApprovedAt: item.materialApprovedAt,
+    materialApprovedByUserId: item.materialApprovedByUserId,
     isRoutine: Boolean(routineTask),
     reconciliationPending: Boolean(reconciliation),
     // Home Operations Item #16: computed so the write-API frontend never

@@ -127,13 +127,8 @@ export function canRefreshPresentationFromSource(state: OperationalWorkItemState
  * source is a correctness bug, not a rug-pull — so this stays true across
  * every open state, only stopping once the item is CLOSED.
  *
- * Known limitation, not solved by this slice: if a human has explicitly
- * rescheduled a work item (rescheduleWorkItem.usecase.ts) and the source
- * later recalculates to a different date, this will silently overwrite the
- * human's reschedule back to the source's value. Detecting "has a human
- * override since occurred" needs a persisted signal this slice doesn't add
- * (no schema change was scoped here) — revisit if this proves to matter in
- * practice, most naturally alongside Slice 3's RecurrencePolicy work.
+ * The resolver separately checks scheduleOverrideAt, so an explicit human
+ * reschedule remains authoritative for the current occurrence.
  */
 export function canRefreshDueFieldsFromSource(state: OperationalWorkItemState): boolean {
   return state !== 'CLOSED';

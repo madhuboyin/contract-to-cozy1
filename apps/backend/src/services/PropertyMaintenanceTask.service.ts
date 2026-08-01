@@ -37,6 +37,7 @@ import {
   findWorkItemByWorkKey,
   findWorkItemsLinkedToMaintenanceTaskExecution,
   linkWorkExecution,
+  updateWorkItemOccurrence,
 } from '../modules/homeOperations/infrastructure/workItemRepository';
 import { markReconciliationResolved, recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 
@@ -572,7 +573,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
      * both mutation paths write identical completion data.
      */
     private static buildStatusUpdateData(
-      task: Pick<PropertyMaintenanceTask, 'actionKey' | 'isRecurring' | 'frequency'>,
+      task: Pick<PropertyMaintenanceTask, 'actionKey' | 'isRecurring' | 'frequency' | 'nextDueDate'>,
       status: MaintenanceTaskStatus,
       userId: string,
       actualCost?: number,
@@ -597,7 +598,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       }
 
       if (task.isRecurring && task.frequency) {
-        updateData.nextDueDate = this.calculateNextDueDate(task.frequency);
+        updateData.nextDueDate = this.calculateNextDueDate(task.frequency, task.nextDueDate, updateData.lastCompletedDate as Date);
       }
 
       return updateData;
@@ -853,6 +854,14 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         if (!proposal) return;
         let workItem = await this.resolveTaskWorkItem(updatedTask, proposal, recommendationSourceEntityId, canonicalWorkItemId);
 
+        if (updatedTask.isRecurring) {
+          workItem = await updateWorkItemOccurrence(
+            workItem.id,
+            `maintenance-task:${updatedTask.id}`,
+            updatedTask.nextDueDate ? updatedTask.nextDueDate.toISOString().slice(0, 10) : null,
+          );
+        }
+
         // Creating a task is itself an acceptance act — nothing separately
         // "recommended" it as a candidate distinct from its own existence.
         if (workItem.state === 'CANDIDATE') {
@@ -866,6 +875,24 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         }
 
         if (!wasCompleted && isNowCompleted) {
+          if (workItem.state === 'FOLLOW_UP_DUE') {
+            workItem = await transitionWorkItem({
+              workItemId: workItem.id,
+              to: 'ACCEPTED',
+              actorType,
+              actorUserId,
+              idempotencyKey: `maintenance-task-completion-accepted:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+            });
+          }
+          if (workItem.state === 'BLOCKED' || workItem.state === 'DEFERRED') {
+            workItem = await transitionWorkItem({
+              workItemId: workItem.id,
+              to: 'IN_PROGRESS',
+              actorType,
+              actorUserId,
+              idempotencyKey: `maintenance-task-completion-progress:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+            });
+          }
           if (workItem.state !== 'REPORTED_COMPLETE' && workItem.state !== 'VERIFIED') {
             workItem = await transitionWorkItem({
               workItemId: workItem.id,
@@ -875,7 +902,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
               idempotencyKey: `maintenance-task-reported-complete:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
             });
           }
-          if (workItem.state === 'REPORTED_COMPLETE') {
+          if (workItem.state === 'REPORTED_COMPLETE' && workItem.safetyTier === 'LOW_CONSEQUENCE') {
             // A plain maintenance task's homeowner-reported completion is
             // its own verification — matches the doc's completion-authority
             // table ("Simple homeowner task | Maintenance | Homeowner
@@ -941,6 +968,41 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
             // Home Operations Slice 5: this task may have been created by
             // accepting an Inspection Finding as work — a no-op otherwise.
             await propagateFindingResolutionFromExecution('MAINTENANCE_TASK', updatedTask.id);
+          } else if (workItem.state === 'REPORTED_COMPLETE') {
+            const existingCompletionEvidence = await prisma.operationalWorkEvidence.findFirst({
+              where: {
+                workItemId: workItem.id,
+                evidenceType: 'DOMAIN_COMPLETION_RECORD',
+                evidenceEntityId: updatedTask.id,
+              },
+            });
+            if (!existingCompletionEvidence) {
+              await prisma.operationalWorkEvidence.create({
+                data: {
+                  workItemId: workItem.id,
+                  evidenceType: 'DOMAIN_COMPLETION_RECORD',
+                  evidenceEntityId: updatedTask.id,
+                  verificationStatus: 'PENDING',
+                  observedAt: updatedTask.lastCompletedDate ?? new Date(),
+                },
+              });
+            }
+            await prisma.operationalWorkEvent.upsert({
+              where: {
+                workItemId_idempotencyKey: {
+                  workItemId: workItem.id,
+                  idempotencyKey: `material-approval-required:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+                },
+              },
+              create: {
+                workItemId: workItem.id,
+                eventType: 'WORK_APPROVAL_REQUIRED',
+                actorType: 'SYSTEM',
+                idempotencyKey: `material-approval-required:${workItem.id}:${updatedTask.updatedAt.toISOString()}`,
+                payload: { taskId: updatedTask.id, safetyTier: workItem.safetyTier },
+              },
+              update: {},
+            });
           }
           if (updatedTask.isRecurring && workItem.state === 'VERIFIED') {
             workItem = await transitionWorkItem({
@@ -1273,24 +1335,27 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
     /**
      * Calculate next due date based on frequency.
      */
-    private static calculateNextDueDate(frequency: RecurrenceFrequency): Date {
-      const now = new Date();
-      switch (frequency) {
-        case 'DAILY':
-          return new Date(now.setDate(now.getDate() + 1));
-        case 'WEEKLY':
-          return new Date(now.setDate(now.getDate() + 7));
-        case 'MONTHLY':
-          return new Date(now.setMonth(now.getMonth() + 1));
-        case 'QUARTERLY':
-          return new Date(now.setMonth(now.getMonth() + 3));
-        case 'SEMI_ANNUALLY':
-          return new Date(now.setMonth(now.getMonth() + 6));
-        case 'ANNUALLY':
-          return new Date(now.setFullYear(now.getFullYear() + 1));
-        default:
-          return new Date(now.setMonth(now.getMonth() + 1));
-      }
+    private static calculateNextDueDate(
+      frequency: RecurrenceFrequency,
+      previousDueAt: Date | null = null,
+      completedAt = new Date(),
+    ): Date {
+      // Advance from the prior occurrence to preserve the homeowner's cadence.
+      // A late completion skips elapsed windows until the next future one,
+      // rather than drifting every recurrence relative to the completion day.
+      let next = new Date(previousDueAt ?? completedAt);
+      do {
+        switch (frequency) {
+          case 'DAILY': next.setDate(next.getDate() + 1); break;
+          case 'WEEKLY': next.setDate(next.getDate() + 7); break;
+          case 'MONTHLY': next.setMonth(next.getMonth() + 1); break;
+          case 'QUARTERLY': next.setMonth(next.getMonth() + 3); break;
+          case 'SEMI_ANNUALLY': next.setMonth(next.getMonth() + 6); break;
+          case 'ANNUALLY': next.setFullYear(next.getFullYear() + 1); break;
+          default: next.setMonth(next.getMonth() + 1);
+        }
+      } while (next <= completedAt);
+      return next;
     }
   
     /**

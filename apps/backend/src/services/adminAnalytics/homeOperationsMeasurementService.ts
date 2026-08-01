@@ -25,11 +25,15 @@ type WorkItemSnapshot = {
   startedAt: Date | null;
   reportedCompletedAt: Date | null;
   verifiedAt: Date | null;
+  understoodAt: Date | null;
+  safetyTier: string;
 };
 
 type HomeOperationsMeasurementSnapshot = {
   workItems: WorkItemSnapshot[];
-  sources: Array<{ workItemId: string; active: boolean }>;
+  sources: Array<{ workItemId: string; active: boolean; lastObservedAt: Date; reconciledAt: Date | null }>;
+  events: Array<{ workItemId: string; eventType: string; occurredAt: Date }>;
+  evidence: Array<{ workItemId: string; verificationStatus: string }>;
   scheduledEvents: Array<{ workItemId: string; occurredAt: Date }>;
   reopenedEvents: Array<{ workItemId: string; occurredAt: Date }>;
   briefingItems: Array<{
@@ -124,9 +128,13 @@ export function summarizeHomeOperationsMeasurement(
     (item) => item.reportedCompletedAt != null || item.verifiedAt != null,
   ).length;
 
-  gaps.push('recommendationUnderstoodRate: no item-agnostic "work item viewed/understood" signal exists yet — only the legacy pre-Home-Operations HomeAction command feed tracks an OPENED event, and only for HomeAction-sourced items.');
-  gaps.push('duplicatePreventionRate: candidate-stage dedup that never creates a second work item leaves no trace to count against — only *caught* duplicates (disposition=DUPLICATE) are logged, not *prevented* ones.');
-  gaps.push('completedWithoutDuplicateClosure: needs a join against PropertyChange/HomeBriefingItem engagement history per canonicalActionId that has not been built.');
+  const understoodItems = snapshot.workItems.filter((item) => item.understoodAt != null);
+  const verifiedItems = snapshot.workItems.filter((item) => item.state === 'VERIFIED');
+  const activeSourceWorkItemIds = new Set(snapshot.sources.filter((source) => source.active).map((source) => source.workItemId));
+  const completedWithSourcesReconciled = verifiedItems.filter((item) => !activeSourceWorkItemIds.has(item.id));
+  const lifecycleCount = (eventType: string) => new Set(
+    snapshot.events.filter((event) => event.eventType === eventType).map((event) => event.workItemId),
+  ).size;
 
   // ── Trust & quality (§14.3) ─────────────────────────────────────────────
   const briefedWithNoEngagement = snapshot.briefingItems.filter(
@@ -139,11 +147,15 @@ export function summarizeHomeOperationsMeasurement(
   const writeBackProjectIdSet = new Set(snapshot.writeBackProjectIds);
   const successfulWriteBacks = completedTrackedProjects.filter((project) => writeBackProjectIdSet.has(project.id));
 
-  gaps.push('unresolvedSourceAfterVerifiedOutcome: would require checking the underlying source domain record\'s own state at the moment OUTCOME_VERIFIED fires — no such check/join exists today.');
+  const unresolvedSourceAfterVerifiedOutcome = verifiedItems.filter((item) => activeSourceWorkItemIds.has(item.id)).length;
   gaps.push('workHiddenWhileSourceOpen: no "hidden" concept is tracked on OperationalWorkItem.');
   gaps.push('incorrectMergesAndDuplicateSplits: merges/duplicate dispositions are recorded, but nothing flags a merge as later found incorrect.');
-  gaps.push('staleSourcePromotions: OperationalWorkSource has no freshness/expiry field to compare against, unlike RenovationRequirement.sourceFreshUntil.');
-  gaps.push('safetyGovernanceViolations: RecommendationIncident exists as a generic cross-capability table, but no confirmed field links an incident back to a specific OperationalWorkItem — not wiring an unverified join.');
+  const staleSourceCutoff = new Date(now.getTime() - 30 * 86_400_000);
+  const staleSourcePromotions = snapshot.sources.filter((source) => source.active && source.lastObservedAt < staleSourceCutoff).length;
+  const verifiedEvidenceWorkItemIds = new Set(snapshot.evidence.filter((entry) => entry.verificationStatus === 'VERIFIED').map((entry) => entry.workItemId));
+  const safetyGovernanceViolations = verifiedItems.filter(
+    (item) => item.safetyTier === 'SAFETY_EMERGENCY' && !verifiedEvidenceWorkItemIds.has(item.id),
+  ).length;
   gaps.push('factCorrectionCompletion: no fact-correction tracking model was found linked to Home Operations work items.');
   gaps.push('accessibilityDefects: not an automated signal anywhere in this codebase — would be manually/QA-logged, not computed.');
 
@@ -168,12 +180,24 @@ export function summarizeHomeOperationsMeasurement(
       scheduledToStartedHours: scheduledToStarted,
       startedToReportedCompleteHours: startedToReportedComplete,
       reportedToVerifiedHours: reportedToVerified,
-      sourceReconciliationSuccessRate: percent(activeSources.length, snapshot.sources.length),
+      sourceReconciliationSuccessRate: percent(snapshot.sources.filter((source) => source.reconciledAt != null).length, snapshot.sources.length),
       overdueRate: percent(overdueItems.length, openItemsWithDueDate.length),
       reopenRate: percent(snapshot.reopenedEvents.length, everCompletedCount),
-      recommendationUnderstoodRate: null,
-      duplicatePreventionRate: null,
-      completedWithoutDuplicateClosure: null,
+      recommendationUnderstoodRate: percent(understoodItems.length, snapshot.workItems.length),
+      duplicatePreventionRate: percent(Math.max(0, candidateCount - uniqueWorkItemCount), candidateCount),
+      completedWithoutDuplicateClosure: percent(completedWithSourcesReconciled.length, verifiedItems.length),
+      stages: {
+        candidateDetected: lifecycleCount('WORK_CANDIDATE_DETECTED'),
+        homeownerUnderstood: lifecycleCount('WORK_UNDERSTOOD'),
+        workAccepted: lifecycleCount('WORK_ACCEPTED'),
+        scheduledOrAssigned: new Set(snapshot.events.filter((event) => ['WORK_SCHEDULED', 'WORK_ASSIGNED'].includes(event.eventType)).map((event) => event.workItemId)).size,
+        executionStarted: lifecycleCount('EXECUTION_STARTED'),
+        reportedComplete: lifecycleCount('WORK_REPORTED_COMPLETE'),
+        evidenceReceived: new Set(snapshot.evidence.map((entry) => entry.workItemId)).size,
+        outcomeVerified: lifecycleCount('OUTCOME_VERIFIED'),
+        sourceConditionReconciled: snapshot.sources.filter((source) => source.reconciledAt != null).length,
+        recurrenceOrFollowUpCreated: lifecycleCount('FOLLOW_UP_CREATED'),
+      },
     },
     trust: {
       falseCompletionIncidents: snapshot.reopenedEvents.length,
@@ -186,11 +210,11 @@ export function summarizeHomeOperationsMeasurement(
         successfulWriteBacks: successfulWriteBacks.length,
         failureRate: percent(completedTrackedProjects.length - successfulWriteBacks.length, completedTrackedProjects.length),
       },
-      unresolvedSourceAfterVerifiedOutcome: null,
+      unresolvedSourceAfterVerifiedOutcome,
       workHiddenWhileSourceOpen: null,
       incorrectMergesAndDuplicateSplits: null,
-      staleSourcePromotions: null,
-      safetyGovernanceViolations: null,
+      staleSourcePromotions,
+      safetyGovernanceViolations,
       factCorrectionCompletion: null,
       accessibilityDefects: null,
     },
@@ -230,14 +254,24 @@ export async function getHomeOperationsMeasurement(from?: Date, to?: Date) {
       startedAt: true,
       reportedCompletedAt: true,
       verifiedAt: true,
+      understoodAt: true,
+      safetyTier: true,
     },
   });
   const workItemIds = workItems.map((item) => item.id);
 
-  const [sources, scheduledEvents, reopenedEvents, briefingItems, projectExecutions] = await Promise.all([
+  const [sources, events, evidence, scheduledEvents, reopenedEvents, briefingItems, projectExecutions] = await Promise.all([
     prisma.operationalWorkSource.findMany({
       where: { workItemId: { in: workItemIds } },
-      select: { workItemId: true, active: true },
+      select: { workItemId: true, active: true, lastObservedAt: true, reconciledAt: true },
+    }),
+    prisma.operationalWorkEvent.findMany({
+      where: { workItemId: { in: workItemIds }, ...dateFilter('occurredAt', from, to) },
+      select: { workItemId: true, eventType: true, occurredAt: true },
+    }),
+    prisma.operationalWorkEvidence.findMany({
+      where: { workItemId: { in: workItemIds } },
+      select: { workItemId: true, verificationStatus: true },
     }),
     prisma.operationalWorkEvent.findMany({
       where: { workItemId: { in: workItemIds }, eventType: 'WORK_SCHEDULED' },
@@ -272,6 +306,8 @@ export async function getHomeOperationsMeasurement(from?: Date, to?: Date) {
   return summarizeHomeOperationsMeasurement({
     workItems,
     sources,
+    events,
+    evidence,
     scheduledEvents,
     reopenedEvents,
     briefingItems,

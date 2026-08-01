@@ -316,10 +316,16 @@ export type WorkItemListEntryDTO = {
   dueWindowStart: string | null;
   dueAt: string | null;
   dueWindowEnd: string | null;
+  scheduleOverrideAt: string | null;
+  recurrenceTemplateKey: string | null;
+  occurrenceKey: string | null;
   ownerUserId: string | null;
   confidence: number | null;
   missingContext: string[];
   snoozedUntil: string | null;
+  understoodAt: string | null;
+  materialApprovalRequired: boolean;
+  materialApprovedAt: string | null;
   isRoutine: boolean;
   executions: Array<{ executionType: string; executionEntityId: string; role: string; responsibleParty: string }>;
   reconciliationPending: boolean;
@@ -339,12 +345,14 @@ export type WorkItemDetailDTO = WorkItemListEntryDTO & {
   sources: Array<{ sourceType: string; sourceEntityId: string; sourceVersion: string | null; sourceRole: string; active: boolean }>;
   executions: Array<{ executionType: string; executionEntityId: string; role: string; responsibleParty: string }>;
   evidence: Array<{
+    id: string;
     evidenceType: OperationalWorkEvidenceType;
     evidenceEntityId: string;
     verificationStatus: OperationalWorkEvidenceVerificationStatus | null;
     observedAt: string;
   }>;
   watchers: Array<{ userId: string; addedAt: string }>;
+  materialApprovedByUserId: string | null;
   // Home Operations Item #16: computed server-side so the frontend never
   // carries its own copy of the state machine.
   legalNextStates: OperationalWorkItemState[];
@@ -5872,6 +5880,7 @@ export type InspectionHomeSystem =
 export type InspectionFindingSeverity = 'SAFETY' | 'MAJOR' | 'MINOR' | 'MONITOR' | 'INFORMATIONAL';
 export type InspectionConditionRating = 'GOOD' | 'FAIR' | 'POOR' | 'SAFETY_CONCERN';
 export type InspectionFindingStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED' | 'ACCEPTED_AS_IS';
+export type InspectionWorkDisposition = 'PENDING_REVIEW' | 'ACCEPTED' | 'MONITOR' | 'DUPLICATE' | 'ALREADY_RESOLVED' | 'NOT_APPLICABLE' | 'CORRECTION_REQUESTED';
 export type InspectionExtractionConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 export type InspectionResolutionMethod =
   | 'CONTRACTOR_WORK' | 'DIY' | 'SELLER_REPAIR' | 'CREDITED_AT_CLOSING' | 'DISMISSED';
@@ -5908,6 +5917,9 @@ export interface InspectionFinding {
   estimatedCostCentsHigh?: number;
   extractionConfidence: InspectionExtractionConfidence;
   status: InspectionFindingStatus;
+  workDisposition: InspectionWorkDisposition;
+  workDispositionNotes?: string;
+  workDispositionAt?: string;
   resolvedAt?: string;
   resolutionMethod?: InspectionResolutionMethod;
   resolutionNotes?: string;

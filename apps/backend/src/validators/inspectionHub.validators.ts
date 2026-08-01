@@ -47,6 +47,24 @@ export const DismissFindingSchema = z.object({
   reason: z.string().optional(),
 });
 
+export const InspectionFindingWorkDispositionSchema = z.object({
+  disposition: z.enum([
+    'ACCEPTED',
+    'MONITOR',
+    'DUPLICATE',
+    'ALREADY_RESOLVED',
+    'NOT_APPLICABLE',
+    'CORRECTION_REQUESTED',
+  ]),
+  notes: z.string().trim().max(2000).optional(),
+  duplicateOfWorkItemId: z.string().uuid().optional(),
+  nextReviewAt: z.string().datetime().optional(),
+}).superRefine((value, ctx) => {
+  if (value.disposition === 'DUPLICATE' && !value.duplicateOfWorkItemId) {
+    ctx.addIssue({ code: 'custom', path: ['duplicateOfWorkItemId'], message: 'Duplicate disposition requires the canonical work item.' });
+  }
+});
+
 export const ResolveFindingSchema = z.object({
   resolutionMethod,
   resolutionNotes: z.string().optional(),

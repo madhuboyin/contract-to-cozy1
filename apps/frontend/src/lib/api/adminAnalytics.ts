@@ -116,19 +116,31 @@ export interface AdminHomeOperationsMeasurementResponse {
     sourceReconciliationSuccessRate: number | null;
     overdueRate: number | null;
     reopenRate: number | null;
-    recommendationUnderstoodRate: null;
-    duplicatePreventionRate: null;
-    completedWithoutDuplicateClosure: null;
+    recommendationUnderstoodRate: number | null;
+    duplicatePreventionRate: number | null;
+    completedWithoutDuplicateClosure: number | null;
+    stages: {
+      candidateDetected: number;
+      homeownerUnderstood: number;
+      workAccepted: number;
+      scheduledOrAssigned: number;
+      executionStarted: number;
+      reportedComplete: number;
+      evidenceReceived: number;
+      outcomeVerified: number;
+      sourceConditionReconciled: number;
+      recurrenceOrFollowUpCreated: number;
+    };
   };
   trust: {
     falseCompletionIncidents: number;
     notificationsWithoutActionableChange: { count: number; rate: number | null };
     projectWriteBackFailures: { completedProjects: number; successfulWriteBacks: number; failureRate: number | null };
-    unresolvedSourceAfterVerifiedOutcome: null;
+    unresolvedSourceAfterVerifiedOutcome: number;
     workHiddenWhileSourceOpen: null;
     incorrectMergesAndDuplicateSplits: null;
-    staleSourcePromotions: null;
-    safetyGovernanceViolations: null;
+    staleSourcePromotions: number;
+    safetyGovernanceViolations: number;
     factCorrectionCompletion: null;
     accessibilityDefects: null;
   };

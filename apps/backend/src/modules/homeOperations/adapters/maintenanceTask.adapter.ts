@@ -11,15 +11,9 @@ import { resolveWorkKey, type WorkSubject } from '../domain/workKey';
  * runs from PropertyMaintenanceTask.service.ts on every create/status
  * transition, not from the Home Action feed.
  *
- * Known limitation: converting a checklist/seasonal recommendation into a
- * task does not reconcile with any CANDIDATE work item Slice 2 may have
- * already resolved for the pre-conversion recommendation — that recommends-
- * stage workKey is keyed off the checklist/orchestration entity id, this
- * task-stage workKey off actionKey/task id. The stale candidate work item
- * is simply never touched again once its source HomeAction is suppressed.
- * Full continuity requires threading the originating workKey through the
- * conversion call chain or a dedicated duplicate-detection pass — a focused
- * follow-up, not this slice.
+ * Conversion callers thread canonicalWorkItemId or the recommendation source
+ * identity into PropertyMaintenanceTaskService, which reverse-links the task
+ * execution to the existing candidate instead of minting parallel work.
  */
 
 const PRIORITY_MAP: Record<PropertyMaintenanceTask['priority'], OperationalWorkItemPriority> = {
@@ -49,8 +43,8 @@ function resolveSubject(task: SubjectFields, propertyId: string): WorkSubject {
 
 // Prefer actionKey when present — it already carries stable per-property
 // -per-assetType identity for ACTION_CENTER/project-follow-up-sourced tasks
-// (see the known-limitation note above for why this is only a partial fix,
-// not full recommendation-to-acceptance continuity).
+// while explicit canonical/recommendation links remain authoritative when
+// conversion began from an existing candidate.
 function resolveObligationSlug(task: SlugFields): string {
   return task.actionKey ? `maintenance-${task.actionKey}` : `maintenance-task-${task.id}`;
 }

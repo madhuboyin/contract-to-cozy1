@@ -27,11 +27,92 @@
 
 import { prisma } from '../../lib/prisma';
 import { invalidateStatusForInventoryItem } from '../homeStatusBoard.service';
+import { findAllWorkItemsLinkedToExecution, recordWorkEvent } from '../../modules/homeOperations/infrastructure/workItemRepository';
+import { transitionWorkItem } from '../../modules/homeOperations/application/transitionWorkItem.usecase';
 
 const REPLACEMENT_VERDICTS = new Set(['REPLACE_NOW', 'REPLACE_SOON']);
 
 function isNonSelfReportedEvidence(evidence: { sourceType: string; status: string }): boolean {
   return evidence.sourceType !== 'USER_INPUT' || evidence.status === 'VERIFIED';
+}
+
+export async function hasVerifiedGuidanceOutcomeEvidence(journeyId: string): Promise<boolean> {
+  const outcomeSteps = await (prisma as any).guidanceJourneyStep.findMany({
+    where: { journeyId, isRequired: true, stepType: { in: ['EXECUTION', 'VALIDATION'] } },
+    select: { evidences: { select: { sourceType: true, status: true } } },
+  });
+  return outcomeSteps.length > 0 && outcomeSteps.every(
+    (step: { evidences: Array<{ sourceType: string; status: string }> }) =>
+      step.evidences.some(isNonSelfReportedEvidence),
+  );
+}
+
+export async function syncGuidanceWorkItemsOnCompletion(journeyId: string, actorUserId?: string | null): Promise<void> {
+  const [links, outcomeVerified] = await Promise.all([
+    findAllWorkItemsLinkedToExecution('GUIDANCE', journeyId),
+    hasVerifiedGuidanceOutcomeEvidence(journeyId),
+  ]);
+  for (const { workItem } of links) {
+    if (workItem.state === 'VERIFIED' || workItem.state === 'CLOSED') continue;
+    let current = workItem;
+    if (current.state === 'CANDIDATE' || current.state === 'FOLLOW_UP_DUE') {
+      current = await transitionWorkItem({
+        workItemId: current.id,
+        to: 'ACCEPTED',
+        actorType: actorUserId ? 'USER' : 'SYSTEM',
+        actorUserId,
+        idempotencyKey: `guidance-completion-accepted:${current.id}:${journeyId}`,
+      });
+    }
+    if (current.state === 'BLOCKED' || current.state === 'DEFERRED') {
+      current = await transitionWorkItem({
+        workItemId: current.id,
+        to: 'IN_PROGRESS',
+        actorType: actorUserId ? 'USER' : 'SYSTEM',
+        actorUserId,
+        idempotencyKey: `guidance-completion-progress:${current.id}:${journeyId}`,
+      });
+    }
+    if (current.state !== 'REPORTED_COMPLETE') {
+      current = await transitionWorkItem({
+        workItemId: current.id,
+        to: 'REPORTED_COMPLETE',
+        actorType: actorUserId ? 'USER' : 'SYSTEM',
+        actorUserId,
+        idempotencyKey: `guidance-reported-complete:${current.id}:${journeyId}`,
+      });
+    }
+    if (outcomeVerified && current.state === 'REPORTED_COMPLETE') {
+      const existingEvidence = await prisma.operationalWorkEvidence.findFirst({
+        where: { workItemId: current.id, evidenceType: 'DOMAIN_COMPLETION_RECORD', evidenceEntityId: journeyId },
+        select: { id: true },
+      });
+      if (!existingEvidence) {
+        await prisma.operationalWorkEvidence.create({
+          data: {
+            workItemId: current.id,
+            evidenceType: 'DOMAIN_COMPLETION_RECORD',
+            evidenceEntityId: journeyId,
+            verificationStatus: 'VERIFIED',
+            observedAt: new Date(),
+          },
+        });
+        await recordWorkEvent({
+          workItemId: current.id,
+          eventType: 'OUTCOME_EVIDENCE_ADDED',
+          actorType: 'SYSTEM',
+          idempotencyKey: `guidance-outcome-evidence:${current.id}:${journeyId}`,
+          payload: { journeyId, verificationStatus: 'VERIFIED' },
+        });
+      }
+      await transitionWorkItem({
+        workItemId: current.id,
+        to: 'VERIFIED',
+        actorType: 'SYSTEM',
+        idempotencyKey: `guidance-outcome-verified:${current.id}:${journeyId}`,
+      });
+    }
+  }
 }
 
 export async function runJourneyCompletionHooks(journeyId: string): Promise<void> {
@@ -55,10 +136,17 @@ export async function runJourneyCompletionHooks(journeyId: string): Promise<void
 
   const requiredSteps = await db.guidanceJourneyStep.findMany({
     where: { journeyId, isRequired: true },
-    select: { evidences: { select: { sourceType: true, status: true } } },
+    select: { stepType: true, evidences: { select: { sourceType: true, status: true } } },
   });
-  const isEvidenceVerified = requiredSteps.some((step: { evidences: Array<{ sourceType: string; status: string }> }) =>
-    step.evidences.some(isNonSelfReportedEvidence),
+  const outcomeSteps = requiredSteps.filter((step: { stepType: string | null }) =>
+    step.stepType === 'EXECUTION' || step.stepType === 'VALIDATION',
+  );
+  // Physical resolution is certified only when every required execution or
+  // validation step carries authoritative evidence. Decision/awareness
+  // evidence cannot certify work that happened elsewhere.
+  const isEvidenceVerified = outcomeSteps.length > 0 && outcomeSteps.every(
+    (step: { evidences: Array<{ sourceType: string; status: string }> }) =>
+      step.evidences.some(isNonSelfReportedEvidence),
   );
 
   // FR-12: Determine whether the resolution was a replacement or a repair by

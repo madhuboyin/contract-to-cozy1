@@ -67,11 +67,13 @@ function FindingCard({
   editable,
   onDismiss,
   onEdit,
+  onDisposition,
 }: {
   finding: InspectionFinding;
   editable: boolean;
   onDismiss: (id: string) => void;
   onEdit: (finding: InspectionFinding) => void;
+  onDisposition: (finding: InspectionFinding, disposition: 'ACCEPTED' | 'MONITOR' | 'DUPLICATE' | 'ALREADY_RESOLVED' | 'NOT_APPLICABLE' | 'CORRECTION_REQUESTED') => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const style = SEVERITY_STYLES[finding.severity] ?? SEVERITY_STYLES.MINOR;
@@ -129,6 +131,17 @@ function FindingCard({
         <p className="text-xs text-slate-600 italic border-l-2 border-slate-300 pl-2">
           {finding.inspectorDescription}
         </p>
+      )}
+
+      {!editable && finding.status === 'OPEN' && (
+        <div className="flex flex-wrap gap-2 border-t border-current/10 pt-2">
+          <Button size="sm" onClick={() => onDisposition(finding, 'ACCEPTED')}>Add to plan</Button>
+          <Button size="sm" variant="outline" onClick={() => onDisposition(finding, 'MONITOR')}>Monitor</Button>
+          <Button size="sm" variant="outline" onClick={() => onDisposition(finding, 'ALREADY_RESOLVED')}>Already resolved</Button>
+          <Button size="sm" variant="outline" onClick={() => onDisposition(finding, 'NOT_APPLICABLE')}>Not applicable</Button>
+          <Button size="sm" variant="ghost" onClick={() => onDisposition(finding, 'DUPLICATE')}>Duplicate</Button>
+          <Button size="sm" variant="ghost" onClick={() => onDisposition(finding, 'CORRECTION_REQUESTED')}>Correct extraction</Button>
+        </div>
       )}
     </div>
   );
@@ -272,6 +285,26 @@ export default function ReportDetailPage() {
     await load();
   }
 
+  async function handleDisposition(
+    finding: InspectionFinding,
+    disposition: 'ACCEPTED' | 'MONITOR' | 'DUPLICATE' | 'ALREADY_RESOLVED' | 'NOT_APPLICABLE' | 'CORRECTION_REQUESTED',
+  ) {
+    try {
+      const duplicateOfWorkItemId = disposition === 'DUPLICATE'
+        ? window.prompt('Enter the canonical Home Operations work item ID this duplicates:') ?? undefined
+        : undefined;
+      if (disposition === 'DUPLICATE' && !duplicateOfWorkItemId) return;
+      await api.setInspectionFindingWorkDisposition(propertyId, reportId, finding.id, {
+        disposition,
+        duplicateOfWorkItemId,
+      });
+      if (disposition === 'CORRECTION_REQUESTED') setEditingFinding(finding);
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to update finding disposition');
+    }
+  }
+
   async function handleConfirm() {
     setConfirming(true);
     setError(null);
@@ -388,6 +421,7 @@ export default function ReportDetailPage() {
                       editable={isEditable}
                       onDismiss={handleDismiss}
                       onEdit={setEditingFinding}
+                      onDisposition={handleDisposition}
                     />
                   ))}
                 </section>

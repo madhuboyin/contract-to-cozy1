@@ -121,33 +121,67 @@ export async function propagateFindingResolutionFromExecution(
   executionEntityId: string,
 ): Promise<void> {
   try {
+    if (executionType === 'GUIDANCE') {
+      const outcomeSteps = await prisma.guidanceJourneyStep.findMany({
+        where: {
+          journeyId: executionEntityId,
+          isRequired: true,
+          stepType: { in: ['EXECUTION', 'VALIDATION'] },
+        },
+        select: { evidences: { select: { sourceType: true, status: true } } },
+      });
+      const outcomeVerified = outcomeSteps.length > 0 && outcomeSteps.every((step) =>
+        step.evidences.some((evidence) => evidence.sourceType !== 'USER_INPUT' || evidence.status === 'VERIFIED'),
+      );
+      if (!outcomeVerified) return;
+    }
     const links = await findWorkItemsLinkedToExecution(executionType, executionEntityId);
     for (const link of links) {
       const workItem = link.workItem;
-      if (workItem.state === 'VERIFIED' || workItem.state === 'CLOSED') continue;
+      if (workItem.state === 'CLOSED') continue;
 
       let current = workItem;
-      if (current.state !== 'REPORTED_COMPLETE') {
+      if (current.state === 'CANDIDATE' || current.state === 'FOLLOW_UP_DUE') {
         current = await transitionWorkItem({
           workItemId: current.id,
-          to: 'REPORTED_COMPLETE',
+          to: 'ACCEPTED',
           actorType: 'SYSTEM',
-          idempotencyKey: `finding-resolution-reported:${current.id}:${executionType}:${executionEntityId}`,
+          idempotencyKey: `finding-resolution-accepted:${current.id}:${executionType}:${executionEntityId}`,
         });
       }
-      await transitionWorkItem({
-        workItemId: current.id,
-        to: 'VERIFIED',
-        actorType: 'SYSTEM',
-        idempotencyKey: `finding-resolution-verified:${current.id}:${executionType}:${executionEntityId}`,
-      });
+      if (current.state === 'BLOCKED' || current.state === 'DEFERRED') {
+        current = await transitionWorkItem({
+          workItemId: current.id,
+          to: 'IN_PROGRESS',
+          actorType: 'SYSTEM',
+          idempotencyKey: `finding-resolution-progress:${current.id}:${executionType}:${executionEntityId}`,
+        });
+      }
+      if (current.state !== 'REPORTED_COMPLETE') {
+        if (current.state !== 'VERIFIED') {
+          current = await transitionWorkItem({
+            workItemId: current.id,
+            to: 'REPORTED_COMPLETE',
+            actorType: 'SYSTEM',
+            idempotencyKey: `finding-resolution-reported:${current.id}:${executionType}:${executionEntityId}`,
+          });
+        }
+      }
+      if (current.state === 'REPORTED_COMPLETE') {
+        current = await transitionWorkItem({
+          workItemId: current.id,
+          to: 'VERIFIED',
+          actorType: 'SYSTEM',
+          idempotencyKey: `finding-resolution-verified:${current.id}:${executionType}:${executionEntityId}`,
+        });
+      }
 
       // workItem.subjectId IS the finding id (subjectType FINDING) — no join
       // needed. CONTRACTOR_WORK is the closest fit among the four resolution
       // methods for "resolved via tracked Home Operations work"; none is a
       // precise match, same class of imprecision Slice 4 already documented
       // for its own disposition mapping.
-      await prisma.inspectionFinding.updateMany({
+      if (current.state === 'VERIFIED') await prisma.inspectionFinding.updateMany({
         where: { id: workItem.subjectId, status: 'OPEN' },
         data: { status: 'RESOLVED', resolutionMethod: 'CONTRACTOR_WORK', resolvedAt: new Date() },
       });

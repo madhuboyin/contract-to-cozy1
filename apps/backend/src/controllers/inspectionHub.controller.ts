@@ -165,6 +165,19 @@ export async function dismissFinding(req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 }
 
+export async function dispositionFindingAsWork(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await hubService.dispositionFindingAsWork(
+      req.params.findingId,
+      req.params.reportId,
+      req.params.propertyId,
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
 // ── Write-back ────────────────────────────────────────────────────────────────
 
 export async function getWriteBackPreviewHandler(req: Request, res: Response, next: NextFunction) {

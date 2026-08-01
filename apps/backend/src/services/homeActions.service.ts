@@ -51,6 +51,9 @@ import { proposeWorkItemFromHomeAction } from '../modules/homeOperations/adapter
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 import { hasAcceptedWorkItemForProperty } from '../modules/homeOperations/application/hasAcceptedWorkItem.usecase';
+import { snoozeWorkItem } from '../modules/homeOperations/application/snoozeWorkItem.usecase';
+import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
+import { markWorkItemUnderstood, recordWorkEvent } from '../modules/homeOperations/infrastructure/workItemRepository';
 import type { OperationalWorkItemAcceptanceState, OperationalWorkItemDisposition, OperationalWorkItemState, Prisma } from '@prisma/client';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
@@ -739,6 +742,19 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
     recommendationVersion: action.source.version ?? 'phase2-v1',
     journeyId: action.relatedJourneyId,
   });
+  if (action.workItem) {
+    const understoodAt = new Date();
+    await markWorkItemUnderstood(action.workItem.id, understoodAt);
+    await recordWorkEvent({
+      workItemId: action.workItem.id,
+      eventType: 'WORK_UNDERSTOOD',
+      actorType: 'USER',
+      actorUserId: userId,
+      idempotencyKey: `understood:${action.workItem.id}:${userId}`,
+      occurredAt: understoodAt,
+      payload: { actionId: action.id },
+    });
+  }
   return { actionId, interaction: 'OPENED' as const, recordedAt: new Date().toISOString() };
 }
 
@@ -1000,6 +1016,41 @@ export async function executeHomeActionCommand(
   const nextTriggerAt = ['DEFER', 'SNOOZE'].includes(input.command)
     ? validateNextTriggerAt(input.nextTriggerAt)
     : null;
+
+  // Apply portfolio controls to the durable obligation, not merely to the
+  // current winning projection ID. Source-specific lifecycle handling below
+  // still runs so recommendation feedback remains reconciled.
+  if (action.workItem) {
+    if (input.command === 'SNOOZE' && nextTriggerAt) {
+      await snoozeWorkItem({
+        workItemId: action.workItem.id,
+        snoozedUntil: nextTriggerAt,
+        actorUserId: userId,
+        idempotencyKey: `home-action-snooze:${action.workItem.id}:${nextTriggerAt.toISOString()}`,
+      });
+    } else if (input.command === 'DEFER' && nextTriggerAt && action.workItem.acceptanceState === 'ACCEPTED') {
+      await transitionWorkItem({
+        workItemId: action.workItem.id,
+        to: 'DEFERRED',
+        actorType: 'USER',
+        actorUserId: userId,
+        idempotencyKey: `home-action-defer:${action.workItem.id}:${nextTriggerAt.toISOString()}`,
+        timestampValue: nextTriggerAt,
+      });
+    } else if (
+      ['DISMISS', 'NOT_RELEVANT', 'REMOVE_FROM_HOME'].includes(input.command) &&
+      action.workItem.state === 'CANDIDATE'
+    ) {
+      await transitionWorkItem({
+        workItemId: action.workItem.id,
+        to: 'CLOSED',
+        disposition: input.command === 'NOT_RELEVANT' ? 'NOT_RELEVANT' : 'DISMISSED',
+        actorType: 'USER',
+        actorUserId: userId,
+        idempotencyKey: `home-action-disposition:${action.workItem.id}:${input.command}`,
+      });
+    }
+  }
 
   if (action.id.startsWith('ownership-cost-change:')) {
     const sourceChangeId = action.id.slice('ownership-cost-change:'.length);

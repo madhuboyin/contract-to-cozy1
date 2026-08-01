@@ -13835,6 +13835,7 @@ model HabitTemplate {
   cadence    HabitCadence
   difficulty HabitDifficulty
   impactType HabitImpactType
+  safetyTier RecommendationSafetyTier @default(LOW_CONSEQUENCE)
 
   estimatedMinutes Int?
   isActive         Boolean @default(true)
@@ -13856,6 +13857,7 @@ model HabitTemplate {
 
   @@index([category])
   @@index([cadence])
+  @@index([safetyTier])
   @@index([isActive])
   @@map("habit_templates")
 }
@@ -17437,6 +17439,16 @@ enum InspectionResolutionMethod {
   DISMISSED
 }
 
+enum InspectionWorkDisposition {
+  PENDING_REVIEW
+  ACCEPTED
+  MONITOR
+  DUPLICATE
+  ALREADY_RESOLVED
+  NOT_APPLICABLE
+  CORRECTION_REQUESTED
+}
+
 enum InspectionWriteBackTarget {
   DIGITAL_TWIN
   CAPITAL_TIMELINE
@@ -17522,6 +17534,11 @@ model InspectionFinding {
   resolutionNotes     String?
   resolutionCostCents Int?
   warrantyExpiresAt   DateTime?
+
+  workDisposition         InspectionWorkDisposition @default(PENDING_REVIEW)
+  workDispositionNotes    String?
+  workDispositionAt       DateTime?
+  workDispositionByUserId String?
 
   // Phase 5 buyer-acquisition review and downstream lineage.
   buyerDisposition         BuyerFindingDisposition @default(PENDING_REVIEW)
@@ -20281,6 +20298,9 @@ enum OperationalWorkEventType {
   // and the Slice 1 usecases that will emit these.
   WORK_SNOOZED
   WORK_RESCHEDULED
+  WORK_UNDERSTOOD
+  WORK_APPROVAL_REQUIRED
+  WORK_APPROVED
 }
 
 enum OperationalWorkActorType {
@@ -20337,6 +20357,15 @@ model OperationalWorkItem {
   dueAt          DateTime?
   dueWindowEnd   DateTime?
 
+  // A homeowner reschedule is an authoritative commitment override. Source
+  // refreshes must not replace it until the occurrence is completed/reopened.
+  scheduleOverrideAt DateTime?
+
+  // Recurring work keeps a stable template identity while each execution
+  // window has an explicit occurrence identity.
+  recurrenceTemplateKey String?
+  occurrenceKey         String?
+
   ownerUserId String?
   owner       User? @relation("OperationalWorkItemOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
@@ -20363,6 +20392,12 @@ model OperationalWorkItem {
   // visibility until this timestamp passes.
   snoozedUntil DateTime?
 
+  // Portfolio-level comprehension and material-decision governance.
+  understoodAt                 DateTime?
+  materialApprovalRequired     Boolean   @default(false)
+  materialApprovedAt           DateTime?
+  materialApprovedByUserId     String?
+
   // Durable, reversible duplicate/supersession decision (doc rule: "deduplication
   // decisions are durable and reversible").
   supersededByWorkItemId String?
@@ -20388,6 +20423,7 @@ model OperationalWorkItem {
   @@index([propertyId, subjectType, subjectId])
   @@index([propertyId, ownerUserId])
   @@index([supersededByWorkItemId])
+  @@index([propertyId, recurrenceTemplateKey, occurrenceKey])
   @@map("operational_work_items")
 }
 
@@ -20400,6 +20436,8 @@ model OperationalWorkSource {
   sourceVersion  String?
   sourceRole     OperationalWorkSourceRole
   active         Boolean @default(true)
+  lastObservedAt DateTime @default(now())
+  reconciledAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

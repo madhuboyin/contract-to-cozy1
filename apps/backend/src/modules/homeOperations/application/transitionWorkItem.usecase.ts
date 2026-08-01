@@ -2,6 +2,7 @@ import type { OperationalWorkActorType, OperationalWorkEventType, OperationalWor
 import { applyTransition } from '../domain/transitions';
 import { findWorkItemById, recordWorkEvent, updateWorkItemState } from '../infrastructure/workItemRepository';
 import { emitWorkItemLifecycleChange } from '../infrastructure/workItemChangeEmitter';
+import { prisma } from '../../../lib/prisma';
 
 /**
  * Maps a legal state transition to the event vocabulary the parent plan
@@ -59,7 +60,28 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
   const timestampValue = result.timestampField && FORWARD_LOOKING_TIMESTAMP_FIELDS.has(result.timestampField)
     ? input.timestampValue
     : undefined;
-  const updated = await updateWorkItemState(input.workItemId, { ...result, timestampValue });
+  let updated = await updateWorkItemState(input.workItemId, { ...result, timestampValue });
+
+  if (result.state === 'VERIFIED' || result.state === 'CLOSED') {
+    await prisma.operationalWorkSource.updateMany({
+      where: { workItemId: input.workItemId, active: true },
+      data: { active: false, reconciledAt: new Date() },
+    });
+  } else if (
+    result.state === 'REOPENED' ||
+    (result.state === 'ACCEPTED' && workItem.state === 'FOLLOW_UP_DUE')
+  ) {
+    await prisma.operationalWorkSource.updateMany({
+      where: { workItemId: input.workItemId },
+      data: { active: true, reconciledAt: null, lastObservedAt: new Date() },
+    });
+    if (workItem.state === 'FOLLOW_UP_DUE' || result.state === 'REOPENED') {
+      updated = await prisma.operationalWorkItem.update({
+        where: { id: input.workItemId },
+        data: { scheduleOverrideAt: null },
+      });
+    }
+  }
 
   const event = await recordWorkEvent({
     workItemId: input.workItemId,
@@ -69,6 +91,16 @@ export async function transitionWorkItem(input: TransitionWorkItemInput) {
     idempotencyKey: input.idempotencyKey,
     payload: { from: workItem.state, to: result.state, disposition: result.disposition, ...(input.payload ?? {}) },
   });
+
+  if (result.state === 'VERIFIED' || result.state === 'CLOSED') {
+    await recordWorkEvent({
+      workItemId: input.workItemId,
+      eventType: 'SOURCE_RECONCILED',
+      actorType: 'SYSTEM',
+      idempotencyKey: `source-links-reconciled:${input.idempotencyKey}`,
+      payload: { outcomeState: result.state, disposition: result.disposition, sourceLinksClosed: true },
+    });
+  }
 
   // Item #20 (Slice 8: "digest limited to changed or due work") — best-effort,
   // see workItemChangeEmitter.ts. event is nullable in type only for a

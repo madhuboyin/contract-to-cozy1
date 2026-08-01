@@ -11,6 +11,7 @@ import {
   ResolveFindingSchema,
   NegotiationPackageSchema,
   FixDisclosureDecisionsSchema,
+  InspectionFindingWorkDispositionSchema,
 } from '../validators/inspectionHub.validators';
 import {
   getHub,
@@ -30,6 +31,7 @@ import {
   getFixDisclosureDecisions,
   saveFixDisclosureDecisions,
   acceptFindingAsWork,
+  dispositionFindingAsWork,
 } from '../controllers/inspectionHub.controller';
 
 const upload = multer({
@@ -61,6 +63,13 @@ router.post(
   upload.single('file'),
   validateBody(UploadReportBodySchema),
   uploadReport,
+);
+
+router.post(
+  '/properties/:propertyId/inspection-hub/reports/:reportId/findings/:findingId/work-disposition',
+  propertyAuthMiddleware,
+  validateBody(InspectionFindingWorkDispositionSchema),
+  dispositionFindingAsWork,
 );
 
 router.get(

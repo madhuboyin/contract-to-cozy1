@@ -27,6 +27,7 @@ import {
 import { logger } from '../../lib/logger';
 import { recordToolLifecycleEvents } from '../analytics/toolLifecycle';
 import { reconcileCoverageGuidanceJourneyApplicability } from '../coverageJourneyReconciliation.service';
+import { runJourneyCompletionHooks } from './guidanceCompletionHooks.service';
 
 const ACTIVE_GUIDANCE_JOURNEY_STATUSES = ['ACTIVE', 'NOT_STARTED'] as const;
 const REPLACEMENT_BRANCH_TYPE_BY_CHOICE: Record<
@@ -2435,47 +2436,7 @@ export class GuidanceJourneyService {
   // completion (Phase 5.1) — do not overwrite it here to avoid stale timestamps.
   // ---------------------------------------------------------------------------
   async onJourneyCompleted(journeyId: string): Promise<void> {
-    const { guidanceJourney } = getGuidanceModels();
-    const db = prisma as any;
-
-    const journey = await guidanceJourney.findUnique({
-      where: { id: journeyId },
-      select: {
-        id: true,
-        propertyId: true,
-        inventoryItemId: true,
-        issueType: true,
-        isUserInitiated: true,
-      },
-    });
-
-    if (!journey || !journey.isUserInitiated) return;
-
-    await db.$transaction(async (tx: any) => {
-      // FR-12: Update asset condition to GOOD
-      if (journey.inventoryItemId) {
-        await tx.inventoryItem.update({
-          where: { id: journey.inventoryItemId },
-          data: { condition: 'GOOD' },
-        });
-      }
-
-      // FR-11: Create certified VERIFIED_RESOLUTION HomeEvent
-      await tx.homeEvent.create({
-        data: {
-          propertyId: journey.propertyId,
-          inventoryItemId: journey.inventoryItemId ?? undefined,
-          guidanceJourneyId: journey.id,
-          type: 'VERIFIED_RESOLUTION',
-          title: `Issue resolved: ${journey.issueType ?? 'Asset serviced'}`,
-          summary: 'Guided resolution completed via the Guidance Engine. All required steps were verified.',
-          occurredAt: new Date(),
-          sourceBadge: 'VERIFIED',
-          importance: 'HIGH',
-          isRetrospective: false,
-        },
-      });
-    });
+    await runJourneyCompletionHooks(journeyId);
   }
 }
 

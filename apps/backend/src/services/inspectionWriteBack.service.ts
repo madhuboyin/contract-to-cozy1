@@ -2,6 +2,9 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
+import { inspectionFindingSourceAdapter } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
+import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
+import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 
 type FindingWithRelations = Prisma.InspectionFindingGetPayload<Record<string, never>>;
 
@@ -253,6 +256,31 @@ export async function applyWriteBacks(
     where: { id: reportId },
     data: { status: 'CONFIRMED', confirmedAt: new Date() },
   });
+
+  // Confirmation turns reviewed, actionable findings into candidate work —
+  // never accepted work. The homeowner disposition endpoint below is the
+  // explicit commitment gate.
+  for (const finding of report.findings) {
+    const proposal = inspectionFindingSourceAdapter.propose(
+      { ...finding, report: { status: 'CONFIRMED' } } as any,
+      propertyId,
+    );
+    if (!proposal) continue;
+    try {
+      await resolveAndUpsertWorkItem(proposal);
+    } catch (err) {
+      await recordReconciliationFailure({
+        propertyId,
+        operation: 'INSPECTION_CONFIRM_CANDIDATE',
+        sourceType: 'INSPECTION_FINDING',
+        sourceEntityId: finding.id,
+        idempotencyKey: `inspection-confirm-candidate:${finding.id}:${finding.updatedAt.toISOString()}`,
+        payload: { reportId, findingId: finding.id },
+        error: err,
+      }).catch(() => null);
+      logger.warn({ err, reportId, findingId: finding.id }, 'Inspection candidate materialization deferred to reconciliation');
+    }
+  }
 
   // Reserve score write-back log entry (actual recalculation is a separate job)
   if (report.findings.some((f) => ['SAFETY', 'MAJOR'].includes(f.severity))) {

@@ -64,6 +64,7 @@ const TEMPLATE_SUMMARY_SELECT = {
   cadence: true,
   difficulty: true,
   impactType: true,
+  safetyTier: true,
   estimatedMinutes: true,
   isSeasonal: true,
   iconKey: true,
@@ -147,10 +148,10 @@ function mapHabit(h: any) {
 async function assertHabitAccess(
   propertyId: string,
   habitId: string,
-): Promise<{ id: string; status: HabitAssignmentStatus }> {
+): Promise<{ id: string; status: HabitAssignmentStatus; linkedMaintenanceTaskId: string | null }> {
   const habit = await prisma.propertyHabit.findFirst({
     where: { id: habitId, propertyId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, linkedMaintenanceTaskId: true },
   });
   if (!habit) throw new APIError('Habit not found', 404, 'HABIT_NOT_FOUND');
   return habit;
@@ -335,10 +336,18 @@ export class HomeHabitCoachService {
         titleOverride: true,
         descriptionOverride: true,
         dueAt: true,
-        habitTemplate: { select: { title: true, description: true, cadence: true } },
+        habitTemplate: { select: { title: true, description: true, cadence: true, safetyTier: true } },
       },
     });
     if (!habit) throw new APIError('Habit not found', 404, 'HABIT_NOT_FOUND');
+
+    if (habit.habitTemplate.safetyTier !== 'LOW_CONSEQUENCE' || habit.habitTemplate.cadence === 'AD_HOC') {
+      throw new APIError(
+        'Safety-sensitive and one-time obligations must be handled as governed work, not adopted as a habit.',
+        409,
+        'HABIT_NOT_ROUTINE_ELIGIBLE',
+      );
+    }
 
     if (habit.linkedMaintenanceTaskId) {
       const current = await prisma.propertyHabit.findUnique({ where: { id: habitId }, select: HABIT_SUMMARY_SELECT });
@@ -370,6 +379,14 @@ export class HomeHabitCoachService {
     body: { note?: string | null },
   ) {
     const habit = await assertHabitAccess(propertyId, habitId);
+
+    if (habit.linkedMaintenanceTaskId) {
+      throw new APIError(
+        'This routine is completed from its linked Maintenance task.',
+        409,
+        'ROUTINE_COMPLETION_OWNED_BY_MAINTENANCE',
+      );
+    }
 
     if (!VALID_STATUSES_FOR.complete.includes(habit.status)) {
       throw new APIError(
@@ -412,6 +429,14 @@ export class HomeHabitCoachService {
     body: { snoozeUntil?: string; snoozePreset?: string; note?: string | null },
   ) {
     const habit = await assertHabitAccess(propertyId, habitId);
+
+    if (habit.linkedMaintenanceTaskId) {
+      throw new APIError(
+        'Snooze the linked Maintenance task so the routine keeps one schedule.',
+        409,
+        'ROUTINE_SCHEDULE_OWNED_BY_MAINTENANCE',
+      );
+    }
 
     if (!VALID_STATUSES_FOR.snooze.includes(habit.status)) {
       throw new APIError(

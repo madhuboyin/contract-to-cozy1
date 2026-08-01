@@ -36,6 +36,8 @@ export interface CreateWorkItemInput {
   confidence?: number | null;
   missingContext?: string[];
   sourceVersion?: string | null;
+  recurrenceTemplateKey?: string | null;
+  occurrenceKey?: string | null;
 }
 
 export interface RefreshWorkItemPresentationInput {
@@ -132,6 +134,9 @@ export async function createWorkItem(input: CreateWorkItemInput) {
         confidence: input.confidence ?? null,
         missingContext: input.missingContext ?? [],
         sourceVersion: input.sourceVersion ?? null,
+        recurrenceTemplateKey: input.recurrenceTemplateKey ?? null,
+        occurrenceKey: input.occurrenceKey ?? null,
+        materialApprovalRequired: input.safetyTier !== 'LOW_CONSEQUENCE',
       },
     });
   } catch (err: any) {
@@ -156,6 +161,7 @@ export function refreshWorkItemPresentation(workItemId: string, input: RefreshWo
     data: {
       priority: input.priority,
       safetyTier: input.safetyTier,
+      materialApprovalRequired: input.safetyTier !== 'LOW_CONSEQUENCE',
       title: input.title,
       homeownerReason: input.homeownerReason,
       expectedOutcome: input.expectedOutcome,
@@ -183,10 +189,22 @@ export function upsertWorkSource(input: UpsertSourceInput) {
       sourceVersion: input.sourceVersion,
       sourceRole: input.sourceRole,
       active: input.active ?? true,
+      lastObservedAt: new Date(),
+      reconciledAt: (input.active ?? true) ? null : new Date(),
     },
     update: {
       sourceVersion: input.sourceVersion,
       active: input.active ?? true,
+      lastObservedAt: new Date(),
+      reconciledAt: (input.active ?? true) ? null : new Date(),
+    },
+  });
+}
+
+export function findWorkSource(input: Pick<UpsertSourceInput, 'workItemId' | 'sourceType' | 'sourceEntityId' | 'sourceRole'>) {
+  return prisma.operationalWorkSource.findUnique({
+    where: {
+      workItemId_sourceType_sourceEntityId_sourceRole: input,
     },
   });
 }
@@ -263,14 +281,45 @@ export interface UpdateDueFieldsInput {
  * item. Only the fields explicitly passed are updated (a caller rescheduling
  * just dueAt shouldn't accidentally null out an existing window).
  */
-export function updateWorkItemDueFields(workItemId: string, input: UpdateDueFieldsInput) {
+export function updateWorkItemDueFields(
+  workItemId: string,
+  input: UpdateDueFieldsInput,
+  options: { userOverride?: boolean; clearOverride?: boolean } = {},
+) {
   return prisma.operationalWorkItem.update({
     where: { id: workItemId },
     data: {
       ...('dueWindowStart' in input ? { dueWindowStart: input.dueWindowStart } : {}),
       ...('dueAt' in input ? { dueAt: input.dueAt } : {}),
       ...('dueWindowEnd' in input ? { dueWindowEnd: input.dueWindowEnd } : {}),
+      ...(options.userOverride ? { scheduleOverrideAt: new Date() } : {}),
+      ...(options.clearOverride ? { scheduleOverrideAt: null } : {}),
     },
+  });
+}
+
+export function markWorkItemUnderstood(workItemId: string, understoodAt = new Date()) {
+  return prisma.operationalWorkItem.update({
+    where: { id: workItemId },
+    data: { understoodAt },
+  });
+}
+
+export function approveMaterialWorkItem(workItemId: string, approvedByUserId: string) {
+  return prisma.operationalWorkItem.update({
+    where: { id: workItemId },
+    data: { materialApprovedAt: new Date(), materialApprovedByUserId: approvedByUserId },
+  });
+}
+
+export function updateWorkItemOccurrence(
+  workItemId: string,
+  recurrenceTemplateKey: string | null,
+  occurrenceKey: string | null,
+) {
+  return prisma.operationalWorkItem.update({
+    where: { id: workItemId },
+    data: { recurrenceTemplateKey, occurrenceKey },
   });
 }
 

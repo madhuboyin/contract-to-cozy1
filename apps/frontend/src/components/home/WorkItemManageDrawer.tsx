@@ -111,6 +111,9 @@ export function WorkItemManageDrawer({
   const [evidenceVerification, setEvidenceVerification] = useState<OperationalWorkEvidenceVerificationStatus | ''>('');
   const [evidencePending, setEvidencePending] = useState(false);
   const [documents, setDocuments] = useState<PropertyDocument[]>([]);
+  const [approvalEvidenceId, setApprovalEvidenceId] = useState('');
+  const [approvalNote, setApprovalNote] = useState('');
+  const [approvalPending, setApprovalPending] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -284,6 +287,23 @@ export function WorkItemManageDrawer({
       toast({ title: 'Unable to add evidence', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
     } finally {
       setEvidencePending(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!approvalEvidenceId || !approvalNote.trim()) return;
+    setApprovalPending(true);
+    try {
+      const res = await api.approveMaterialWorkItem(propertyId, workItemId, approvalEvidenceId, approvalNote.trim());
+      if (!res.success) throw new Error(res.message || 'Unable to approve this work.');
+      toast({ title: 'Material work approved', description: 'The reviewed evidence and approval are now in the audit trail.' });
+      setApprovalEvidenceId('');
+      setApprovalNote('');
+      await refresh();
+    } catch (error) {
+      toast({ title: 'Unable to approve work', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
+    } finally {
+      setApprovalPending(false);
     }
   };
 
@@ -512,6 +532,29 @@ export function WorkItemManageDrawer({
                   </Button>
                 </div>
               </section>
+
+              {detail.materialApprovalRequired && !detail.materialApprovedAt && (
+                <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-amber-950">Manager approval required</h4>
+                    <p className="mt-1 text-xs text-amber-800">A property owner must review attached evidence before this material or safety outcome can be verified.</p>
+                  </div>
+                  <Select value={approvalEvidenceId} onValueChange={setApprovalEvidenceId}>
+                    <SelectTrigger><SelectValue placeholder="Select evidence to approve" /></SelectTrigger>
+                    <SelectContent>
+                      {detail.evidence.map((entry) => (
+                        <SelectItem key={entry.id} value={entry.id}>
+                          {EVIDENCE_TYPE_LABELS[entry.evidenceType]} · {entry.verificationStatus?.toLowerCase() ?? 'pending'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input value={approvalNote} onChange={(event) => setApprovalNote(event.target.value)} placeholder="Record why this evidence is sufficient" />
+                  <Button size="sm" disabled={!approvalEvidenceId || !approvalNote.trim() || approvalPending} onClick={handleApprove}>
+                    {approvalPending ? 'Approving…' : 'Approve reviewed outcome'}
+                  </Button>
+                </section>
+              )}
             </div>
           )}
         </SheetContent>

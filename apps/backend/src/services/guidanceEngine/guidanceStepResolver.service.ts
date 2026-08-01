@@ -10,7 +10,7 @@ import {
 import { guidanceDerivedDataService } from './guidanceDerivedData.service';
 import { guidanceValidationService } from './guidanceValidation.service';
 import { getStepSkipPolicy } from './guidanceTemplateRegistry';
-import { runJourneyCompletionHooks } from './guidanceCompletionHooks.service';
+import { runJourneyCompletionHooks, syncGuidanceWorkItemsOnCompletion } from './guidanceCompletionHooks.service';
 import { propagateFindingResolutionFromExecution } from '../../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { logger } from '../../lib/logger';
 import type { RecommendationGovernance } from '../../productFramework/recommendationGovernance.contract';
@@ -576,6 +576,9 @@ export class GuidanceStepResolverService {
       // Fire-and-forget with a caught error so a hook failure never blocks the
       // step transition response returned to the user.
       if (nextStatus === 'COMPLETED' && journey.status !== 'COMPLETED') {
+        syncGuidanceWorkItemsOnCompletion(params.journeyId, params.actorUserId).catch((err: unknown) => {
+          logger.error({ err }, '[guidance] syncGuidanceWorkItemsOnCompletion failed');
+        });
         runJourneyCompletionHooks(params.journeyId).catch((err: unknown) => {
           logger.error({ err }, '[guidance] runJourneyCompletionHooks failed');
         });

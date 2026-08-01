@@ -16,6 +16,7 @@ import {
   recordDuplicateDecisionHandler,
   reverseDuplicateDecisionHandler,
   recordEvidenceHandler,
+  approveMaterialWorkHandler,
   listReconciliationsHandler,
   retryReconciliationHandler,
 } from '../modules/homeOperations/api/homeOperations.controller';
@@ -28,6 +29,7 @@ import {
   BatchTransitionWorkItemsSchema,
   RecordDuplicateDecisionSchema,
   RecordEvidenceSchema,
+  ApproveMaterialWorkSchema,
 } from '../modules/homeOperations/api/homeOperations.validators';
 
 // Home Operations — durable operational work identity (Slice 1), write API
@@ -106,6 +108,12 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(RecordEvidenceSchema),
   recordEvidenceHandler,
+);
+router.post(
+  '/properties/:propertyId/home-operations/work-items/:workItemId/approve',
+  requireHouseholdRole('OWNER'),
+  validateBody(ApproveMaterialWorkSchema),
+  approveMaterialWorkHandler,
 );
 
 export default router;

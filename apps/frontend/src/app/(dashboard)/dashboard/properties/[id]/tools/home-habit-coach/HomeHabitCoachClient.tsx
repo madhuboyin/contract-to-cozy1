@@ -327,7 +327,10 @@ function HabitDetailSheet({
 
   if (!habit) return null;
 
-  const isActionable = habit.status === 'ACTIVE' || habit.status === 'SNOOZED';
+  // Once adopted, Maintenance is the only execution lifecycle. Habit Coach
+  // remains the recommendation/adherence surface and must not offer parallel
+  // complete/snooze/skip/dismiss controls for the same obligation.
+  const isActionable = !habit.linkedMaintenanceTaskId && (habit.status === 'ACTIVE' || habit.status === 'SNOOZED');
   const isReopenable = ['COMPLETED', 'SKIPPED', 'DISMISSED', 'EXPIRED'].includes(habit.status);
   const dueLabel = formatDueLabel(habit.dueAt);
   const dueTone = getDueTone(habit.dueAt);

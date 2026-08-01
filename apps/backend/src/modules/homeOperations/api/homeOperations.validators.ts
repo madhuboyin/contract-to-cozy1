@@ -27,6 +27,11 @@ export const AddWatcherSchema = z.object({
   userId: z.string().trim().min(1),
 });
 
+export const ApproveMaterialWorkSchema = z.object({
+  evidenceId: z.string().uuid(),
+  decisionNote: z.string().trim().min(1).max(1000),
+});
+
 export const TransitionWorkItemSchema = z.object({
   to: z.nativeEnum(OperationalWorkItemState),
   disposition: z.nativeEnum(OperationalWorkItemDisposition).optional(),

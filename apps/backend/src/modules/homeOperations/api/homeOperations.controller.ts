@@ -17,6 +17,8 @@ import { ListWorkItemsQuerySchema } from './homeOperations.validators';
 import { prisma } from '../../../lib/prisma';
 import { listPendingReconciliations } from '../infrastructure/reconciliationRepository';
 import { retryHomeOperationsReconciliation } from '../../../services/homeOperationsReconciliation.service';
+import { resolvePropertyAccess } from '../../../services/propertyAccess.service';
+import { approveMaterialWorkItem, recordWorkEvent } from '../infrastructure/workItemRepository';
 
 function homeOperationsContext(req: CustomRequest, res: Response): { propertyId: string } | null {
   const propertyId = req.params.propertyId;
@@ -84,6 +86,11 @@ async function loadWorkItemForMutation(req: CustomRequest, res: Response, contex
   return item;
 }
 
+async function isPropertyHouseholdUser(propertyId: string, userId: string | null): Promise<boolean> {
+  if (!userId) return true;
+  return Boolean(await resolvePropertyAccess(userId, propertyId));
+}
+
 function handleWorkItemMutationError(err: unknown, res: Response) {
   if (err instanceof IllegalWorkItemTransitionError) {
     return res.status(409).json({ success: false, error: { code: 'ILLEGAL_TRANSITION', message: err.message } });
@@ -103,6 +110,9 @@ export async function assignOwnerHandler(req: CustomRequest, res: Response, next
     if (!context) return;
     const item = await loadWorkItemForMutation(req, res, context);
     if (!item) return;
+    if (!(await isPropertyHouseholdUser(context.propertyId, req.body.ownerUserId))) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_HOUSEHOLD_MEMBER', message: 'The owner must belong to this property household.' } });
+    }
 
     await assignWorkItemOwner({
       workItemId: item.id,
@@ -121,6 +131,9 @@ export async function addWatcherHandler(req: CustomRequest, res: Response, next:
     if (!context) return;
     const item = await loadWorkItemForMutation(req, res, context);
     if (!item) return;
+    if (!(await isPropertyHouseholdUser(context.propertyId, req.body.userId))) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_HOUSEHOLD_MEMBER', message: 'The watcher must belong to this property household.' } });
+    }
 
     await addWatcher({
       workItemId: item.id,
@@ -215,6 +228,53 @@ export async function rescheduleWorkItemHandler(req: CustomRequest, res: Respons
     });
     const updated = await loadWorkItem(item.id);
     return res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+export async function approveMaterialWorkHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+    const item = await loadWorkItemForMutation(req, res, context);
+    if (!item) return;
+    if (!item.materialApprovalRequired) {
+      return res.status(409).json({ success: false, error: { code: 'APPROVAL_NOT_REQUIRED', message: 'This work does not require material approval.' } });
+    }
+    const evidence = await prisma.operationalWorkEvidence.findFirst({
+      where: { id: req.body.evidenceId, workItemId: item.id },
+    });
+    if (!evidence) {
+      return res.status(400).json({ success: false, error: { code: 'EVIDENCE_REQUIRED', message: 'Select evidence attached to this work item.' } });
+    }
+    if (
+      item.safetyTier === 'SAFETY_EMERGENCY' &&
+      !['DOCUMENT', 'PROPERTY_FACT'].includes(evidence.evidenceType)
+    ) {
+      return res.status(409).json({ success: false, error: { code: 'AUTHORITATIVE_EVIDENCE_REQUIRED', message: 'Safety work requires reviewed document or verified property evidence.' } });
+    }
+    await prisma.operationalWorkEvidence.update({
+      where: { id: evidence.id },
+      data: { verificationStatus: 'VERIFIED' },
+    });
+    await approveMaterialWorkItem(item.id, req.user!.userId);
+    await recordWorkEvent({
+      workItemId: item.id,
+      eventType: 'WORK_APPROVED',
+      actorType: 'USER',
+      actorUserId: req.user!.userId,
+      idempotencyKey: `material-approval:${item.id}:${evidence.id}`,
+      payload: { evidenceId: evidence.id, decisionNote: req.body.decisionNote },
+    });
+    if (item.state === 'REPORTED_COMPLETE') {
+      await transitionWorkItem({
+        workItemId: item.id,
+        to: 'VERIFIED',
+        actorType: 'USER',
+        actorUserId: req.user!.userId,
+        idempotencyKey: `material-approved-verified:${item.id}:${evidence.id}`,
+      });
+    }
+    return res.json({ success: true, data: await loadWorkItem(item.id) });
   } catch (err) { next(err); }
 }
 
