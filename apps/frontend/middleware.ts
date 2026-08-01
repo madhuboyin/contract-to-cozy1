@@ -161,6 +161,8 @@ export function middleware(request: NextRequest) {
       process.env.HOME_DIGITAL_TWIN_ACCEPTANCE_FIXTURE === '1') ||
     (pathname.startsWith('/acceptance/ownership-costs/') &&
       process.env.OWNERSHIP_COST_ACCEPTANCE_FIXTURE === '1') ||
+    (pathname.startsWith('/acceptance/mortgage-refinance-radar/') &&
+      process.env.MORTGAGE_REFINANCE_ACCEPTANCE_FIXTURE === '1') ||
     (pathname === '/acceptance/savings-benefits' &&
       process.env.SAVINGS_BENEFITS_ACCEPTANCE_FIXTURE === '1') ||
     (pathname.startsWith('/dashboard/properties/') &&

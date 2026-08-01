@@ -218,7 +218,7 @@ function JourneySection({
   return (
     <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24 space-y-4">
       <div className="px-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-700 dark:text-blue-300">
           {step}
         </p>
         <h2 id={`${id}-title`} className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
@@ -1357,6 +1357,7 @@ function ScenarioCalculator({
               Target Rate (%)
             </label>
             <input
+              aria-label="Target Rate (%)"
               type="number"
               min="0.1"
               max="30"
@@ -1398,6 +1399,7 @@ function ScenarioCalculator({
               Closing Costs (optional, USD)
             </label>
             <input
+              aria-label="Closing Costs (optional, USD)"
               type="number"
               min="0"
               step="100"
@@ -1430,6 +1432,7 @@ function ScenarioCalculator({
                   Discount points
                 </label>
                 <input
+                  aria-label="Discount points"
                   type="number"
                   min="0"
                   max="5"
@@ -1454,6 +1457,7 @@ function ScenarioCalculator({
                     {label as string} (USD)
                   </label>
                   <input
+                    aria-label={`${label as string} (USD)`}
                     type="number"
                     min="0"
                     step="100"
@@ -1472,6 +1476,7 @@ function ScenarioCalculator({
                   Broad credit band
                 </label>
                 <select
+                  aria-label="Broad credit band"
                   value={creditBand}
                   onChange={(event) => setCreditBand(event.target.value as typeof creditBand)}
                   className="w-full rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
@@ -1499,6 +1504,7 @@ function ScenarioCalculator({
                   Other fees (USD)
                 </label>
                 <input
+                  aria-label="Other fees (USD)"
                   type="number"
                   min="0"
                   step="100"
@@ -1514,6 +1520,7 @@ function ScenarioCalculator({
                   Lender credits (USD)
                 </label>
                 <input
+                  aria-label="Lender credits (USD)"
                   type="number"
                   min="0"
                   step="100"
@@ -1557,7 +1564,7 @@ function ScenarioCalculator({
         <button
           onClick={handleRun}
           disabled={running}
-          className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-blue-300/70 bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50 dark:border-blue-700/70 dark:bg-blue-700 dark:hover:bg-blue-600"
+          className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-slate-900 bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-50 dark:border-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
         >
           {running ? (
             <>
@@ -2072,7 +2079,7 @@ function MortgageSetupForm({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="mt-5 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-blue-300/70 bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50 dark:border-blue-700/70 dark:bg-blue-700 dark:hover:bg-blue-600"
+          className="mt-5 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-slate-900 bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-50 dark:border-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
         >
           {saving ? (
             <>
@@ -2389,7 +2396,7 @@ function RefinanceDecisionTracker({
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <input aria-label="New mortgage balance" type="number" min="0" value={closingBalance} onChange={(event) => setClosingBalance(event.target.value)} placeholder="New balance ($)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
                   <input aria-label="New interest rate" type="number" min="0.001" step="0.001" value={closingRate} onChange={(event) => setClosingRate(event.target.value)} placeholder="New rate (%)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
-                  <input aria-label="New remaining term" type="number" min="1" max="600" value={closingTerm} onChange={(event) => setClosingTerm(event.target.value)} placeholder="Term (months)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
+                  <input aria-label="New remaining term in months" type="number" min="1" max="600" value={closingTerm} onChange={(event) => setClosingTerm(event.target.value)} placeholder="Term (months)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
                   <input aria-label="New monthly payment" type="number" min="0" value={closingPayment} onChange={(event) => setClosingPayment(event.target.value)} placeholder="Payment (optional)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -2526,6 +2533,7 @@ export default function MortgageRefinanceRadarClient() {
       eyebrow="Home tool"
       title="Mortgage Refinance Radar"
       subtitle="Monitor rates and know when refinancing is likely worth the effort."
+      introOnDesktop
       trust={trust}
       introAction={
         <HomeToolsRail

@@ -42,7 +42,7 @@ export default function TrustStrip({
 
   if (variant === 'footnote') {
     return (
-      <div className={cn('mb-0 flex items-center flex-wrap gap-2.5 border-t border-slate-100 pt-3 text-[11px] text-slate-500', className)}>
+      <div className={cn('mb-0 flex items-center flex-wrap gap-2.5 border-t border-slate-100 pt-3 text-[11px] text-slate-700', className)}>
         <ConfidenceBadge level={confidenceLevel} className="scale-90 origin-left" />
         <span className="text-slate-300">|</span>
         <div className="flex items-center gap-1.5">

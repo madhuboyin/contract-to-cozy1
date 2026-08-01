@@ -26,6 +26,7 @@ interface ToolWorkspaceTemplateProps {
   rail?: ReactNode;
   introAction?: ReactNode;
   embedded?: boolean;
+  introOnDesktop?: boolean;
   children: ReactNode;
 }
 
@@ -40,6 +41,7 @@ export default function ToolWorkspaceTemplate({
   rail,
   introAction,
   embedded = false,
+  introOnDesktop = false,
   children,
 }: ToolWorkspaceTemplateProps) {
   if (embedded) {
@@ -60,6 +62,7 @@ export default function ToolWorkspaceTemplate({
         title={title}
         subtitle={subtitle}
         action={introAction}
+        showOnDesktop={introOnDesktop}
       />
 
       {/* 2-column on desktop: main content left, rail sidebar right */}
