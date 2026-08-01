@@ -8,6 +8,7 @@ import { addWatcher, removeWatcher } from '../application/watchers.usecase';
 import { transitionWorkItem } from '../application/transitionWorkItem.usecase';
 import { snoozeWorkItem } from '../application/snoozeWorkItem.usecase';
 import { rescheduleWorkItem } from '../application/rescheduleWorkItem.usecase';
+import { batchTransitionWorkItems } from '../application/batchTransitionWorkItems.usecase';
 import { recordDuplicateDecision } from '../application/recordDuplicateDecision.usecase';
 import { recordEvidence } from '../application/recordEvidence.usecase';
 import { IllegalWorkItemTransitionError, InvalidClosureDispositionError } from '../domain/transitions';
@@ -190,6 +191,26 @@ export async function rescheduleWorkItemHandler(req: CustomRequest, res: Respons
     });
     const updated = await loadWorkItem(item.id);
     return res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+}
+
+export async function batchTransitionWorkItemsHandler(req: CustomRequest, res: Response, next: (err: unknown) => void) {
+  try {
+    const context = homeOperationsContext(req, res);
+    if (!context) return;
+
+    const dueFields: { dueWindowStart?: Date | null; dueAt?: Date | null; dueWindowEnd?: Date | null } = {};
+    if ('dueWindowStart' in req.body) dueFields.dueWindowStart = req.body.dueWindowStart ? new Date(req.body.dueWindowStart) : null;
+    if ('dueAt' in req.body) dueFields.dueAt = req.body.dueAt ? new Date(req.body.dueAt) : null;
+    if ('dueWindowEnd' in req.body) dueFields.dueWindowEnd = req.body.dueWindowEnd ? new Date(req.body.dueWindowEnd) : null;
+
+    const results = await batchTransitionWorkItems({
+      propertyId: context.propertyId,
+      workItemIds: req.body.workItemIds,
+      actorUserId: req.user!.userId,
+      ...dueFields,
+    });
+    return res.json({ success: true, data: { results } });
   } catch (err) { next(err); }
 }
 

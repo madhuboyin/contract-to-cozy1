@@ -12,6 +12,7 @@ import {
   transitionWorkItemHandler,
   snoozeWorkItemHandler,
   rescheduleWorkItemHandler,
+  batchTransitionWorkItemsHandler,
   recordDuplicateDecisionHandler,
   recordEvidenceHandler,
 } from '../modules/homeOperations/api/homeOperations.controller';
@@ -21,6 +22,7 @@ import {
   TransitionWorkItemSchema,
   SnoozeWorkItemSchema,
   RescheduleWorkItemSchema,
+  BatchTransitionWorkItemsSchema,
   RecordDuplicateDecisionSchema,
   RecordEvidenceSchema,
 } from '../modules/homeOperations/api/homeOperations.validators';
@@ -72,6 +74,12 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(RescheduleWorkItemSchema),
   rescheduleWorkItemHandler,
+);
+router.post(
+  '/properties/:propertyId/home-operations/work-items/batch-transition',
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(BatchTransitionWorkItemsSchema),
+  batchTransitionWorkItemsHandler,
 );
 router.post(
   '/properties/:propertyId/home-operations/work-items/:workItemId/duplicate',

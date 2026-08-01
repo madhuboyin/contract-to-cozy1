@@ -11,6 +11,8 @@ import {
   groupAttentionActions,
   type AttentionEntry,
 } from '@/components/home/UnifiedHomeSurface';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BatchScheduleActionBar } from '@/components/home/BatchScheduleActionBar';
 
 export type HomeOperationsTabKey = 'today' | 'upcoming' | 'waiting' | 'projects' | 'routines' | 'completed';
 
@@ -70,6 +72,19 @@ export function isAcceptedWorkItem(action: RankedHomeActionDTO): boolean {
 
 function entryActions(entry: AttentionEntry): RankedHomeActionDTO[] {
   return entry.kind === 'COVERAGE_CORRECTION_GROUP' ? entry.actions : [entry.action];
+}
+
+// Item #22 (Slice 8: "batch scheduling for low-risk routine work"). Client-
+// side mirror of the server's eligibility gate, for UI purposes only — the
+// backend re-enforces this regardless of what the client sends. Grouped
+// entries (COVERAGE_CORRECTION_GROUP) and every non-ACTION kind never get a
+// batch checkbox: no v1 batch-eligibility claim is made for them.
+function batchEligibleWorkItemId(entry: AttentionEntry): string | null {
+  if (entry.kind !== 'ACTION') return null;
+  const { workItem, governance } = entry.action;
+  if (!workItem || workItem.state !== 'CANDIDATE') return null;
+  if (governance.safetyTier !== 'LOW_CONSEQUENCE') return null;
+  return workItem.id;
 }
 
 function entryKey(entry: AttentionEntry): string {
@@ -148,12 +163,16 @@ function EntryList({
   onChanged,
   focusActionId,
   focusWorkItemId,
+  selectedIds,
+  onToggleSelect,
 }: {
   entries: AttentionEntry[];
   propertyId: string;
   onChanged: () => Promise<unknown>;
   focusActionId: string | null;
   focusWorkItemId: string | null;
+  selectedIds: Set<string>;
+  onToggleSelect: (workItemId: string) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -172,14 +191,25 @@ function EntryList({
           : focusActionId && isFocused
             ? `home-action-${focusActionId}`
             : `home-action-${actions[0]?.id ?? 'unknown'}`;
+        const eligibleWorkItemId = batchEligibleWorkItemId(entry);
 
         return (
           <div
             id={anchorId}
             key={entryKey(entry)}
-            className={`scroll-mt-28 rounded-2xl transition-shadow ${isFocused ? 'ring-2 ring-teal-500 ring-offset-4 ring-offset-white' : ''}`}
+            className={`flex items-start gap-2 scroll-mt-28 rounded-2xl transition-shadow ${isFocused ? 'ring-2 ring-teal-500 ring-offset-4 ring-offset-white' : ''}`}
           >
-            <EntryCard entry={entry} propertyId={propertyId} onChanged={onChanged} />
+            {eligibleWorkItemId && (
+              <Checkbox
+                className="mt-5"
+                aria-label="Select for batch scheduling"
+                checked={selectedIds.has(eligibleWorkItemId)}
+                onCheckedChange={() => onToggleSelect(eligibleWorkItemId)}
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <EntryCard entry={entry} propertyId={propertyId} onChanged={onChanged} />
+            </div>
           </div>
         );
       })}
@@ -204,6 +234,26 @@ export function HomeOperationsTabPanel({
   focusWorkItemId: string | null;
   emptyStateReason: HomeActionEmptyStateReason | null;
 }) {
+  // Item #22: selection is scoped per-tab — clearing on tab switch is the
+  // simplest correct behavior and avoids carrying stale selection across
+  // differently-filtered lists.
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  React.useEffect(() => {
+    setSelectedIds(new Set());
+  }, [tab]);
+  const onToggleSelect = React.useCallback((workItemId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(workItemId)) next.delete(workItemId);
+      else next.add(workItemId);
+      return next;
+    });
+  }, []);
+  const handleBatchComplete = React.useCallback(async () => {
+    setSelectedIds(new Set());
+    await onChanged();
+  }, [onChanged]);
+
   if (tab === 'routines') {
     const empty = TAB_EMPTY_STATE.routines;
     return (
@@ -248,6 +298,12 @@ export function HomeOperationsTabPanel({
     const accepted = actions.filter(isAcceptedWorkItem);
     return (
       <div className="space-y-6">
+        <BatchScheduleActionBar
+          propertyId={propertyId}
+          selectedIds={selectedIds}
+          onClear={() => setSelectedIds(new Set())}
+          onComplete={handleBatchComplete}
+        />
         {accepted.length > 0 && (
           <div className="space-y-3">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">In your plan</h3>
@@ -257,6 +313,8 @@ export function HomeOperationsTabPanel({
               onChanged={onChanged}
               focusActionId={focusActionId}
               focusWorkItemId={focusWorkItemId}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
             />
           </div>
         )}
@@ -269,6 +327,8 @@ export function HomeOperationsTabPanel({
               onChanged={onChanged}
               focusActionId={focusActionId}
               focusWorkItemId={focusWorkItemId}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
             />
           </div>
         )}
@@ -283,6 +343,8 @@ export function HomeOperationsTabPanel({
       onChanged={onChanged}
       focusActionId={focusActionId}
       focusWorkItemId={focusWorkItemId}
+      selectedIds={selectedIds}
+      onToggleSelect={onToggleSelect}
     />
   );
 }

@@ -3134,6 +3134,18 @@ class APIClient {
     );
   }
 
+  // Item #22 (Slice 8: "batch scheduling for low-risk routine work"). Fixed
+  // to bulk-accept server-side (not a generic batch-transition-to-anything
+  // call) — dueAt is an optional shared due date applied to every accepted
+  // item, not a per-item value. Server re-enforces LOW_CONSEQUENCE/CANDIDATE
+  // eligibility regardless of what the caller selected.
+  async batchTransitionWorkItems(propertyId: string, workItemIds: string[], dueAt?: string | null) {
+    return this.request<{ results: Array<{ workItemId: string; success: boolean; message?: string; item?: WorkItemDetailDTO }> }>(
+      `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/batch-transition`,
+      { method: 'POST', body: JSON.stringify({ workItemIds, ...(dueAt !== undefined ? { dueAt } : {}) }) },
+    );
+  }
+
   async recordWorkItemDuplicateDecision(propertyId: string, workItemId: string, supersededByWorkItemId: string) {
     return this.request<WorkItemDetailDTO>(
       `/api/properties/${encodeURIComponent(propertyId)}/home-operations/work-items/${encodeURIComponent(workItemId)}/duplicate`,

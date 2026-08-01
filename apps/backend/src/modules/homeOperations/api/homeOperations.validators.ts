@@ -54,6 +54,19 @@ export const RescheduleWorkItemSchema = z.object({
   { message: 'At least one of dueWindowStart, dueAt, or dueWindowEnd must be provided.' },
 );
 
+// Item #22 (Slice 8: "batch scheduling for low-risk routine work"). Fixed to
+// bulk-accept (CANDIDATE -> ACCEPTED) server-side — `to` is deliberately not
+// a request field, this is not a generic batch-transition-to-anything API.
+// The due-window fields are optional: batch-accept alone is a complete,
+// valid request; a shared due date is an addition, not a requirement.
+
+export const BatchTransitionWorkItemsSchema = z.object({
+  workItemIds: z.array(z.string().uuid()).min(1).max(50),
+  dueWindowStart: z.string().datetime().nullable().optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  dueWindowEnd: z.string().datetime().nullable().optional(),
+});
+
 export const RecordDuplicateDecisionSchema = z.object({
   supersededByWorkItemId: z.string().trim().min(1),
 });
