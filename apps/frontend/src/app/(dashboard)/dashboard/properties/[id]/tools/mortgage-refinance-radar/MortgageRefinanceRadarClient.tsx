@@ -198,6 +198,64 @@ function InnerCard({ children, className = '' }: { children: React.ReactNode; cl
   );
 }
 
+function JourneySection({
+  id,
+  step,
+  title,
+  description,
+  children,
+}: {
+  id: string;
+  step: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24 space-y-4">
+      <div className="px-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          {step}
+        </p>
+        <h2 id={`${id}-title`} className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+          {title}
+        </h2>
+        <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
+          {description}
+        </p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ProgressiveDisclosure({
+  id,
+  title,
+  description,
+  children,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details id={id} className="group scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white/60 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/40">
+      <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+        <span>
+          <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</span>
+          <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{description}</span>
+        </span>
+        <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="space-y-4 border-t border-slate-200/70 p-4 sm:p-6 dark:border-slate-700/70">
+        {children}
+      </div>
+    </details>
+  );
+}
+
 // ─── Sub-Sections ─────────────────────────────────────────────────────────────
 
 function KpiTile({
@@ -366,6 +424,39 @@ function KeyMetricsCard({ data }: { data: RadarStatusAvailable }) {
           <span>Remaining: {months(data.remainingTermMonths)}</span>
           <span>Closing cost est.: {usd(data.closingCostAssumptionUsd)}</span>
         </div>
+      </div>
+    </GlassCard>
+  );
+}
+
+function RecommendedNextStepCard({ data }: { data: RadarStatusAvailable }) {
+  const isOpen = data.radarState === 'OPEN';
+  const targetId = isOpen ? 'refinance-explore' : 'refinance-evidence-settings';
+
+  return (
+    <GlassCard>
+      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Recommended next step
+          </p>
+          <h3 className="mt-1 text-base font-semibold text-slate-950 dark:text-white">
+            {isOpen ? 'Explore realistic loan options' : 'No action needed right now'}
+          </h3>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
+            {isOpen
+              ? 'Test terms and costs first. If the result still fits your goal, compare official Loan Estimates before deciding.'
+              : 'Home monitoring continues. You can review the facts and sources behind this result or explore a hypothetical scenario.'}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant={isOpen ? 'default' : 'outline'}
+          className="w-full shrink-0 sm:w-auto"
+          onClick={() => document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
+          {isOpen ? 'Explore my options' : 'Review monitoring details'}
+        </Button>
       </div>
     </GlassCard>
   );
@@ -725,10 +816,8 @@ function AlertPreferencesCard({
       setMessage(
         (saved.externalDeliveryEnabled || saved.pushDeliveryEnabled) &&
         saved.recipientInRolloutCohort
-          ? 'Preferences saved. Eligible external alerts are active.'
-          : saved.rolloutMode === 'ALLOWLIST'
-            ? 'Preferences saved. Delivery remains limited to the internal rollout cohort.'
-            : 'Preferences saved. External delivery remains disabled during the pilot.',
+          ? 'Preferences saved. Your selected email or push alerts are active.'
+          : 'Preferences saved. Home monitoring remains on; unavailable channels will stay off.',
       );
     } catch (error) {
       setMessage(
@@ -797,9 +886,7 @@ function AlertPreferencesCard({
             preference?.pushDeliveryEnabled) &&
             preference?.recipientInRolloutCohort
               ? 'Home monitoring stays on. Email and push are explicit opt-in and follow your cadence and quiet hours.'
-              : preference?.rolloutMode === 'ALLOWLIST'
-                ? 'Home monitoring stays on. External alerts are limited to an internal rollout cohort while delivery guardrails are verified.'
-                : 'Home monitoring stays on. External channels require explicit opt-in and activate only after their delivery rollout is approved.'}
+              : 'Home monitoring stays on. Email and push appear as available when supported for your account.'}
           </p>
         </div>
 
@@ -834,7 +921,7 @@ function AlertPreferencesCard({
                 <Mail className="h-3.5 w-3.5" aria-hidden="true" /> Email
               </span>
               <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">
-                Opt in now; delivery is not active yet.
+                Save your preference; email remains off until it is available for your account.
               </span>
             </span>
           </label>
@@ -863,7 +950,7 @@ function AlertPreferencesCard({
                     : preference.pushDeliveryEnabled &&
                         preference.recipientInRolloutCohort
                       ? 'Receive qualified refinance alerts on this device.'
-                      : 'Opt in now; delivery activates with the push rollout.'}
+                      : 'Save your preference; push remains off until it is available for your account.'}
               </span>
             </span>
           </label>
@@ -1746,6 +1833,20 @@ function MortgageSetupForm({
   const [error, setError] = useState<string | null>(null);
 
   const selectedPreset = TERM_MONTH_OPTIONS.find((o) => String(o.value) === termMonths);
+  const requiredFacts = [
+    { label: 'Loan balance', known: balance.trim().length > 0 },
+    { label: 'Interest rate', known: ratePct.trim().length > 0 },
+    { label: 'Remaining term', known: termMonths.trim().length > 0 },
+  ];
+  const knownFacts = requiredFacts.filter((fact) => fact.known);
+  const missingFacts = requiredFacts.filter((fact) => !fact.known);
+  const balanceAsOf = initial?.mortgageBalanceAsOfDate
+    ? new Date(initial.mortgageBalanceAsOfDate)
+    : null;
+  const balanceAgeDays = balanceAsOf && !Number.isNaN(balanceAsOf.getTime())
+    ? Math.floor((Date.now() - balanceAsOf.getTime()) / 86_400_000)
+    : null;
+  const balanceIsStale = balanceAgeDays != null && balanceAgeDays > 180;
 
   function resolvedTermMonths(): number | null {
     if (termMonths === 'custom') {
@@ -1806,8 +1907,44 @@ function MortgageSetupForm({
         </div>
         <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
           {initial
-            ? 'We pulled the mortgage details already saved in Financing. Complete any missing fields to enable the refinance radar.'
-            : 'Enter your current mortgage details to enable the refinance radar.'}
+            ? 'Confirm the facts below to see whether refinancing could lower your payment or total cost.'
+            : 'Add three mortgage facts to estimate whether refinancing could improve your loan.'}
+        </p>
+
+        <div className="mb-5 grid gap-3 sm:grid-cols-3" aria-label="Mortgage fact readiness">
+          <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/60 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200">
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Known facts ({knownFacts.length})
+            </p>
+            <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+              {knownFacts.length ? knownFacts.map((fact) => fact.label).join(', ') : 'None yet'}
+            </p>
+          </div>
+          <div className={`rounded-xl border p-3 ${missingFacts.length ? 'border-amber-200/70 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20' : 'border-slate-200/70 bg-slate-50/60 dark:border-slate-700 dark:bg-slate-900/40'}`}>
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Missing facts ({missingFacts.length})
+            </p>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              {missingFacts.length ? missingFacts.map((fact) => fact.label).join(', ') : 'Ready to estimate'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-blue-200/70 bg-blue-50/60 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-800 dark:text-blue-200">
+              <Info className="h-3.5 w-3.5" aria-hidden="true" /> Optional facts
+            </p>
+            <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">Monthly payment improves the comparison but is not required.</p>
+          </div>
+        </div>
+
+        {balanceIsStale && (
+          <p className="mb-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            Stale balance: last confirmed {balanceAgeDays} days ago. Updating it improves the savings estimate.
+          </p>
+        )}
+
+        <p className="mb-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          Balance determines the dollars at stake, rate establishes your current cost, and remaining term prevents a lower payment from hiding a longer payoff.
         </p>
 
         <div className="space-y-4">
@@ -1931,7 +2068,7 @@ function MortgageSetupForm({
               Saving & analyzing…
             </>
           ) : (
-            'Save & Enable Radar'
+            'Save facts & check savings'
           )}
         </button>
       </div>
@@ -2397,11 +2534,11 @@ export default function MortgageRefinanceRadarClient() {
               type="button"
               className="w-full sm:w-auto"
               onClick={() => {
-                const el = document.getElementById('refinance-steps-to-act');
+                const el = document.getElementById('refinance-explore');
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }}
             >
-              View steps to act
+              Explore my options
             </Button>
           ),
           supportingAction: (
@@ -2413,12 +2550,12 @@ export default function MortgageRefinanceRadarClient() {
               disabled={evaluating}
             >
               <RefreshCw className={`mr-1.5 h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
-              {evaluating ? 'Evaluating…' : 'Re-evaluate radar'}
+              {evaluating ? 'Refreshing…' : 'Refresh estimate'}
             </Button>
           ),
         } : {
           title: 'No refinance opportunity detected at current rates.',
-          description: 'The current analysis does not see a compelling rate gap right now. Re-evaluate when rates shift for an updated read.',
+          description: 'The current analysis does not see a compelling rate gap right now. Home monitoring continues as rates and your mortgage facts change.',
           impactLabel: 'Window currently closed',
           confidenceLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} confidence` : 'Medium confidence',
           primaryAction: (
@@ -2430,7 +2567,7 @@ export default function MortgageRefinanceRadarClient() {
               disabled={evaluating}
             >
               <RefreshCw className={`mr-1.5 h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
-              {evaluating ? 'Evaluating…' : 'Re-evaluate radar'}
+              {evaluating ? 'Refreshing…' : 'Refresh estimate'}
             </Button>
           ),
         }
@@ -2493,104 +2630,87 @@ export default function MortgageRefinanceRadarClient() {
             currentToolId="mortgage-refinance-radar"
           />
 
-          {/* 1. Refinance decision */}
-          <RadarStatusHero data={available} />
+          <JourneySection
+            id="refinance-understand"
+            step="1 · Understand"
+            title="Your refinance outlook"
+            description="Start with the conclusion, estimated impact, reasons, and caveats behind this result."
+          >
+            <RadarStatusHero data={available} />
+            <KeyMetricsCard data={available} />
+            <RecommendedNextStepCard data={available} />
+          </JourneySection>
 
-          {/* 2. Key metrics */}
-          <KeyMetricsCard data={available} />
+          <JourneySection
+            id="refinance-explore"
+            step="2 · Explore"
+            title="Test loan scenarios"
+            description="Adjust terms and costs to see how the monthly payment, break-even point, and total cost could change."
+          >
+            <ScenarioCalculator propertyId={propertyId} contextData={available} />
+          </JourneySection>
 
-          <RefinanceDecisionTracker
-            propertyId={propertyId}
-            onFinancingUpdated={async () => {
-              await handleEvaluate();
-              setMortgageProfile(await getFinancingMortgageProfile(propertyId).catch(() => null));
-            }}
-          />
+          <JourneySection
+            id="refinance-compare"
+            step="3 · Compare"
+            title="Compare official offers"
+            description="When you have lender disclosures, compare their actual APR, cash to close, fees, and terms side by side."
+          >
+            <ProgressiveDisclosure
+              id="refinance-loan-estimates"
+              title="I have Loan Estimates to compare"
+              description="Open this only when you are ready to enter official lender disclosures."
+            >
+              <LoanEstimateComparisonCard propertyId={propertyId} />
+            </ProgressiveDisclosure>
+          </JourneySection>
 
-          {/* 3. Data freshness and monitoring readiness */}
-          {available.alertReadiness && (
-            <DataFreshnessCard data={available} propertyId={propertyId} />
-          )}
+          <JourneySection
+            id="refinance-decide-track"
+            step="4 · Decide and track"
+            title="Record what you plan to do"
+            description="Save a decision, a follow-up date, or completion details so the refinance journey stays connected to your home."
+          >
+            <RefinanceDecisionTracker
+              propertyId={propertyId}
+              onFinancingUpdated={async () => {
+                await handleEvaluate();
+                setMortgageProfile(await getFinancingMortgageProfile(propertyId).catch(() => null));
+              }}
+            />
+            <RefinanceFeedbackCard
+              propertyId={propertyId}
+              context={available.radarState === 'OPEN' ? 'OPPORTUNITY' : 'RADAR'}
+            />
+          </JourneySection>
 
-          {/* 4. Equity, lien, and mortgage-insurance context */}
-          <EligibilityContextCard data={available} propertyId={propertyId} />
-
-          {/* 5. Alert preferences */}
-          <AlertPreferencesCard
-            propertyId={propertyId}
-            alertReadiness={available.alertReadiness}
-          />
-
-          {/* 6. Scenario planner */}
-          <ScenarioCalculator propertyId={propertyId} contextData={available} />
-
-          {/* 7. Official lender disclosure comparison */}
-          <LoanEstimateComparisonCard propertyId={propertyId} />
-
-          <RefinanceFeedbackCard
-            propertyId={propertyId}
-            context={available.radarState === 'OPEN' ? 'OPPORTUNITY' : 'RADAR'}
-          />
-
-          {/* 3b. Steps to act — shown when opportunity is open */}
-          {available.radarState === 'OPEN' && (
-            <div id="refinance-steps-to-act"><GlassCard>
-              <div className="p-5 sm:p-6 space-y-4">
-                <p className="text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
-                  Steps to act today
-                </p>
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  A refinance window doesn&apos;t stay open forever. Here&apos;s what you can do right now — no lender or partner needed.
-                </p>
-                <ol className="space-y-3">
-                  {[
-                    { n: 1, title: 'Check your current loan terms', body: 'Find your most recent mortgage statement. Note your current rate, remaining balance, and monthly payment.' },
-                    { n: 2, title: 'Run scenarios above', body: 'Use the scenario planner to compare 15-, 20-, and 30-year options. Find the term where monthly savings exceed closing costs within your target break-even window.' },
-                    { n: 3, title: 'Pull your credit score', body: 'Lenders price rate offers on your score. Check a free source (Credit Karma, your bank app) so you know where you stand before requesting quotes.' },
-                    { n: 4, title: 'Gather documents in advance', body: 'Most lenders will ask for 2 years of tax returns, 2 recent pay stubs, and 2–3 months of bank statements. Having these ready shortens approval timelines.' },
-                    { n: 5, title: 'Request quotes from 3+ lenders', body: 'Rate-shopping within a 14–45 day window counts as one hard inquiry on your credit. Compare APR — not just rate — to account for fees.' },
-                  ].map(({ n, title, body }) => (
-                    <li key={n} className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-                        {n}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-300">{body}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </GlassCard></div>
-          )}
-
-          {/* 4. Market context */}
-          <section aria-label="Market Context" className="space-y-4">
-            <div className="px-1">
-              <p className="text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
-                Market Context
-              </p>
-            </div>
-
+          <ProgressiveDisclosure
+            id="refinance-evidence-settings"
+            title="Monitoring, sources, assumptions, and settings"
+            description="Review data freshness, eligibility context, market evidence, alerts, and model limitations."
+          >
+            {available.alertReadiness && (
+              <DataFreshnessCard data={available} propertyId={propertyId} />
+            )}
+            <EligibilityContextCard data={available} propertyId={propertyId} />
             <RateTrendCard data={available} />
-
             <MissedOpportunityCard data={available} />
-
             {rateData && rateData.snapshots.length > 0 && (
               <MortgageRateHistoryChart
                 rateData={rateData}
                 currentMortgageRatePct={available.currentRatePct}
               />
             )}
-          </section>
-
-          {/* 5. Disclaimer */}
-          {available.disclaimer && (
-            <p className="px-1 text-xs leading-relaxed text-slate-400 dark:text-slate-500">
-              {available.disclaimer}
-            </p>
-          )}
+            <AlertPreferencesCard
+              propertyId={propertyId}
+              alertReadiness={available.alertReadiness}
+            />
+            {available.disclaimer && (
+              <p className="px-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                {available.disclaimer}
+              </p>
+            )}
+          </ProgressiveDisclosure>
         </>
       )}
     </ToolWorkspaceTemplate>
