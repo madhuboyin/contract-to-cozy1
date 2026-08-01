@@ -108,6 +108,7 @@ export function shouldPromptForMissingMortgageDetails(input: {
 /** Standard disclaimer appended to all refinance API responses. */
 export const REFINANCE_DISCLAIMER =
   'These estimates are for informational purposes only and are based on simplified ' +
-  'assumptions. Modeled APR is not a lender disclosure; actual APR, savings, rates, and ' +
+  'assumptions. A national benchmark is market context, not a personalized rate or offer. ' +
+  'Modeled APR is not a lender disclosure; actual APR, savings, rates, and ' +
   'closing costs will vary by lender and official Loan Estimate. Consult a ' +
   'licensed mortgage professional before making refinancing decisions.';

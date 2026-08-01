@@ -1,5 +1,10 @@
 import type { RefinanceScenarioResult } from './types/refinanceRadar.types';
 import type { RefinanceEligibilityContext } from './refinanceEligibilityContext';
+import {
+  REFINANCE_COMMERCIAL_BOUNDARY,
+  REFINANCE_CREDIT_SCORE_BOUNDARY,
+  refinanceGuidanceSourceLines,
+} from './refinanceTrustContent';
 
 function money(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -86,6 +91,7 @@ export function buildRefinanceScenarioMarkdown(input: {
     `- Lender credits: ${money(result.costBreakdown.lenderCreditsUsd)}`,
     `- Net modeled costs: ${money(result.costBreakdown.netClosingCostsUsd)}`,
     `- Broad credit band supplied for planning: ${result.assumptions.borrowerCreditBand}`,
+    `- Credit-score boundary: ${REFINANCE_CREDIT_SCORE_BOUNDARY}`,
     '',
     '## Term comparison',
     '',
@@ -118,7 +124,13 @@ export function buildRefinanceScenarioMarkdown(input: {
     '',
     result.disclaimer,
     '',
+    REFINANCE_COMMERCIAL_BOUNDARY,
+    '',
     'Market rates and lender fees can change. Confirm every amount using an official lender Loan Estimate before making a decision.',
+    '',
+    '## Maintained consumer guidance',
+    '',
+    ...refinanceGuidanceSourceLines(),
     '',
   ].join('\n');
 }

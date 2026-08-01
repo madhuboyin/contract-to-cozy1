@@ -55,6 +55,9 @@ test('exports reviewed offers, comparison context, and verification checklist', 
   assert.match(markdown, /Verification checklist/);
   assert.match(markdown, /Rate-lock status/);
   assert.match(markdown, /not a lender recommendation/i);
+  assert.match(markdown, /not an overall lender ranking/i);
+  assert.match(markdown, /does not endorse a lender/i);
+  assert.match(markdown, /consumerfinance\.gov\/owning-a-home\/loan-estimate/);
 });
 
 test('exports only the selected lender in a homeowner-controlled discussion brief', () => {
@@ -88,6 +91,8 @@ test('exports only the selected lender in a homeowner-controlled discussion brie
   assert.match(markdown, /\[x\] The selected figures were checked/);
   assert.match(markdown, /did not send it to a lender/i);
   assert.match(markdown, /not a commitment, acceptance, application/i);
+  assert.match(markdown, /rank lenders for compensation/i);
+  assert.match(markdown, /consumerfinance\.gov\/owning-a-home\/compare/);
   assert.match(markdown, /lower-net-cost baseline/i);
 });
 

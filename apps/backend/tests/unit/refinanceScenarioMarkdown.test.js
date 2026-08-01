@@ -92,8 +92,13 @@ test('builds a Markdown-only lender discussion summary', () => {
   });
   assert.match(markdown, /^# Mortgage Refinance Scenario Summary/m);
   assert.match(markdown, /Educational planning estimate only/);
+  assert.match(markdown, /consumer credit scores can differ/i);
+  assert.match(markdown, /does not endorse a lender/i);
+  assert.match(markdown, /consumerfinance\.gov\/consumer-tools\/credit-reports-and-scores/);
+  assert.match(markdown, /national benchmark|official lender Loan Estimate/i);
   assert.match(markdown, /## Questions for a lender or servicer/);
   assert.match(markdown, /Initial escrow funding: \$2,500/);
   assert.doesNotMatch(markdown, /<html|<script/i);
   assert.doesNotMatch(markdown, /94 Ashford Dr \|/);
+  assert.doesNotMatch(markdown, /Credit Karma|guaranteed approval|act now/i);
 });

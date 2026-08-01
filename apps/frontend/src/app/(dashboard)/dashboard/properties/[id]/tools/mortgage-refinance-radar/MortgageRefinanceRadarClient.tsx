@@ -62,6 +62,10 @@ import { refinanceLoopTrust, trustDateLabel } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
 import { MortgageRateHistoryChart } from './MortgageRateHistoryChart';
 import { LoanEstimateComparisonCard } from './LoanEstimateComparisonCard';
+import {
+  REFINANCE_CREDIT_SCORE_BOUNDARY,
+  REFINANCE_GUIDANCE_LINKS,
+} from './refinanceTrustContent';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1479,7 +1483,15 @@ function ScenarioCalculator({
                   <option value="LIMITED">Limited history</option>
                 </select>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Planning context only; this does not imply lender approval.
+                  {REFINANCE_CREDIT_SCORE_BOUNDARY}{' '}
+                  <a
+                    href={REFINANCE_GUIDANCE_LINKS.creditScores}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-blue-700 underline underline-offset-2 dark:text-blue-300"
+                  >
+                    CFPB credit-score guidance
+                  </a>
                 </p>
               </div>
               <div>

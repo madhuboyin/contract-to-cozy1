@@ -3,6 +3,11 @@ import {
   type LoanEstimateMetric,
   type RefinanceLoanEstimateInput,
 } from './refinanceLoanEstimateComparison';
+import {
+  REFINANCE_COMMERCIAL_BOUNDARY,
+  REFINANCE_METRIC_RANKING_BOUNDARY,
+  refinanceGuidanceSourceLines,
+} from './refinanceTrustContent';
 
 function money(value: number | null): string {
   if (value == null) return 'Not supplied';
@@ -116,6 +121,8 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     '',
     '## What stands out',
     '',
+    REFINANCE_METRIC_RANKING_BOUNDARY,
+    '',
     ...comparison.summary.map((line) => `- ${safeInline(line)}`),
     '',
     ...(tradeoffRows.length
@@ -159,7 +166,13 @@ export function buildRefinanceLoanEstimateComparisonMarkdown(input: {
     '',
     comparison.disclaimer,
     '',
+    REFINANCE_COMMERCIAL_BOUNDARY,
+    '',
     'ContractToCozy does not verify the uploaded document, lender identity, eligibility, rate lock, or final closing terms. Compare the latest official disclosures and consult qualified professionals before committing.',
+    '',
+    '## Maintained consumer guidance',
+    '',
+    ...refinanceGuidanceSourceLines(),
     '',
   ].join('\n');
 }
@@ -241,6 +254,7 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
     '',
     '## Private comparison context',
     '',
+    `- ${REFINANCE_METRIC_RANKING_BOUNDARY}`,
     `- Reviewed against ${input.offers.length - 1} other offer(s); competitor lender identities are intentionally omitted.`,
     `- Requested loan amount alignment: ${sameLoanAmount ? 'confirmed across reviewed offers' : 'not aligned; request corrected estimates before relying on rankings'}.`,
     `- Product and term alignment: ${sameProduct ? 'confirmed across reviewed offers' : 'not aligned; treat payment and cost differences as tradeoffs'}.`,
@@ -272,7 +286,13 @@ export function buildRefinanceLoanEstimateHandoffMarkdown(input: {
     '',
     comparison.disclaimer,
     '',
+    REFINANCE_COMMERCIAL_BOUNDARY,
+    '',
     'This brief intentionally excludes competitor lender identities and is not a commitment, acceptance, application, approval, or authorization for a credit inquiry. Reconfirm all terms using the latest official disclosures before proceeding.',
+    '',
+    '## Maintained consumer guidance',
+    '',
+    ...refinanceGuidanceSourceLines(),
     '',
   ].join('\n');
 }

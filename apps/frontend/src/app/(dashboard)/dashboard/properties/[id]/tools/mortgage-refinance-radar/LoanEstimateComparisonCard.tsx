@@ -27,6 +27,11 @@ import {
   type RefinanceLoanEstimateExtraction,
   type SavedRefinanceLoanEstimateComparison,
 } from './mortgageRefinanceRadarApi';
+import {
+  REFINANCE_COMMERCIAL_BOUNDARY,
+  REFINANCE_GUIDANCE_LINKS,
+  REFINANCE_METRIC_RANKING_BOUNDARY,
+} from './refinanceTrustContent';
 
 type OfferDraft = {
   id: string;
@@ -753,7 +758,18 @@ export function LoanEstimateComparisonCard({
           </h3>
           <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
             Copy the same fields from each lender&apos;s standardized form. Values
-            stay in this comparison and are not saved.
+            stay in this comparison and are not saved unless you choose Save comparison.
+          </p>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+            {REFINANCE_COMMERCIAL_BOUNDARY}{' '}
+            <a
+              href={REFINANCE_GUIDANCE_LINKS.loanEstimate}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-blue-700 underline underline-offset-2 dark:text-blue-300"
+            >
+              CFPB Loan Estimate explainer
+            </a>
           </p>
         </div>
 
@@ -1029,6 +1045,17 @@ export function LoanEstimateComparisonCard({
                 )),
               )}
             </div>
+            <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+              {REFINANCE_METRIC_RANKING_BOUNDARY}{' '}
+              <a
+                href={REFINANCE_GUIDANCE_LINKS.compareOffers}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-blue-700 underline underline-offset-2 dark:text-blue-300"
+              >
+                CFPB offer-comparison guidance
+              </a>
+            </p>
             {comparison.costTradeoffs.length > 0 && (
               <div className="rounded-xl border border-violet-200/80 bg-violet-50/50 p-3 dark:border-violet-900/60 dark:bg-violet-950/20">
                 <h4 className="text-xs font-semibold text-violet-900 dark:text-violet-200">
