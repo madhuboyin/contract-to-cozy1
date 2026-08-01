@@ -15,6 +15,7 @@ import {
   fetchAdminToolLifecycleFunnel,
   fetchAdminServiceQuoteDecisionMetrics,
   fetchAdminRenovationOperationalHealth,
+  fetchAdminHomeOperationsMeasurement,
 } from '@/lib/api/adminAnalytics';
 import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
 
@@ -36,6 +37,18 @@ export function useAdminRenovationOperationalHealth(
   return useQuery({
     queryKey: ['admin-renovation-operational-health', filters.from, filters.to],
     queryFn: () => fetchAdminRenovationOperationalHealth(filters),
+    staleTime: STALE,
+    enabled,
+  });
+}
+
+export function useAdminHomeOperationsMeasurement(
+  filters: AdminAnalyticsFilters,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['admin-home-operations-measurement', filters.from, filters.to],
+    queryFn: () => fetchAdminHomeOperationsMeasurement(filters),
     staleTime: STALE,
     enabled,
   });

@@ -32,6 +32,7 @@ import {
   getServiceQuoteDecisionMetricsHandler,
   getRenovationOperationalHealthHandler,
   getHomeDigitalTwinDiagnosticsHandler,
+  getHomeOperationsMeasurementHandler,
 } from '../controllers/adminAnalytics.controller';
 
 const router = Router();
@@ -282,6 +283,24 @@ router.get(
   '/admin/analytics/renovation-operations',
   validate(OverviewQuerySchema),
   getRenovationOperationalHealthHandler,
+);
+
+/**
+ * @swagger
+ * /api/admin/analytics/home-operations:
+ *   get:
+ *     summary: Home Operations §14 measurement — north star, funnel, trust, and guardrail context
+ *     tags: [Admin Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Aggregate Home Operations funnel, trust/quality metrics, and guardrail context, with documented gaps for metrics not yet computable
+ */
+router.get(
+  '/admin/analytics/home-operations',
+  validate(OverviewQuerySchema),
+  getHomeOperationsMeasurementHandler,
 );
 
 /**

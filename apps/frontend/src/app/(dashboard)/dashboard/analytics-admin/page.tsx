@@ -46,6 +46,7 @@ import {
   useAdminToolLifecycleFunnel,
   useAdminServiceQuoteDecisionMetrics,
   useAdminRenovationOperationalHealth,
+  useAdminHomeOperationsMeasurement,
 } from '@/hooks/useAdminAnalytics';
 import AdminAnalyticsLineChart from '@/components/admin-analytics/AdminAnalyticsLineChart';
 import {
@@ -334,6 +335,154 @@ function RenovationOperationalHealthSection({
             description="No stale requirements, overdue blockers, unknown execution applicability, missing scopes, or projection errors were found."
           />
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function notMeasurable(label: string) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs">
+      <span className="text-slate-500">{label}</span>
+      <Badge variant="outline" className="text-slate-400">Not yet measurable</Badge>
+    </div>
+  );
+}
+
+// Item #23 (§14 "Measurement"). Same structural shape as
+// RenovationOperationalHealthSection above — north star / funnel / trust,
+// plus a guardrail-context strip explicitly labeled as context, not a KPI
+// (§14.4 lists these as things NOT to optimize), plus a visible "gaps" list
+// for every metric §14 names that isn't computable from existing data yet.
+function HomeOperationsMeasurementSection({
+  filters,
+  enabled,
+}: {
+  filters: AdminAnalyticsFilters;
+  enabled: boolean;
+}) {
+  const query = useAdminHomeOperationsMeasurement(filters, enabled);
+  if (query.isLoading) return <TableSkeleton rows={4} />;
+  if (query.isError) {
+    return (
+      <AdminRouteState
+        state="error"
+        title="Home Operations measurement unavailable"
+        description="North star, funnel, and trust signals could not be loaded."
+      />
+    );
+  }
+  if (!query.data) return null;
+  const data = query.data;
+  const stageHours = (stage: { count: number; averageHours: number | null }) =>
+    stage.averageHours == null ? '—' : `${num(stage.averageHours)}h`;
+
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Home className="h-4 w-4 text-teal-600" aria-hidden="true" />
+              Home Operations measurement (§14)
+            </CardTitle>
+            <CardDescription>
+              North star, funnel, and trust signals for the OperationalWorkItem lifecycle — not every §14 metric is computable yet, see gaps below.
+            </CardDescription>
+          </div>
+          <Badge variant="outline">{data.gaps.length} documented gaps</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          <OverviewCard
+            label="Verified important outcomes"
+            value={num(data.northStar.verifiedImportantOutcomes)}
+            sub={`${pct(data.northStar.perPropertyRate)} per active property`}
+          />
+          <OverviewCard
+            label="Active properties"
+            value={num(data.northStar.activeProperties)}
+          />
+          <OverviewCard
+            label="Reconciliation"
+            value={pct(data.funnel.reconciliationRatio)}
+            sub={`${num(data.funnel.uniqueWorkItemsAfterReconciliation)} items from ${num(data.funnel.actionableCandidatesDetected)} candidates`}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <OverviewCard label="Acceptance rate" value={pct(data.funnel.acceptanceRate)} />
+          <OverviewCard label="Overdue rate" value={pct(data.funnel.overdueRate)} />
+          <OverviewCard label="Reopen rate" value={pct(data.funnel.reopenRate)} />
+          <OverviewCard label="Source reconciliation" value={pct(data.funnel.sourceReconciliationSuccessRate)} />
+        </div>
+
+        <div className="rounded-xl border border-slate-200">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-900">Stage timing (average)</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-3 p-4 text-xs text-slate-600 md:grid-cols-4">
+            <div><dt>Accepted → Scheduled</dt><dd className="text-lg font-semibold text-slate-900">{stageHours(data.funnel.acceptedToScheduledHours)}</dd></div>
+            <div><dt>Scheduled → Started</dt><dd className="text-lg font-semibold text-slate-900">{stageHours(data.funnel.scheduledToStartedHours)}</dd></div>
+            <div><dt>Started → Reported</dt><dd className="text-lg font-semibold text-slate-900">{stageHours(data.funnel.startedToReportedCompleteHours)}</dd></div>
+            <div><dt>Reported → Verified</dt><dd className="text-lg font-semibold text-slate-900">{stageHours(data.funnel.reportedToVerifiedHours)}</dd></div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="rounded-xl border border-slate-200">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h3 className="text-sm font-semibold text-slate-900">Trust &amp; quality</h3>
+            </div>
+            <dl className="grid grid-cols-2 gap-3 p-4 text-xs text-slate-600">
+              <div><dt>False-completion incidents</dt><dd className="text-lg font-semibold text-slate-900">{num(data.trust.falseCompletionIncidents)}</dd></div>
+              <div><dt>Notifications w/o change</dt><dd className="text-lg font-semibold text-slate-900">{pct(data.trust.notificationsWithoutActionableChange.rate)}</dd></div>
+              <div><dt>Write-back failure rate</dt><dd className="text-lg font-semibold text-slate-900">{pct(data.trust.projectWriteBackFailures.failureRate)}</dd></div>
+            </dl>
+            <div className="divide-y divide-slate-100 border-t border-slate-100">
+              {notMeasurable('Unresolved source after verified outcome')}
+              {notMeasurable('Work hidden while source remains open')}
+              {notMeasurable('Incorrect merges / duplicate splits')}
+              {notMeasurable('Stale-source promotions')}
+              {notMeasurable('Safety-governance violations')}
+              {notMeasurable('Fact-correction completion')}
+              {notMeasurable('Accessibility defects')}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h3 className="text-sm font-semibold text-slate-900">Guardrail context</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                §14.4 — explicitly not success metrics. Shown for anti-gaming visibility only.
+              </p>
+            </div>
+            <dl className="grid grid-cols-2 gap-3 p-4 text-xs text-slate-600">
+              <div><dt>Work items created</dt><dd className="text-lg font-semibold text-slate-900">{num(data.guardrailContext.workItemsCreated)}</dd></div>
+              <div><dt>Dismissals recorded</dt><dd className="text-lg font-semibold text-slate-900">{num(data.guardrailContext.dismissalsRecorded)}</dd></div>
+              <div><dt>Projects w/o verified outcome</dt><dd className="text-lg font-semibold text-slate-900">{num(data.guardrailContext.projectsCreatedWithoutVerifiedOutcome)}</dd></div>
+            </dl>
+            {notMeasurable('Reminders sent')}
+            <div className="divide-y divide-slate-100 border-t border-slate-100">
+              {notMeasurable('Recommendation-understood rate')}
+              {notMeasurable('Duplicate-prevention rate')}
+              {notMeasurable('Completed without duplicate closure')}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-2">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+            <div>
+              <h3 className="text-sm font-semibold text-amber-900">Documented measurement gaps</h3>
+              <ul className="mt-2 space-y-1 text-xs leading-5 text-amber-800">
+                {data.gaps.map((gap) => <li key={gap}>{gap}</li>)}
+              </ul>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -1753,6 +1902,12 @@ export default function AnalyticsAdminPage() {
           filters={filters}
           enabled={isAdmin}
           key={`renovation-operations-${refreshKey}`}
+        />
+
+        <HomeOperationsMeasurementSection
+          filters={filters}
+          enabled={isAdmin}
+          key={`home-operations-measurement-${refreshKey}`}
         />
 
         {/* ── Phase 1 Pilot ── */}

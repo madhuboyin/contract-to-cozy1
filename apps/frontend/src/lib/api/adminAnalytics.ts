@@ -95,6 +95,51 @@ export interface AdminRenovationOperationalHealthResponse {
   };
 }
 
+// Item #23 (§14 "Measurement"). Metrics that aren't yet computable come
+// back `null` with a matching one-line reason in `gaps` — never fabricated.
+export interface AdminHomeOperationsMeasurementResponse {
+  generatedAt: string;
+  northStar: {
+    verifiedImportantOutcomes: number;
+    activeProperties: number;
+    perPropertyRate: number | null;
+  };
+  funnel: {
+    actionableCandidatesDetected: number;
+    uniqueWorkItemsAfterReconciliation: number;
+    reconciliationRatio: number | null;
+    acceptanceRate: number | null;
+    acceptedToScheduledHours: { count: number; averageHours: number | null };
+    scheduledToStartedHours: { count: number; averageHours: number | null };
+    startedToReportedCompleteHours: { count: number; averageHours: number | null };
+    reportedToVerifiedHours: { count: number; averageHours: number | null };
+    sourceReconciliationSuccessRate: number | null;
+    overdueRate: number | null;
+    reopenRate: number | null;
+    recommendationUnderstoodRate: null;
+    duplicatePreventionRate: null;
+    completedWithoutDuplicateClosure: null;
+  };
+  trust: {
+    falseCompletionIncidents: number;
+    notificationsWithoutActionableChange: { count: number; rate: number | null };
+    projectWriteBackFailures: { completedProjects: number; successfulWriteBacks: number; failureRate: number | null };
+    unresolvedSourceAfterVerifiedOutcome: null;
+    workHiddenWhileSourceOpen: null;
+    incorrectMergesAndDuplicateSplits: null;
+    staleSourcePromotions: null;
+    safetyGovernanceViolations: null;
+    factCorrectionCompletion: null;
+    accessibilityDefects: null;
+  };
+  guardrailContext: {
+    workItemsCreated: number;
+    dismissalsRecorded: number;
+    projectsCreatedWithoutVerifiedOutcome: number;
+  };
+  gaps: string[];
+}
+
 // Overview
 export interface AdminOverviewResponse {
   period: { from: string; to: string };
@@ -412,6 +457,16 @@ export async function fetchAdminRenovationOperationalHealth(
 ): Promise<AdminRenovationOperationalHealthResponse> {
   const response = await api.get<AdminRenovationOperationalHealthResponse>(
     '/api/admin/analytics/renovation-operations',
+    { params: buildParams(filters) },
+  );
+  return response.data;
+}
+
+export async function fetchAdminHomeOperationsMeasurement(
+  filters: AdminAnalyticsFilters,
+): Promise<AdminHomeOperationsMeasurementResponse> {
+  const response = await api.get<AdminHomeOperationsMeasurementResponse>(
+    '/api/admin/analytics/home-operations',
     { params: buildParams(filters) },
   );
   return response.data;
