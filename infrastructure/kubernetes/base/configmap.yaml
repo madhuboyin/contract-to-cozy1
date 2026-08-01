@@ -100,6 +100,9 @@ data:
   # approved. WEB_PUSH_VAPID_PRIVATE_KEY belongs in app-secrets, not here.
   WEB_PUSH_DELIVERY_ENABLED: "false"
   REFINANCE_PUSH_ALERTS_ENABLED: "false"
+  # Notification flags never authorize lender transmission, lead sale,
+  # referral routing, or another commercial action. No such path is enabled.
+  # A separate reviewed implementation and authorization would be required.
   WEB_PUSH_VAPID_SUBJECT: ""
   WEB_PUSH_VAPID_PUBLIC_KEY: ""
   # Deliberately kept "false" (not synced from live's "true") — the

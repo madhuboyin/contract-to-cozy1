@@ -2,16 +2,16 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Recommended for implementation |
-| Date | July 27, 2026 |
+| Status | Implemented; controlled external-alert rollout gated |
+| Date | August 1, 2026 |
 | Accountable product area | Homeowner Product |
 | Capability ID | `mortgage-refinance-radar` |
 | Canonical route | `/dashboard/properties/[id]/tools/mortgage-refinance-radar` |
 | Governing framework | [Capability Outcome and Experience Audit Framework](./CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md) |
 | Existing feature baseline | [Mortgage Refinance Radar Enhancement Plan](./mortgage-refinance-radar-enhancement-plan.md) |
 | Product framework | [ContractToCozy Product Framework](./ContractToCozy_Product_Framework.md) |
-| Recommended disposition | Double down with bounded gap closure |
-| Provisional audit score | 81 / 100 |
+| Final disposition | Double down completed; retain controlled rollout |
+| Final audit score | 98 / 100 |
 
 ---
 
@@ -22,8 +22,8 @@ monitoring, property-specific financial analysis, scenario modeling, alert safeg
 Loan Estimate comparison deliver a differentiated homeowner outcome that is not adequately served
 by a generic mortgage calculator.
 
-The previous enhancement program produced a strong financial and operational foundation. The
-capability is not missing another large calculation phase. The remaining gaps are primarily:
+The previous enhancement program produced a strong financial and operational foundation. This
+audit then closed the following bounded gaps:
 
 1. Product Framework contract accuracy;
 2. canonical Unified Home placement;
@@ -33,11 +33,14 @@ capability is not missing another large calculation phase. The remaining gaps ar
 6. end-to-end experience acceptance; and
 7. measurement of decisions and realized outcomes.
 
-The recommended decision is:
+The implemented decision is:
 
 > Preserve and deepen Mortgage Refinance Radar, remove its parallel Home priority path, connect it
 > to canonical Home Actions, and extend it from “opportunity analysis” to a homeowner-controlled
 > decision and completion journey.
+
+All seven implementation slices are complete. General external-alert delivery remains withheld by
+design and is governed as a separate operational release decision.
 
 ### 1.1 Implementation constraint
 
@@ -195,22 +198,27 @@ preferences, rollout behavior, transitions, DATA_REQUIRED policy, scenario alter
 guidance, Loan Estimate extraction and comparison, handoff safeguards, persistence, Markdown
 exports, and analytics.
 
+Subsequent audit slices added a deterministic 17-test desktop/mobile Playwright matrix, focused
+decision and measurement tests, financial-language governance tests, and a documentation-alignment
+contract test. Each slice's commit evidence is recorded in Section 10.1.
+
 ---
 
 ## 5. Audit Scorecard
 
 | Dimension | Score | Maximum | Assessment |
 | --- | ---: | ---: | --- |
-| Homeowner value and differentiation | 18 | 20 | Strong always-on decision value and unusually deep offer comparison. |
-| Functional completeness | 19 | 20 | Core monitoring, analysis, control, and operational lifecycle are mature. |
-| Actionability and closed-loop completion | 10 | 15 | Strong preparation and comparison, but no durable final decision or verified refinance outcome. |
-| Data quality, freshness, and trust | 13 | 15 | Strong technical safeguards; some unsourced generic homeowner guidance remains. |
-| UX clarity and readiness | 12 | 15 | First result is clearer than before, but advanced controls and operational language appear too early. |
-| Product Framework integration | 6 | 10 | Manifest and Home behavior do not match; OPEN uses a parallel card rather than canonical action ranking. |
-| Accessibility, performance, and reliability | 3 | 5 | Chart evidence is strong; complete route-level responsive and accessibility acceptance is absent. |
-| **Total** | **81** | **100** | **Double down with bounded gap closure.** |
+| Homeowner value and differentiation | 19 | 20 | Strong always-on decision value, realistic alternatives, and reviewed official-offer comparison. |
+| Functional completeness | 20 | 20 | Monitoring, worker evaluation, alerts, comparison, decision, completion, and measurement are implemented. |
+| Actionability and closed-loop completion | 15 | 15 | Durable decisions, application tracking, verified outcomes, and canonical Financing writeback close the loop. |
+| Data quality, freshness, and trust | 14 | 15 | Source, freshness, consent, privacy floors, and financial boundaries are enforced; external delivery remains deliberately unvalidated for general release. |
+| UX clarity and readiness | 15 | 15 | Outcome-first progressive disclosure and exact readiness/error states are covered by browser acceptance. |
+| Product Framework integration | 10 | 10 | Reviewed manifest, canonical Home Actions, deduplication, lifecycle, and ranking agree. |
+| Accessibility, performance, and reliability | 5 | 5 | Desktop/mobile browser coverage includes keyboard, names, reduced motion, table equivalence, retry, and WCAG A/AA checks. |
+| **Total** | **98** | **100** | **Double down completed; retain the controlled external-alert gate.** |
 
-The score is provisional until the required multi-state browser acceptance is captured.
+The score is final for this audit. The remaining two points reflect unproven general external-alert
+delivery, not an open in-product implementation slice.
 
 ---
 
@@ -267,6 +275,8 @@ Unified Home behavior shall be:
 
 ### MRR-001 — Capability contract does not match behavior
 
+**Final status:** Resolved in Slice 0 (`695aa0a`).
+
 - **Priority:** P0
 - **Evidence:** The registry uses generic catalog-only `SAVE_OPTIMIZE` defaults even though the
   capability reads and writes financing data, reacts to domain transitions, creates artifacts,
@@ -276,6 +286,8 @@ Unified Home behavior shall be:
 - **Required outcome:** A reviewed capability definition accurately describes the real journey.
 
 ### MRR-002 — OPEN opportunities bypass canonical Home Action ranking
+
+**Final status:** Resolved in Slice 0 (`695aa0a`).
 
 - **Priority:** P0
 - **Evidence:** A dedicated refinance portfolio card ranks OPEN properties separately from the
@@ -287,6 +299,8 @@ Unified Home behavior shall be:
 
 ### MRR-003 — No durable decision and verified completion
 
+**Final status:** Resolved in Slice 1 (`577faad`).
+
 - **Priority:** P1
 - **Evidence:** The system records scenarios, comparisons, exports, and feedback but does not record
   the homeowner's refinance decision or actual refinance outcome.
@@ -296,6 +310,8 @@ Unified Home behavior shall be:
   selection, application, and closing; and update canonical Financing after verified completion.
 
 ### MRR-004 — Page hierarchy is not progressive enough
+
+**Final status:** Resolved in Slice 2 (`8cd562f`).
 
 - **Priority:** P1
 - **Evidence:** Freshness, eligibility, alert controls, the full scenario planner, the full Loan
@@ -307,6 +323,8 @@ Unified Home behavior shall be:
 
 ### MRR-005 — Readiness does not identify known and missing facts clearly enough
 
+**Final status:** Resolved in Slice 2 (`8cd562f`).
+
 - **Priority:** P1
 - **Evidence:** The setup form pre-populates known values but renders all fields and does not clearly
   label known, missing, stale, required, or optional facts.
@@ -315,6 +333,8 @@ Unified Home behavior shall be:
   and date, and automatic re-evaluation after save.
 
 ### MRR-006 — Some material-financial guidance lacks visible qualification
+
+**Final status:** Resolved in Slice 3 (`41d7acc`).
 
 - **Priority:** P1
 - **Evidence:** The action checklist contains exact credit-shopping timing, a named consumer score
@@ -326,6 +346,8 @@ Unified Home behavior shall be:
 
 ### MRR-007 — Complete route acceptance is absent
 
+**Final status:** Resolved in Slice 4 (`e157c53`).
+
 - **Priority:** P1
 - **Evidence:** Financial unit tests and chart tests are extensive, but no dedicated browser suite
   proves the complete OPEN, CLOSED, partial, stale, failure, responsive, keyboard, and screen-reader
@@ -334,6 +356,8 @@ Unified Home behavior shall be:
 - **Required outcome:** Fixture-based desktop/mobile route acceptance with accessibility assertions.
 
 ### MRR-008 — Analytics stop before homeowner value is realized
+
+**Final status:** Resolved in Slice 5 (`c81625e`).
 
 - **Priority:** P2
 - **Evidence:** Existing reporting measures views, Home opens, scenarios, comparisons, exports,
@@ -345,6 +369,8 @@ Unified Home behavior shall be:
 
 ### MRR-009 — Outcome-family boundary has not been formally audited
 
+**Final status:** Resolved through the reviewed Slice 0 Product Framework contract and related-capability boundaries (`695aa0a`).
+
 - **Priority:** P2
 - **Evidence:** The enhancement plan establishes Financing as the mortgage-fact owner but does not
   formally score overlap with Financing Center, Break-Even, True Cost, or related scenario routes.
@@ -354,6 +380,9 @@ Unified Home behavior shall be:
   scenario/comparison stages rather than new standalone tools.
 
 ### MRR-010 — Documentation contains conflicting status
+
+**Final status:** Resolved in Slice 6 through the aligned functional, product, inventory,
+configuration, measurement, and incident-response sources.
 
 - **Priority:** P2
 - **Evidence:** The enhancement plan says only operational work remains, while the functional
@@ -454,6 +483,21 @@ Each slice should be independently releasable and should deliver:
 ```text
 real input → canonical logic → homeowner output → action → durable signal → analytics
 ```
+
+### 10.1 Recorded implementation status
+
+| Slice | Status | Repository evidence |
+| --- | --- | --- |
+| 0 — Product truth and canonical placement | Complete | `695aa0a` — reviewed capability contract and canonical refinance Home Actions |
+| 1 — Decision and completion loop | Complete | `577faad` — durable decision lifecycle, events, and canonical Financing writeback |
+| 2 — Outcome-first page redesign and readiness | Complete | `8cd562f` — staged homeowner journey and exact readiness states |
+| 3 — Material-financial trust and content review | Complete | `41d7acc` — qualified financial guidance and governance tests |
+| 4 — Full experience acceptance | Complete | `e157c53` — deterministic desktop/mobile/browser acceptance matrix |
+| 5 — Outcome measurement and controlled optimization | Complete | `c81625e` — durable funnel, privacy floors, optimization gates, and SLO ownership |
+| 6 — Documentation and operational rollout alignment | Complete | Functional contract, enhancement baseline, generated inventory, fail-closed configuration evidence, and alert incident runbook in this slice |
+
+External email and Web Push activation is not an incomplete slice. It remains a separately approved
+rollout decision governed by the allowlist, evidence thresholds, and rollback runbook.
 
 ### Slice 0 — Product truth and canonical placement
 
@@ -875,8 +919,10 @@ Mortgage Refinance Radar satisfies this audit when:
 
 ## 17. Recommended Immediate Next Step
 
-Begin with **Slice 0 — Product truth and canonical placement**.
+Close this implementation audit. Keep external email and Web Push on the explicit internal
+allowlist and collect the delivery, duplicate, opt-out, complaint, usefulness, and freshness
+evidence required by the rollout runbook. A move to `GENERAL` requires a separate recorded approval.
 
-It is the smallest high-value correction, removes a framework launch defect, prevents further
-investment in a parallel Home priority system, and creates the correct foundation for the decision
-and completion work in Slice 1.
+Do not add automated lender transmission or another commercial action under this audit. That work
+requires a new product proposal and separate privacy, compliance, security, and operational
+authorization.

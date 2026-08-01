@@ -228,6 +228,7 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'property-tax': 'DECISION_RECORDED',
   'ownership-costs': 'DECISION_RECORDED',
   'savings-benefits': 'DECISION_RECORDED',
+  'mortgage-refinance-radar': 'DECISION_RECORDED',
   // Home Operations Slice 10 (§11): exceptions from their outcome
   // category's default (PLAN_BUDGET → PLAN_CREATED, PROTECT_MONITOR →
   // OUTPUT_VIEWED), matching the backend registry correction.

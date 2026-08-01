@@ -6,19 +6,20 @@ _PRODUCT, ENGINEERING & ROLLOUT STATUS_
 
 **Prepared for:** ContractToCozy Product, Design, Engineering, Data, and Growth
 
-**Last updated:** July 26, 2026
+**Last updated:** August 1, 2026
 
-**Implementation baseline:** main @ f589baf — isolated Prisma schema-push runtime and successful production schema synchronization
+**Implementation baseline:** main @ c81625e — capability audit Slices 0–5 implemented, including canonical Home Actions, decision completion, acceptance, and outcome measurement
 
-**Status:** Core implementation complete; controlled external-alert rollout remains operationally gated
+**Status:** Capability implementation and audit gap closure complete; controlled external-alert rollout remains gated
 
 **Document source of truth:** This Markdown file. The legacy DOCX is not
 maintained and should not be used for implementation or rollout status.
 
 ### Current implementation status
 
-As of July 26, 2026, Releases 0 through 3 and the advanced decision-intelligence
-slices described in this plan are implemented. The radar now:
+As of August 1, 2026, Releases 0 through 3, the advanced decision-intelligence
+work, and capability-audit Slices 0 through 5 are implemented. Slice 6 aligns
+the functional contract, inventory, configuration, and operational runbooks. The radar now:
 
 - Reuses the canonical Financing profile, pre-populates every known mortgage
   fact, requests only missing required fields, and automatically re-evaluates
@@ -44,20 +45,22 @@ slices described in this plan are implemented. The radar now:
   points, cash-direction, payment, five-year-cost, save/delete, and manual
   sharing safeguards.
 - Aggregates funnel, usefulness, delivery-suppression, duplicate-alert,
-  coverage, and freshness guardrails through the authorized refinance-radar
-  analytics report.
+  coverage, freshness, durable decision, application, closing, canonical
+  Financing writeback, and privacy-suppressed verified-outcome metrics through
+  the authorized refinance-radar analytics report.
 
 The production Prisma schema, including `PushSubscription`, has been applied
 successfully using the isolated non-root schema-push Job in
 `apps/backend/run-schema-push-job.sh`. No Prisma migration script was created,
 in accordance with the project constraint.
 
-The remaining work is operational rollout, not missing core implementation:
-configure VAPID and outbound-provider secrets, define the internal recipient
-allowlist, enable the fail-closed channel flags for that cohort, validate
-delivery/duplicate/opt-out/freshness guardrails, and promote
-`REFINANCE_ALERT_ROLLOUT_MODE` from `ALLOWLIST` to `GENERAL` only after approval.
-Transactional lender delivery remains intentionally out of scope and gated.
+No capability-audit implementation slice remains open. External-channel activation is a separate,
+deliberately withheld release decision: configure VAPID and outbound-provider secrets, define the
+internal recipient allowlist, enable fail-closed channel flags for that cohort, validate delivery,
+duplicate, opt-out, complaint, usefulness, and freshness guardrails, and promote
+`REFINANCE_ALERT_ROLLOUT_MODE` from `ALLOWLIST` to `GENERAL` only after recorded approval.
+Automated lender transmission and commercial action remain unimplemented and require a separate
+product, privacy, compliance, security, and operational authorization.
 
 ### Current completion matrix
 
@@ -74,7 +77,7 @@ Transactional lender delivery remains intentionally out of scope and gated.
 | Term and objective comparison | Complete | Balanced, lower-payment, faster-payoff, and lower-total-cost modes compare 15-, 20-, and 30-year terms. |
 | Retain, extra-principal, recast, and cash-out alternatives | Complete for planning | Recast and cash-out results remain conditional on servicer/lender eligibility. |
 | Lender-ready Markdown export | Complete | Recomputes against canonical context and exports assumptions, costs, alternatives, questions, and disclaimers as Markdown only. |
-| Funnel and trust instrumentation and reporting | Complete | Opportunity views, Home conversion, scenario runs/saves, projected savings, exports, feedback, durable alert-suppression outcomes, evaluation coverage, duplicate alerts, and freshness guardrails are aggregated through the authorized `/api/admin/analytics/refinance-radar` report. |
+| Funnel and trust instrumentation and reporting | Complete | Durable opportunity-to-decision, defer/return, comparison/selection, selection/application, application/close, decision distribution, stale/reopened, canonical writeback, projected-versus-recorded, and existing delivery guardrails are aggregated through the authorized `/api/admin/analytics/refinance-radar` report. Sensitive value medians are suppressed below five observations from five properties. |
 | FHA, VA, jumbo, ARM, and multiple-mortgage program rules | Complete for planning | Explicit Financing loan types drive FHA streamline, VA IRRRL, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, and second-lien coordination pathways. Every pathway lists facts to confirm and avoids approval claims or hard-coded county limits. |
 | Push notifications | Implemented; cohort rollout gated | Explicit browser consent, persisted per-device subscriptions, property-scoped PUSH preferences, VAPID delivery, minimal payloads, stale-subscription cleanup, recipient-cohort enforcement, and fail-closed rollout controls are implemented. The production Prisma schema has been applied; VAPID keys, an internal allowlist, rollout flags, and controlled delivery validation remain operational gates. |
 | Lender-offer and Loan Estimate comparison | Reviewed comparison and homeowner-controlled handoff complete | Homeowners can compare two to four official Loan Estimates using loan amount, disclosed APR, principal-and-interest payment, estimated total payment, monthly mortgage insurance, lender costs/credits, cash to close, and page-3 five-year totals. Cash to close is recorded as from or to the borrower and is ranked only when every offer is cash-from-borrower with the same amount, product, and term; unknown, mixed, or cash-to-borrower disclosures remain visible but cannot earn a misleading lowest-cash badge. Readable direction text is extracted from page 2, and all exports preserve the direction. Total-payment rankings appear only when every offer supplies that field, and the interface separates mortgage insurance plus lender-estimated tax, insurance, and escrow assumptions from P&I. Page-1 extraction prefills readable Projected Payments values and warns about mortgage insurance or incomplete all-in payment context. Section A discount points are captured as both percentage and dollars, checked against the loan amount, and shown separately from net loan costs so a bought-down rate is not mistaken for a free advantage. Page-2 extraction prefills readable points, while incomplete or inconsistent point disclosures require review. For offers with the same amount, product, and term, the comparison quantifies how long a lower monthly principal-and-interest payment takes to recover additional net loan costs; it also warns when a higher-cost offer does not lower payment. The tradeoff is explicitly limited to disclosed net loan costs and P&I and excludes taxes, insurance, escrow, future refinancing, and time value of money. The comparison records each disclosure's issue date, rate-lock status, and lock expiration; it warns on older disclosures, expired or incomplete locks, different issue dates, and mixed locked/floating offers. Saved comparisons are re-evaluated when read so time-sensitive lock warnings do not freeze at save time. A text-layer or scanned PDF, or up to three image pages, can prefill an editable offer through a non-retained, magic-byte-validated upload, including the standardized page-1 issue date when readable. Scanned PDFs are safely capped at three pages; PDF and image pages use sequential local OCR, expose field provenance, and cap every OCR-derived field at medium confidence. Standard page sections are detected automatically, with visible completeness, duplicate-page, and ordering checks before comparison. Every extracted field requires explicit review before comparison or saving. Different loan amounts and unlike terms fail visibly as comparison warnings. Homeowners can export a Markdown-only review package with lender questions and an apples-to-apples verification checklist. After selecting one offer and completing explicit figure, comparability, and manual-sharing acknowledgements, the homeowner can also download a selected-lender discussion brief. That brief intentionally omits competitor identities and is never transmitted by ContractToCozy. Comparisons remain transient by default, persist only after an explicit Save action, and can be permanently deleted through a two-step property-scoped control. Any future transactional lender delivery remains gated. |
@@ -85,15 +88,14 @@ Transactional lender delivery remains intentionally out of scope and gated.
 > and proceed only with controlled external-alert activation and evidence-based
 > rollout.
 
-The feature now has the calculation, orchestration, Home promotion, proactive
-data capture, explainability, Markdown export, feedback, and official
-Loan Estimate comparison foundations required for an always-on product.
-The `PushSubscription` schema is deployed. Remaining work is operational:
-provision VAPID and outbound-provider configuration, define the internal
-recipient allowlist, enable email and/or push for that cohort, and promote the
-mode to `GENERAL` only after delivery, duplicate, opt-out, and freshness
-guardrails pass. Any future
-transactional lender delivery remains deliberately gated. Exports remain
+The feature now has the calculation, orchestration, canonical Home Action,
+proactive data capture, explainability, scenario and official Loan Estimate
+comparison, durable decision/completion, canonical Financing writeback,
+browser acceptance, and purpose-minimized outcome measurement required for an
+always-on product. The `PushSubscription` schema is deployed. External-channel
+activation is intentionally withheld pending the controlled-cohort process in
+the alert rollout and incident runbook. Any future transactional lender
+delivery remains unimplemented and separately gated. Exports remain
 Markdown-only and keep the homeowner in control of external sharing.
 
 - Preserve Financing Center as the only owner of mortgage facts.
@@ -378,7 +380,7 @@ controlled rollout and operational evidence in Section 11.
 
 - Decision quality: percentage of alerts later dismissed as not relevant; median projected savings and break-even at OPEN.
 
-- Home conversion: transition from Home card to radar review and intentional next step.
+- Home conversion: transition from the canonical Home Action to radar review and an intentional next step.
 
 ### Trust guardrails
 
@@ -397,7 +399,7 @@ controlled rollout and operational evidence in Section 11.
 | Release | Focus | Implementation status | Remaining exit evidence |
 | --- | --- | --- | --- |
 | Release 0 — Correctness | Canonical profile sync, missing-field behavior, Gazette correctness | Complete | Continue regression monitoring; no known profile should be re-requested and stale opportunities must not surface. |
-| Release 1 — Always-on | Post-ingestion evaluation, state-transition events, Home card | Complete | Monitor weekly evaluation coverage, retry/dead-letter volume, transition lag, and duplicate current-state actions. |
+| Release 1 — Always-on | Post-ingestion evaluation, state-transition events, canonical Home Action | Complete | Monitor weekly evaluation coverage, retry/dead-letter volume, transition lag, and duplicate current-state actions. |
 | Release 2 — Explainability | 52-week chart, trigger rate, expanded assumptions and alternatives | Complete | Continue accessibility, freshness, benchmark-versus-quote, and modeled-assumption guardrails. |
 | Release 3 — Personalization | Eligibility context, alert preferences, multi-property prioritization | In-product complete; external rollout gated | Configure providers and VAPID, validate an explicit internal allowlist, and demonstrate acceptable delivery, duplicate, opt-out, complaint, and freshness metrics before `GENERAL`. |
 | Advanced comparison | Official Loan Estimate intake, reviewed comparison, persistence, export, and manual lender brief | Complete for homeowner-controlled use | Keep automated/transactional lender delivery disabled unless separately authorized and governed. |
@@ -435,7 +437,9 @@ sufficient evidence for general release.
 
 - Radar client and current rate-history presentation: apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/mortgage-refinance-radar/
 
-- Home-card implementation: apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/RefinanceRadarDashboardCard.tsx
+- Canonical Home Action adaptation and ranking: apps/backend/src/productFramework/homeActionSourceAdapters.ts and apps/backend/src/services/homeActions.service.ts
+
+- Property-local radar preview: apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/RefinanceRadarDashboardCard.tsx
 
 - Gazette refinance signal: apps/backend/src/modules/gazette/services/gazetteSignalCollector.service.ts
 
@@ -452,6 +456,12 @@ sufficient evidence for general release.
 - Loan Estimate comparison and extraction: apps/backend/src/refinanceRadar/refinanceLoanEstimateComparison.ts and apps/backend/src/refinanceRadar/refinanceLoanEstimateExtraction.service.ts
 
 - Refinance funnel and trust reporting: apps/backend/src/services/adminAnalytics/refinanceRadarMetricsService.ts
+
+- Durable decision and canonical closing writeback: apps/backend/src/refinanceRadar/refinanceDecision.service.ts
+
+- Full-experience acceptance: apps/frontend/e2e/mortgage-refinance-radar/
+
+- Measurement and rollout operations: docs/operations/MORTGAGE_REFINANCE_RADAR_MEASUREMENT_AND_OPTIMIZATION.md and docs/operations/MORTGAGE_REFINANCE_RADAR_ALERT_ROLLOUT_AND_INCIDENT_RUNBOOK.md
 
 - Isolated production schema synchronization: apps/backend/run-schema-push-job.sh
 
@@ -486,11 +496,11 @@ Recommended activation order:
 5. Move to `GENERAL` only through the recorded operational approval described
    below.
 
-### Remaining operational decisions
+### Withheld rollout decisions
 
-- Assign the product, engineering, data, design, compliance, and operations owners for rollout evidence and incident response.
+- Use the named owners and response objectives in the measurement and alert incident runbooks.
 
-- Confirm the production service-level objective for weekly evaluation coverage and transition lag.
+- Preserve at least 99% eligible evaluation completion within 24 hours before external expansion.
 
 - Define and approve the initial email and push recipient allowlists.
 

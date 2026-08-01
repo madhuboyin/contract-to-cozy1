@@ -463,7 +463,7 @@
       "rolloutKey": "MORTGAGE_REFINANCE_RADAR",
       "releaseStage": "ACTIVE",
       "safetyTier": "MATERIAL_FINANCIAL",
-      "completionKind": "OUTPUT_GENERATED",
+      "completionKind": "DECISION_RECORDED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"

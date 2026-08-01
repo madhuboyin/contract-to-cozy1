@@ -51,7 +51,7 @@
 | home-timeline | Home Timeline | home | `/dashboard/properties/[id]/timeline` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CATALOG_ONLY |
 | inspection-hub | Inspection Hub | home | `/dashboard/properties/[id]/inspection-hub` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
 | material-specs | Material Specs | home | `/dashboard/properties/[id]/materials` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
-| mortgage-refinance-radar | Mortgage Refinance Radar | home, ai | `/dashboard/properties/[id]/tools/mortgage-refinance-radar` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
+| mortgage-refinance-radar | Mortgage Refinance Radar | home, ai | `/dashboard/properties/[id]/tools/mortgage-refinance-radar` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |
 | negotiation-shield | Negotiation Shield | home, ai | `/dashboard/properties/[id]/tools/negotiation-shield` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |
 | neighborhood-change-radar | Around Your Home | home, ai | `/dashboard/properties/[id]/tools/neighborhood-change-radar` | Verified | PROTECT_MONITOR | BETA | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | oracle | Appliance Oracle | ai | `/dashboard/oracle` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |

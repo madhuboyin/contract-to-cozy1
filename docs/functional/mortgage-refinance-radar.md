@@ -1,477 +1,243 @@
 # Mortgage Refinance Radar
 
-**Feature area:** Financial Tools → Home Tools
-**Status:** Production
-**Last updated:** 2026-03-16
+**Feature area:** Homeowner Product → Save & Optimize
 
----
+**Capability ID:** `mortgage-refinance-radar`
 
-## Overview
+**Canonical route:** `/dashboard/properties/[id]/tools/mortgage-refinance-radar`
 
-The Mortgage Refinance Radar is a passive, always-on monitoring feature that continuously evaluates whether market mortgage rates have dropped enough to make refinancing a homeowner's existing mortgage financially worthwhile. It runs silently in the background, surfacing a clear signal only when conditions cross a conservative, multi-factor threshold — avoiding noisy low-value alerts.
+**Status:** Production in-product experience; external email and Web Push remain controlled-rollout only
 
-Key design principles:
-- **Conservative thresholds** — avoids false positives; requires a meaningful rate gap, minimum monthly savings, and acceptable break-even period simultaneously
-- **Hysteresis** — a separate, lower threshold to *close* an open window prevents the radar from flip-flopping when rates hover near the boundary
-- **Multi-factor confidence** — opportunities are classified STRONG / GOOD / WEAK based on both break-even speed and monthly savings, not rate gap alone
-- **Missed opportunity insight** — surfaces a suppressed historical context view ("rates were lower 3 months ago") only when the delta is materially meaningful
-- **Calm, trustworthy copy** — no financial hype; all text is factual and non-judgmental with a standard legal disclaimer
+**Last updated:** 2026-08-01
 
----
+## Product contract
 
-## Database
+Mortgage Refinance Radar is an always-on, property-specific decision capability. It combines the
+canonical Financing profile with current national benchmark rates, detects material refinance
+windows, explains the modeled tradeoffs, supports reviewed official Loan Estimate comparison, and
+lets the homeowner record a durable decision and verified outcome.
 
-### Enums
+It is educational planning support. A national benchmark is not a personalized rate or lender
+offer. ContractToCozy does not select, endorse, rank for compensation, contact, or transmit data to
+a lender. Official disclosures and lender or professional confirmation remain authoritative.
 
-| Enum | Values | Purpose |
-|------|--------|---------|
-| `RefinanceRadarState` | `CLOSED`, `OPEN` | Whether an actionable window is currently detected |
-| `RefinanceConfidenceLevel` | `WEAK`, `GOOD`, `STRONG` | Conviction level of the current opportunity |
-| `MortgageRateSource` | `FREDDIE_MAC`, `FRED`, `MANUAL`, `IMPORTED` | Provenance of a market rate snapshot |
-| `RefinanceScenarioTerm` | `THIRTY_YEAR`, `TWENTY_YEAR`, `FIFTEEN_YEAR` | Loan term for a user scenario calculation |
+The capability is catalog-discoverable. Material `OPEN` and `UPDATE` transitions enter the
+canonical Home Action feed; passive monitoring and `CLOSED` states stay quiet. The primary
+completion is an explicit refinance decision, not a view, scenario run, export, or download.
 
-### Tables
+## Homeowner journey
 
-#### `mortgage_rate_snapshots`
-Stores weekly market mortgage rate data. One record per `(source, date)` — deduplication is enforced at the DB level.
+The page presents one staged journey:
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `uuid` PK | |
-| `date` | `Date` | Survey date (YYYY-MM-DD) |
-| `rate30yr` | `Float` | 30-year fixed rate as a **percentage** (e.g. `6.875`) |
-| `rate15yr` | `Float` | 15-year fixed rate as a **percentage** |
-| `source` | `MortgageRateSource` | Where the data came from |
-| `sourceRef` | `String?` | External ref (e.g. `FRED/MORTGAGE30US+MORTGAGE15US`) |
-| `metadataJson` | `Json?` | Arbitrary ingestion metadata |
-| `createdAt` | `DateTime` | |
-| `updatedAt` | `DateTime` | |
+1. conclusion and potential modeled impact;
+2. why the conclusion applies and the important caveats;
+3. the recommended next step;
+4. optional scenario exploration;
+5. optional official Loan Estimate comparison;
+6. decision and outcome tracking; and
+7. expandable monitoring, source, freshness, eligibility, assumptions, and alert settings.
 
-**Indexes:** `(source, date)` unique, `date DESC`, `source`, `(source, date DESC)`
+Supported result states are:
 
-#### `refinance_opportunities`
-Accumulates every evaluation result per property. Supports history and trend views.
+- `OPEN`: a material modeled opportunity is worth reviewing;
+- material `UPDATE`: an existing opportunity changed enough to merit review;
+- `CLOSED`: no modeled opportunity currently meets the conservative gates;
+- `DATA_REQUIRED`: missing mortgage facts are worth collecting after a meaningful market change;
+- no mortgage, no market data, stale mortgage data, stale market data, unavailable, and retryable
+  error states.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `uuid` PK | |
-| `propertyId` | `uuid` FK → `Property` | Cascade delete |
-| `currentRate` | `Float` | Homeowner's mortgage rate at evaluation time (%) |
-| `marketRate` | `Float` | Market 30-yr rate used in evaluation (%) |
-| `rateGap` | `Float` | `currentRate - marketRate` |
-| `loanBalance` | `Decimal(12,2)` | Estimated remaining principal |
-| `monthlySavings` | `Decimal(12,2)` | Estimated monthly P&I savings |
-| `breakEvenMonths` | `Int` | Months to recoup closing costs |
-| `lifetimeSavings` | `Decimal(12,2)` | Net interest savings after closing costs |
-| `confidenceLevel` | `RefinanceConfidenceLevel` | |
-| `radarState` | `RefinanceRadarState` | State at evaluation time |
-| `evaluationDate` | `Date` | Date of this evaluation |
-| `triggerDate` | `DateTime?` | When the CLOSED → OPEN transition was first detected |
-| `closingCostAssumption` | `Decimal(12,2)?` | Closing cost used in the calculation |
-| `remainingTermMonths` | `Int?` | Months remaining on current loan |
-| `metadataJson` | `Json?` | Full assumption set used |
+No missing, stale, unavailable, or failed state is rendered as a successful zero or all-clear.
 
-**Indexes:** `(propertyId, createdAt DESC)`, `(propertyId, radarState)`, `(propertyId, evaluationDate DESC)`, `confidenceLevel`
+## Canonical data ownership
 
-#### `property_refinance_radar_states`
-One row per property — fast current-state lookup without scanning opportunity history.
+`PropertyFinancingProfile` owns mortgage status, balance, interest rate, remaining term, payment,
+loan type, mortgage insurance, second-mortgage context, and the balance as-of date. Radar reads and
+updates this profile; it does not maintain a competing mortgage-facts model.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `uuid` PK | |
-| `propertyId` | `uuid` unique FK → `Property` | Cascade delete |
-| `radarState` | `RefinanceRadarState` | Current state; default `CLOSED` |
-| `currentOpportunityId` | `uuid?` unique FK → `RefinanceOpportunity` | The opportunity that opened the current window |
-| `lastRateSnapshotId` | `uuid?` FK → `MortgageRateSnapshot` | Most recent snapshot used in evaluation |
-| `lastEvaluatedAt` | `DateTime?` | Last time `evaluate` was called |
-| `lastOpenedAt` | `DateTime?` | When the window last opened |
-| `lastClosedAt` | `DateTime?` | When the window last closed |
-| `metadataJson` | `Json?` | |
+Radar-owned persistence includes:
 
-**Indexes:** `radarState`, `lastEvaluatedAt`
+- `MortgageRateSnapshot`: deduplicated 30-year and 15-year benchmark observations;
+- `RefinanceOpportunity`: immutable evaluation results and modeled assumptions;
+- `PropertyRefinanceRadarState`: the latest OPEN/CLOSED state and source pointers;
+- `RefinanceEvaluationClaim`: durable per-property/per-snapshot work, leases, retries, and dead
+  letters;
+- `RefinanceScenarioSnapshot`: explicitly saved scenario calculations;
+- `RefinanceLoanEstimateComparisonSnapshot`: explicitly saved reviewed comparisons;
+- `RefinanceDecision` and `RefinanceDecisionHistory`: the homeowner-controlled lifecycle and
+  idempotent transition history; and
+- property-scoped alert preferences and push subscriptions.
 
-#### `refinance_scenario_snapshots`
-Records user-run scenario calculations. `isSaved = true` for explicitly bookmarked scenarios.
+No migration script or legacy backfill was introduced for the audit implementation. Schema
+reconciliation remains a separately controlled database operation.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `uuid` PK | |
-| `propertyId` | `uuid` FK → `Property` | Cascade delete |
-| `targetRate` | `Float` | Hypothetical new rate (%) |
-| `targetTerm` | `RefinanceScenarioTerm` | |
-| `closingCost` | `Decimal(12,2)` | Closing cost used |
-| `monthlySavings` | `Decimal(12,2)?` | |
-| `breakEvenMonths` | `Int?` | |
-| `lifetimeSavings` | `Decimal(12,2)?` | |
-| `isSaved` | `Boolean` | Default `false` |
-| `metadataJson` | `Json?` | Full assumption set |
+## Market ingestion and worker evaluation
 
-### Property model relations
-```
-Property {
-  refinanceOpportunities    RefinanceOpportunity[]
-  refinanceRadarState       PropertyRefinanceRadarState?
-  refinanceScenarios        RefinanceScenarioSnapshot[]
-}
-```
+The registered `mortgage-rate-ingest` job runs Thursdays after the Freddie Mac PMMS release. It
+reads the FRED `MORTGAGE30US` and `MORTGAGE15US` series, with a configured manual fallback, and
+deduplicates by source and observation date.
 
----
+After ingestion, the worker resumes both durable sweeps even when the snapshot already exists:
 
-## Backend
+- eligible Financing profiles are evaluated through leased `RefinanceEvaluationClaim` records;
+- missing-data eligibility is evaluated separately for a bounded `DATA_REQUIRED` action;
+- retries are bounded and exhausted work becomes dead-lettered;
+- replay-safe `OPEN`, material `UPDATE`, `CLOSED`, and `DATA_REQUIRED` domain events are emitted;
+- `CLOSED` resolves the current refinance Home Action; and
+- OPEN/UPDATE external delivery remains subject to every consent, freshness, confidence, cooldown,
+  channel, and cohort gate.
 
-### File structure
-```
-apps/backend/src/refinanceRadar/
-├── config/
-│   └── refinanceRadar.config.ts        # All thresholds and constants
-├── engine/
-│   ├── refinanceCalculation.engine.ts  # Pure amortization math
-│   ├── refinanceRadar.engine.ts        # Opportunity detection + confidence
-│   └── mortgageRate.service.ts         # Rate snapshot CRUD + trend
-├── mappers/
-│   └── refinanceRadar.mapper.ts        # Prisma rows → API DTOs
-├── types/
-│   └── refinanceRadar.types.ts         # All TypeScript interfaces
-├── validators/
-│   └── refinanceRadar.validators.ts    # Zod v4 request schemas
-├── refinanceRadar.service.ts           # Orchestration + DB writes
-├── refinanceRadar.controller.ts        # HTTP handlers
-└── refinanceRadar.routes.ts            # Express route definitions
-```
+Evaluation uses OPEN/CLOSED hysteresis plus minimum rate-gap, balance, remaining-term, monthly
+savings, lifetime-savings, and break-even gates. Stale mortgage or market inputs reduce readiness
+and suppress external alerts.
 
-### Config (`refinanceRadar.config.ts`)
+## Home and multi-property behavior
 
-All thresholds are centralised here — tune without touching business logic.
+Radar does not own a parallel Unified Home priority card. `OPEN`, material `UPDATE`, and eligible
+`DATA_REQUIRED` events adapt into stable, deduplicated canonical Home Actions. The shared Home
+Action ranker decides whether a refinance action appears as `NOW`, `SOON`, `PLAN`, or `CONSIDER`
+relative to safety, maintenance, coverage, and other financial work.
 
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `MIN_RATE_GAP_PCT` | `0.50%` | Rate gap required to open a window |
-| `CLOSE_RATE_GAP_PCT` | `0.40%` | Rate gap below which an open window closes (hysteresis buffer) |
-| `MAX_BREAK_EVEN_MONTHS_OPPORTUNITY` | `48` | Maximum break-even to qualify at all |
-| `MIN_MONTHLY_SAVINGS_USD` | `$100` | Minimum monthly savings to qualify |
-| `MIN_LIFETIME_SAVINGS_USD` | `$10,000` | Minimum lifetime savings to qualify |
-| `MIN_REMAINING_TERM_MONTHS` | `60` | Must have ≥ 5 years left on current loan |
-| `MIN_LOAN_BALANCE_USD` | `$80,000` | Minimum balance to make refinance meaningful |
-| `CONFIDENCE_THRESHOLDS.STRONG` | ≤ 24mo + ≥ $200/mo | Criteria for STRONG confidence |
-| `CONFIDENCE_THRESHOLDS.GOOD` | ≤ 36mo + ≥ $100/mo | Criteria for GOOD confidence |
-| `CONFIDENCE_THRESHOLDS.WEAK` | ≤ 48mo | Fallback when break-even qualifies but savings are modest |
-| `MISSED_OPPORTUNITY_THRESHOLDS.MIN_RATE_DELTA_PCT` | `0.20pp` | Minimum historical rate advantage to surface missed-window insight |
-| `MISSED_OPPORTUNITY_THRESHOLDS.MIN_LIFETIME_SAVINGS_DELTA_USD` | `$10,000` | Minimum lifetime savings difference |
-| `MISSED_OPPORTUNITY_MIN_SAVINGS_DELTA_USD` | `$50/mo` | Secondary monthly savings guard |
-| `MISSED_OPPORTUNITY_LOOKBACK_DAYS` | `180` | How far back to look for missed windows |
-| `RATE_TREND_LOOKBACK_SNAPSHOTS` | `12` | Number of snapshots for trend display |
-| `DEFAULT_CLOSING_COST_PCT` | `2.5%` | Default closing cost assumption |
+For households with multiple properties, each property is evaluated independently and its action
+retains property context. Cross-property priority is determined by the shared action ranking and
+portfolio selection behavior, not a refinance-only ordering system. Dismiss, defer, not-relevant,
+correct-fact, and no-mortgage feedback use the shared Home Action lifecycle.
 
-### Calculation engine (`refinanceCalculation.engine.ts`)
+The property detail page may show a local radar preview. That preview is not a second Unified Home
+priority mechanism.
 
-Pure functions, no side effects, fully testable.
+## Scenario planning
 
-**`calcMonthlyPayment(principal, annualRatePct, termMonths)`**
-- Standard P&I amortization: `M = P·r(1+r)^n / ((1+r)^n − 1)`
-- Zero-rate edge case handled (returns `principal / term`)
-- Guards: rejects NaN, Infinity, negative rate, zero/negative principal or term → returns `0`
+The scenario engine models payment, APR estimate, closing-cost breakdown, break-even, lifetime
+savings, total remaining interest, cash to close, and payoff-date movement. It supports 15-, 20-,
+and 30-year terms and balanced, lower-payment, faster-payoff, and lower-total-cost objectives.
 
-**`calcRefinanceScenario(input)`**
-- Input clamping: rates capped at 30%, closing cost pct capped at 10%, terms rounded to integers
-- Returns: `rateGapPct`, `effectiveClosingCostUsd`, `currentMonthlyPayment`, `newMonthlyPayment`, `monthlySavings`, `breakEvenMonths` (null when savings ≤ 0), `totalInterestRemainingCurrent`, `totalInterestNewLoan`, `lifetimeSavings` (net of closing costs), `payoffDeltaMonths`
+The homeowner can compare the modeled refinance with applicable alternatives:
 
-**Rate convention:**
-`PropertyFinanceSnapshot.interestRate` is stored as a **decimal fraction** (0.0625 = 6.25%). The engine works in **percentage form**. Conversion happens in `getMortgageContext()` via `× 100`.
+- retain the current mortgage;
+- make additional principal payments;
+- request a recast where the servicer permits it;
+- choose a shorter, preserved, or extended term; and
+- explore cash-out only as a conditional planning path.
 
-### Radar engine (`refinanceRadar.engine.ts`)
+FHA, VA, jumbo/high-balance, ARM-to-fixed, mortgage-insurance, second-lien, occupancy, property-type,
+and multiple-mortgage context is explanatory rather than an eligibility or approval determination.
+Scenarios are transient unless the homeowner explicitly saves them. Markdown exports are generated
+for homeowner-controlled review and are never transmitted automatically.
 
-**`classifyConfidence(breakEvenMonths, monthlySavings)`**
-Multi-factor classification — both dimensions must meet threshold:
-- STRONG: break-even ≤ 24mo **AND** monthly savings ≥ $200
-- GOOD: break-even ≤ 36mo **AND** monthly savings ≥ $100
-- WEAK: fallback (break-even ≤ 48mo)
+## Official Loan Estimate comparison
 
-**`evaluate(mortgageInput, currentRadarState?)`**
-- Fetches latest market snapshot, runs `calcRefinanceScenario`
-- Applies hysteresis: if radar is currently OPEN, uses `CLOSE_RATE_GAP_PCT` (0.40%) instead of `MIN_RATE_GAP_PCT` (0.50%) to prevent flip-flopping
-- Runs 5 qualification gates: rate gap, remaining term, loan balance, monthly savings, lifetime savings, break-even
-- Returns `isOpportunity`, `radarState`, `confidenceLevel`, `notQualifiedReasons[]`, `summary` text, `latestSnapshotId`
+The comparison accepts two to four manually entered or reviewed extracted Loan Estimates. PDF and
+image intake is memory-only, magic-byte validated, capped at three pages, locally OCR processed,
+and not retained. OCR-derived fields are editable, provenance-marked, confidence-capped, and require
+explicit review.
 
-**`evaluateMissedOpportunity(mortgageInput)`**
-- Looks back `MISSED_OPPORTUNITY_LOOKBACK_DAYS` (180 days) of rate history
-- 3 suppression gates: rate delta < 0.20pp → skip; lifetime savings delta < $10k → skip; monthly savings delta < $50 → skip
-- Returns calm, non-judgmental prose summary
+The comparison preserves disclosed loan amount, product and term, note rate, APR, principal and
+interest, estimated total payment, mortgage insurance, lender costs and credits, discount points,
+cash-to-close direction, issue and rate-lock dates, and page-3 five-year totals. Unlike loan amounts,
+terms, products, dates, locks, incomplete projected payments, mixed cash directions, and inconsistent
+points produce visible comparability warnings instead of misleading winners.
 
-### Service (`refinanceRadar.service.ts`)
+Saved comparisons are opt-in and property-scoped. Lock warnings are recomputed when loaded.
+Permanent deletion requires explicit confirmation. A selected-lender discussion brief omits
+competitor identities and is downloaded for manual homeowner sharing only.
 
-Orchestrates all DB reads/writes. The engine never writes to the DB.
+## Decision and verified outcome
 
-| Method | Description |
-|--------|-------------|
-| `evaluateProperty(propertyId)` | Pre-reads current radar state, calls engine, persists result, returns status DTO |
-| `getCurrentStatus(propertyId)` | Returns persisted state (evaluates if no prior record exists) |
-| `getMortgageContext(propertyId)` | Reads `PropertyFinanceSnapshot`, converts rate fraction → percentage |
-| `persistEvaluationResult(...)` | Upserts `PropertyRefinanceRadarState`, creates `RefinanceOpportunity` with same-day dedup |
-| `getOpportunityHistory(propertyId, limit, offset)` | Paginated history |
-| `getMissedOpportunity(propertyId)` | Delegates to engine's `evaluateMissedOpportunity` |
-| `getRateHistory(limit)` | Recent snapshots + trend summary |
-| `runScenario(propertyId, input)` | Calculates + optionally persists scenario |
-| `getSavedScenarios(propertyId)` | Returns `isSaved = true` scenarios |
-| `ingestRateSnapshot(input)` | Delegates to `MortgageRateService.ingestSnapshot()` |
+Supported decision states are `EXPLORING`, `DEFERRED`, `KEEP_CURRENT_LOAN`, `PROCEEDING`,
+`OFFER_SELECTED`, `APPLICATION_IN_PROGRESS`, `CLOSED`, `DECLINED`, `ABANDONED`, and `SUPERSEDED`.
+Transitions are validated, versioned, idempotent, property-authorized, and recorded in durable
+history. A decision may link to a saved scenario or reviewed comparison and selected offer.
 
-**Same-day dedup logic in `persistEvaluationResult`:**
-Checks for an existing `RefinanceOpportunity` with `evaluationDate = today`. If found, skips creating a new record. State transitions (`lastOpenedAt`, `lastClosedAt`) are recorded only on actual CLOSED ↔ OPEN changes.
+A verified `CLOSED` transition requires homeowner-confirmed new balance, rate, and term, with
+optional payment and recorded closing cost. The transaction writes the new canonical Financing
+facts and preserves purpose-limited prior/new closing evidence for aggregate outcome measurement.
+Closing, application, or selection is never inferred from a page view, export, or lender brief.
 
-### API Routes
+## Alerts and fail-closed rollout
 
-Base path: `/api`
-All property-scoped routes require `authenticate` + `propertyAuthMiddleware`.
-Admin route requires `authenticate` + `requireRole('ADMIN')`.
+Home monitoring remains available without external delivery. Email and Web Push are explicit opt-in
+channels with cadence, sensitivity, quiet hours, cooldown, freshness, confidence, and material-change
+checks. Push additionally requires an active subscription and complete VAPID configuration.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/properties/:propertyId/refinance-radar` | Current radar status |
-| `POST` | `/properties/:propertyId/refinance-radar/evaluate` | Trigger fresh evaluation |
-| `GET` | `/properties/:propertyId/refinance-radar/history` | Paginated opportunity history (`?limit&offset`) |
-| `GET` | `/properties/:propertyId/refinance-radar/missed-opportunity` | Missed window insight |
-| `GET` | `/properties/:propertyId/refinance-radar/rates` | Rate history + trend (`?limit`) |
-| `POST` | `/properties/:propertyId/refinance-scenario` | Run scenario calculation |
-| `GET` | `/properties/:propertyId/refinance-scenario/saved` | Saved scenario snapshots |
-| `POST` | `/admin/refinance-radar/rate-snapshots` | Ingest market rate snapshot |
+Production defaults remain fail-closed:
 
-### Validators (`refinanceRadar.validators.ts`)
+| Configuration | Required production baseline |
+| --- | --- |
+| `REFINANCE_EXTERNAL_ALERTS_ENABLED` | `false` until controlled email activation |
+| `REFINANCE_PUSH_ALERTS_ENABLED` | `false` until controlled push activation |
+| `WEB_PUSH_DELIVERY_ENABLED` | `false` until transport approval |
+| `REFINANCE_ALERT_ROLLOUT_MODE` | `ALLOWLIST` |
+| `REFINANCE_ALERT_RECIPIENT_EMAIL_ALLOWLIST` | secret-backed explicit internal recipients only |
 
-| Schema | Validates |
-|--------|-----------|
-| `ingestRateSnapshotSchema` | `date` (YYYY-MM-DD regex), `rate30yr`/`rate15yr` (0–30%), `source` (enum), `sourceRef`, `metadataJson` |
-| `runScenarioSchema` | `targetRate` (0–30%), `targetTerm` (enum), `closingCostAmount` (max $500k) or `closingCostPercent` (max 20%) — mutually exclusive, `saveScenario` |
-| `historyQuerySchema` | `limit` (1–100, default 20), `offset` (default 0) |
-| `rateHistoryQuerySchema` | `limit` (1–52, default 12) |
+Admission is enforced when the alert is created and again by email and push transport. Missing,
+invalid, or non-member rollout configuration suppresses delivery. `GENERAL` requires a recorded
+approval after delivery, duplicate, opt-out, complaint, usefulness, and freshness evidence passes.
 
-### Mapper (`refinanceRadar.mapper.ts`)
+These flags do not authorize automated lender transmission, lead sale, referral routing, or any
+commercial action. Such behavior requires a separate product, privacy, compliance, security, and
+operational authorization plus a new reviewed implementation. No such implementation currently
+exists.
 
-Converts Prisma rows → API-safe DTOs:
-- `mapOpportunityToDTO(row)` — `Decimal → number` via `.toNumber()`, `Date → YYYY-MM-DD string`
-- `mapScenarioToDTO(row)` — includes `targetTermMonths` derived from `TERM_TO_MONTHS` lookup
+See [Mortgage Refinance Radar alert rollout and incident runbook](../operations/MORTGAGE_REFINANCE_RADAR_ALERT_ROLLOUT_AND_INCIDENT_RUNBOOK.md).
 
----
+## Analytics and privacy
 
-## Frontend
+`GET /api/admin/analytics/refinance-radar` requires an authenticated administrator, MFA, and
+`ANALYTICS_VIEW`. The report covers evaluation coverage, transitions, decision distribution,
+OPEN-to-decision time, defer/return, comparison/selection, selection/application,
+application/close, stale/reopened decisions, verified Financing writeback, and projected-versus-
+recorded outcome medians.
 
-### File structure
-```
-apps/frontend/src/
-├── app/(dashboard)/dashboard/properties/[id]/
-│   ├── tools/mortgage-refinance-radar/
-│   │   ├── page.tsx                         # Next.js route shell (server component)
-│   │   ├── MortgageRefinanceRadarClient.tsx  # Full-page tool UI ('use client')
-│   │   └── mortgageRefinanceRadarApi.ts      # Typed API client functions + types
-│   └── components/
-│       └── RefinanceRadarDashboardCard.tsx   # Preview card on property dashboard
-└── lib/
-    ├── config/featureFlags.ts               # MORTGAGE_REFINANCE_RADAR flag
-    └── api/adminWorkerJobs.ts               # JobCategory type (FINANCIAL_MARKET added)
+The report returns aggregates only. It does not return property IDs, homeowner IDs, balances,
+rates, payments, costs, or offer identifiers. Sensitive projected or verified value aggregates are
+suppressed below five observations from five distinct properties. Controlled optimization also
+requires at least 20 usefulness responses with a 60% helpful rate and at least 20 notification
+records with no more than a 5% duplicate rate.
+
+See [Mortgage Refinance Radar measurement and optimization](../operations/MORTGAGE_REFINANCE_RADAR_MEASUREMENT_AND_OPTIMIZATION.md).
+
+## API surface
+
+All property routes require authentication and `propertyAuthMiddleware`. The surface includes:
+
+- status, explicit evaluation, history, missed-opportunity, rate history, and telemetry;
+- scenario run, save, list, and Markdown export;
+- alert preference and push-subscription management;
+- Loan Estimate compare, reviewed extraction, save, list, delete, comparison export, and manual
+  handoff export;
+- decision read, record, and delete; and
+- feedback recording.
+
+Rate ingestion is admin-only. Analytics is admin/MFA/capability-authorized.
+
+## Acceptance and operational evidence
+
+The dedicated deterministic browser suite covers desktop Chromium plus mobile Chromium and WebKit.
+It exercises no-mortgage, partial, current, stale, unavailable, OPEN, UPDATE, CLOSED, retry,
+scenario, comparison, alerts, Home Action lifecycle, decision, closing, canonical writeback,
+keyboard, reduced-motion, table-equivalence, and WCAG A/AA behavior.
+
+Relevant commands:
+
+```bash
+cd apps/backend
+npm run build
+node --test tests/unit/refinanceRadarMetricsService.test.js tests/unit/refinanceDecisionLifecycle.test.js
+
+cd ../frontend
+npm run test:mortgage-refinance:e2e
+node scripts/product-framework/inventory-tool-capabilities.mjs
 ```
 
-### Tool page (`MortgageRefinanceRadarClient.tsx`)
+## Current boundaries
 
-**Pattern:** Follows `CapitalTimelineClient` — `useState` + `useEffect` (not React Query).
+- No lender selection, endorsement, compensation ranking, automated contact, application, or data
+  transmission.
+- No personalized approval, underwriting, appraisal, credit, income, program, or rate guarantee.
+- No general external-alert delivery before the controlled gates and human approval pass.
+- No automatic optimization of homeowner-facing thresholds from analytics.
+- Additional benchmark products may be added only with reviewed source, product, and freshness
+  metadata.
 
-**Race condition guard:** `reqRef = useRef(0)` — each load/evaluate increments the ref; stale responses from superseded requests are discarded.
-
-**State cleared on property switch:** `setData(null)` and `setRateData(null)` at the top of `load()` prevents stale data from a previous property rendering during navigation.
-
-**Sections rendered in order:**
-1. **`RadarStatusHero`** — state badge (Open/Closed), confidence badge, radar summary text, KPI grid (rate gap, monthly savings, break-even, lifetime savings) when OPEN; "why not yet" reasons when CLOSED; loan context footer
-2. **`RateTrendCard`** — current 30yr / 15yr rates, prior period rate, trend icon (↑ rising / ↓ falling / — stable)
-3. **`MissedOpportunityCard`** — shown only when `hasMissedOpportunity = true`; calm historical context with peak rate, date, and savings delta
-4. **`ScenarioCalculator`** — user inputs: target rate (validated 0.1–30%), loan term (pill selector), optional closing cost; calls `runScenario` API; renders full result KPI grid with disclaimer
-5. **`RateHistoryCard`** — table of recent snapshots, expandable from 4 → 12 rows
-6. **Disclaimer** — appended at bottom of all available states
-
-**Action safety:**
-- Re-evaluate button: `disabled={evaluating || loading}` prevents double-submit
-- Scenario run button: `disabled={running}` with spinner feedback
-- Client-side validation on rate input before API call
-
-### Dashboard preview card (`RefinanceRadarDashboardCard.tsx`)
-
-**Pattern:** Follows `NeighborhoodRadarDashboardCard`.
-
-Uses React Query: `useQuery(['refinance-radar-status', propertyId], staleTime: 10 * 60 * 1000)`.
-
-**Three render states:**
-1. **Unavailable** — mortgage data not set up; prompt to add financial details
-2. **Monitoring (CLOSED)** — "Radar monitoring. No opportunity detected." with last-evaluated date
-3. **Opportunity (OPEN)** — confidence badge, rate gap, monthly savings, link to full tool
-
-Feature-gated: `enabled: Boolean(propertyId) && FEATURE_FLAGS.MORTGAGE_REFINANCE_RADAR`
-
-### API client (`mortgageRefinanceRadarApi.ts`)
-
-| Function | HTTP | Description |
-|----------|------|-------------|
-| `getRadarStatus(propertyId)` | GET | Current status (available or unavailable) |
-| `evaluateRadar(propertyId)` | POST | Trigger fresh evaluation |
-| `getOpportunityHistory(propertyId, limit, offset)` | GET | Paginated history |
-| `getMissedOpportunity(propertyId)` | GET | Missed window insight |
-| `getRateHistory(propertyId, limit)` | GET | Rate snapshots + trend |
-| `runScenario(propertyId, input)` | POST | Scenario calculation |
-| `getSavedScenarios(propertyId)` | GET | Saved scenarios |
-
-**Response discrimination:** `RadarStatusDTO` is a union type:
-```typescript
-type RadarStatusDTO = RadarStatusAvailable | RadarStatusUnavailable
-// discriminated by: data.available === true | false
-```
-
-**Unavailable reasons:** `MISSING_MORTGAGE_DATA` | `NO_RATE_DATA` | `PROPERTY_NOT_FOUND`
-
-### Mobile Navigation
-
-| Location | Detail |
-|----------|--------|
-| **Tool catalog** | `mobileToolCatalog.ts` → `MOBILE_HOME_TOOL_LINKS` — entry with `id: 'mortgage-refinance-radar'`, label, icon, group |
-| **Home Tools page** | `home-tools/page.tsx` → `HOME_TOOL_GROUPS['ownership']` array — appears in the Ownership group alongside Break-Even, Capital Timeline, True Cost |
-| **Tool rail** | `HomeToolsRail` renders with `context="mortgage-refinance-radar"` showing related tools |
-| **Icon** | `HOME_TOOL_ICON_OVERRIDES: { MORTGAGE_REFINANCE_RADAR: 'BarChart2' }` in `iconMapping.ts` |
-| **Context tools** | `contextToolMappings.ts` → `'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'true-cost']` |
-| **Page context** | `resolvePageContext.ts` → route pattern registered for `mortgage-refinance-radar` |
-| **Feature flag** | `featureFlags.ts` → `MORTGAGE_REFINANCE_RADAR: process.env.NEXT_PUBLIC_FEATURE_MORTGAGE_REFINANCE_RADAR !== 'false'` (opt-out pattern — on by default) |
-| **Tool registry** | `toolRegistry.ts` → `TOOL_IDS` includes `'mortgage-refinance-radar'`; `HOME_TOOL_REGISTRY` auto-built from catalog |
-
----
-
-## Worker
-
-### File structure
-```
-apps/workers/src/jobs/
-└── ingestMortgageRates.job.ts    # Weekly FRED rate fetch + ingestion
-```
-
-### Job: `ingestMortgageRates.job.ts`
-
-**Schedule:** Every Thursday at 17:00 EST (`0 17 * * 4`) — aligned with Freddie Mac's weekly PMMS release day.
-
-**Registry key:** `mortgage-rate-ingest` | **Category:** `FINANCIAL_MARKET`
-
-**Data source precedence:**
-
-| Priority | Source | Env vars required | Stored as |
-|----------|--------|-------------------|-----------|
-| 1 | FRED API (St. Louis Fed) | `FRED_API_KEY` | `source: FRED` |
-| 2 | Manual env var fallback | `MORTGAGE_RATE_30YR_FALLBACK` + `MORTGAGE_RATE_15YR_FALLBACK` | `source: MANUAL` |
-| 3 | Skip | — | Nothing written; logs warning |
-
-**FRED API series:**
-- `MORTGAGE30US` — Freddie Mac 30-Year Fixed-Rate Mortgage Average
-- `MORTGAGE15US` — Freddie Mac 15-Year Fixed-Rate Mortgage Average
-
-**Behaviour:**
-- 15-second HTTP timeout with `AbortController`
-- Handles FRED's `"."` sentinel (missing/preliminary data) gracefully
-- Idempotent — calls `MortgageRateService.ingestSnapshot()` which deduplicates on `(source, date)`
-- Never crashes the worker on failure — skips and logs
-
-**Return type:** `MortgageRateIngestResult`
-```typescript
-{
-  success: boolean;
-  source: 'FRED' | 'MANUAL' | 'NONE';
-  date: string | null;
-  rate30yr: number | null;
-  rate15yr: number | null;
-  created: boolean;   // false if snapshot already existed for this date
-  skipped: boolean;
-  reason?: string;
-}
-```
-
-### Docker (`infrastructure/docker/workers/Dockerfile`)
-
-The worker Dockerfile uses a two-stage build. The refinanceRadar files are copied into a `src/shared/backend/` layer during the builder stage and their import paths are rewritten via `sed` before TypeScript compilation.
-
-**Files copied into shared layer:**
-
-| Backend source | Shared destination |
-|---|---|
-| `refinanceRadar/engine/mortgageRate.service.ts` | `src/shared/backend/refinanceRadar/engine/` |
-| `refinanceRadar/config/refinanceRadar.config.ts` | `src/shared/backend/refinanceRadar/config/` |
-| `refinanceRadar/types/refinanceRadar.types.ts` | `src/shared/backend/refinanceRadar/types/` |
-
-**Import path rewrite (sed):**
-```
-../../../backend/src/refinanceRadar/engine/mortgageRate.service
-  → ../shared/backend/refinanceRadar/engine/mortgageRate.service
-```
-
-**Runtime stage:** Only `dist/` and `node_modules` are copied — the shared source files are compiled away and not present at runtime.
-
-### Kubernetes deployment (`infrastructure/kubernetes/apps/workers/deployment.yaml`)
-
-`FRED_API_KEY` is injected as a Kubernetes secret reference:
-```yaml
-- name: FRED_API_KEY
-  valueFrom:
-    secretKeyRef:
-      name: app-secrets
-      key: FRED_API_KEY
-```
-
-The secret value must be set manually in the `app-secrets` Kubernetes Secret (not committed to Git).
-
----
-
-## Integration Points
-
-| System | Integration |
-|--------|-------------|
-| **PropertyFinanceSnapshot** | Source of `interestRate` (fraction), `loanBalance`, `mortgageTermYears`, `monthlyPayment`. Rate converted fraction → percentage at extraction boundary in `getMortgageContext()` |
-| **Property model** | Three new relations: `refinanceOpportunities[]`, `refinanceRadarState?`, `refinanceScenarios[]` — all cascade-delete |
-| **Worker job registry** | `workerJobRegistry.ts` is the single source of truth; new `FINANCIAL_MARKET` category added |
-| **Admin worker-jobs UI** | `FINANCIAL_MARKET` category added to `adminWorkerJobs.ts` type and `worker-jobs/page.tsx` display |
-| **FRED API** | External: `api.stlouisfed.org/fred/series/observations` — free, no auth beyond API key; publishes weekly mortgage rate data |
-| **Feature flags** | `NEXT_PUBLIC_FEATURE_MORTGAGE_REFINANCE_RADAR` — opt-out pattern (on by default) |
-
----
-
-## Assumptions
-
-| Assumption | Value | Where configured |
-|------------|-------|-----------------|
-| Default closing cost | 2.5% of loan balance | `DEFAULT_CLOSING_COST_PCT` in config |
-| Radar benchmark term | 30-year fixed | Hard-coded in `evaluate()` — `targetTermMonths: 360` |
-| Rate convention in DB | `PropertyFinanceSnapshot.interestRate` is a **decimal fraction** | `getMortgageContext()` conversion |
-| Rate convention in engine | Rates are **percentage form** (e.g. `6.25`) | All engine functions and `MortgageRateSnapshot` columns |
-| Monthly payment | Computed from amortization if `currentMonthlyPayment` not in `PropertyFinanceSnapshot` | `calcRefinanceScenario` |
-| Market rate for evaluation | Most recent snapshot across all sources | `MortgageRateService.getLatestSnapshot()` |
-| Closing cost cap | Cannot exceed loan balance | Guardrail in `calcRefinanceScenario` |
-| Maximum realistic rate | 30% | Clamped in `calcRefinanceScenario`; enforced in Zod validators |
-| Rate data freshness | No staleness check — evaluates against whatever snapshot is newest in DB | Addressed by weekly worker job |
-| Same-day dedup | One `RefinanceOpportunity` record per property per calendar day | `persistEvaluationResult()` |
-
----
-
-## Unit Tests
-
-Located in `apps/backend/tests/unit/` — run with `node --test`.
-
-| File | Coverage |
-|------|----------|
-| `refinanceCalculation.test.js` | 24 tests: `calcMonthlyPayment` (zero rate, zero principal, NaN, Infinity, negative inputs), `calcTotalInterest`, `calcRefinanceScenario` (beneficial scenario, break-even math, lifetime savings net of closing costs, term shortening, closing cost overrides, clamping) |
-| `refinanceRadarEngine.test.js` | 22 tests: `classifyConfidence` (STRONG/GOOD/WEAK at boundaries), config invariants (hysteresis buffer ≥ 0.05pp, STRONG < GOOD < WEAK thresholds), missed-opportunity suppression constants |
-
----
-
-## Future Enhancements
-
-| Enhancement | Description | Effort |
-|------------|-------------|--------|
-| **Refinance alerts** | Push/email notification when radar flips from CLOSED → OPEN | Medium |
-| **15-year benchmark** | Add a 15-year radar evaluation alongside the 30-year default | Small |
-| **Lender rate integration** | Pull personalized rates from a lender API (e.g. Optimal Blue) factoring in credit score and LTV | Large |
-| **Rate lock advisor** | Given a rate trend direction, recommend whether to lock now or wait | Medium |
-| **Amortization chart** | Visual comparison of current vs. refinanced payment schedules | Small |
-| **Credit score input** | Allow homeowners to input their credit range to adjust the market rate assumption | Small |
-| **Multi-property comparison** | Dashboard view ranking all properties by refinance opportunity strength | Medium |
-| **Equity-out scenario** | Cash-out refinance calculator alongside the standard rate-reduction scenario | Medium |
-| **Freddie Mac direct feed** | Replace FRED (weekly lag) with a Freddie Mac direct API or same-day data vendor for real-time rates | Large |
-| **Admin bulk re-evaluate** | Worker job that re-runs `evaluateProperty` for all properties after each rate ingest | Small |
-| **Opportunity history chart** | Graph of rate gap and confidence level over time for a property | Small |
-| **Closing cost input** | Let homeowners enter their actual lender quote to replace the 2.5% default | Small |
+The current product and rollout baseline is maintained in the
+[Mortgage Refinance Radar enhancement plan](../product/mortgage-refinance-radar-enhancement-plan.md).
