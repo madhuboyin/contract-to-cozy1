@@ -425,3 +425,23 @@ export function getWorkItemGraph(workItemId: string) {
     },
   });
 }
+
+/**
+ * Item #24 (§15 "Admin tooling can inspect one work item's full source/
+ * execution/outcome graph"). Separate from getWorkItemGraph rather than
+ * adding events there, so the household-facing route's payload shape
+ * doesn't change as a side effect — raw event payloads/actor internals
+ * aren't necessarily meant for homeowner eyes.
+ */
+export function getWorkItemGraphForAdmin(workItemId: string) {
+  return prisma.operationalWorkItem.findUnique({
+    where: { id: workItemId },
+    include: {
+      sources: true,
+      executions: true,
+      evidence: true,
+      watchers: true,
+      events: { orderBy: { occurredAt: 'asc' } },
+    },
+  });
+}

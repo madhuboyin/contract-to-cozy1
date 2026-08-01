@@ -109,7 +109,19 @@ export async function acceptFindingAsWork(
     throw new APIError('This finding is not eligible for tracked work', 409, 'NOT_ELIGIBLE');
   }
 
-  let workItem = await resolveAndUpsertWorkItem(proposal);
+  // Home Operations §15: unlike every other resolveAndUpsertWorkItem caller
+  // in the codebase (a secondary sync alongside an already-committed
+  // primary mutation), this IS the primary effect of acceptFindingAsWork —
+  // there's nothing to silently degrade to. Catch only to log full context
+  // for internal visibility and return a clean, retryable error instead of
+  // letting a raw internal exception bubble up uncaught.
+  let workItem;
+  try {
+    workItem = await resolveAndUpsertWorkItem(proposal);
+  } catch (err) {
+    logger.error({ err, findingId, reportId, propertyId }, '[InspectionHub] Failed to resolve the work item for an accepted finding');
+    throw new APIError('Unable to record this finding as tracked work right now — please try again.', 503, 'WORK_ITEM_RESOLUTION_FAILED');
+  }
   if (workItem.state === 'CANDIDATE') {
     workItem = await transitionWorkItem({
       workItemId: workItem.id,

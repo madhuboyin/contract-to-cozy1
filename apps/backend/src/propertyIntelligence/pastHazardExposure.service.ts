@@ -4,6 +4,7 @@ import {
   PropertyHazardEvidenceKind,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import {
@@ -464,33 +465,41 @@ export async function linkPropertyHazardEvidence(input: {
   }
 
   if (outcome.status === PropertyHazardEffectStatus.OBSERVED_EFFECT_CONFIRMED) {
-    const workItem = await resolveAndUpsertWorkItem({
-      propertyId: input.propertyId,
-      subject: { type: 'PROPERTY', id: input.propertyId },
-      obligationType: 'INCIDENT_RESPONSE',
-      occurrence: {
-        obligationSlug: 'review-confirmed-hazard-effect',
-        occurrenceKey: outcome.propertyMatch.observation.externalId,
-      },
-      title: `Review reported ${hazardLabel(outcome.propertyMatch.observation.observationType)} effect`,
-      homeownerReason:
-        'A household-reported property effect now has linked evidence. Decide whether inspection, documentation, or maintenance is still needed.',
-      expectedOutcome:
-        'The confirmed outcome and evidence are reviewed, with any necessary follow-up tracked once in Home Actions.',
-      priority: 'SOON',
-      safetyTier: 'LOW_CONSEQUENCE',
-      confidence: 1,
-      source: {
-        sourceType: 'HAZARD_OBSERVATION',
-        sourceEntityId: outcome.id,
-        sourceVersion: outcome.updatedAt.toISOString(),
-        sourceRole: 'TRIGGER',
-      },
-    });
-    await prisma.propertyHazardOutcome.update({
-      where: { id: outcome.id },
-      data: { canonicalActionId: workItem.id },
-    });
+    // Home Operations §15: a secondary sync alongside the evidence link
+    // already committed above — best-effort, must never block the evidence
+    // link that already succeeded (only the canonicalActionId backfill is
+    // skipped on failure).
+    try {
+      const workItem = await resolveAndUpsertWorkItem({
+        propertyId: input.propertyId,
+        subject: { type: 'PROPERTY', id: input.propertyId },
+        obligationType: 'INCIDENT_RESPONSE',
+        occurrence: {
+          obligationSlug: 'review-confirmed-hazard-effect',
+          occurrenceKey: outcome.propertyMatch.observation.externalId,
+        },
+        title: `Review reported ${hazardLabel(outcome.propertyMatch.observation.observationType)} effect`,
+        homeownerReason:
+          'A household-reported property effect now has linked evidence. Decide whether inspection, documentation, or maintenance is still needed.',
+        expectedOutcome:
+          'The confirmed outcome and evidence are reviewed, with any necessary follow-up tracked once in Home Actions.',
+        priority: 'SOON',
+        safetyTier: 'LOW_CONSEQUENCE',
+        confidence: 1,
+        source: {
+          sourceType: 'HAZARD_OBSERVATION',
+          sourceEntityId: outcome.id,
+          sourceVersion: outcome.updatedAt.toISOString(),
+          sourceRole: 'TRIGGER',
+        },
+      });
+      await prisma.propertyHazardOutcome.update({
+        where: { id: outcome.id },
+        data: { canonicalActionId: workItem.id },
+      });
+    } catch (err) {
+      logger.error({ err, outcomeId: outcome.id, propertyId: input.propertyId }, '[PastHazardExposure] Failed to sync the work item for a confirmed hazard effect');
+    }
   }
   return evidence;
 }

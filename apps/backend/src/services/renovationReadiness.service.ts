@@ -1,5 +1,6 @@
 import { Prisma, type RenovationReadinessItemCategory } from '@prisma/client';
 import { prisma } from '../config/database';
+import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import * as projectTrackerService from './projectTracker.service';
 import { linkContributor } from './renovationCase.service';
@@ -935,6 +936,13 @@ export async function handoffToProject(
       },
     }),
   ]);
-  await ensureProjectWorkItem(propertyId, updatedProject, actorUserId);
+  // Home Operations §15: a secondary sync alongside the project handoff
+  // already committed above — best-effort, must never block the handoff
+  // that already succeeded.
+  try {
+    await ensureProjectWorkItem(propertyId, updatedProject, actorUserId);
+  } catch (err) {
+    logger.error({ err, propertyId, projectId: project.id }, '[RenovationReadiness] Failed to sync the project execution work item');
+  }
   return projectTrackerService.getProjectDetail(project.id, propertyId);
 }
