@@ -2179,6 +2179,7 @@ function RefinanceDecisionTracker({
   const [closingRate, setClosingRate] = useState('');
   const [closingTerm, setClosingTerm] = useState('360');
   const [closingPayment, setClosingPayment] = useState('');
+  const [closingCost, setClosingCost] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -2235,13 +2236,15 @@ function RefinanceDecisionTracker({
     const rate = Number(closingRate);
     const term = Number(closingTerm);
     const payment = closingPayment.trim() ? Number(closingPayment) : undefined;
+    const cost = closingCost.trim() ? Number(closingCost) : undefined;
     if (
       !Number.isFinite(balance) || balance < 0 ||
       !Number.isFinite(rate) || rate <= 0 ||
       !Number.isInteger(term) || term < 1 ||
-      (payment != null && (!Number.isFinite(payment) || payment < 0))
+      (payment != null && (!Number.isFinite(payment) || payment < 0)) ||
+      (cost != null && (!Number.isFinite(cost) || cost < 0))
     ) {
-      setDecisionError('Enter valid new loan balance, rate, and remaining term before confirming the closing.');
+      setDecisionError('Enter valid new loan details before confirming the closing.');
       return;
     }
     await transition('CLOSED', {
@@ -2250,6 +2253,7 @@ function RefinanceDecisionTracker({
         interestRatePct: rate,
         remainingTermMonths: term,
         ...(payment == null ? {} : { monthlyPaymentUsd: payment }),
+        ...(cost == null ? {} : { closingCostUsd: cost }),
         mortgageBalanceAsOfDate: new Date().toISOString(),
       },
     });
@@ -2398,6 +2402,7 @@ function RefinanceDecisionTracker({
                   <input aria-label="New interest rate" type="number" min="0.001" step="0.001" value={closingRate} onChange={(event) => setClosingRate(event.target.value)} placeholder="New rate (%)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
                   <input aria-label="New remaining term in months" type="number" min="1" max="600" value={closingTerm} onChange={(event) => setClosingTerm(event.target.value)} placeholder="Term (months)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
                   <input aria-label="New monthly payment" type="number" min="0" value={closingPayment} onChange={(event) => setClosingPayment(event.target.value)} placeholder="Payment (optional)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
+                  <input aria-label="Recorded closing cost" type="number" min="0" value={closingCost} onChange={(event) => setClosingCost(event.target.value)} placeholder="Closing cost (optional)" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm dark:border-emerald-800 dark:bg-slate-900" />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" disabled={savingDecision} onClick={recordClosing}>Confirm closed and update Financing</Button>

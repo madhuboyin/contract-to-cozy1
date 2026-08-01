@@ -69,6 +69,7 @@ test('requires defer timing, selected offer linkage, and verified closing facts'
       interestRatePct: 5.75,
       remainingTermMonths: 360,
       monthlyPaymentUsd: 1750,
+      closingCostUsd: 8250,
       mortgageBalanceAsOfDate: '2026-07-31T12:00:00.000Z',
     },
   }).success, true);
@@ -101,5 +102,7 @@ test('decision persistence owns history while verified close updates canonical F
   assert.match(source, /clientMutationId/);
   assert.match(source, /propertyFinancingProfile\.upsert/);
   assert.match(source, /priorMortgage/);
+  assert.match(source, /newMortgage/);
+  assert.match(source, /canonicalFinancingWritebackCompleted/);
   assert.match(source, /REFINANCE_OUTCOME_COMPLETED/);
 });

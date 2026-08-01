@@ -149,12 +149,17 @@ test('decision completion persists history and writes verified terms to Financin
   await page.getByLabel('New interest rate').fill('5.5');
   await page.getByLabel('New remaining term in months').fill('360');
   await page.getByLabel('New monthly payment').fill('1788');
+  await page.getByLabel('Recorded closing cost').fill('8250');
   await page.getByRole('button', { name: 'Confirm closed and update Financing' }).click();
   await expect(page.getByText('Refinance closed', { exact: true })).toBeVisible();
   await expect(page.getByText(/Decision history \(3\)/)).toBeVisible();
   expect(api.decision()?.status).toBe('CLOSED');
   expect(api.financingProfile().interestRateBps).toBe(550);
   expect(api.financingProfile().currentMortgageBalanceCents).toBe(31500000);
+  expect(api.mutations.find((mutation) =>
+    mutation.path.endsWith('/refinance-radar/decision') &&
+    (mutation.body.completedMortgage as { closingCostUsd?: number } | undefined)?.closingCostUsd === 8250,
+  )).toBeDefined();
 });
 
 test('primary hierarchy is keyboard reachable and has no serious axe violations', async ({ page }) => {

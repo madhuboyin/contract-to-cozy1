@@ -248,6 +248,7 @@ export async function recordRefinanceDecision(input: {
           verifiedClosing: {
             confirmedByUserId: input.userId,
             confirmedAt: now.toISOString(),
+            canonicalFinancingWritebackCompleted: true,
             priorMortgage: previousMortgage ? {
               mortgageStatus: previousMortgage.mortgageStatus,
               currentMortgageBalanceCents: previousMortgage.currentMortgageBalanceCents,
@@ -256,6 +257,18 @@ export async function recordRefinanceDecision(input: {
               monthlyPaymentCents: previousMortgage.monthlyPaymentCents,
               mortgageBalanceAsOfDate: previousMortgage.mortgageBalanceAsOfDate?.toISOString() ?? null,
             } : null,
+            newMortgage: {
+              currentMortgageBalanceCents: Math.round(input.body.completedMortgage.currentMortgageBalanceUsd * 100),
+              interestRateBps: Math.round(input.body.completedMortgage.interestRatePct * 100),
+              remainingTermMonths: input.body.completedMortgage.remainingTermMonths,
+              monthlyPaymentCents: input.body.completedMortgage.monthlyPaymentUsd == null
+                ? null
+                : Math.round(input.body.completedMortgage.monthlyPaymentUsd * 100),
+              closingCostCents: input.body.completedMortgage.closingCostUsd == null
+                ? null
+                : Math.round(input.body.completedMortgage.closingCostUsd * 100),
+              mortgageBalanceAsOfDate: input.body.completedMortgage.mortgageBalanceAsOfDate,
+            },
           },
         }
       : {};

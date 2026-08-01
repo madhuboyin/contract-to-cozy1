@@ -506,6 +506,7 @@ export async function recordRefinanceDecision(
       interestRatePct: number;
       remainingTermMonths: number;
       monthlyPaymentUsd?: number;
+      closingCostUsd?: number;
       mortgageBalanceAsOfDate: string;
     };
   },

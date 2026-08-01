@@ -109,6 +109,7 @@ const completedMortgageSchema = z.object({
   interestRatePct: z.number().positive().max(30),
   remainingTermMonths: z.number().int().min(1).max(600),
   monthlyPaymentUsd: z.number().min(0).max(1_000_000).optional(),
+  closingCostUsd: z.number().min(0).max(1_000_000).optional(),
   mortgageBalanceAsOfDate: z.string().datetime({ offset: true }),
 }).strict();
 
