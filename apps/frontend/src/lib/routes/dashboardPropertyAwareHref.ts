@@ -39,9 +39,9 @@ function getItemId(query?: QueryReader | null): string | null {
 
 const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
   '/dashboard/health-score': {
-    navTarget: 'health-score',
+    navTarget: 'property-brief',
     toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/health-score`, query),
+      buildHref(`/dashboard/properties/${propertyId}/property-brief`, query),
   },
   '/dashboard/fix': {
     navTarget: 'fix',

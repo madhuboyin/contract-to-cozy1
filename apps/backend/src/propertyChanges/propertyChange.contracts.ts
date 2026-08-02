@@ -34,7 +34,9 @@ export const propertyChangeEmissionSchema = z.object({
     .regex(/^[A-Z][A-Z0-9_]*$/),
   sourceEntityId: z.string().trim().min(1).max(300),
   sourceRevision: z.string().trim().min(1).max(160),
-  sourceRevisionOrdinal: z.number().int().nonnegative(),
+  // Sources with a native, bounded revision should provide it. Timestamp- or
+  // state-based sources omit it and receive a transaction-serialized ordinal.
+  sourceRevisionOrdinal: z.number().int().nonnegative().optional(),
   changeType: propertyChangeTypeSchema,
   occurredAt: z.coerce.date().nullable().optional(),
   detectedAt: z.coerce.date().optional(),

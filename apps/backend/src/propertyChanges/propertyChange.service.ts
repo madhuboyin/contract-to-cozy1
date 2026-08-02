@@ -105,13 +105,20 @@ export async function emitPropertyChangeWithTransaction(
       sourceType,
       sourceEntityId: identity.sourceEntityId,
       latestRevision: identity.sourceRevision,
-      latestRevisionOrdinal: input.sourceRevisionOrdinal,
+      latestRevisionOrdinal: input.sourceRevisionOrdinal ?? 0,
     },
     // A real UPDATE intentionally acquires the source-identity row lock.
     update: { sourceType },
   });
+  const hasExplicitOrdinal = input.sourceRevisionOrdinal !== undefined;
+  const revisionOrdinal = hasExplicitOrdinal
+    ? input.sourceRevisionOrdinal as number
+    : cursor.latestRevision === identity.sourceRevision
+      ? cursor.latestRevisionOrdinal
+      : cursor.latestRevisionOrdinal + 1;
   if (
-    cursor.latestRevisionOrdinal === input.sourceRevisionOrdinal
+    hasExplicitOrdinal
+    && cursor.latestRevisionOrdinal === revisionOrdinal
     && cursor.latestRevision !== identity.sourceRevision
   ) {
     throw new APIError(
@@ -121,7 +128,7 @@ export async function emitPropertyChangeWithTransaction(
     );
   }
   if (
-    cursor.latestRevisionOrdinal === input.sourceRevisionOrdinal
+    cursor.latestRevision === identity.sourceRevision
     && cursor.latestChangeId
   ) {
     const replayed = await tx.propertyChange.findUnique({
@@ -131,8 +138,8 @@ export async function emitPropertyChangeWithTransaction(
   }
 
   const materiality = derivePropertyChangeMateriality(input.signals);
-  const outOfOrder =
-    cursor.latestRevisionOrdinal > input.sourceRevisionOrdinal;
+  const outOfOrder = hasExplicitOrdinal
+    && cursor.latestRevisionOrdinal > revisionOrdinal;
   const briefing = deriveBriefingEligibility({
     materiality: materiality.materiality,
     confidence: input.confidence ?? null,
@@ -147,7 +154,7 @@ export async function emitPropertyChangeWithTransaction(
     },
     create: {
       ...identity,
-      sourceRevisionOrdinal: input.sourceRevisionOrdinal,
+      sourceRevisionOrdinal: revisionOrdinal,
       changeType: input.changeType as PropertyChangeType,
       occurredAt: input.occurredAt ?? null,
       detectedAt: input.detectedAt ?? new Date(),
@@ -191,7 +198,7 @@ export async function emitPropertyChangeWithTransaction(
       where: { id: cursor.id },
       data: {
         latestRevision: identity.sourceRevision,
-        latestRevisionOrdinal: input.sourceRevisionOrdinal,
+        latestRevisionOrdinal: revisionOrdinal,
         latestChangeId: change.id,
       },
     });

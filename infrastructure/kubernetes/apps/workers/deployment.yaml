@@ -218,16 +218,31 @@ spec:
                   name: app-secrets
                   key: AIRNOW_API_KEY
                   optional: true
-            - name: WORKER_JOB_USGS_EARTHQUAKES_ENABLED
+            - name: WORKER_JOB_USGS_HAZARD_INTELLIGENCE_INGEST_ENABLED
               valueFrom:
                 configMapKeyRef:
                   name: app-config
-                  key: WORKER_JOB_USGS_EARTHQUAKES_ENABLED
-            - name: USGS_EARTHQUAKE_CRON
+                  key: WORKER_JOB_USGS_HAZARD_INTELLIGENCE_INGEST_ENABLED
+            - name: USGS_PROPERTY_INTELLIGENCE_PILOT_ENABLED
               valueFrom:
                 configMapKeyRef:
                   name: app-config
-                  key: USGS_EARTHQUAKE_CRON
+                  key: USGS_PROPERTY_INTELLIGENCE_PILOT_ENABLED
+            - name: USGS_PROPERTY_INTELLIGENCE_REVIEWED_BY
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: USGS_PROPERTY_INTELLIGENCE_REVIEWED_BY
+            - name: USGS_PROPERTY_INTELLIGENCE_REVIEW_REFERENCE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: USGS_PROPERTY_INTELLIGENCE_REVIEW_REFERENCE
+            - name: USGS_HAZARD_INTELLIGENCE_INGEST_CRON
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: USGS_HAZARD_INTELLIGENCE_INGEST_CRON
             - name: WORKER_JOB_OPENFEMA_DECLARATIONS_ENABLED
               valueFrom:
                 configMapKeyRef:

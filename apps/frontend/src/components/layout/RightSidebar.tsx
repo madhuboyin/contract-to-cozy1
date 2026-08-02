@@ -25,18 +25,11 @@ import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
-import type { Booking, OrchestratedActionDTO, Property } from '@/types';
+import type { Booking, OrchestratedActionDTO } from '@/types';
 import type { IncidentDTO } from '@/types/incidents.types';
 import { listIncidents } from '@/app/(dashboard)/dashboard/properties/[id]/incidents/incidentsApi';
 import { getSidebarActions, getPageAwareSubtitle, type SidebarAction } from '@/lib/sidebar/dynamicSidebarActions';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
-
-type HealthTone = 'good' | 'fair' | 'poor';
-
-type Trend = {
-  delta: number;
-  direction: 'up' | 'down' | 'flat';
-} | null;
 
 type NextTask = {
   name: string;
@@ -59,47 +52,6 @@ function normalizeUpperText(value: string | null | undefined): string {
 function hasKeyword(value: string | null | undefined, keywords: string[]): boolean {
   const upper = normalizeUpperText(value);
   return keywords.some((keyword) => upper.includes(keyword));
-}
-
-function asNumber(value: unknown): number | null {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function clampScore(value: unknown): number {
-  const numeric = asNumber(value) ?? 0;
-  return Math.max(0, Math.min(100, Math.round(numeric)));
-}
-
-function getHealthTone(score: number): HealthTone {
-  if (score >= 70) return 'good';
-  if (score >= 40) return 'fair';
-  return 'poor';
-}
-
-function getHealthLabel(score: number): 'Good' | 'Fair' | 'Poor' {
-  if (score >= 70) return 'Good';
-  if (score >= 40) return 'Fair';
-  return 'Poor';
-}
-
-function toneClasses(tone: HealthTone) {
-  if (tone === 'good') return { text: 'text-teal-600', stroke: '#0d9488' };
-  if (tone === 'fair') return { text: 'text-amber-600', stroke: '#d97706' };
-  return { text: 'text-red-600', stroke: '#dc2626' };
-}
-
-function formatRelativeUpdated(dateLike: string | number | null | undefined): string {
-  const timestamp = typeof dateLike === 'number' ? dateLike : Date.parse(String(dateLike || ''));
-  if (!Number.isFinite(timestamp) || timestamp <= 0) return 'Updated recently';
-
-  const minutes = Math.max(1, Math.round((Date.now() - timestamp) / 60000));
-  if (minutes < 60) return `Verified ${minutes} minutes ago from live signals`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `Verified ${hours} hours ago from live signals`;
-  const days = Math.round(hours / 24);
-  if (days > 365) return 'Verified recently from home signals';
-  return `Verified ${days} days ago from home signals`;
 }
 
 function formatCompactUsd(value: number): string {
@@ -225,27 +177,6 @@ function useResolvedPropertyId() {
 function useSidebarData() {
   const { propertyId, isLoading: propertyIdLoading } = useResolvedPropertyId();
 
-  const propertyQuery = useQuery({
-    queryKey: ['property', propertyId],
-    queryFn: async () => {
-      if (!propertyId) return null;
-      const response = await api.getProperty(propertyId);
-      return response.success ? response.data : null;
-    },
-    enabled: !!propertyId,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const scoreSnapshotQuery = useQuery({
-    queryKey: ['property-score-snapshot', propertyId ?? 'none', 'HEALTH'],
-    queryFn: async () => {
-      if (!propertyId) return null;
-      return api.getPropertyScoreSnapshots(propertyId, 16);
-    },
-    enabled: !!propertyId,
-    staleTime: 10 * 60 * 1000,
-  });
-
   const orchestrationQuery = useQuery({
     queryKey: ['orchestration-summary', propertyId],
     queryFn: () => (propertyId ? api.getOrchestrationSummary(propertyId) : Promise.resolve(null as any)),
@@ -290,13 +221,6 @@ function useSidebarData() {
   });
 
   return useMemo(() => {
-    const property = propertyQuery.data as (Property & { healthScore?: { totalScore?: number } }) | null;
-    const score = clampScore(scoreSnapshotQuery.data?.scores?.HEALTH?.latest?.score ?? property?.healthScore?.totalScore);
-    const delta = scoreSnapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? null;
-    const trend: Trend =
-      typeof delta === 'number' && Math.abs(delta) >= 0.05
-        ? { delta, direction: delta > 0 ? 'up' : 'down' }
-        : null;
     const actions: OrchestratedActionDTO[] = (orchestrationQuery.data as any)?.actions || [];
     const incidents: IncidentDTO[] = (incidentsQuery.data as any)?.items || [];
     const bookings: Booking[] =
@@ -310,22 +234,10 @@ function useSidebarData() {
       propertyId,
       isLoading:
         propertyIdLoading ||
-        propertyQuery.isLoading ||
-        scoreSnapshotQuery.isLoading ||
         orchestrationQuery.isLoading ||
         incidentsQuery.isLoading ||
         resolutionsQuery.isLoading ||
         bookingsQuery.isLoading,
-      health: {
-        score,
-        label: getHealthLabel(score),
-        updatedAt:
-          scoreSnapshotQuery.data?.scores?.HEALTH?.latest?.computedAt ||
-          property?.updatedAt ||
-          scoreSnapshotQuery.dataUpdatedAt ||
-          propertyQuery.dataUpdatedAt,
-        trend,
-      },
       snapshot: {
         atRisk: activeActions.reduce((sum, item) => sum + (typeof item.exposure === 'number' ? item.exposure : 0), 0),
         urgentCount: activeActions.filter(isUrgentAction).length + activeIncidents.filter(isUrgentIncident).length,
@@ -338,12 +250,6 @@ function useSidebarData() {
   }, [
     propertyId,
     propertyIdLoading,
-    propertyQuery.data,
-    propertyQuery.dataUpdatedAt,
-    propertyQuery.isLoading,
-    scoreSnapshotQuery.data,
-    scoreSnapshotQuery.dataUpdatedAt,
-    scoreSnapshotQuery.isLoading,
     orchestrationQuery.data,
     orchestrationQuery.isLoading,
     incidentsQuery.data,
@@ -365,52 +271,20 @@ function BlockSkeleton() {
   );
 }
 
-function HealthScoreBlock({
-  score,
-  label,
-  updatedAt,
-  trend,
-}: {
-  score: number;
-  label: string;
-  updatedAt: string | number | null | undefined;
-  trend: Trend;
-}) {
-  const radius = 35;
-  const circumference = 2 * Math.PI * radius;
-  const tone = getHealthTone(score);
-  const color = toneClasses(tone);
-  const trendText = trend ? `${trend.direction === 'up' ? '↑' : '↓'} ${Math.abs(Math.round(trend.delta))} pts this week` : null;
-
+function PropertyStatusBlock({ urgentCount, highConfidence }: { urgentCount: number; highConfidence: number }) {
   return (
     <section className="rounded-[22px] border border-slate-200/80 bg-white/88 px-3 py-4 shadow-[var(--ctc-shadow-card)]">
-      <h2 className="mb-3 text-[11px] font-semibold text-slate-400 tracking-normal">Health score</h2>
+      <h2 className="mb-3 text-[11px] font-semibold text-slate-400 tracking-normal">Current status</h2>
       <div className="flex flex-col items-center text-center">
-        <svg width="80" height="80" viewBox="0 0 80 80" aria-label={`Home health score ${score}`}>
-          <circle cx="40" cy="40" r={radius} stroke="#f3f4f6" strokeWidth="7" fill="none" />
-          <circle
-            cx="40"
-            cy="40"
-            r={radius}
-            stroke={color.stroke}
-            strokeWidth="7"
-            fill="none"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference - (score / 100) * circumference}
-            transform="rotate(-90 40 40)"
-          />
-          <text x="40" y="46" textAnchor="middle" className={cn('fill-current text-lg font-semibold', color.text)}>
-            {score}
-          </text>
-        </svg>
-        <p className={cn('mt-2 text-sm font-medium', color.text)}>{label}</p>
-        <p className="mt-1 max-w-[150px] text-xs leading-4 text-slate-500">{formatRelativeUpdated(updatedAt)}</p>
-        {trendText ? (
-          <p className={cn('mt-1 text-xs', trend?.direction === 'up' ? 'text-teal-600' : 'text-amber-600')}>
-            {trendText}
-          </p>
-        ) : null}
+        <span className={cn('flex h-16 w-16 items-center justify-center rounded-full text-2xl font-semibold', urgentCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-teal-50 text-teal-700')}>
+          {urgentCount}
+        </span>
+        <p className={cn('mt-2 text-sm font-medium', urgentCount > 0 ? 'text-amber-700' : 'text-teal-700')}>
+          {urgentCount > 0 ? 'Items need attention' : 'No urgent items'}
+        </p>
+        <p className="mt-1 max-w-[170px] text-xs leading-4 text-slate-500">
+          {highConfidence} item{highConfidence === 1 ? '' : 's'} backed by strong signal confidence.
+        </p>
       </div>
     </section>
   );
@@ -604,7 +478,7 @@ function DynamicActionsBlock({
 
 function ViewReportLink({ propertyId }: { propertyId: string | undefined }) {
   const href = propertyId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/health-score`
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/property-brief`
     : '/dashboard/properties';
 
   return (
@@ -615,7 +489,7 @@ function ViewReportLink({ propertyId }: { propertyId: string | undefined }) {
       }}
       className="w-full rounded-[14px] border border-teal-200 bg-white/80 py-2.5 text-[12px] font-semibold text-teal-700 transition-colors hover:bg-teal-50"
     >
-      View full report →
+      Create property brief →
     </button>
   );
 }
@@ -657,10 +531,10 @@ export function RightSidebar() {
     }
     return {
       icon: Sparkles,
-      title: data.health.score >= 70 ? 'Your home is in controlled range' : 'A few signals need attention',
+      title: urgent > 0 ? 'A few signals need attention' : 'Your current status is clear',
       detail: data.snapshot.nextTask ? `Next smart move: ${data.snapshot.nextTask.name}.` : 'No time-sensitive task is due right now.',
     };
-  }, [data.health.score, data.snapshot, pathname]);
+  }, [data.snapshot, pathname]);
   const RouteIcon = routeInsight.icon;
 
   return (
@@ -688,11 +562,9 @@ export function RightSidebar() {
         </>
       ) : (
         <>
-          <HealthScoreBlock
-            score={data.health.score}
-            label={data.health.label}
-            updatedAt={data.health.updatedAt}
-            trend={data.health.trend}
+          <PropertyStatusBlock
+            urgentCount={data.snapshot.urgentCount}
+            highConfidence={data.snapshot.highConfidence}
           />
           <ViewReportLink propertyId={data.propertyId} />
           <SnapshotBlock

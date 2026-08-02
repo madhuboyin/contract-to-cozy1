@@ -1331,7 +1331,7 @@ export default function HealthInsightFocusPage() {
   const actionHint = getFactorActionHint(insight?.factor, status);
   const primaryCta = getPrimaryCta(insight?.factor, status, propertyId);
   const friendlyStatus = getUserFriendlyStatus(status);
-  const healthScoreHref = `/dashboard/properties/${propertyId}/health-score`;
+  const healthScoreHref = `/dashboard/properties/${propertyId}/status-board`;
   const FactorIcon = getFactorIcon(insight?.factor);
 
   // Property age specifics

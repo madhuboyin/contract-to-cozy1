@@ -9,7 +9,11 @@ function timestampRevision(updatedAt: Date, discriminator?: string | null) {
 
 async function emitAll(candidates: Candidate[]) {
   const results = [];
-  for (const candidate of candidates) {
+  // Auto-assigned revisions are serialized in the same order the source rows
+  // changed, so a delayed briefing reconciliation cannot invert source state.
+  for (const candidate of candidates.sort(
+    (left, right) => (left.detectedAt?.getTime() ?? 0) - (right.detectedAt?.getTime() ?? 0),
+  )) {
     results.push(await emitPropertyChange(candidate));
   }
   return results;
@@ -125,7 +129,6 @@ export async function reconcileCanonicalPropertyChanges(input: {
       sourceType: 'PROPERTY_FACT',
       sourceEntityId: fact.id,
       sourceRevision: timestampRevision(fact.observedAt, fact.verifiedAt?.toISOString()),
-      sourceRevisionOrdinal: Math.max(fact.observedAt.getTime(), fact.verifiedAt?.getTime() ?? 0),
       changeType: 'PROPERTY_FACT_CHANGED',
       occurredAt: fact.observedAt,
       detectedAt: fact.verifiedAt ?? fact.observedAt,
@@ -144,7 +147,6 @@ export async function reconcileCanonicalPropertyChanges(input: {
       sourceType: 'DOCUMENT',
       sourceEntityId: document.id,
       sourceRevision: timestampRevision(document.updatedAt, 'VERIFIED'),
-      sourceRevisionOrdinal: document.updatedAt.getTime(),
       changeType: 'SOURCE_RECORD_REVISED',
       occurredAt: document.verifiedAt ?? document.updatedAt,
       detectedAt: document.updatedAt,
@@ -163,7 +165,6 @@ export async function reconcileCanonicalPropertyChanges(input: {
       sourceType: 'CLAIM_RECORD',
       sourceEntityId: claim.id,
       sourceRevision: timestampRevision(claim.updatedAt, claim.status),
-      sourceRevisionOrdinal: claim.updatedAt.getTime(),
       changeType: 'SOURCE_LIFECYCLE_CHANGED',
       occurredAt: claim.incidentAt ?? claim.updatedAt,
       detectedAt: claim.updatedAt,
@@ -182,7 +183,6 @@ export async function reconcileCanonicalPropertyChanges(input: {
       sourceType: 'PROJECT_RECORD',
       sourceEntityId: project.id,
       sourceRevision: timestampRevision(project.updatedAt, project.status),
-      sourceRevisionOrdinal: project.updatedAt.getTime(),
       changeType: 'SOURCE_LIFECYCLE_CHANGED',
       occurredAt: project.actualEndDate ?? project.startDate,
       detectedAt: project.updatedAt,
@@ -201,7 +201,6 @@ export async function reconcileCanonicalPropertyChanges(input: {
       sourceType: 'MAINTENANCE_RECORD',
       sourceEntityId: task.id,
       sourceRevision: timestampRevision(task.updatedAt, task.status),
-      sourceRevisionOrdinal: task.updatedAt.getTime(),
       changeType: 'SOURCE_LIFECYCLE_CHANGED',
       occurredAt: task.lastCompletedDate ?? task.nextDueDate ?? task.updatedAt,
       detectedAt: task.updatedAt,

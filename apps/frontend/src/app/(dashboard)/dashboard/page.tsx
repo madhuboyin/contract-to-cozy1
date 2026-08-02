@@ -22,7 +22,6 @@ import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'd
 
 // NEW IMPORTS FOR SCORECARDS AND LAYOUT
 import { DashboardShell } from '@/components/DashboardShell';
-import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { WelcomeModal } from './components/WelcomeModal';
@@ -141,25 +140,25 @@ function buildTopCardActionMeta(
   };
 }
 
-function buildHealthInsightActionMeta(factorTitle: string, healthScore: number) {
+function buildHealthInsightActionMeta(factorTitle: string, _healthScore: number) {
   return buildTopCardActionMeta(
-    `Health Score · ${factorTitle}`,
-    'Open Health Score to review Current Health Focus and the factor ledger.',
-    'This factor is currently the clearest health driver to review first.',
-    'Current property health',
-    `${healthScore} / 100`,
-    healthScore,
+    `Status Board · ${factorTitle}`,
+    'Open the Status Board to review the underlying signals and evidence.',
+    'This factor is currently the clearest property item to review first.',
+    'Current signal',
+    'Needs review',
+    100,
   );
 }
 
-function buildApplianceStatusActionMeta(itemName: string, healthScore: number, recommendation: string) {
+function buildApplianceStatusActionMeta(itemName: string, _healthScore: number, recommendation: string) {
   return buildTopCardActionMeta(
     `Status Board · ${itemName}`,
     `Open the Status Board to review why ${itemName.toLowerCase()} is flagged and take the next recommended step.`,
     `Current recommendation: ${recommendation}.`,
-    'Current property health',
-    `${healthScore} / 100`,
-    healthScore,
+    'Current recommendation',
+    recommendation,
+    100,
   );
 }
 
@@ -296,14 +295,14 @@ function buildBackendSignalActionMeta(reasonCode: BackendSignalReasonCode, detai
   return buildTopCardActionMeta(toolLabel, detail, supportingText, 'Signal strength', signalStrengthLabel, 72);
 }
 
-function buildDefaultActionMeta(healthScore: number) {
+function buildDefaultActionMeta(_healthScore: number) {
   return buildTopCardActionMeta(
-    'Health Score overview',
-    'Review score drivers, recent changes, and current health focus.',
-    'Open Health Score to see what is helping, what is dragging the score down, and where to act next.',
-    'Current property health',
-    `${healthScore} / 100 overall`,
-    healthScore,
+    'Property status overview',
+    'Review current signals, recent changes, and verified home facts.',
+    'Open the Status Board for attention items or create a governed Property Brief.',
+    'Record status',
+    'Current',
+    100,
   );
 }
 
@@ -1142,24 +1141,26 @@ export default function DashboardPage() {
       };
     }
 
-    // 7. Default: health-score-aware fallback
-    const score = healthScore ?? 0;
-    const isHealthy = score >= 75;
-    const impactLabel = isHealthy ? 'Home status current' : `Health at ${score} / 100`;
+    // 7. Default: canonical status fallback
+    const attentionCount = scopedUrgentActions.length;
+    const isCurrent = attentionCount === 0;
+    const impactLabel = isCurrent ? 'Home status current' : `${attentionCount} item${attentionCount === 1 ? '' : 's'} flagged`;
     const etaLabel = 'ETA 1 min';
     return {
       badgeLabel: buildDefaultBadgeLabel(),
-      title: isHealthy
-        ? 'All systems healthy.'
-        : `Home health at ${score} — review score drivers.`,
-      subtitle: isHealthy
-        ? 'Review your score drivers and current health focus to stay ahead of issues.'
-        : 'Your health score has room to improve. Open the full report to see what is dragging it down and what to fix first.',
-      ctaLabel: 'View full report',
-      href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
+      title: isCurrent
+        ? 'Your Status Board is current.'
+        : `${attentionCount} home item${attentionCount === 1 ? '' : 's'} need attention.`,
+      subtitle: isCurrent
+        ? 'Review verified home facts or create a shareable Property Brief.'
+        : 'Open the Status Board to review the underlying evidence and next actions.',
+      ctaLabel: isCurrent ? 'Create property brief' : 'Open Status Board',
+      href: isCurrent
+        ? `/dashboard/properties/${encodeURIComponent(effectiveSelectedPropertyId)}/property-brief`
+        : `/dashboard/properties/${encodeURIComponent(effectiveSelectedPropertyId)}/status-board`,
       impactLabel,
       etaLabel,
-      ...buildDefaultActionMeta(score),
+      ...buildDefaultActionMeta(0),
     };
   })();
 
@@ -1187,7 +1188,7 @@ export default function DashboardPage() {
 
   if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;
 
-  const healthScoreHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score');
+  const propertyBriefHref = `/dashboard/properties/${encodeURIComponent(effectiveSelectedPropertyId)}/property-brief`;
   const priorityActionsHref = buildPropertyAwareDashboardHref(
     effectiveSelectedPropertyId,
     '/dashboard/fix?focus=priority-actions',
@@ -1223,12 +1224,12 @@ export default function DashboardPage() {
         }
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Link href={healthScoreHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
+          <Link href={propertyBriefHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
             <MetricTile
-              label="Health score"
-              value={healthScore !== null ? healthScore : '—'}
-              hint="Current property signal"
-              tone={healthScore !== null && healthScore >= 80 ? 'success' : healthScore !== null ? 'warning' : 'neutral'}
+              label="Property brief"
+              value="Verified facts"
+              hint="Create a governed share"
+              tone="neutral"
               className="h-full cursor-pointer"
             />
           </Link>

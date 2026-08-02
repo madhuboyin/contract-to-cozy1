@@ -193,11 +193,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_AIRNOW_AIR_QUALITY_ENABLED
-            - name: WORKER_JOB_USGS_EARTHQUAKES_ENABLED
+            - name: WORKER_JOB_USGS_HAZARD_INTELLIGENCE_INGEST_ENABLED
               valueFrom:
                 configMapKeyRef:
                   name: app-config
-                  key: WORKER_JOB_USGS_EARTHQUAKES_ENABLED
+                  key: WORKER_JOB_USGS_HAZARD_INTELLIGENCE_INGEST_ENABLED
             - name: WORKER_JOB_OPENFEMA_DECLARATIONS_ENABLED
               valueFrom:
                 configMapKeyRef:

@@ -242,13 +242,13 @@ function getMyHomeActions(ctx: SidebarContext): SidebarAction[] {
     group: 'contextual-actions',
   });
 
-  // View health score
+  // Create an evidence-bounded shareable property record.
   actions.push({
-    id: 'view-health-score',
-    title: 'View health score',
-    description: 'Check property wellness',
+    id: 'create-property-brief',
+    title: 'Create property brief',
+    description: 'Review verified home facts',
     icon: Sparkles,
-    href: `${propPath}/health-score`,
+    href: `${propPath}/property-brief`,
     priority: 'low',
     group: 'contextual-actions',
   });
