@@ -6,8 +6,6 @@ import { prisma } from '../lib/prisma';
 import { generateRoiChecklist } from './engines/roiRules.engine';
 import { logger } from '../lib/logger';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
-import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
-import { sellerPrepPlanCompletionEvent } from '../services/analytics/sellerPrepLifecycle';
 
 function optionalLineageId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -70,21 +68,6 @@ export class SellerPrepController {
         itemId,
         status
       );
-      if (status === 'DONE' && result.previousStatus !== 'DONE') {
-        void recordToolLifecycleEvents({
-          userId: req.user!.userId,
-          propertyId: result.propertyId,
-          events: [sellerPrepPlanCompletionEvent({
-            planId: result.planId,
-            operation: 'checklist_item_completed',
-            itemId: result.item.id,
-            sourceActionId: result.sourceActionId,
-            sourceJourneyId: result.sourceJourneyId,
-            sourceProjectId: result.sourceProjectId,
-          })],
-        });
-      }
-
       res.json({
         success: true,
         message: 'Item status updated successfully'
@@ -201,19 +184,6 @@ export class SellerPrepController {
       let plan = await prisma.sellerPrepPlan.findFirst({
         where: { userId, propertyId }
       });
-      const previousPreferences =
-        plan?.preferences
-        && typeof plan.preferences === 'object'
-        && !Array.isArray(plan.preferences)
-          ? plan.preferences as Record<string, unknown>
-          : null;
-      const materiallyChanged = !previousPreferences || [
-        ['timeline', timeline],
-        ['budget', budget],
-        ['propertyType', propertyType],
-        ['priority', priority],
-        ['condition', condition],
-      ].some(([key, value]) => previousPreferences[key] !== value);
 
       if (plan) {
         // Update existing plan with preferences
@@ -285,20 +255,6 @@ export class SellerPrepController {
           include: { items: true },
         });
       }
-      if (materiallyChanged) {
-        void recordToolLifecycleEvents({
-          userId,
-          propertyId,
-          events: [sellerPrepPlanCompletionEvent({
-            planId: plan.id,
-            operation: 'preferences_saved',
-            sourceActionId: plan.sourceActionId,
-            sourceJourneyId: plan.sourceJourneyId,
-            sourceProjectId: plan.sourceProjectId,
-          })],
-        });
-      }
-
       res.json({
         success: true,
         data: plan,

@@ -15,7 +15,7 @@ const {
   buildToolLifecycleAnalyticsEvents,
 } = require('../../src/services/analytics/toolLifecycle.ts');
 const {
-  sellerPrepPlanCompletionEvent,
+  saleCaseMilestoneCompletionEvent,
 } = require('../../src/services/analytics/sellerPrepLifecycle.ts');
 
 function propertyContext(propertyUse) {
@@ -40,10 +40,11 @@ function propertyContext(propertyUse) {
   };
 }
 
-test('CAP-804 Seller Prep owns seller discovery, Home Record, and completion contracts', () => {
+test('CAP-804 Sale Readiness owns sale-case discovery, Home Record, and completion contracts', () => {
   const capability = canonicalCapabilityRegistry.getById('seller-prep');
   assert.ok(capability);
-  assert.equal(capability.version, 2);
+  assert.equal(capability.version, 3);
+  assert.equal(capability.presentation.label, 'Sale Readiness & Handoff');
   assert.ok(capability.presentation.intentAliases.includes('prepare my home to sell'));
   assert.equal(capability.recommendation.requiresExplicitTrigger, true);
   assert.deepEqual(capability.recommendation.recommendationDefinitionCodes, [
@@ -52,20 +53,21 @@ test('CAP-804 Seller Prep owns seller discovery, Home Record, and completion con
   assert.deepEqual(capability.recommendation.sourceCtaExclusionCapabilityIds, [
     'sell-hold-rent',
   ]);
-  assert.equal(capability.lifecycle.completionKind, 'PLAN_CREATED');
+  assert.equal(capability.lifecycle.completionKind, 'OUTCOME_VERIFIED');
   assert.equal(
     capability.lifecycle.completionSignal,
-    'seller_prep_plan_created_or_advanced',
+    'sale_case_verified_milestone_completed',
   );
   assert.deepEqual(capability.productFramework.livingHomeRecordWrites, [
-    'seller-prep-plan',
-    'seller-prep-preferences',
-    'seller-prep-checklist-progress',
-    'agent-comparison',
+    'sale-case',
+    'sale-milestone',
+    'sale-work-reference',
+    'sale-handoff-package',
+    'ownership-transition-decision',
   ]);
 });
 
-test('CAP-804 catalog search retrieves Seller Prep from homeowner phrasing', () => {
+test('CAP-804 sale readiness stays contextual and safety-gated in general catalog search', () => {
   const availability = createCapabilityAvailabilityAdapter({
     registry: canonicalCapabilityRegistry,
     failureMode: 'LAUNCH_FAIL_CLOSED',
@@ -90,7 +92,7 @@ test('CAP-804 catalog search retrieves Seller Prep from homeowner phrasing', () 
       ...capability.intentAliases,
     ].join(' ').toLowerCase().includes(query),
   );
-  assert.deepEqual(matches.map((capability) => capability.id), ['seller-prep']);
+  assert.deepEqual(matches.map((capability) => capability.id), []);
 });
 
 test('CAP-804 derives seller intent only from a confirmed FOR_SALE Home Record fact', () => {
@@ -107,28 +109,28 @@ test('CAP-804 derives seller intent only from a confirmed FOR_SALE Home Record f
   assert.equal(source.contextVersion, 'context-v2');
 });
 
-test('CAP-804 plan creation and advancement emit canonical completion', () => {
+test('CAP-804 verified sale milestones emit canonical completion', () => {
   const events = buildToolLifecycleAnalyticsEvents({
     userId: '11111111-1111-4111-8111-111111111111',
     propertyId: '22222222-2222-4222-8222-222222222222',
     events: [
-      sellerPrepPlanCompletionEvent({
-        planId: 'plan-1',
-        operation: 'preferences_saved',
+      saleCaseMilestoneCompletionEvent({
+        saleCaseId: 'sale-case-1',
+        milestoneId: 'milestone-1',
+        operation: 'readiness_verified',
         sourceJourneyId: 'journey-1',
       }),
-      sellerPrepPlanCompletionEvent({
-        planId: 'plan-1',
-        operation: 'checklist_item_completed',
-        itemId: 'item-1',
+      saleCaseMilestoneCompletionEvent({
+        saleCaseId: 'sale-case-1',
+        milestoneId: 'milestone-2',
+        operation: 'handoff_published',
         sourceProjectId: 'project-1',
       }),
     ],
   });
   assert.ok(events.every((event) => event.eventName === 'TOOL_COMPLETED'));
   assert.ok(events.every((event) =>
-    event.metadataJson.completionKind === 'PLAN_CREATED'));
+    event.metadataJson.completionKind === 'OUTCOME_VERIFIED'));
   assert.equal(events[0].metadataJson.journeyId, 'journey-1');
-  assert.equal(events[1].metadataJson.operation, 'checklist_item_completed');
+  assert.equal(events[1].metadataJson.operation, 'handoff_published');
 });
-

@@ -2225,8 +2225,7 @@ class APIClient {
 
   async analyzeDocument(
     file: File,
-    propertyId: string,
-    autoCreateWarranty: boolean = true
+    propertyId: string
   ): Promise<APIResponse<{
     document: any;
     insights: any;
@@ -2236,7 +2235,6 @@ class APIClient {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('propertyId', propertyId);
-    formData.append('autoCreateWarranty', autoCreateWarranty.toString());
 
     return this.formDataRequest('/api/documents/analyze', formData);
   }

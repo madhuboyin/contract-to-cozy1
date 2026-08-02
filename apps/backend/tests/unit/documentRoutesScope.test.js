@@ -4,6 +4,9 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 let inventoryWhere = null;
+let documentWhere = null;
+let propertyAccess = { propertyId: 'owned-property-id', role: 'OWNER' };
+let autoCreateWarrantyCalls = 0;
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {
@@ -12,6 +15,20 @@ require.cache[prismaPath] = {
   loaded: true,
   exports: {
     prisma: {
+      homeownerProfile: {
+        findUnique: async () => ({ id: 'profile-1' }),
+      },
+      document: {
+        findMany: async (args) => {
+          documentWhere = args.where;
+          return [];
+        },
+        create: async (args) => ({
+          id: 'doc-created',
+          ...args.data,
+          createdAt: new Date('2026-08-02T00:00:00.000Z'),
+        }),
+      },
       inventoryItem: {
         findMany: async (args) => {
           inventoryWhere = args.where;
@@ -57,8 +74,22 @@ require.cache[intelligencePath] = {
   exports: {
     documentIntelligenceService: {
       analyzeDocument: async () => ({}),
-      autoCreateWarranty: async () => null,
+      autoCreateWarranty: async () => {
+        autoCreateWarrantyCalls += 1;
+        return { id: 'unsafe-auto-created-warranty' };
+      },
     },
+  },
+};
+
+const propertyAccessPath = require.resolve('../../src/services/propertyAccess.service.ts');
+require.cache[propertyAccessPath] = {
+  id: propertyAccessPath,
+  filename: propertyAccessPath,
+  loaded: true,
+  exports: {
+    ROLE_RANK: { VIEWER: 0, CONTRIBUTOR: 1, OWNER: 2 },
+    resolvePropertyAccess: async () => propertyAccess,
   },
 };
 
@@ -166,6 +197,15 @@ function getAssetSuggestionHandler() {
   return handler;
 }
 
+function getRouteHandler(path, method) {
+  const routeLayer = router.stack
+    .filter((layer) => layer.route)
+    .find((layer) => layer.route.path === path && Boolean(layer.route.methods?.[method]));
+
+  assert.ok(routeLayer, `Expected ${method.toUpperCase()} ${path} route to exist`);
+  return routeLayer.route.stack[routeLayer.route.stack.length - 1].handle;
+}
+
 test('asset suggestions ignore query property override and use owned document property', async () => {
   inventoryWhere = null;
 
@@ -189,4 +229,64 @@ test('asset suggestions ignore query property override and use owned document pr
   assert.equal(res.statusCode, 200);
   assert.equal(inventoryWhere.propertyId, 'owned-property-id');
   assert.equal(res.payload.data.document.propertyId, 'owned-property-id');
+});
+
+test('property-scoped document listing authorizes access and filters by property', async () => {
+  documentWhere = null;
+  propertyAccess = { propertyId: 'household-property-id', role: 'VIEWER' };
+
+  const handler = getRouteHandler('/', 'get');
+  const req = {
+    user: { userId: 'user-1' },
+    query: { propertyId: 'household-property-id' },
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(documentWhere, { propertyId: 'household-property-id' });
+});
+
+test('property-scoped document listing hides properties without access', async () => {
+  documentWhere = null;
+  propertyAccess = null;
+
+  const handler = getRouteHandler('/', 'get');
+  const req = {
+    user: { userId: 'user-1' },
+    query: { propertyId: 'other-property-id' },
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 404);
+  assert.equal(documentWhere, null);
+});
+
+test('document analysis never auto-creates a warranty from extracted fields', async () => {
+  propertyAccess = { propertyId: 'owned-property-id', role: 'OWNER' };
+  autoCreateWarrantyCalls = 0;
+
+  const handler = getRouteHandler('/analyze', 'post');
+  const req = {
+    user: { userId: 'user-1' },
+    body: { propertyId: 'owned-property-id', autoCreateWarranty: 'true' },
+    file: {
+      buffer: Buffer.from('warranty document'),
+      mimetype: 'application/pdf',
+      originalname: 'warranty.pdf',
+      size: 17,
+    },
+    ip: '127.0.0.1',
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(autoCreateWarrantyCalls, 0);
+  assert.equal(res.payload.data.warranty, null);
+  assert.equal(res.payload.data.reviewRequired, true);
 });

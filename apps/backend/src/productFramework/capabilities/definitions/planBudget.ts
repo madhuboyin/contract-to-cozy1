@@ -4,7 +4,6 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   ['budget', 'Budget Planner', 'Plan and track home spending.', '/dashboard/budget', 'BUDGET_PLANNER', 'BETA', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['capital-timeline', 'Home Capital Timeline', 'Plan major home system and capital events.', '/dashboard/properties/[id]/tools/capital-timeline', 'HOME_CAPITAL_TIMELINE', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['diy', 'DIY Project Center', 'Use reviewed guidance for eligible low-risk projects.', '/dashboard/properties/[id]/tools/diy', 'DIY', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
-  ['documents', 'Document Vault', 'Organize and review critical home documents.', '/dashboard/documents', 'DOCUMENT_VAULT', 'BETA', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['emergency', 'Emergency Help', 'Access rapid guidance for urgent home incidents.', '/dashboard/emergency', 'EMERGENCY_HELP', 'BETA', 'SAFETY_EMERGENCY', 'CATALOG_ONLY'],
   ['hoa-compliance', 'HOA Compliance', 'Track HOA approvals and compliance requirements.', '/dashboard/properties/[id]/tools/hoa', 'HOA_COMPLIANCE', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['home-renovation-risk-advisor', 'Renovations', 'Explore, plan, approve, execute, and close out one governed renovation journey.', '/dashboard/properties/[id]/renovations', 'RENOVATION_RISK_ADVISOR', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
@@ -13,7 +12,7 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
   ['permits', 'Permit Tracker', 'Track permits, inspections, and disclosure records.', '/dashboard/properties/[id]/tools/permits', 'PERMITS', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['project-tracker', 'Project Tracker', 'Track contractor projects from contract to completion.', '/dashboard/properties/[id]/projects', 'PROJECT_TRACKER', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['reserve-fund', 'Reserve Fund Planner', 'Plan reserves for future repairs and replacements.', '/dashboard/properties/[id]/tools/reserve-fund', 'RESERVE_FUND', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CATALOG_ONLY'],
-  ['seller-prep', 'Seller Prep', 'Prepare the property, documents, and timeline for sale.', '/dashboard/properties/[id]/seller-prep', 'SELLER_PREP', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
+  ['seller-prep', 'Sale Readiness & Handoff', 'Prepare verified work and selected records for a confirmed home sale.', '/dashboard/properties/[id]/seller-prep', 'SELLER_PREP', 'ACTIVE', 'MATERIAL_FINANCIAL', 'CONTEXTUAL'],
   ['status-board', 'Status Board', "See your home's current condition, readiness, and evidence in one place.", '/dashboard/properties/[id]/status-board', 'STATUS_BOARD', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
 ] as const).map(([
   id,
@@ -60,20 +59,21 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
     outputEntityTypes: ['PROJECT'] as const,
   } : {}),
   ...(id === 'seller-prep' ? {
-    version: 2,
+    version: 3,
     iconName: 'list-checks' as const,
     intentAliases: [
       'seller prep',
+      'sale readiness and handoff',
       'prepare my home to sell',
       'home sale checklist',
       'get my house ready to list',
       'moving timeline home sale',
       'what should I fix before selling',
-      'maximize my home sale value',
+      'prepare records for a buyer',
       'seller readiness plan',
     ],
     homeownerOutcome:
-      'Turn confirmed sale intent into a prioritized preparation plan for the property, documents, budget, and listing timeline.',
+      'Turn confirmed sale intent into one governed sale case with verified milestones, canonical work, and an expressly selected handoff package.',
     livingHomeRecordReads: [
       'property-context',
       'sale-intent',
@@ -81,19 +81,23 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
       'inspection-finding',
       'permit-record',
       'active-project',
-      'insurance-policy',
-      'comparable-sale',
+      'home-action',
+      'property-record',
+      'material-specification',
+      'home-event',
+      'property-brief',
     ],
     livingHomeRecordWrites: [
-      'seller-prep-plan',
-      'seller-prep-preferences',
-      'seller-prep-checklist-progress',
-      'agent-comparison',
+      'sale-case',
+      'sale-milestone',
+      'sale-work-reference',
+      'sale-handoff-package',
+      'ownership-transition-decision',
     ],
     expectedOutput:
-      'A property-specific seller preparation plan with priorities, budget guidance, readiness progress, and market context.',
-    completionSignal: 'seller_prep_plan_created_or_advanced',
-    outputEntityTypes: ['PROJECT'] as const,
+      'A property Sale Case advanced through a verified readiness or handoff milestone without inferred spend, ROI, or value uplift.',
+    completionSignal: 'sale_case_verified_milestone_completed',
+    outputEntityTypes: ['SALE_CASE'] as const,
   } : {}),
   ...(id === 'permits' ? {
     version: 2,
@@ -282,6 +286,8 @@ export const PLAN_BUDGET_CAPABILITIES = buildCapabilityDefinitions(([
       ? 'DECISION_RECORDED' as const
       : id === 'inspection-hub'
         ? 'ARTIFACT_CREATED' as const
+        : id === 'seller-prep'
+          ? 'OUTCOME_VERIFIED' as const
         : id === 'project-tracker'
           // Home Operations Slice 10 (§11): verified project completion, not
           // "created with a milestone or progress" — the real machinery this

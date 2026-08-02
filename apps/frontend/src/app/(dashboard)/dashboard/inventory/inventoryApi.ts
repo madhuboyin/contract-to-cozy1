@@ -207,8 +207,8 @@ export async function listUserDocuments() {
  * Uploads a document and analyzes it using your existing api client helper.
  * NOTE: this depends on your api client implementing analyzeDocument().
  */
-export async function uploadAndAnalyzeDocument(args: { file: File; propertyId: string; autoCreateWarranty?: boolean }) {
-  const res = await api.analyzeDocument(args.file, args.propertyId, args.autoCreateWarranty);
+export async function uploadAndAnalyzeDocument(args: { file: File; propertyId: string }) {
+  const res = await api.analyzeDocument(args.file, args.propertyId);
   if (!res.success) {
     throw new Error(res.message || 'Failed to analyze document');
   }

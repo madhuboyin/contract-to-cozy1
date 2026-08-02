@@ -315,13 +315,13 @@ function WillEmptyState({
         </Button>
         <MobilePageIntro
           eyebrow="Home tool"
-          title="Home Digital Will"
-          subtitle="Capture the knowledge your home needs — emergency contacts, utility info, contractor preferences, and critical instructions."
+          title="Home Continuity Plan"
+          subtitle="Prepare selected home information for a trusted recipient. Access invitations are not sent yet."
          className="lg:hidden"/>
         <HomeToolHeader toolId="home-digital-will" propertyId={propertyId} />
         <EmptyStateCard
           title="Get started"
-          description="Create your Home Digital Will to store everything someone would need to manage this property — in an emergency or any time you're unavailable."
+          description="Create a draft continuity plan for selected home information. Trusted contacts cannot access it until invitation and acceptance are implemented."
           action={
             <Button onClick={onInit} disabled={isLoading} className="mt-2 gap-2">
               {isLoading ? (
@@ -329,7 +329,7 @@ function WillEmptyState({
               ) : (
                 <BookOpen className="h-4 w-4" />
               )}
-              {isLoading ? 'Setting up…' : 'Create Home Digital Will'}
+              {isLoading ? 'Setting up…' : 'Create Home Continuity Plan'}
             </Button>
           }
         />
@@ -656,13 +656,13 @@ function WillHeader({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mb-1 text-gray-500')}>
-            Home Digital Will
+            Home Continuity Plan
           </p>
           <h1 className={cn(MOBILE_TYPE_TOKENS.sectionTitle, 'text-gray-900')}>
             {will.title}
           </h1>
           <p className={cn(MOBILE_TYPE_TOKENS.body, 'mt-1 text-gray-500')}>
-            Store the critical knowledge your home needs to function.
+            Prepare selected home knowledge for continuity and handoff.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <StatusChip tone={readinessTone}>{readinessLabel}</StatusChip>
@@ -1965,7 +1965,7 @@ function WillMetadataSheet({
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle>Edit Will Details</SheetTitle>
           <SheetDescription className="sr-only">
-            Update the title, status, readiness, and last reviewed date for this Home Digital Will.
+            Update the title, status, readiness, and last reviewed date for this Home Continuity Plan.
           </SheetDescription>
         </SheetHeader>
 
@@ -1977,7 +1977,7 @@ function WillMetadataSheet({
                 id="will-title"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Home Digital Will"
+                placeholder="Home Continuity Plan"
               />
             </div>
 
@@ -2402,7 +2402,7 @@ export default function HomeDigitalWillClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       toast({
-        title: 'Home Digital Will created',
+        title: 'Home Continuity Plan created',
         description: 'Your will has been set up with default sections.',
       });
     },
@@ -2597,7 +2597,7 @@ export default function HomeDigitalWillClient() {
     return (
       <MobilePageContainer className="space-y-4 py-4 lg:max-w-7xl lg:px-8">
         <EmptyStateCard
-          title="Couldn't load your Home Digital Will"
+          title="Couldn't load your Home Continuity Plan"
           description="There was a problem fetching your data. Please try again."
           action={
             <Button

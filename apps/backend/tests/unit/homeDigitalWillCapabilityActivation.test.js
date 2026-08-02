@@ -14,7 +14,7 @@ const {
   buildToolLifecycleAnalyticsEvents,
 } = require('../../src/services/analytics/toolLifecycle.ts');
 const {
-  homeDigitalWillCompletionEvent,
+  homeContinuityAccessTestCompletionEvent,
 } = require('../../src/services/analytics/homeDigitalWillLifecycle.ts');
 const {
   buildTrustedContactScopedWill,
@@ -92,10 +92,11 @@ function willFixture(options = {}) {
   };
 }
 
-test('CAP-802 Home Digital Will owns reviewed artifact and access contracts', () => {
+test('CAP-802 Home Continuity Plan owns reviewed package and access contracts', () => {
   const capability = canonicalCapabilityRegistry.getById('home-digital-will');
   assert.ok(capability);
-  assert.equal(capability.version, 2);
+  assert.equal(capability.version, 3);
+  assert.equal(capability.presentation.label, 'Home Continuity Plan');
   assert.ok(
     capability.presentation.intentAliases.includes(
       'critical home documents handoff',
@@ -104,15 +105,17 @@ test('CAP-802 Home Digital Will owns reviewed artifact and access contracts', ()
   assert.equal(capability.lifecycle.completionKind, 'ARTIFACT_CREATED');
   assert.equal(
     capability.lifecycle.completionSignal,
-    'home_digital_will_published',
+    'home_continuity_access_tested',
   );
   assert.deepEqual(capability.productFramework.livingHomeRecordWrites, [
-    'governed-home-handoff',
-    'trusted-contact-access-policy',
+    'home-continuity-package',
+    'handoff-recipient',
+    'handoff-access-grant',
+    'handoff-access-log',
   ]);
 });
 
-test('CAP-802 catalog search retrieves the will from homeowner phrasing', () => {
+test('CAP-802 continuity plan stays contextual instead of entering general catalog search', () => {
   const availability = createCapabilityAvailabilityAdapter({
     registry: canonicalCapabilityRegistry,
     failureMode: 'LAUNCH_FAIL_CLOSED',
@@ -139,7 +142,7 @@ test('CAP-802 catalog search retrieves the will from homeowner phrasing', () => 
   );
   assert.deepEqual(
     matches.map((capability) => capability.id),
-    ['home-digital-will'],
+    [],
   );
 });
 
@@ -203,19 +206,20 @@ test('CAP-802 generic updates cannot bypass governed publishing', async () => {
   );
 });
 
-test('CAP-802 governed publication emits canonical artifact completion', () => {
+test('CAP-802 tested recipient access emits canonical continuity completion', () => {
   const [event] = buildToolLifecycleAnalyticsEvents({
     userId: '11111111-1111-4111-8111-111111111111',
     propertyId: '22222222-2222-4222-8222-222222222222',
-    events: [homeDigitalWillCompletionEvent({
-      willId: 'will-1',
-      trustedContactCount: 1,
-      entryCount: 4,
+    events: [homeContinuityAccessTestCompletionEvent({
+      handoffPackageId: 'handoff-1',
+      grantId: 'grant-1',
+      recipientId: 'recipient-1',
+      accessTestId: 'access-test-1',
     })],
   });
   assert.equal(event.eventName, 'TOOL_COMPLETED');
   assert.equal(event.featureKey, 'home-digital-will');
   assert.equal(event.metadataJson.completionKind, 'ARTIFACT_CREATED');
-  assert.equal(event.metadataJson.artifactType, 'governed-home-handoff');
-  assert.equal(event.metadataJson.outputKey, 'will-1');
+  assert.equal(event.metadataJson.artifactType, 'home-continuity-package');
+  assert.equal(event.metadataJson.outputKey, 'access-test-1');
 });

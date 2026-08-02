@@ -5,8 +5,6 @@ import { HomeDigitalWillSectionType } from '@prisma/client';
 import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getPlanningContextEnvelope } from '../services/planningContext/context';
-import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
-import { homeDigitalWillCompletionEvent } from '../services/analytics/homeDigitalWillLifecycle';
 
 const svc = new HomeDigitalWillService();
 
@@ -97,15 +95,6 @@ export async function publishDigitalWill(req: CustomRequest, res: Response, next
     const { id } = req.params;
     const userId = req.user!.userId;
     const data = await svc.publishWill(id, userId);
-    void recordToolLifecycleEvents({
-      userId,
-      propertyId: data.propertyId,
-      events: [homeDigitalWillCompletionEvent({
-        willId: data.id,
-        trustedContactCount: data.counts.trustedContactCount,
-        entryCount: data.counts.entryCount,
-      })],
-    }).catch(() => undefined);
     res.json({ success: true, data });
   } catch (err) {
     next(err);

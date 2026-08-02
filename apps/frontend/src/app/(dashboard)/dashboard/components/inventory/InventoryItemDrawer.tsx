@@ -241,7 +241,6 @@ export default function InventoryItemDrawer(props: {
   const [linkedDocs, setLinkedDocs] = useState<any[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [documentUploading, setDocumentUploading] = useState(false);
-  const autoCreateWarranty = true;
   const [mounted, setMounted] = useState(false);
 
   // coverage links
@@ -551,7 +550,6 @@ useEffect(() => {
       const result = await uploadAndAnalyzeDocument({
         file,
         propertyId: props.propertyId,
-        autoCreateWarranty,
       });
 
       const newDocId = result.document?.id;

@@ -2,9 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../lib/prisma';
-import { Prisma, WarrantyCategory } from '@prisma/client';
 import { logger } from '../lib/logger';
-import { analyticsEmitter } from './analytics';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
 import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
@@ -165,7 +163,10 @@ export class DocumentIntelligenceService {
       if (!text) {
         throw new APIError('AI service returned an empty response', 502, 'AI_EMPTY_RESPONSE');
       }
-      logger.info({ text }, '[DOC-INTELLIGENCE] Raw AI response');
+      logger.info(
+        { responseLength: text.length },
+        '[DOC-INTELLIGENCE] AI response received'
+      );
 
       // Clean response (remove markdown code blocks if present)
       const cleanedText = text
@@ -221,117 +222,6 @@ export class DocumentIntelligenceService {
     }
   }
 
-  async autoCreateWarranty(
-    homeownerProfileId: string,
-    propertyId: string,
-    insights: DocumentInsights,
-    documentId: string
-  ): Promise<any | null> {
-    try {
-      const { extractedData } = insights;
-
-      if ((insights.confidence ?? 0) < DocumentIntelligenceService.AUTO_WARRANTY_MIN_CONFIDENCE) {
-        logger.info(
-          `[DOC-INTELLIGENCE] Confidence ${(insights.confidence ?? 0).toFixed(2)} below threshold ` +
-            `${DocumentIntelligenceService.AUTO_WARRANTY_MIN_CONFIDENCE.toFixed(2)}, skipping auto-create`
-        );
-        return null;
-      }
-
-      // Only create if we have minimum required data
-      if (!extractedData.warrantyExpiration) {
-        logger.info('[DOC-INTELLIGENCE] No warranty expiration found, skipping auto-create');
-        return null;
-      }
-
-      // Check if warranty already exists
-      const existingWarranty = await prisma.warranty.findFirst({
-        where: {
-          homeownerProfileId,
-          propertyId,
-          OR: [
-            { policyNumber: extractedData.modelNumber || undefined },
-            { 
-              AND: [
-                { providerName: extractedData.vendor || extractedData.manufacturer },
-                { coverageDetails: { contains: extractedData.productName || '' } }
-              ]
-            }
-          ]
-        }
-      });
-
-      if (existingWarranty) {
-        logger.info('[DOC-INTELLIGENCE] Warranty already exists, skipping creation');
-        return null;
-      }
-
-      // Determine warranty category
-      const category = this.mapCategoryToWarrantyCategory(extractedData.category);
-
-      // Create warranty
-      const warranty = await prisma.warranty.create({
-        data: {
-          homeownerProfileId,
-          propertyId,
-          category,
-          providerName: extractedData.vendor || extractedData.manufacturer || 'Unknown',
-          policyNumber: extractedData.modelNumber || `AUTO-${Date.now()}`,
-          coverageDetails: `Auto-detected: ${extractedData.productName || 'Product'}${extractedData.modelNumber ? ` (Model: ${extractedData.modelNumber})` : ''}. Auto-created from document ${documentId}. AI Confidence: ${(insights.confidence * 100).toFixed(0)}%`,
-          startDate: extractedData.purchaseDate || new Date(),
-          expiryDate: extractedData.warrantyExpiration,
-          cost: extractedData.amount ? new Prisma.Decimal(extractedData.amount) : null,
-        }
-      });
-
-      logger.info({ warrantyId: warranty.id }, '[DOC-INTELLIGENCE] Auto-created warranty');
-
-      // Track outcome generated for the user
-      analyticsEmitter.outcomeGenerated({
-        propertyId,
-        outcomeType: 'RISK_PREVENTION',
-        sourceEngine: 'WARRANTY_AUTO_DETECTION',
-        metadataJson: {
-          warrantyId: warranty.id,
-          category: warranty.category,
-          docId: documentId
-        }
-      });
-
-      return warranty;
-    } catch (error: any) {
-      logger.error({ err: error }, '[DOC-INTELLIGENCE] Warranty creation error');
-      return null;
-    }
-  }
-
-  private mapCategoryToWarrantyCategory(category?: string): WarrantyCategory {
-    if (!category) return WarrantyCategory.OTHER;
-    
-    const upperCategory = category.toUpperCase();
-    
-    if (upperCategory.includes('HVAC') || upperCategory.includes('AC') || upperCategory.includes('HEAT')) {
-      return WarrantyCategory.HVAC;
-    }
-    if (upperCategory.includes('ROOF')) {
-      return WarrantyCategory.ROOFING;
-    }
-    if (upperCategory.includes('PLUMB')) {
-      return WarrantyCategory.PLUMBING;
-    }
-    if (upperCategory.includes('ELECTRIC')) {
-      return WarrantyCategory.ELECTRICAL;
-    }
-    if (upperCategory.includes('APPLIANCE') || upperCategory.includes('FRIDGE') || 
-        upperCategory.includes('WASHER') || upperCategory.includes('DRYER')) {
-      return WarrantyCategory.APPLIANCE;
-    }
-    if (upperCategory.includes('STRUCTURE') || upperCategory.includes('FOUNDATION')) {
-      return WarrantyCategory.STRUCTURAL;
-    }
-    
-    return WarrantyCategory.OTHER;
-  }
   async autoCreateInsurancePolicy(
     homeownerProfileId: string,
     propertyId: string,
@@ -382,20 +272,6 @@ export class DocumentIntelligenceService {
     }
   }
 
-  async autoCreate(
-    homeownerProfileId: string,
-    propertyId: string,
-    insights: DocumentInsights,
-    documentId: string
-  ): Promise<any | null> {
-    if (insights.documentType === 'WARRANTY') {
-      return this.autoCreateWarranty(homeownerProfileId, propertyId, insights, documentId);
-    }
-    if (insights.documentType === 'INSURANCE') {
-      return this.autoCreateInsurancePolicy(homeownerProfileId, propertyId, insights, documentId);
-    }
-    return null;
-  }
 }
 
 export const documentIntelligenceService = new DocumentIntelligenceService();

@@ -462,7 +462,7 @@ export default function QuoteComparisonWorkspaceClient() {
     setUploadingQuote(true);
     setManualInputError(null);
     try {
-      const analyzed = await api.analyzeDocument(file, propertyId, false);
+      const analyzed = await api.analyzeDocument(file, propertyId);
       if (!('data' in analyzed)) {
         throw new Error(analyzed.error?.message || analyzed.message || 'Document analysis failed.');
       }

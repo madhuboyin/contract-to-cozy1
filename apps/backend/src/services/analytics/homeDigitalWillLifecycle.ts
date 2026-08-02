@@ -1,26 +1,30 @@
 import type { ToolLifecycleEventInput } from './toolLifecycle';
 
-export function homeDigitalWillCompletionEvent(input: {
-  willId: string;
-  trustedContactCount: number;
-  entryCount: number;
+export function homeContinuityAccessTestCompletionEvent(input: {
+  handoffPackageId: string;
+  grantId: string;
+  recipientId: string;
+  accessTestId: string;
 }): ToolLifecycleEventInput {
   return {
     toolId: 'home-digital-will',
     stage: 'COMPLETED',
     surface: 'workflow',
     sourceKind: 'COMPLETION',
-    sourceEntityType: 'DOCUMENT',
-    sourceEntityId: input.willId,
+    sourceEntityType: 'HANDOFF_PACKAGE',
+    sourceEntityId: input.handoffPackageId,
     completionKind: 'ARTIFACT_CREATED',
-    outputKey: input.willId,
+    outputKey: input.accessTestId,
     metadata: {
-      artifactType: 'governed-home-handoff',
-      trustedContactCount: input.trustedContactCount,
-      entryCount: input.entryCount,
+      artifactType: 'home-continuity-package',
+      grantId: input.grantId,
+      recipientId: input.recipientId,
+      accessTestId: input.accessTestId,
       livingHomeRecordWrites: [
-        'governed-home-handoff',
-        'trusted-contact-access-policy',
+        'home-continuity-package',
+        'handoff-recipient',
+        'handoff-access-grant',
+        'handoff-access-log',
       ],
     },
   };

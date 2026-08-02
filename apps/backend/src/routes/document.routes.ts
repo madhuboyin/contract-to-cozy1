@@ -18,6 +18,7 @@ import { presignGetObject } from '../services/storage/presign';
 import { uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 
 const router = Router();
 
@@ -81,8 +82,6 @@ const upload = multer({
  *               propertyId:
  *                 type: string
  *                 description: Optional ID of the property the document belongs to.
- *               autoCreateWarranty:
- *                 type: boolean
  *     responses:
  *       200:
  *         description: Document analysis complete
@@ -103,23 +102,22 @@ router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), 
     }
 
     const file = req.file;
-    const { propertyId, autoCreateWarranty } = req.body;
+    const { propertyId } = req.body;
 
     if (propertyId) {
-      // Basic check: Ensure the propertyId belongs to the authenticated user
-      const isPropertyOwned = await prisma.property.findFirst({
-        where: {
-          id: propertyId,
-          homeownerProfile: {
-            userId: userId,
-          },
-        },
-      });
+      const access = await resolvePropertyAccess(userId, propertyId);
 
-      if (!isPropertyOwned) {
+      if (!access) {
         return res.status(404).json({
           success: false,
           message: 'Property not found or access denied.'
+        });
+      }
+
+      if (ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
+        return res.status(403).json({
+          success: false,
+          message: 'Contributor access is required to upload property records.'
         });
       }
     }
@@ -198,17 +196,6 @@ router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), 
       }
     }
 
-    // Optionally auto-create warranty if requested
-    let warranty = null;
-    if (autoCreateWarranty === 'true' && propertyId && insights.documentType === 'WARRANTY') {
-      warranty = await documentIntelligenceService.autoCreateWarranty(
-        homeownerProfile.id,
-        propertyId,
-        insights,
-        document.id
-      );
-    }
-
     const bucket = process.env.S3_BUCKET;
     const fileSignedUrl = bucket
       ? await presignGetObject({
@@ -225,7 +212,7 @@ router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), 
       propertyId: document.propertyId ?? undefined,
       moduleKey: AnalyticsModule.DOCUMENTS,
       featureKey: AnalyticsFeature.DOCUMENT_UPLOAD,
-      metadataJson: { documentType: String(document.type), autoCreatedWarranty: Boolean(warranty) },
+      metadataJson: { documentType: String(document.type), reviewRequired: true },
     });
 
     res.json({
@@ -233,7 +220,8 @@ router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), 
       data: {
         document: { ...document, fileUrl: undefined, fileSignedUrl },
         insights,
-        warranty
+        warranty: null,
+        reviewRequired: true,
       }
     });
 
@@ -289,10 +277,21 @@ router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
       });
     }
 
+    const propertyId = typeof req.query.propertyId === 'string' && req.query.propertyId.trim()
+      ? req.query.propertyId.trim()
+      : undefined;
+
+    if (propertyId && !(await resolvePropertyAccess(userId, propertyId))) {
+      return res.status(404).json({
+        success: false,
+        message: 'Property not found or access denied.'
+      });
+    }
+
     const documents = await prisma.document.findMany({
-      where: {
-        uploadedBy: homeownerProfile.id
-      },
+      where: propertyId
+        ? { propertyId }
+        : { uploadedBy: homeownerProfile.id },
       orderBy: { createdAt: 'desc' }
     });
 

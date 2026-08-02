@@ -15,15 +15,15 @@
   ],
   "summary": {
     "aiCatalogEntries": 30,
-    "homeCatalogEntries": 33,
+    "homeCatalogEntries": 35,
     "overlappingEntries": 20,
-    "distinctCapabilities": 43,
-    "routeVerified": 43,
-    "canonicalRelationshipCoverage": 28,
+    "distinctCapabilities": 45,
+    "routeVerified": 45,
+    "canonicalRelationshipCoverage": 29,
     "contextualCapabilities": 23,
     "workflowOnly": 1,
-    "lifecycleCanonicalized": 43,
-    "catalogOnlyCapabilities": 19
+    "lifecycleCanonicalized": 45,
+    "catalogOnlyCapabilities": 21
   },
   "capabilities": [
     {
@@ -156,20 +156,20 @@
     },
     {
       "id": "documents",
-      "label": "Document Vault",
+      "label": "Home Records",
       "sources": [
         "ai"
       ],
-      "canonicalRoute": "/dashboard/documents",
+      "canonicalRoute": "/dashboard/properties/[id]/documents",
       "routeVerified": true,
       "workflowOnly": false,
-      "outcomeCategory": "PLAN_BUDGET",
+      "outcomeCategory": "UNDERSTAND_HOME",
       "rolloutKey": "DOCUMENT_VAULT",
       "releaseStage": "BETA",
       "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
+      "completionKind": "ARTIFACT_CREATED",
       "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": false,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -302,7 +302,7 @@
     },
     {
       "id": "home-digital-will",
-      "label": "Home Digital Will",
+      "label": "Home Continuity Plan",
       "sources": [
         "home",
         "ai"
@@ -356,6 +356,22 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
+    },
+    {
+      "id": "home-operations",
+      "label": "Home Operations",
+      "sources": ["home"],
+      "canonicalRoute": "/dashboard/properties/[id]/home-operations",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "MAINTAIN_PREVENT",
+      "rolloutKey": "HOME_OPERATIONS",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTCOME_VERIFIED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": false,
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "home-renovation-risk-advisor",
@@ -448,6 +464,22 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
+    },
+    {
+      "id": "maintenance",
+      "label": "Maintenance",
+      "sources": ["home"],
+      "canonicalRoute": "/dashboard/maintenance",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "MAINTAIN_PREVENT",
+      "rolloutKey": "MAINTENANCE",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "ACTION_COMPLETED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": false,
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "mortgage-refinance-radar",
@@ -749,7 +781,7 @@
     },
     {
       "id": "seller-prep",
-      "label": "Seller Prep",
+      "label": "Sale Readiness & Handoff",
       "sources": [
         "home"
       ],
@@ -759,8 +791,8 @@
       "outcomeCategory": "PLAN_BUDGET",
       "rolloutKey": "SELLER_PREP",
       "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "PLAN_CREATED",
+      "safetyTier": "MATERIAL_FINANCIAL",
+      "completionKind": "OUTCOME_VERIFIED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"

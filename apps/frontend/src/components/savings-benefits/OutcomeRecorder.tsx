@@ -243,7 +243,7 @@ export function OutcomeRecorder({
     setUploading(true);
     setUploadError(null);
     try {
-      const result = await api.analyzeDocument(file, propertyId, false);
+      const result = await api.analyzeDocument(file, propertyId);
       if (!result.success || !result.data?.document) {
         throw new Error(result.message || 'Failed to upload document');
       }

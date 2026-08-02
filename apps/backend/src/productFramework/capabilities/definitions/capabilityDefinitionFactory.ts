@@ -196,17 +196,18 @@ const OUTPUT_ENTITY_TYPES: Record<
   string,
   ToolCapabilityDefinition['lifecycle']['outputEntityTypes']
 > = {
+  documents: ['PROPERTY_RECORD'],
   diy: ['PROJECT'],
   'hoa-compliance': ['DOCUMENT'],
-  'home-digital-will': ['DOCUMENT'],
+  'home-digital-will': ['HANDOFF_PACKAGE'],
   'home-renovation-risk-advisor': ['PROJECT'],
   'inspection-hub': ['ISSUE'],
-  'material-specs': ['DOCUMENT'],
+  'material-specs': ['STRUCTURED_RECORD'],
   permits: ['DOCUMENT'],
   'project-tracker': ['PROJECT'],
   'quote-comparison': ['SERVICE'],
   'coverage-intelligence': ['COVERAGE_DECISION'],
-  'seller-prep': ['PROJECT'],
+  'seller-prep': ['SALE_CASE'],
 };
 
 const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
@@ -272,7 +273,8 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
   'home-digital-will': {
     sourceKinds: ['PERSONALIZATION'],
     triggerFamily: 'TRUSTED_TRANSFER_PREPARATION',
-    reason: 'Critical documents and trusted contacts should be prepared for transfer or emergency access.',
+    reason: 'A continuity need makes it timely to prepare selected records and test recipient access.',
+    requiresExplicitTrigger: true,
     acceptedContext: ['PROPERTY', 'DOCUMENT', 'JOURNEY'],
   },
   'home-event-radar': {
@@ -408,7 +410,7 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
   'seller-prep': {
     sourceKinds: ['PERSONALIZATION', 'PROJECT'],
     triggerFamily: 'SELLER_JOURNEY_ACTIVE',
-    reason: 'Sale intent or a moving timeline makes seller preparation relevant.',
+    reason: 'Confirmed sale intent makes a governed readiness and handoff case relevant.',
     requiresExplicitTrigger: true,
     recommendationDefinitionCodes: ['SELLER_SALE_INTENT_ACTIVE'],
     sourceCtaExclusionCapabilityIds: ['sell-hold-rent'],
@@ -441,18 +443,19 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
 const RELATED_CAPABILITIES: Record<string, string[]> = {
   'break-even': ['sell-hold-rent', 'ownership-costs', 'capital-timeline'],
   'capital-timeline': ['reserve-fund', 'home-timeline', 'seller-prep'],
+  documents: ['property-brief', 'home-timeline', 'material-specs'],
   'ownership-costs': ['property-tax', 'coverage-intelligence', 'budget'],
   financing: ['capital-timeline', 'mortgage-refinance-radar', 'break-even'],
   'guidance-overview': ['status-board', 'home-event-radar', 'home-risk-replay'],
   'home-digital-twin': ['capital-timeline', 'status-board', 'home-risk-replay'],
-  'home-digital-will': ['home-event-radar', 'home-risk-replay', 'status-board'],
+  'home-digital-will': ['property-brief', 'documents', 'home-timeline'],
   'home-event-radar': ['home-risk-replay', 'home-timeline', 'status-board'],
   'home-briefing': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-habit-coach': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-renovation-risk-advisor': ['project-tracker', 'permits', 'hoa-compliance'],
   'home-risk-replay': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-timeline': ['property-brief', 'home-risk-replay', 'seller-prep'],
-  'material-specs': ['project-tracker', 'inspection-hub', 'home-digital-twin'],
+  'material-specs': ['documents', 'project-tracker', 'property-brief'],
   'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'ownership-costs'],
   'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
   'negotiation-shield': ['service-price-radar', 'quote-comparison', 'ownership-costs'],
@@ -463,7 +466,7 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'reserve-fund': ['capital-timeline', 'ownership-costs', 'break-even'],
   'savings-benefits': ['property-tax', 'coverage-intelligence', 'mortgage-refinance-radar'],
   'sell-hold-rent': ['break-even', 'ownership-costs', 'capital-timeline'],
-  'seller-prep': ['sell-hold-rent', 'home-timeline', 'capital-timeline'],
+  'seller-prep': ['property-brief', 'home-timeline', 'documents'],
   'service-price-radar': ['negotiation-shield', 'quote-comparison', 'ownership-costs'],
   'status-board': ['home-event-radar', 'home-risk-replay', 'home-timeline'],
   'property-brief': ['home-timeline', 'documents', 'status-board'],

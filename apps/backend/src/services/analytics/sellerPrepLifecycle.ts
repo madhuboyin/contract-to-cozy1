@@ -1,15 +1,15 @@
 import type { ToolLifecycleEventInput } from './toolLifecycle';
 
-export function sellerPrepPlanCompletionEvent(input: {
-  planId: string;
-  operation: 'preferences_saved' | 'checklist_item_completed';
+export function saleCaseMilestoneCompletionEvent(input: {
+  saleCaseId: string;
+  milestoneId: string;
+  operation: 'readiness_verified' | 'handoff_published' | 'transition_recorded';
   sourceActionId?: string | null;
   sourceJourneyId?: string | null;
   sourceProjectId?: string | null;
-  itemId?: string | null;
 }): ToolLifecycleEventInput {
   const sourceEntityType = input.sourceProjectId ? 'PROJECT' : 'PROPERTY';
-  const sourceEntityId = input.sourceProjectId ?? input.planId;
+  const sourceEntityId = input.sourceProjectId ?? input.saleCaseId;
   return {
     toolId: 'seller-prep',
     stage: 'COMPLETED',
@@ -25,19 +25,17 @@ export function sellerPrepPlanCompletionEvent(input: {
     sourceEntityType,
     sourceEntityId,
     journeyId: input.sourceJourneyId ?? null,
-    completionKind: 'PLAN_CREATED',
-    outputKey: input.planId,
+    completionKind: 'OUTCOME_VERIFIED',
+    outputKey: input.milestoneId,
     metadata: {
       operation: input.operation,
-      itemId: input.itemId ?? null,
+      saleCaseId: input.saleCaseId,
+      milestoneId: input.milestoneId,
       sourceProjectId: input.sourceProjectId ?? null,
       livingHomeRecordWrites: [
-        'seller-prep-plan',
-        input.operation === 'preferences_saved'
-          ? 'seller-prep-preferences'
-          : 'seller-prep-checklist-progress',
+        'sale-case',
+        'sale-milestone',
       ],
     },
   };
 }
-

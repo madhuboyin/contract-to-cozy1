@@ -26,13 +26,11 @@ interface DocumentInsights {
 interface SmartDocumentUploadProps {
   propertyId: string;
   onUploadComplete?: (documentId: string) => void;
-  autoCreateWarranty?: boolean;
 }
 
 export default function SmartDocumentUpload({ 
   propertyId, 
   onUploadComplete,
-  autoCreateWarranty = true 
 }: SmartDocumentUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -92,13 +90,8 @@ export default function SmartDocumentUpload({
     setAnalyzing(true);
     setError('');
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('propertyId', propertyId);
-    formData.append('autoCreateWarranty', autoCreateWarranty.toString());
-
     try {
-      const data = await api.analyzeDocument(file, propertyId, autoCreateWarranty);
+      const data = await api.analyzeDocument(file, propertyId);
 
       if (data.success) {
         setInsights(data.data.insights);

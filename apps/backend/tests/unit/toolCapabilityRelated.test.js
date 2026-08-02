@@ -161,7 +161,7 @@ test('canonical manifests declare only verified output-to-input entity types', (
   );
   assert.deepEqual(
     canonicalCapabilityRegistry.getById('material-specs').lifecycle.outputEntityTypes,
-    ['DOCUMENT'],
+    ['STRUCTURED_RECORD'],
   );
 });
 

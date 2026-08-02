@@ -108,6 +108,7 @@ const HOME_OUTCOME_BY_GROUP: Record<MobileHomeToolGroupKey, ToolOutcomeCategory>
 };
 
 const HOME_OUTCOME_BY_TOOL: Partial<Record<string, ToolOutcomeCategory>> = {
+  documents: 'UNDERSTAND_HOME',
   'home-digital-twin': 'DECIDE_COMPARE',
   'home-timeline': 'UNDERSTAND_HOME',
   'home-briefing': 'PROTECT_MONITOR',
@@ -180,7 +181,7 @@ const MATERIAL_TOOL_IDS = new Set([
   'property-tax', 'ownership-costs',
   'capital-timeline', 'reserve-fund', 'financing', 'mortgage-refinance-radar',
   'savings-benefits', 'home-renovation-risk-advisor', 'service-price-radar',
-  'property-brief',
+  'property-brief', 'seller-prep',
   // Mixed-consequence: the same route surfaces low-consequence record
   // projection and MATERIAL_FINANCIAL scenario computation (replacement
   // cost, savings, risk claims). See
@@ -218,6 +219,7 @@ const COMPLETION_KIND_BY_CATEGORY: Record<ToolOutcomeCategory, ToolCompletionKin
 };
 
 const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
+  documents: 'ARTIFACT_CREATED',
   'home-digital-will': 'ARTIFACT_CREATED',
   'home-digital-twin': 'DECISION_RECORDED',
   'material-specs': 'ARTIFACT_CREATED',
@@ -239,6 +241,7 @@ const COMPLETION_KIND_OVERRIDES: Record<string, ToolCompletionKind> = {
   'home-timeline': 'ARTIFACT_CREATED',
   'neighborhood-change-radar': 'DECISION_RECORDED',
   'property-brief': 'ARTIFACT_CREATED',
+  'seller-prep': 'OUTCOME_VERIFIED',
 };
 
 function appendLaunchContext(href: string, context?: ToolLaunchContext): string {

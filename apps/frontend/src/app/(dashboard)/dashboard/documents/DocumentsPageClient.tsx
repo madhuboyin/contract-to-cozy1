@@ -119,7 +119,7 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
     setError('');
 
     try {
-      const response = await api.analyzeDocument(file, selectedPropertyId, true);
+      const response = await api.analyzeDocument(file, selectedPropertyId);
 
       if (response.success && response.data) {
         setUploadedDocumentId(String(response.data.document?.id ?? '') || null);
@@ -680,8 +680,8 @@ export default function DocumentsPage() {
         </Button>
       )}
       <MobilePageIntro
-        title="Document Vault"
-        subtitle="Centralized repository with AI-powered analysis"
+        title="Home Records"
+        subtitle="Property files organized as reviewable evidence"
         action={
           <Button onClick={() => setIsUploadModalOpen(true)} className="w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" /> Upload New Document
@@ -691,7 +691,7 @@ export default function DocumentsPage() {
 
       <div className="space-y-3 md:hidden">
         <ReadOnlySummaryBlock
-          title="Vault Snapshot"
+          title="Records Snapshot"
           columns={2}
           items={[
             { label: 'Documents', value: filteredDocuments.length, emphasize: true },

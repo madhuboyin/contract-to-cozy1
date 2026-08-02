@@ -14,15 +14,15 @@
 | Measure | Count |
 | --- | ---: |
 | AI catalog entries | 30 |
-| Home catalog entries | 33 |
+| Home catalog entries | 35 |
 | Overlapping entries | 20 |
-| Distinct capabilities | 43 |
-| Canonical routes verified | 43 |
-| Canonical explicit-relationship coverage | 28 |
+| Distinct capabilities | 45 |
+| Canonical routes verified | 45 |
+| Canonical explicit-relationship coverage | 29 |
 | Canonical contextual capabilities | 23 |
 | Workflow-only | 1 |
-| Backend lifecycle canonicalized | 43 |
-| Canonical catalog-only capabilities | 19 |
+| Backend lifecycle canonicalized | 45 |
+| Canonical catalog-only capabilities | 21 |
 
 ## Capability Matrix
 
@@ -35,7 +35,7 @@
 | coverage-intelligence | Coverage & Premium Review | ai | `/dashboard/properties/[id]/tools/coverage-intelligence` | Verified | DECIDE_COMPARE | BETA | REGULATED_COVERAGE | DECISION_RECORDED | Canonical; real-user launch gate remains fail-closed pending technical evidence, rollback drill, and human approvals | No | CATALOG_ONLY |
 | diy | DIY Project Center | home | `/dashboard/properties/[id]/tools/diy` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | No | CONTEXTUAL_CANONICAL |
 | do-nothing-simulator | Do-Nothing Simulator | ai | `/dashboard/do-nothing-simulator` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | No | CATALOG_ONLY |
-| documents | Document Vault | ai | `/dashboard/documents` | Verified | PLAN_BUDGET | BETA | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
+| documents | Home Records | ai | `/dashboard/properties/[id]/documents` | Verified | UNDERSTAND_HOME | BETA | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CATALOG_ONLY |
 | emergency | Emergency Help | ai | `/dashboard/emergency` | Verified | PLAN_BUDGET | BETA | SAFETY_EMERGENCY | PLAN_CREATED | Canonical | No | CATALOG_ONLY |
 | energy | Energy Audit | ai | `/dashboard/energy` | Verified | PROTECT_MONITOR | BETA | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CATALOG_ONLY |
 | financing | Financing Center | home | `/dashboard/properties/[id]/tools/financing` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CATALOG_ONLY |
@@ -43,14 +43,16 @@
 | hoa-compliance | HOA Compliance | home | `/dashboard/properties/[id]/tools/hoa` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
 | home-briefing | Home Briefing | home, ai | `/dashboard/properties/[id]/tools/home-briefing` | Verified | PROTECT_MONITOR | BETA | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-digital-twin | Home Upgrade Planner | home | `/dashboard/properties/[id]/tools/home-digital-twin` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
-| home-digital-will | Home Digital Will | home, ai | `/dashboard/properties/[id]/tools/home-digital-will` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| home-digital-will | Home Continuity Plan | home, ai | `/dashboard/properties/[id]/tools/home-digital-will` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-event-radar | Home Event Radar | home, ai | `/dashboard/properties/[id]/tools/home-event-radar` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-habit-coach | Home Habit Coach | home, ai | `/dashboard/properties/[id]/tools/home-habit-coach` | Verified | MAINTAIN_PREVENT | ACTIVE | LOW_CONSEQUENCE | ACTION_INITIATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| home-operations | Home Operations | home | `/dashboard/properties/[id]/home-operations` | Verified | MAINTAIN_PREVENT | ACTIVE | LOW_CONSEQUENCE | OUTCOME_VERIFIED | Canonical | No | CATALOG_ONLY |
 | home-renovation-risk-advisor | Renovations | home, ai | `/dashboard/properties/[id]/renovations` | Verified | PLAN_BUDGET | ACTIVE | MATERIAL_FINANCIAL | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-risk-replay | Past Hazard Exposure | home, ai | `/dashboard/properties/[id]/tools/home-risk-replay` | Verified | UNDERSTAND_HOME | BETA | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | home-timeline | Home Timeline | home | `/dashboard/properties/[id]/timeline` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CATALOG_ONLY |
 | inspection-hub | Inspection Hub | home | `/dashboard/properties/[id]/inspection-hub` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | No | CONTEXTUAL_CANONICAL |
 | material-specs | Material Specs | home | `/dashboard/properties/[id]/materials` | Verified | UNDERSTAND_HOME | ACTIVE | LOW_CONSEQUENCE | ARTIFACT_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| maintenance | Maintenance | home | `/dashboard/maintenance` | Verified | MAINTAIN_PREVENT | ACTIVE | LOW_CONSEQUENCE | ACTION_COMPLETED | Canonical | No | CATALOG_ONLY |
 | mortgage-refinance-radar | Mortgage Refinance Radar | home, ai | `/dashboard/properties/[id]/tools/mortgage-refinance-radar` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |
 | negotiation-shield | Negotiation Shield | home, ai | `/dashboard/properties/[id]/tools/negotiation-shield` | Verified | DECIDE_COMPARE | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CATALOG_ONLY |
 | neighborhood-change-radar | Around Your Home | home, ai | `/dashboard/properties/[id]/tools/neighborhood-change-radar` | Verified | PROTECT_MONITOR | BETA | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
@@ -67,7 +69,7 @@
 | reserve-fund | Reserve Fund Planner | home | `/dashboard/properties/[id]/tools/reserve-fund` | Verified | PLAN_BUDGET | ACTIVE | MATERIAL_FINANCIAL | PLAN_CREATED | Canonical | Yes | CATALOG_ONLY |
 | savings-benefits | Savings and Benefits | home, ai | `/dashboard/properties/[id]/tools/savings-benefits` | Verified | SAVE_OPTIMIZE | BETA | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | sell-hold-rent | Sell / Hold / Rent | home, ai | `/dashboard/properties/[id]/tools/sell-hold-rent` | Verified | SAVE_OPTIMIZE | ACTIVE | MATERIAL_FINANCIAL | OUTPUT_GENERATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
-| seller-prep | Seller Prep | home | `/dashboard/properties/[id]/seller-prep` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| seller-prep | Sale Readiness & Handoff | home | `/dashboard/properties/[id]/seller-prep` | Verified | PLAN_BUDGET | ACTIVE | MATERIAL_FINANCIAL | OUTCOME_VERIFIED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | service-price-radar | Service Price Radar | home, ai | `/dashboard/properties/[id]/tools/service-price-radar` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | status-board | Status Board | home | `/dashboard/properties/[id]/status-board` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | visual-inspector | Visual Inspector | ai | `/dashboard/visual-inspector` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CATALOG_ONLY |

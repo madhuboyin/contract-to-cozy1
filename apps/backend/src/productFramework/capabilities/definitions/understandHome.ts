@@ -2,10 +2,52 @@ import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 
 export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
   {
-    id: 'home-digital-will',
+    id: 'documents',
     version: 2,
-    label: 'Home Digital Will',
-    description: 'Prepare critical home knowledge for trusted parties.',
+    label: 'Home Records',
+    description: 'Keep property files organized as reviewable evidence for the home.',
+    routeTemplate: '/dashboard/properties/[id]/documents',
+    routeAliases: ['/dashboard/documents'],
+    outcomeCategory: 'UNDERSTAND_HOME',
+    rolloutKey: 'DOCUMENT_VAULT',
+    releaseStage: 'BETA',
+    safetyTier: 'LOW_CONSEQUENCE',
+    completionKind: 'ARTIFACT_CREATED',
+    mode: 'CATALOG_ONLY',
+    iconName: 'file-check',
+    intentAliases: [
+      'home records',
+      'document vault',
+      'find a home document',
+      'upload property records',
+      'home receipts warranties and manuals',
+      'property evidence',
+    ],
+    homeownerOutcome:
+      'Keep property files findable, reviewable, and reusable as evidence without treating extracted facts as verified records.',
+    livingHomeRecordReads: [
+      'property-context',
+      'property-record',
+      'record-version',
+      'record-link',
+      'extraction-candidate',
+    ],
+    livingHomeRecordWrites: [
+      'property-record',
+      'record-version',
+      'record-link',
+      'extraction-review',
+    ],
+    expectedOutput:
+      'A property-scoped record with review state, evidence links, access scope, and a durable current version.',
+    completionSignal: 'home_record_saved_or_reviewed',
+    outputEntityTypes: ['PROPERTY_RECORD'],
+  },
+  {
+    id: 'home-digital-will',
+    version: 3,
+    label: 'Home Continuity Plan',
+    description: 'Prepare selected home knowledge for a trusted recipient.',
     routeTemplate: '/dashboard/properties/[id]/tools/home-digital-will',
     outcomeCategory: 'UNDERSTAND_HOME',
     rolloutKey: 'HOME_DIGITAL_WILL',
@@ -16,6 +58,8 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
     iconName: 'file-check',
     intentAliases: [
       'home digital will',
+      'home continuity plan',
+      'home handoff',
       'prepare home information for an emergency',
       'trusted contact home access',
       'critical home documents handoff',
@@ -24,7 +68,7 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
       'home emergency instructions',
     ],
     homeownerOutcome:
-      'Publish a governed property handoff that gives trusted people only the home knowledge they are authorized to receive.',
+      'Prepare a governed home-information handoff and verify recipient access before relying on it for continuity.',
     livingHomeRecordReads: [
       'property-context',
       'critical-property-document',
@@ -32,13 +76,15 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
       'emergency-instruction',
     ],
     livingHomeRecordWrites: [
-      'governed-home-handoff',
-      'trusted-contact-access-policy',
+      'home-continuity-package',
+      'handoff-recipient',
+      'handoff-access-grant',
+      'handoff-access-log',
     ],
     expectedOutput:
-      'A validated, access-scoped Home Digital Will handoff artifact for trusted property continuity.',
-    completionSignal: 'home_digital_will_published',
-    outputEntityTypes: ['DOCUMENT'],
+      'A published, access-scoped Home Continuity Plan revision with an accepted recipient and tested access.',
+    completionSignal: 'home_continuity_access_tested',
+    outputEntityTypes: ['HANDOFF_PACKAGE'],
   },
   {
     id: 'home-risk-replay',
@@ -142,7 +188,7 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
   },
   {
     id: 'material-specs',
-    version: 2,
+    version: 3,
     label: 'Material Specs',
     description: 'Record finishes, products, colors, and supplier details.',
     routeTemplate: '/dashboard/properties/[id]/materials',
@@ -173,6 +219,6 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
     expectedOutput:
       'A durable material specification linked to its property, room, or project context.',
     completionSignal: 'material_specification_saved',
-    outputEntityTypes: ['DOCUMENT'],
+    outputEntityTypes: ['STRUCTURED_RECORD'],
   },
 ]);

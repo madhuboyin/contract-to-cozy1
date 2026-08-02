@@ -130,8 +130,8 @@ export default function SellerPrepPage() {
       <DashboardShell>
         <MobilePageContainer className="space-y-4 py-6 lg:max-w-3xl lg:px-8 lg:pb-10">
           <div>
-            <p className="text-xs text-muted-foreground">Seller Prep</p>
-            <h1 className="text-xl font-bold">Home Sale Preparation</h1>
+            <p className="text-xs text-muted-foreground">Sale Readiness &amp; Handoff</p>
+            <h1 className="text-xl font-bold">Prepare a governed sale case</h1>
             <p className="text-sm text-muted-foreground">Confirm the minimum property details used to build this plan.</p>
           </div>
           <PropertyContextCapturePanel
@@ -169,7 +169,7 @@ export default function SellerPrepPage() {
               <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
               <div>
                 <p className="font-medium text-red-600">
-                  Failed to load Seller Preparation insights
+                  Failed to load Sale Readiness
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
                   {error instanceof Error ? error.message : 'An unexpected error occurred'}
@@ -221,9 +221,9 @@ export default function SellerPrepPage() {
         </Link>
 
         <MobilePageIntro
-          eyebrow="Seller Prep"
-          title="Home Sale Preparation"
-          subtitle="Personalized action plan to maximize resale value."
+          eyebrow="Sale Readiness & Handoff"
+          title="Prepare the home and selected records for sale"
+          subtitle="Track verified readiness milestones without inferred ROI or value claims."
           action={
             <Button
               variant="outline"
