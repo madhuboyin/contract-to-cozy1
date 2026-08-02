@@ -51,6 +51,7 @@ export interface AroundYourHomeItem {
     termsVersion: string | null;
   };
   possibleRelevance: {
+    safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY';
     relevance: string;
     materiality: string;
     confidence: number;

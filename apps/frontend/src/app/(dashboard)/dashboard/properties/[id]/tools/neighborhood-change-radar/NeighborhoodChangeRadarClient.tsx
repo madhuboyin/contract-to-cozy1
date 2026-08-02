@@ -129,6 +129,13 @@ function ObservationCard({
         benefit="More property context can refine possible relevance. It does not create a value, demand, insurance, or household-impact prediction."
       />
 
+      {item.possibleRelevance.safetyTier === 'MATERIAL_FINANCIAL' && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm leading-6 text-amber-950">
+          <p className="font-semibold">Review before financial or insurance decisions</p>
+          <p>This source observation is context only. Confirm applicability with the relevant authority, insurer, appraiser, or qualified professional before acting.</p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
         <div className="text-xs text-slate-600">
           <p>{item.source.provider} · revision {item.observation.revision}</p>

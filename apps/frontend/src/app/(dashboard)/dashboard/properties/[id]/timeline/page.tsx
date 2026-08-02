@@ -36,8 +36,33 @@ import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
+import { api } from '@/lib/api/client';
+import { listClaims } from '../claims/claimsApi';
+import { listEligiblePropertyBriefDocuments } from '../property-brief/propertyBriefApi';
 
 type Mode = 'LIST' | 'VISUAL';
+
+type EvidenceChoice = { id: string; label: string; detail?: string; entityType?: string };
+
+function dateControlType(precision: HomeEventDatePrecision) {
+  if (precision === 'MONTH') return 'month';
+  if (precision === 'YEAR') return 'number';
+  return 'date';
+}
+
+function dateControlValue(iso: string, precision: HomeEventDatePrecision) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  if (precision === 'YEAR') return String(date.getUTCFullYear());
+  if (precision === 'MONTH') return date.toISOString().slice(0, 7);
+  return date.toISOString().slice(0, 10);
+}
+
+function dateControlToIso(value: string, precision: HomeEventDatePrecision) {
+  if (precision === 'YEAR') return new Date(`${value}-01-01T12:00:00.000Z`).toISOString();
+  if (precision === 'MONTH') return new Date(`${value}-01T12:00:00.000Z`).toISOString();
+  return new Date(`${value}T12:00:00.000Z`).toISOString();
+}
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(' ');
@@ -128,6 +153,8 @@ function toTimelineEvent(entry: TimelineProjectionEntry): HomeEvent {
       timelineProjectionKind: entry.kind,
       sourceModel: entry.sourceModel,
       signalKey: entry.signalKey,
+      ...((entry.payloadJson?.meta as Record<string, unknown> | null) ?? {}),
+      synthetic: entry.payloadJson?.synthetic === true,
     },
     datePrecision: (entry.payloadJson?.datePrecision as HomeEventDatePrecision) ?? 'EXACT_DATE',
     observationKind: (entry.payloadJson?.observationKind as HomeEvent['observationKind']) ?? (
@@ -511,6 +538,7 @@ export default function Page() {
   const [evidenceNote, setEvidenceNote] = useState('');
   const [timelineActionError, setTimelineActionError] = useState<string | null>(null);
   const [annualRecap, setAnnualRecap] = useState<any>(null);
+  const openedDeepLinkRef = useRef<string | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -565,15 +593,77 @@ export default function Page() {
     queryFn: () => getHomeEvent(propertyId, activeEvent!.id),
     enabled: Boolean(activeEvent?.id),
   });
+  const evidenceDocumentsQuery = useQuery({
+    queryKey: ['timeline-evidence-documents', propertyId],
+    queryFn: () => listEligiblePropertyBriefDocuments(propertyId),
+    enabled: Boolean(activeEvent),
+  });
+  const evidenceClaimsQuery = useQuery({
+    queryKey: ['timeline-evidence-claims', propertyId],
+    queryFn: () => listClaims(propertyId),
+    enabled: Boolean(activeEvent),
+  });
+  const evidenceInspectionsQuery = useQuery({
+    queryKey: ['timeline-evidence-inspections', propertyId],
+    queryFn: () => api.listInspectionReports(propertyId),
+    enabled: Boolean(activeEvent),
+  });
+  const evidenceProjectsQuery = useQuery({
+    queryKey: ['timeline-evidence-projects', propertyId],
+    queryFn: () => api.listProjects(propertyId),
+    enabled: Boolean(activeEvent),
+  });
+  const evidenceMaintenanceQuery = useQuery({
+    queryKey: ['timeline-evidence-maintenance', propertyId],
+    queryFn: async () => {
+      const response = await api.getMaintenanceTasks(propertyId, { includeCompleted: true });
+      return response.success ? response.data : [];
+    },
+    enabled: Boolean(activeEvent),
+  });
+  const evidenceChoices = useMemo<EvidenceChoice[]>(() => {
+    if (evidenceType === 'DOCUMENT' || evidenceType === 'PHOTO' || evidenceType === 'RECEIPT' || evidenceType === 'INVOICE') {
+      return (evidenceDocumentsQuery.data ?? []).map((item) => ({ id: item.id, label: item.name, detail: formatEnumLabel(item.type) }));
+    }
+    if (evidenceType === 'CLAIM') {
+      return (evidenceClaimsQuery.data ?? []).map((item) => ({ id: item.id, label: item.title, detail: formatEnumLabel(item.status), entityType: 'Claim' }));
+    }
+    if (evidenceType === 'INSPECTION') {
+      return (evidenceInspectionsQuery.data ?? []).map((item) => ({ id: item.id, label: `${formatEnumLabel(item.reportType)} inspection`, detail: formatDate(item.inspectionDate), entityType: 'InspectionReport' }));
+    }
+    if (evidenceType === 'REPAIR_RECORD') {
+      return [
+        ...(evidenceProjectsQuery.data ?? []).map((item) => ({ id: item.id, label: item.name, detail: `Project · ${formatEnumLabel(item.status)}`, entityType: 'ProjectRecord' })),
+        ...(evidenceMaintenanceQuery.data ?? []).map((item) => ({ id: item.id, label: item.title, detail: `Maintenance · ${formatEnumLabel(item.status)}`, entityType: 'PropertyMaintenanceTask' })),
+      ];
+    }
+    return [];
+  }, [
+    evidenceType,
+    evidenceDocumentsQuery.data,
+    evidenceClaimsQuery.data,
+    evidenceInspectionsQuery.data,
+    evidenceProjectsQuery.data,
+    evidenceMaintenanceQuery.data,
+  ]);
 
   function openEvent(event: HomeEvent) {
     setActiveEvent(event);
     setCorrectedTitle(event.title);
-    setCorrectedDate(event.occurredAt.slice(0, 10));
+    setCorrectedDate(dateControlValue(event.occurredAt, event.datePrecision));
     setCorrectedPrecision(event.datePrecision);
     setCorrectionReason('');
     setTimelineActionError(null);
   }
+
+  useEffect(() => {
+    const eventId = searchParams.get('eventId');
+    if (!eventId || openedDeepLinkRef.current === eventId) return;
+    const event = events.find((item) => item.id === eventId && item.meta?.synthetic !== true);
+    if (!event) return;
+    openedDeepLinkRef.current = eventId;
+    openEvent(event);
+  }, [events, searchParams]);
 
   async function refreshTimeline() {
     await Promise.all([
@@ -603,7 +693,7 @@ export default function Page() {
       await createHomeEvent(propertyId, {
         type: logType,
         title: logTitle.trim(),
-        occurredAt: new Date(logDate).toISOString(),
+        occurredAt: dateControlToIso(logDate, logDatePrecision),
         summary: logSummary.trim() || null,
         amount: logAmount ? parseFloat(logAmount) : null,
         datePrecision: logDatePrecision,
@@ -940,9 +1030,10 @@ export default function Page() {
                   Date <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="date"
+                  type={dateControlType(logDatePrecision)}
                   value={logDate}
-                  max={today}
+                  max={logDatePrecision === 'YEAR' ? new Date().getFullYear() : logDatePrecision === 'MONTH' ? today.slice(0, 7) : today}
+                  min={logDatePrecision === 'YEAR' ? 1600 : undefined}
                   onChange={(e) => setLogDate(e.target.value)}
                   required
                   className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
@@ -956,7 +1047,14 @@ export default function Page() {
                 <label className="mb-1 block text-xs text-[hsl(var(--mobile-text-muted))]">Date precision</label>
                 <select
                   value={logDatePrecision}
-                  onChange={(event) => setLogDatePrecision(event.target.value as HomeEventDatePrecision)}
+                  onChange={(event) => {
+                    const next = event.target.value as HomeEventDatePrecision;
+                    const anchor = logDate
+                      ? dateControlToIso(logDate, logDatePrecision)
+                      : new Date().toISOString();
+                    setLogDatePrecision(next);
+                    setLogDate(dateControlValue(anchor, next));
+                  }}
                   className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
                 >
                   <option value="EXACT_DATE">Exact date</option>
@@ -973,7 +1071,7 @@ export default function Page() {
                   className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
                 >
                   <option value="">Standalone event</option>
-                  {events.filter((event) => !event.parentEventId).map((event) => (
+                  {events.filter((event) => !event.parentEventId && event.meta?.synthetic !== true).map((event) => (
                     <option key={event.id} value={event.id}>{event.title}</option>
                   ))}
                 </select>
@@ -1108,7 +1206,7 @@ export default function Page() {
               try {
                 setTimelineActionError(null);
                 const corrected = await correctHomeEvent(propertyId, activeEvent.id, {
-                  title: correctedTitle.trim(), occurredAt: new Date(correctedDate).toISOString(),
+                  title: correctedTitle.trim(), occurredAt: dateControlToIso(correctedDate, correctedPrecision),
                   datePrecision: correctedPrecision, correctionReason: correctionReason.trim(),
                 });
                 openEvent(corrected);
@@ -1118,8 +1216,13 @@ export default function Page() {
               <p className="text-sm font-semibold">Create a traceable correction</p>
               <input value={correctedTitle} onChange={(event) => setCorrectedTitle(event.target.value)} className="min-h-[40px] w-full rounded-lg border px-3 text-sm" aria-label="Corrected title" />
               <div className="grid grid-cols-2 gap-2">
-                <input type="date" value={correctedDate} onChange={(event) => setCorrectedDate(event.target.value)} className="min-h-[40px] rounded-lg border px-3 text-sm" aria-label="Corrected date" />
-                <select value={correctedPrecision} onChange={(event) => setCorrectedPrecision(event.target.value as HomeEventDatePrecision)} className="min-h-[40px] rounded-lg border px-3 text-sm" aria-label="Corrected date precision">
+                <input type={dateControlType(correctedPrecision)} min={correctedPrecision === 'YEAR' ? 1600 : undefined} max={correctedPrecision === 'YEAR' ? new Date().getFullYear() : correctedPrecision === 'MONTH' ? today.slice(0, 7) : today} value={correctedDate} onChange={(event) => setCorrectedDate(event.target.value)} className="min-h-[40px] rounded-lg border px-3 text-sm" aria-label="Corrected date" />
+                <select value={correctedPrecision} onChange={(event) => {
+                  const next = event.target.value as HomeEventDatePrecision;
+                  const anchor = correctedDate ? dateControlToIso(correctedDate, correctedPrecision) : activeEvent.occurredAt;
+                  setCorrectedPrecision(next);
+                  setCorrectedDate(dateControlValue(anchor, next));
+                }} className="min-h-[40px] rounded-lg border px-3 text-sm" aria-label="Corrected date precision">
                   <option value="EXACT_DATE">Exact date</option><option value="MONTH">Month</option><option value="YEAR">Year</option><option value="UNKNOWN">Unknown</option>
                 </select>
               </div>
@@ -1135,19 +1238,28 @@ export default function Page() {
               <select value={evidenceType} onChange={(event) => setEvidenceType(event.target.value as typeof evidenceType)} className="min-h-[40px] w-full rounded-lg border px-3 text-sm">
                 <option value="USER_ATTESTATION">Homeowner attestation</option><option value="DOCUMENT">Vault document</option><option value="RECEIPT">Receipt</option><option value="INVOICE">Invoice</option><option value="INSPECTION">Inspection</option><option value="CLAIM">Claim</option><option value="REPAIR_RECORD">Repair record</option>
               </select>
-              {evidenceType !== 'USER_ATTESTATION' && <input value={evidenceEntityId} onChange={(event) => setEvidenceEntityId(event.target.value)} placeholder="Linked record ID" className="min-h-[40px] w-full rounded-lg border px-3 text-sm" />}
+              {evidenceType !== 'USER_ATTESTATION' && (
+                <select value={evidenceEntityId} onChange={(event) => setEvidenceEntityId(event.target.value)} className="min-h-[40px] w-full rounded-lg border px-3 text-sm">
+                  <option value="">Select a linked record</option>
+                  {evidenceChoices.map((choice) => <option key={`${evidenceType}:${choice.id}`} value={choice.id}>{choice.label}{choice.detail ? ` · ${choice.detail}` : ''}</option>)}
+                </select>
+              )}
               <textarea value={evidenceNote} onChange={(event) => setEvidenceNote(event.target.value)} placeholder="Evidence note" className="min-h-[70px] w-full rounded-lg border p-3 text-sm" />
               <button type="button" onClick={async () => {
                 try {
                   setTimelineActionError(null);
                   await addHomeEventEvidence(propertyId, activeEvent.id, {
                     evidenceType,
-                    ...(evidenceType === 'DOCUMENT' ? { documentId: evidenceEntityId } : evidenceType !== 'USER_ATTESTATION' ? { sourceEntityType: evidenceType, sourceEntityId: evidenceEntityId } : {}),
+                    ...(['DOCUMENT', 'PHOTO', 'RECEIPT', 'INVOICE'].includes(evidenceType)
+                      ? { documentId: evidenceEntityId }
+                      : evidenceType !== 'USER_ATTESTATION'
+                        ? { sourceEntityType: evidenceChoices.find((choice) => choice.id === evidenceEntityId)?.entityType ?? evidenceType, sourceEntityId: evidenceEntityId }
+                        : {}),
                     note: evidenceNote || null,
                   });
                   setEvidenceEntityId(''); setEvidenceNote(''); await refreshTimeline();
                 } catch { setTimelineActionError('The evidence link could not be saved.'); }
-              }} className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Add evidence</button>
+              }} disabled={evidenceType !== 'USER_ATTESTATION' && !evidenceEntityId} className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Add evidence</button>
             </div>
           </div>
         </section>

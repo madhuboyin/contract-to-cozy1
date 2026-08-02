@@ -102,6 +102,8 @@ function toHomeEventFromTimelineEntry(entry: TimelineProjectionEntry): HomeEvent
       timelineProjectionKind: entry.kind,
       sourceModel: entry.sourceModel,
       signalKey: entry.signalKey,
+      ...((entry.payloadJson?.meta as Record<string, unknown> | null) ?? {}),
+      synthetic: entry.payloadJson?.synthetic === true,
     },
     groupKey: null,
     createdAt: entry.occurredAt,
@@ -273,7 +275,11 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                 label: 'History controls',
                 render: (event) => (
                   <div className="flex flex-wrap gap-2">
-                    {props.onToggleSelected ? (
+                    {event.meta?.synthetic === true ? (
+                      <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                        Inferred from inventory · add a recorded event to confirm it
+                      </span>
+                    ) : props.onToggleSelected ? (
                       <button
                         type="button"
                         className="rounded-md border px-2 py-1 text-xs"
@@ -282,7 +288,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                         {props.selectedEventIds?.includes(event.id) ? 'Remove from export' : 'Select for export'}
                       </button>
                     ) : null}
-                    {props.onSelectEvent ? (
+                    {event.meta?.synthetic !== true && props.onSelectEvent ? (
                       <button
                         type="button"
                         className="rounded-md border px-2 py-1 text-xs font-medium"

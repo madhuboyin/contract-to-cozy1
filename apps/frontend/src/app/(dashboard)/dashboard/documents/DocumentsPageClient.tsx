@@ -542,6 +542,7 @@ export default function DocumentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activePropertyId = useCanonicalPropertyId();
+  const targetDocumentId = searchParams.get('documentId');
   const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   const fetchDependencies = useCallback(async () => {
@@ -638,6 +639,15 @@ export default function DocumentsPage() {
 
     return list.sort((a, b) => parseISO(b.createdAt).getTime() - parseISO(a.createdAt).getTime());
   }, [documents, filterType, filterParentType]);
+
+  useEffect(() => {
+    if (!targetDocumentId || isLoading) return;
+    window.setTimeout(() => {
+      const targets = Array.from(document.querySelectorAll<HTMLElement>('[data-document-id]'));
+      const target = targets.find((element) => element.dataset.documentId === targetDocumentId && element.getClientRects().length > 0);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  }, [targetDocumentId, isLoading, filteredDocuments]);
 
   const aiAnalyzedCount = useMemo(
     () => filteredDocuments.filter((doc) => Boolean((doc as any).confidence)).length,
@@ -794,7 +804,7 @@ export default function DocumentsPage() {
             {filteredDocuments.map((doc) => {
               const confidence = (doc as any).confidence as number | undefined;
               return (
-                <MobileCard key={doc.id} variant="compact" className="space-y-3 border-slate-200/80 bg-white">
+                <MobileCard data-document-id={doc.id} key={doc.id} variant="compact" className={`space-y-3 border-slate-200/80 bg-white ${targetDocumentId === doc.id ? 'ring-2 ring-sky-500 ring-offset-2' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-900">{doc.name}</p>
@@ -856,7 +866,7 @@ export default function DocumentsPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredDocuments.map(doc => (
-                    <tr key={doc.id} className="hover:bg-gray-50">
+                    <tr data-document-id={doc.id} key={doc.id} className={targetDocumentId === doc.id ? 'bg-sky-50 ring-2 ring-inset ring-sky-400' : 'hover:bg-gray-50'}>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900 truncate max-w-xs">{doc.name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {doc.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}

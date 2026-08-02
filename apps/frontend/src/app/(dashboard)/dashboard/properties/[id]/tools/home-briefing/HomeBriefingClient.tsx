@@ -115,6 +115,13 @@ function BriefingItemCard({
         ) : null}
       </div>
 
+      {item.sourceLineage.safetyTier !== 'LOW_CONSEQUENCE' && (
+        <div className={`rounded-xl border p-3 text-sm leading-6 ${item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'border-rose-300 bg-rose-50 text-rose-950' : 'border-amber-300 bg-amber-50 text-amber-950'}`}>
+          <p className="font-semibold">{item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'Safety-sensitive update' : 'Material decision boundary'}</p>
+          <p>{item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'Open the canonical owner now. Do not use this briefing summary as a substitute for emergency services or qualified inspection.' : 'Review the canonical source and verify with the appropriate professional before making financial, insurance, or property decisions.'}</p>
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
         <p className="font-medium text-slate-900">Source lineage</p>
         <p className="mt-1">

@@ -16,7 +16,7 @@ type SelectedBriefingShare = {
     title: string;
     summary: string;
     materiality: string;
-    sourceLineage: Record<string, unknown>;
+    sourceLineage: Record<string, unknown> & { safetyTier?: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY' };
   }>;
   sharingBoundary: string;
   expiresAt: string;
@@ -74,6 +74,13 @@ export default function SelectedHomeBriefingSharePage() {
           </div>
           <h2 className="mt-2 text-base font-semibold text-slate-950">{item.title}</h2>
           <p className="mt-2 text-sm leading-relaxed text-slate-700">{item.summary}</p>
+          {item.sourceLineage.safetyTier && item.sourceLineage.safetyTier !== 'LOW_CONSEQUENCE' && (
+            <p className={`mt-3 rounded-lg border p-3 text-xs font-medium leading-5 ${item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'border-rose-300 bg-rose-50 text-rose-950' : 'border-amber-300 bg-amber-50 text-amber-950'}`}>
+              {item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY'
+                ? 'Safety-sensitive summary: use the canonical source, emergency services when appropriate, and qualified professional review before acting.'
+                : 'Material decision boundary: verify the canonical source and obtain appropriate professional advice before financial, insurance, or property decisions.'}
+            </p>
+          )}
         </article>
       ))}
 

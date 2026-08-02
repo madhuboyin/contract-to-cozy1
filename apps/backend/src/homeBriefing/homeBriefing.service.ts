@@ -82,12 +82,30 @@ function defaultDeepLink(input: {
   topic: HomeBriefingTopic;
   canonicalActionId: string | null;
   canonicalEventId: string | null;
+  sourceType: string;
+  sourceEntityId: string;
 }) {
   if (input.canonicalActionId) {
     return `/dashboard/properties/${input.propertyId}/home-operations?workItemId=${encodeURIComponent(input.canonicalActionId)}`;
   }
   if (input.canonicalEventId) {
     return `/dashboard/properties/${input.propertyId}/timeline?eventId=${encodeURIComponent(input.canonicalEventId)}`;
+  }
+  const entityId = encodeURIComponent(input.sourceEntityId);
+  if (input.sourceType === 'DOCUMENT') {
+    return `/dashboard/properties/${input.propertyId}/documents?documentId=${entityId}`;
+  }
+  if (input.sourceType === 'CLAIM_RECORD') {
+    return `/dashboard/properties/${input.propertyId}/claims/${entityId}`;
+  }
+  if (input.sourceType === 'PROJECT_RECORD') {
+    return `/dashboard/properties/${input.propertyId}/projects/${entityId}`;
+  }
+  if (input.sourceType === 'MAINTENANCE_RECORD') {
+    return `/dashboard/properties/${input.propertyId}/maintenance?taskId=${entityId}`;
+  }
+  if (input.sourceType === 'PROPERTY_FACT') {
+    return `/dashboard/properties/${input.propertyId}/edit`;
   }
   if (input.topic === 'LOCAL_CHANGE') {
     return `/dashboard/properties/${input.propertyId}/tools/neighborhood-change-radar`;
@@ -355,6 +373,8 @@ export async function generateHomeBriefing(input: {
       topic,
       canonicalActionId: change.canonicalActionId,
       canonicalEventId: change.canonicalEventId,
+      sourceType: change.sourceType,
+      sourceEntityId: change.sourceEntityId,
     });
     const sourceLineage = {
       propertyChangeId: change.id,

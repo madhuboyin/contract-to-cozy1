@@ -18,6 +18,7 @@ import {
   listEligiblePropertyBriefDocuments,
   listPropertyBriefs,
   revokePropertyBriefShare,
+  renderPropertyBriefPdf,
 } from './propertyBrief.service';
 
 const router = Router();
@@ -57,10 +58,11 @@ router.get('/property-briefs/shares/:token/download', async (req: Request, res: 
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });
-    const filename = `${brief.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'property-brief'}.json`;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    const filename = `${brief.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'property-brief'}.pdf`;
+    const pdf = await renderPropertyBriefPdf(brief);
+    res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    return res.send(JSON.stringify(brief, null, 2));
+    return res.send(Buffer.from(pdf));
   } catch (error) {
     return next(error);
   }
@@ -159,6 +161,7 @@ router.post(
         briefId: uuid.parse(req.params.briefId),
         expiresInDays: req.body.expiresInDays,
         downloadPolicy: req.body.downloadPolicy,
+        sensitiveDataAcknowledged: req.body.sensitiveDataAcknowledged,
       });
       const origin = req.headers.origin || process.env.FRONTEND_URL || '';
       return res.status(201).json({

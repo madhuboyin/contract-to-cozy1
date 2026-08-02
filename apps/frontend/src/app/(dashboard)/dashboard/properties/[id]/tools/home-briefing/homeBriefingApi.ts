@@ -33,6 +33,7 @@ export interface HomeBriefingItem {
     detectedAt: string;
     occurredAt: string | null;
     confidence: number | null;
+    safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY';
     source?: {
       provider: string;
       url: string | null;

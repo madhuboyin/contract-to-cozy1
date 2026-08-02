@@ -13,7 +13,8 @@ type SharedBrief = {
   limitationStatement: string;
   expiresAt: string;
   downloadPolicy: 'VIEW_ONLY' | 'ALLOW_DOWNLOAD';
-  property: { name: string | null; city: string; state: string };
+  safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY';
+  property: { name: string | null; address: string; city: string; state: string; zipCode: string };
   sections: Array<{
     id: string;
     title: string;
@@ -71,8 +72,9 @@ export default function SharedPropertyBriefPage() {
         <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-sky-700">Property Brief</p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-950">{brief.title}</h1>
         <p className="mt-2 text-sm text-slate-600">
-          {brief.property.name ?? 'Home'} · {brief.property.city}, {brief.property.state}
+          {brief.property.name ?? 'Home'} · {brief.property.address}, {brief.property.city}, {brief.property.state} {brief.property.zipCode}
         </p>
+        <p className="mt-1 text-xs text-slate-500">Property identity from the homeowner record; evidence-verified facts are labeled separately.</p>
         <p className="mt-1 text-xs text-slate-500">
           Purpose: {humanize(brief.purpose)} · Snapshot as of {new Date(brief.asOf).toLocaleString()} ·
           Expires {new Date(brief.expiresAt).toLocaleString()}
@@ -82,12 +84,15 @@ export default function SharedPropertyBriefPage() {
             ? brief.excludedSections.map(humanize).join(', ')
             : 'No template sections'}.
         </p>
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-medium leading-5 text-amber-950">
+          This controlled view contains sensitive property information. Confirm you are the intended recipient and independently verify it before making financial, insurance, safety, or purchase decisions.
+        </p>
         {brief.downloadPolicy === 'ALLOW_DOWNLOAD' && (
           <a
             href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/property-briefs/shares/${encodeURIComponent(params.token)}/download`}
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"
           >
-            <Download className="h-4 w-4" /> Download this snapshot
+            <Download className="h-4 w-4" /> Download readable PDF
           </a>
         )}
       </header>

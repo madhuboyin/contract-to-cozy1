@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
   DocumentVerificationStatus,
   HomeEventVerificationStatus,
@@ -25,6 +26,7 @@ import {
   type PropertyBriefPurposeInput,
   type PropertyBriefSectionInput,
 } from './propertyBrief.contracts';
+import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
 
 const json = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -107,7 +109,9 @@ async function assembleSections(input: {
   if (!property) throw new APIError('Property not found.', 404, 'PROPERTY_NOT_FOUND');
 
   const factDefinitions: Array<{ key: string; label: string; value: unknown }> = [
-    { key: 'location.address', label: 'Address', value: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` },
+    { key: 'location.city', label: 'City', value: property.city },
+    { key: 'location.state', label: 'State', value: property.state },
+    { key: 'location.zipCode', label: 'ZIP code', value: property.zipCode },
     { key: 'core.dwellingType', label: 'Dwelling type', value: property.dwellingType },
     { key: 'core.ownershipForm', label: 'Ownership form', value: property.ownershipForm },
     { key: 'core.propertyUse', label: 'Property use', value: property.propertyUse },
@@ -121,8 +125,6 @@ async function assembleSections(input: {
     { key: 'systems.heatingType', label: 'Heating type', value: property.heatingType },
     { key: 'systems.coolingType', label: 'Cooling type', value: property.coolingType },
     { key: 'systems.waterHeaterType', label: 'Water heater type', value: property.waterHeaterType },
-    { key: 'systems.hvacInstallYear', label: 'HVAC install year', value: property.hvacInstallYear },
-    { key: 'systems.waterHeaterInstallYear', label: 'Water heater install year', value: property.waterHeaterInstallYear },
     { key: 'structure.foundationType', label: 'Foundation type', value: property.foundationType },
   ];
   const knownFacts = factDefinitions.filter((fact) =>
@@ -487,7 +489,11 @@ async function findOwnedBrief(propertyId: string, userId: string, briefId: strin
 }
 
 export async function getPropertyBriefPreview(propertyId: string, userId: string, briefId: string) {
-  return findOwnedBrief(propertyId, userId, briefId);
+  const brief = await findOwnedBrief(propertyId, userId, briefId);
+  return {
+    ...brief,
+    safetyTier: derivePropertyIntelligenceSafetyTier({ sharesSensitivePropertyData: true }),
+  };
 }
 
 export async function createPropertyBriefShare(input: {
@@ -496,6 +502,7 @@ export async function createPropertyBriefShare(input: {
   briefId: string;
   expiresInDays: number;
   downloadPolicy: 'VIEW_ONLY' | 'ALLOW_DOWNLOAD';
+  sensitiveDataAcknowledged: true;
 }) {
   const brief = await findOwnedBrief(input.propertyId, input.userId, input.briefId);
   if (brief.status === PropertyBriefStatus.ARCHIVED) {
@@ -576,7 +583,7 @@ export async function getSharedPropertyBrief(input: {
     include: {
       brief: {
         include: {
-          property: { select: { name: true, city: true, state: true } },
+          property: { select: { name: true, address: true, city: true, state: true, zipCode: true } },
           sections: { orderBy: { sortOrder: 'asc' }, include: { evidenceLinks: true } },
         },
       },
@@ -641,5 +648,99 @@ export async function getSharedPropertyBrief(input: {
     sections: share.brief.sections,
     expiresAt: share.expiresAt,
     downloadPolicy: share.downloadPolicy,
+    safetyTier: derivePropertyIntelligenceSafetyTier({ sharesSensitivePropertyData: true }),
   };
+}
+
+function printable(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'Not recorded';
+  if (Array.isArray(value)) return value.map(printable).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value)
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[^\x20-\x7E]/g, ' ');
+}
+
+export async function renderPropertyBriefPdf(brief: Awaited<ReturnType<typeof getSharedPropertyBrief>>) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const width = 612;
+  const height = 792;
+  const margin = 48;
+  let page = pdf.addPage([width, height]);
+  let y = height - margin;
+
+  const ensureSpace = (needed = 40) => {
+    if (y - needed >= margin) return;
+    page = pdf.addPage([width, height]);
+    y = height - margin;
+  };
+  const linesFor = (text: string, size: number, maxWidth: number, font = regular) => {
+    const words = printable(text).split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) line = candidate;
+      else {
+        if (line) lines.push(line);
+        line = word;
+      }
+    }
+    if (line) lines.push(line);
+    return lines.length > 0 ? lines : [''];
+  };
+  const drawText = (text: string, options: { size?: number; bold?: boolean; color?: ReturnType<typeof rgb>; gap?: number } = {}) => {
+    const size = options.size ?? 10;
+    const font = options.bold ? bold : regular;
+    const lines = linesFor(text, size, width - margin * 2, font);
+    ensureSpace(lines.length * (size + 3) + (options.gap ?? 5));
+    for (const line of lines) {
+      page.drawText(line, { x: margin, y, size, font, color: options.color ?? rgb(0.15, 0.2, 0.27) });
+      y -= size + 3;
+    }
+    y -= options.gap ?? 5;
+  };
+
+  drawText('PROPERTY BRIEF', { size: 9, bold: true, color: rgb(0.02, 0.42, 0.55), gap: 8 });
+  drawText(brief.title, { size: 20, bold: true, gap: 10 });
+  drawText(
+    `${brief.property.name ?? 'Home'} - ${brief.property.address}, ${brief.property.city}, ${brief.property.state} ${brief.property.zipCode}`,
+    { size: 11, bold: true },
+  );
+  drawText('Property identity from the homeowner record; evidence-verified facts are labeled separately.', { size: 8, color: rgb(0.4, 0.43, 0.47) });
+  drawText(`Purpose: ${printable(brief.purpose)} | Snapshot: ${new Date(brief.asOf).toISOString()} | Expires: ${new Date(brief.expiresAt).toISOString()}`, { size: 8, color: rgb(0.35, 0.4, 0.46), gap: 12 });
+
+  for (const section of brief.sections) {
+    ensureSpace(60);
+    drawText(section.title, { size: 14, bold: true, color: rgb(0.02, 0.35, 0.48), gap: 6 });
+    const payload = section.payload && typeof section.payload === 'object' && !Array.isArray(section.payload)
+      ? section.payload as Record<string, unknown>
+      : {};
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    if (items.length === 0) drawText('No eligible records were included.', { size: 9 });
+    for (const rawItem of items) {
+      const item = rawItem && typeof rawItem === 'object' && !Array.isArray(rawItem)
+        ? rawItem as Record<string, unknown>
+        : {};
+      const summary = Object.entries(item)
+        .filter(([key, value]) => !['key', 'asOf', 'source', 'verification'].includes(key) && value != null)
+        .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${printable(value)}`)
+        .join(' | ');
+      drawText(`- ${summary || 'Recorded item'}`, { size: 9, gap: 3 });
+    }
+    if (payload.completenessBoundary) drawText(printable(payload.completenessBoundary), { size: 8, color: rgb(0.4, 0.43, 0.47) });
+    if (Array.isArray(payload.excludedFields)) drawText(`Excluded fields: ${payload.excludedFields.map(printable).join(', ')}`, { size: 8, color: rgb(0.4, 0.43, 0.47) });
+    y -= 5;
+  }
+
+  ensureSpace(90);
+  drawText('IMPORTANT LIMITATIONS', { size: 11, bold: true, color: rgb(0.55, 0.27, 0.02) });
+  drawText(brief.limitationStatement, { size: 8, color: rgb(0.35, 0.25, 0.12) });
+  drawText('This controlled copy may contain sensitive property information. Verify independently before making safety, financial, insurance, or purchase decisions.', { size: 8, bold: true });
+
+  return pdf.save();
 }

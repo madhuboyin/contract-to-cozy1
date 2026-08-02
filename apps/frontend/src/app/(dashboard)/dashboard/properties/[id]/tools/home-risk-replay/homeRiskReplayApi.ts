@@ -41,6 +41,7 @@ export interface PastHazardExposureItem {
     revision: number;
   };
   interpretation: {
+    safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY';
     relevance: string;
     confidence: number;
     missingFacts: string[];

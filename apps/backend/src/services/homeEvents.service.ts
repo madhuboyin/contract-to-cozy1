@@ -109,10 +109,51 @@ export class HomeEventsService {
   private async assertParentEventBelongs(propertyId: string, parentEventId?: string | null) {
     if (!parentEventId) return;
     const ok = await prisma.homeEvent.findFirst({
-      where: { id: parentEventId, propertyId, deletedAt: null },
+      where: { id: parentEventId, propertyId, isCurrent: true, deletedAt: null },
       select: { id: true },
     });
     if (!ok) throw new APIError('Parent event not found', 404, 'PARENT_EVENT_NOT_FOUND');
+  }
+
+  private async assertNoParentCycle(propertyId: string, eventId: string, parentEventId?: string | null) {
+    let cursor = parentEventId ?? null;
+    const visited = new Set<string>();
+    while (cursor) {
+      if (cursor === eventId || visited.has(cursor)) {
+        throw new APIError('Timeline story grouping cannot contain a cycle.', 422, 'HOME_EVENT_PARENT_CYCLE');
+      }
+      visited.add(cursor);
+      const parent = await prisma.homeEvent.findFirst({
+        where: { id: cursor, propertyId, isCurrent: true, deletedAt: null },
+        select: { parentEventId: true },
+      });
+      cursor = parent?.parentEventId ?? null;
+    }
+  }
+
+  private async assertEvidenceSourceBelongs(
+    propertyId: string,
+    sourceEntityType?: string | null,
+    sourceEntityId?: string | null,
+  ) {
+    if (!sourceEntityType || !sourceEntityId) return;
+    const type = sourceEntityType.trim().toUpperCase();
+    const record = type === 'CLAIM'
+      ? await prisma.claim.findFirst({ where: { id: sourceEntityId, propertyId }, select: { id: true } })
+      : type === 'INSPECTIONREPORT'
+        ? await prisma.inspectionReport.findFirst({ where: { id: sourceEntityId, propertyId }, select: { id: true } })
+        : type === 'PROJECTRECORD'
+          ? await prisma.projectRecord.findFirst({ where: { id: sourceEntityId, propertyId }, select: { id: true } })
+          : type === 'PROPERTYMAINTENANCETASK'
+            ? await prisma.propertyMaintenanceTask.findFirst({ where: { id: sourceEntityId, propertyId }, select: { id: true } })
+            : null;
+    if (!record) {
+      throw new APIError(
+        'The selected evidence record does not belong to this property.',
+        404,
+        'HOME_EVENT_EVIDENCE_SOURCE_NOT_FOUND',
+      );
+    }
   }
 
   // Document is property-scoped OR (propertyId null AND uploadedBy matches current homeownerProfile)
@@ -232,6 +273,8 @@ export class HomeEventsService {
         groupType: event.groupType ?? null,
         revision: event.revision ?? 1,
         correctionReason: event.correctionReason ?? null,
+        meta: event.meta ?? null,
+        synthetic: event.meta?.synthetic === true,
       },
     });
 
@@ -545,6 +588,9 @@ export class HomeEventsService {
       include: { documents: true, evidence: true },
     });
     if (!existing) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
+    if (patch.parentEventId === existing.id) {
+      throw new APIError('An event cannot be its own parent.', 422, 'HOME_EVENT_PARENT_CYCLE');
+    }
 
     // If patch includes links, validate them
     await this.assertRoomBelongs(propertyId, patch.roomId ?? undefined);
@@ -552,6 +598,9 @@ export class HomeEventsService {
     await this.assertClaimBelongs(propertyId, patch.claimId ?? undefined);
     await this.assertExpenseBelongs(propertyId, patch.expenseId ?? undefined);
     await this.assertParentEventBelongs(propertyId, patch.parentEventId ?? undefined);
+    if (patch.parentEventId !== undefined) {
+      await this.assertNoParentCycle(propertyId, existing.id, patch.parentEventId);
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.homeEvent.update({
@@ -562,7 +611,7 @@ export class HomeEventsService {
           idempotencyKey: null,
         },
       });
-      return tx.homeEvent.create({
+      const replacement = await tx.homeEvent.create({
         data: {
           propertyId,
           createdById: userId,
@@ -641,6 +690,18 @@ export class HomeEventsService {
           },
         },
       });
+      // Children belong to the logical story, not to one historical revision
+      // of its parent. Move current children atomically to the replacement.
+      await tx.homeEvent.updateMany({
+        where: {
+          propertyId,
+          parentEventId: existing.id,
+          isCurrent: true,
+          deletedAt: null,
+        },
+        data: { parentEventId: replacement.id },
+      });
+      return replacement;
     });
 
     const touchedItemIds = new Set<string>();
@@ -788,7 +849,7 @@ export class HomeEventsService {
     note?: string | null;
   }) {
     const event = await prisma.homeEvent.findFirst({
-      where: { id: args.eventId, propertyId: args.propertyId, deletedAt: null },
+      where: { id: args.eventId, propertyId: args.propertyId, isCurrent: true, deletedAt: null },
       select: { id: true },
     });
     if (!event) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
@@ -799,6 +860,11 @@ export class HomeEventsService {
         homeownerProfileId: args.homeownerProfileId ?? null,
       });
     }
+    await this.assertEvidenceSourceBelongs(
+      args.propertyId,
+      args.sourceEntityType,
+      args.sourceEntityId,
+    );
     return prisma.$transaction(async (tx) => {
       const evidence = await tx.homeEventEvidence.create({
         data: {

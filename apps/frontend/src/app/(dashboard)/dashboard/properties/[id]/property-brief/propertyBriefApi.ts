@@ -73,6 +73,7 @@ export type PropertyBrief = {
   sections?: PropertyBriefSection[];
   shares: PropertyBriefShare[];
   property?: { name: string | null; address: string; city: string; state: string; zipCode: string };
+  safetyTier?: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY';
 };
 
 export type EligiblePropertyBriefDocument = {
@@ -127,6 +128,7 @@ export async function createPropertyBriefShare(
     downloadPolicy: 'VIEW_ONLY' | 'ALLOW_DOWNLOAD';
     previewAcknowledged: true;
     limitationAcknowledged: true;
+    sensitiveDataAcknowledged: true;
   },
 ) {
   const response = await api.post(

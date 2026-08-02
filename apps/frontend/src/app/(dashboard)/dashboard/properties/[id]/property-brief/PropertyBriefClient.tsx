@@ -126,6 +126,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
   const [selectedDocumentIds, setSelectedDocumentIds] = React.useState<string[]>([]);
   const [expiresInDays, setExpiresInDays] = React.useState(14);
   const [downloadPolicy, setDownloadPolicy] = React.useState<'VIEW_ONLY' | 'ALLOW_DOWNLOAD'>('VIEW_ONLY');
+  const [shareSensitiveAcknowledged, setShareSensitiveAcknowledged] = React.useState(false);
 
   const currentTemplate = templatesQuery.data?.find((item) => item.purpose === purpose);
   const previewQuery = useQuery({
@@ -144,6 +145,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
     onSuccess: async (brief) => {
       setSelectedBriefId(brief.id);
       setShareUrl(null);
+      setShareSensitiveAcknowledged(false);
       await queryClient.invalidateQueries({ queryKey: ['property-briefs', propertyId] });
     },
   });
@@ -153,9 +155,11 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
       downloadPolicy,
       previewAcknowledged: true,
       limitationAcknowledged: true,
+      sensitiveDataAcknowledged: true,
     }),
     onSuccess: async (share) => {
       setShareUrl(share.shareUrl);
+      setShareSensitiveAcknowledged(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['property-briefs', propertyId] }),
         queryClient.invalidateQueries({ queryKey: ['property-brief-preview', propertyId, selectedBriefId] }),
@@ -313,6 +317,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                     onClick={() => {
                       setSelectedBriefId(brief.id);
                       setShareUrl(null);
+                      setShareSensitiveAcknowledged(false);
                     }}
                     className="w-full rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50"
                   >
@@ -346,6 +351,14 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                     <p className="mt-1 text-sm text-slate-600">
                       Snapshot as of {new Date(preview.asOf).toLocaleString()}
                     </p>
+                    {preview.property && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium text-slate-800">
+                          {preview.property.name ?? 'Home'} · {preview.property.address}, {preview.property.city}, {preview.property.state} {preview.property.zipCode}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">Property identity from the homeowner record; verified facts are listed separately below.</p>
+                      </div>
+                    )}
                   </div>
                   <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-800">
                     {humanize(preview.purpose)}
@@ -375,6 +388,10 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                 <p className="mt-1 text-xs leading-5 text-slate-600">
                   Choose a short expiration and whether the recipient may download this immutable snapshot. Every view and download is logged.
                 </p>
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+                  <p className="font-semibold">Material privacy boundary</p>
+                  <p>This share identifies the property and may contain sensitive household records. Send it only to the intended recipient; revoke it when no longer needed.</p>
+                </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <label className="text-xs font-semibold text-slate-600">
                     Expires after
@@ -389,9 +406,13 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                     </select>
                   </label>
                 </div>
+                <label className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 p-3 text-xs leading-5 text-slate-700">
+                  <input type="checkbox" checked={shareSensitiveAcknowledged} onChange={(event) => setShareSensitiveAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4" />
+                  I reviewed the full property identity and selected records and understand this is a material sharing action.
+                </label>
                 <button
                   type="button"
-                  disabled={shareMutation.isPending}
+                  disabled={shareMutation.isPending || !shareSensitiveAcknowledged}
                   onClick={() => shareMutation.mutate()}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >

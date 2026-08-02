@@ -144,6 +144,13 @@ function HazardCard({
 
       {item.factualSummary ? <p className="text-sm text-slate-700">{item.factualSummary}</p> : null}
 
+      {item.interpretation.safetyTier === 'SAFETY_EMERGENCY' && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm leading-6 text-rose-950">
+          <p className="font-semibold">Possible structural or safety consequence</p>
+          <p>Do not rely on this history view to assess current safety. If danger may be active, leave the area, contact emergency services when appropriate, and use a qualified professional before re-entry or repair.</p>
+        </div>
+      )}
+
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm md:grid-cols-2">
         <div>
           <p className="font-medium text-slate-900">Source observation and match</p>

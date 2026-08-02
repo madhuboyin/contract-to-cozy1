@@ -102,4 +102,5 @@ export const createPropertyBriefShareSchema = z.object({
   downloadPolicy: z.enum(['VIEW_ONLY', 'ALLOW_DOWNLOAD']).default('VIEW_ONLY'),
   previewAcknowledged: z.literal(true),
   limitationAcknowledged: z.literal(true),
+  sensitiveDataAcknowledged: z.literal(true),
 });
