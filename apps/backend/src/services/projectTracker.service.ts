@@ -29,10 +29,9 @@ import { findAllWorkItemsLinkedToExecution, findWorkItemByWorkKey, linkWorkExecu
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { maintenanceTaskSourceAdapter, resolveMaintenanceTaskWorkKey } from '../modules/homeOperations/adapters/maintenanceTask.adapter';
-import { resolveGuidanceJourneyWorkKey, resolveProjectExecutionWorkKey } from '../modules/homeOperations/adapters/homeActionWorkItem.adapter';
 import { resolveInspectionFindingWorkKey, propagateFindingResolutionFromExecution } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { invalidateStatusForInventoryItem } from './homeStatusBoard.service';
-import type { OperationalWorkItemState, OperationalWorkResponsibleParty } from '@prisma/client';
+import type { OperationalWorkResponsibleParty } from '@prisma/client';
 import { evaluateRequirementCompletionCheck } from './projectCompliance/completionPolicy';
 import {
   caseOutcomeForProjectOutcome,
@@ -43,6 +42,18 @@ import {
 import { createHash, randomBytes } from 'node:crypto';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
+import {
+  responsiblePartyForFulfillmentMode,
+  syncJourneyWorkItemForProjectEvent,
+  syncProjectExecutionWorkItemOnCompletion,
+} from './projectWorkItemReconciliation.service';
+
+export {
+  resolveJourneyWorkKey,
+  responsiblePartyForFulfillmentMode,
+  syncJourneyWorkItemForProjectEvent,
+  syncProjectExecutionWorkItemOnCompletion,
+} from './projectWorkItemReconciliation.service';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -140,242 +151,6 @@ async function assertMilestoneLinks(
   }
 }
 
-// ── Home Operations work-item reconciliation (Slice 4) ──────────────────────
-//
-// A Project spawned from a guidance journey shares that journey's own
-// OperationalWorkItem (see homeActionWorkItem.adapter.ts's Slice 4 comment —
-// PROJECT actions with a relatedJourneyId resolve to the same
-// `guidance-${journeyId}` obligation, PROPERTY subject). This helper
-// resolves that same workKey directly, without going through a HomeAction,
-// so project-lifecycle events (handoff, verified completion, cancellation)
-// can transition it. Best-effort throughout: a sync failure must never
-// block the actual project mutation (Slice 2/3 precedent).
-// Home Operations Item #14 (Gap 3): async because a coverage-shaped journey
-// resolves to a different workKey shape (INVENTORY_ITEM/COVERAGE_ACTION)
-// than a plain one (PROPERTY/DECISION) — determining which requires a
-// lookup neither this function nor its callers previously had in scope.
-export async function resolveJourneyWorkKey(propertyId: string, journeyId: string): Promise<string> {
-  const journey = await prisma.guidanceJourney.findUnique({
-    where: { id: journeyId },
-    select: { journeyTypeKey: true, inventoryItemId: true },
-  });
-  return resolveGuidanceJourneyWorkKey({
-    propertyId,
-    journeyId,
-    journeyTypeKey: journey?.journeyTypeKey ?? null,
-    inventoryItemId: journey?.inventoryItemId ?? null,
-  });
-}
-
-// Home Operations Item #15: ProjectRecord.fulfillmentMode (PROVIDER/DIY) is
-// the existing, already-captured "who does the work" signal for a project —
-// this just maps it onto OperationalWorkExecution's responsibleParty rather
-// than introducing a second, competing concept.
-export function responsiblePartyForFulfillmentMode(
-  fulfillmentMode: 'PROVIDER' | 'DIY' | null | undefined,
-): OperationalWorkResponsibleParty {
-  if (fulfillmentMode === 'PROVIDER') return 'CONTRACTOR';
-  if (fulfillmentMode === 'DIY') return 'HOUSEHOLD';
-  return 'UNKNOWN';
-}
-
-export async function syncJourneyWorkItemForProjectEvent(
-  propertyId: string,
-  guidanceJourneyId: string | null | undefined,
-  projectId: string,
-  event: 'HANDOFF' | 'VERIFIED' | 'CANCELLED',
-  actorUserId: string | null,
-  responsibleParty?: OperationalWorkResponsibleParty,
-  throwOnFailure: boolean = false,
-): Promise<void> {
-  if (!guidanceJourneyId) return;
-  const actorType = actorUserId ? 'USER' : 'SYSTEM';
-  try {
-    const linkedJourneyItems = await findAllWorkItemsLinkedToExecution('GUIDANCE', guidanceJourneyId);
-    const workKey = await resolveJourneyWorkKey(propertyId, guidanceJourneyId);
-    const workItem = linkedJourneyItems.find((entry) => entry.workItem.propertyId === propertyId)?.workItem
-      ?? await findWorkItemByWorkKey(propertyId, workKey);
-    if (!workItem) return;
-
-    if (event === 'HANDOFF') {
-      if (['ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE'].includes(workItem.state)) {
-        await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'IN_PROJECT',
-          actorType,
-          actorUserId,
-          idempotencyKey: `project-handoff:${workItem.id}:${projectId}`,
-        });
-      }
-      await linkWorkExecution({ workItemId: workItem.id, executionType: 'PROJECT', executionEntityId: projectId, responsibleParty });
-      return;
-    }
-
-    if (event === 'VERIFIED') {
-      let state: OperationalWorkItemState = workItem.state;
-      if (state === 'CANDIDATE' || state === 'FOLLOW_UP_DUE') {
-        const accepted = await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'ACCEPTED',
-          actorType,
-          actorUserId,
-          idempotencyKey: `project-verified-accepted:${workItem.id}:${projectId}`,
-        });
-        state = accepted.state;
-      }
-      if (state === 'BLOCKED' || state === 'DEFERRED') {
-        const progressing = await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'IN_PROGRESS',
-          actorType,
-          actorUserId,
-          idempotencyKey: `project-verified-progress:${workItem.id}:${projectId}`,
-        });
-        state = progressing.state;
-      }
-      if (state !== 'REPORTED_COMPLETE' && state !== 'VERIFIED') {
-        const reported = await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'REPORTED_COMPLETE',
-          actorType,
-          actorUserId,
-          idempotencyKey: `project-verified-reported:${workItem.id}:${projectId}`,
-        });
-        state = reported.state;
-      }
-      if (state === 'REPORTED_COMPLETE') {
-        await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'VERIFIED',
-          actorType: 'SYSTEM',
-          idempotencyKey: `project-verified:${workItem.id}:${projectId}`,
-        });
-      }
-      const now = new Date();
-      const completedJourney = await prisma.guidanceJourney.updateMany({
-        where: { id: guidanceJourneyId, propertyId, status: { in: ['NOT_STARTED', 'ACTIVE'] } },
-        data: { status: 'COMPLETED', completedAt: now, lastTransitionAt: now, version: { increment: 1 } },
-      });
-      if (completedJourney.count > 0) {
-        await prisma.guidanceSignal.updateMany({
-          where: { journeys: { some: { id: guidanceJourneyId } }, status: 'ACTIVE' },
-          data: { status: 'RESOLVED', resolvedAt: now },
-        });
-      }
-      return;
-    }
-
-    // CANCELLED
-    if (workItem.state === 'IN_PROJECT' || workItem.state === 'IN_PROGRESS') {
-      await transitionWorkItem({
-        workItemId: workItem.id,
-        to: 'ACCEPTED',
-        actorType,
-        actorUserId,
-        idempotencyKey: `project-cancelled-reconciled:${workItem.id}:${projectId}`,
-      });
-    }
-  } catch (err) {
-    await recordReconciliationFailure({
-      propertyId,
-      operation: 'PROJECT_JOURNEY_SYNC',
-      sourceType: 'PROJECT',
-      sourceEntityId: projectId,
-      idempotencyKey: `project-journey-sync:${projectId}:${guidanceJourneyId}:${event}`,
-      payload: { guidanceJourneyId, projectId, event, actorUserId, responsibleParty },
-      error: err,
-    }).catch(() => null);
-    logger.warn({ err, propertyId, guidanceJourneyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
-    if (throwOnFailure) throw err;
-  }
-}
-
-/**
- * Home Operations Item #18 (§13.2 "Project scope coverage"): a Project's
- * own top-level work item (subject PROJECT, obligation PROJECT_EXECUTION —
- * only created for a Project with no relatedJourneyId, see
- * homeActionWorkItem.adapter.ts's resolveSubject) is created passively
- * whenever the Home feed resolves it, but — unlike journeys, findings, and
- * maintenance tasks — nothing ever transitioned it on completion or
- * cancellation. Best-effort: never blocks the project mutation.
- */
-export async function syncProjectExecutionWorkItemOnCompletion(
-  propertyId: string,
-  projectId: string,
-  event: 'VERIFIED' | 'CANCELLED',
-  throwOnFailure: boolean = false,
-): Promise<void> {
-  try {
-    const workKey = resolveProjectExecutionWorkKey(propertyId, projectId);
-    const workItem = await findWorkItemByWorkKey(propertyId, workKey);
-    if (!workItem) return;
-
-    if (event === 'VERIFIED') {
-      let state: OperationalWorkItemState = workItem.state;
-      if (state === 'CANDIDATE' || state === 'FOLLOW_UP_DUE') {
-        const accepted = await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'ACCEPTED',
-          actorType: 'SYSTEM',
-          idempotencyKey: `project-execution-verified-accepted:${workItem.id}:${projectId}`,
-        });
-        state = accepted.state;
-      }
-      if (state === 'BLOCKED' || state === 'DEFERRED') {
-        const progressing = await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'IN_PROGRESS',
-          actorType: 'SYSTEM',
-          idempotencyKey: `project-execution-verified-progress:${workItem.id}:${projectId}`,
-        });
-        state = progressing.state;
-      }
-      if (state !== 'REPORTED_COMPLETE' && state !== 'VERIFIED') {
-        const reported = await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'REPORTED_COMPLETE',
-          actorType: 'SYSTEM',
-          idempotencyKey: `project-execution-verified-reported:${workItem.id}:${projectId}`,
-        });
-        state = reported.state;
-      }
-      if (state === 'REPORTED_COMPLETE') {
-        await transitionWorkItem({
-          workItemId: workItem.id,
-          to: 'VERIFIED',
-          actorType: 'SYSTEM',
-          idempotencyKey: `project-execution-verified:${workItem.id}:${projectId}`,
-        });
-      }
-      return;
-    }
-
-    // CANCELLED — the project itself no longer exists as an active
-    // obligation, unlike a cancelled project's journey (which hands back
-    // to the active backlog since the journey's own obligation persists).
-    if (workItem.state !== 'CLOSED') {
-      await transitionWorkItem({
-        workItemId: workItem.id,
-        to: 'CLOSED',
-        disposition: 'NOT_RELEVANT',
-        actorType: 'SYSTEM',
-        idempotencyKey: `project-execution-cancelled:${workItem.id}:${projectId}`,
-      });
-    }
-  } catch (err) {
-    await recordReconciliationFailure({
-      propertyId,
-      operation: 'PROJECT_EXECUTION_SYNC',
-      sourceType: 'PROJECT',
-      sourceEntityId: projectId,
-      idempotencyKey: `project-execution-sync:${projectId}:${event}`,
-      payload: { projectId, event },
-      error: err,
-    }).catch(() => null);
-    logger.warn({ err, propertyId, projectId, event }, 'Home Operations work item sync failed; project mutation proceeds regardless');
-    if (throwOnFailure) throw err;
-  }
-}
 
 /**
  * A verified project outcome closes every canonical obligation linked to the

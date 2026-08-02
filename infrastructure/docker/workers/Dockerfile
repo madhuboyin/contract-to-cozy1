@@ -186,6 +186,8 @@ COPY apps/backend/src/services/hiddenAssets.service.ts src/shared/backend/servic
 # Risk assessment service chain (RiskAssessment.service → riskAssessmentIntegration → PropertyMaintenanceTask)
 COPY apps/backend/src/config/risk-job-types.ts src/shared/backend/config/
 COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts \
+     apps/backend/src/services/homeOperationsReconciliation.service.ts \
+     apps/backend/src/services/projectWorkItemReconciliation.service.ts \
      apps/backend/src/services/seasonalChecklistStatus.service.ts \
      apps/backend/src/services/riskAssessmentIntegration.service.ts \
      apps/backend/src/services/RiskAssessment.service.ts \
@@ -257,6 +259,7 @@ COPY apps/backend/src/modules/homeOperations/domain/sourceAdapter.ts \
      src/shared/backend/modules/homeOperations/domain/
 COPY apps/backend/src/modules/homeOperations/infrastructure/workItemRepository.ts \
      apps/backend/src/modules/homeOperations/infrastructure/workItemChangeEmitter.ts \
+     apps/backend/src/modules/homeOperations/infrastructure/reconciliationRepository.ts \
      src/shared/backend/modules/homeOperations/infrastructure/
 # Stub: breaks the JobQueue.service ↔ RiskAssessment.service circular import
 COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueue.service.ts

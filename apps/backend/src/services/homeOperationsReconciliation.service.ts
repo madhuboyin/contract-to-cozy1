@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
-import { syncJourneyWorkItemForProjectEvent, syncProjectExecutionWorkItemOnCompletion } from './projectTracker.service';
+import { syncJourneyWorkItemForProjectEvent, syncProjectExecutionWorkItemOnCompletion } from './projectWorkItemReconciliation.service';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { findWorkItemByWorkKey } from '../modules/homeOperations/infrastructure/workItemRepository';
 import { resolveInspectionFindingWorkKey } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
