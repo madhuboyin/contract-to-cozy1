@@ -16,10 +16,15 @@ import { NotificationService } from '../services/notification.service';
 import { reconcileCanonicalPropertyChanges } from '../propertyChanges/canonicalChangeReconciliation.service';
 import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
 
-export const HOME_BRIEFING_BASELINE_VERSION = 'home-briefing-deterministic-v1';
+export const HOME_BRIEFING_BASELINE_VERSION = 'home-briefing-homeowner-v2';
 
 const json = (value: unknown): Prisma.InputJsonValue =>
   value as Prisma.InputJsonValue;
+
+const jsonRecord = (value: Prisma.JsonValue): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 
 const currentEnvironment = (): string => process.env.NODE_ENV ?? 'development';
 
@@ -133,6 +138,135 @@ function safeFacts(payload: unknown): { title?: string; summary?: string } {
   return { ...(title ? { title } : {}), ...(summary ? { summary } : {}) };
 }
 
+function homeownerLabel(value: string): string {
+  const leaf = value.split('.').pop() ?? value;
+  return leaf
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+type HomeownerChangeDetail = {
+  title: string;
+  summary: string;
+  actionLabel: string;
+  semanticKey: string;
+  sourceLabel: string;
+  verifiedAt: Date | null;
+};
+
+async function homeownerDetailForChange(change: {
+  id: string;
+  propertyId: string;
+  sourceType: string;
+  sourceEntityId: string;
+  changeType: string;
+  detectedAt: Date;
+  canonicalAction?: { title: string; homeownerReason: string | null } | null;
+  canonicalEvent?: { title: string; summary: string | null } | null;
+}): Promise<HomeownerChangeDetail | null> {
+  if (change.canonicalAction) {
+    return {
+      title: change.canonicalAction.title,
+      summary: change.canonicalAction.homeownerReason ?? 'A next step for your home has been updated.',
+      actionLabel: 'Review next step',
+      semanticKey: `ACTION:${change.sourceEntityId}`,
+      sourceLabel: 'Home Action',
+      verifiedAt: change.detectedAt,
+    };
+  }
+  if (change.canonicalEvent) {
+    return {
+      title: change.canonicalEvent.title,
+      summary: change.canonicalEvent.summary ?? 'A record in your home timeline was updated.',
+      actionLabel: 'View timeline record',
+      semanticKey: `EVENT:${change.sourceEntityId}`,
+      sourceLabel: 'Home Timeline',
+      verifiedAt: change.detectedAt,
+    };
+  }
+  if (change.sourceType === 'PROPERTY_FACT') {
+    const fact = await prisma.propertyFactEvidence.findFirst({
+      where: { id: change.sourceEntityId, propertyId: change.propertyId },
+      select: { factKey: true, verifiedAt: true, observedAt: true },
+    });
+    if (!fact) return null;
+    const label = homeownerLabel(fact.factKey);
+    return {
+      title: `${label} ${fact.verifiedAt ? 'was confirmed' : 'was updated'}`,
+      summary: `Your home record has updated information for ${label.toLowerCase()}. Review it to make sure it is correct.`,
+      actionLabel: 'Review home details',
+      semanticKey: `PROPERTY_FACT:${fact.factKey}`,
+      sourceLabel: fact.verifiedAt ? 'Verified home information' : 'Home information',
+      verifiedAt: fact.verifiedAt ?? fact.observedAt,
+    };
+  }
+  if (change.sourceType === 'DOCUMENT') {
+    const document = await prisma.document.findFirst({
+      where: { id: change.sourceEntityId, propertyId: change.propertyId },
+      select: { name: true, type: true, verifiedAt: true, updatedAt: true },
+    });
+    if (!document) return null;
+    return {
+      title: `${document.name} was verified`,
+      summary: `A ${homeownerLabel(document.type).toLowerCase()} document in your home record was reviewed and updated.`,
+      actionLabel: 'View document',
+      semanticKey: `DOCUMENT:${change.sourceEntityId}`,
+      sourceLabel: 'Home documents',
+      verifiedAt: document.verifiedAt ?? document.updatedAt,
+    };
+  }
+  if (change.sourceType === 'CLAIM_RECORD') {
+    const claim = await prisma.claim.findFirst({
+      where: { id: change.sourceEntityId, propertyId: change.propertyId },
+      select: { title: true, status: true, providerName: true, updatedAt: true },
+    });
+    if (!claim) return null;
+    return {
+      title: `${claim.title} is now ${homeownerLabel(claim.status).toLowerCase()}`,
+      summary: `Your claim record${claim.providerName ? ` with ${claim.providerName}` : ''} has a new status.`,
+      actionLabel: 'Review claim',
+      semanticKey: `CLAIM:${change.sourceEntityId}`,
+      sourceLabel: claim.providerName ?? 'Claims record',
+      verifiedAt: claim.updatedAt,
+    };
+  }
+  if (change.sourceType === 'PROJECT_RECORD') {
+    const project = await prisma.projectRecord.findFirst({
+      where: { id: change.sourceEntityId, propertyId: change.propertyId },
+      select: { name: true, status: true, updatedAt: true },
+    });
+    if (!project) return null;
+    return {
+      title: `${project.name} is now ${homeownerLabel(project.status).toLowerCase()}`,
+      summary: 'Your project record has been updated. Review its current status, dates, and next steps.',
+      actionLabel: 'Review project',
+      semanticKey: `PROJECT:${change.sourceEntityId}`,
+      sourceLabel: 'Projects',
+      verifiedAt: project.updatedAt,
+    };
+  }
+  if (change.sourceType === 'MAINTENANCE_RECORD') {
+    const task = await prisma.propertyMaintenanceTask.findFirst({
+      where: { id: change.sourceEntityId, propertyId: change.propertyId },
+      select: { title: true, status: true, nextDueDate: true, updatedAt: true },
+    });
+    if (!task) return null;
+    const dueCopy = task.nextDueDate
+      ? ` It is scheduled for ${task.nextDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}.`
+      : '';
+    return {
+      title: `${task.title} is ${homeownerLabel(task.status).toLowerCase()}`,
+      summary: `Your maintenance plan has been updated.${dueCopy}`,
+      actionLabel: 'Review maintenance',
+      semanticKey: `MAINTENANCE:${change.sourceEntityId}`,
+      sourceLabel: 'Maintenance plan',
+      verifiedAt: task.updatedAt,
+    };
+  }
+  return null;
+}
+
 function deterministicCopy(input: {
   changeType: string;
   sourceType: string;
@@ -143,7 +277,11 @@ function deterministicCopy(input: {
   eventSummary?: string | null;
   sourceTitle?: string;
   sourceSummary?: string;
+  homeownerDetail?: HomeownerChangeDetail | null;
 }) {
+  if (input.homeownerDetail) {
+    return { title: input.homeownerDetail.title, summary: input.homeownerDetail.summary };
+  }
   if (input.actionTitle) {
     return {
       title: input.actionTitle,
@@ -155,7 +293,7 @@ function deterministicCopy(input: {
     return {
       title: input.eventTitle,
       summary: input.eventSummary
-        ?? 'A canonical property-history record changed during this briefing window.',
+        ?? 'A record in your home timeline was updated.',
     };
   }
   if (input.sourceTitle) {
@@ -165,11 +303,9 @@ function deterministicCopy(input: {
         ?? `The reviewed source reported a ${input.changeType.toLowerCase().replace(/_/g, ' ')}.`,
     };
   }
-  const sourceLabel = input.sourceType.toLowerCase().replace(/_/g, ' ');
   return {
-    title: `${input.changeType.toLowerCase().replace(/_/g, ' ')}: ${sourceLabel}`,
-    summary:
-      `A ${input.materiality.toLowerCase()} canonical property change was detected. Open its owner for the verified details and next step.`,
+    title: 'Your home record was updated',
+    summary: 'New information is available for your home. Review the details and confirm that they look right.',
   };
 }
 
@@ -239,7 +375,7 @@ async function notifyHomeBriefingDelivery(input: {
     deduplicationKey: `${input.deliveryKey}:v${input.delivery.itemCount}`,
     type: 'HOME_BRIEFING_DELIVERED',
     title: `${input.delivery.itemCount} meaningful home ${input.delivery.itemCount === 1 ? 'change' : 'changes'}`,
-    message: 'Your Home Briefing links each update to its canonical source or next step.',
+    message: 'Your Home Briefing explains what changed and where to review the details.',
     actionUrl: `/dashboard/properties/${input.propertyId}/tools/home-briefing`,
     entityType: 'HomeBriefingDelivery',
     entityId: input.delivery.id,
@@ -356,6 +492,7 @@ export async function generateHomeBriefing(input: {
 
   const preparedItems = await Promise.all(eligibleChanges.map(async ({ change, topic }) => {
     const sourceDetail = await sourceDetailForChange(change);
+    const homeownerDetail = await homeownerDetailForChange(change);
     const facts = safeFacts(sourceDetail?.factualPayload);
     const copy = deterministicCopy({
       changeType: change.changeType,
@@ -367,6 +504,7 @@ export async function generateHomeBriefing(input: {
       eventSummary: change.canonicalEvent?.summary,
       sourceTitle: facts.title,
       sourceSummary: facts.summary,
+      homeownerDetail,
     });
     const primaryDeepLink = defaultDeepLink({
       propertyId: input.propertyId,
@@ -406,6 +544,17 @@ export async function generateHomeBriefing(input: {
         insuranceOrValueImplication: topic === 'HAZARD' || topic === 'LOCAL_CHANGE',
         verifiedHistoryRead: topic === 'HOME_HISTORY',
       }),
+      display: homeownerDetail ? {
+        actionLabel: homeownerDetail.actionLabel,
+        semanticKey: homeownerDetail.semanticKey,
+        sourceLabel: homeownerDetail.sourceLabel,
+        verifiedAt: homeownerDetail.verifiedAt,
+      } : {
+        actionLabel: 'Review update',
+        semanticKey: `CHANGE:${change.id}`,
+        sourceLabel: 'Home record',
+        verifiedAt: change.detectedAt,
+      },
     };
     const shareEligible =
       topic === 'LOCAL_CHANGE'
@@ -443,7 +592,17 @@ export async function generateHomeBriefing(input: {
             sourceLineage: json(item.sourceLineage),
             shareEligible: item.shareEligible,
           },
-          update: {},
+          update: {
+            canonicalActionId: item.change.canonicalActionId,
+            canonicalEventId: item.change.canonicalEventId,
+            topic: item.topic,
+            title: item.copy.title,
+            summary: item.copy.summary,
+            materiality: item.change.materiality,
+            primaryDeepLink: item.primaryDeepLink,
+            sourceLineage: json(item.sourceLineage),
+            shareEligible: item.shareEligible,
+          },
         });
         await tx.propertyChangeAudienceState.upsert({
           where: {
@@ -469,13 +628,14 @@ export async function generateHomeBriefing(input: {
         data: {
           itemCount,
           windowEnd: now,
+          baselineVersion: HOME_BRIEFING_BASELINE_VERSION,
           sourceHealthSnapshot: json({
             comprehensive: false,
             capturedAt: now,
             sources: sourceCoverage,
             scopeLimitations: [
-              'This snapshot covers reviewed Property Intelligence providers only.',
-              'Canonical domains without a source-health contract are not treated as verified quiet.',
+              'This briefing checks only the data sources currently connected to your home.',
+              'A source that does not report its availability cannot be treated as fully checked.',
             ],
           }),
           quietReasonCodes: itemCount > 0 ? [] : quietReasonCodes,
@@ -518,8 +678,8 @@ export async function generateHomeBriefing(input: {
           capturedAt: now,
           sources: sourceCoverage,
           scopeLimitations: [
-            'This snapshot covers reviewed Property Intelligence providers only.',
-            'Canonical domains without a source-health contract are not treated as verified quiet.',
+            'This briefing checks only the data sources currently connected to your home.',
+            'A source that does not report its availability cannot be treated as fully checked.',
           ],
         }),
         quietReasonCodes,
@@ -610,22 +770,83 @@ export async function getHomeBriefingView(propertyId: string, userId: string) {
       include: {
         items: {
           orderBy: [{ materiality: 'desc' }, { createdAt: 'desc' }],
+          include: {
+            propertyChange: {
+              include: {
+                canonicalAction: {
+                  select: { title: true, homeownerReason: true },
+                },
+                canonicalEvent: {
+                  select: { title: true, summary: true },
+                },
+              },
+            },
+          },
         },
       },
     }),
   ]);
-  const current = deliveries[0] ?? null;
+  const rawCurrent = deliveries[0] ?? null;
+  const presentedCurrentItems = rawCurrent
+    ? await Promise.all(rawCurrent.items.map(async ({ propertyChange, ...item }) => {
+        const detail = await homeownerDetailForChange(propertyChange);
+        const lineage = jsonRecord(item.sourceLineage);
+        return {
+          ...item,
+          title: detail?.title ?? item.title,
+          summary: detail?.summary ?? item.summary,
+          sourceLineage: {
+            ...lineage,
+            display: detail ? {
+              actionLabel: detail.actionLabel,
+              semanticKey: detail.semanticKey,
+              sourceLabel: detail.sourceLabel,
+              verifiedAt: detail.verifiedAt,
+            } : lineage.display,
+          },
+        };
+      }))
+    : [];
+  const groupedCurrentItems = new Map<string, (typeof presentedCurrentItems)[number] & { relatedUpdateCount?: number }>();
+  for (const item of presentedCurrentItems) {
+    const lineage = jsonRecord(item.sourceLineage as Prisma.JsonValue);
+    const display = jsonRecord((lineage.display ?? {}) as Prisma.JsonValue);
+    const semanticKey = typeof display.semanticKey === 'string'
+      ? display.semanticKey
+      : `CHANGE:${item.propertyChangeId}`;
+    const existing = groupedCurrentItems.get(semanticKey);
+    if (!existing) {
+      groupedCurrentItems.set(semanticKey, { ...item, relatedUpdateCount: 1 });
+    } else {
+      existing.relatedUpdateCount = (existing.relatedUpdateCount ?? 1) + 1;
+    }
+  }
+  const current = rawCurrent ? {
+    ...rawCurrent,
+    items: [...groupedCurrentItems.values()].map(({ relatedUpdateCount, ...item }) => ({
+      ...item,
+      sourceLineage: {
+        ...jsonRecord(item.sourceLineage as Prisma.JsonValue),
+        relatedUpdateCount,
+      },
+    })),
+    itemCount: groupedCurrentItems.size,
+  } : null;
+  const archive = deliveries.slice(1).map((delivery) => ({
+    ...delivery,
+    items: delivery.items.map(({ propertyChange: _propertyChange, ...item }) => item),
+  }));
   const unreadMaterialCount = current?.items.filter((item) =>
     !item.seenAt && !item.actedAt && !item.dismissedAt && !item.notUsefulAt).length ?? 0;
   return {
     preference,
     current,
-    archive: deliveries,
+    archive,
     unreadMaterialCount,
     archiveBoundary:
-      'Briefing history is a delivery archive. Canonical Home Actions, Timeline records, and source views remain the system of record.',
+      'Review earlier home updates and the number of changes included in each one.',
     editorialBoundary:
-      'Item titles and summaries use the deterministic validated baseline. Generative editing is optional and must fall back to this copy.',
+      'Updates are written from verified home records and reviewed sources.',
   };
 }
 
@@ -701,7 +922,7 @@ export async function recordHomeBriefingItemOutcome(input: {
   if (!item) throw new APIError('Briefing item not found.', 404, 'BRIEFING_ITEM_NOT_FOUND');
   if (input.outcome === 'ACTED' && !item.canonicalActionId && !item.canonicalEventId) {
     throw new APIError(
-      'This briefing item has no canonical owner action to record.',
+      'This update does not have a separate next step to record.',
       422,
       'BRIEFING_ITEM_ACTION_UNAVAILABLE',
     );

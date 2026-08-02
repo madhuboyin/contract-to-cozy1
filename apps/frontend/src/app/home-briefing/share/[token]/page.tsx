@@ -16,7 +16,10 @@ type SelectedBriefingShare = {
     title: string;
     summary: string;
     materiality: string;
-    sourceLineage: Record<string, unknown> & { safetyTier?: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY' };
+    sourceLineage: Record<string, unknown> & {
+      safetyTier?: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY';
+      display?: { sourceLabel?: string; verifiedAt?: string | null };
+    };
   }>;
   sharingBoundary: string;
   expiresAt: string;
@@ -56,7 +59,7 @@ export default function SelectedHomeBriefingSharePage() {
     <main className="mx-auto min-h-screen max-w-2xl space-y-5 bg-slate-50 p-6">
       <header className="rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm">
         <FileCheck2 className="h-5 w-5 text-indigo-700" />
-        <h1 className="mt-3 text-xl font-semibold text-slate-950">Selected Home Briefing items</h1>
+        <h1 className="mt-3 text-xl font-semibold text-slate-950">Shared Home Briefing updates</h1>
         <p className="mt-1 text-sm text-slate-600">
           {query.data.property.name ?? 'Home'} · {query.data.property.city}, {query.data.property.state}
         </p>
@@ -77,10 +80,19 @@ export default function SelectedHomeBriefingSharePage() {
           {item.sourceLineage.safetyTier && item.sourceLineage.safetyTier !== 'LOW_CONSEQUENCE' && (
             <p className={`mt-3 rounded-lg border p-3 text-xs font-medium leading-5 ${item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'border-rose-300 bg-rose-50 text-rose-950' : 'border-amber-300 bg-amber-50 text-amber-950'}`}>
               {item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY'
-                ? 'Safety-sensitive summary: use the canonical source, emergency services when appropriate, and qualified professional review before acting.'
-                : 'Material decision boundary: verify the canonical source and obtain appropriate professional advice before financial, insurance, or property decisions.'}
+                ? 'Review the full safety record now. Contact emergency services when appropriate and use a qualified professional before acting.'
+                : 'Review the full record and obtain appropriate professional advice before financial, insurance, or property decisions.'}
             </p>
           )}
+          {item.sourceLineage.display?.sourceLabel ? (
+            <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <summary className="cursor-pointer font-medium text-slate-900">How we know this</summary>
+              <p className="mt-2">{item.sourceLineage.display.sourceLabel}</p>
+              {item.sourceLineage.display.verifiedAt ? (
+                <p className="mt-1">Checked {new Date(item.sourceLineage.display.verifiedAt).toLocaleString()}</p>
+              ) : null}
+            </details>
+          ) : null}
         </article>
       ))}
 

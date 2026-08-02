@@ -34,6 +34,13 @@ export interface HomeBriefingItem {
     occurredAt: string | null;
     confidence: number | null;
     safetyTier: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY';
+    relatedUpdateCount?: number;
+    display?: {
+      actionLabel?: string;
+      semanticKey?: string;
+      sourceLabel?: string;
+      verifiedAt?: string | null;
+    };
     source?: {
       provider: string;
       url: string | null;

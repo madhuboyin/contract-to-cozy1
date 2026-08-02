@@ -9,7 +9,6 @@ import {
   Archive,
   Check,
   ExternalLink,
-  FileText,
   RefreshCw,
   Settings2,
   Share2,
@@ -60,6 +59,19 @@ function humanize(value: string) {
   return value.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function topicLabel(value: HomeBriefingTopic) {
+  const labels: Record<HomeBriefingTopic, string> = {
+    HOME_ACTION: 'Next steps',
+    HOME_HISTORY: 'Home timeline',
+    LOCAL_CHANGE: 'Nearby changes',
+    HAZARD: 'Hazards',
+    PROPERTY_FACT: 'Home details',
+    SOURCE_HEALTH: 'Data coverage',
+    OTHER: 'Other updates',
+  };
+  return labels[value];
+}
+
 function formatDate(value: string | null) {
   if (!value) return 'not available';
   return new Date(value).toLocaleString();
@@ -90,6 +102,8 @@ function BriefingItemCard({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['home-briefing', propertyId] }),
   });
   const source = item.sourceLineage.source;
+  const display = item.sourceLineage.display;
+  const actionLabel = display?.actionLabel ?? 'Review update';
 
   return (
     <MobileCard className={`space-y-4 ${item.dismissedAt || item.notUsefulAt ? 'opacity-60' : ''}`}>
@@ -97,7 +111,7 @@ function BriefingItemCard({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <StatusChip tone={itemTone(item.materiality)}>{humanize(item.materiality)}</StatusChip>
-            <StatusChip tone="info">{humanize(item.topic)}</StatusChip>
+            <StatusChip tone="info">{topicLabel(item.topic)}</StatusChip>
             {!item.seenAt ? <StatusChip tone="elevated">Unread</StatusChip> : null}
           </div>
           <h3 className="mt-2 text-base font-semibold text-slate-950">{item.title}</h3>
@@ -118,38 +132,33 @@ function BriefingItemCard({
       {item.sourceLineage.safetyTier !== 'LOW_CONSEQUENCE' && (
         <div className={`rounded-xl border p-3 text-sm leading-6 ${item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'border-rose-300 bg-rose-50 text-rose-950' : 'border-amber-300 bg-amber-50 text-amber-950'}`}>
           <p className="font-semibold">{item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'Safety-sensitive update' : 'Material decision boundary'}</p>
-          <p>{item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'Open the canonical owner now. Do not use this briefing summary as a substitute for emergency services or qualified inspection.' : 'Review the canonical source and verify with the appropriate professional before making financial, insurance, or property decisions.'}</p>
+          <p>{item.sourceLineage.safetyTier === 'SAFETY_EMERGENCY' ? 'Review the full safety record now. This summary is not a substitute for emergency services or a qualified inspection.' : 'Review the full record and check with the appropriate professional before making financial, insurance, or property decisions.'}</p>
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-        <p className="font-medium text-slate-900">Source lineage</p>
-        <p className="mt-1">
-          {humanize(item.sourceLineage.changeType)} · revision {item.sourceLineage.sourceRevision}
-          {' · '}detected {formatDate(item.sourceLineage.detectedAt)}
-        </p>
-        <p className="mt-1">
-          Canonical change {item.propertyChangeId} · {humanize(item.sourceLineage.sourceType)}
-        </p>
-        {source ? (
-          <>
-            <p className="mt-1">
-              {source.provider} · checked {formatDate(source.lastVerifiedAt)}
-              {' · '}{humanize(source.lifecycleStatus)}
-            </p>
-            {source.url ? (
-              <a
-                href={source.url}
-                target="_blank"
-                rel="noreferrer"
-                className="no-brand-style mt-1 inline-flex items-center font-medium text-slate-700 underline hover:text-slate-950"
-              >
-                Open exact source <ExternalLink className="ml-1 h-3.5 w-3.5" />
-              </a>
-            ) : null}
-          </>
-        ) : null}
-      </div>
+      {item.sourceLineage.relatedUpdateCount && item.sourceLineage.relatedUpdateCount > 1 ? (
+        <p className="text-xs text-slate-500">{item.sourceLineage.relatedUpdateCount} related records were combined into this update.</p>
+      ) : null}
+
+      <details className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+        <summary className="cursor-pointer font-medium text-slate-900">How we know this</summary>
+        <div className="mt-2 space-y-1">
+          <p>{display?.sourceLabel ?? source?.provider ?? 'Home record'}</p>
+          <p>Checked {formatDate(display?.verifiedAt ?? source?.lastVerifiedAt ?? item.sourceLineage.detectedAt)}</p>
+          {source ? <p>{source.provider} · {humanize(source.lifecycleStatus)}</p> : null}
+          {source?.url ? (
+            <a href={source.url} target="_blank" rel="noreferrer" className="no-brand-style inline-flex font-medium text-slate-700 underline hover:text-slate-950">
+              View original source <ExternalLink className="ml-1 h-3.5 w-3.5" />
+            </a>
+          ) : null}
+          <details className="pt-1 text-xs text-slate-500">
+            <summary className="cursor-pointer">Technical details</summary>
+            <p className="mt-1 break-all">{humanize(item.sourceLineage.changeType)} · {humanize(item.sourceLineage.sourceType)}</p>
+            <p className="mt-1 break-all">Revision {item.sourceLineage.sourceRevision}</p>
+            <p className="mt-1 break-all">Record {item.propertyChangeId}</p>
+          </details>
+        </div>
+      </details>
 
       <div className="flex flex-wrap gap-2">
         <Button
@@ -160,17 +169,17 @@ function BriefingItemCard({
           )}
         >
           <Link href={item.primaryDeepLink}>
-            Open canonical owner <ExternalLink className="ml-1 h-3.5 w-3.5" />
+            {actionLabel} <ExternalLink className="ml-1 h-3.5 w-3.5" />
           </Link>
         </Button>
         <Button size="sm" variant="outline" onClick={() => outcome.mutate('SEEN')} disabled={outcome.isPending}>
-          <Check className="mr-1 h-3.5 w-3.5" /> Seen
+          <Check className="mr-1 h-3.5 w-3.5" /> Mark read
         </Button>
         <Button size="sm" variant="ghost" onClick={() => outcome.mutate('NOT_USEFUL')} disabled={outcome.isPending}>
           <ThumbsDown className="mr-1 h-3.5 w-3.5" /> Not useful
         </Button>
         <Button size="sm" variant="ghost" onClick={() => outcome.mutate('DISMISSED')} disabled={outcome.isPending}>
-          <X className="mr-1 h-3.5 w-3.5" /> Dismiss
+          <X className="mr-1 h-3.5 w-3.5" /> Hide update
         </Button>
       </div>
     </MobileCard>
@@ -245,15 +254,15 @@ export default function HomeBriefingClient({
       backLabel="Back to property"
       eyebrow="Home tool"
       title="Home Briefing"
-      subtitle="Meaningful changes since your last delivery, linked back to the canonical source, Home Action, or Timeline record."
+      subtitle="A clear summary of what changed in your home records and what you may want to do next."
       rail={<HomeToolsRail propertyId={propertyId} currentToolId="home-briefing" />}
     >
 
       <MobileCard className="border-indigo-200 bg-indigo-50/50">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-950">Briefing controls</h2>
-            <p className="mt-1 text-sm text-slate-700">Review delivery settings or check for newly recorded changes.</p>
+            <h2 className="text-lg font-semibold text-slate-950">Your briefing</h2>
+            <p className="mt-1 text-sm text-slate-700">Choose what you receive or refresh your latest home updates.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowPreferences((value) => !value)}>
@@ -261,7 +270,7 @@ export default function HomeBriefingClient({
             </Button>
             <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending || !enabled}>
               <RefreshCw className={`mr-1 h-4 w-4 ${generate.isPending ? 'animate-spin' : ''}`} />
-              Check changes
+              Refresh updates
             </Button>
           </div>
         </div>
@@ -289,7 +298,7 @@ export default function HomeBriefingClient({
             <div className="mt-2 flex flex-wrap gap-2">
               {TOPICS.map((value) => (
                 <Button key={value} size="sm" variant={topics.includes(value) ? 'default' : 'outline'} onClick={() => toggle(value, topics, setTopics)}>
-                  {humanize(value)}
+                  {topicLabel(value)}
                 </Button>
               ))}
             </div>
@@ -319,25 +328,25 @@ export default function HomeBriefingClient({
       ) : null}
 
       {query.isLoading ? (
-        <EmptyStateCard title="Loading Home Briefing" description="Checking your delivery archive and preferences." />
+        <EmptyStateCard title="Loading Home Briefing" description="Checking your latest updates and preferences." />
       ) : query.isError || !query.data ? (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Home Briefing is unavailable</AlertTitle>
-          <AlertDescription>We could not load canonical property changes. Try again.</AlertDescription>
+          <AlertDescription>We could not load your latest home updates. Try again.</AlertDescription>
         </Alert>
       ) : !query.data.current ? (
         <EmptyStateCard
-          title="No briefing delivery yet"
-          description="Check for meaningful canonical changes. A delivery may contain zero items when nothing eligible changed."
-          action={<Button onClick={() => generate.mutate()}>Check for changes</Button>}
+          title="Your first briefing is ready to be checked"
+          description="Refresh the briefing to check whether anything important changed in your home records."
+          action={<Button onClick={() => generate.mutate()}>Refresh updates</Button>}
         />
       ) : (
         <>
           <MobileSection>
             <MobileSectionHeader
-              title="Current delivery"
-              subtitle={`${humanize(query.data.current.cadence)} · ${formatDate(query.data.current.windowStart)} to ${formatDate(query.data.current.windowEnd)}`}
+              title="Your latest updates"
+              subtitle={`${humanize(query.data.current.cadence)} briefing · ${new Date(query.data.current.windowStart).toLocaleDateString()}–${new Date(query.data.current.windowEnd).toLocaleDateString()}`}
             />
             {query.data.current.items.length > 0 ? (
               <div className="space-y-4">
@@ -355,10 +364,9 @@ export default function HomeBriefingClient({
               </div>
             ) : (
               <MobileCard className="space-y-3">
-                <p className="font-semibold text-slate-950">No material changes in this delivery window</p>
+                <p className="font-semibold text-slate-950">No important updates found</p>
                 <p className="text-sm text-slate-700">
-                  This is not automatically an all-clear. The source-health snapshot below explains
-                  whether coverage was current, degraded, stale, unavailable, or not configured.
+                  No important updates were found in the records checked for this briefing. Some data sources may be incomplete; review data coverage below for details.
                 </p>
                 {query.data.current.quietReasonCodes.map((reason) => (
                   <StatusChip key={reason} tone="elevated">{humanize(reason)}</StatusChip>
@@ -367,22 +375,25 @@ export default function HomeBriefingClient({
             )}
           </MobileSection>
 
-          <MobileSection>
-            <MobileSectionHeader title="Source health snapshot" subtitle="Captured with this delivery; coverage is never presented as comprehensive." />
-            <SourceCoverageSummary
-              state={
-                query.data.current.sourceHealthSnapshot.sources.length === 0
-                  ? 'NOT_CONFIGURED'
-                  : query.data.current.sourceHealthSnapshot.sources.every((source) => source.state === 'CURRENT')
-                    ? 'CURRENT'
-                    : 'DEGRADED'
-              }
-              comprehensive={query.data.current.sourceHealthSnapshot.comprehensive}
-              sources={query.data.current.sourceHealthSnapshot.sources}
-              limitations={query.data.current.sourceHealthSnapshot.scopeLimitations}
-              title="Delivery source-health snapshot"
-            />
-          </MobileSection>
+          <details className="rounded-xl border border-slate-200 bg-white p-4">
+            <summary className="cursor-pointer font-medium text-slate-900">Data coverage</summary>
+            <p className="mt-1 text-sm text-slate-600">See which reviewed sources were available when this briefing was prepared.</p>
+            <div className="mt-3">
+              <SourceCoverageSummary
+                state={
+                  query.data.current.sourceHealthSnapshot.sources.length === 0
+                    ? 'NOT_CONFIGURED'
+                    : query.data.current.sourceHealthSnapshot.sources.every((source) => source.state === 'CURRENT')
+                      ? 'CURRENT'
+                      : 'DEGRADED'
+                }
+                comprehensive={query.data.current.sourceHealthSnapshot.comprehensive}
+                sources={query.data.current.sourceHealthSnapshot.sources}
+                limitations={query.data.current.sourceHealthSnapshot.scopeLimitations}
+                title="Sources checked"
+              />
+            </div>
+          </details>
 
           {selectedItems.length > 0 ? (
             <MobileCard className="space-y-3">
@@ -402,14 +413,8 @@ export default function HomeBriefingClient({
             </MobileCard>
           ) : null}
 
-          <Alert>
-            <FileText className="h-4 w-4" />
-            <AlertTitle>Deterministic baseline</AlertTitle>
-            <AlertDescription>{query.data.editorialBoundary}</AlertDescription>
-          </Alert>
-
           <MobileSection>
-            <MobileSectionHeader title="Delivery archive" subtitle={query.data.archiveBoundary} />
+            <MobileSectionHeader title="Earlier briefings" subtitle="Review previous briefing dates and how many updates they contained." />
             <MobileCard className="space-y-2">
               {query.data.archive.map((delivery) => (
                 <div key={delivery.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 text-sm">

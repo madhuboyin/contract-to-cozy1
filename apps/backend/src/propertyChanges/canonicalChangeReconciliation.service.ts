@@ -103,6 +103,16 @@ export async function reconcileCanonicalPropertyChanges(input: {
     }),
   ]);
 
+  // A fact may have multiple active evidence rows from different sources.
+  // A homeowner briefing represents the semantic fact once, using the most
+  // recently verified/observed evidence, rather than emitting duplicate cards.
+  const latestFactsByKey = [...facts]
+    .sort((left, right) =>
+      (left.verifiedAt ?? left.observedAt).getTime()
+      - (right.verifiedAt ?? right.observedAt).getTime())
+    .reduce((byKey, fact) => byKey.set(fact.factKey, fact), new Map<string, (typeof facts)[number]>());
+  const briefingFacts = [...latestFactsByKey.values()];
+
   const candidates: Candidate[] = [
     ...events.map((event): Candidate => ({
       propertyId: input.propertyId,
@@ -124,7 +134,7 @@ export async function reconcileCanonicalPropertyChanges(input: {
       },
       canonicalEventId: event.id,
     })),
-    ...facts.map((fact): Candidate => ({
+    ...briefingFacts.map((fact): Candidate => ({
       propertyId: input.propertyId,
       sourceType: 'PROPERTY_FACT',
       sourceEntityId: fact.id,
