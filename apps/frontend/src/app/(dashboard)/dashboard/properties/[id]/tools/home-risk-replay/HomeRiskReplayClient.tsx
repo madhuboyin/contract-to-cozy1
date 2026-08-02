@@ -14,12 +14,10 @@ import {
   MapPin,
   ShieldAlert,
 } from 'lucide-react';
-import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
   EmptyStateCard,
   MobileCard,
   MobileFilterSurface,
-  MobilePageContainer,
   MobileSection,
   MobileSectionHeader,
   StatusChip,
@@ -43,6 +41,8 @@ import {
   type PropertyHazardEvidenceKind,
   recordPastHazardOutcome,
 } from './homeRiskReplayApi';
+import HomeToolsRail from '../../components/HomeToolsRail';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 const EVIDENCE_KINDS: PropertyHazardEvidenceKind[] = [
   'CLAIM',
@@ -365,25 +365,21 @@ export default function HomeRiskReplayClient() {
   );
 
   return (
-    <MobilePageContainer className="space-y-6">
-      <HomeToolHeader
-        toolId="home-risk-replay"
-        propertyId={propertyId}
-        backHref={`/dashboard/properties/${propertyId}`}
-        backLabel="Back to property"
-        showBackLink
-      />
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home tool"
+      title="Past Hazard Exposure"
+      subtitle="Review sourced historical hazards matched to this property geography, then record what is actually known about the home."
+      rail={<HomeToolsRail propertyId={propertyId} currentToolId="home-risk-replay" />}
+    >
 
       <MobileCard className="border-amber-200 bg-amber-50/50">
         <div className="flex items-start gap-3">
           <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-700" />
           <div>
-            <h1 className="text-xl font-semibold text-slate-950">Past Hazard Exposure</h1>
-            <p className="mt-1 text-sm text-slate-700">
-              Review sourced historical hazards matched to this property geography, then record what
-              is actually known about the home.
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-slate-600">
+            <h2 className="text-lg font-semibold text-slate-950">Interpretation boundary</h2>
+            <p className="mt-1 text-sm leading-relaxed text-slate-700">
               A nearby event or geographic match does not prove damage, causation, insurance coverage,
               or a change in property value.
             </p>
@@ -489,6 +485,6 @@ export default function HomeRiskReplayClient() {
       >
         <ArrowLeft className="mr-1 h-4 w-4" /> Return to property
       </Link>
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

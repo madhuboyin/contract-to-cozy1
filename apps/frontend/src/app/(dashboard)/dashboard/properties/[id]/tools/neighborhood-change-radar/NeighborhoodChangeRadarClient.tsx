@@ -14,11 +14,9 @@ import {
   MapPin,
   X,
 } from 'lucide-react';
-import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
   EmptyStateCard,
   MobileCard,
-  MobilePageContainer,
   MobileSection,
   MobileSectionHeader,
   StatusChip,
@@ -37,6 +35,8 @@ import {
   getAroundYourHome,
   updateAroundYourHomeInteraction,
 } from './aroundYourHomeApi';
+import HomeToolsRail from '../../components/HomeToolsRail';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 function humanize(value: string) {
   return value.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -270,21 +270,18 @@ export default function NeighborhoodChangeRadarClient({
   });
 
   return (
-    <MobilePageContainer className="space-y-6">
-      <HomeToolHeader
-        toolId="neighborhood-change-radar"
-        propertyId={propertyId}
-        backHref={`/dashboard/properties/${propertyId}`}
-        backLabel="Back to property"
-        showBackLink
-      />
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home tool"
+      title="Around Your Home"
+      subtitle="Follow factual planning, infrastructure, land-use, flood-map, and school updates from reviewed sources."
+      rail={<HomeToolsRail propertyId={propertyId} currentToolId="neighborhood-change-radar" />}
+    >
 
       <MobileCard className="border-indigo-200 bg-indigo-50/50">
-        <h1 className="text-xl font-semibold text-slate-950">Around Your Home</h1>
-        <p className="mt-1 text-sm text-slate-700">
-          Follow factual planning, infrastructure, land-use, flood-map, and school updates from reviewed sources.
-        </p>
-        <p className="mt-2 text-xs leading-relaxed text-slate-600">
+        <h2 className="text-lg font-semibold text-slate-950">Interpretation boundary</h2>
+        <p className="mt-1 text-sm leading-relaxed text-slate-700">
           Possible relevance is shown separately. This view does not predict property value, demand,
           insurance cost, or household impact.
         </p>
@@ -365,6 +362,6 @@ export default function NeighborhoodChangeRadarClient({
         </>
       )}
       <PropertyIntelligenceJourneyLinks propertyId={propertyId} current="SOURCE_VIEW" />
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

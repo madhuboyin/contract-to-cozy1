@@ -16,11 +16,9 @@ import {
   ThumbsDown,
   X,
 } from 'lucide-react';
-import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
   EmptyStateCard,
   MobileCard,
-  MobilePageContainer,
   MobileSection,
   MobileSectionHeader,
   StatusChip,
@@ -43,6 +41,8 @@ import {
   recordHomeBriefingOutcome,
   updateHomeBriefingPreferences,
 } from './homeBriefingApi';
+import HomeToolsRail from '../../components/HomeToolsRail';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 const CADENCES: HomeBriefingCadence[] = ['IMMEDIATE', 'WEEKLY', 'MONTHLY', 'IMPORTANT_ONLY'];
 const CHANNELS: HomeBriefingChannel[] = ['IN_APP', 'EMAIL', 'PUSH'];
@@ -240,23 +240,20 @@ export default function HomeBriefingClient({
     setValues(values.includes(value) ? values.filter((candidate) => candidate !== value) : [...values, value]);
 
   return (
-    <MobilePageContainer className="space-y-6">
-      <HomeToolHeader
-        toolId="home-briefing"
-        propertyId={propertyId}
-        backHref={`/dashboard/properties/${propertyId}`}
-        backLabel="Back to property"
-        showBackLink
-      />
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home tool"
+      title="Home Briefing"
+      subtitle="Meaningful changes since your last delivery, linked back to the canonical source, Home Action, or Timeline record."
+      rail={<HomeToolsRail propertyId={propertyId} currentToolId="home-briefing" />}
+    >
 
       <MobileCard className="border-indigo-200 bg-indigo-50/50">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-slate-950">Home Briefing</h1>
-            <p className="mt-1 text-sm text-slate-700">
-              Meaningful changes since your last delivery, linked back to the canonical source,
-              Home Action, or Timeline record.
-            </p>
+            <h2 className="text-lg font-semibold text-slate-950">Briefing controls</h2>
+            <p className="mt-1 text-sm text-slate-700">Review delivery settings or check for newly recorded changes.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowPreferences((value) => !value)}>
@@ -428,6 +425,6 @@ export default function HomeBriefingClient({
         </>
       )}
       <PropertyIntelligenceJourneyLinks propertyId={propertyId} current="BRIEFING" />
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }
