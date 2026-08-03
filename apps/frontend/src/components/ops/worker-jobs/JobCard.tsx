@@ -220,6 +220,9 @@ export function JobCard({
                     {run.dryRun && (
                       <span className="rounded bg-slate-200 px-1 text-[10px] font-semibold text-slate-600">dry run</span>
                     )}
+                    {run.trigger === 'manual' && (
+                      <span className="rounded bg-slate-200 px-1 text-[10px] font-semibold text-slate-600">manual</span>
+                    )}
                     {run.status === 'failed' && run.failReason && (
                       <>
                         <span className="text-slate-300">·</span>

@@ -46,6 +46,16 @@ export interface RecentRun {
   dryRun?: boolean;
   /** The handler's returned outcome (WorkerRunResult or a job-specific shape), when available. */
   result?: unknown;
+  /**
+   * Whether this run came from the real schedule (node-cron tick / BullMQ
+   * repeatable job) or an admin-console manual "Run Job" click. A `type:
+   * 'cron'` registry entry that also declares a `queueName` only uses that
+   * queue for manual triggers — its scheduled ticks run in-process and are
+   * never distinguishable from BullMQ history alone, so callers must not
+   * assume queue-sourced runs are 'scheduled' for those jobs (see
+   * listWorkerJobs()).
+   */
+  trigger?: 'scheduled' | 'manual';
 }
 
 export interface WorkerJobDetail {
@@ -106,12 +116,24 @@ async function getCronRunHistory(jobKey: string, limit = 3): Promise<RecentRun[]
         finishedAt: parsed.finishedAt,
         durationMs: parsed.durationMs,
         failReason: parsed.failReason,
+        // recordCronRun() is only ever called from scheduleCronJobs()'s
+        // in-process tick handler (worker.ts) — cronTriggerWorker's manual
+        // trigger path updates metrics/alerting only, never this history —
+        // so every entry here is a real scheduled tick.
+        trigger: 'scheduled',
       };
     });
   } catch (err) {
     logger.error({ err }, `[ADMIN-WORKER-JOBS] Failed to read cron run history for "${jobKey}"`);
     return [];
   }
+}
+
+/** Merge run histories from multiple sources, most recent first. */
+function mergeRecentRuns(...lists: RecentRun[][]): RecentRun[] {
+  return lists
+    .flat()
+    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0));
 }
 
 // WKR-007 (partial): dedup window for triggerJob()'s deterministic jobId —
@@ -196,6 +218,12 @@ async function getRecentRuns(queueName: string, jobName: string | undefined, lim
   const filterByName = <T extends { name: string }>(jobs: T[]) =>
     isShared ? jobs.filter((job) => job.name === jobName) : jobs;
 
+  // Manual admin-console triggers always use a `manual-<jobKey>-...` jobId
+  // (see triggerJob() below); the repeatable/singleton schedule never does,
+  // so this prefix reliably tells the two apart even on a shared queue.
+  const triggerOf = (id: string | undefined): 'scheduled' | 'manual' =>
+    id?.startsWith('manual-') ? 'manual' : 'scheduled';
+
   const runs: RecentRun[] = [
     ...filterByName(completed).map((job) => ({
       id: job.id ?? '',
@@ -206,6 +234,7 @@ async function getRecentRuns(queueName: string, jobName: string | undefined, lim
         job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : null,
       dryRun: job.data?.dryRun === true,
       result: job.returnvalue,
+      trigger: triggerOf(job.id),
     })),
     ...filterByName(failed).map((job) => ({
       id: job.id ?? '',
@@ -216,6 +245,7 @@ async function getRecentRuns(queueName: string, jobName: string | undefined, lim
         job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : null,
       failReason: job.failedReason ?? undefined,
       dryRun: job.data?.dryRun === true,
+      trigger: triggerOf(job.id),
     })),
   ];
 
@@ -232,6 +262,12 @@ function effectiveExecutionState(job: { key: string } & Parameters<typeof evalua
   return decision.allowed ? { effectiveEnabled: true } : { effectiveEnabled: false, disabledReason: decision.reason };
 }
 
+// Fetched per source before merging, so a manual-trigger-only run on the
+// queue can't crowd out the final, smaller merged list before the real
+// scheduled history even gets compared against it.
+const MERGE_SOURCE_FETCH_LIMIT = 5;
+const RECENT_RUNS_DISPLAY_LIMIT = 3;
+
 export async function listWorkerJobs(): Promise<WorkerJobDetail[]> {
   // Same value for every job — computed once per call, not per job, but kept
   // on each WorkerJobDetail so the frontend doesn't need a second fetch.
@@ -239,18 +275,55 @@ export async function listWorkerJobs(): Promise<WorkerJobDetail[]> {
   return Promise.all(
     JOB_REGISTRY.map(async (job) => {
       const state = effectiveExecutionState(job);
+
+      // type: 'bullmq' jobs have no separate schedule — the repeatable job
+      // and any manual trigger both land on the same queue/job name, so its
+      // own completed/failed history is already the complete picture.
+      if (job.type === 'bullmq') {
+        if (!job.queueName) {
+          return { ...job, ...state, recentRuns: [], smokeAllowlistConfigured };
+        }
+        try {
+          const [queueStats, recentRuns] = await Promise.all([
+            getQueueStats(job.queueName, job.jobName),
+            getRecentRuns(job.queueName, job.jobName),
+          ]);
+          return { ...job, ...state, queueStats, recentRuns, smokeAllowlistConfigured };
+        } catch {
+          return { ...job, ...state, recentRuns: [], smokeAllowlistConfigured };
+        }
+      }
+
+      // type: 'cron' — the real execution path is scheduleCronJobs()'s
+      // in-process node-cron tick (recorded to cron-run-history), not the
+      // BullMQ queue. If this entry also declares a queueName, that queue
+      // only ever carries manual "Run Job" attempts (cronTriggerWorker never
+      // writes to cron-run-history) — using only one source either hides
+      // the real scheduled-run status behind a stale/successful manual
+      // trigger, or vice versa. Merge both, most recent first.
+      const scheduledRuns = await getCronRunHistory(job.key, MERGE_SOURCE_FETCH_LIMIT);
       if (!job.queueName) {
-        const recentRuns = await getCronRunHistory(job.key);
-        return { ...job, ...state, recentRuns, smokeAllowlistConfigured };
+        return {
+          ...job,
+          ...state,
+          recentRuns: scheduledRuns.slice(0, RECENT_RUNS_DISPLAY_LIMIT),
+          smokeAllowlistConfigured,
+        };
       }
       try {
-        const [queueStats, recentRuns] = await Promise.all([
+        const [queueStats, manualRuns] = await Promise.all([
           getQueueStats(job.queueName, job.jobName),
-          getRecentRuns(job.queueName, job.jobName),
+          getRecentRuns(job.queueName, job.jobName, MERGE_SOURCE_FETCH_LIMIT),
         ]);
+        const recentRuns = mergeRecentRuns(scheduledRuns, manualRuns).slice(0, RECENT_RUNS_DISPLAY_LIMIT);
         return { ...job, ...state, queueStats, recentRuns, smokeAllowlistConfigured };
       } catch {
-        return { ...job, ...state, recentRuns: [], smokeAllowlistConfigured };
+        return {
+          ...job,
+          ...state,
+          recentRuns: scheduledRuns.slice(0, RECENT_RUNS_DISPLAY_LIMIT),
+          smokeAllowlistConfigured,
+        };
       }
     }),
   );

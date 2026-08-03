@@ -36,6 +36,8 @@ export interface RecentRun {
   dryRun?: boolean;
   /** The handler's returned outcome, when available (W6 smoke checklist "actual result"). */
   result?: unknown;
+  /** Whether this run came from the real schedule or an admin-console manual "Run Job" click. */
+  trigger?: 'scheduled' | 'manual';
 }
 
 export interface WorkerJobDetail {
