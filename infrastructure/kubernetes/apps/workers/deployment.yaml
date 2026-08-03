@@ -156,6 +156,21 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_HOME_BRIEFING_DELIVERY_ENABLED
+            - name: WORKER_JOB_RADAR_SAFETY_NET_RECONCILIATION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_RADAR_SAFETY_NET_RECONCILIATION_ENABLED
+            - name: WORKER_JOB_RENOVATION_ADVISOR_SESSION_EXPIRY_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_RENOVATION_ADVISOR_SESSION_EXPIRY_ENABLED
+            - name: WORKER_JOB_SAVINGS_BENEFITS_SOURCE_HEALTH_AUDIT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_SAVINGS_BENEFITS_SOURCE_HEALTH_AUDIT_ENABLED
             - name: WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED
               valueFrom:
                 configMapKeyRef:
@@ -166,6 +181,31 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED
+            - name: WORKER_JOB_RECALL_INGEST_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_RECALL_INGEST_ENABLED
+            - name: WORKER_JOB_NEIGHBORHOOD_RADAR_REFRESH_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_NEIGHBORHOOD_RADAR_REFRESH_ENABLED
+            - name: WORKER_JOB_MORTGAGE_RATE_INGEST_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_MORTGAGE_RATE_INGEST_ENABLED
+            - name: WORKER_JOB_PERMIT_FETCH_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_PERMIT_FETCH_ENABLED
+            - name: WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED
             - name: WORKER_JOB_NYC_ZAP_PLANNING_INGEST_ENABLED
               valueFrom:
                 configMapKeyRef:

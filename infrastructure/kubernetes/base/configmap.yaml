@@ -106,11 +106,12 @@ data:
   # A separate reviewed implementation and authorization would be required.
   WEB_PUSH_VAPID_SUBJECT: ""
   WEB_PUSH_VAPID_PUBLIC_KEY: ""
-  # Deliberately kept "false" (not synced from live's "true") — the
-  # WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED / WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED
-  # per-job overrides below replace the group flag for those two jobs so
-  # the other external-ingest jobs (recall-ingest, mortgage-rate-ingest,
-  # permit-fetch, generate-diy-ai-guide, etc.) stay off pending review.
+  # Deliberately kept "false" (not synced from live's "true") — reviewed
+  # jobs in this group are enabled individually via the per-job overrides
+  # below instead. airnow-air-quality (missing AIRNOW_API_KEY),
+  # openfema-declarations and tax-assessment-ingest (unverified
+  # county/state matching, pending dry-run verification) remain excluded
+  # pending those specific blockers.
   WORKER_EXTERNAL_INGEST_ENABLED: "false"
   # Durable canonical Radar ingestion. This is independent from provider
   # enablement so reviewed NWS/freeze jobs can share one bounded consumer.
@@ -149,13 +150,27 @@ data:
   WORKER_JOB_MATERIAL_SPEC_EXPORT_CLEANUP_ENABLED: "true"
   WORKER_JOB_SEASONAL_CHECKLIST_GENERATION_ENABLED: "true"
   WORKER_JOB_HOME_BRIEFING_DELIVERY_ENABLED: "true"
+  # Reviewed 2026-08-03 — no other blocker found for these three broadSweep
+  # jobs; they were simply missing from the curated list above.
+  WORKER_JOB_RADAR_SAFETY_NET_RECONCILIATION_ENABLED: "true"
+  WORKER_JOB_RENOVATION_ADVISOR_SESSION_EXPIRY_ENABLED: "true"
+  WORKER_JOB_SAVINGS_BENEFITS_SOURCE_HEALTH_AUDIT_ENABLED: "true"
+  # shared-data-backfill intentionally has no override here — defaultEnabledInBeta:false
+  # is a deliberate WKR-011 product decision (no real-user migration/backfill need in
+  # this single-environment model), not a review-pending gap; see workerJobRegistry.ts.
   # Per-job overrides for the WORKER_EXTERNAL_INGEST_ENABLED=false group —
   # reviewed individually rather than flipping the group flag, which would
-  # also enable every other external-provider job (recall-ingest,
-  # neighborhood-radar-refresh, mortgage-rate-ingest, tax-assessment-ingest,
-  # permit-fetch, generate-diy-ai-guide) without review.
+  # also enable airnow-air-quality, openfema-declarations, and
+  # tax-assessment-ingest without their required review/credentials.
   WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED: "true"
   WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED: "true"
+  # Reviewed 2026-08-03 — no other blocker found for these five
+  # external-provider jobs.
+  WORKER_JOB_RECALL_INGEST_ENABLED: "true"
+  WORKER_JOB_NEIGHBORHOOD_RADAR_REFRESH_ENABLED: "true"
+  WORKER_JOB_MORTGAGE_RATE_INGEST_ENABLED: "true"
+  WORKER_JOB_PERMIT_FETCH_ENABLED: "true"
+  WORKER_JOB_GENERATE_DIY_AI_GUIDE_ENABLED: "true"
   # Reviewed public-data pilot: NYC Department of City Planning ZAP projects,
   # limited to Manhattan/New York County and county-level matching. The job
   # persists the source, family PILOT gate, and audit evidence before ingest.
