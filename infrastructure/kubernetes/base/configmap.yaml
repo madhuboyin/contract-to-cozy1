@@ -164,6 +164,20 @@ data:
   # tax-assessment-ingest without their required review/credentials.
   WORKER_JOB_FREEZE_RISK_INCIDENTS_ENABLED: "true"
   WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED: "true"
+  # Found 2026-08-03: freeze-risk-incidents and severe-weather-alerts each
+  # hit a SECOND, independent execution-policy gate inside their handler
+  # (radarSourceRun.service.ts -> radarSourceRegistry.service.ts
+  # executionDecision()), keyed by their RadarSourceDefinition.key
+  # ('open-meteo-freeze-forecast' / 'nws-active-alerts') rather than the
+  # JOB_REGISTRY key above. That inner gate has no override of its own, so it
+  # falls through to WORKER_EXTERNAL_INGEST_ENABLED (false) and blocks the
+  # run with errorCode EXECUTION_POLICY_BLOCKED even though the outer,
+  # registry-keyed gate already allowed the tick. This was masked for months
+  # by WORKER_EXTERNAL_INGEST_ENABLED having been hand-set "true" directly on
+  # the cluster; it surfaced the moment a deploy applied this file's "false"
+  # and restarted the workers pod. These two overrides close that gap.
+  WORKER_JOB_NWS_ACTIVE_ALERTS_ENABLED: "true"
+  WORKER_JOB_OPEN_METEO_FREEZE_FORECAST_ENABLED: "true"
   # Reviewed 2026-08-03 — no other blocker found for these five
   # external-provider jobs.
   WORKER_JOB_RECALL_INGEST_ENABLED: "true"

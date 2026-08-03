@@ -181,6 +181,16 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WORKER_JOB_SEVERE_WEATHER_ALERTS_ENABLED
+            - name: WORKER_JOB_NWS_ACTIVE_ALERTS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_NWS_ACTIVE_ALERTS_ENABLED
+            - name: WORKER_JOB_OPEN_METEO_FREEZE_FORECAST_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: WORKER_JOB_OPEN_METEO_FREEZE_FORECAST_ENABLED
             - name: WORKER_JOB_RECALL_INGEST_ENABLED
               valueFrom:
                 configMapKeyRef:
