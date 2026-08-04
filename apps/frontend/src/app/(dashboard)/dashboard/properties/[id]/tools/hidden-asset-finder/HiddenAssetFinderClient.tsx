@@ -874,7 +874,7 @@ function FilterChip({
 // MAIN CLIENT COMPONENT
 // ============================================================================
 
-export default function HiddenAssetFinderClient() {
+export default function HiddenAssetFinderClient({ embedded = false }: { embedded?: boolean } = {}) {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const queryClient = useQueryClient();
@@ -1043,24 +1043,28 @@ export default function HiddenAssetFinderClient() {
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      {/* Back button */}
-      <Button
-        variant="ghost"
-        className="min-h-[44px] w-fit px-0 text-muted-foreground"
-        asChild
-      >
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-          Back to property
-        </Link>
-      </Button>
+      {!embedded ? (
+        <>
+          {/* Back button */}
+          <Button
+            variant="ghost"
+            className="min-h-[44px] w-fit px-0 text-muted-foreground"
+            asChild
+          >
+            <Link href={`/dashboard/properties/${propertyId}`}>
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+              Back to property
+            </Link>
+          </Button>
 
-      {/* Page intro */}
-      <MobilePageIntro
-        eyebrow="Home tool"
-        title="Hidden Asset Finder"
-        subtitle="Discover potential rebates, tax benefits, discounts, and grants that may apply to your home. All results are potential matches — verify eligibility with each program's official source."
-       className="lg:hidden"/>
+          {/* Page intro */}
+          <MobilePageIntro
+            eyebrow="Home tool"
+            title="Hidden Asset Finder"
+            subtitle="Discover potential rebates, tax benefits, discounts, and grants that may apply to your home. All results are potential matches — verify eligibility with each program's official source."
+           className="lg:hidden"/>
+        </>
+      ) : null}
 
       <PropertyContextCapturePanel propertyId={propertyId} featureKey="HIDDEN_ASSETS" operationKey="VIEW_MATCHES" onCaptured={async () => { await refetch(); }} />
 

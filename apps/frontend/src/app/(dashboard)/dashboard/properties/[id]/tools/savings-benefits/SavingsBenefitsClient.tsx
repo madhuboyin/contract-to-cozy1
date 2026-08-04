@@ -57,7 +57,7 @@ export default function SavingsBenefitsClient() {
         </TabsList>
 
         <TabsContent value="benefits" className="mt-5">
-          <HiddenAssetFinderClient />
+          <HiddenAssetFinderClient embedded />
         </TabsContent>
 
         <TabsContent value="recurring" className="mt-5">
