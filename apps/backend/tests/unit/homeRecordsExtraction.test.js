@@ -12,7 +12,7 @@ let propertyForPromotion = { homeownerProfileId: 'homeowner-1' };
 const createManyCalls = [];
 const updateManyCalls = [];
 const updateCalls = [];
-const transactionCalls = { warrantyCreates: [], candidateUpdateManys: [], linkCreates: [] };
+const transactionCalls = { warrantyCreates: [], expenseCreates: [], candidateUpdateManys: [], linkCreates: [] };
 let downloadCalls = 0;
 let analyzeCalls = 0;
 let analyzeResult = null;
@@ -36,6 +36,12 @@ const prismaMock = {
       create: async (args) => {
         transactionCalls.warrantyCreates.push(args);
         return { id: 'warranty-1', ...args.data };
+      },
+    },
+    expense: {
+      create: async (args) => {
+        transactionCalls.expenseCreates.push(args);
+        return { id: 'expense-1', ...args.data };
       },
     },
     extractedFactCandidate: {
@@ -79,11 +85,11 @@ const originalBucket = process.env.S3_BUCKET;
 process.env.S3_BUCKET = 'bucket-1';
 test.after(() => { process.env.S3_BUCKET = originalBucket; });
 
-test('runExtraction refuses non-WARRANTY record types', async () => {
+test('runExtraction refuses record types with no promotion contract', async () => {
   versionForRecord = {
     id: 'version-1',
     scanStatus: 'CLEAN',
-    record: { lifecycleStatus: 'ACTIVE', recordType: 'RECEIPT' },
+    record: { lifecycleStatus: 'ACTIVE', recordType: 'MANUAL' },
   };
 
   await assert.rejects(
@@ -270,6 +276,116 @@ test('promoteWarranty refuses to run twice against the same analysis', async () 
 
   await assert.rejects(
     service.promoteWarranty({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
+  );
+});
+
+test('runExtraction stages a document-type candidate plus mapped expense fields for a RECEIPT record', async () => {
+  // Earlier promote* tests permanently swap this mock to read from
+  // candidatesForPromotion instead — restore the default before exercising
+  // runExtraction's own "already analyzed" findMany check.
+  prismaMock.extractedFactCandidate.findMany = async () => existingCandidates;
+  versionForRecord = {
+    id: 'version-1',
+    storageKey: 'key-1',
+    mimeType: 'application/pdf',
+    originalFileName: 'home-depot-receipt.pdf',
+    scanStatus: 'CLEAN',
+    record: { lifecycleStatus: 'ACTIVE', recordType: 'RECEIPT' },
+  };
+  existingCandidates = [];
+  analyzeResult = {
+    documentType: 'RECEIPT',
+    confidence: 0.75,
+    extractedData: {
+      vendor: 'Home Depot',
+      amount: 84.21,
+      purchaseDate: new Date('2026-06-15T00:00:00.000Z'),
+      category: 'materials',
+    },
+    suggestedActions: [],
+  };
+  createManyCalls.length = 0;
+
+  await service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
+
+  assert.equal(createManyCalls.length, 1);
+  const rows = createManyCalls[0].data;
+  const byField = Object.fromEntries(rows.map((r) => [r.fieldKey, r]));
+
+  assert.equal(rows.every((r) => r.targetDomain === 'EXPENSE'), true);
+  assert.equal(byField._documentType.proposedValue, 'RECEIPT');
+  assert.equal(byField.description.proposedValue, 'Home Depot');
+  assert.equal(byField.amount.proposedValue, '84.21');
+  assert.equal(byField.transactionDate.proposedValue, '2026-06-15');
+  assert.equal(byField.category.proposedValue, 'MATERIALS');
+});
+
+test('promoteExpense blocks promotion until every required field is confirmed or corrected', async () => {
+  versionForRecord = { id: 'version-1' };
+  candidatesForPromotion = [
+    { id: 'c-desc', fieldKey: 'description', reviewStatus: 'CONFIRMED', reviewedValue: 'Home Depot', promotedEntityId: null },
+    { id: 'c-amount', fieldKey: 'amount', reviewStatus: 'PENDING', reviewedValue: null, promotedEntityId: null },
+  ];
+  prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
+
+  await assert.rejects(
+    service.promoteExpense({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    (err) => {
+      assert.equal(err.code, 'PROPERTY_RECORD_EXTRACTION_PROMOTION_INCOMPLETE');
+      assert.ok(err.details.missingFields.includes('amount'));
+      assert.ok(err.details.missingFields.includes('transactionDate'));
+      return true;
+    },
+  );
+});
+
+test('promoteExpense creates an Expense, links it, and marks candidates promoted once required fields are reviewed', async () => {
+  versionForRecord = { id: 'version-1' };
+  candidatesForPromotion = [
+    { id: 'c-desc', fieldKey: 'description', reviewStatus: 'CONFIRMED', reviewedValue: 'Home Depot', promotedEntityId: null },
+    { id: 'c-amount', fieldKey: 'amount', reviewStatus: 'CONFIRMED', reviewedValue: '84.21', promotedEntityId: null },
+    { id: 'c-date', fieldKey: 'transactionDate', reviewStatus: 'CORRECTED', reviewedValue: '2026-06-15', promotedEntityId: null },
+    { id: 'c-category', fieldKey: 'category', reviewStatus: 'CONFIRMED', reviewedValue: 'MATERIALS', promotedEntityId: null },
+  ];
+  prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
+  propertyForPromotion = { homeownerProfileId: 'homeowner-1' };
+  transactionCalls.expenseCreates.length = 0;
+  transactionCalls.candidateUpdateManys.length = 0;
+  transactionCalls.linkCreates.length = 0;
+
+  const expense = await service.promoteExpense({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
+
+  assert.equal(expense.id, 'expense-1');
+  const createData = transactionCalls.expenseCreates[0].data;
+  assert.equal(createData.homeownerProfileId, 'homeowner-1');
+  assert.equal(createData.description, 'Home Depot');
+  assert.equal(createData.amount, 84.21);
+  assert.equal(createData.category, 'MATERIALS');
+  assert.equal(createData.transactionDate.toISOString().slice(0, 10), '2026-06-15');
+
+  assert.equal(transactionCalls.candidateUpdateManys[0].data.promotedEntityId, 'expense-1');
+  assert.deepEqual(
+    transactionCalls.candidateUpdateManys[0].where.id.in.sort(),
+    ['c-amount', 'c-category', 'c-date', 'c-desc'].sort(),
+  );
+
+  assert.equal(transactionCalls.linkCreates[0].data.entityType, 'EXPENSE');
+  assert.equal(transactionCalls.linkCreates[0].data.entityId, 'expense-1');
+  assert.equal(transactionCalls.linkCreates[0].data.purpose, 'RECEIPT');
+});
+
+test('promoteExpense refuses to run twice against the same analysis', async () => {
+  versionForRecord = { id: 'version-1' };
+  candidatesForPromotion = [
+    { id: 'c-desc', fieldKey: 'description', reviewStatus: 'CONFIRMED', reviewedValue: 'Home Depot', promotedEntityId: 'expense-1' },
+    { id: 'c-amount', fieldKey: 'amount', reviewStatus: 'CONFIRMED', reviewedValue: '84.21', promotedEntityId: 'expense-1' },
+    { id: 'c-date', fieldKey: 'transactionDate', reviewStatus: 'CONFIRMED', reviewedValue: '2026-06-15', promotedEntityId: 'expense-1' },
+  ];
+  prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
+
+  await assert.rejects(
+    service.promoteExpense({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
     (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
   );
 });

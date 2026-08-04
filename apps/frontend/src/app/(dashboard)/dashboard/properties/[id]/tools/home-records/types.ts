@@ -44,6 +44,7 @@ export type PropertyRecordLinkEntityType =
   | 'CLAIM'
   | 'PERMIT'
   | 'PROPERTY_BRIEF'
+  | 'EXPENSE'
   | 'OTHER';
 
 export type PropertyRecordLinkPurpose =
@@ -119,10 +120,10 @@ export interface PropertyRecordLink {
   broken: boolean | null;
 }
 
-// Only WARRANTY has a working promotion path today — see
+// WARRANTY and EXPENSE have a working promotion path today — see
 // homeRecordsExtraction.service.ts. fieldKey '_documentType' is the AI's
 // informational overall classification, not a reviewable field.
-export type ExtractedFactTargetDomain = 'WARRANTY' | 'INSURANCE_POLICY' | 'OTHER';
+export type ExtractedFactTargetDomain = 'WARRANTY' | 'EXPENSE' | 'INSURANCE_POLICY' | 'OTHER';
 export type ExtractedFactReviewStatus = 'PENDING' | 'CONFIRMED' | 'CORRECTED' | 'REJECTED';
 
 export interface ExtractedFactCandidate {

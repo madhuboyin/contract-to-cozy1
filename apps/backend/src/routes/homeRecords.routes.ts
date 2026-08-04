@@ -39,7 +39,7 @@ const sensitivitySchema = z.enum([
 const visibilitySchema = z.enum(['HOUSEHOLD', 'OWNER_ONLY', 'RECIPIENT_SELECTED']);
 const linkEntityTypeSchema = z.enum([
   'HOME_EVENT', 'INVENTORY_ITEM', 'MATERIAL_SPEC', 'PROJECT', 'WARRANTY',
-  'INSURANCE_POLICY', 'CLAIM', 'PERMIT', 'PROPERTY_BRIEF', 'OTHER',
+  'INSURANCE_POLICY', 'CLAIM', 'PERMIT', 'PROPERTY_BRIEF', 'EXPENSE', 'OTHER',
 ]);
 const linkPurposeSchema = z.enum([
   'EVIDENCE', 'SOURCE', 'ATTACHMENT', 'APPROVAL', 'RECEIPT', 'WARRANTY', 'MANUAL',
@@ -79,7 +79,7 @@ const reviewCandidateSchema = z.object({
   reviewedValue: z.string().trim().max(2000).optional(),
 });
 
-const promoteWarrantySchema = z.object({
+const promoteFromVersionSchema = z.object({
   versionId: z.string().uuid(),
 });
 
@@ -326,7 +326,7 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
-      const input = parseOrThrow(promoteWarrantySchema, req.body ?? {});
+      const input = parseOrThrow(promoteFromVersionSchema, req.body ?? {});
       const warranty = await homeRecordsExtractionService.promoteWarranty({
         propertyId: req.params.propertyId,
         recordId: req.params.recordId,
@@ -334,6 +334,25 @@ router.post(
         userId: req.user!.userId,
       });
       return res.status(201).json({ success: true, data: { warranty } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/records/:recordId/extractions/promote-expense',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(promoteFromVersionSchema, req.body ?? {});
+      const expense = await homeRecordsExtractionService.promoteExpense({
+        propertyId: req.params.propertyId,
+        recordId: req.params.recordId,
+        versionId: input.versionId,
+        userId: req.user!.userId,
+      });
+      return res.status(201).json({ success: true, data: { expense } });
     } catch (error) {
       return next(error);
     }

@@ -63,6 +63,7 @@ import {
   createRecord,
   getRecord,
   listRecords,
+  promoteExpense,
   promoteWarranty,
   restoreRecord,
   reviewCandidate,
@@ -129,6 +130,7 @@ const LINK_ENTITY_LABELS: Record<PropertyRecordLinkEntityType, string> = {
   CLAIM: 'Claim',
   PERMIT: 'Permit',
   PROPERTY_BRIEF: 'Property Brief',
+  EXPENSE: 'Expense',
   OTHER: 'Other',
 };
 
@@ -148,7 +150,7 @@ const LIFECYCLE_TONE: Record<string, 'good' | 'elevated' | 'danger' | 'info'> = 
   TRASHED: 'danger',
 };
 
-// Only WARRANTY records have an AI review/promotion path today — see
+// WARRANTY and RECEIPT records have an AI review/promotion path today — see
 // homeRecordsExtraction.service.ts. '_documentType' is excluded here: it's
 // the AI's informational overall classification, not a reviewable field.
 const WARRANTY_REQUIRED_FIELD_KEYS = ['providerName', 'startDate', 'expiryDate'];
@@ -159,6 +161,14 @@ const WARRANTY_FIELD_LABELS: Record<string, string> = {
   category: 'Category',
   coverageDetails: 'Coverage details',
   cost: 'Cost',
+};
+
+const EXPENSE_REQUIRED_FIELD_KEYS = ['description', 'amount', 'transactionDate'];
+const EXPENSE_FIELD_LABELS: Record<string, string> = {
+  description: 'Vendor / description',
+  amount: 'Amount',
+  transactionDate: 'Transaction date',
+  category: 'Category',
 };
 
 const REVIEW_STATUS_TONE: Record<string, 'good' | 'elevated' | 'danger' | 'info'> = {
@@ -428,16 +438,18 @@ function AddLinkForm({ onAdd, isSubmitting }: { onAdd: (input: { entityType: Pro
 
 function CandidateReviewRow({
   candidate,
+  fieldLabels,
   onReview,
   isSubmitting,
 }: {
   candidate: ExtractedFactCandidate;
+  fieldLabels: Record<string, string>;
   onReview: (input: { action: 'CONFIRM' | 'CORRECT' | 'REJECT'; reviewedValue?: string }) => void;
   isSubmitting: boolean;
 }) {
   const [correcting, setCorrecting] = React.useState(false);
   const [draft, setDraft] = React.useState(candidate.proposedValue ?? '');
-  const label = WARRANTY_FIELD_LABELS[candidate.fieldKey] ?? candidate.fieldKey;
+  const label = fieldLabels[candidate.fieldKey] ?? candidate.fieldKey;
   const isPending = candidate.reviewStatus === 'PENDING';
   const isPromoted = Boolean(candidate.promotedEntityId);
 
@@ -512,16 +524,48 @@ function CandidateReviewRow({
   );
 }
 
-function WarrantyExtractionSection({
+type ExtractionDomainConfig = {
+  requiredFieldKeys: string[];
+  fieldLabels: Record<string, string>;
+  promote: (propertyId: string, recordId: string, versionId: string) => Promise<{ id: string }>;
+  promoteButtonLabel: string;
+  promotedMessage: string;
+  successToastTitle: string;
+  errorToastTitle: string;
+};
+
+const WARRANTY_EXTRACTION_CONFIG: ExtractionDomainConfig = {
+  requiredFieldKeys: WARRANTY_REQUIRED_FIELD_KEYS,
+  fieldLabels: WARRANTY_FIELD_LABELS,
+  promote: promoteWarranty,
+  promoteButtonLabel: 'Create warranty from confirmed details',
+  promotedMessage: 'A warranty was created from these details.',
+  successToastTitle: 'Warranty created',
+  errorToastTitle: 'Could not create warranty',
+};
+
+const EXPENSE_EXTRACTION_CONFIG: ExtractionDomainConfig = {
+  requiredFieldKeys: EXPENSE_REQUIRED_FIELD_KEYS,
+  fieldLabels: EXPENSE_FIELD_LABELS,
+  promote: promoteExpense,
+  promoteButtonLabel: 'Log expense from confirmed details',
+  promotedMessage: 'An expense was logged from these details.',
+  successToastTitle: 'Expense logged',
+  errorToastTitle: 'Could not log expense',
+};
+
+function ExtractionReviewSection({
   propertyId,
   recordId,
   versionId,
   candidates,
+  config,
 }: {
   propertyId: string;
   recordId: string;
   versionId: string;
   candidates: ExtractedFactCandidate[];
+  config: ExtractionDomainConfig;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -545,15 +589,15 @@ function WarrantyExtractionSection({
   });
 
   const promoteMutation = useMutation({
-    mutationFn: () => promoteWarranty(propertyId, recordId, versionId),
-    onSuccess: () => { invalidate(); toast({ title: 'Warranty created', description: 'Linked back to this record.' }); },
-    onError: (e: any) => toast({ title: 'Could not create warranty', description: e?.message, variant: 'destructive' }),
+    mutationFn: () => config.promote(propertyId, recordId, versionId),
+    onSuccess: () => { invalidate(); toast({ title: config.successToastTitle, description: 'Linked back to this record.' }); },
+    onError: (e: any) => toast({ title: config.errorToastTitle, description: e?.message, variant: 'destructive' }),
   });
 
   const docTypeCandidate = candidates.find((c) => c.fieldKey === '_documentType');
   const fieldCandidates = candidates.filter((c) => c.fieldKey !== '_documentType');
   const alreadyPromoted = fieldCandidates.some((c) => c.promotedEntityId);
-  const missingRequired = WARRANTY_REQUIRED_FIELD_KEYS.filter((key) => {
+  const missingRequired = config.requiredFieldKeys.filter((key) => {
     const c = fieldCandidates.find((candidate) => candidate.fieldKey === key);
     return !c || !c.reviewedValue || (c.reviewStatus !== 'CONFIRMED' && c.reviewStatus !== 'CORRECTED');
   });
@@ -586,23 +630,24 @@ function WarrantyExtractionSection({
               <CandidateReviewRow
                 key={candidate.id}
                 candidate={candidate}
+                fieldLabels={config.fieldLabels}
                 isSubmitting={reviewMutation.isPending}
                 onReview={(input) => reviewMutation.mutate({ candidateId: candidate.id, ...input })}
               />
             ))}
           </div>
           {alreadyPromoted ? (
-            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-green-700')}>A warranty was created from these details.</p>
+            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-green-700')}>{config.promotedMessage}</p>
           ) : (
             <Button
               size="sm"
               className="w-full gap-2"
               disabled={missingRequired.length > 0 || promoteMutation.isPending}
               onClick={() => promoteMutation.mutate()}
-              title={missingRequired.length > 0 ? `Still needs: ${missingRequired.map((k) => WARRANTY_FIELD_LABELS[k]).join(', ')}` : undefined}
+              title={missingRequired.length > 0 ? `Still needs: ${missingRequired.map((k) => config.fieldLabels[k]).join(', ')}` : undefined}
             >
               {promoteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              Create warranty from confirmed details
+              {config.promoteButtonLabel}
             </Button>
           )}
         </>
@@ -752,14 +797,16 @@ function RecordDetailSheet({
               </div>
             </div>
 
-            {record.recordType === 'WARRANTY' && record.currentVersion?.scanStatus === 'CLEAN' && (
-              <WarrantyExtractionSection
+            {(record.recordType === 'WARRANTY' || record.recordType === 'RECEIPT')
+              && record.currentVersion?.scanStatus === 'CLEAN' && (
+              <ExtractionReviewSection
                 propertyId={propertyId}
                 recordId={record.id}
                 versionId={record.currentVersion.id}
                 candidates={
                   record.versions.find((v) => v.id === record.currentVersion?.id)?.extractedFacts ?? []
                 }
+                config={record.recordType === 'WARRANTY' ? WARRANTY_EXTRACTION_CONFIG : EXPENSE_EXTRACTION_CONFIG}
               />
             )}
 

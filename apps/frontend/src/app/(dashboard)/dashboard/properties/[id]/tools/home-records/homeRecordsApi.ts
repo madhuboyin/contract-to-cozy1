@@ -128,3 +128,15 @@ export async function promoteWarranty(
   );
   return res.data.warranty;
 }
+
+export async function promoteExpense(
+  propertyId: string,
+  recordId: string,
+  versionId: string,
+): Promise<{ id: string }> {
+  const res = await api.post<{ expense: { id: string } }>(
+    `/api/properties/${propertyId}/records/${recordId}/extractions/promote-expense`,
+    { versionId },
+  );
+  return res.data.expense;
+}

@@ -1,13 +1,13 @@
 // apps/backend/src/services/homeRecordsExtraction.service.ts
 //
 // Turns AI document analysis into reviewable ExtractedFactCandidate rows
-// instead of writing canonical records directly. Only WARRANTY has an
-// implemented promotion contract today (see promoteWarranty) — this is the
-// exact domain the audit flagged for automatic, unreviewed warranty
-// creation (HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
+// instead of writing canonical records directly. WARRANTY and RECEIPT have
+// implemented promotion contracts today (see promoteWarranty/promoteExpense)
+// — WARRANTY is the exact domain the audit flagged for automatic, unreviewed
+// warranty creation (HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
 // §1.1). No field is ever written to a canonical record until its candidate
 // has been explicitly CONFIRMED or CORRECTED by a homeowner.
-import type { ExtractedFactCandidate, ExtractedFactReviewStatus, WarrantyCategory } from '@prisma/client';
+import type { ExpenseCategory, ExtractedFactCandidate, ExtractedFactReviewStatus, WarrantyCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { downloadObjectBuffer } from './storage/reportStorage';
@@ -27,6 +27,16 @@ type WarrantyFieldKey =
 
 const WARRANTY_CATEGORY_VALUES = new Set<WarrantyCategory>([
   'APPLIANCE', 'HVAC', 'ROOFING', 'PLUMBING', 'ELECTRICAL', 'STRUCTURAL', 'HOME_WARRANTY_PLAN', 'OTHER',
+]);
+
+const EXPENSE_REQUIRED_FIELD_KEYS = ['description', 'amount', 'transactionDate'] as const;
+const EXPENSE_OPTIONAL_FIELD_KEYS = ['category'] as const;
+type ExpenseFieldKey =
+  | (typeof EXPENSE_REQUIRED_FIELD_KEYS)[number]
+  | (typeof EXPENSE_OPTIONAL_FIELD_KEYS)[number];
+
+const EXPENSE_CATEGORY_VALUES = new Set<ExpenseCategory>([
+  'REPAIR_SERVICE', 'PROPERTY_TAX', 'HOA_FEE', 'UTILITY', 'APPLIANCE', 'MATERIALS', 'OTHER',
 ]);
 
 function toIsoDate(value: Date): string {
@@ -73,6 +83,32 @@ function warrantyCandidatesFromInsights(
   return candidates;
 }
 
+function receiptCandidatesFromInsights(
+  insights: DocumentInsights,
+): { fieldKey: ExpenseFieldKey; proposedValue: string }[] {
+  const { extractedData } = insights;
+  const candidates: { fieldKey: ExpenseFieldKey; proposedValue: string }[] = [];
+
+  const description = extractedData.vendor || extractedData.productName;
+  if (description) candidates.push({ fieldKey: 'description', proposedValue: description });
+
+  if (extractedData.amount != null) {
+    candidates.push({ fieldKey: 'amount', proposedValue: String(extractedData.amount) });
+  }
+  if (extractedData.purchaseDate) {
+    candidates.push({ fieldKey: 'transactionDate', proposedValue: toIsoDate(extractedData.purchaseDate) });
+  }
+  if (extractedData.category) {
+    const normalized = extractedData.category.trim().toUpperCase().replace(/[^A-Z_]/g, '_') as ExpenseCategory;
+    candidates.push({
+      fieldKey: 'category',
+      proposedValue: EXPENSE_CATEGORY_VALUES.has(normalized) ? normalized : 'OTHER',
+    });
+  }
+
+  return candidates;
+}
+
 export class HomeRecordsExtractionService {
   async runExtraction(input: {
     propertyId: string;
@@ -94,14 +130,15 @@ export class HomeRecordsExtractionService {
         'PROPERTY_RECORD_VERSION_NOT_CLEAN',
       );
     }
-    // Only WARRANTY has a promotion contract implemented — see file header.
-    if (version.record.recordType !== 'WARRANTY') {
+    // Only WARRANTY and RECEIPT have a promotion contract implemented — see file header.
+    if (version.record.recordType !== 'WARRANTY' && version.record.recordType !== 'RECEIPT') {
       throw new APIError(
-        'AI review is available for warranty records in this release.',
+        'AI review is available for warranty and receipt records in this release.',
         422,
         'PROPERTY_RECORD_EXTRACTION_UNSUPPORTED_TYPE',
       );
     }
+    const targetDomain = version.record.recordType === 'WARRANTY' ? 'WARRANTY' as const : 'EXPENSE' as const;
 
     // Idempotent: re-running analysis on an already-analyzed version would
     // either duplicate candidates or silently discard homeowner review
@@ -124,18 +161,21 @@ export class HomeRecordsExtractionService {
 
     const citation = `AI extraction from "${version.originalFileName}"`;
     const confidence = insights.confidence ?? 0;
+    const fieldCandidates = targetDomain === 'WARRANTY'
+      ? warrantyCandidatesFromInsights(insights)
+      : receiptCandidatesFromInsights(insights);
     const rows = [
       {
         propertyRecordVersionId: version.id,
-        targetDomain: 'WARRANTY' as const,
+        targetDomain,
         fieldKey: DOCUMENT_TYPE_FIELD_KEY,
         proposedValue: insights.documentType,
         sourceCitation: citation,
         confidence,
       },
-      ...warrantyCandidatesFromInsights(insights).map((candidate) => ({
+      ...fieldCandidates.map((candidate) => ({
         propertyRecordVersionId: version.id,
-        targetDomain: 'WARRANTY' as const,
+        targetDomain,
         fieldKey: candidate.fieldKey,
         proposedValue: candidate.proposedValue,
         sourceCitation: citation,
@@ -310,6 +350,109 @@ export class HomeRecordsExtractionService {
     });
 
     return warranty;
+  }
+
+  async promoteExpense(input: {
+    propertyId: string;
+    recordId: string;
+    versionId: string;
+    userId: string;
+  }) {
+    const version = await prisma.propertyRecordVersion.findFirst({
+      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId } },
+    });
+    if (!version) throw new APIError('Record version not found.', 404, 'PROPERTY_RECORD_VERSION_NOT_FOUND');
+
+    const candidates = await prisma.extractedFactCandidate.findMany({
+      where: {
+        propertyRecordVersionId: version.id,
+        targetDomain: 'EXPENSE',
+        fieldKey: { not: DOCUMENT_TYPE_FIELD_KEY },
+      },
+    });
+    const byField = new Map(candidates.map((candidate) => [candidate.fieldKey, candidate]));
+
+    const missing = EXPENSE_REQUIRED_FIELD_KEYS.filter((key) => {
+      const candidate = byField.get(key);
+      return (
+        !candidate
+        || !candidate.reviewedValue
+        || (candidate.reviewStatus !== 'CONFIRMED' && candidate.reviewStatus !== 'CORRECTED')
+      );
+    });
+    if (missing.length > 0) {
+      throw new APIError(
+        `Confirm ${missing.join(', ')} before creating an expense.`,
+        409,
+        'PROPERTY_RECORD_EXTRACTION_PROMOTION_INCOMPLETE',
+        { missingFields: missing },
+      );
+    }
+    if (candidates.some((candidate) => candidate.promotedEntityId)) {
+      throw new APIError(
+        'An expense was already created from this analysis.',
+        409,
+        'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
+      );
+    }
+
+    const property = await prisma.property.findUnique({
+      where: { id: input.propertyId },
+      select: { homeownerProfileId: true },
+    });
+    if (!property) throw new APIError('Property not found.', 404, 'PROPERTY_NOT_FOUND');
+
+    const description = byField.get('description')!.reviewedValue!;
+    const amountValue = byField.get('amount')!.reviewedValue!;
+    const amount = Number(amountValue);
+    if (Number.isNaN(amount)) {
+      throw new APIError('Amount must be a valid number.', 422, 'PROPERTY_RECORD_EXTRACTION_INVALID_AMOUNT');
+    }
+    const transactionDate = new Date(byField.get('transactionDate')!.reviewedValue!);
+    if (Number.isNaN(transactionDate.getTime())) {
+      throw new APIError('Transaction date must be a valid date.', 422, 'PROPERTY_RECORD_EXTRACTION_INVALID_DATE');
+    }
+
+    const categoryCandidate = byField.get('category');
+    const category = categoryCandidate?.reviewedValue && EXPENSE_CATEGORY_VALUES.has(categoryCandidate.reviewedValue as ExpenseCategory)
+      ? (categoryCandidate.reviewedValue as ExpenseCategory)
+      : 'OTHER';
+
+    const usedCandidateIds = EXPENSE_REQUIRED_FIELD_KEYS.map((key) => byField.get(key)!.id)
+      .concat(EXPENSE_OPTIONAL_FIELD_KEYS.filter((key) => byField.get(key)).map((key) => byField.get(key)!.id));
+
+    const expense = await prisma.$transaction(async (tx) => {
+      const created = await tx.expense.create({
+        data: {
+          homeownerProfileId: property.homeownerProfileId,
+          propertyId: input.propertyId,
+          description,
+          category,
+          amount,
+          transactionDate,
+        },
+      });
+
+      await tx.extractedFactCandidate.updateMany({
+        where: { id: { in: usedCandidateIds } },
+        data: { promotedEntityType: 'EXPENSE', promotedEntityId: created.id },
+      });
+
+      await tx.propertyRecordLink.create({
+        data: {
+          recordId: input.recordId,
+          versionId: version.id,
+          entityType: 'EXPENSE',
+          entityId: created.id,
+          purpose: 'RECEIPT',
+          createdByUserId: input.userId,
+        },
+      });
+
+      return created;
+    });
+
+    return expense;
   }
 }
 

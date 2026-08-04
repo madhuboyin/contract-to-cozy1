@@ -538,6 +538,7 @@ export class HomeRecordsService {
         case 'CLAIM': return prisma.claim.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'PERMIT': return prisma.propertyPermitRecord.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'PROPERTY_BRIEF': return prisma.propertyBrief.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+        case 'EXPENSE': return prisma.expense.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         // OTHER has no canonical table to verify against; the caller-supplied
         // entityId is opaque and always treated as existing.
         case 'OTHER': return { id: entityId };

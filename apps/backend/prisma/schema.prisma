@@ -1826,6 +1826,7 @@ enum PropertyRecordLinkEntityType {
   CLAIM
   PERMIT
   PROPERTY_BRIEF
+  EXPENSE
   OTHER
 }
 
@@ -1848,12 +1849,13 @@ enum PropertyRecordPurgeState {
   FAILED
 }
 
-// Only WARRANTY has an implemented promotion contract so far (see
+// WARRANTY and EXPENSE have implemented promotion contracts (see
 // homeRecordsExtraction.service.ts). INSURANCE_POLICY is reserved for a
 // future slice — insurance already has its own bespoke staging path via
 // InsurancePolicyTerm/InsurancePolicyFact, unrelated to this model today.
 enum ExtractedFactTargetDomain {
   WARRANTY
+  EXPENSE
   INSURANCE_POLICY
   OTHER
 }
