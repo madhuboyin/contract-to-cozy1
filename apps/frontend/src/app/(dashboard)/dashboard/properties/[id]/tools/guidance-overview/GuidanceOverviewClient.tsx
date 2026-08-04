@@ -1209,13 +1209,6 @@ export default function GuidanceOverviewClient() {
       const skippedCount = activeJourneySteps.filter((s) => s.status === 'SKIPPED').length;
       return (
         <MobilePageContainer className="space-y-6 lg:max-w-[1240px] lg:px-8 lg:pb-12">
-          <Button variant="ghost" className="min-h-[40px] w-fit px-0 text-slate-500 hover:text-slate-900" asChild>
-            <Link href={`/dashboard/properties/${propertyId}`}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to property
-            </Link>
-          </Button>
-
           <Card className="overflow-hidden rounded-[32px] border-emerald-200/80 bg-white shadow-sm">
             <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 p-8 text-white lg:p-10">
               <div className="flex flex-col items-start gap-4 lg:flex-row lg:items-center lg:gap-6">

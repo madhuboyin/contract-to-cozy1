@@ -58,13 +58,20 @@ const ID_PARENT_LABELS: Record<string, string> = {
   incidents: 'Incident',
   rooms: 'Room',
   items: 'Item',
+  renovations: 'Case',
+  materials: 'Material',
+  'inspection-hub': 'Report',
+  projects: 'Project',
 };
 
 function isLikelyIdSegment(segment: string): boolean {
   if (!segment) return false;
   const uuidLike = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment);
   const numericLike = /^\d+$/.test(segment);
-  const longToken = /^[A-Za-z0-9_-]{16,}$/.test(segment);
+  // Kebab-case route slugs (e.g. "home-habit-coach") can be 16+ characters,
+  // so only opaque tokens without hyphens count as a long ID here — real
+  // hyphenated IDs are already caught by uuidLike above.
+  const longToken = /^[A-Za-z0-9_]{16,}$/.test(segment);
   return uuidLike || numericLike || longToken;
 }
 
