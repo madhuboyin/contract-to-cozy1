@@ -161,3 +161,17 @@ export const RUN_BAR_COLOR: Record<RecentRun['status'], string> = {
   skipped: 'bg-amber-400',
   partial: 'bg-amber-400',
 };
+
+/**
+ * Label + text color per recent-run status. 'skipped' (policy-gated tick, or
+ * a lease held by another in-flight run) and 'partial' (some items in the
+ * run failed, others succeeded) are distinct from 'failed' and must not
+ * collapse into the same "Failed" text a reader would mistake for a full
+ * run failure — only RUN_BAR_COLOR distinguished them before this.
+ */
+export const RUN_STATUS_STYLE: Record<RecentRun['status'], { label: string; textClass: string }> = {
+  completed: { label: 'Success', textClass: 'text-emerald-700' },
+  failed: { label: 'Failed', textClass: 'font-semibold text-rose-600' },
+  partial: { label: 'Partial', textClass: 'text-amber-600' },
+  skipped: { label: 'Skipped', textClass: 'text-amber-600' },
+};

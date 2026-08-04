@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, ChevronDown, Clock, Loader2, Play, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, Clock, Loader2, Play, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { WorkerJobDetail } from '@/lib/api/adminWorkerJobs';
 import {
@@ -15,6 +15,7 @@ import {
   HEALTH_BORDER,
   HEALTH_DOT,
   RUN_BAR_COLOR,
+  RUN_STATUS_STYLE,
   SMOKE_CHECKLIST_JOB_KEYS,
 } from './workerJobsUtils';
 import { SmokeChecklistPanel } from './SmokeChecklistPanel';
@@ -114,15 +115,13 @@ export function JobCard({
               <>
                 {lastRun.status === 'completed' ? (
                   <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                ) : (
+                ) : lastRun.status === 'failed' ? (
                   <XCircle className="h-3 w-3 text-rose-500" />
+                ) : (
+                  <AlertCircle className="h-3 w-3 text-amber-500" />
                 )}
-                <span
-                  className={
-                    lastRun.status === 'failed' ? 'text-rose-600 font-semibold' : 'text-emerald-700'
-                  }
-                >
-                  {lastRun.status === 'completed' ? 'Success' : 'Failed'}
+                <span className={RUN_STATUS_STYLE[lastRun.status].textClass}>
+                  {RUN_STATUS_STYLE[lastRun.status].label}
                 </span>
                 <span className="text-slate-400">·</span>
                 <span className="text-slate-500">{timeAgo(lastRun.finishedAt)}</span>
@@ -207,11 +206,13 @@ export function JobCard({
                   <div key={run.id} className="flex items-center gap-1.5 text-[11px]">
                     {run.status === 'completed' ? (
                       <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-emerald-500" />
-                    ) : (
+                    ) : run.status === 'failed' ? (
                       <XCircle className="h-2.5 w-2.5 shrink-0 text-rose-500" />
+                    ) : (
+                      <AlertCircle className="h-2.5 w-2.5 shrink-0 text-amber-500" />
                     )}
-                    <span className={run.status === 'failed' ? 'font-medium text-rose-600' : 'text-slate-500'}>
-                      {run.status === 'completed' ? 'Success' : 'Failed'}
+                    <span className={run.status === 'completed' ? 'text-slate-500' : RUN_STATUS_STYLE[run.status].textClass}>
+                      {RUN_STATUS_STYLE[run.status].label}
                     </span>
                     <span className="text-slate-300">·</span>
                     <span className="text-slate-400">{timeAgo(run.finishedAt)}</span>
@@ -223,10 +224,13 @@ export function JobCard({
                     {run.trigger === 'manual' && (
                       <span className="rounded bg-slate-200 px-1 text-[10px] font-semibold text-slate-600">manual</span>
                     )}
-                    {run.status === 'failed' && run.failReason && (
+                    {run.status !== 'completed' && run.failReason && (
                       <>
                         <span className="text-slate-300">·</span>
-                        <span className="max-w-[140px] truncate text-rose-500" title={run.failReason}>
+                        <span
+                          className={`max-w-[140px] truncate ${run.status === 'failed' ? 'text-rose-500' : 'text-amber-600'}`}
+                          title={run.failReason}
+                        >
                           {run.failReason}
                         </span>
                       </>
