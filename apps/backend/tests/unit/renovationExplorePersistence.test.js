@@ -71,7 +71,7 @@ test('recommendations persist before disposition and conversion is explicit', ()
   assert.match(service, /Affected spaces/);
   assert.match(service, /withinBudget/);
   assert.match(legacyRoute, /rel="successor-version"/);
-  assert.match(legacyPage, /router\.replace\(`\/dashboard\/properties\/\$\{selectedPropertyId\}\/renovations\/explore`\)/);
+  assert.match(legacyPage, /PropertyScopedToolRedirectPage/);
   assert.match(ui, /Side-by-side comparison/);
   assert.match(ui, /'Saved' : 'Save'/);
   assert.match(ui, /> Reject/);

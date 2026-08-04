@@ -80,6 +80,48 @@ export async function uploadDocumentBuffer(args: DocumentUploadArgs): Promise<{
   return { key, fileSizeBytes: args.buffer.length };
 }
 
+type PropertyRecordVersionUploadArgs = {
+  buffer: Buffer;
+  storageKey: string;
+  fileName: string;
+  mimeType: string;
+  propertyId: string;
+  recordId: string;
+  versionId: string;
+  checksumSha256: string;
+  userId: string;
+};
+
+export async function uploadPropertyRecordVersionBuffer(
+  args: PropertyRecordVersionUploadArgs,
+): Promise<{ key: string; fileSizeBytes: number; storageEtag: string | null }> {
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) throw new Error('S3_BUCKET is not set');
+
+  const result = await getS3Client().send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: args.storageKey,
+    Body: args.buffer,
+    ContentType: args.mimeType,
+    ServerSideEncryption: 'AES256',
+    ChecksumSHA256: Buffer.from(args.checksumSha256, 'hex').toString('base64'),
+    Metadata: {
+      checksumsha256: args.checksumSha256,
+      propertyid: args.propertyId,
+      recordid: args.recordId,
+      versionid: args.versionId,
+      userid: args.userId,
+      originalfilename: encodeURIComponent(args.fileName).slice(0, 900),
+    },
+  }));
+
+  return {
+    key: args.storageKey,
+    fileSizeBytes: args.buffer.length,
+    storageEtag: result.ETag?.replace(/^"|"$/g, '') ?? null,
+  };
+}
+
 export async function deleteDocumentObject(key: string): Promise<void> {
   const bucket = process.env.S3_BUCKET;
   if (!bucket) return; // no-op if S3 not configured

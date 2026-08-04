@@ -1761,6 +1761,87 @@ enum DocumentVerificationStatus {
   REJECTED
 }
 
+enum PropertyRecordType {
+  WARRANTY
+  RECEIPT
+  MANUAL
+  INSPECTION_REPORT
+  INVOICE
+  CONTRACT
+  PERMIT
+  INSURANCE_POLICY
+  CLAIM
+  PHOTO
+  OTHER
+}
+
+enum PropertyRecordSensitivity {
+  STANDARD
+  PERSONAL
+  FINANCIAL
+  INSURANCE
+  CLAIM
+  SECURITY
+  LEGAL
+}
+
+enum PropertyRecordVisibility {
+  HOUSEHOLD
+  OWNER_ONLY
+  RECIPIENT_SELECTED
+}
+
+enum PropertyRecordLifecycleStatus {
+  ACTIVE
+  ARCHIVED
+  TRASHED
+}
+
+enum PropertyRecordScanStatus {
+  PENDING
+  CLEAN
+  QUARANTINED
+  FAILED
+}
+
+enum PropertyRecordIntegrityStatus {
+  PENDING
+  VERIFIED
+  MISMATCH
+}
+
+enum PropertyRecordLinkEntityType {
+  HOME_EVENT
+  INVENTORY_ITEM
+  MATERIAL_SPEC
+  PROJECT
+  WARRANTY
+  INSURANCE_POLICY
+  CLAIM
+  PERMIT
+  PROPERTY_BRIEF
+  OTHER
+}
+
+enum PropertyRecordLinkPurpose {
+  EVIDENCE
+  SOURCE
+  ATTACHMENT
+  APPROVAL
+  RECEIPT
+  WARRANTY
+  MANUAL
+}
+
+enum PropertyRecordPurgeState {
+  PENDING
+  BLOCKED
+  ELIGIBLE
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum MessageType {
   TEXT
   SYSTEM
@@ -2831,6 +2912,7 @@ model Property {
   newHomeSystemRegistrations NewHomeSystemRegistration[]
   newHomeEvidenceRecords     NewHomeEvidenceRecord[]
   documents                  Document[]                  @relation("PropertyDocuments")
+  propertyRecords            PropertyRecord[]
   coverPhoto                 Document?                   @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
@@ -3715,6 +3797,107 @@ model Document {
   @@index([inventoryItemId]) // NEW INDEX
   @@index([projectId])
   @@map("documents")
+}
+
+// Canonical property-owned record foundation. This is intentionally separate
+// from the legacy uploader-owned Document graph while domain cutovers occur;
+// new Home Records APIs write only these models and do not dual-write.
+model PropertyRecord {
+  id               String                        @id @default(uuid())
+  propertyId       String
+  title            String
+  description      String?
+  recordType       PropertyRecordType
+  sensitivity      PropertyRecordSensitivity     @default(STANDARD)
+  visibility       PropertyRecordVisibility      @default(HOUSEHOLD)
+  lifecycleStatus  PropertyRecordLifecycleStatus @default(ACTIVE)
+  currentVersionId String?                       @unique
+  createdByUserId  String
+  archivedAt       DateTime?
+  trashedAt        DateTime?
+  trashedByUserId  String?
+  retainUntil      DateTime?
+  legalHoldReason  String?
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+
+  property       Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  currentVersion PropertyRecordVersion?  @relation("PropertyRecordCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions       PropertyRecordVersion[] @relation("PropertyRecordVersions")
+  links          PropertyRecordLink[]
+  purgeJobs      PropertyRecordPurgeJob[]
+
+  @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
+  @@index([propertyId, recordType])
+  @@index([propertyId, sensitivity])
+  @@map("property_records")
+}
+
+model PropertyRecordVersion {
+  id                  String                        @id @default(uuid())
+  recordId            String
+  versionNumber       Int
+  storageKey          String
+  originalFileName    String
+  mimeType            String
+  fileSizeBytes       Int
+  sha256              String                        @db.VarChar(64)
+  storageEtag         String?
+  scanStatus          PropertyRecordScanStatus      @default(PENDING)
+  integrityStatus     PropertyRecordIntegrityStatus @default(PENDING)
+  uploadedByUserId    String
+  supersedesVersionId String?
+  createdAt           DateTime                      @default(now())
+
+  record            PropertyRecord         @relation("PropertyRecordVersions", fields: [recordId], references: [id], onDelete: Cascade)
+  currentForRecord  PropertyRecord?         @relation("PropertyRecordCurrentVersion")
+  supersedesVersion PropertyRecordVersion?  @relation("PropertyRecordVersionSupersession", fields: [supersedesVersionId], references: [id], onDelete: SetNull)
+  supersededBy      PropertyRecordVersion[] @relation("PropertyRecordVersionSupersession")
+  links             PropertyRecordLink[]
+
+  @@unique([recordId, versionNumber])
+  @@index([recordId, createdAt(sort: Desc)])
+  @@index([sha256])
+  @@index([supersedesVersionId])
+  @@map("property_record_versions")
+}
+
+model PropertyRecordLink {
+  id              String                       @id @default(uuid())
+  recordId        String
+  versionId       String?
+  entityType      PropertyRecordLinkEntityType
+  entityId        String
+  purpose         PropertyRecordLinkPurpose    @default(EVIDENCE)
+  label           String?
+  createdByUserId String
+  createdAt       DateTime                     @default(now())
+
+  record  PropertyRecord         @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  version PropertyRecordVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+
+  @@unique([recordId, entityType, entityId, purpose])
+  @@index([entityType, entityId])
+  @@index([versionId])
+  @@map("property_record_links")
+}
+
+model PropertyRecordPurgeJob {
+  id                String                   @id @default(uuid())
+  recordId          String
+  state             PropertyRecordPurgeState @default(PENDING)
+  eligibleAt        DateTime?
+  blockedReason     String?
+  requestedByUserId String
+  requestedAt       DateTime                 @default(now())
+  processedAt       DateTime?
+  lastError         String?
+
+  record PropertyRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([state, eligibleAt])
+  @@index([recordId, requestedAt(sort: Desc)])
+  @@map("property_record_purge_jobs")
 }
 
 // ============================================================================
