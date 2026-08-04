@@ -147,6 +147,7 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   'capital-timeline': 'HOME_CAPITAL_TIMELINE',
   'seller-prep': 'SELLER_PREP',
   'status-board': 'STATUS_BOARD',
+  'home-records': 'HOME_RECORDS',
   'home-digital-will': 'HOME_DIGITAL_WILL',
   'home-digital-twin': 'HOME_DIGITAL_TWIN',
   'home-habit-coach': 'HOME_HABIT_COACH',

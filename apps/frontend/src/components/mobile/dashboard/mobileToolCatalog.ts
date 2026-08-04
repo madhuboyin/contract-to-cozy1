@@ -1,5 +1,5 @@
 import type { ElementType } from 'react';
-import { Layers } from 'lucide-react';
+import { FolderLock, Layers } from 'lucide-react';
 import { AI_TOOL_ARTWORK, type AIToolArtworkKey } from './aiToolArtwork';
 import { resolveToolIcon } from '@/lib/icons';
 
@@ -679,6 +679,25 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     navTarget: 'status-board',
     icon: resolveToolIcon('home', 'status-board'),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/status-board(\/|$)/.test(pathname),
+  },
+  {
+    // Working name "Property Records" deliberately avoids colliding with the
+    // legacy uploader-owned "documents" tool (titled "Home Records" in
+    // MOBILE_AI_TOOL_CATALOG below) while both exist side by side during the
+    // Home Continuity and Records cutover. See
+    // docs/product/HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
+    // §1 and §9.4 — Slice 1 is where the final naming/consolidation decision
+    // and legacy-route removal happen, not here.
+    key: 'home-records',
+    group: 'records',
+    name: 'Property Records',
+    description: 'Warranties, receipts, inspections, and permits — organized by property',
+    desktopDescription: "Property-owned records with versions, integrity checks, and a recoverable trash — visible to your whole household, not just whoever uploaded the file.",
+    hrefSuffix: 'tools/home-records',
+    navTarget: 'tool:home-records',
+    icon: FolderLock,
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/home-records(\/|$)/.test(pathname),
   },
   {
     key: 'home-digital-will',

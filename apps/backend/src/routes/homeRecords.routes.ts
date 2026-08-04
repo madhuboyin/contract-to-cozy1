@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
+import { validateDocumentUpload } from '../utils/documentValidator.util';
 import type { CustomRequest } from '../types';
 import { homeRecordsService } from '../services/homeRecords.service';
+import { homeRecordsExtractionService } from '../services/homeRecordsExtraction.service';
 
 const router = Router();
 
@@ -27,7 +29,9 @@ const upload = multer({
 
 const recordTypeSchema = z.enum([
   'WARRANTY', 'RECEIPT', 'MANUAL', 'INSPECTION_REPORT', 'INVOICE',
-  'CONTRACT', 'PERMIT', 'INSURANCE_POLICY', 'CLAIM', 'PHOTO', 'OTHER',
+  'CONTRACT', 'PERMIT', 'INSURANCE_POLICY', 'CLAIM', 'PHOTO',
+  'DEED', 'TAX_DOCUMENT', 'UTILITY', 'DISCLOSURE', 'SURVEY', 'CLOSING_DOCUMENT',
+  'OTHER',
 ]);
 const sensitivitySchema = z.enum([
   'STANDARD', 'PERSONAL', 'FINANCIAL', 'INSURANCE', 'CLAIM', 'SECURITY', 'LEGAL',
@@ -69,6 +73,15 @@ const retentionSchema = z.object({
   (value) => value.retainUntil !== undefined || value.legalHoldReason !== undefined,
   'At least one retention field is required.',
 );
+
+const reviewCandidateSchema = z.object({
+  action: z.enum(['CONFIRM', 'CORRECT', 'REJECT']),
+  reviewedValue: z.string().trim().max(2000).optional(),
+});
+
+const promoteWarrantySchema = z.object({
+  versionId: z.string().uuid(),
+});
 
 function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -112,6 +125,7 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   uploadRateLimiter,
   upload.single('file'),
+  validateDocumentUpload,
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
       if (!req.file) return res.status(400).json({ success: false, message: 'File is required.' });
@@ -152,6 +166,7 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   uploadRateLimiter,
   upload.single('file'),
+  validateDocumentUpload,
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
       if (!req.file) return res.status(400).json({ success: false, message: 'File is required.' });
@@ -262,6 +277,63 @@ router.patch(
         legalHoldReason: input.legalHoldReason,
       });
       return res.json({ success: true });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/records/:recordId/versions/:versionId/extract',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const candidates = await homeRecordsExtractionService.runExtraction({
+        propertyId: req.params.propertyId,
+        recordId: req.params.recordId,
+        versionId: req.params.versionId,
+      });
+      return res.status(201).json({ success: true, data: { candidates } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/records/:recordId/extractions/:candidateId/review',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(reviewCandidateSchema, req.body ?? {});
+      const candidate = await homeRecordsExtractionService.reviewCandidate({
+        propertyId: req.params.propertyId,
+        recordId: req.params.recordId,
+        candidateId: req.params.candidateId,
+        userId: req.user!.userId,
+        action: input.action,
+        reviewedValue: input.reviewedValue,
+      });
+      return res.json({ success: true, data: { candidate } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/records/:recordId/extractions/promote-warranty',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(promoteWarrantySchema, req.body ?? {});
+      const warranty = await homeRecordsExtractionService.promoteWarranty({
+        propertyId: req.params.propertyId,
+        recordId: req.params.recordId,
+        versionId: input.versionId,
+        userId: req.user!.userId,
+      });
+      return res.status(201).json({ success: true, data: { warranty } });
     } catch (error) {
       return next(error);
     }

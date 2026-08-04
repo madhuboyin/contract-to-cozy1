@@ -18,6 +18,7 @@ import { sendSeasonalNotifications } from './jobs/seasonalNotification.job';
 import { expireSeasonalChecklists } from './jobs/seasonalChecklistExpiration.job';
 import { runHomeReportExportPoller, stopHomeReportExportPoller } from './runners/homeReportExport.poller';
 import { runReportExportCleanup, stopReportExportCleanup } from './runners/reportExport.cleanup';
+import { runPropertyRecordPurge, stopPropertyRecordPurge } from './runners/propertyRecordPurge.cleanup';
 import { runMaterialSpecExportPoller, stopMaterialSpecExportPoller } from './runners/materialSpecExport.poller';
 import { runMaterialSpecExportCleanup, stopMaterialSpecExportCleanup } from './runners/materialSpecExport.cleanup';
 import { startDomainEventsPoller } from './runners/domainEvents.poller';
@@ -1117,6 +1118,10 @@ if (runnerAllowed('material-spec-export-poller')) {
 if (runnerAllowed('material-spec-export-cleanup')) {
   restartAfterDelay('Material spec export cleanup', runMaterialSpecExportCleanup);
   registerShutdownHandler('material-spec-export-cleanup', stopMaterialSpecExportCleanup);
+}
+if (runnerAllowed('property-record-purge')) {
+  restartAfterDelay('Property record purge', runPropertyRecordPurge);
+  registerShutdownHandler('property-record-purge', stopPropertyRecordPurge);
 }
 
 if (runnerAllowed('high-priority-email-enqueue-poller')) {

@@ -8,8 +8,14 @@ require('ts-node/register');
 let duplicateVersion = null;
 let recordForVersion = null;
 let recordForTrash = null;
+let recordForLink = null;
+let recordForGet = null;
+let warrantyLookupResult = null;
 let storageUploadCalls = 0;
 const transactionWrites = [];
+const recordCreateCalls = [];
+const versionCreateCalls = [];
+const linkCreateCalls = [];
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {
@@ -20,23 +26,31 @@ require.cache[prismaPath] = {
     prisma: {
       propertyRecordVersion: {
         findFirst: async () => duplicateVersion,
-        create: async () => ({}),
+        create: async (args) => { versionCreateCalls.push(args); return {}; },
         update: async () => ({}),
         findUniqueOrThrow: async () => ({}),
       },
       propertyRecord: {
         findFirst: async (args) => {
+          // get()'s include also carries `versions`, so the links-only check
+          // must come first or it collides with the addVersion() branch.
+          if (args?.include?.links) return recordForGet;
           if (args?.include?.versions) return recordForVersion;
           if (args?.include?._count) return recordForTrash;
+          if (args?.select?.title !== undefined) return null; // possibleVersionOf lookup
+          if (args?.select?.currentVersionId !== undefined) return recordForLink;
           return null;
         },
-        create: async () => ({}),
+        create: async (args) => { recordCreateCalls.push(args); return {}; },
         update: async () => ({}),
         updateMany: async () => ({ count: 1 }),
         findUniqueOrThrow: async () => ({}),
       },
+      warranty: {
+        findFirst: async () => warrantyLookupResult,
+      },
       propertyRecordLink: {
-        create: async () => ({}),
+        create: async (args) => { linkCreateCalls.push(args); return { id: 'link-1', ...args.data }; },
         deleteMany: async (args) => transactionWrites.push(['deleteManyLinks', args]),
       },
       propertyRecordPurgeJob: {
@@ -110,6 +124,17 @@ test('Slice 2 schema defines property-owned records, immutable versions, links, 
   assert.match(schema, /sha256\s+String\s+@db\.VarChar\(64\)/);
   assert.match(schema, /model PropertyRecordLink \{/);
   assert.match(schema, /model PropertyRecordPurgeJob \{/);
+});
+
+test('record taxonomy includes common continuity records beyond the generic OTHER bucket', () => {
+  const schema = fs.readFileSync(
+    path.resolve(__dirname, '../../prisma/schema.prisma'),
+    'utf8',
+  );
+  const enumBody = schema.match(/enum PropertyRecordType \{([\s\S]*?)\}/)[1];
+  for (const type of ['DEED', 'TAX_DOCUMENT', 'UTILITY', 'DISCLOSURE', 'SURVEY', 'CLOSING_DOCUMENT']) {
+    assert.match(enumBody, new RegExp(`\\b${type}\\b`));
+  }
 });
 
 test('exact duplicate content is rejected before storage upload', async () => {
@@ -204,4 +229,97 @@ test('record routes enforce property access and contributor mutation floors', ()
   assert.ok((routes.match(/requireHouseholdRole\('CONTRIBUTOR'\)/g) ?? []).length >= 7);
   assert.match(routes, /records\/:recordId\/retention'[\s\S]*requireHouseholdRole\('OWNER'\)/);
   assert.doesNotMatch(routes, /deleteDocumentObject/);
+});
+
+test('record and version upload routes run real magic-byte content validation', () => {
+  const routes = fs.readFileSync(
+    path.resolve(__dirname, '../../src/routes/homeRecords.routes.ts'),
+    'utf8',
+  );
+  assert.match(routes, /import \{ validateDocumentUpload \} from '\.\.\/utils\/documentValidator\.util'/);
+  // Both the create-record and add-version upload endpoints must run the
+  // shared magic-byte validator directly after multer parses the file —
+  // multer's fileFilter only ever sees the attacker-controlled declared
+  // Content-Type, never the actual bytes.
+  assert.ok((routes.match(/upload\.single\('file'\),\n\s*validateDocumentUpload,/g) ?? []).length === 2);
+});
+
+test('a new record and a new version are marked scan-clean, not left pending forever', async () => {
+  duplicateVersion = null;
+  storageUploadCalls = 0;
+  recordCreateCalls.length = 0;
+  versionCreateCalls.length = 0;
+
+  await service.create({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    file,
+    title: 'Warranty',
+    recordType: 'WARRANTY',
+    sensitivity: 'STANDARD',
+    visibility: 'HOUSEHOLD',
+  });
+
+  assert.equal(recordCreateCalls.length, 1);
+  assert.equal(recordCreateCalls[0].data.versions.create.scanStatus, 'CLEAN');
+
+  recordForVersion = {
+    id: 'record-1',
+    lifecycleStatus: 'ACTIVE',
+    currentVersionId: 'version-1',
+    versions: [{ id: 'version-1', versionNumber: 1, sha256: 'different-hash' }],
+  };
+  await service.addVersion({ propertyId: 'property-1', recordId: 'record-1', userId: 'user-1', file });
+
+  assert.equal(versionCreateCalls.length, 1);
+  assert.equal(versionCreateCalls[0].data.scanStatus, 'CLEAN');
+});
+
+test('a link to an OTHER entity is accepted since there is no canonical table to check', async () => {
+  recordForLink = { id: 'record-1', currentVersionId: null };
+  linkCreateCalls.length = 0;
+
+  const link = await service.addLink({
+    propertyId: 'property-1',
+    recordId: 'record-1',
+    userId: 'user-1',
+    entityType: 'OTHER',
+    entityId: 'external-system-id',
+    purpose: 'ATTACHMENT',
+  });
+
+  assert.equal(linkCreateCalls.length, 1);
+  assert.equal(link.entityType, 'OTHER');
+});
+
+test('get() flags a link whose target entity can no longer be found, and leaves OTHER links undetermined', async () => {
+  recordForGet = {
+    id: 'record-1',
+    propertyId: 'property-1',
+    lifecycleStatus: 'ACTIVE',
+    legalHoldReason: null,
+    retainUntil: null,
+    currentVersion: null,
+    versions: [],
+    purgeJobs: [],
+    links: [
+      { id: 'link-warranty', entityType: 'WARRANTY', entityId: 'w-1', purpose: 'EVIDENCE' },
+      { id: 'link-other', entityType: 'OTHER', entityId: 'ext-1', purpose: 'ATTACHMENT' },
+    ],
+  };
+  warrantyLookupResult = null; // the linked warranty no longer exists
+
+  const result = await service.get('property-1', 'record-1', 'OWNER');
+
+  const warrantyLink = result.links.find((link) => link.id === 'link-warranty');
+  const otherLink = result.links.find((link) => link.id === 'link-other');
+  assert.equal(warrantyLink.broken, true);
+  assert.equal(otherLink.broken, null);
+  assert.equal(result.deletionImpact.brokenLinkCount, 1);
+
+  warrantyLookupResult = { id: 'w-1' };
+  const healthyResult = await service.get('property-1', 'record-1', 'OWNER');
+  const healthyWarrantyLink = healthyResult.links.find((link) => link.id === 'link-warranty');
+  assert.equal(healthyWarrantyLink.broken, false);
+  assert.equal(healthyResult.deletionImpact.brokenLinkCount, 0);
 });

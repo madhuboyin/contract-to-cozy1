@@ -142,12 +142,25 @@ export class HomeRecordsService {
       where: { id: recordId, propertyId, ...visibleWhere(role) },
       include: {
         currentVersion: true,
-        versions: { orderBy: { versionNumber: 'desc' } },
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+          include: { extractedFacts: { orderBy: { createdAt: 'asc' } } },
+        },
         links: { orderBy: { createdAt: 'asc' } },
         purgeJobs: { orderBy: { requestedAt: 'desc' }, take: 1 },
       },
     });
     if (!record) throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
+
+    const links = await Promise.all(record.links.map(async (link) => ({
+      ...link,
+      // OTHER has no canonical table, so its health can never be determined —
+      // it is neither reported healthy nor broken.
+      broken: link.entityType === 'OTHER'
+        ? null
+        : !(await this.entityExists(propertyId, link.entityType, link.entityId)),
+    })));
+    const brokenLinkCount = links.filter((link) => link.broken === true).length;
 
     return {
       ...record,
@@ -155,12 +168,14 @@ export class HomeRecordsService {
         ? await publicVersion(record.currentVersion)
         : null,
       versions: record.versions.map((version) => ({ ...version, storageKey: undefined })),
+      links,
       allowedActions: allowedActions(role, record.lifecycleStatus),
       deletionImpact: {
         activeLinkCount: record.links.length,
         requiresImpactDecision: record.links.length > 0,
         legalHold: Boolean(record.legalHoldReason),
         retainUntil: record.retainUntil,
+        brokenLinkCount,
       },
     };
   }
@@ -220,6 +235,10 @@ export class HomeRecordsService {
             fileSizeBytes: input.file.size,
             sha256: checksum,
             uploadedByUserId: input.userId,
+            // Route-level magic-byte/content validation (validateDocumentUpload)
+            // already ran before this service is invoked, so the upload is
+            // clean by the time a version row exists.
+            scanStatus: 'CLEAN',
           },
         },
       },
@@ -308,6 +327,7 @@ export class HomeRecordsService {
         sha256: checksum,
         uploadedByUserId: input.userId,
         supersedesVersionId: record.currentVersionId,
+        scanStatus: 'CLEAN',
       },
     });
 
@@ -500,12 +520,14 @@ export class HomeRecordsService {
     }
   }
 
-  private async assertEntityScope(
+  // Shared by assertEntityScope (link-creation guard) and get() (broken-link
+  // health check on read) so both use one definition of "still resolves."
+  private async entityExists(
     propertyId: string,
     entityType: PropertyRecordLinkEntityType,
     entityId: string,
-  ) {
-    const exists = await (async () => {
+  ): Promise<boolean> {
+    const found = await (async () => {
       switch (entityType) {
         case 'HOME_EVENT': return prisma.homeEvent.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'INVENTORY_ITEM': return prisma.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
@@ -516,9 +538,20 @@ export class HomeRecordsService {
         case 'CLAIM': return prisma.claim.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'PERMIT': return prisma.propertyPermitRecord.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'PROPERTY_BRIEF': return prisma.propertyBrief.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
-        case 'OTHER': return null;
+        // OTHER has no canonical table to verify against; the caller-supplied
+        // entityId is opaque and always treated as existing.
+        case 'OTHER': return { id: entityId };
       }
     })();
+    return Boolean(found);
+  }
+
+  private async assertEntityScope(
+    propertyId: string,
+    entityType: PropertyRecordLinkEntityType,
+    entityId: string,
+  ) {
+    const exists = await this.entityExists(propertyId, entityType, entityId);
     if (!exists) {
       throw new APIError(
         'Linked entity was not found for this property or is not supported.',

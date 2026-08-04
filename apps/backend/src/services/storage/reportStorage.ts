@@ -1,5 +1,5 @@
 // apps/backend/src/services/storage/reportStorage.ts
-import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getS3Client } from './s3Client';
 
 type UploadArgs = {
@@ -127,4 +127,12 @@ export async function deleteDocumentObject(key: string): Promise<void> {
   if (!bucket) return; // no-op if S3 not configured
   const client = getS3Client();
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+export async function downloadObjectBuffer(bucket: string, key: string): Promise<Buffer> {
+  const client = getS3Client();
+  const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!result.Body) throw new Error(`Object body is empty for key "${key}"`);
+  const bytes = await result.Body.transformToByteArray();
+  return Buffer.from(bytes);
 }

@@ -1772,6 +1772,12 @@ enum PropertyRecordType {
   INSURANCE_POLICY
   CLAIM
   PHOTO
+  DEED
+  TAX_DOCUMENT
+  UTILITY
+  DISCLOSURE
+  SURVEY
+  CLOSING_DOCUMENT
   OTHER
 }
 
@@ -1840,6 +1846,23 @@ enum PropertyRecordPurgeState {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+// Only WARRANTY has an implemented promotion contract so far (see
+// homeRecordsExtraction.service.ts). INSURANCE_POLICY is reserved for a
+// future slice — insurance already has its own bespoke staging path via
+// InsurancePolicyTerm/InsurancePolicyFact, unrelated to this model today.
+enum ExtractedFactTargetDomain {
+  WARRANTY
+  INSURANCE_POLICY
+  OTHER
+}
+
+enum ExtractedFactReviewStatus {
+  PENDING
+  CONFIRMED
+  CORRECTED
+  REJECTED
 }
 
 enum MessageType {
@@ -3849,17 +3872,50 @@ model PropertyRecordVersion {
   supersedesVersionId String?
   createdAt           DateTime                      @default(now())
 
-  record            PropertyRecord         @relation("PropertyRecordVersions", fields: [recordId], references: [id], onDelete: Cascade)
-  currentForRecord  PropertyRecord?         @relation("PropertyRecordCurrentVersion")
-  supersedesVersion PropertyRecordVersion?  @relation("PropertyRecordVersionSupersession", fields: [supersedesVersionId], references: [id], onDelete: SetNull)
-  supersededBy      PropertyRecordVersion[] @relation("PropertyRecordVersionSupersession")
+  record            PropertyRecord           @relation("PropertyRecordVersions", fields: [recordId], references: [id], onDelete: Cascade)
+  currentForRecord  PropertyRecord?           @relation("PropertyRecordCurrentVersion")
+  supersedesVersion PropertyRecordVersion?    @relation("PropertyRecordVersionSupersession", fields: [supersedesVersionId], references: [id], onDelete: SetNull)
+  supersededBy      PropertyRecordVersion[]   @relation("PropertyRecordVersionSupersession")
   links             PropertyRecordLink[]
+  extractedFacts    ExtractedFactCandidate[]
 
   @@unique([recordId, versionNumber])
   @@index([recordId, createdAt(sort: Desc)])
   @@index([sha256])
   @@index([supersedesVersionId])
   @@map("property_record_versions")
+}
+
+// Field-level AI-extraction candidates staged from a PropertyRecordVersion.
+// A candidate is never itself a source of truth — it only becomes one once a
+// domain-specific promotion path (see homeRecordsExtraction.service.ts)
+// reads CONFIRMED/CORRECTED values and writes the canonical record. This is
+// deliberately separate from the document-level classification the AI
+// returns (see the '_documentType' fieldKey convention in the extraction
+// service) so a future extractor can report differing per-field confidence
+// without a schema change.
+model ExtractedFactCandidate {
+  id                      String                    @id @default(uuid())
+  propertyRecordVersionId String
+  targetDomain            ExtractedFactTargetDomain
+  fieldKey                String
+  proposedValue           String?
+  sourceCitation          String?
+  confidence              Float
+  reviewStatus            ExtractedFactReviewStatus @default(PENDING)
+  reviewedValue           String?
+  reviewedByUserId        String?
+  reviewedAt              DateTime?
+  promotedEntityType      String?
+  promotedEntityId        String?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  version PropertyRecordVersion @relation(fields: [propertyRecordVersionId], references: [id], onDelete: Cascade)
+
+  @@index([propertyRecordVersionId])
+  @@index([propertyRecordVersionId, targetDomain])
+  @@map("extracted_fact_candidates")
 }
 
 model PropertyRecordLink {

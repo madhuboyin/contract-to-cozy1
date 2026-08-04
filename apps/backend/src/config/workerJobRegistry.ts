@@ -1185,6 +1185,18 @@ export const RUNNER_REGISTRY: RunnerRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'property-record-purge',
+    name: 'Property Record Purge',
+    description: 'Permanently deletes Home Records that have been in trash past the 30-day recovery window (or an explicit legal hold), removing every stored version object before the database row.',
+    impact: 'DESTRUCTIVE',
+    customerJob: 'PLATFORM_OPERATIONS',
+    defaultEnabledInBeta: true,
+    supportsDryRun: false,
+    supportsPropertyScope: false,
+    broadSweep: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'high-priority-email-enqueue-poller',
     name: 'High-priority Email Enqueue Poller',
     description: 'Enqueues pending high-priority (immediate-delivery) email notifications.',
