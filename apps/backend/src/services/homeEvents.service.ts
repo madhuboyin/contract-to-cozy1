@@ -234,7 +234,32 @@ export class HomeEventsService {
       return String(b.id || '').localeCompare(String(a.id || ''));
     });
 
-    const projectedEvents = sorted.slice(0, take).map(({ inventoryItem, ...event }) => event);
+    const projectedEventsBase = sorted.slice(0, take).map(({ inventoryItem, ...event }) => event);
+
+    // Home Records evidence links back via PropertyRecordLink (entityType
+    // HOME_EVENT), not a Prisma relation on HomeEvent itself, so it can't be
+    // pulled in via the `include` above — batched by event id here instead
+    // of a per-event query. See getHomeEvent() for the single-event version.
+    const eventIds = projectedEventsBase.map((event) => event.id);
+    const propertyRecordLinks = eventIds.length > 0
+      ? await prisma.propertyRecordLink.findMany({
+        where: { entityType: 'HOME_EVENT', entityId: { in: eventIds } },
+        include: {
+          record: { select: { id: true, title: true, recordType: true, lifecycleStatus: true } },
+          version: { select: { id: true, versionNumber: true, scanStatus: true, integrityStatus: true } },
+        },
+      })
+      : [];
+    const recordLinksByEventId = new Map<string, typeof propertyRecordLinks>();
+    for (const link of propertyRecordLinks) {
+      const existing = recordLinksByEventId.get(link.entityId);
+      if (existing) existing.push(link);
+      else recordLinksByEventId.set(link.entityId, [link]);
+    }
+    const projectedEvents = projectedEventsBase.map((event) => ({
+      ...event,
+      propertyRecordLinks: recordLinksByEventId.get(event.id) ?? [],
+    }));
     // Analytical signals are not durable property history. They are available
     // only to explicit legacy/debug callers and never enter the default view.
     const includeSignals = query.includeSignals === true;
@@ -486,7 +511,24 @@ export class HomeEventsService {
       },
     });
     if (!event) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
-    return event;
+
+    // Home Records evidence (e.g. a reviewed warranty/receipt promotion —
+    // see homeRecordsExtraction.service.ts) links back here via a typed
+    // PropertyRecordLink (entityType HOME_EVENT) rather than the legacy
+    // Document model that `documents`/`evidence` above read from. Slice 6 of
+    // HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
+    // calls for surfacing this so an event's detail shows how it's known,
+    // not just what happened.
+    const propertyRecordLinks = await prisma.propertyRecordLink.findMany({
+      where: { entityType: 'HOME_EVENT', entityId: eventId },
+      include: {
+        record: { select: { id: true, title: true, recordType: true, lifecycleStatus: true } },
+        version: { select: { id: true, versionNumber: true, scanStatus: true, integrityStatus: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return { ...event, propertyRecordLinks };
   }
 
   async createHomeEvent(args: { propertyId: string; userId?: string | null; body: any }) {

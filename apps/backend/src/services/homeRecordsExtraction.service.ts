@@ -346,6 +346,45 @@ export class HomeRecordsExtractionService {
         },
       });
 
+      // The real historical fact is "warranty coverage began," not "a file
+      // was uploaded" — Slice 6 of the plan (§8) calls this out explicitly:
+      // promote reviewed facts into Timeline instead of a generic
+      // document-upload event. occurredAt is the coverage start date, not
+      // today, since that's when the fact actually happened.
+      const event = await tx.homeEvent.create({
+        data: {
+          propertyId: input.propertyId,
+          createdById: input.userId,
+          type: 'MILESTONE',
+          title: `Warranty registered: ${providerName}`,
+          summary: `Coverage ${startDate.toISOString().slice(0, 10)} to ${expiryDate.toISOString().slice(0, 10)}, evidenced by "${version.originalFileName}".`,
+          occurredAt: startDate,
+          datePrecision: 'EXACT_DATE',
+          observationKind: 'EVIDENCE_DERIVED',
+          verificationStatus: 'EVIDENCE_VERIFIED',
+          sourceType: 'DOCUMENT',
+          sourceEntityType: 'WARRANTY',
+          sourceEntityId: created.id,
+          sourceBadge: 'DOCUMENT_BACKED',
+          idempotencyKey: `home-records-warranty:${created.id}`,
+        },
+      });
+
+      // Reverse pointer so homeRecords.service.ts's trash() evidence-impact
+      // gate (an active PropertyRecordLink blocks trashing without an
+      // explicit KEEP_LINKS/REMOVE_LINKS decision) actually protects this
+      // record now that it evidences a Timeline event, not just the Warranty.
+      await tx.propertyRecordLink.create({
+        data: {
+          recordId: input.recordId,
+          versionId: version.id,
+          entityType: 'HOME_EVENT',
+          entityId: event.id,
+          purpose: 'EVIDENCE',
+          createdByUserId: input.userId,
+        },
+      });
+
       return created;
     });
 
@@ -445,6 +484,42 @@ export class HomeRecordsExtractionService {
           entityType: 'EXPENSE',
           entityId: created.id,
           purpose: 'RECEIPT',
+          createdByUserId: input.userId,
+        },
+      });
+
+      // Same reasoning as promoteWarranty: the receipt evidences a real
+      // purchase, not just a file upload — record it on Timeline.
+      // HomeEvent.expenseId is a typed 1:1 FK, so no sourceEntityType/Id
+      // pointer is needed here (unlike warranty, which has no such column).
+      const event = await tx.homeEvent.create({
+        data: {
+          propertyId: input.propertyId,
+          createdById: input.userId,
+          type: 'PURCHASE',
+          title: `Expense logged: ${description}`,
+          summary: `Evidenced by "${version.originalFileName}".`,
+          occurredAt: transactionDate,
+          datePrecision: 'EXACT_DATE',
+          amount,
+          expenseId: created.id,
+          observationKind: 'EVIDENCE_DERIVED',
+          verificationStatus: 'EVIDENCE_VERIFIED',
+          sourceType: 'DOCUMENT',
+          sourceEntityType: 'EXPENSE',
+          sourceEntityId: created.id,
+          sourceBadge: 'DOCUMENT_BACKED',
+          idempotencyKey: `home-records-expense:${created.id}`,
+        },
+      });
+
+      await tx.propertyRecordLink.create({
+        data: {
+          recordId: input.recordId,
+          versionId: version.id,
+          entityType: 'HOME_EVENT',
+          entityId: event.id,
+          purpose: 'EVIDENCE',
           createdByUserId: input.userId,
         },
       });

@@ -340,6 +340,22 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                 ),
               },
               {
+                key: 'propertyRecordLinks',
+                label: 'Home Records evidence',
+                render: (event) => Array.isArray(event.propertyRecordLinks) && event.propertyRecordLinks.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {event.propertyRecordLinks.map((link) => (
+                      <Badge key={link.id}>
+                        {link.record?.title || 'Record'}
+                        {link.version ? ` (v${link.version.versionNumber}${link.version.scanStatus !== 'CLEAN' ? `, ${formatEnumLabel(link.version.scanStatus)}` : ''})` : ''}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mb-0 text-sm text-slate-500">Not evidenced by a Home Record</p>
+                ),
+              },
+              {
                 key: 'financial',
                 label: 'Financial',
                 render: (event) => (

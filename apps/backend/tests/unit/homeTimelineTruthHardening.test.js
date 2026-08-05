@@ -117,3 +117,21 @@ test('Timeline completion is a useful history action, not plan creation', () => 
     /A reported or verified property event, evidence attachment, correction, or selected history export\./,
   );
 });
+
+test('Slice 6: reviewed Home Records promotions link back to Timeline via typed PropertyRecordLink, not a generic upload event', () => {
+  const extractionService = readBackend('src/services/homeRecordsExtraction.service.ts');
+  // The real historical fact (coverage began / a purchase happened) is
+  // promoted, not a "document uploaded" event — and the promotion writes
+  // the reverse PropertyRecordLink (entityType HOME_EVENT) so the generic
+  // evidence-impact purge gate in homeRecords.service.ts engages for it.
+  assert.match(extractionService, /type: 'MILESTONE'/);
+  assert.match(extractionService, /type: 'PURCHASE'/);
+  assert.match(extractionService, /observationKind: 'EVIDENCE_DERIVED'/);
+  assert.match(extractionService, /verificationStatus: 'EVIDENCE_VERIFIED'/);
+  assert.match(extractionService, /entityType: 'HOME_EVENT'/);
+  assert.doesNotMatch(extractionService, /type: 'DOCUMENT'/);
+
+  const eventsService = readBackend('src/services/homeEvents.service.ts');
+  assert.match(eventsService, /propertyRecordLink\.findMany/);
+  assert.match(eventsService, /entityType: 'HOME_EVENT'/);
+});

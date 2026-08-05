@@ -12,7 +12,8 @@ let propertyForPromotion = { homeownerProfileId: 'homeowner-1' };
 const createManyCalls = [];
 const updateManyCalls = [];
 const updateCalls = [];
-const transactionCalls = { warrantyCreates: [], expenseCreates: [], candidateUpdateManys: [], linkCreates: [] };
+const transactionCalls = { warrantyCreates: [], expenseCreates: [], candidateUpdateManys: [], linkCreates: [], homeEventCreates: [] };
+let homeEventIdCounter = 0;
 let downloadCalls = 0;
 let analyzeCalls = 0;
 let analyzeResult = null;
@@ -48,7 +49,14 @@ const prismaMock = {
       updateMany: async (args) => { transactionCalls.candidateUpdateManys.push(args); return { count: args.where.id.in.length }; },
     },
     propertyRecordLink: {
-      create: async (args) => { transactionCalls.linkCreates.push(args); return { id: 'link-1', ...args.data }; },
+      create: async (args) => { transactionCalls.linkCreates.push(args); return { id: `link-${transactionCalls.linkCreates.length + 1}`, ...args.data }; },
+    },
+    homeEvent: {
+      create: async (args) => {
+        transactionCalls.homeEventCreates.push(args);
+        homeEventIdCounter += 1;
+        return { id: `home-event-${homeEventIdCounter}`, ...args.data };
+      },
     },
   }),
 };
@@ -231,7 +239,7 @@ test('promoteWarranty blocks promotion until every required field is confirmed o
 });
 
 test('promoteWarranty creates a Warranty, links it, and marks candidates promoted once required fields are reviewed', async () => {
-  versionForRecord = { id: 'version-1' };
+  versionForRecord = { id: 'version-1', originalFileName: 'ge-fridge-warranty.pdf' };
   candidatesForPromotion = [
     { id: 'c-provider', fieldKey: 'providerName', reviewStatus: 'CONFIRMED', reviewedValue: 'GE', promotedEntityId: null },
     { id: 'c-start', fieldKey: 'startDate', reviewStatus: 'CONFIRMED', reviewedValue: '2024-03-01', promotedEntityId: null },
@@ -243,6 +251,8 @@ test('promoteWarranty creates a Warranty, links it, and marks candidates promote
   transactionCalls.warrantyCreates.length = 0;
   transactionCalls.candidateUpdateManys.length = 0;
   transactionCalls.linkCreates.length = 0;
+  transactionCalls.homeEventCreates.length = 0;
+  homeEventIdCounter = 0;
 
   const warranty = await service.promoteWarranty({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
 
@@ -263,6 +273,25 @@ test('promoteWarranty creates a Warranty, links it, and marks candidates promote
   assert.equal(transactionCalls.linkCreates[0].data.entityType, 'WARRANTY');
   assert.equal(transactionCalls.linkCreates[0].data.entityId, 'warranty-1');
   assert.equal(transactionCalls.linkCreates[0].data.purpose, 'WARRANTY');
+
+  // Slice 6: the real historical fact (coverage began) is promoted to
+  // Timeline instead of leaving only a generic upload trail, and the
+  // record links back to that event so the evidence-impact purge gate
+  // engages for it too.
+  assert.equal(transactionCalls.homeEventCreates.length, 1);
+  const eventData = transactionCalls.homeEventCreates[0].data;
+  assert.equal(eventData.type, 'MILESTONE');
+  assert.match(eventData.title, /GE/);
+  assert.equal(eventData.occurredAt.toISOString().slice(0, 10), '2024-03-01');
+  assert.equal(eventData.observationKind, 'EVIDENCE_DERIVED');
+  assert.equal(eventData.verificationStatus, 'EVIDENCE_VERIFIED');
+  assert.equal(eventData.sourceEntityType, 'WARRANTY');
+  assert.equal(eventData.sourceEntityId, 'warranty-1');
+
+  assert.equal(transactionCalls.linkCreates.length, 2);
+  assert.equal(transactionCalls.linkCreates[1].data.entityType, 'HOME_EVENT');
+  assert.equal(transactionCalls.linkCreates[1].data.entityId, 'home-event-1');
+  assert.equal(transactionCalls.linkCreates[1].data.purpose, 'EVIDENCE');
 });
 
 test('promoteWarranty refuses to run twice against the same analysis', async () => {
@@ -341,7 +370,7 @@ test('promoteExpense blocks promotion until every required field is confirmed or
 });
 
 test('promoteExpense creates an Expense, links it, and marks candidates promoted once required fields are reviewed', async () => {
-  versionForRecord = { id: 'version-1' };
+  versionForRecord = { id: 'version-1', originalFileName: 'home-depot-receipt.pdf' };
   candidatesForPromotion = [
     { id: 'c-desc', fieldKey: 'description', reviewStatus: 'CONFIRMED', reviewedValue: 'Home Depot', promotedEntityId: null },
     { id: 'c-amount', fieldKey: 'amount', reviewStatus: 'CONFIRMED', reviewedValue: '84.21', promotedEntityId: null },
@@ -353,6 +382,8 @@ test('promoteExpense creates an Expense, links it, and marks candidates promoted
   transactionCalls.expenseCreates.length = 0;
   transactionCalls.candidateUpdateManys.length = 0;
   transactionCalls.linkCreates.length = 0;
+  transactionCalls.homeEventCreates.length = 0;
+  homeEventIdCounter = 0;
 
   const expense = await service.promoteExpense({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
 
@@ -373,6 +404,22 @@ test('promoteExpense creates an Expense, links it, and marks candidates promoted
   assert.equal(transactionCalls.linkCreates[0].data.entityType, 'EXPENSE');
   assert.equal(transactionCalls.linkCreates[0].data.entityId, 'expense-1');
   assert.equal(transactionCalls.linkCreates[0].data.purpose, 'RECEIPT');
+
+  // Slice 6: promote the real fact (a purchase happened) to Timeline,
+  // using the typed expenseId FK rather than a sourceEntityType/Id pointer.
+  assert.equal(transactionCalls.homeEventCreates.length, 1);
+  const eventData = transactionCalls.homeEventCreates[0].data;
+  assert.equal(eventData.type, 'PURCHASE');
+  assert.match(eventData.title, /Home Depot/);
+  assert.equal(eventData.occurredAt.toISOString().slice(0, 10), '2026-06-15');
+  assert.equal(eventData.expenseId, 'expense-1');
+  assert.equal(Number(eventData.amount), 84.21);
+  assert.equal(eventData.observationKind, 'EVIDENCE_DERIVED');
+  assert.equal(eventData.verificationStatus, 'EVIDENCE_VERIFIED');
+
+  assert.equal(transactionCalls.linkCreates.length, 2);
+  assert.equal(transactionCalls.linkCreates[1].data.entityType, 'HOME_EVENT');
+  assert.equal(transactionCalls.linkCreates[1].data.entityId, 'home-event-1');
 });
 
 test('promoteExpense refuses to run twice against the same analysis', async () => {

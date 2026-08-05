@@ -56,6 +56,14 @@ export interface HomeEvent {
   correctionReason?: string | null;
   evidence?: Array<{ id: string; evidenceType: string; note: string | null; documentId: string | null }>;
   childEvents?: Array<{ id: string; title: string; occurredAt: string; datePrecision: HomeEventDatePrecision }>;
+  // Home Records evidence (reviewed warranty/receipt promotions) — a typed
+  // link, distinct from the legacy `documents`/`evidence` arrays above.
+  propertyRecordLinks?: Array<{
+    id: string;
+    purpose: string;
+    record: { id: string; title: string; recordType: string; lifecycleStatus: string } | null;
+    version: { id: string; versionNumber: number; scanStatus: string; integrityStatus: string } | null;
+  }>;
 }
 
 export interface TimelineProjectionEntry {
