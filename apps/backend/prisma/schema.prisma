@@ -13661,6 +13661,12 @@ enum PropertyBriefShareStatus {
   EXPIRED
 }
 
+enum PropertyBriefShareInvitationStatus {
+  NOT_SET
+  PENDING
+  ACCEPTED
+}
+
 enum PropertyBriefAccessKind {
   VIEW
   DOWNLOAD
@@ -13745,6 +13751,20 @@ model PropertyBriefShare {
   accessCount     Int                         @default(0)
   createdAt       DateTime                    @default(now())
   updatedAt       DateTime                    @updatedAt
+
+  // Recipient identity binding (Home Continuity Plan / Slice 7): a share
+  // created with a named recipient is no longer an anonymous bearer link —
+  // "accepted" means that specific person's emailed link was actually
+  // opened at least once, distinct from lastAccessedAt/accessCount which
+  // also increment on every subsequent visit and on the owner's own
+  // "test access" checks (which deliberately do NOT touch these fields).
+  recipientName     String?
+  recipientEmail    String?
+  invitationStatus  PropertyBriefShareInvitationStatus @default(NOT_SET)
+  invitedAt         DateTime?
+  acceptedAt        DateTime?
+  lastTestedAt      DateTime?
+  lastTestedByUserId String?
 
   brief     PropertyBrief             @relation(fields: [briefId], references: [id], onDelete: Cascade)
   createdBy User                      @relation("PropertyBriefShareCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)

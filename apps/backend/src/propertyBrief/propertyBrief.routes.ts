@@ -19,6 +19,7 @@ import {
   listPropertyBriefs,
   revokePropertyBriefShare,
   renderPropertyBriefPdf,
+  testPropertyBriefShareAccess,
 } from './propertyBrief.service';
 
 const router = Router();
@@ -162,6 +163,8 @@ router.post(
         expiresInDays: req.body.expiresInDays,
         downloadPolicy: req.body.downloadPolicy,
         sensitiveDataAcknowledged: req.body.sensitiveDataAcknowledged,
+        recipientName: req.body.recipientName,
+        recipientEmail: req.body.recipientEmail,
       });
       const origin = req.headers.origin || process.env.FRONTEND_URL || '';
       return res.status(201).json({
@@ -187,6 +190,28 @@ router.post(
       return res.json({
         success: true,
         data: await revokePropertyBriefShare({
+          propertyId: req.params.propertyId,
+          userId: req.user.userId,
+          briefId: uuid.parse(req.params.briefId),
+          shareId: uuid.parse(req.params.shareId),
+        }),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/property-briefs/:briefId/shares/:shareId/test',
+  authenticate,
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user?.userId) return res.status(401).json({ success: false });
+      return res.json({
+        success: true,
+        data: await testPropertyBriefShareAccess({
           propertyId: req.params.propertyId,
           userId: req.user.userId,
           briefId: uuid.parse(req.params.briefId),

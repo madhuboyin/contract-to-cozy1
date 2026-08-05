@@ -21,6 +21,7 @@ import {
   listEligiblePropertyBriefDocuments,
   listPropertyBriefs,
   revokePropertyBriefShare,
+  testPropertyBriefShareAccess,
   type PropertyBrief,
   type PropertyBriefPurpose,
   type PropertyBriefSection,
@@ -127,6 +128,8 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
   const [expiresInDays, setExpiresInDays] = React.useState(14);
   const [downloadPolicy, setDownloadPolicy] = React.useState<'VIEW_ONLY' | 'ALLOW_DOWNLOAD'>('VIEW_ONLY');
   const [shareSensitiveAcknowledged, setShareSensitiveAcknowledged] = React.useState(false);
+  const [recipientName, setRecipientName] = React.useState('');
+  const [recipientEmail, setRecipientEmail] = React.useState('');
 
   const currentTemplate = templatesQuery.data?.find((item) => item.purpose === purpose);
   const previewQuery = useQuery({
@@ -156,10 +159,14 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
       previewAcknowledged: true,
       limitationAcknowledged: true,
       sensitiveDataAcknowledged: true,
+      recipientName: recipientName.trim() || undefined,
+      recipientEmail: recipientEmail.trim() || undefined,
     }),
     onSuccess: async (share) => {
       setShareUrl(share.shareUrl);
       setShareSensitiveAcknowledged(false);
+      setRecipientName('');
+      setRecipientEmail('');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['property-briefs', propertyId] }),
         queryClient.invalidateQueries({ queryKey: ['property-brief-preview', propertyId, selectedBriefId] }),
@@ -171,6 +178,19 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
       revokePropertyBriefShare(propertyId, briefId, shareId),
     onSuccess: async () => {
       setShareUrl(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['property-briefs', propertyId] }),
+        queryClient.invalidateQueries({ queryKey: ['property-brief-preview', propertyId, selectedBriefId] }),
+      ]);
+    },
+  });
+  const [testingShareId, setTestingShareId] = React.useState<string | null>(null);
+  const testMutation = useMutation({
+    mutationFn: ({ briefId, shareId }: { briefId: string; shareId: string }) =>
+      testPropertyBriefShareAccess(propertyId, briefId, shareId),
+    onMutate: ({ shareId }) => setTestingShareId(shareId),
+    onSettled: () => setTestingShareId(null),
+    onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['property-briefs', propertyId] }),
         queryClient.invalidateQueries({ queryKey: ['property-brief-preview', propertyId, selectedBriefId] }),
@@ -406,6 +426,19 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                     </select>
                   </label>
                 </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-600">
+                    Recipient name (optional)
+                    <input type="text" value={recipientName} onChange={(event) => setRecipientName(event.target.value)} placeholder="e.g. Aunt Carol" className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900" />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Recipient email (optional)
+                    <input type="email" value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} placeholder="carol@example.com" className="mt-1 min-h-[40px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900" />
+                  </label>
+                </div>
+                <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+                  Naming a recipient lets you see whether they've opened the link yet — you still need to send it to them yourself; this doesn't email it for you.
+                </p>
                 <label className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 p-3 text-xs leading-5 text-slate-700">
                   <input type="checkbox" checked={shareSensitiveAcknowledged} onChange={(event) => setShareSensitiveAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4" />
                   I reviewed the full property identity and selected records and understand this is a material sharing action.
@@ -451,15 +484,37 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                       <span className="font-semibold text-slate-900">{humanize(share.status)}</span>
                       {' · '}expires {new Date(share.expiresAt).toLocaleDateString()}
                       {' · '}{share.accessCount} access{share.accessCount === 1 ? '' : 'es'}
+                      {share.recipientEmail && (
+                        <>
+                          {' · '}{share.recipientName || share.recipientEmail}
+                          {': '}
+                          {share.invitationStatus === 'ACCEPTED'
+                            ? `opened ${share.acceptedAt ? new Date(share.acceptedAt).toLocaleDateString() : ''}`
+                            : 'not yet opened'}
+                        </>
+                      )}
+                      {share.lastTestedAt && (
+                        <> · last tested {new Date(share.lastTestedAt).toLocaleDateString()}</>
+                      )}
                     </div>
                     {share.status === 'ACTIVE' && (
-                      <button
-                        type="button"
-                        onClick={() => revokeMutation.mutate({ briefId: preview.id, shareId: share.id })}
-                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700"
-                      >
-                        <X className="h-3.5 w-3.5" /> Revoke
-                      </button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={testingShareId === share.id}
+                          onClick={() => testMutation.mutate({ briefId: preview.id, shareId: share.id })}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+                        >
+                          {testingShareId === share.id ? 'Testing…' : 'Test access'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => revokeMutation.mutate({ briefId: preview.id, shareId: share.id })}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700"
+                        >
+                          <X className="h-3.5 w-3.5" /> Revoke
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}

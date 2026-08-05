@@ -400,6 +400,8 @@ export async function listPropertyBriefs(propertyId: string, userId: string) {
         select: {
           id: true, status: true, downloadPolicy: true, expiresAt: true,
           revokedAt: true, accessCount: true, lastAccessedAt: true, createdAt: true,
+          recipientName: true, recipientEmail: true, invitationStatus: true,
+          acceptedAt: true, lastTestedAt: true,
         },
       },
     },
@@ -503,6 +505,8 @@ export async function createPropertyBriefShare(input: {
   expiresInDays: number;
   downloadPolicy: 'VIEW_ONLY' | 'ALLOW_DOWNLOAD';
   sensitiveDataAcknowledged: true;
+  recipientName?: string | null;
+  recipientEmail?: string | null;
 }) {
   const brief = await findOwnedBrief(input.propertyId, input.userId, input.briefId);
   if (brief.status === PropertyBriefStatus.ARCHIVED) {
@@ -510,6 +514,12 @@ export async function createPropertyBriefShare(input: {
   }
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000);
+  // A share with a named recipient is a real invitation, not just an
+  // anonymous link — "accepted" (set the first time the link is opened, see
+  // getSharedPropertyBrief) is the closest thing to identity binding without
+  // requiring the recipient to hold a platform account: only someone with
+  // access to that specific emailed link can accept it.
+  const hasRecipient = Boolean(input.recipientEmail?.trim());
   const share = await prisma.$transaction(async (tx) => {
     const created = await tx.propertyBriefShare.create({
       data: {
@@ -519,8 +529,15 @@ export async function createPropertyBriefShare(input: {
         tokenHash: tokenHash(token),
         expiresAt,
         downloadPolicy: input.downloadPolicy as PropertyBriefDownloadPolicy,
+        recipientName: input.recipientName?.trim() || null,
+        recipientEmail: input.recipientEmail?.trim() || null,
+        invitationStatus: hasRecipient ? 'PENDING' : 'NOT_SET',
+        invitedAt: hasRecipient ? new Date() : null,
       },
-      select: { id: true, status: true, expiresAt: true, downloadPolicy: true, createdAt: true },
+      select: {
+        id: true, status: true, expiresAt: true, downloadPolicy: true, createdAt: true,
+        recipientName: true, recipientEmail: true, invitationStatus: true,
+      },
     });
     await tx.propertyBrief.update({
       where: { id: brief.id },
@@ -539,6 +556,7 @@ export async function createPropertyBriefShare(input: {
       briefId: brief.id,
       downloadPolicy: input.downloadPolicy,
       expiresInDays: input.expiresInDays,
+      hasRecipient,
     },
   });
   return { ...share, token };
@@ -621,10 +639,18 @@ export async function getSharedPropertyBrief(input: {
   const kind = input.accessKind === 'DOWNLOAD'
     ? PropertyBriefAccessKind.DOWNLOAD
     : PropertyBriefAccessKind.VIEW;
+  // First real open of an invited link is the acceptance event — distinct
+  // from accessCount/lastAccessedAt, which also move on every later visit
+  // and are deliberately left untouched by the owner's "test access" check.
+  const isFirstAcceptance = share.invitationStatus === 'PENDING';
   await prisma.$transaction([
     prisma.propertyBriefShare.update({
       where: { id: share.id },
-      data: { accessCount: { increment: 1 }, lastAccessedAt: now },
+      data: {
+        accessCount: { increment: 1 },
+        lastAccessedAt: now,
+        ...(isFirstAcceptance ? { invitationStatus: 'ACCEPTED', acceptedAt: now } : {}),
+      },
     }),
     prisma.propertyBriefAccessLog.create({
       data: {
@@ -648,8 +674,38 @@ export async function getSharedPropertyBrief(input: {
     sections: share.brief.sections,
     expiresAt: share.expiresAt,
     downloadPolicy: share.downloadPolicy,
+    recipientName: share.recipientName,
     safetyTier: derivePropertyIntelligenceSafetyTier({ sharesSensitivePropertyData: true }),
   };
+}
+
+export async function testPropertyBriefShareAccess(input: {
+  propertyId: string;
+  userId: string;
+  briefId: string;
+  shareId: string;
+}) {
+  await findOwnedBrief(input.propertyId, input.userId, input.briefId);
+  const share = await prisma.propertyBriefShare.findFirst({
+    where: { id: input.shareId, briefId: input.briefId, propertyId: input.propertyId },
+  });
+  if (!share) throw new APIError('Share not found.', 404, 'PROPERTY_BRIEF_SHARE_NOT_FOUND');
+
+  const now = new Date();
+  const failureReason = share.status === PropertyBriefShareStatus.REVOKED
+    ? 'SHARE_REVOKED'
+    : share.status === PropertyBriefShareStatus.EXPIRED || share.expiresAt <= now
+      ? 'SHARE_EXPIRED'
+      : null;
+
+  // Deliberately does not touch accessCount/lastAccessedAt — this is the
+  // owner verifying the link still works, not a real recipient visit.
+  const updated = await prisma.propertyBriefShare.update({
+    where: { id: share.id },
+    data: { lastTestedAt: now, lastTestedByUserId: input.userId },
+    select: { id: true, lastTestedAt: true, status: true, expiresAt: true },
+  });
+  return { ...updated, accessible: failureReason === null, failureReason };
 }
 
 function printable(value: unknown): string {

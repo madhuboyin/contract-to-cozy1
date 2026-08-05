@@ -57,6 +57,11 @@ export type PropertyBriefShare = {
   accessCount: number;
   lastAccessedAt: string | null;
   createdAt: string;
+  recipientName: string | null;
+  recipientEmail: string | null;
+  invitationStatus: 'NOT_SET' | 'PENDING' | 'ACCEPTED';
+  acceptedAt: string | null;
+  lastTestedAt: string | null;
 };
 
 export type PropertyBrief = {
@@ -129,6 +134,8 @@ export async function createPropertyBriefShare(
     previewAcknowledged: true;
     limitationAcknowledged: true;
     sensitiveDataAcknowledged: true;
+    recipientName?: string;
+    recipientEmail?: string;
   },
 ) {
   const response = await api.post(
@@ -147,4 +154,16 @@ export async function revokePropertyBriefShare(
     `/api/properties/${propertyId}/property-briefs/${briefId}/shares/${shareId}/revoke`,
     {},
   );
+}
+
+export async function testPropertyBriefShareAccess(
+  propertyId: string,
+  briefId: string,
+  shareId: string,
+) {
+  const response = await api.post(
+    `/api/properties/${propertyId}/property-briefs/${briefId}/shares/${shareId}/test`,
+    {},
+  );
+  return response.data as { id: string; lastTestedAt: string; accessible: boolean; failureReason: string | null };
 }

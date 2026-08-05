@@ -136,3 +136,33 @@ test('creation and sharing use Property Brief analytics instead of page views', 
   assert.match(capability, /completionSignal: 'property_brief_created'/);
   assert.doesNotMatch(service, /FEATURE_OPENED|TOOL_USED/);
 });
+
+test('Slice 7: shares support a named recipient with real acceptance tracking and owner-side test access, not just an anonymous link', () => {
+  const schema = readBackend('prisma/schema.prisma');
+  assert.match(schema, /enum PropertyBriefShareInvitationStatus \{[\s\S]*NOT_SET[\s\S]*PENDING[\s\S]*ACCEPTED/);
+  assert.match(schema, /recipientEmail\s+String\?/);
+  assert.match(schema, /invitationStatus\s+PropertyBriefShareInvitationStatus/);
+  assert.match(schema, /acceptedAt\s+DateTime\?/);
+  assert.match(schema, /lastTestedAt\s+DateTime\?/);
+
+  const service = readBackend('src/propertyBrief/propertyBrief.service.ts');
+  // Acceptance is the first real open of an invited link, tracked
+  // separately from accessCount/lastAccessedAt (which move on every visit).
+  assert.match(service, /isFirstAcceptance = share\.invitationStatus === 'PENDING'/);
+  assert.match(service, /invitationStatus: 'ACCEPTED', acceptedAt: now/);
+  // testPropertyBriefShareAccess must not look like a real recipient visit.
+  assert.match(service, /export async function testPropertyBriefShareAccess/);
+  const testFn = service.slice(service.indexOf('export async function testPropertyBriefShareAccess'));
+  assert.doesNotMatch(testFn.slice(0, testFn.indexOf('\n}')), /accessCount:\s*\{\s*increment/);
+
+  const routes = readBackend('src/propertyBrief/propertyBrief.routes.ts');
+  assert.match(routes, /shares\/:shareId\/test/);
+
+  const ownerUi = readRepository(
+    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/property-brief/PropertyBriefClient.tsx',
+  );
+  assert.match(ownerUi, /Test access/);
+  // Must not overclaim automated delivery — the plan's §1.1 flagged exactly
+  // this kind of gap for the old Home Digital Will preview.
+  assert.match(ownerUi, /doesn't email it for you/);
+});

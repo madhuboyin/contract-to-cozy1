@@ -103,4 +103,6 @@ export const createPropertyBriefShareSchema = z.object({
   previewAcknowledged: z.literal(true),
   limitationAcknowledged: z.literal(true),
   sensitiveDataAcknowledged: z.literal(true),
+  recipientName: z.string().trim().min(1).max(120).optional(),
+  recipientEmail: z.string().trim().email().max(200).optional(),
 });
