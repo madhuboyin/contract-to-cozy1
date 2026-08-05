@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { SellerPrepController } from './sellerPrep.controller';
 import { SellerPrepLeadController } from './monetization/lead.controller';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 
 const router = Router();
 
@@ -34,8 +34,10 @@ router.get(
   SellerPrepController.getReadinessReport
 );
 router.post(
-  '/lead',
+  '/lead/:propertyId',
   authenticate,
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   SellerPrepLeadController.create
 );
 

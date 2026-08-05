@@ -2709,15 +2709,16 @@ class APIClient {
       phone?: string;
       contactMethod?: string;
       fullName?: string;
-    }
+    },
+    consentGiven: boolean,
   ): Promise<APIResponse<any>> {
-    return this.request('/api/seller-prep/lead', {
+    return this.request(`/api/seller-prep/lead/${propertyId}`, {
       method: 'POST',
       body: {
-        propertyId,
         leadType,
         context: JSON.stringify(context),
         ...contactInfo,
+        consentGiven,
       },
     });
   }

@@ -49,7 +49,6 @@ export interface SellerPrepItem {
       summary: {
         completionPercent: number;
         highPriorityRemaining: number;
-        estimatedUpliftRange: string;
       };
       topActions: SellerPrepItem[];
       comparables: {

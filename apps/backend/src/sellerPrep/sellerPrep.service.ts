@@ -15,6 +15,7 @@ export class SellerPrepService {
     propertyId: string
   ): Promise<{
     propertyId: string;
+    saleIntentConfirmed: boolean;
     items: ChecklistItem[];
     completionPercent: number;
     preferences: UserPreferences | null;
@@ -22,7 +23,7 @@ export class SellerPrepService {
     budget: any;
     value: any;
     interviews: any[]; // NEW: Added for agent comparison
-    startDate: string;
+    startDate: string | null;
     context: Awaited<ReturnType<typeof getPlanningContextEnvelope>>;
   }> {
     // Verify access: owner OR household collaborator (CONTRIBUTOR/VIEWER), not owner-only.
@@ -44,6 +45,37 @@ export class SellerPrepService {
         interviews: true // NEW: Include agent interviews
       },
     });
+
+    // Require confirmed sale intent (Property.propertyUse === 'FOR_SALE')
+    // before ever creating a plan — a plan silently appearing the first time
+    // this page is opened, regardless of whether the homeowner is actually
+    // selling, is exactly the kind of unconfirmed-intent gap
+    // HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
+    // Slice 8 calls out. Once a plan exists, keep serving it even if
+    // propertyUse later changes — revoking an in-progress plan would be
+    // more jarring than useful, and this app has no real users to worry
+    // about drifting property records yet.
+    if (!plan) {
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { propertyUse: true },
+      });
+      if (property?.propertyUse !== 'FOR_SALE') {
+        return {
+          propertyId,
+          saleIntentConfirmed: false,
+          items: [],
+          completionPercent: 0,
+          preferences: null,
+          personalizedSummary: null,
+          budget: null,
+          value: null,
+          interviews: [],
+          startDate: null,
+          context: await getPlanningContextEnvelope(propertyId, userId, 'SELLER_PREP', null),
+        };
+      }
+    }
 
     if (!plan) {
       const baseItems = generateRoiChecklist({
@@ -112,6 +144,7 @@ export class SellerPrepService {
 
     return {
       propertyId,
+      saleIntentConfirmed: true,
       items: personalizedItems,
       completionPercent,
       preferences,
@@ -288,6 +321,7 @@ export class SellerPrepLeadService {
     email?: string;
     phone?: string;
     contactMethod?: string;
+    consentGiven: boolean;
   }) {
     return prisma.sellerPrepLead.create({
       data: {
@@ -299,6 +333,7 @@ export class SellerPrepLeadService {
         email: input.email,
         phone: input.phone,
         contactMethod: input.contactMethod,
+        consentGiven: input.consentGiven,
       },
     });
   }

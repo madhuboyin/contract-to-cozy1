@@ -4574,6 +4574,12 @@ model SellerPrepLead {
   phone         String?
   contactMethod String? // email | phone | either
 
+  // Explicit commercial-sharing consent — required before a lead is
+  // created; see HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_
+  // IMPLEMENTATION_PLAN.md §1.1, which flagged this endpoint as lacking a
+  // validated consent contract.
+  consentGiven Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   @@index([propertyId, leadType])

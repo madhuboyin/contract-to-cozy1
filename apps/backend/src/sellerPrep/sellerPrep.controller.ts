@@ -129,10 +129,10 @@ export class SellerPrepController {
 
       // Transform backend report structure to match frontend expectations
       const transformedReport = {
-        summary: `Your home is ${reportData.summary.completionPercent}% ready for sale. ${reportData.summary.highPriorityRemaining} high-priority items remain. Estimated value uplift: ${reportData.summary.estimatedUpliftRange}`,
+        summary: `Your home is ${reportData.summary.completionPercent}% ready for sale. ${reportData.summary.highPriorityRemaining} high-priority items remain.`,
         highlights: [
-          ...reportData.topActions.slice(0, 3).map(action => 
-            `${action.title} (${action.roiRange} ROI) - ${action.status}`
+          ...reportData.topActions.slice(0, 3).map(action =>
+            `${action.title} - ${action.status}`
           ),
           `Market comparables ${reportData.comparables.available ? 'available' : 'limited'} in your area`
         ],

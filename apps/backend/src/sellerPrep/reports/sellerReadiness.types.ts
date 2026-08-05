@@ -1,11 +1,11 @@
 // apps/backend/src/sellerPrep/reports/sellerReadiness.types.ts
 export type SellerReadinessReport = {
     propertyId: string;
-  
+    saleIntentConfirmed: boolean;
+
     summary: {
       completionPercent: number;
       highPriorityRemaining: number;
-      estimatedUpliftRange: string;
     };
   
     topActions: {

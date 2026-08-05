@@ -30,11 +30,11 @@ export function SellerPrepCTA({ propertyId }: SellerPrepCTAProps) {
               </h3>
             </div>
             <p className="text-sm text-green-800 mb-3">
-              Discover which improvements may add value to your home sale using the available property evidence.
+              Track sale-prep tasks and readiness using your property's records.
             </p>
             <ul className="text-xs text-green-700 space-y-1 mb-4">
-              <li>• ROI-ranked repair checklist</li>
-              <li>• Comparable sales analysis</li>
+              <li>• General pre-sale improvement checklist</li>
+              <li>• Comparable sales, where available</li>
               <li>• Seller readiness assessment</li>
             </ul>
           </div>

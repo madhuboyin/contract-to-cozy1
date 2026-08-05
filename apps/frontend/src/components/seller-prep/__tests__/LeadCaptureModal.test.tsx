@@ -85,7 +85,7 @@ describe('LeadCaptureModal — phone validation (Bug 7)', () => {
     fireEvent.change(document.getElementById('email')!, { target: { value: 'jane@example.com' } });
     fireEvent.change(document.getElementById('phone')!, { target: { value: 'abc' } });
 
-    fireEvent.click(screen.getByText('Get Free Quotes'));
+    fireEvent.click(screen.getByText('Save request'));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
@@ -101,7 +101,7 @@ describe('LeadCaptureModal — phone validation (Bug 7)', () => {
     fireEvent.change(document.getElementById('email')!, { target: { value: 'jane@example.com' } });
     fireEvent.change(document.getElementById('phone')!, { target: { value: '123' } });
 
-    fireEvent.click(screen.getByText('Get Free Quotes'));
+    fireEvent.click(screen.getByText('Save request'));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
@@ -117,7 +117,7 @@ describe('LeadCaptureModal — phone validation (Bug 7)', () => {
     fireEvent.change(document.getElementById('email')!, { target: { value: 'jane@example.com' } });
     fireEvent.change(document.getElementById('phone')!, { target: { value: '555-867-5309' } });
 
-    fireEvent.click(screen.getByText('Get Free Quotes'));
+    fireEvent.click(screen.getByText('Save request'));
 
     await waitFor(() => {
       const invalidPhoneCalls = mockToast.mock.calls.filter(
@@ -134,7 +134,7 @@ describe('LeadCaptureModal — phone validation (Bug 7)', () => {
     fireEvent.change(document.getElementById('email')!, { target: { value: 'jane@example.com' } });
     fireEvent.change(document.getElementById('phone')!, { target: { value: '+44 7700 900123' } });
 
-    fireEvent.click(screen.getByText('Get Free Quotes'));
+    fireEvent.click(screen.getByText('Save request'));
 
     await waitFor(() => {
       const invalidPhoneCalls = mockToast.mock.calls.filter(

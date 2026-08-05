@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { api } from "@/lib/api/client";
@@ -40,6 +40,7 @@ interface SellerPrepItem {
 }
 
 interface SellerPrepOverviewData {
+  saleIntentConfirmed: boolean;
   items: SellerPrepItem[];
   completionPercent: number;
   preferences?: any;
@@ -104,11 +105,19 @@ export default function SellerPrepPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const queryClient = useQueryClient();
+  const confirmSaleIntentMutation = useMutation({
+    mutationFn: () => api.updateProperty(propertyId as string, { propertyUse: 'FOR_SALE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["seller-prep", propertyId] });
+    },
+  });
+
   useMilestones(data?.overview?.completionPercent || 0);
 
   // Trigger intake form if user has no saved preferences
   useEffect(() => {
-    if (data && !hasCheckedPreferences) {
+    if (data && data.overview.saleIntentConfirmed && !hasCheckedPreferences) {
       if (!data.overview.preferences) {
         setShowIntakeForm(true);
       }
@@ -225,15 +234,17 @@ export default function SellerPrepPage() {
           title="Prepare the home and selected records for sale"
           subtitle="Track verified readiness milestones without inferred ROI or value claims."
           action={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEditPreferences}
-              className="min-h-[44px] gap-1.5"
-            >
-              <Settings className="h-4 w-4" />
-              {data.overview.preferences ? "Edit" : "Setup"}
-            </Button>
+            data.overview.saleIntentConfirmed ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEditPreferences}
+                className="min-h-[44px] gap-1.5"
+              >
+                <Settings className="h-4 w-4" />
+                {data.overview.preferences ? "Edit" : "Setup"}
+              </Button>
+            ) : undefined
           }
         />
       </div>
@@ -249,17 +260,19 @@ export default function SellerPrepPage() {
 
         <HomeToolHeader toolId="seller-prep" propertyId={propertyId as string} />
 
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleEditPreferences}
-            className="h-9"
-          >
-            <Settings className="h-4 w-4 mr-2" />
-            {data.overview.preferences ? "Edit Preferences" : "Setup Plan"}
-          </Button>
-        </div>
+        {data.overview.saleIntentConfirmed && (
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEditPreferences}
+              className="h-9"
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              {data.overview.preferences ? "Edit Preferences" : "Setup Plan"}
+            </Button>
+          </div>
+        )}
       </div>
 
       <SellerPrepDisclaimer />
@@ -271,12 +284,32 @@ export default function SellerPrepPage() {
       />
 
       {/* Main Redesigned Dashboard Content */}
-      <SellerPrepOverview
-        overview={data.overview}
-        comparables={data.comparables}
-        report={data.report}
-        propertyId={propertyId as string}
-      />
+      {data.overview.saleIntentConfirmed ? (
+        <SellerPrepOverview
+          overview={data.overview}
+          comparables={data.comparables}
+          report={data.report}
+          propertyId={propertyId as string}
+        />
+      ) : (
+        <Card className="p-6 space-y-4">
+          <div className="space-y-1.5">
+            <h2 className="text-lg font-semibold">Confirm you're preparing to sell</h2>
+            <p className="text-sm text-muted-foreground">
+              This tool only opens once you've confirmed sale intent, so a sale plan
+              doesn't get created for a home you're not actually selling. This sets your
+              property's "Property use" to "For sale" — you can change it back at any time
+              from property settings.
+            </p>
+          </div>
+          <Button
+            onClick={() => confirmSaleIntentMutation.mutate()}
+            disabled={confirmSaleIntentMutation.isPending}
+          >
+            {confirmSaleIntentMutation.isPending ? "Confirming…" : "Yes, I'm preparing to sell"}
+          </Button>
+        </Card>
+      )}
 
       </MobilePageContainer>
     </DashboardShell>

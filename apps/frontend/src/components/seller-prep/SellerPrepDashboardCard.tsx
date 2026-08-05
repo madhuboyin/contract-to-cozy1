@@ -45,7 +45,7 @@ export function SellerPrepDashboardCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-gray-600">
-          Get a personalized checklist of improvements that maximize your sale price
+          Track sale-prep tasks and readiness for a property you're preparing to sell
         </p>
 
         <div className="space-y-2">
@@ -79,7 +79,7 @@ export function SellerPrepDashboardCard({
 
         <div className="flex items-center justify-between pt-2 border-t">
           <div className="text-xs text-gray-500">
-            <p>✓ ROI-ranked improvements</p>
+            <p>✓ General improvement checklist</p>
             <p>✓ Comparable sales data</p>
             <p>✓ Readiness assessment</p>
           </div>

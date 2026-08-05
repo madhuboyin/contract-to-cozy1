@@ -189,10 +189,10 @@ export default function SellerPrepOverview({
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">
-                  {hasPreferences ? 'Your Personalized Checklist' : 'ROI-Based Prep Checklist'}
+                  {hasPreferences ? 'Your Personalized Checklist' : 'Sale Prep Checklist'}
                 </CardTitle>
                 <CardDescription>
-                  Focus on high-ROI tasks to maximize your sale price.
+                  General pre-sale improvement categories — not calculated for this property.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -309,11 +309,11 @@ export default function SellerPrepOverview({
             <div className="pt-4 border-t space-y-3">
               <h4 className="text-xs font-bold text-gray-500 tracking-normal">Expert Assistance</h4>
               <p className="text-xs text-gray-600">Need help with repairs or staging?</p>
-              <Button 
-                onClick={() => setShowLeadModal(true)} 
+              <Button
+                onClick={() => setShowLeadModal(true)}
                 className="w-full bg-blue-600 hover:bg-blue-700 h-9 text-xs"
               >
-                Get Free Contractor Quotes
+                Record contractor interest
               </Button>
             </div>
           </CardContent>
@@ -344,7 +344,6 @@ function TaskItem({ item, onUpdate, isUpdating }: any) {
           </div>
           <div className="flex gap-2 items-center">
             <Badge variant={item.priority === 'HIGH' ? 'destructive' : 'secondary'} className="text-xs px-1.5 h-5 ">{item.priority}</Badge>
-            <span className="text-xs text-gray-500">ROI: {item.roiRange} • {item.costBucket}</span>
           </div>
         </div>
         <div className="flex gap-1">

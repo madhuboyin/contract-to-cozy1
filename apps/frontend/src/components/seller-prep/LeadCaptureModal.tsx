@@ -45,6 +45,7 @@ export function LeadCaptureModal({
     contactMethod: "email",
     timeline: "asap",
     notes: "",
+    consentGiven: false,
   });
   const [submitted, setSubmitted] = useState(false);
 
@@ -64,15 +65,15 @@ export function LeadCaptureModal({
           phone: data.phone,
           contactMethod: data.contactMethod,
           fullName: data.fullName,
-        }
+        },
+        data.consentGiven,
       );
     },
     onSuccess: () => {
       setSubmitted(true);
-      const leadTypeText = leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors';
       toast({
-        title: "Request sent!",
-        description: `We'll connect you with local ${leadTypeText} within 24 hours.`,
+        title: "Request saved",
+        description: "Your request has been recorded. We don't yet have a live matching or fulfillment process, so there's no guaranteed response — see next steps below.",
       });
     },
     onError: (error) => {
@@ -128,6 +129,15 @@ export function LeadCaptureModal({
       return;
     }
 
+    if (!formData.consentGiven) {
+      toast({
+        title: "Consent required",
+        description: "Please confirm you agree to share this information before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     mutation.mutate(formData);
   };
 
@@ -152,6 +162,7 @@ export function LeadCaptureModal({
         contactMethod: "email",
         timeline: "asap",
         notes: "",
+        consentGiven: false,
       });
       onClose();
     }
@@ -169,24 +180,19 @@ export function LeadCaptureModal({
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xl font-semibold">Request Sent!</h3>
+              <h3 className="text-xl font-semibold">Request saved</h3>
               <p className="text-sm text-gray-600">
-                Thanks! We&apos;ll connect you with local {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors'} within 24 hours.
+                Your interest in finding a {leadType === 'AGENT' ? 'agent' : leadType === 'STAGER' ? 'stager' : 'contractor'} has been recorded with the contact details you provided.
               </p>
             </div>
 
-            <div className="bg-blue-50 rounded-lg p-4 text-left space-y-2">
-              <p className="text-sm font-medium text-blue-900">What happens next:</p>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Up to 3 verified {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors'} will review your request</li>
-                <li>• You&apos;ll receive free quotes via email and/or phone</li>
-                <li>• Compare quotes and choose the best fit</li>
-                <li>• Book directly with your chosen {leadType === 'AGENT' ? 'agent' : leadType === 'STAGER' ? 'stager' : 'contractor'}</li>
+            <div className="bg-amber-50 rounded-lg p-4 text-left space-y-2">
+              <p className="text-sm font-medium text-amber-900">What this doesn&apos;t do yet:</p>
+              <ul className="text-sm text-amber-800 space-y-1">
+                <li>• We don&apos;t currently match you with providers or guarantee any response</li>
+                <li>• No professionals have been notified or verified on your behalf</li>
+                <li>• There is no quote or timeline commitment tied to this request</li>
               </ul>
-            </div>
-
-            <div className="text-xs text-gray-500">
-              Check your email for confirmation and next steps.
             </div>
 
             <Button onClick={handleClose} className="w-full">
@@ -203,12 +209,12 @@ export function LeadCaptureModal({
       <DialogContent className="sm:max-w-[600px] max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {leadType === 'AGENT' ? 'Find Recommended Agents' : 
-             leadType === 'STAGER' ? 'Get Free Staging Quotes' : 
-             'Get Free Contractor Quotes'}
+            {leadType === 'AGENT' ? 'Record interest in finding an agent' :
+             leadType === 'STAGER' ? 'Record interest in staging help' :
+             'Record interest in contractor help'}
           </DialogTitle>
           <DialogDescription>
-            We&apos;ll connect you with up to 3 verified local {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'professionals'} within 24 hours
+            This saves your request and contact details. We don&apos;t yet match you with providers or guarantee a response — see "What this doesn't do yet" after you submit.
           </DialogDescription>
         </DialogHeader>
 
@@ -388,13 +394,27 @@ export function LeadCaptureModal({
             />
           </div>
 
-          {/* Security Notice */}
+          {/* Security notice + consent */}
           <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
             <Lock className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <p>
-              Your information is secure and will only be shared with verified, licensed
-              contractors in your area.
+              This information is stored with your account. We don&apos;t currently have a
+              provider network, so it is not shared with any contractor, agent, or stager
+              automatically.
             </p>
+          </div>
+          <div className="flex items-start space-x-3">
+            <Checkbox
+              id="lead-consent"
+              checked={formData.consentGiven}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, consentGiven: checked === true })
+              }
+            />
+            <Label htmlFor="lead-consent" className="text-sm font-normal leading-snug">
+              I understand this only records my request and contact details, and does not
+              connect me with a professional or guarantee any follow-up.
+            </Label>
           </div>
 
           {/* Submit Buttons */}
@@ -416,10 +436,10 @@ export function LeadCaptureModal({
               {mutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
+                  Saving...
                 </>
               ) : (
-                "Get Free Quotes"
+                "Save request"
               )}
             </Button>
           </div>
