@@ -2644,52 +2644,8 @@ class APIClient {
     });
   }
 
-  /**
-   * Update seller prep item status
-   */
-  async updateSellerPrepItem(
-    itemId: string,
-    status: string
-  ): Promise<APIResponse<void>> {
-    return this.request(`/api/seller-prep/item/${itemId}`, {
-      method: 'PATCH',
-      body: { status },
-    });
-  }
-
-// =======================
-// SELLER PREP ENDPOINTS
-// =======================
-
-  async getSellerPrepROI(propertyId: string) {
-    return this.request(`/api/seller-prep/roi/${propertyId}`);
-  }
-
   async getSellerPrepComparables(propertyId: string) {
     return this.request(`/api/seller-prep/comparables/${propertyId}`);
-  }
-
-  async getSellerPrepCurbAppeal(propertyId: string) {
-    return this.request(`/api/seller-prep/curb-appeal/${propertyId}`);
-  }
-
-  async getSellerPrepStaging(propertyId: string) {
-    return this.request(`/api/seller-prep/staging/${propertyId}`);
-  }
-
-  async getSellerPrepAgentGuide() {
-    return this.request(`/api/seller-prep/agent-guide`);
-  }
-
-  /**
-   * Get seller prep readiness report for a property
-   */
-  async getSellerPrepReport(
-    propertyId: string
-  ): Promise<APIResponse<any>> {
-    return this.request(`/api/seller-prep/report/${propertyId}`, {
-      method: 'GET',
-    });
   }
 
   /**
@@ -2720,28 +2676,6 @@ class APIClient {
         ...contactInfo,
         consentGiven,
       },
-    });
-  }
-
-  /**
-   * Save seller prep preferences for a property
-   */
-  async saveSellerPrepPreferences(
-    propertyId: string,
-    preferences: {
-      timeline: string;
-      budget: string;
-      propertyType: string;
-      priority: string;
-      condition: string;
-      sourceActionId?: string;
-      sourceJourneyId?: string;
-      sourceProjectId?: string;
-    }
-  ): Promise<APIResponse<any>> {
-    return this.request(`/api/seller-prep/preferences/${propertyId}`, {
-      method: 'POST',
-      body: preferences,
     });
   }
 

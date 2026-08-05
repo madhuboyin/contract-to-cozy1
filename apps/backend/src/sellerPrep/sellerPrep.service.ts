@@ -1,13 +1,29 @@
 // apps/backend/src/sellerPrep/sellerPrep.service.ts
 import { prisma } from '../lib/prisma';
-import { generateRoiChecklist } from './engines/roiRules.engine';
 import { resolveCompsProvider } from './providers/compsResolver';
 import { buildSellerReadinessReport } from './reports/sellerReadiness.builder';
 import { calculateBudgetAndValue } from './engines/valueCalculator.engine';
-import { personalizeChecklist, generatePersonalizedSummary, ChecklistItem, UserPreferences } from './engines/personalization.engine';
-import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
+import { resolvePropertyAccess } from '../services/propertyAccess.service';
 import { getPlanningContextEnvelope, getPlanningContextDecisions } from '../services/planningContext/context';
-import { knownContextValue } from '../services/propertyContextDecision';
+
+// The static per-property ROI checklist (generateRoiChecklist) and its
+// personalization (personalizeChecklist/generatePersonalizedSummary) were
+// retired — see HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_
+// IMPLEMENTATION_PLAN.md Slice 8's "replace the static checklist" goal.
+// SellerPrepPlan.items is never seeded anymore; PropertySaleCase's
+// SaleReadinessItem projection (propertySaleCase.service.ts) is the real
+// governed replacement. This shape is kept minimal purely so the plan
+// record and its still-live features (agent interviews, comps, leads)
+// keep working.
+export interface ChecklistItem {
+  id?: string;
+  code: string;
+  title: string;
+  priority: string;
+  roiRange: string;
+  costBucket: string;
+  status?: string;
+}
 
 export class SellerPrepService {
   static async getOverview(
@@ -18,7 +34,7 @@ export class SellerPrepService {
     saleIntentConfirmed: boolean;
     items: ChecklistItem[];
     completionPercent: number;
-    preferences: UserPreferences | null;
+    preferences: any;
     personalizedSummary: string | null;
     budget: any;
     value: any;
@@ -34,9 +50,6 @@ export class SellerPrepService {
 
     // Canonical dwelling/location/open-work context (single applicability policy).
     const planning = await getPlanningContextDecisions(propertyId, userId, 'SELLER_PREP');
-    const dwellingType = knownContextValue<string>(planning.context, 'core.dwellingType');
-    const state = knownContextValue<string>(planning.context, 'location.state');
-    const yearBuilt = knownContextValue<number>(planning.context, 'core.yearBuilt');
 
     let plan = await prisma.sellerPrepPlan.findFirst({
       where: { userId, propertyId },
@@ -78,63 +91,25 @@ export class SellerPrepService {
     }
 
     if (!plan) {
-      const baseItems = generateRoiChecklist({
-        propertyType: dwellingType && dwellingType !== 'UNKNOWN' ? dwellingType : undefined,
-        yearBuilt: yearBuilt ?? undefined,
-        state: state ?? '',
-      });
-
+      // No item-seeding — the static ROI checklist is retired (Slice 8).
+      // The plan row still exists to host agent interviews and comps
+      // context for this property.
       plan = await prisma.sellerPrepPlan.create({
         data: {
           userId,
           propertyId,
           contextVersion: planning.contextVersion,
-          items: {
-            create: baseItems.map((i) => ({
-              code: i.code,
-              title: i.title,
-              priority: i.priority,
-              roiRange: i.roiRange,
-              costBucket: i.costBucket,
-              status: 'PLANNED',
-            })),
-          },
         },
         include: { items: true, interviews: true },
       });
     }
-  
-    const total = plan.items.length;
-    const done = plan.items.filter((i: any) => i.status === 'DONE').length;
-    const completionPercent = total ? Math.round((done / total) * 100) : 0;
-  
-    const itemsWithTimestamps = plan.items.map((item: any) => ({
-      id: item.id,
-      code: item.code,
-      title: item.title,
-      priority: item.priority,
-      roiRange: item.roiRange,
-      costBucket: item.costBucket,
-      status: item.status,
-      completedAt: item.completedAt,
-      skippedAt: item.skippedAt,
-      createdAt: item.createdAt,
-    }));
 
     const preferences = plan.preferences as any;
-    const personalizedItems: ChecklistItem[] = preferences
-      ? personalizeChecklist(itemsWithTimestamps as ChecklistItem[], preferences)
-      : (itemsWithTimestamps as ChecklistItem[]);
-  
-    const personalizedSummary = preferences
-      ? generatePersonalizedSummary(preferences, completionPercent)
-      : null;
-  
     const budgetAndValue = calculateBudgetAndValue(
       plan.items as any[],
       preferences?.budget
     );
-  
+
     const contextEnvelope = await getPlanningContextEnvelope(
       propertyId,
       userId,
@@ -145,63 +120,15 @@ export class SellerPrepService {
     return {
       propertyId,
       saleIntentConfirmed: true,
-      items: personalizedItems,
-      completionPercent,
+      items: [],
+      completionPercent: 0,
       preferences,
-      personalizedSummary,
+      personalizedSummary: null,
       budget: budgetAndValue.budget,
       value: budgetAndValue.value,
       interviews: plan.interviews || [], // NEW: Return saved interviews
       startDate: plan.createdAt.toISOString(),
       context: contextEnvelope,
-    };
-  }
-
-  static async updateItemStatus(
-    userId: string,
-    itemId: string,
-    status: 'PLANNED' | 'DONE' | 'SKIPPED'
-  ) {
-    const item = await prisma.sellerPrepPlanItem.findUnique({
-      where: { id: itemId },
-      include: { plan: true },
-    });
-
-    if (!item) {
-      throw new Error('Item not found');
-    }
-
-    // Verify access: owner OR household collaborator (CONTRIBUTOR+), not unauthenticated/no check.
-    const access = await resolvePropertyAccess(userId, item.plan.propertyId);
-    if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
-      throw new Error('Item not found or unauthorized');
-    }
-
-    const updateData: any = { status };
-
-    if (status === 'DONE') {
-      updateData.completedAt = new Date();
-      updateData.skippedAt = null;
-    } else if (status === 'SKIPPED') {
-      updateData.skippedAt = new Date();
-      updateData.completedAt = null;
-    } else if (status === 'PLANNED') {
-      updateData.completedAt = null;
-      updateData.skippedAt = null;
-    }
-
-    const updated = await prisma.sellerPrepPlanItem.update({
-      where: { id: itemId },
-      data: updateData,
-    });
-    return {
-      item: updated,
-      previousStatus: item.status,
-      planId: item.plan.id,
-      propertyId: item.plan.propertyId,
-      sourceActionId: item.plan.sourceActionId,
-      sourceJourneyId: item.plan.sourceJourneyId,
-      sourceProjectId: item.plan.sourceProjectId,
     };
   }
 

@@ -119,18 +119,10 @@ test('Slice 9: contractor help routes to the real Providers/Bookings marketplace
   // — it doesn't contact anyone, unlike the real link above.
   assert.match(overviewCard, /no provider is contacted/);
 
-  // Per-item deep links use real ServiceCategory values the provider search
-  // page actually filters on, not made-up category strings.
-  assert.match(overviewCard, /TASK_SERVICE_CATEGORY/);
-  assert.match(overviewCard, /INTERIOR_PAINT:\s*'PAINTING'/);
-  assert.match(overviewCard, /ROOF_REPLACEMENT:\s*'ROOFING'/);
-
-  const schema = readBackend('prisma/schema.prisma');
-  const serviceCategoryEnum = schema.slice(
-    schema.indexOf('enum ServiceCategory'),
-    schema.indexOf('}', schema.indexOf('enum ServiceCategory')),
-  );
-  for (const category of ['PAINTING', 'HANDYMAN', 'LANDSCAPING', 'ROOFING']) {
-    assert.match(serviceCategoryEnum, new RegExp(`\\b${category}\\b`));
-  }
+  // The static checklist that carried per-item TASK_SERVICE_CATEGORY deep
+  // links was retired (checklist replaced by the governed PropertySaleCase/
+  // SaleReadinessItem journey) — the sidebar CTA above is now the sole
+  // provider-routing path on this page, not a secondary one alongside
+  // per-item links.
+  assert.doesNotMatch(overviewCard, /TASK_SERVICE_CATEGORY/);
 });

@@ -3,50 +3,26 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  CheckCircle, 
-  Hammer, 
-  TrendingUp, 
-  FileText, 
-  AlertCircle, 
-  Loader2, 
-  Undo2, 
-  LayoutDashboard, 
-  DollarSign, 
-  Users 
+import {
+  TrendingUp,
+  AlertCircle,
+  LayoutDashboard,
+  DollarSign,
+  Users
 } from "lucide-react";
-import { api } from "@/lib/api/client";
-import { useToast } from "@/components/ui/use-toast";
 import { LeadCaptureModal } from "@/components/seller-prep/LeadCaptureModal";
 import { FEATURE_FLAGS } from "@/lib/featureFlags";
 import { BudgetTrackerCard } from "./BudgetTrackerCard";
 import { ValueEstimatorCard } from "./ValueEstimatorCard";
-import { ProgressTimeline } from "./ProgressTimeline";
 import { AgentInterviewGuide } from "./AgentInterviewGuide";
-
-interface SellerPrepItem {
-  id: string;
-  code: string;
-  title: string;
-  priority: string;
-  roiRange: string;
-  costBucket: string;
-  status: string;
-  createdAt?: string;
-  completedAt?: string;
-  skippedAt?: string;
-}
 
 interface ComparableHome {
   address: string;
@@ -58,20 +34,8 @@ interface ComparableHome {
   similarityReason: string;
 }
 
-interface ReadinessReport {
-  summary: string;
-  highlights?: string[];
-  risks?: string[];
-  disclaimers?: string[];
-}
-
 interface SellerPrepOverviewProps {
   overview: {
-    items: SellerPrepItem[];
-    completionPercent: number;
-    createdAt?: string;
-    preferences?: any;
-    personalizedSummary?: string;
     interviews?: any[];
     budget?: {
       totalBudget: number;
@@ -104,86 +68,37 @@ interface SellerPrepOverviewProps {
     };
   };
   comparables: ComparableHome[];
-  report: ReadinessReport;
   propertyId: string;
 }
 
 export default function SellerPrepOverview({
   overview,
   comparables,
-  report,
   propertyId,
 }: SellerPrepOverviewProps) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [showLeadModal, setShowLeadModal] = useState(false);
-  
+
   // State for agent interviews persistence (max 3)
   const [interviews, setInterviews] = useState(overview.interviews || []);
 
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ itemId, status }: { itemId: string; status: string }) => {
-      return api.updateSellerPrepItem(itemId, status);
-    },
-    onMutate: async ({ itemId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['seller-prep', propertyId] });
-      const previousData = queryClient.getQueryData(['seller-prep', propertyId]);
-      queryClient.setQueryData(['seller-prep', propertyId], (old: any) => {
-        if (!old) return old;
-        const updatedItems = old.overview.items.map((item: any) =>
-          item.id === itemId ? { ...item, status } : item
-        );
-        const done = updatedItems.filter((i: any) => i.status === 'DONE').length;
-        const total = updatedItems.length;
-        const completionPercent = total ? Math.round((done / total) * 100) : 0;
-        return {
-          ...old,
-          overview: { ...old.overview, items: updatedItems, completionPercent },
-        };
-      });
-      return { previousData };
-    },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Task updated successfully!" });
-    },
-    onError: (_error, _variables, context) => {
-      // Roll back the optimistic update if the API call fails
-      if (context?.previousData) {
-        queryClient.setQueryData(['seller-prep', propertyId], context.previousData);
-      }
-      toast({ title: "Error", description: "Failed to update task. Please try again.", variant: "destructive" });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['seller-prep', propertyId] });
-    },
-  });
-
-  const handleStatusUpdate = (itemId: string, status: 'DONE' | 'SKIPPED' | 'PLANNED') => {
-    updateStatusMutation.mutate({ itemId, status });
-  };
-
   const hasComparables = comparables && comparables.length > 0;
-  const hasPreferences = overview.preferences;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* LEFT COLUMN: Main Interaction Area */}
       <div className="lg:col-span-8 space-y-6">
-        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-          The checklist below is general, not calculated for this property. For a governed
-          readiness case built from this property&apos;s actual findings, projects, permits,
-          Home Actions, and records, see{' '}
-          <Link href={`/dashboard/properties/${propertyId}/tools/sale-case`} className="font-medium underline">
-            Sale Readiness
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 space-y-2">
+          <p className="font-medium">Sale readiness now lives in one governed case.</p>
+          <p>
+            Findings, unfinished projects, permits, Home Actions, and records are projected
+            directly from this property — not a generic checklist.
+          </p>
+          <Link href={`/dashboard/properties/${propertyId}/tools/sale-case`}>
+            <Button size="sm" className="mt-1">Open Sale Readiness</Button>
           </Link>
-          .
         </div>
-        <Tabs defaultValue="checklist" className="w-full">
-          {/* Layout Fix: Single row grid-cols-4 */}
-          <TabsList className="no-scrollbar mb-6 flex h-auto overflow-x-auto p-1 bg-muted/50 md:grid md:w-full md:grid-cols-4">
-            <TabsTrigger value="checklist" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">
-              <Hammer className="h-4 w-4 hidden sm:inline" /> <span>Tasks</span>
-            </TabsTrigger>
+        <Tabs defaultValue="market" className="w-full">
+          <TabsList className="no-scrollbar mb-6 flex h-auto overflow-x-auto p-1 bg-muted/50 md:grid md:w-full md:grid-cols-3">
             <TabsTrigger value="financials" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">
               <DollarSign className="h-4 w-4 hidden sm:inline" /> <span>Finance</span>
             </TabsTrigger>
@@ -195,41 +110,7 @@ export default function SellerPrepOverview({
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB 1: Action Plan & History */}
-          <TabsContent value="checklist" className="space-y-6 outline-none">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">
-                  {hasPreferences ? 'Your Personalized Checklist' : 'Sale Prep Checklist'}
-                </CardTitle>
-                <CardDescription>
-                  General pre-sale improvement categories — not calculated for this property.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {overview.items.length === 0 ? (
-                  <p className="text-sm text-gray-500 py-8 text-center">No tasks available.</p>
-                ) : (
-                  overview.items.map((item) => (
-                    <TaskItem
-                      key={item.id}
-                      item={item}
-                      propertyId={propertyId}
-                      onUpdate={handleStatusUpdate}
-                      isUpdating={updateStatusMutation.isPending && updateStatusMutation.variables?.itemId === item.id}
-                    />
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            <ProgressTimeline
-              items={overview.items}
-              startDate={overview.createdAt ?? overview.items[0]?.createdAt ?? new Date().toISOString()}
-            />
-          </TabsContent>
-
-          {/* TAB 2: Budget & Value Estimates */}
+          {/* TAB: Budget & Value Estimates */}
           <TabsContent value="financials" className="space-y-6 outline-none">
             {FEATURE_FLAGS.VALUE_ESTIMATOR && overview.value && (
               <ValueEstimatorCard {...overview.value} />
@@ -239,7 +120,7 @@ export default function SellerPrepOverview({
             )}
           </TabsContent>
 
-          {/* TAB 3: Comps & Report */}
+          {/* TAB: Comps */}
           <TabsContent value="market" className="space-y-6 outline-none">
             <Card>
               <CardHeader>
@@ -258,31 +139,12 @@ export default function SellerPrepOverview({
                 )}
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-blue-600" /> Readiness Report
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm leading-relaxed">{report.summary}</p>
-                {report.risks && report.risks.length > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-                    <p className="text-xs font-medium text-amber-800 mb-2">⚠️ Areas for Attention:</p>
-                    <ul className="list-disc ml-5 space-y-1 text-sm text-amber-800">
-                      {report.risks.map((risk, i) => <li key={i}>{risk}</li>)}
-                    </ul>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </TabsContent>
 
-          {/* TAB 4: Agent Interview Guide (Interactive Comparison Matrix) */}
+          {/* TAB: Agent Interview Guide (Interactive Comparison Matrix) */}
           <TabsContent value="agents" className="outline-none">
-            <AgentInterviewGuide 
-              propertyId={propertyId} 
+            <AgentInterviewGuide
+              propertyId={propertyId}
               interviews={interviews}
               onInterviewsChange={setInterviews}
             />
@@ -299,24 +161,13 @@ export default function SellerPrepOverview({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-medium">
-                <span>Progress</span>
-                <span>{overview.completionPercent}%</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2">
-                <div
-                  className="bg-green-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${overview.completionPercent}%` }}
-                />
-              </div>
+            <div className="text-xs text-gray-600">
+              Governed readiness status lives on{' '}
+              <Link href={`/dashboard/properties/${propertyId}/tools/sale-case`} className="font-medium text-blue-600 underline">
+                Sale Readiness
+              </Link>
+              . This page covers comps, agent comparisons, and contractor help.
             </div>
-
-            {hasPreferences && overview.personalizedSummary && (
-              <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 leading-relaxed">
-                <strong>Current Strategy:</strong> {overview.personalizedSummary}
-              </div>
-            )}
 
             <div className="pt-4 border-t space-y-3">
               <h4 className="text-xs font-bold text-gray-500 tracking-normal">Contractor help</h4>
@@ -345,60 +196,7 @@ export default function SellerPrepOverview({
         propertyId={propertyId}
         open={showLeadModal}
         onClose={() => setShowLeadModal(false)}
-        checklistItems={overview.items.map(item => ({ code: item.id, title: item.title }))}
       />
-    </div>
-  );
-}
-
-// Maps the static checklist's fixed codes to real ServiceCategory values so
-// a task can link straight to the actual provider marketplace — Seller Prep
-// has no fulfillment of its own (see Slice 9 of the continuity plan), but
-// Providers/Bookings does, and this reuses it rather than promising a match
-// workflow that doesn't exist.
-const TASK_SERVICE_CATEGORY: Record<string, string> = {
-  INTERIOR_PAINT: 'PAINTING',
-  MINOR_FIXES: 'HANDYMAN',
-  CURB_APPEAL: 'LANDSCAPING',
-  ROOF_REPLACEMENT: 'ROOFING',
-};
-
-// Sub-components
-function TaskItem({ item, propertyId, onUpdate, isUpdating }: any) {
-  const isDone = item.status === 'DONE';
-  const isSkipped = item.status === 'SKIPPED';
-  const serviceCategory = TASK_SERVICE_CATEGORY[item.code];
-  return (
-    <div className={`border rounded-lg p-4 transition-all ${isDone ? 'bg-green-50 border-green-200' : isSkipped ? 'bg-gray-50 border-gray-200' : 'hover:bg-gray-50'}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            {isDone && <CheckCircle className="h-4 w-4 text-green-600" />}
-            <p className={`text-sm font-medium ${isDone ? 'line-through text-gray-500' : ''}`}>{item.title}</p>
-          </div>
-          <div className="flex gap-2 items-center flex-wrap">
-            <Badge variant={item.priority === 'HIGH' ? 'destructive' : 'secondary'} className="text-xs px-1.5 h-5 ">{item.priority}</Badge>
-            {serviceCategory && !isDone && (
-              <Link
-                href={`/dashboard/providers?category=${serviceCategory}&propertyId=${propertyId}&from=seller-prep`}
-                className="text-xs text-blue-600 hover:underline"
-              >
-                Find providers →
-              </Link>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-1">
-          {!isDone && !isSkipped ? (
-            <>
-              <Button size="sm" variant="outline" className="h-11 sm:h-8 text-xs px-3 sm:px-2 text-green-700 hover:bg-green-50 touch-manipulation" onClick={() => onUpdate(item.id, 'DONE')} disabled={isUpdating}>✓ Done</Button>
-              <Button size="sm" variant="ghost" className="h-11 sm:h-8 text-xs px-3 sm:px-2 touch-manipulation" onClick={() => onUpdate(item.id, 'SKIPPED')} disabled={isUpdating}>Skip</Button>
-            </>
-          ) : (
-            <Button size="sm" variant="ghost" className="h-11 sm:h-8 text-xs touch-manipulation" onClick={() => onUpdate(item.id, 'PLANNED')} disabled={isUpdating}><Undo2 className="h-3 w-3 mr-1" /> Undo</Button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

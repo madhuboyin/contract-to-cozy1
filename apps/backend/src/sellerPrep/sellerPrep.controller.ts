@@ -3,7 +3,6 @@ import { Response } from 'express';
 import { AuthRequest } from '../types/auth.types';
 import { SellerPrepService } from './sellerPrep.service';
 import { prisma } from '../lib/prisma';
-import { generateRoiChecklist } from './engines/roiRules.engine';
 import { logger } from '../lib/logger';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 
@@ -47,36 +46,6 @@ export class SellerPrepController {
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to retrieve seller prep overview'
-      });
-    }
-  }
-
-  static async updateItem(req: AuthRequest, res: Response) {
-    try {
-      const { itemId } = req.params;
-      const { status } = req.body;
-
-      if (!status || !['PLANNED', 'DONE', 'SKIPPED'].includes(status)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid status value. Must be PLANNED, DONE, or SKIPPED'
-        });
-      }
-
-      const result = await SellerPrepService.updateItemStatus(
-        req.user!.userId,
-        itemId,
-        status
-      );
-      res.json({
-        success: true,
-        message: 'Item status updated successfully'
-      });
-    } catch (error) {
-      logger.error({ err: error }, '[SellerPrepController] updateItem error');
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : 'Failed to update item status'
       });
     }
   }
@@ -210,7 +179,7 @@ export class SellerPrepController {
             id: propertyId,
             homeownerProfile: { userId },
           },
-          select: { id: true, state: true, yearBuilt: true, dwellingType: true },
+          select: { id: true },
         });
 
         if (!property) {
@@ -220,12 +189,7 @@ export class SellerPrepController {
           });
         }
 
-        const baseItems = generateRoiChecklist({
-          propertyType: property.dwellingType !== 'UNKNOWN' ? String(property.dwellingType) : undefined,
-          yearBuilt: property.yearBuilt ?? undefined,
-          state: property.state,
-        });
-
+        // No item-seeding — the static ROI checklist is retired (Slice 8).
         plan = await prisma.sellerPrepPlan.create({
           data: {
             userId,
@@ -240,16 +204,6 @@ export class SellerPrepController {
               priority,
               condition,
               updatedAt: new Date().toISOString()
-            },
-            items: {
-              create: baseItems.map((i) => ({
-                code: i.code,
-                title: i.title,
-                priority: i.priority,
-                roiRange: i.roiRange,
-                costBucket: i.costBucket,
-                status: 'PLANNED',
-              })),
             },
           },
           include: { items: true },
@@ -335,67 +289,6 @@ export class SellerPrepController {
       });
     }
   }
-  static async updateItemStatus(req: AuthRequest, res: Response) {
-    try {
-      const { itemId } = req.params;
-      const { status } = req.body;
-      const userId = req.user!.userId;
-  
-      if (!['PLANNED', 'DONE', 'SKIPPED'].includes(status)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid status. Must be PLANNED, DONE, or SKIPPED'
-        });
-      }
-  
-      // Verify user owns this item
-      const item = await prisma.sellerPrepPlanItem.findFirst({
-        where: {
-          id: itemId,
-          plan: { userId }
-        }
-      });
-  
-      if (!item) {
-        return res.status(404).json({
-          success: false,
-          message: 'Item not found or unauthorized'
-        });
-      }
-  
-      // UPDATE: Set timestamps based on status
-      const updateData: any = { status };
-      
-      if (status === 'DONE') {
-        updateData.completedAt = new Date();
-        updateData.skippedAt = null;
-      } else if (status === 'SKIPPED') {
-        updateData.skippedAt = new Date();
-        updateData.completedAt = null;
-      } else if (status === 'PLANNED') {
-        updateData.completedAt = null;
-        updateData.skippedAt = null;
-      }
-  
-      const updated = await prisma.sellerPrepPlanItem.update({
-        where: { id: itemId },
-        data: updateData
-      });
-  
-      res.json({
-        success: true,
-        data: updated,
-        message: 'Item status updated successfully'
-      });
-    } catch (error) {
-      logger.error({ err: error }, '[SellerPrepController] updateItemStatus error');
-      res.status(500).json({
-        success: false,
-        message: error instanceof Error ? error.message : 'Failed to update item'
-      });
-    }
-  }
-
   static async deleteAgentInterview(req: AuthRequest, res: Response) {
     try {
       const { interviewId } = req.params;

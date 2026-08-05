@@ -14,12 +14,6 @@ router.get(
   SellerPrepController.getOverview
 );
 
-router.patch(
-  '/item/:itemId',
-  authenticate,
-  SellerPrepController.updateItem
-);
-
 /* ✅ Phase 2 – Comparables */
 router.get(
   '/comparables/:propertyId',

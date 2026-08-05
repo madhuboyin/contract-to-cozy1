@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/seller-prep/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -10,7 +10,7 @@ import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertCircle, Settings } from "lucide-react";
+import { ArrowLeft, AlertCircle } from "lucide-react";
 import {
   MobileCard,
   MobilePageContainer,
@@ -20,32 +20,27 @@ import HomeToolHeader from "@/components/tools/HomeToolHeader";
 import { PropertyContextCapturePanel } from "@/components/property-context/PropertyContextCapturePanel";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
-import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
 import { SellerPrepDisclaimer } from "@/components/seller-prep/SellerPrepDisclaimer";
-import { useMilestones } from "@/hooks/useMilestones";
 import { CapabilityDiscoveryAnchor } from "@/features/tools/CapabilityDiscoveryAnchor";
-import { useToolLaunchContext } from "@/features/tools/ToolLaunchContextBoundary";
-import { sellerPrepSourceLineage } from "@/features/tools/sellerPrepLaunchContext";
 // Note: this page used to mount its own seller-prep-scoped FeedbackWidget
 // here. That's superseded by the app-wide FeedbackWidget now mounted once
 // in app/(dashboard)/layout.tsx — kept here would double-mount it on this page.
 
-interface SellerPrepItem {
-  id: string;
-  code: string;
-  title: string;
-  priority: string;
-  roiRange: string;
-  costBucket: string;
-  status: string;
-}
-
 interface SellerPrepOverviewData {
   saleIntentConfirmed: boolean;
-  items: SellerPrepItem[];
-  completionPercent: number;
   preferences?: any;
-  personalizedSummary?: string;
+  interviews?: any[];
+  budget?: {
+    totalBudget: number;
+    spentAmount: number;
+    remainingTasks: Array<{ title: string; estimatedCost: number }>;
+  };
+  value?: {
+    completedImprovements: Array<{ title: string; roiRange: string; estimatedCost: number }>;
+    remainingImprovements: Array<{ title: string; roiRange: string; estimatedCost: number; priority: string }>;
+    completedValueIncrease: { minValue: number; maxValue: number };
+    potentialValueIncrease: { minValue: number; maxValue: number };
+  };
 }
 
 interface ComparableHome {
@@ -58,31 +53,19 @@ interface ComparableHome {
   similarityReason: string;
 }
 
-interface ReadinessReport {
-  summary: string;
-  highlights?: string[];
-  risks?: string[];
-  disclaimers?: string[];
-}
-
 export default function SellerPrepPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
-  const launchContext = useToolLaunchContext();
-  const sourceLineage = sellerPrepSourceLineage(launchContext);
-  const [showIntakeForm, setShowIntakeForm] = useState(false);
-  const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
   const [contextReady, setContextReady] = useState(false);
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["seller-prep", propertyId],
     queryFn: async () => {
       if (!propertyId) throw new Error("Property ID missing");
 
-      const [overviewRes, comparablesRes, reportRes] = await Promise.all([
+      const [overviewRes, comparablesRes] = await Promise.all([
         api.getSellerPrepOverview(propertyId),
         api.getSellerPrepComparables(propertyId),
-        api.getSellerPrepReport(propertyId),
       ]);
 
       if (!overviewRes.success) {
@@ -91,14 +74,10 @@ export default function SellerPrepPage() {
       if (!comparablesRes.success) {
         throw new Error(comparablesRes.message || 'Failed to load comparables');
       }
-      if (!reportRes.success) {
-        throw new Error(reportRes.message || 'Failed to load report');
-      }
 
       return {
         overview: overviewRes.data as SellerPrepOverviewData,
         comparables: comparablesRes.data as ComparableHome[],
-        report: reportRes.data as ReadinessReport,
       };
     },
     enabled: !!propertyId && contextReady,
@@ -113,27 +92,6 @@ export default function SellerPrepPage() {
       queryClient.invalidateQueries({ queryKey: ["seller-prep", propertyId] });
     },
   });
-
-  useMilestones(data?.overview?.completionPercent || 0);
-
-  // Trigger intake form if user has no saved preferences
-  useEffect(() => {
-    if (data && data.overview.saleIntentConfirmed && !hasCheckedPreferences) {
-      if (!data.overview.preferences) {
-        setShowIntakeForm(true);
-      }
-      setHasCheckedPreferences(true);
-    }
-  }, [data, hasCheckedPreferences]);
-
-  const handleIntakeComplete = () => {
-    setShowIntakeForm(false);
-    refetch();
-  };
-
-  const handleEditPreferences = () => {
-    setShowIntakeForm(true);
-  };
 
   if (!contextReady) {
     return (
@@ -202,17 +160,6 @@ export default function SellerPrepPage() {
   return (
     <DashboardShell className="max-w-7xl mx-auto gap-4">
       <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      {/* Intake Form Modal */}
-      {propertyId && (
-        <SellerPrepIntakeForm
-          propertyId={propertyId}
-          open={showIntakeForm}
-          onComplete={handleIntakeComplete}
-          onSkip={() => setShowIntakeForm(false)}
-          sourceLineage={sourceLineage}
-        />
-      )}
-
       <PropertyContextCapturePanel
         propertyId={propertyId as string}
         featureKey="SELLER_PREP"
@@ -234,19 +181,6 @@ export default function SellerPrepPage() {
           eyebrow="Sale Readiness & Handoff"
           title="Prepare the home and selected records for sale"
           subtitle="Track verified readiness milestones without inferred ROI or value claims."
-          action={
-            data.overview.saleIntentConfirmed ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleEditPreferences}
-                className="min-h-[44px] gap-1.5"
-              >
-                <Settings className="h-4 w-4" />
-                {data.overview.preferences ? "Edit" : "Setup"}
-              </Button>
-            ) : undefined
-          }
         />
       </div>
 
@@ -260,20 +194,6 @@ export default function SellerPrepPage() {
         </Link>
 
         <HomeToolHeader toolId="seller-prep" propertyId={propertyId as string} />
-
-        {data.overview.saleIntentConfirmed && (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEditPreferences}
-              className="h-9"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              {data.overview.preferences ? "Edit Preferences" : "Setup Plan"}
-            </Button>
-          </div>
-        )}
       </div>
 
       <SellerPrepDisclaimer />
@@ -289,7 +209,6 @@ export default function SellerPrepPage() {
         <SellerPrepOverview
           overview={data.overview}
           comparables={data.comparables}
-          report={data.report}
           propertyId={propertyId as string}
         />
       ) : (
