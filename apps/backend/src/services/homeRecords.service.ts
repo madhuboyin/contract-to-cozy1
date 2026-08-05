@@ -31,7 +31,19 @@ type CreateRecordInput = {
   sensitivity: PropertyRecordSensitivity;
   visibility: PropertyRecordVisibility;
   retainUntil?: Date | null;
+  effectiveFrom?: Date | null;
+  effectiveTo?: Date | null;
 };
+
+type ListOptions = {
+  lifecycleStatus?: string;
+  search?: string;
+  recordType?: PropertyRecordType;
+};
+
+type ExpiryStatus = 'EXPIRED' | 'EXPIRING_SOON' | 'CURRENT' | null;
+
+const EXPIRING_SOON_WINDOW_DAYS = 30;
 
 type CreateVersionInput = {
   propertyId: string;
@@ -76,11 +88,19 @@ function allowedActions(role: HouseholdRole, lifecycleStatus: string) {
     trash: canMutate && lifecycleStatus !== 'TRASHED',
     restore: canMutate && lifecycleStatus === 'TRASHED',
     manageRetention: role === 'OWNER',
+    manageEffectivePeriod: canMutate && lifecycleStatus !== 'TRASHED',
   };
 }
 
 function visibleWhere(role: HouseholdRole) {
   return role === 'OWNER' ? {} : { visibility: 'HOUSEHOLD' as const };
+}
+
+function expiryStatus(effectiveTo: Date | null, now: Date, soonThreshold: Date): ExpiryStatus {
+  if (!effectiveTo) return null;
+  if (effectiveTo < now) return 'EXPIRED';
+  if (effectiveTo <= soonThreshold) return 'EXPIRING_SOON';
+  return 'CURRENT';
 }
 
 async function signedUrl(storageKeyValue: string, fileName: string) {
@@ -112,7 +132,24 @@ async function publicVersion<T extends {
 }
 
 export class HomeRecordsService {
-  async list(propertyId: string, role: HouseholdRole, lifecycleStatus?: string) {
+  // Batched rather than per-record so list() stays a single extra query
+  // regardless of how many records are on the page.
+  private async pendingReviewCountsByVersionId(versionIds: string[]): Promise<Map<string, number>> {
+    if (versionIds.length === 0) return new Map();
+    const grouped = await prisma.extractedFactCandidate.groupBy({
+      by: ['propertyRecordVersionId'],
+      where: {
+        propertyRecordVersionId: { in: versionIds },
+        reviewStatus: 'PENDING',
+        fieldKey: { not: '_documentType' },
+      },
+      _count: { _all: true },
+    });
+    return new Map(grouped.map((row) => [row.propertyRecordVersionId, row._count._all]));
+  }
+
+  async list(propertyId: string, role: HouseholdRole, options?: ListOptions) {
+    const { lifecycleStatus, search, recordType } = options ?? {};
     const records = await prisma.propertyRecord.findMany({
       where: {
         propertyId,
@@ -120,6 +157,13 @@ export class HomeRecordsService {
         ...(lifecycleStatus ? { lifecycleStatus: lifecycleStatus as any } : {
           lifecycleStatus: { not: 'TRASHED' },
         }),
+        ...(recordType ? { recordType } : {}),
+        ...(search?.trim() ? {
+          OR: [
+            { title: { contains: search.trim(), mode: 'insensitive' as const } },
+            { description: { contains: search.trim(), mode: 'insensitive' as const } },
+          ],
+        } : {}),
       },
       include: {
         currentVersion: true,
@@ -128,12 +172,22 @@ export class HomeRecordsService {
       orderBy: { updatedAt: 'desc' },
     });
 
+    const pendingCounts = await this.pendingReviewCountsByVersionId(
+      records.map((record) => record.currentVersionId).filter((id): id is string => Boolean(id)),
+    );
+    const now = new Date();
+    const soonThreshold = new Date(now.getTime() + EXPIRING_SOON_WINDOW_DAYS * 86_400_000);
+
     return Promise.all(records.map(async (record) => ({
       ...record,
       currentVersion: record.currentVersion
         ? await publicVersion(record.currentVersion)
         : null,
       allowedActions: allowedActions(role, record.lifecycleStatus),
+      needsReview: record.currentVersionId
+        ? (pendingCounts.get(record.currentVersionId) ?? 0) > 0
+        : false,
+      expiryStatus: expiryStatus(record.effectiveTo, now, soonThreshold),
     })));
   }
 
@@ -161,6 +215,11 @@ export class HomeRecordsService {
         : !(await this.entityExists(propertyId, link.entityType, link.entityId)),
     })));
     const brokenLinkCount = links.filter((link) => link.broken === true).length;
+    const now = new Date();
+    const soonThreshold = new Date(now.getTime() + EXPIRING_SOON_WINDOW_DAYS * 86_400_000);
+    const pendingCount = record.currentVersionId
+      ? (await this.pendingReviewCountsByVersionId([record.currentVersionId])).get(record.currentVersionId) ?? 0
+      : 0;
 
     return {
       ...record,
@@ -170,6 +229,8 @@ export class HomeRecordsService {
       versions: record.versions.map((version) => ({ ...version, storageKey: undefined })),
       links,
       allowedActions: allowedActions(role, record.lifecycleStatus),
+      needsReview: pendingCount > 0,
+      expiryStatus: expiryStatus(record.effectiveTo, now, soonThreshold),
       deletionImpact: {
         activeLinkCount: record.links.length,
         requiresImpactDecision: record.links.length > 0,
@@ -225,6 +286,8 @@ export class HomeRecordsService {
         visibility: input.visibility,
         createdByUserId: input.userId,
         retainUntil: input.retainUntil ?? null,
+        effectiveFrom: input.effectiveFrom ?? null,
+        effectiveTo: input.effectiveTo ?? null,
         versions: {
           create: {
             id: versionId,
@@ -517,6 +580,24 @@ export class HomeRecordsService {
           blockedReason: `Legal hold: ${input.legalHoldReason.trim()}`,
         },
       });
+    }
+  }
+
+  async setEffectivePeriod(input: {
+    propertyId: string;
+    recordId: string;
+    effectiveFrom?: Date | null;
+    effectiveTo?: Date | null;
+  }) {
+    const result = await prisma.propertyRecord.updateMany({
+      where: { id: input.recordId, propertyId: input.propertyId },
+      data: {
+        ...(input.effectiveFrom !== undefined ? { effectiveFrom: input.effectiveFrom } : {}),
+        ...(input.effectiveTo !== undefined ? { effectiveTo: input.effectiveTo } : {}),
+      },
+    });
+    if (result.count !== 1) {
+      throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
     }
   }
 

@@ -30,6 +30,11 @@ export type PropertyRecordVisibility = 'HOUSEHOLD' | 'OWNER_ONLY' | 'RECIPIENT_S
 
 export type PropertyRecordLifecycleStatus = 'ACTIVE' | 'ARCHIVED' | 'TRASHED';
 
+// null: no effectiveTo set (most records — a paint color, a manual — have no
+// natural expiry). Computed server-side against a 30-day "expiring soon"
+// window; never stored.
+export type ExpiryStatus = 'EXPIRED' | 'EXPIRING_SOON' | 'CURRENT' | null;
+
 export type PropertyRecordScanStatus = 'PENDING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
 
 export type PropertyRecordIntegrityStatus = 'PENDING' | 'VERIFIED' | 'MISMATCH';
@@ -81,6 +86,7 @@ export interface RecordAllowedActions {
   trash: boolean;
   restore: boolean;
   manageRetention: boolean;
+  manageEffectivePeriod: boolean;
 }
 
 export interface PropertyRecordSummary {
@@ -97,11 +103,17 @@ export interface PropertyRecordSummary {
   trashedAt: string | null;
   retainUntil: string | null;
   legalHoldReason: string | null;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
   createdAt: string;
   updatedAt: string;
   currentVersion: RecordVersionSummary | null;
   _count: { versions: number; links: number };
   allowedActions: RecordAllowedActions;
+  // True when the current version has AI-extracted fields still PENDING
+  // homeowner confirm/correct/reject — see homeRecordsExtraction.service.ts.
+  needsReview: boolean;
+  expiryStatus: ExpiryStatus;
 }
 
 export interface PropertyRecordLink {
@@ -164,6 +176,7 @@ export interface CreateRecordInput {
   recordType: PropertyRecordType;
   sensitivity: PropertyRecordSensitivity;
   visibility: PropertyRecordVisibility;
+  effectiveTo?: string;
 }
 
 export interface CreateRecordResult {

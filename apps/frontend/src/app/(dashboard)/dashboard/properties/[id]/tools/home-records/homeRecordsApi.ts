@@ -7,15 +7,20 @@ import type {
   PropertyRecordLinkEntityType,
   PropertyRecordLinkPurpose,
   PropertyRecordSummary,
+  PropertyRecordType,
 } from './types';
 
 export async function listRecords(
   propertyId: string,
-  lifecycleStatus?: 'ACTIVE' | 'ARCHIVED' | 'TRASHED',
+  options?: { lifecycleStatus?: 'ACTIVE' | 'ARCHIVED' | 'TRASHED'; search?: string; recordType?: PropertyRecordType },
 ): Promise<PropertyRecordSummary[]> {
+  const params: Record<string, string> = {};
+  if (options?.lifecycleStatus) params.lifecycleStatus = options.lifecycleStatus;
+  if (options?.search?.trim()) params.search = options.search.trim();
+  if (options?.recordType) params.recordType = options.recordType;
   const res = await api.get<{ records: PropertyRecordSummary[] }>(
     `/api/properties/${propertyId}/records`,
-    { params: lifecycleStatus ? { lifecycleStatus } : undefined },
+    { params: Object.keys(params).length > 0 ? params : undefined },
   );
   return res.data.records;
 }
@@ -38,6 +43,7 @@ export async function createRecord(
   formData.append('recordType', input.recordType);
   formData.append('sensitivity', input.sensitivity);
   formData.append('visibility', input.visibility);
+  if (input.effectiveTo) formData.append('effectiveTo', input.effectiveTo);
   const res = await api.postFormData<CreateRecordResult>(
     `/api/properties/${propertyId}/records`,
     formData,
@@ -90,6 +96,14 @@ export async function setRetention(
   input: { retainUntil?: string | null; legalHoldReason?: string | null },
 ): Promise<void> {
   await api.patch(`/api/properties/${propertyId}/records/${recordId}/retention`, input);
+}
+
+export async function setEffectivePeriod(
+  propertyId: string,
+  recordId: string,
+  input: { effectiveFrom?: string | null; effectiveTo?: string | null },
+): Promise<void> {
+  await api.patch(`/api/properties/${propertyId}/records/${recordId}/effective-period`, input);
 }
 
 export async function runExtraction(

@@ -3843,6 +3843,13 @@ model PropertyRecord {
   trashedByUserId  String?
   retainUntil      DateTime?
   legalHoldReason  String?
+  // The record's own effective period (e.g. an inspection report or permit
+  // that is only current for a known window) — distinct from retainUntil,
+  // which governs deletion/purge policy, not whether the record's content is
+  // still current. Optional: most records (a paint color, a manual) have no
+  // natural expiry.
+  effectiveFrom    DateTime?
+  effectiveTo      DateTime?
   createdAt        DateTime                      @default(now())
   updatedAt        DateTime                      @updatedAt
 
@@ -3855,6 +3862,7 @@ model PropertyRecord {
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])
   @@index([propertyId, sensitivity])
+  @@index([propertyId, effectiveTo])
   @@map("property_records")
 }
 

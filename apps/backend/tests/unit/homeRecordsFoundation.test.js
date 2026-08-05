@@ -11,6 +11,8 @@ let recordForTrash = null;
 let recordForLink = null;
 let recordForGet = null;
 let warrantyLookupResult = null;
+let recordsForList = [];
+let pendingReviewGroups = [];
 let storageUploadCalls = 0;
 const transactionWrites = [];
 const recordCreateCalls = [];
@@ -45,9 +47,13 @@ require.cache[prismaPath] = {
         update: async () => ({}),
         updateMany: async () => ({ count: 1 }),
         findUniqueOrThrow: async () => ({}),
+        findMany: async () => recordsForList,
       },
       warranty: {
         findFirst: async () => warrantyLookupResult,
+      },
+      extractedFactCandidate: {
+        groupBy: async () => pendingReviewGroups,
       },
       propertyRecordLink: {
         create: async (args) => { linkCreateCalls.push(args); return { id: 'link-1', ...args.data }; },
@@ -322,4 +328,51 @@ test('get() flags a link whose target entity can no longer be found, and leaves 
   const healthyWarrantyLink = healthyResult.links.find((link) => link.id === 'link-warranty');
   assert.equal(healthyWarrantyLink.broken, false);
   assert.equal(healthyResult.deletionImpact.brokenLinkCount, 0);
+});
+
+test('list() flags needsReview from pending extracted-fact candidates and computes expiry status from effectiveTo', async () => {
+  const now = Date.now();
+  recordsForList = [
+    {
+      id: 'record-needs-review',
+      lifecycleStatus: 'ACTIVE',
+      currentVersionId: 'version-1',
+      currentVersion: { scanStatus: 'CLEAN', integrityStatus: 'VERIFIED', storageKey: 'k', originalFileName: 'f' },
+      effectiveTo: null,
+    },
+    {
+      id: 'record-expired',
+      lifecycleStatus: 'ACTIVE',
+      currentVersionId: 'version-2',
+      currentVersion: { scanStatus: 'CLEAN', integrityStatus: 'VERIFIED', storageKey: 'k', originalFileName: 'f' },
+      effectiveTo: new Date(now - 5 * 86_400_000), // 5 days ago
+    },
+    {
+      id: 'record-expiring-soon',
+      lifecycleStatus: 'ACTIVE',
+      currentVersionId: 'version-3',
+      currentVersion: { scanStatus: 'CLEAN', integrityStatus: 'VERIFIED', storageKey: 'k', originalFileName: 'f' },
+      effectiveTo: new Date(now + 10 * 86_400_000), // 10 days from now, within the 30-day window
+    },
+    {
+      id: 'record-current',
+      lifecycleStatus: 'ACTIVE',
+      currentVersionId: 'version-4',
+      currentVersion: { scanStatus: 'CLEAN', integrityStatus: 'VERIFIED', storageKey: 'k', originalFileName: 'f' },
+      effectiveTo: new Date(now + 200 * 86_400_000), // far out
+    },
+  ];
+  pendingReviewGroups = [
+    { propertyRecordVersionId: 'version-1', _count: { _all: 2 } },
+  ];
+
+  const result = await service.list('property-1', 'OWNER', {});
+  const byId = Object.fromEntries(result.map((r) => [r.id, r]));
+
+  assert.equal(byId['record-needs-review'].needsReview, true);
+  assert.equal(byId['record-expired'].needsReview, false);
+  assert.equal(byId['record-expired'].expiryStatus, 'EXPIRED');
+  assert.equal(byId['record-expiring-soon'].expiryStatus, 'EXPIRING_SOON');
+  assert.equal(byId['record-current'].expiryStatus, 'CURRENT');
+  assert.equal(byId['record-needs-review'].expiryStatus, null);
 });

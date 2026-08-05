@@ -52,6 +52,8 @@ const createRecordSchema = z.object({
   sensitivity: sensitivitySchema.default('STANDARD'),
   visibility: visibilitySchema.default('HOUSEHOLD'),
   retainUntil: z.string().datetime().optional(),
+  effectiveFrom: z.string().datetime().optional(),
+  effectiveTo: z.string().datetime().optional(),
 });
 
 const createLinkSchema = z.object({
@@ -72,6 +74,14 @@ const retentionSchema = z.object({
 }).refine(
   (value) => value.retainUntil !== undefined || value.legalHoldReason !== undefined,
   'At least one retention field is required.',
+);
+
+const effectivePeriodSchema = z.object({
+  effectiveFrom: z.string().datetime().nullable().optional(),
+  effectiveTo: z.string().datetime().nullable().optional(),
+}).refine(
+  (value) => value.effectiveFrom !== undefined || value.effectiveTo !== undefined,
+  'At least one effective-period field is required.',
 );
 
 const reviewCandidateSchema = z.object({
@@ -109,10 +119,17 @@ router.get('/properties/:propertyId/records', async (req: CustomRequest, res: Re
     if (lifecycleStatus && !['ACTIVE', 'ARCHIVED', 'TRASHED'].includes(lifecycleStatus)) {
       return res.status(400).json({ success: false, code: 'PROPERTY_RECORD_LIFECYCLE_INVALID' });
     }
+    const recordTypeRaw = typeof req.query.recordType === 'string' ? req.query.recordType : undefined;
+    const recordTypeResult = recordTypeRaw ? recordTypeSchema.safeParse(recordTypeRaw) : undefined;
+    if (recordTypeRaw && !recordTypeResult?.success) {
+      return res.status(400).json({ success: false, code: 'PROPERTY_RECORD_TYPE_INVALID' });
+    }
+    const search = typeof req.query.search === 'string' ? req.query.search.slice(0, 200) : undefined;
+
     const records = await homeRecordsService.list(
       req.params.propertyId,
       req.householdRole!,
-      lifecycleStatus,
+      { lifecycleStatus, search, recordType: recordTypeResult?.data },
     );
     return res.json({ success: true, data: { records } });
   } catch (error) {
@@ -140,6 +157,8 @@ router.post(
         sensitivity: input.sensitivity,
         visibility: input.visibility,
         retainUntil: input.retainUntil ? new Date(input.retainUntil) : null,
+        effectiveFrom: input.effectiveFrom ? new Date(input.effectiveFrom) : null,
+        effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
       });
       return res.status(201).json({ success: true, data: result });
     } catch (error) {
@@ -275,6 +294,29 @@ router.patch(
             ? null
             : new Date(input.retainUntil),
         legalHoldReason: input.legalHoldReason,
+      });
+      return res.json({ success: true });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.patch(
+  '/properties/:propertyId/records/:recordId/effective-period',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(effectivePeriodSchema, req.body ?? {});
+      await homeRecordsService.setEffectivePeriod({
+        propertyId: req.params.propertyId,
+        recordId: req.params.recordId,
+        effectiveFrom: input.effectiveFrom === undefined
+          ? undefined
+          : input.effectiveFrom === null ? null : new Date(input.effectiveFrom),
+        effectiveTo: input.effectiveTo === undefined
+          ? undefined
+          : input.effectiveTo === null ? null : new Date(input.effectiveTo),
       });
       return res.json({ success: true });
     } catch (error) {

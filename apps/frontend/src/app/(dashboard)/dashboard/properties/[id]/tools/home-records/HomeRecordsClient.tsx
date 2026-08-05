@@ -14,6 +14,7 @@ import {
   Lock,
   Pencil,
   Plus,
+  Search,
   Shield,
   Sparkles,
   Trash2,
@@ -68,6 +69,7 @@ import {
   restoreRecord,
   reviewCandidate,
   runExtraction,
+  setEffectivePeriod,
   setRetention,
   trashRecord,
 } from './homeRecordsApi';
@@ -211,6 +213,7 @@ function UploadDialog({
     recordType: PropertyRecordType;
     sensitivity: PropertyRecordSensitivity;
     visibility: PropertyRecordVisibility;
+    effectiveTo?: string;
   }) => void;
   isSubmitting: boolean;
 }) {
@@ -220,6 +223,7 @@ function UploadDialog({
   const [recordType, setRecordType] = React.useState<PropertyRecordType>('OTHER');
   const [sensitivity, setSensitivity] = React.useState<PropertyRecordSensitivity>('STANDARD');
   const [visibility, setVisibility] = React.useState<PropertyRecordVisibility>('HOUSEHOLD');
+  const [expiresOn, setExpiresOn] = React.useState('');
   const [fileError, setFileError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -230,6 +234,7 @@ function UploadDialog({
       setRecordType('OTHER');
       setSensitivity('STANDARD');
       setVisibility('HOUSEHOLD');
+      setExpiresOn('');
       setFileError(null);
     }
   }, [open]);
@@ -315,12 +320,25 @@ function UploadDialog({
               </Select>
             </div>
           </div>
+          <div>
+            <Label htmlFor="record-expires">Expires / needs renewal on (optional)</Label>
+            <Input id="record-expires" type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
+            <p className="mt-1 text-xs text-gray-400">Shown under "Expiring or outdated" as the date approaches.</p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
           <Button
             disabled={!canSubmit}
-            onClick={() => file && onSubmit({ file, title: title.trim(), description: description.trim() || undefined, recordType, sensitivity, visibility })}
+            onClick={() => file && onSubmit({
+              file,
+              title: title.trim(),
+              description: description.trim() || undefined,
+              recordType,
+              sensitivity,
+              visibility,
+              effectiveTo: expiresOn ? new Date(`${expiresOn}T00:00:00.000Z`).toISOString() : undefined,
+            })}
             className="gap-2"
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -362,6 +380,9 @@ function RecordCard({ record, onOpen }: { record: PropertyRecordSummary; onOpen:
                 {availability === 'PENDING' ? 'Scanning…' : availability}
               </span>
             )}
+            {record.needsReview && <StatusChip tone="elevated">Needs review</StatusChip>}
+            {record.expiryStatus === 'EXPIRED' && <StatusChip tone="danger">Expired</StatusChip>}
+            {record.expiryStatus === 'EXPIRING_SOON' && <StatusChip tone="elevated">Expiring soon</StatusChip>}
           </div>
           <p className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'mt-1.5 truncate text-gray-900')}>{record.title}</p>
           <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mt-0.5 text-gray-500')}>
@@ -718,6 +739,12 @@ function RecordDetailSheet({
     onError: (e: any) => toast({ title: 'Could not update retention', description: e?.message, variant: 'destructive' }),
   });
 
+  const effectivePeriodMutation = useMutation({
+    mutationFn: (input: { effectiveTo: string | null }) => setEffectivePeriod(propertyId, recordId, input),
+    onSuccess: () => { invalidate(); toast({ title: 'Expiration updated' }); },
+    onError: (e: any) => toast({ title: 'Could not update expiration', description: e?.message, variant: 'destructive' }),
+  });
+
   const record = detailQuery.data;
 
   return (
@@ -740,8 +767,31 @@ function RecordDetailSheet({
               <span className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{RECORD_TYPE_LABELS[record.recordType]}</span>
               <span className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-400')}>· {SENSITIVITY_LABELS[record.sensitivity]}</span>
               <span className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-400')}>· {VISIBILITY_LABELS[record.visibility]}</span>
+              {record.needsReview && <StatusChip tone="elevated">Needs review</StatusChip>}
+              {record.expiryStatus === 'EXPIRED' && <StatusChip tone="danger">Expired</StatusChip>}
+              {record.expiryStatus === 'EXPIRING_SOON' && <StatusChip tone="elevated">Expiring soon</StatusChip>}
             </div>
             {record.description && <p className={cn(MOBILE_TYPE_TOKENS.body, 'text-gray-600')}>{record.description}</p>}
+
+            {record.allowedActions.manageEffectivePeriod && (
+              <div className="flex items-center gap-2">
+                <Label htmlFor="record-effective-to" className="shrink-0 text-xs text-gray-500">Expires / needs renewal on</Label>
+                <Input
+                  id="record-effective-to"
+                  type="date"
+                  className="h-8 w-auto"
+                  defaultValue={record.effectiveTo ? record.effectiveTo.slice(0, 10) : ''}
+                  onBlur={(e) => {
+                    const value = e.target.value;
+                    const currentValue = record.effectiveTo ? record.effectiveTo.slice(0, 10) : '';
+                    if (value === currentValue) return;
+                    effectivePeriodMutation.mutate({
+                      effectiveTo: value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null,
+                    });
+                  }}
+                />
+              </div>
+            )}
 
             {record.legalHoldReason && (
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
@@ -912,6 +962,8 @@ function RecordDetailSheet({
 
 // ─── Main client ──────────────────────────────────────────────────────────────
 
+type RecordView = 'ALL' | 'NEEDS_REVIEW' | 'EXPIRING';
+
 export default function HomeRecordsClient() {
   const { id: propertyId } = useParams<{ id: string }>();
   const { toast } = useToast();
@@ -919,10 +971,23 @@ export default function HomeRecordsClient() {
   const [showTrashed, setShowTrashed] = React.useState(false);
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [selectedRecordId, setSelectedRecordId] = React.useState<string | null>(null);
+  const [search, setSearch] = React.useState('');
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+  const [recordTypeFilter, setRecordTypeFilter] = React.useState<PropertyRecordType | 'ALL'>('ALL');
+  const [view, setView] = React.useState<RecordView>('ALL');
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const recordsQuery = useQuery({
-    queryKey: ['home-records', propertyId, showTrashed ? 'TRASHED' : 'ACTIVE'],
-    queryFn: () => listRecords(propertyId, showTrashed ? 'TRASHED' : undefined),
+    queryKey: ['home-records', propertyId, showTrashed ? 'TRASHED' : 'ACTIVE', debouncedSearch, recordTypeFilter],
+    queryFn: () => listRecords(propertyId, {
+      lifecycleStatus: showTrashed ? 'TRASHED' : undefined,
+      search: debouncedSearch || undefined,
+      recordType: recordTypeFilter === 'ALL' ? undefined : recordTypeFilter,
+    }),
     enabled: Boolean(propertyId),
     staleTime: 2 * 60 * 1000,
   });
@@ -945,6 +1010,14 @@ export default function HomeRecordsClient() {
   });
 
   const records = recordsQuery.data ?? [];
+  const needsReviewCount = records.filter((record) => record.needsReview).length;
+  const expiringCount = records.filter((record) => record.expiryStatus === 'EXPIRING_SOON' || record.expiryStatus === 'EXPIRED').length;
+  const visibleRecords = records.filter((record) => {
+    if (view === 'NEEDS_REVIEW') return record.needsReview;
+    if (view === 'EXPIRING') return record.expiryStatus === 'EXPIRING_SOON' || record.expiryStatus === 'EXPIRED';
+    return true;
+  });
+  const isFiltering = Boolean(debouncedSearch) || recordTypeFilter !== 'ALL' || view !== 'ALL';
 
   return (
     <MobilePageContainer className="space-y-5 py-4 lg:max-w-5xl lg:px-8 lg:pb-10">
@@ -973,18 +1046,68 @@ export default function HomeRecordsClient() {
         )}
       </MobileCard>
 
+      {!showTrashed && (
+        <div className="space-y-2.5">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search records by title or description"
+                className="pl-9"
+              />
+            </div>
+            <Select value={recordTypeFilter} onValueChange={(v) => setRecordTypeFilter(v as PropertyRecordType | 'ALL')}>
+              <SelectTrigger className="sm:w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All types</SelectItem>
+                {(Object.entries(RECORD_TYPE_LABELS) as [PropertyRecordType, string][]).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button variant={view === 'ALL' ? 'default' : 'outline'} size="sm" className="h-7 rounded-full px-3 text-xs" onClick={() => setView('ALL')}>
+              All records
+            </Button>
+            <Button
+              variant={view === 'NEEDS_REVIEW' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 gap-1 rounded-full px-3 text-xs"
+              onClick={() => setView('NEEDS_REVIEW')}
+              disabled={needsReviewCount === 0 && view !== 'NEEDS_REVIEW'}
+            >
+              Needs review{needsReviewCount > 0 ? ` (${needsReviewCount})` : ''}
+            </Button>
+            <Button
+              variant={view === 'EXPIRING' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 gap-1 rounded-full px-3 text-xs"
+              onClick={() => setView('EXPIRING')}
+              disabled={expiringCount === 0 && view !== 'EXPIRING'}
+            >
+              Expiring or outdated{expiringCount > 0 ? ` (${expiringCount})` : ''}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {recordsQuery.isLoading ? (
         <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
-      ) : records.length === 0 ? (
+      ) : visibleRecords.length === 0 ? (
         <EmptyStateCard
-          title={showTrashed ? 'Trash is empty' : 'No records yet'}
+          title={showTrashed ? 'Trash is empty' : isFiltering ? 'No records match' : 'No records yet'}
           description={
             showTrashed
               ? 'Records you move to trash stay recoverable here for 30 days.'
-              : 'Add a warranty, receipt, inspection report, or other file tied to this property.'
+              : isFiltering
+                ? 'Try a different search term, type, or view.'
+                : 'Add a warranty, receipt, inspection report, or other file tied to this property.'
           }
           action={
-            !showTrashed ? (
+            !showTrashed && !isFiltering ? (
               <Button variant="outline" size="sm" className="mt-2 gap-2" onClick={() => setUploadOpen(true)}>
                 <Plus className="h-4 w-4" />
                 Add first record
@@ -994,7 +1117,7 @@ export default function HomeRecordsClient() {
         />
       ) : (
         <div className="space-y-2.5">
-          {records.map((record) => (
+          {visibleRecords.map((record) => (
             <RecordCard key={record.id} record={record} onOpen={() => setSelectedRecordId(record.id)} />
           ))}
         </div>
