@@ -32,6 +32,7 @@ import { sellerPrepSourceLineage } from "@/features/tools/sellerPrepLaunchContex
 
 interface SellerPrepItem {
   id: string;
+  code: string;
   title: string;
   priority: string;
   roiRange: string;

@@ -105,3 +105,32 @@ test('top actions are ranked by an explicit priority order, not a lexical string
   assert.doesNotMatch(builder, /\.sort\(\(a, b\) => a\.priority\.localeCompare/);
   assert.match(builder, /PRIORITY_RANK/);
 });
+
+test('Slice 9: contractor help routes to the real Providers/Bookings marketplace instead of the inert lead-capture note', () => {
+  const overviewCard = readRepository(
+    'apps/frontend/src/components/seller-prep/SellerPrepOverview.tsx',
+  );
+  // Primary CTA is a real link into the existing provider search/booking
+  // flow — Seller Prep has no fulfillment of its own; Providers/Bookings
+  // does (browse-and-book, admin-reviewed licensing, real lifecycle).
+  assert.match(overviewCard, /\/dashboard\/providers\?propertyId=\$\{propertyId\}&from=seller-prep/);
+  assert.match(overviewCard, /Browse verified providers/);
+  // The old note-only path must stay clearly secondary and honestly labeled
+  // — it doesn't contact anyone, unlike the real link above.
+  assert.match(overviewCard, /no provider is contacted/);
+
+  // Per-item deep links use real ServiceCategory values the provider search
+  // page actually filters on, not made-up category strings.
+  assert.match(overviewCard, /TASK_SERVICE_CATEGORY/);
+  assert.match(overviewCard, /INTERIOR_PAINT:\s*'PAINTING'/);
+  assert.match(overviewCard, /ROOF_REPLACEMENT:\s*'ROOFING'/);
+
+  const schema = readBackend('prisma/schema.prisma');
+  const serviceCategoryEnum = schema.slice(
+    schema.indexOf('enum ServiceCategory'),
+    schema.indexOf('}', schema.indexOf('enum ServiceCategory')),
+  );
+  for (const category of ['PAINTING', 'HANDYMAN', 'LANDSCAPING', 'ROOFING']) {
+    assert.match(serviceCategoryEnum, new RegExp(`\\b${category}\\b`));
+  }
+});

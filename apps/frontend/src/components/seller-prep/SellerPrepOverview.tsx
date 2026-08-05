@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -36,6 +37,7 @@ import { AgentInterviewGuide } from "./AgentInterviewGuide";
 
 interface SellerPrepItem {
   id: string;
+  code: string;
   title: string;
   priority: string;
   roiRange: string;
@@ -200,10 +202,11 @@ export default function SellerPrepOverview({
                   <p className="text-sm text-gray-500 py-8 text-center">No tasks available.</p>
                 ) : (
                   overview.items.map((item) => (
-                    <TaskItem 
-                      key={item.id} 
-                      item={item} 
-                      onUpdate={handleStatusUpdate} 
+                    <TaskItem
+                      key={item.id}
+                      item={item}
+                      propertyId={propertyId}
+                      onUpdate={handleStatusUpdate}
                       isUpdating={updateStatusMutation.isPending && updateStatusMutation.variables?.itemId === item.id}
                     />
                   ))
@@ -307,14 +310,23 @@ export default function SellerPrepOverview({
             )}
 
             <div className="pt-4 border-t space-y-3">
-              <h4 className="text-xs font-bold text-gray-500 tracking-normal">Expert Assistance</h4>
-              <p className="text-xs text-gray-600">Need help with repairs or staging?</p>
-              <Button
+              <h4 className="text-xs font-bold text-gray-500 tracking-normal">Contractor help</h4>
+              <p className="text-xs text-gray-600">
+                Browse licensed, verified providers on the platform and book one directly —
+                this actually reaches a provider, unlike the note below.
+              </p>
+              <Link href={`/dashboard/providers?propertyId=${propertyId}&from=seller-prep`}>
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 h-9 text-xs">
+                  Browse verified providers
+                </Button>
+              </Link>
+              <button
+                type="button"
                 onClick={() => setShowLeadModal(true)}
-                className="w-full bg-blue-600 hover:bg-blue-700 h-9 text-xs"
+                className="w-full text-center text-xs text-gray-500 underline underline-offset-2 hover:text-gray-700"
               >
-                Record contractor interest
-              </Button>
+                Or just leave a note for later (no provider is contacted)
+              </button>
             </div>
           </CardContent>
         </Card>
@@ -330,10 +342,23 @@ export default function SellerPrepOverview({
   );
 }
 
+// Maps the static checklist's fixed codes to real ServiceCategory values so
+// a task can link straight to the actual provider marketplace — Seller Prep
+// has no fulfillment of its own (see Slice 9 of the continuity plan), but
+// Providers/Bookings does, and this reuses it rather than promising a match
+// workflow that doesn't exist.
+const TASK_SERVICE_CATEGORY: Record<string, string> = {
+  INTERIOR_PAINT: 'PAINTING',
+  MINOR_FIXES: 'HANDYMAN',
+  CURB_APPEAL: 'LANDSCAPING',
+  ROOF_REPLACEMENT: 'ROOFING',
+};
+
 // Sub-components
-function TaskItem({ item, onUpdate, isUpdating }: any) {
+function TaskItem({ item, propertyId, onUpdate, isUpdating }: any) {
   const isDone = item.status === 'DONE';
   const isSkipped = item.status === 'SKIPPED';
+  const serviceCategory = TASK_SERVICE_CATEGORY[item.code];
   return (
     <div className={`border rounded-lg p-4 transition-all ${isDone ? 'bg-green-50 border-green-200' : isSkipped ? 'bg-gray-50 border-gray-200' : 'hover:bg-gray-50'}`}>
       <div className="flex items-start justify-between gap-4">
@@ -342,8 +367,16 @@ function TaskItem({ item, onUpdate, isUpdating }: any) {
             {isDone && <CheckCircle className="h-4 w-4 text-green-600" />}
             <p className={`text-sm font-medium ${isDone ? 'line-through text-gray-500' : ''}`}>{item.title}</p>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
             <Badge variant={item.priority === 'HIGH' ? 'destructive' : 'secondary'} className="text-xs px-1.5 h-5 ">{item.priority}</Badge>
+            {serviceCategory && !isDone && (
+              <Link
+                href={`/dashboard/providers?category=${serviceCategory}&propertyId=${propertyId}&from=seller-prep`}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Find providers →
+              </Link>
+            )}
           </div>
         </div>
         <div className="flex gap-1">
