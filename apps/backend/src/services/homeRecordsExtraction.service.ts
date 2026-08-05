@@ -9,10 +9,34 @@
 // has been explicitly CONFIRMED or CORRECTED by a homeowner.
 import type { ExpenseCategory, ExtractedFactCandidate, ExtractedFactReviewStatus, WarrantyCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { auditLog } from '../lib/logger';
+import { auditLog, logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { downloadObjectBuffer } from './storage/reportStorage';
 import { documentIntelligenceService, type DocumentInsights } from './documentIntelligence.service';
+import { homeRecordsService } from './homeRecords.service';
+import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
+
+// Best-effort bridge into Home Operations (Slice 4 of the continuity
+// plan) — re-reads the record's freshly recomputed needsReview/
+// expiryStatus after a mutation and syncs its Home Action candidate.
+// Never throws: a sync failure must never block the Home Records write
+// that triggered it.
+async function syncRecordWorkItem(propertyId: string, recordId: string): Promise<void> {
+  try {
+    const record = await homeRecordsService.get(propertyId, recordId, 'OWNER');
+    await syncPropertyRecordWorkItem(propertyId, {
+      id: record.id,
+      title: record.title,
+      recordType: record.recordType,
+      sensitivity: record.sensitivity,
+      needsReview: record.needsReview,
+      expiryStatus: record.expiryStatus,
+      effectiveTo: record.effectiveTo,
+    });
+  } catch (err) {
+    logger.warn({ err, propertyId, recordId }, 'Home Operations record-review sync failed after a Home Records write');
+  }
+}
 
 // Purely informational — the AI's overall document classification, kept
 // distinct from field-level candidates so a future extractor can report
@@ -185,10 +209,12 @@ export class HomeRecordsExtractionService {
     ];
 
     await prisma.extractedFactCandidate.createMany({ data: rows });
-    return prisma.extractedFactCandidate.findMany({
+    const created = await prisma.extractedFactCandidate.findMany({
       where: { propertyRecordVersionId: version.id },
       orderBy: { createdAt: 'asc' },
     });
+    await syncRecordWorkItem(input.propertyId, input.recordId);
+    return created;
   }
 
   async reviewCandidate(input: {
@@ -239,10 +265,12 @@ export class HomeRecordsExtractionService {
       reviewedValue = null;
     }
 
-    return prisma.extractedFactCandidate.update({
+    const updated = await prisma.extractedFactCandidate.update({
       where: { id: candidate.id },
       data: { reviewStatus, reviewedValue, reviewedByUserId: input.userId, reviewedAt: new Date() },
     });
+    await syncRecordWorkItem(input.propertyId, input.recordId);
+    return updated;
   }
 
   async promoteWarranty(input: {

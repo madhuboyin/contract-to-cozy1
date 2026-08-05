@@ -20659,6 +20659,10 @@ enum OperationalObligationType {
   PROJECT_EXECUTION
   INCIDENT_RESPONSE
   COVERAGE_ACTION
+  // Home Continuity plan §8 (Slice 4): "promote missing/stale records
+  // through canonical Home Actions" — a Home Record with pending
+  // extraction review or an expired/expiring effective period.
+  RECORD_REVIEW
 }
 
 enum OperationalWorkSourceType {
@@ -20670,6 +20674,7 @@ enum OperationalWorkSourceType {
   RECALL
   COVERAGE
   INSPECTION_FINDING
+  PROPERTY_RECORD
 }
 
 enum OperationalWorkSourceRole {

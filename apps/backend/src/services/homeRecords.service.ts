@@ -8,10 +8,11 @@ import type {
   PropertyRecordVisibility,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { auditLog } from '../lib/logger';
+import { auditLog, logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { uploadPropertyRecordVersionBuffer } from './storage/reportStorage';
 import { presignGetObject } from './storage/presign';
+import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
 
 const TRASH_RECOVERY_DAYS = 30;
 
@@ -544,6 +545,8 @@ export class HomeRecordsService {
         },
       });
     });
+    // Leaving ACTIVE scope means it can no longer represent open work.
+    await this.syncWorkItem(input.propertyId, input.recordId);
   }
 
   async restore(propertyId: string, recordId: string) {
@@ -609,6 +612,31 @@ export class HomeRecordsService {
     });
     if (result.count !== 1) {
       throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
+    }
+    await this.syncWorkItem(input.propertyId, input.recordId);
+  }
+
+  // Home Continuity plan §8 (Slice 4) bridge into Home Operations — best
+  // effort, never throws, never blocks the Home Records write that
+  // triggered it. get() doesn't filter by lifecycleStatus, so a record
+  // that just left ACTIVE scope (trashed/archived) is forced to look
+  // "resolved" here regardless of its needsReview/expiryStatus — it can no
+  // longer represent open work once it's not the active record.
+  private async syncWorkItem(propertyId: string, recordId: string): Promise<void> {
+    try {
+      const record = await this.get(propertyId, recordId, 'OWNER');
+      const isActive = record.lifecycleStatus === 'ACTIVE';
+      await syncPropertyRecordWorkItem(propertyId, {
+        id: record.id,
+        title: record.title,
+        recordType: record.recordType,
+        sensitivity: record.sensitivity,
+        needsReview: isActive && record.needsReview,
+        expiryStatus: isActive ? record.expiryStatus : null,
+        effectiveTo: record.effectiveTo,
+      });
+    } catch (err) {
+      logger.warn({ err, propertyId, recordId }, 'Home Operations record-review sync failed after a Home Records write');
     }
   }
 
