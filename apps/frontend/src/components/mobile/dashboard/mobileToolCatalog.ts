@@ -365,9 +365,15 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     isActive: (pathname) => /^\/dashboard\/oracle(\/|$)/.test(pathname),
   },
   {
+    // Formerly titled "Home Records" — renamed to remove the collision with
+    // the property-owned records tool in MOBILE_HOME_TOOL_LINKS below,
+    // which is the real "Home Records" destination: versioned,
+    // trash/restore, visible to the whole household rather than
+    // uploader-only. This tool's quick single-file AI-scan flow still has
+    // standalone value and its route stays live.
     key: 'documents',
-    title: 'Home Records',
-    description: 'Organize property files as reviewable evidence',
+    title: 'Quick Document Scan',
+    description: 'Scan a file and store it with AI-assisted analysis',
     href: '/dashboard/documents',
     icon: resolveToolIcon('ai', 'documents'),
     emoji: '🗂️',
@@ -681,16 +687,21 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/status-board(\/|$)/.test(pathname),
   },
   {
-    // Working name "Property Records" deliberately avoids colliding with the
-    // legacy uploader-owned "documents" tool (titled "Home Records" in
-    // MOBILE_AI_TOOL_CATALOG below) while both exist side by side during the
-    // Home Continuity and Records cutover. See
+    // This is the canonical "Home Records" destination per
     // docs/product/HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
-    // §1 and §9.4 — Slice 1 is where the final naming/consolidation decision
-    // and legacy-route removal happen, not here.
+    // §1 item 2. The legacy uploader-owned "documents" tool in
+    // MOBILE_AI_TOOL_CATALOG below used to share this same "Home Records"
+    // title — it's now labeled "Quick Document Scan" to remove the
+    // collision, since this tool (property-owned, versioned, trash/restore,
+    // household-visible) is the one that actually matches what "Home
+    // Records" promises. The legacy tool's underlying `Document` model is
+    // still real, load-bearing infrastructure for many other domains
+    // (claims, insurance, tax, HOA, etc.), so its route stays live — only
+    // its framing as a primary "manage my home's records" destination is
+    // retired here.
     key: 'home-records',
     group: 'records',
-    name: 'Property Records',
+    name: 'Home Records',
     description: 'Warranties, receipts, inspections, and permits — organized by property',
     desktopDescription: "Property-owned records with versions, integrity checks, and a recoverable trash — visible to your whole household, not just whoever uploaded the file.",
     hrefSuffix: 'tools/home-records',

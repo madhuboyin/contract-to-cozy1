@@ -1,7 +1,15 @@
 // apps/backend/src/middleware/documentAuth.middleware.ts
 //
-// Verifies that the authenticated user owns the document identified by :id.
-// Must be placed after authenticate in the middleware chain.
+// Verifies that the authenticated user may access the document identified by
+// :id. Must be placed after authenticate in the middleware chain.
+//
+// A property-scoped document is accessible to any household member with at
+// least CONTRIBUTOR role, not just whoever happened to upload it — a
+// document is property evidence, not the uploader's personal file, once it
+// is linked to a property. Documents with no propertyId (booking-scoped,
+// or uploaded before a property link existed) fall back to the original
+// uploader-only check since there is no property to resolve household
+// access against.
 //
 // On success, attaches to req:
 //   (req as any).ownedDocument      — full Prisma document row
@@ -10,6 +18,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
+import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 
 export const requireDocumentOwnership = async (
   req: CustomRequest,
@@ -31,12 +40,27 @@ export const requireDocumentOwnership = async (
     }
 
     const document = await prisma.document.findFirst({
-      where: { id: documentId, uploadedBy: homeownerProfile.id },
+      where: { id: documentId, deletedAt: null },
     });
 
     if (!document) {
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
+    }
+
+    const isUploader = document.uploadedBy === homeownerProfile.id;
+
+    if (!isUploader) {
+      if (!document.propertyId) {
+        res.status(404).json({ success: false, message: 'Document not found' });
+        return;
+      }
+
+      const access = await resolvePropertyAccess(userId, document.propertyId);
+      if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
+        res.status(404).json({ success: false, message: 'Document not found' });
+        return;
+      }
     }
 
     (req as any).ownedDocument = document;

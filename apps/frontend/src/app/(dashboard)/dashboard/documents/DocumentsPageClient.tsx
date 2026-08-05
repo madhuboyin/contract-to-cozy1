@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
@@ -588,18 +589,18 @@ export default function DocumentsPage() {
 
   const handleDelete = async (documentId: string) => {
     const confirmed = await requestConfirmation({
-      title: 'Delete this document?',
-      description: 'This removes the uploaded file from your vault.',
-      confirmLabel: 'Delete document',
+      title: 'Move this document to trash?',
+      description: 'It will be hidden from your list but not permanently deleted — you can restore it later.',
+      confirmLabel: 'Move to trash',
     });
     if (!confirmed) return;
 
     try {
       await api.deleteDocument(documentId);
-      toast({ title: 'Document Deleted', description: 'Document removed successfully.' });
+      toast({ title: 'Moved to trash', description: 'This document was not permanently deleted and can still be restored.' });
       fetchDependencies();
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to delete document.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Failed to move document to trash.', variant: 'destructive' });
     }
   };
 
@@ -680,14 +681,24 @@ export default function DocumentsPage() {
         </Button>
       )}
       <MobilePageIntro
-        title="Home Records"
-        subtitle="Property files organized as reviewable evidence"
+        title="Quick Document Scan"
+        subtitle="Scan and store a file quickly with AI-assisted analysis"
         action={
           <Button onClick={() => setIsUploadModalOpen(true)} className="w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" /> Upload New Document
           </Button>
         }
       />
+
+      {activePropertyId && (
+        <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          Looking to manage this property&apos;s full record set — with versions, links, and a
+          recoverable trash? Use{' '}
+          <Link href={`/dashboard/properties/${activePropertyId}/tools/home-records`} className="font-medium underline underline-offset-2">
+            Home Records
+          </Link>.
+        </p>
+      )}
 
       <div className="space-y-3 md:hidden">
         <ReadOnlySummaryBlock

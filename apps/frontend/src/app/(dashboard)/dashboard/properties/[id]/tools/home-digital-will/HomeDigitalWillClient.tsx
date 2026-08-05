@@ -441,7 +441,7 @@ function SetupChecklist({
     {
       id: 'contact',
       label: 'Add a trusted contact',
-      description: 'Someone who can access this home',
+      description: "Someone you'll plan to give access to",
       done: hasContact,
       action: onOpenContacts,
     },
@@ -590,7 +590,7 @@ function ReadinessNudges({
   if (!hasContacts) {
     nudges.push({
       icon: Users,
-      text: 'Add a trusted contact so others can access critical home knowledge when needed.',
+      text: 'Add a trusted contact you plan to give access to during an emergency or transition.',
       action: onOpenContacts,
       actionLabel: 'Add contact',
     });
@@ -664,6 +664,13 @@ function WillHeader({
           <p className={cn(MOBILE_TYPE_TOKENS.body, 'mt-1 text-gray-500')}>
             Prepare selected home knowledge for continuity and handoff.
           </p>
+          <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-amber-800')}>
+            This is a private planning space — trusted contacts cannot access it from here.
+            For real, invited-and-accepted recipient access, use{' '}
+            <Link href={`/dashboard/properties/${will.propertyId}/property-brief?purpose=HOUSEHOLD_TRUSTED_CONTACT`} className="font-medium underline underline-offset-2">
+              Home Continuity Plan sharing
+            </Link>.
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <StatusChip tone={readinessTone}>{readinessLabel}</StatusChip>
             {will.counts.entryCount > 0 && (
@@ -719,14 +726,14 @@ function WillHeader({
               }
               title={
                 handoffReadiness.missingRequirements.join(' ')
-                || 'Publish governed handoff'
+                || 'Mark this plan ready — does not send any invitations'
               }
               className="gap-1.5"
             >
               {isPublishing
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : <Shield className="h-3.5 w-3.5" />}
-              Publish handoff
+              Mark plan ready
             </Button>
           )}
         </div>
@@ -1205,7 +1212,7 @@ function ContactsDetailPanel({
               Trusted Contacts
             </h2>
             <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
-              People who can access critical home knowledge
+              People you plan to give access to critical home knowledge
             </p>
           </div>
         </div>
@@ -1214,9 +1221,10 @@ function ContactsDetailPanel({
       {/* Explanation */}
       <div className="rounded-xl bg-gray-50 px-4 py-3">
         <p className={cn(MOBILE_TYPE_TOKENS.body, 'text-gray-600')}>
-          Trusted contacts can access critical home knowledge when needed — during an emergency,
-          a transition, or when you&apos;re unavailable. Choose each person&apos;s access level based on
-          their role.
+          These entries record who you intend to give access to and at what level — during an
+          emergency, a transition, or when you&apos;re unavailable. Adding someone here does not yet
+          give them access; use Home Continuity Plan sharing on the Property Brief page to actually
+          invite and grant access.
         </p>
       </div>
 
@@ -2124,7 +2132,7 @@ function ContactEditorSheet({
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle>{sheetTitle}</SheetTitle>
           <SheetDescription className="sr-only">
-            {state?.mode === 'edit' ? 'Update this trusted contact\'s information and access level.' : 'Add a trusted contact who can access critical home knowledge.'}
+            {state?.mode === 'edit' ? 'Update this trusted contact\'s information and intended access level.' : 'Record a trusted contact you plan to give access to critical home knowledge.'}
           </SheetDescription>
         </SheetHeader>
 
@@ -2428,8 +2436,8 @@ export default function HomeDigitalWillClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       toast({
-        title: 'Governed handoff published',
-        description: 'Trusted-contact access rules are now active.',
+        title: 'Plan marked ready',
+        description: 'No invitations were sent. Use Home Continuity Plan sharing on the Property Brief page to actually give a recipient access.',
       });
     },
     onError: () => {

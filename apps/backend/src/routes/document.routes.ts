@@ -13,7 +13,7 @@ import { DocumentType } from '@prisma/client';
 import { validateDocumentUpload } from '../utils/documentValidator.util'; // Assuming this was added in the previous step
 import { HomeEventsAutoGen } from '../services/homeEvents/homeEvents.autogen';
 import { auditLog, logger } from '../lib/logger';
-import { uploadDocumentBuffer, deleteDocumentObject } from '../services/storage/reportStorage';
+import { uploadDocumentBuffer } from '../services/storage/reportStorage';
 import { presignGetObject } from '../services/storage/presign';
 import { uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { APIError } from '../middleware/error.middleware';
@@ -290,8 +290,8 @@ router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
 
     const documents = await prisma.document.findMany({
       where: propertyId
-        ? { propertyId }
-        : { uploadedBy: homeownerProfile.id },
+        ? { propertyId, deletedAt: null }
+        : { uploadedBy: homeownerProfile.id, deletedAt: null },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -564,7 +564,12 @@ router.get(
  * @swagger
  * /api/documents/{id}:
  *   delete:
- *     summary: Delete a document
+ *     summary: Move a document to trash
+ *     description: >
+ *       Soft delete only — the row and its stored object are left in place so
+ *       any evidence link other domains hold on this document (claims,
+ *       insurance, warranties, home events, etc.) is not silently broken.
+ *       Use POST /:id/restore to undo.
  *     tags: [Documents]
  *     security:
  *       - bearerAuth: []
@@ -576,39 +581,116 @@ router.get(
  *           type: string
  *     responses:
  *       200:
- *         description: Document deleted
+ *         description: Document moved to trash
  */
 router.delete('/:id', authenticate, requireDocumentOwnership, async (req: CustomRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = req.user!.userId;
 
-    // Ownership already verified by requireDocumentOwnership; use pre-fetched doc
-    const document = (req as any).ownedDocument as { id: string; fileUrl: string | null };
-
-    // Delete from S3 first (best-effort — don't block DB delete on S3 failure)
-    if (document.fileUrl && !document.fileUrl.startsWith('data:')) {
-      try {
-        await deleteDocumentObject(document.fileUrl);
-      } catch (s3Err) {
-        logger.error({ s3Err }, '[DOCUMENTS] S3 delete failed (continuing)');
-      }
-    }
-
-    await prisma.document.delete({
-      where: { id }
+    // Ownership/access already verified by requireDocumentOwnership.
+    await prisma.document.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedByUserId: userId },
     });
 
     res.json({
       success: true,
-      message: 'Document deleted successfully'
+      message: 'Document moved to trash. It can be restored from Trash.',
     });
 
   } catch (error: any) {
-    logger.error({ err: error }, '[DOCUMENTS] Error deleting document');
+    logger.error({ err: error }, '[DOCUMENTS] Error trashing document');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete document'
     });
+  }
+});
+
+/**
+ * @swagger
+ * /api/documents/{id}/restore:
+ *   post:
+ *     summary: Restore a trashed document
+ *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Document restored
+ */
+router.post('/:id/restore', authenticate, requireDocumentOwnership, async (req: CustomRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.document.update({
+      where: { id },
+      data: { deletedAt: null, deletedByUserId: null },
+    });
+
+    res.json({
+      success: true,
+      message: 'Document restored',
+    });
+  } catch (error: any) {
+    logger.error({ err: error }, '[DOCUMENTS] Error restoring document');
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to restore document'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/documents/trash:
+ *   get:
+ *     summary: List trashed documents for the current homeowner (optionally scoped to a property)
+ *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of trashed documents
+ */
+router.get('/trash', authenticate, async (req: CustomRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const homeownerProfile = await prisma.homeownerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!homeownerProfile) {
+      return res.status(404).json({ success: false, message: 'Homeowner profile not found' });
+    }
+
+    const propertyId = typeof req.query.propertyId === 'string' && req.query.propertyId.trim()
+      ? req.query.propertyId.trim()
+      : undefined;
+
+    if (propertyId && !(await resolvePropertyAccess(userId, propertyId))) {
+      return res.status(404).json({ success: false, message: 'Property not found or access denied.' });
+    }
+
+    const documents = await prisma.document.findMany({
+      where: propertyId
+        ? { propertyId, deletedAt: { not: null } }
+        : { uploadedBy: homeownerProfile.id, deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+
+    res.json({ success: true, data: { documents } });
+  } catch (error: any) {
+    logger.error({ err: error }, '[DOCUMENTS] Error listing trash');
+    res.status(500).json({ success: false, message: error.message || 'Failed to list trash' });
   }
 });
 

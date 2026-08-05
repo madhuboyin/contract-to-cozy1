@@ -7,6 +7,8 @@ let inventoryWhere = null;
 let documentWhere = null;
 let propertyAccess = { propertyId: 'owned-property-id', role: 'OWNER' };
 let autoCreateWarrantyCalls = 0;
+let updateCalls = [];
+let deleteCalls = 0;
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {
@@ -28,6 +30,14 @@ require.cache[prismaPath] = {
           ...args.data,
           createdAt: new Date('2026-08-02T00:00:00.000Z'),
         }),
+        update: async (args) => {
+          updateCalls.push(args);
+          return { id: args.where.id, ...args.data };
+        },
+        delete: async () => {
+          deleteCalls += 1;
+          throw new Error('prisma.document.delete should never be called by these routes anymore');
+        },
       },
       inventoryItem: {
         findMany: async (args) => {
@@ -245,7 +255,7 @@ test('property-scoped document listing authorizes access and filters by property
   await handler(req, res);
 
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(documentWhere, { propertyId: 'household-property-id' });
+  assert.deepEqual(documentWhere, { propertyId: 'household-property-id', deletedAt: null });
 });
 
 test('property-scoped document listing hides properties without access', async () => {
@@ -289,4 +299,44 @@ test('document analysis never auto-creates a warranty from extracted fields', as
   assert.equal(autoCreateWarrantyCalls, 0);
   assert.equal(res.payload.data.warranty, null);
   assert.equal(res.payload.data.reviewRequired, true);
+});
+
+test('deleting a document soft-deletes it (trash) instead of physically removing the row or object', async () => {
+  updateCalls = [];
+  deleteCalls = 0;
+
+  const handler = getRouteHandler('/:id', 'delete');
+  const req = {
+    params: { id: 'doc-1' },
+    user: { userId: 'user-1' },
+    ownedDocument: { id: 'doc-1', fileUrl: 'documents/doc-1.pdf' },
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(deleteCalls, 0, 'prisma.document.delete must never be called by the trash route');
+  assert.equal(updateCalls.length, 1);
+  assert.equal(updateCalls[0].where.id, 'doc-1');
+  assert.ok(updateCalls[0].data.deletedAt instanceof Date);
+  assert.equal(updateCalls[0].data.deletedByUserId, 'user-1');
+});
+
+test('restoring a document clears the trash fields', async () => {
+  updateCalls = [];
+
+  const handler = getRouteHandler('/:id/restore', 'post');
+  const req = {
+    params: { id: 'doc-1' },
+    user: { userId: 'user-1' },
+    ownedDocument: { id: 'doc-1' },
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(updateCalls.length, 1);
+  assert.deepEqual(updateCalls[0].data, { deletedAt: null, deletedByUserId: null });
 });

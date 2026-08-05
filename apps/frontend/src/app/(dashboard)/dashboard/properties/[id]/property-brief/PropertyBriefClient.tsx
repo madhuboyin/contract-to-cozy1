@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -105,6 +106,8 @@ function BriefSection({ section }: { section: PropertyBriefSection }) {
 
 export default function PropertyBriefClient({ propertyId }: { propertyId: string }) {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const deepLinkedPurpose = searchParams.get('purpose') as PropertyBriefPurpose | null;
   const templatesQuery = useQuery({
     queryKey: ['property-brief-templates'],
     queryFn: getPropertyBriefTemplates,
@@ -117,7 +120,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
     queryKey: ['property-brief-eligible-documents', propertyId],
     queryFn: () => listEligiblePropertyBriefDocuments(propertyId),
   });
-  const [purpose, setPurpose] = React.useState<PropertyBriefPurpose>('HOMEOWNER_REFERENCE');
+  const [purpose, setPurpose] = React.useState<PropertyBriefPurpose>(deepLinkedPurpose ?? 'HOMEOWNER_REFERENCE');
   const [selectedSections, setSelectedSections] = React.useState<PropertyBriefSectionType[]>([
     'PROPERTY_FACTS',
     'VERIFIED_HISTORY',
@@ -133,6 +136,14 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
   const [shareSensitiveAcknowledged, setShareSensitiveAcknowledged] = React.useState(false);
   const [recipientName, setRecipientName] = React.useState('');
   const [recipientEmail, setRecipientEmail] = React.useState('');
+
+  const appliedDeepLinkPurpose = React.useRef(false);
+  React.useEffect(() => {
+    if (appliedDeepLinkPurpose.current || !deepLinkedPurpose || !templatesQuery.data) return;
+    appliedDeepLinkPurpose.current = true;
+    const template = templatesQuery.data.find((item) => item.purpose === deepLinkedPurpose);
+    if (template) setSelectedSections(template.defaultSections);
+  }, [templatesQuery.data, deepLinkedPurpose]);
 
   const currentTemplate = templatesQuery.data?.find((item) => item.purpose === purpose);
   const previewQuery = useQuery({

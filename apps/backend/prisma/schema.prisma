@@ -3752,6 +3752,15 @@ model Document {
   ocrQualityScore Float?
   parserVersion   String?
 
+  // Guarded soft delete (trash) — the many onDelete: Cascade relations below
+  // mean a hard delete here can silently take out evidence rows other
+  // domains still rely on (claim documents, insurance policy source
+  // documents, home event evidence, etc.). Deletion from the Documents
+  // route sets these instead of calling prisma.document.delete(); the row
+  // and its S3 object are left in place until explicitly restored.
+  deletedAt       DateTime?
+  deletedByUserId String?
+
   // Relations
   booking                    Booking?                    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   property                   Property?                   @relation("PropertyDocuments", fields: [propertyId], references: [id], onDelete: SetNull)
