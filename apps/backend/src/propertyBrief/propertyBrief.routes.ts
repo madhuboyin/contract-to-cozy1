@@ -2,7 +2,7 @@ import { NextFunction, Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { CustomRequest } from '../types';
 import {
@@ -94,7 +94,7 @@ router.get(
       if (!req.user?.userId) return res.status(401).json({ success: false });
       return res.json({
         success: true,
-        data: await listPropertyBriefs(req.params.propertyId, req.user.userId),
+        data: await listPropertyBriefs(req.params.propertyId),
       });
     } catch (error) {
       return next(error);
@@ -106,6 +106,7 @@ router.post(
   '/properties/:propertyId/property-briefs',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createPropertyBriefSchema),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
@@ -152,6 +153,7 @@ router.post(
   '/properties/:propertyId/property-briefs/:briefId/share',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createPropertyBriefShareSchema),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
@@ -185,6 +187,7 @@ router.post(
   '/properties/:propertyId/property-briefs/:briefId/shares/:shareId/revoke',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
       if (!req.user?.userId) return res.status(401).json({ success: false });
@@ -207,6 +210,7 @@ router.post(
   '/properties/:propertyId/property-briefs/:briefId/shares/:shareId/test',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
       if (!req.user?.userId) return res.status(401).json({ success: false });

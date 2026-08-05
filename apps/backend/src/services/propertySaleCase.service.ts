@@ -468,9 +468,11 @@ export class PropertySaleCaseService {
   // real recorded acceptance, and a retention decision must be on file
   // before completedAt can be set. Optionally revokes now-unneeded
   // professional/agent Property Brief shares as part of the same action
-  // (best-effort per share; a share created by a different household member
-  // than the caller will fail — Property Brief shares are creator-scoped,
-  // a pre-existing gap this doesn't attempt to fix).
+  // (best-effort per share, still reported individually in revokeResults —
+  // Property Brief access is now household-role-scoped rather than
+  // creator-scoped, so any CONTRIBUTOR+ on this property can revoke a share
+  // a co-owner created; a failure here means the share/brief genuinely
+  // doesn't belong to this property, not an ownership mismatch).
   static async completeTransition(
     userId: string,
     propertyId: string,

@@ -515,9 +515,15 @@ export async function listEligiblePropertyBriefDocuments(propertyId: string) {
   });
 }
 
-export async function listPropertyBriefs(propertyId: string, userId: string) {
+// Property-shared, not creator-scoped — any household member can see every
+// brief on this property, matching Home Records' pattern. Previously
+// filtered by createdByUserId, which made one co-owner's briefs invisible
+// to another and silently broke actions (e.g. Sale Case transition
+// completion) that need to revoke a share someone else on the household
+// created.
+export async function listPropertyBriefs(propertyId: string) {
   return prisma.propertyBrief.findMany({
-    where: { propertyId, createdByUserId: userId, status: { not: PropertyBriefStatus.ARCHIVED } },
+    where: { propertyId, status: { not: PropertyBriefStatus.ARCHIVED } },
     orderBy: { createdAt: 'desc' },
     include: {
       shares: {
@@ -599,9 +605,13 @@ export async function createPropertyBrief(input: {
   return brief;
 }
 
-async function findOwnedBrief(propertyId: string, userId: string, briefId: string) {
+// Property-shared, not creator-scoped — see listPropertyBriefs above. The
+// household-role floor (CONTRIBUTOR+ for every mutation, any role for
+// reads) is enforced by requireHouseholdRole in propertyBrief.routes.ts,
+// not by this lookup.
+async function findAccessibleBrief(propertyId: string, briefId: string) {
   const brief = await prisma.propertyBrief.findFirst({
-    where: { id: briefId, propertyId, createdByUserId: userId },
+    where: { id: briefId, propertyId },
     include: {
       property: { select: { name: true, address: true, city: true, state: true, zipCode: true } },
       sections: { orderBy: { sortOrder: 'asc' }, include: { evidenceLinks: true } },
@@ -616,7 +626,7 @@ async function findOwnedBrief(propertyId: string, userId: string, briefId: strin
 }
 
 export async function getPropertyBriefPreview(propertyId: string, userId: string, briefId: string) {
-  const brief = await findOwnedBrief(propertyId, userId, briefId);
+  const brief = await findAccessibleBrief(propertyId, briefId);
   return {
     ...brief,
     safetyTier: derivePropertyIntelligenceSafetyTier({ sharesSensitivePropertyData: true }),
@@ -634,7 +644,7 @@ export async function createPropertyBriefShare(input: {
   recipientName?: string | null;
   recipientEmail?: string | null;
 }) {
-  const brief = await findOwnedBrief(input.propertyId, input.userId, input.briefId);
+  const brief = await findAccessibleBrief(input.propertyId, input.briefId);
   if (brief.status === PropertyBriefStatus.ARCHIVED) {
     throw new APIError('Archived briefs cannot be shared.', 409, 'PROPERTY_BRIEF_ARCHIVED');
   }
@@ -716,7 +726,7 @@ export async function revokePropertyBriefShare(input: {
   briefId: string;
   shareId: string;
 }) {
-  await findOwnedBrief(input.propertyId, input.userId, input.briefId);
+  await findAccessibleBrief(input.propertyId, input.briefId);
   const share = await prisma.propertyBriefShare.findFirst({
     where: { id: input.shareId, briefId: input.briefId, propertyId: input.propertyId },
   });
@@ -833,7 +843,7 @@ export async function testPropertyBriefShareAccess(input: {
   briefId: string;
   shareId: string;
 }) {
-  await findOwnedBrief(input.propertyId, input.userId, input.briefId);
+  await findAccessibleBrief(input.propertyId, input.briefId);
   const share = await prisma.propertyBriefShare.findFirst({
     where: { id: input.shareId, briefId: input.briefId, propertyId: input.propertyId },
   });
