@@ -7,6 +7,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import {
   BottomSafeAreaReserve,
@@ -20,14 +30,29 @@ import {
   type StatusChipTone,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
-import { createSaleCase, getSaleCase, setItemDecision, transitionStatus } from './saleCaseApi';
+import {
+  completeTransition,
+  createSaleCase,
+  getSaleCase,
+  listBuyerPackageShares,
+  listRevocableShares,
+  recordTransition,
+  setItemDecision,
+  transitionStatus,
+  updateTransition,
+  type BuyerPackageShareOption,
+  type RevocableShareOption,
+} from './saleCaseApi';
 import {
   CATEGORY_LABELS,
+  RETENTION_DECISION_LABELS,
   REQUIREMENT_CLASS_LABELS,
+  type PropertyTransition,
   type SaleCaseOverview,
   type SaleCaseStatus,
   type SaleReadinessItem,
   type SaleReadinessRequirementClass,
+  type SaleTransitionRetentionDecision,
 } from './types';
 
 const STATUS_TONE: Record<SaleCaseStatus, StatusChipTone> = {
@@ -108,6 +133,34 @@ export default function SaleCaseClient() {
     onError: (error: any) => toast({ title: 'Could not update item', description: error?.message, variant: 'destructive' }),
   });
 
+  const startTransitionMutation = useMutation({
+    mutationFn: () => recordTransition(propertyId, {}),
+    onSuccess: invalidate,
+    onError: (error: any) => toast({ title: 'Could not start transition', description: error?.message, variant: 'destructive' }),
+  });
+
+  const updateTransitionMutation = useMutation({
+    mutationFn: ({ transitionId, input }: { transitionId: string; input: Parameters<typeof updateTransition>[2] }) =>
+      updateTransition(propertyId, transitionId, input),
+    onSuccess: invalidate,
+    onError: (error: any) => toast({ title: 'Could not save transition details', description: error?.message, variant: 'destructive' }),
+  });
+
+  const completeTransitionMutation = useMutation({
+    mutationFn: ({ transitionId, revokeShareIds }: { transitionId: string; revokeShareIds: string[] }) =>
+      completeTransition(propertyId, transitionId, revokeShareIds),
+    onSuccess: (result) => {
+      invalidate();
+      const failed = result.revokeResults.filter((r) => !r.revoked);
+      if (failed.length > 0) {
+        toast({ title: 'Transition completed', description: `${failed.length} share revoke(s) failed and need manual follow-up.`, variant: 'destructive' });
+      } else {
+        toast({ title: 'Transition completed' });
+      }
+    },
+    onError: (error: any) => toast({ title: 'Could not complete transition', description: error?.message, variant: 'destructive' }),
+  });
+
   const overview = overviewQuery.data;
 
   return (
@@ -155,11 +208,18 @@ export default function SaleCaseClient() {
         />
       ) : (
         <SaleCaseBody
+          propertyId={propertyId}
           overview={overview as SaleCaseOverview & { saleCase: NonNullable<SaleCaseOverview['saleCase']> }}
           onTransition={(status) => transitionMutation.mutate(status)}
           transitionPending={transitionMutation.isPending}
           onDecision={(itemId, action) => decisionMutation.mutate({ itemId, action })}
           decisionPending={decisionMutation.isPending}
+          onStartTransition={() => startTransitionMutation.mutate()}
+          startTransitionPending={startTransitionMutation.isPending}
+          onUpdateTransition={(transitionId, input) => updateTransitionMutation.mutate({ transitionId, input })}
+          updateTransitionPending={updateTransitionMutation.isPending}
+          onCompleteTransition={(transitionId, revokeShareIds) => completeTransitionMutation.mutate({ transitionId, revokeShareIds })}
+          completeTransitionPending={completeTransitionMutation.isPending}
         />
       )}
 
@@ -169,17 +229,31 @@ export default function SaleCaseClient() {
 }
 
 function SaleCaseBody({
+  propertyId,
   overview,
   onTransition,
   transitionPending,
   onDecision,
   decisionPending,
+  onStartTransition,
+  startTransitionPending,
+  onUpdateTransition,
+  updateTransitionPending,
+  onCompleteTransition,
+  completeTransitionPending,
 }: {
+  propertyId: string;
   overview: SaleCaseOverview & { saleCase: NonNullable<SaleCaseOverview['saleCase']> };
   onTransition: (status: SaleCaseStatus) => void;
   transitionPending: boolean;
   onDecision: (itemId: string, action: 'WAIVE' | 'REOPEN') => void;
   decisionPending: boolean;
+  onStartTransition: () => void;
+  startTransitionPending: boolean;
+  onUpdateTransition: (transitionId: string, input: { sellerRetentionDecision?: SaleTransitionRetentionDecision | null; sellerRetentionNotes?: string | null; buyerPackageId?: string | null }) => void;
+  updateTransitionPending: boolean;
+  onCompleteTransition: (transitionId: string, revokeShareIds: string[]) => void;
+  completeTransitionPending: boolean;
 }) {
   const saleCase = overview.saleCase;
   const groups = groupByRequirementClass(overview.readinessItems);
@@ -278,6 +352,191 @@ function SaleCaseBody({
           description="No open findings, unfinished projects, unverified permits, Home Actions, or record gaps are currently projected for this property."
         />
       ) : null}
+
+      {saleCase.status === 'CLOSED' ? (
+        <MobileSection className="mb-4">
+          <MobileSectionHeader title="Ownership transition" />
+          <TransitionSection
+            propertyId={propertyId}
+            transition={overview.transitions[0] ?? null}
+            onStart={onStartTransition}
+            startPending={startTransitionPending}
+            onUpdate={onUpdateTransition}
+            updatePending={updateTransitionPending}
+            onComplete={onCompleteTransition}
+            completePending={completeTransitionPending}
+          />
+        </MobileSection>
+      ) : null}
     </>
+  );
+}
+
+function TransitionSection({
+  propertyId,
+  transition,
+  onStart,
+  startPending,
+  onUpdate,
+  updatePending,
+  onComplete,
+  completePending,
+}: {
+  propertyId: string;
+  transition: PropertyTransition | null;
+  onStart: () => void;
+  startPending: boolean;
+  onUpdate: (transitionId: string, input: { sellerRetentionDecision?: SaleTransitionRetentionDecision | null; sellerRetentionNotes?: string | null; buyerPackageId?: string | null }) => void;
+  updatePending: boolean;
+  onComplete: (transitionId: string, revokeShareIds: string[]) => void;
+  completePending: boolean;
+}) {
+  const buyerSharesQuery = useQuery({
+    queryKey: ['sale-case-buyer-shares', propertyId],
+    queryFn: () => listBuyerPackageShares(propertyId),
+    enabled: Boolean(transition) && !transition?.completedAt,
+  });
+  const revocableSharesQuery = useQuery({
+    queryKey: ['sale-case-revocable-shares', propertyId],
+    queryFn: () => listRevocableShares(propertyId),
+    enabled: Boolean(transition) && !transition?.completedAt,
+  });
+
+  const [notes, setNotes] = React.useState(transition?.sellerRetentionNotes ?? '');
+  const [revokeIds, setRevokeIds] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    setNotes(transition?.sellerRetentionNotes ?? '');
+  }, [transition?.id, transition?.sellerRetentionNotes]);
+
+  if (!transition) {
+    return (
+      <MobileCard className="space-y-2">
+        <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+          Capture how ownership actually transferred — retention decisions, the buyer's handoff package, and access cleanup.
+        </p>
+        <div className="flex justify-end">
+          <Button size="sm" onClick={onStart} disabled={startPending}>
+            {startPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Start transition
+          </Button>
+        </div>
+      </MobileCard>
+    );
+  }
+
+  if (transition.completedAt) {
+    return (
+      <MobileCard className="space-y-2">
+        <StatusChip tone="protected">Transition complete</StatusChip>
+        <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+          Completed {new Date(transition.completedAt).toLocaleDateString()}
+          {transition.acceptedAt ? ` — buyer package accepted ${new Date(transition.acceptedAt).toLocaleDateString()}` : ''}.
+        </p>
+        {transition.sellerRetentionDecision ? (
+          <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+            {RETENTION_DECISION_LABELS[transition.sellerRetentionDecision]}
+          </p>
+        ) : null}
+      </MobileCard>
+    );
+  }
+
+  const buyerShares = buyerSharesQuery.data ?? [];
+  const revocableShares = revocableSharesQuery.data ?? [];
+  const canComplete = Boolean(transition.sellerRetentionDecision)
+    && (!transition.buyerPackageId || Boolean(transition.acceptedAt));
+
+  return (
+    <MobileCard className="space-y-4">
+      <div className="space-y-1.5">
+        <Label>Buyer handoff package</Label>
+        <Select
+          value={transition.buyerPackageId ?? '__none__'}
+          onValueChange={(value) => onUpdate(transition.id, { buyerPackageId: value === '__none__' ? null : value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a Property Brief share" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">None selected</SelectItem>
+            {buyerShares.map((share: BuyerPackageShareOption) => (
+              <SelectItem key={share.shareId} value={share.shareId}>
+                {share.briefTitle}{share.recipientName ? ` — ${share.recipientName}` : ''}
+                {share.invitationStatus === 'ACCEPTED' ? ' (accepted)' : ' (not yet accepted)'}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {buyerShares.length === 0 ? (
+          <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+            No active buyer-purpose Property Brief share yet — create one from Property Brief first.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Seller retention decision</Label>
+        <Select
+          value={transition.sellerRetentionDecision ?? undefined}
+          onValueChange={(value) => onUpdate(transition.id, { sellerRetentionDecision: value as SaleTransitionRetentionDecision })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Choose a decision" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="RETAIN_PRIVATE_ONLY">{RETENTION_DECISION_LABELS.RETAIN_PRIVATE_ONLY}</SelectItem>
+            <SelectItem value="SHARE_SELECTED_HISTORY">{RETENTION_DECISION_LABELS.SHARE_SELECTED_HISTORY}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Notes (optional)</Label>
+        <Textarea
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          onBlur={() => {
+            if (notes !== (transition.sellerRetentionNotes ?? '')) {
+              onUpdate(transition.id, { sellerRetentionNotes: notes || null });
+            }
+          }}
+          placeholder="Anything specific about what's being retained or shared"
+          rows={2}
+        />
+      </div>
+
+      {revocableShares.length > 0 ? (
+        <div className="space-y-1.5">
+          <Label>Revoke access on completion</Label>
+          {revocableShares.map((share: RevocableShareOption) => (
+            <div key={share.shareId} className="flex items-center gap-2">
+              <Checkbox
+                id={`revoke-${share.shareId}`}
+                checked={revokeIds.includes(share.shareId)}
+                onCheckedChange={(checked) => {
+                  setRevokeIds((prev) => (checked ? [...prev, share.shareId] : prev.filter((id) => id !== share.shareId)));
+                }}
+              />
+              <label htmlFor={`revoke-${share.shareId}`} className={cn('text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.caption)}>
+                {share.briefTitle} ({share.purpose.replaceAll('_', ' ').toLowerCase()})
+              </label>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {updatePending ? <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Saving…</p> : null}
+
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          onClick={() => onComplete(transition.id, revokeIds)}
+          disabled={!canComplete || completePending}
+        >
+          {completePending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Complete transition
+        </Button>
+      </div>
+    </MobileCard>
   );
 }

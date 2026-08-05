@@ -17,6 +17,12 @@ let unpermittedFlags = [];
 let workItems = []; // fed to the mocked listWorkItems usecase
 let homeRecords = []; // fed to the mocked homeRecordsService.list
 
+let transitions = []; // in-memory PropertyTransition rows
+let nextTransitionId = 1;
+let briefShares = []; // in-memory PropertyBriefShare rows (with .brief attached)
+let revokeCalls = [];
+let revokeShouldFail = new Set(); // shareIds that revokePropertyBriefShare should reject for
+
 function resetFixtures() {
   propertyUse = 'FOR_SALE';
   saleCaseStore = null;
@@ -28,6 +34,11 @@ function resetFixtures() {
   unpermittedFlags = [];
   workItems = [];
   homeRecords = [];
+  transitions = [];
+  nextTransitionId = 1;
+  briefShares = [];
+  revokeCalls = [];
+  revokeShouldFail = new Set();
 }
 
 function findReadinessItem(saleCaseId, sourceEntityType, sourceEntityId) {
@@ -93,7 +104,30 @@ require.cache[prismaPath] = {
         ) || null,
       },
       propertyTransition: {
-        create: async ({ data }) => ({ id: 'transition-1', createdAt: new Date(), ...data }),
+        create: async ({ data }) => {
+          const created = { id: `transition-${nextTransitionId++}`, createdAt: new Date(), updatedAt: new Date(), completedAt: null, acceptedAt: null, ...data };
+          transitions.push(created);
+          return created;
+        },
+        update: async ({ where, data }) => {
+          const transition = transitions.find((t) => t.id === where.id);
+          Object.assign(transition, data, { updatedAt: new Date() });
+          return transition;
+        },
+        findFirst: async ({ where }) => transitions.find((t) => {
+          if (where.id && t.id !== where.id) return false;
+          if (where.saleCaseId && t.saleCaseId !== where.saleCaseId) return false;
+          if (where.saleCase && (!saleCaseStore || where.saleCase.propertyId !== saleCaseStore.propertyId)) return false;
+          return true;
+        }) || null,
+        findMany: async ({ where }) => transitions.filter((t) => t.saleCaseId === where.saleCaseId),
+      },
+      propertyBriefShare: {
+        findFirst: async ({ where }) => briefShares.find(
+          (share) => share.id === where.id
+            && share.propertyId === where.propertyId
+            && (where.status === undefined || share.status === where.status),
+        ) || null,
       },
       inspectionFinding: {
         findMany: async () => inspectionFindings,
@@ -142,6 +176,22 @@ require.cache[homeRecordsServicePath] = {
   exports: {
     homeRecordsService: {
       list: async () => homeRecords,
+    },
+  },
+};
+
+const propertyBriefServicePath = require.resolve('../../src/propertyBrief/propertyBrief.service.ts');
+require.cache[propertyBriefServicePath] = {
+  id: propertyBriefServicePath,
+  filename: propertyBriefServicePath,
+  loaded: true,
+  exports: {
+    revokePropertyBriefShare: async ({ shareId }) => {
+      revokeCalls.push(shareId);
+      if (revokeShouldFail.has(shareId)) throw new Error('Share not found.');
+      const share = briefShares.find((s) => s.id === shareId);
+      if (share) share.status = 'REVOKED';
+      return share;
     },
   },
 };
@@ -319,8 +369,146 @@ test('recordTransition persists a PropertyTransition row scoped to the sale case
   resetFixtures();
   await PropertySaleCaseService.createCase('user-1', 'prop-1');
   const transition = await PropertySaleCaseService.recordTransition('user-1', 'prop-1', {
-    sellerRetentionDecision: 'Retaining insurance claim history',
+    sellerRetentionDecision: 'SHARE_SELECTED_HISTORY',
+    sellerRetentionNotes: 'Retaining insurance claim history',
   });
   assert.equal(transition.saleCaseId, 'case-1');
-  assert.equal(transition.sellerRetentionDecision, 'Retaining insurance claim history');
+  assert.equal(transition.sellerRetentionDecision, 'SHARE_SELECTED_HISTORY');
+  assert.equal(transition.sellerRetentionNotes, 'Retaining insurance claim history');
+});
+
+test('recordTransition and updateTransition reject a buyerPackageId that is not an active PROSPECTIVE_BUYER share on this property', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  briefShares = [
+    { id: 'share-wrong-purpose', propertyId: 'prop-1', status: 'ACTIVE', acceptedAt: null, brief: { purpose: 'CONTRACTOR_SERVICE_PROFESSIONAL' } },
+  ];
+  await assert.rejects(
+    () => PropertySaleCaseService.recordTransition('user-1', 'prop-1', { buyerPackageId: 'share-wrong-purpose' }),
+    /SALE_TRANSITION_BUYER_PACKAGE_INVALID|PROSPECTIVE_BUYER/,
+  );
+});
+
+test('recordTransition mirrors acceptedAt from an already-accepted buyer package share', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  const acceptedAt = new Date('2026-01-01T00:00:00Z');
+  briefShares = [
+    { id: 'share-1', propertyId: 'prop-1', status: 'ACTIVE', acceptedAt, brief: { purpose: 'PROSPECTIVE_BUYER' } },
+  ];
+  const transition = await PropertySaleCaseService.recordTransition('user-1', 'prop-1', { buyerPackageId: 'share-1' });
+  assert.equal(transition.acceptedAt, acceptedAt);
+});
+
+test('updateTransition refuses to edit a transition that has already been completed', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  const transition = await PropertySaleCaseService.recordTransition('user-1', 'prop-1', {
+    sellerRetentionDecision: 'RETAIN_PRIVATE_ONLY',
+  });
+  transitions.find((t) => t.id === transition.id).completedAt = new Date();
+  await assert.rejects(
+    () => PropertySaleCaseService.updateTransition('user-1', 'prop-1', transition.id, { sellerRetentionDecision: 'SHARE_SELECTED_HISTORY' }),
+    /SALE_TRANSITION_ALREADY_COMPLETE|already been completed|cannot be edited/,
+  );
+});
+
+test('completeTransition requires the sale case to already be CLOSED', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1'); // status: PREPARING
+  const transition = await PropertySaleCaseService.recordTransition('user-1', 'prop-1', {
+    sellerRetentionDecision: 'RETAIN_PRIVATE_ONLY',
+  });
+  await assert.rejects(
+    () => PropertySaleCaseService.completeTransition('user-1', 'prop-1', transition.id),
+    /SALE_TRANSITION_CASE_NOT_CLOSED|must be CLOSED/,
+  );
+});
+
+test('completeTransition requires a seller retention decision on file', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  const transition = await PropertySaleCaseService.recordTransition('user-1', 'prop-1', {});
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'LISTED');
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'UNDER_CONTRACT');
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'CLOSED');
+  await assert.rejects(
+    () => PropertySaleCaseService.completeTransition('user-1', 'prop-1', transition.id),
+    /SALE_TRANSITION_RETENTION_DECISION_MISSING|retention decision is required/,
+  );
+});
+
+test('completeTransition requires the linked buyer package share to actually be accepted, not just sent', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  briefShares = [
+    { id: 'share-1', propertyId: 'prop-1', status: 'ACTIVE', acceptedAt: null, brief: { purpose: 'PROSPECTIVE_BUYER' } },
+  ];
+  const transition = await PropertySaleCaseService.recordTransition('user-1', 'prop-1', {
+    sellerRetentionDecision: 'RETAIN_PRIVATE_ONLY',
+    buyerPackageId: 'share-1',
+  });
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'LISTED');
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'UNDER_CONTRACT');
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'CLOSED');
+  await assert.rejects(
+    () => PropertySaleCaseService.completeTransition('user-1', 'prop-1', transition.id),
+    /SALE_TRANSITION_BUYER_PACKAGE_NOT_ACCEPTED|has not been accepted/,
+  );
+});
+
+test('completeTransition succeeds once the case is closed, retention is decided, and the buyer package is accepted — and revokes requested professional shares', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  const acceptedAt = new Date('2026-02-01T00:00:00Z');
+  briefShares = [
+    { id: 'share-buyer', propertyId: 'prop-1', status: 'ACTIVE', acceptedAt, brief: { purpose: 'PROSPECTIVE_BUYER', id: 'brief-buyer' }, briefId: 'brief-buyer' },
+    { id: 'share-contractor', propertyId: 'prop-1', status: 'ACTIVE', acceptedAt: null, brief: { purpose: 'CONTRACTOR_SERVICE_PROFESSIONAL' }, briefId: 'brief-contractor' },
+  ];
+  const transition = await PropertySaleCaseService.recordTransition('user-1', 'prop-1', {
+    sellerRetentionDecision: 'SHARE_SELECTED_HISTORY',
+    buyerPackageId: 'share-buyer',
+  });
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'LISTED');
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'UNDER_CONTRACT');
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'CLOSED');
+
+  const result = await PropertySaleCaseService.completeTransition('user-1', 'prop-1', transition.id, {
+    revokeShareIds: ['share-contractor'],
+  });
+  assert.ok(result.transition.completedAt);
+  assert.deepEqual(result.transition.acceptedAt, acceptedAt);
+  assert.equal(result.revokeResults.length, 1);
+  assert.equal(result.revokeResults[0].revoked, true);
+  assert.equal(briefShares.find((s) => s.id === 'share-contractor').status, 'REVOKED');
+
+  // Idempotent: calling again returns the same completed transition without re-running revokes.
+  revokeCalls = [];
+  const second = await PropertySaleCaseService.completeTransition('user-1', 'prop-1', transition.id, {
+    revokeShareIds: ['share-contractor'],
+  });
+  assert.ok(second.transition.completedAt);
+  assert.equal(revokeCalls.length, 0);
+});
+
+test('completeTransition reports a failed revoke per-share instead of aborting the whole completion', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  briefShares = [
+    { id: 'share-other-owner', propertyId: 'prop-1', status: 'ACTIVE', acceptedAt: null, brief: { purpose: 'CONTRACTOR_SERVICE_PROFESSIONAL' }, briefId: 'brief-x' },
+  ];
+  revokeShouldFail.add('share-other-owner');
+  const transition = await PropertySaleCaseService.recordTransition('user-1', 'prop-1', {
+    sellerRetentionDecision: 'RETAIN_PRIVATE_ONLY',
+  });
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'LISTED');
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'UNDER_CONTRACT');
+  await PropertySaleCaseService.transitionStatus('user-1', 'prop-1', 'CLOSED');
+
+  const result = await PropertySaleCaseService.completeTransition('user-1', 'prop-1', transition.id, {
+    revokeShareIds: ['share-other-owner'],
+  });
+  assert.ok(result.transition.completedAt, 'transition should still complete despite the failed revoke');
+  assert.equal(result.revokeResults[0].revoked, false);
+  assert.match(result.revokeResults[0].error, /not found/i);
 });

@@ -25,10 +25,19 @@ const itemDecisionSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+const retentionDecisionSchema = z.enum(['RETAIN_PRIVATE_ONLY', 'SHARE_SELECTED_HISTORY']);
+
 const recordTransitionSchema = z.object({
   effectiveAt: z.string().datetime().nullable().optional(),
-  sellerRetentionDecision: z.string().trim().max(500).nullable().optional(),
+  sellerRetentionDecision: retentionDecisionSchema.nullable().optional(),
+  sellerRetentionNotes: z.string().trim().max(1000).nullable().optional(),
   buyerPackageId: z.string().uuid().nullable().optional(),
+});
+
+const updateTransitionSchema = recordTransitionSchema;
+
+const completeTransitionSchema = z.object({
+  revokeShareIds: z.array(z.string().uuid()).max(20).optional(),
 });
 
 function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -131,9 +140,53 @@ router.post(
       const transition = await PropertySaleCaseService.recordTransition(req.user!.userId, req.params.propertyId, {
         effectiveAt: input.effectiveAt === undefined ? undefined : input.effectiveAt ? new Date(input.effectiveAt) : null,
         sellerRetentionDecision: input.sellerRetentionDecision,
+        sellerRetentionNotes: input.sellerRetentionNotes,
         buyerPackageId: input.buyerPackageId,
       });
       return res.status(201).json({ success: true, data: { transition } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.patch(
+  '/properties/:propertyId/sale-case/transitions/:transitionId',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(updateTransitionSchema, req.body ?? {});
+      const transition = await PropertySaleCaseService.updateTransition(
+        req.user!.userId,
+        req.params.propertyId,
+        req.params.transitionId,
+        {
+          effectiveAt: input.effectiveAt === undefined ? undefined : input.effectiveAt ? new Date(input.effectiveAt) : null,
+          sellerRetentionDecision: input.sellerRetentionDecision,
+          sellerRetentionNotes: input.sellerRetentionNotes,
+          buyerPackageId: input.buyerPackageId,
+        },
+      );
+      return res.json({ success: true, data: { transition } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/sale-case/transitions/:transitionId/complete',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(completeTransitionSchema, req.body ?? {});
+      const result = await PropertySaleCaseService.completeTransition(
+        req.user!.userId,
+        req.params.propertyId,
+        req.params.transitionId,
+        { revokeShareIds: input.revokeShareIds },
+      );
+      return res.json({ success: true, data: result });
     } catch (error) {
       return next(error);
     }

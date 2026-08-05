@@ -19,6 +19,8 @@ export type SaleReadinessRequirementClass =
 
 export type SaleReadinessItemStatus = 'OPEN' | 'RESOLVED' | 'WAIVED';
 
+export type SaleTransitionRetentionDecision = 'RETAIN_PRIVATE_ONLY' | 'SHARE_SELECTED_HISTORY';
+
 export interface PropertySaleCase {
   id: string;
   propertyId: string;
@@ -50,13 +52,31 @@ export interface SaleReadinessItem {
   waivedReason: string | null;
 }
 
+export interface PropertyTransition {
+  id: string;
+  saleCaseId: string;
+  effectiveAt: string | null;
+  sellerRetentionDecision: SaleTransitionRetentionDecision | null;
+  sellerRetentionNotes: string | null;
+  buyerPackageId: string | null;
+  acceptedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
 export interface SaleCaseOverview {
   propertyId: string;
   saleIntentConfirmed: boolean;
   canCreate: boolean;
   saleCase: PropertySaleCase | null;
   readinessItems: SaleReadinessItem[];
+  transitions: PropertyTransition[];
 }
+
+export const RETENTION_DECISION_LABELS: Record<SaleTransitionRetentionDecision, string> = {
+  RETAIN_PRIVATE_ONLY: 'Retain private records only',
+  SHARE_SELECTED_HISTORY: 'Share selected history with buyer',
+};
 
 export const REQUIREMENT_CLASS_LABELS: Record<SaleReadinessRequirementClass, string> = {
   MATERIAL_BLOCKER: 'Material blocker',

@@ -1,5 +1,12 @@
 import { api } from '@/lib/api/client';
-import type { PropertySaleCase, SaleCaseOverview, SaleCaseStatus, SaleReadinessItem } from './types';
+import type {
+  PropertySaleCase,
+  PropertyTransition,
+  SaleCaseOverview,
+  SaleCaseStatus,
+  SaleReadinessItem,
+  SaleTransitionRetentionDecision,
+} from './types';
 
 export async function getSaleCase(propertyId: string): Promise<SaleCaseOverview> {
   const res = await api.get<SaleCaseOverview>(`/api/properties/${propertyId}/sale-case`);
@@ -35,4 +42,99 @@ export async function setItemDecision(
     { action, reason },
   );
   return res.data.item;
+}
+
+type TransitionInput = {
+  effectiveAt?: string | null;
+  sellerRetentionDecision?: SaleTransitionRetentionDecision | null;
+  sellerRetentionNotes?: string | null;
+  buyerPackageId?: string | null;
+};
+
+export async function recordTransition(propertyId: string, input: TransitionInput): Promise<PropertyTransition> {
+  const res = await api.post<{ transition: PropertyTransition }>(`/api/properties/${propertyId}/sale-case/transitions`, input);
+  return res.data.transition;
+}
+
+export async function updateTransition(
+  propertyId: string,
+  transitionId: string,
+  input: TransitionInput,
+): Promise<PropertyTransition> {
+  const res = await api.patch<{ transition: PropertyTransition }>(
+    `/api/properties/${propertyId}/sale-case/transitions/${transitionId}`,
+    input,
+  );
+  return res.data.transition;
+}
+
+// Minimal local shape of what /property-briefs returns — kept independent
+// of the property-brief tool's own api module so these two tool
+// directories stay self-contained rather than cross-importing.
+type PropertyBriefListEntry = {
+  id: string;
+  title: string;
+  purpose: string;
+  shares: Array<{
+    id: string;
+    status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+    invitationStatus: 'NOT_SET' | 'PENDING' | 'ACCEPTED';
+    acceptedAt: string | null;
+    recipientName: string | null;
+  }>;
+};
+
+export type BuyerPackageShareOption = {
+  shareId: string;
+  briefTitle: string;
+  invitationStatus: 'NOT_SET' | 'PENDING' | 'ACCEPTED';
+  acceptedAt: string | null;
+  recipientName: string | null;
+};
+
+export type RevocableShareOption = {
+  shareId: string;
+  briefTitle: string;
+  purpose: string;
+};
+
+async function listActivePropertyBriefShares(propertyId: string): Promise<Array<{ briefId: string; briefTitle: string; purpose: string; share: PropertyBriefListEntry['shares'][number] }>> {
+  const res = await api.get<PropertyBriefListEntry[]>(`/api/properties/${propertyId}/property-briefs`);
+  const briefs = res.data ?? [];
+  return briefs.flatMap((brief) =>
+    brief.shares
+      .filter((share) => share.status === 'ACTIVE')
+      .map((share) => ({ briefId: brief.id, briefTitle: brief.title, purpose: brief.purpose, share })));
+}
+
+export async function listBuyerPackageShares(propertyId: string): Promise<BuyerPackageShareOption[]> {
+  const active = await listActivePropertyBriefShares(propertyId);
+  return active
+    .filter((entry) => entry.purpose === 'PROSPECTIVE_BUYER')
+    .map((entry) => ({
+      shareId: entry.share.id,
+      briefTitle: entry.briefTitle,
+      invitationStatus: entry.share.invitationStatus,
+      acceptedAt: entry.share.acceptedAt,
+      recipientName: entry.share.recipientName,
+    }));
+}
+
+export async function listRevocableShares(propertyId: string): Promise<RevocableShareOption[]> {
+  const active = await listActivePropertyBriefShares(propertyId);
+  return active
+    .filter((entry) => entry.purpose !== 'PROSPECTIVE_BUYER')
+    .map((entry) => ({ shareId: entry.share.id, briefTitle: entry.briefTitle, purpose: entry.purpose }));
+}
+
+export async function completeTransition(
+  propertyId: string,
+  transitionId: string,
+  revokeShareIds?: string[],
+): Promise<{ transition: PropertyTransition; revokeResults: Array<{ shareId: string; revoked: boolean; error?: string }> }> {
+  const res = await api.post<{ transition: PropertyTransition; revokeResults: Array<{ shareId: string; revoked: boolean; error?: string }> }>(
+    `/api/properties/${propertyId}/sale-case/transitions/${transitionId}/complete`,
+    { revokeShareIds },
+  );
+  return res.data;
 }

@@ -13,6 +13,7 @@ import type {
   SaleReadinessItemStatus,
   SaleReadinessRequirementClass,
   SaleReadinessSourceType,
+  SaleTransitionRetentionDecision,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { auditLog } from '../lib/logger';
@@ -20,6 +21,7 @@ import { APIError } from '../middleware/error.middleware';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { listWorkItems } from '../modules/homeOperations/application/listWorkItems.usecase';
 import { homeRecordsService } from './homeRecords.service';
+import { revokePropertyBriefShare } from '../propertyBrief/propertyBrief.service';
 
 type ProjectedItem = {
   sourceEntityType: SaleReadinessSourceType;
@@ -251,14 +253,21 @@ export class PropertySaleCaseService {
         canCreate: property?.propertyUse === 'FOR_SALE' && ROLE_RANK[access.role] >= ROLE_RANK.CONTRIBUTOR,
         saleCase: null,
         readinessItems: [],
+        transitions: [],
       };
     }
 
     await syncReadinessItems(saleCase.id, propertyId, access.role);
-    const readinessItems = await prisma.saleReadinessItem.findMany({
-      where: { saleCaseId: saleCase.id },
-      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
-    });
+    const [readinessItems, transitions] = await Promise.all([
+      prisma.saleReadinessItem.findMany({
+        where: { saleCaseId: saleCase.id },
+        orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+      }),
+      prisma.propertyTransition.findMany({
+        where: { saleCaseId: saleCase.id },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
 
     return {
       propertyId,
@@ -266,6 +275,7 @@ export class PropertySaleCaseService {
       canCreate: false,
       saleCase,
       readinessItems,
+      transitions,
     };
   }
 
@@ -361,25 +371,164 @@ export class PropertySaleCaseService {
     });
   }
 
+  // Resolves & validates a candidate buyerPackageId against the real
+  // PropertyBriefShare/PropertyBrief tables (never trusted as an opaque
+  // string) — must belong to this property, be a PROSPECTIVE_BUYER-purpose
+  // brief (Slice 10's buyer-safe section set), and still be ACTIVE.
+  private static async resolveBuyerPackageShare(propertyId: string, buyerPackageId: string) {
+    const share = await prisma.propertyBriefShare.findFirst({
+      where: { id: buyerPackageId, propertyId, status: 'ACTIVE' },
+      include: { brief: { select: { purpose: true } } },
+    });
+    if (!share || share.brief.purpose !== 'PROSPECTIVE_BUYER') {
+      throw new APIError(
+        'buyerPackageId must reference an active PROSPECTIVE_BUYER Property Brief share on this property.',
+        422,
+        'SALE_TRANSITION_BUYER_PACKAGE_INVALID',
+      );
+    }
+    return share;
+  }
+
   static async recordTransition(
     userId: string,
     propertyId: string,
     input: {
       effectiveAt?: Date | null;
-      sellerRetentionDecision?: string | null;
+      sellerRetentionDecision?: SaleTransitionRetentionDecision | null;
+      sellerRetentionNotes?: string | null;
       buyerPackageId?: string | null;
     },
   ) {
     await requireAccess(userId, propertyId, 'CONTRIBUTOR');
     const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
     if (!saleCase) throw new APIError('Sale case not found', 404, 'SALE_CASE_NOT_FOUND');
+
+    const share = input.buyerPackageId
+      ? await this.resolveBuyerPackageShare(propertyId, input.buyerPackageId)
+      : null;
+
     return prisma.propertyTransition.create({
       data: {
         saleCaseId: saleCase.id,
         effectiveAt: input.effectiveAt ?? null,
         sellerRetentionDecision: input.sellerRetentionDecision ?? null,
+        sellerRetentionNotes: input.sellerRetentionNotes ?? null,
         buyerPackageId: input.buyerPackageId ?? null,
+        // Mirrored from the real share, never client-supplied — a milestone
+        // only becomes "accepted" once the actual recipient opened it.
+        acceptedAt: share?.acceptedAt ?? null,
       },
     });
+  }
+
+  static async updateTransition(
+    userId: string,
+    propertyId: string,
+    transitionId: string,
+    updates: {
+      effectiveAt?: Date | null;
+      sellerRetentionDecision?: SaleTransitionRetentionDecision | null;
+      sellerRetentionNotes?: string | null;
+      buyerPackageId?: string | null;
+    },
+  ) {
+    await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    const transition = await prisma.propertyTransition.findFirst({
+      where: { id: transitionId, saleCase: { propertyId } },
+    });
+    if (!transition) throw new APIError('Transition not found', 404, 'SALE_TRANSITION_NOT_FOUND');
+    if (transition.completedAt) {
+      throw new APIError('A completed transition cannot be edited.', 409, 'SALE_TRANSITION_ALREADY_COMPLETE');
+    }
+
+    const share = updates.buyerPackageId
+      ? await this.resolveBuyerPackageShare(propertyId, updates.buyerPackageId)
+      : updates.buyerPackageId === null
+        ? null
+        : undefined;
+
+    return prisma.propertyTransition.update({
+      where: { id: transitionId },
+      data: {
+        ...(updates.effectiveAt !== undefined ? { effectiveAt: updates.effectiveAt } : {}),
+        ...(updates.sellerRetentionDecision !== undefined ? { sellerRetentionDecision: updates.sellerRetentionDecision } : {}),
+        ...(updates.sellerRetentionNotes !== undefined ? { sellerRetentionNotes: updates.sellerRetentionNotes } : {}),
+        ...(updates.buyerPackageId !== undefined ? {
+          buyerPackageId: updates.buyerPackageId,
+          acceptedAt: share?.acceptedAt ?? null,
+        } : {}),
+      },
+    });
+  }
+
+  // Plan §10 exit gate: "verify closing before property transition" +
+  // "create verified transition milestones". Nothing here is self-reported —
+  // the case must actually be CLOSED, the linked buyer package must have a
+  // real recorded acceptance, and a retention decision must be on file
+  // before completedAt can be set. Optionally revokes now-unneeded
+  // professional/agent Property Brief shares as part of the same action
+  // (best-effort per share; a share created by a different household member
+  // than the caller will fail — Property Brief shares are creator-scoped,
+  // a pre-existing gap this doesn't attempt to fix).
+  static async completeTransition(
+    userId: string,
+    propertyId: string,
+    transitionId: string,
+    options?: { revokeShareIds?: string[] },
+  ) {
+    await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
+    if (!saleCase) throw new APIError('Sale case not found', 404, 'SALE_CASE_NOT_FOUND');
+    if (saleCase.status !== 'CLOSED') {
+      throw new APIError(
+        'The sale case must be CLOSED before its transition can be completed.',
+        409,
+        'SALE_TRANSITION_CASE_NOT_CLOSED',
+      );
+    }
+
+    const transition = await prisma.propertyTransition.findFirst({
+      where: { id: transitionId, saleCaseId: saleCase.id },
+    });
+    if (!transition) throw new APIError('Transition not found', 404, 'SALE_TRANSITION_NOT_FOUND');
+    if (transition.completedAt) return { transition, revokeResults: [] };
+    if (!transition.sellerRetentionDecision) {
+      throw new APIError('A seller retention decision is required before completing the transition.', 409, 'SALE_TRANSITION_RETENTION_DECISION_MISSING');
+    }
+
+    let acceptedAt = transition.acceptedAt;
+    if (transition.buyerPackageId) {
+      const share = await this.resolveBuyerPackageShare(propertyId, transition.buyerPackageId);
+      if (!share.acceptedAt) {
+        throw new APIError(
+          'The buyer package share has not been accepted yet — the recipient must open it before the transition can be completed.',
+          409,
+          'SALE_TRANSITION_BUYER_PACKAGE_NOT_ACCEPTED',
+        );
+      }
+      acceptedAt = share.acceptedAt;
+    }
+
+    const revokeResults: Array<{ shareId: string; revoked: boolean; error?: string }> = [];
+    for (const shareId of options?.revokeShareIds ?? []) {
+      try {
+        const share = await prisma.propertyBriefShare.findFirst({ where: { id: shareId, propertyId } });
+        if (!share) throw new Error('Share not found on this property.');
+        await revokePropertyBriefShare({ propertyId, userId, briefId: share.briefId, shareId });
+        revokeResults.push({ shareId, revoked: true });
+      } catch (error: any) {
+        revokeResults.push({ shareId, revoked: false, error: error?.message ?? 'Revoke failed' });
+      }
+    }
+
+    const updated = await prisma.propertyTransition.update({
+      where: { id: transitionId },
+      data: { completedAt: new Date(), acceptedAt },
+    });
+    auditLog('SALE_CASE_STATUS_CHANGED', userId, {
+      propertyId, saleCaseId: saleCase.id, transitionId, event: 'TRANSITION_COMPLETED',
+    });
+    return { transition: updated, revokeResults };
   }
 }

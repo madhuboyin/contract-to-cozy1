@@ -4695,17 +4695,31 @@ model SaleReadinessItem {
   @@index([saleCaseId, status])
 }
 
+enum SaleTransitionRetentionDecision {
+  RETAIN_PRIVATE_ONLY
+  SHARE_SELECTED_HISTORY
+}
+
 model PropertyTransition {
-  id                      String    @id @default(uuid())
-  saleCaseId              String
-  effectiveAt             DateTime?
-  sellerRetentionDecision String?
+  id          String    @id @default(uuid())
+  saleCaseId  String
+  effectiveAt DateTime?
+  // Plan §8: "capture actual seller retention and buyer projection
+  // decisions" — a structured choice plus optional free-text elaboration,
+  // rather than an unstructured string.
+  sellerRetentionDecision SaleTransitionRetentionDecision?
+  sellerRetentionNotes    String?
   // Loose reference to a PropertyBriefShare id (buyer handoff package);
-  // cross-module, intentionally not a Prisma relation.
-  buyerPackageId          String?
-  acceptedAt              DateTime?
-  completedAt             DateTime?
-  createdAt               DateTime  @default(now())
+  // cross-module, intentionally not a Prisma relation. Validated at write
+  // time against the real PropertyBriefShare/PropertyBrief tables instead.
+  buyerPackageId String?
+  // Both set only by verified system logic (mirrored from the linked
+  // share's real invitationStatus/acceptedAt, or the completion gate), never
+  // directly from client input — plan §6.5: not self-reported.
+  acceptedAt   DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   saleCase PropertySaleCase @relation(fields: [saleCaseId], references: [id], onDelete: Cascade)
 
