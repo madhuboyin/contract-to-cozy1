@@ -15,6 +15,9 @@ export const PROPERTY_BRIEF_SECTIONS = [
   'OPEN_UNKNOWNS',
   'CLAIMS',
   'INSURANCE',
+  'WARRANTIES',
+  'MATERIAL_SPECS',
+  'PERMITS',
 ] as const;
 
 export type PropertyBriefPurposeInput = (typeof PROPERTY_BRIEF_PURPOSES)[number];
@@ -31,7 +34,7 @@ export const PROPERTY_BRIEF_TEMPLATES: Record<PropertyBriefPurposeInput, {
 }> = {
   HOMEOWNER_REFERENCE: {
     label: 'Homeowner reference',
-    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS'],
+    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
     allowedSections: [...PROPERTY_BRIEF_SECTIONS],
     sensitiveSections: ['DOCUMENTS', 'CLAIMS', 'INSURANCE'],
   },
@@ -55,8 +58,11 @@ export const PROPERTY_BRIEF_TEMPLATES: Record<PropertyBriefPurposeInput, {
   },
   PROSPECTIVE_BUYER: {
     label: 'Prospective buyer',
-    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS'],
-    allowedSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'DOCUMENTS', 'OPEN_UNKNOWNS'],
+    // Successor value only — claims/insurance stay off allowedSections
+    // entirely for this purpose (a buyer should not inherit the seller's
+    // claim or policy history), not just excluded by default.
+    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
+    allowedSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'DOCUMENTS', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
     sensitiveSections: ['DOCUMENTS'],
   },
 };

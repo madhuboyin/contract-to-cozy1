@@ -13,7 +13,10 @@ export type PropertyBriefSectionType =
   | 'DOCUMENTS'
   | 'OPEN_UNKNOWNS'
   | 'CLAIMS'
-  | 'INSURANCE';
+  | 'INSURANCE'
+  | 'WARRANTIES'
+  | 'MATERIAL_SPECS'
+  | 'PERMITS';
 
 export type PropertyBriefTemplate = {
   purpose: PropertyBriefPurpose;

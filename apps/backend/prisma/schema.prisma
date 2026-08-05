@@ -13646,6 +13646,12 @@ enum PropertyBriefSectionType {
   OPEN_UNKNOWNS
   CLAIMS
   INSURANCE
+  // Slice 10 (buyer handoff / ownership transition) — successor-value
+  // records a buyer actually needs, as distinct from OPEN_UNKNOWNS/CLAIMS/
+  // INSURANCE which stay seller-private by default.
+  WARRANTIES
+  MATERIAL_SPECS
+  PERMITS
 }
 
 enum PropertyBriefStatus {

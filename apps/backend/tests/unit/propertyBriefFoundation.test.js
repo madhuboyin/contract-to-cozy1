@@ -22,10 +22,18 @@ const readRepository = (relativePath) =>
 test('purpose templates keep sensitive sections opt-in and constrain prospective-buyer scope', () => {
   assert.deepEqual(
     PROPERTY_BRIEF_TEMPLATES.PROSPECTIVE_BUYER.defaultSections,
-    ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS'],
+    ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
   );
   assert.equal(PROPERTY_BRIEF_TEMPLATES.PROSPECTIVE_BUYER.allowedSections.includes('CLAIMS'), false);
   assert.equal(PROPERTY_BRIEF_TEMPLATES.PROSPECTIVE_BUYER.allowedSections.includes('INSURANCE'), false);
+  // Slice 10: warranties/material specs/permits are successor value, not
+  // seller-private — allowed and defaulted-on, but never treated as
+  // sensitive (no extra acknowledgement gate, unlike DOCUMENTS/CLAIMS/
+  // INSURANCE).
+  for (const section of ['WARRANTIES', 'MATERIAL_SPECS', 'PERMITS']) {
+    assert.equal(PROPERTY_BRIEF_TEMPLATES.PROSPECTIVE_BUYER.allowedSections.includes(section), true);
+    assert.equal(PROPERTY_BRIEF_TEMPLATES.PROSPECTIVE_BUYER.sensitiveSections.includes(section), false);
+  }
 
   assert.equal(createPropertyBriefSchema.safeParse({
     purpose: 'HOMEOWNER_REFERENCE',

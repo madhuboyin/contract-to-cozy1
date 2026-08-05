@@ -35,6 +35,9 @@ const SECTION_LABELS: Record<PropertyBriefSectionType, string> = {
   OPEN_UNKNOWNS: 'Open unknowns',
   CLAIMS: 'Claims',
   INSURANCE: 'Insurance',
+  WARRANTIES: 'Active warranties',
+  MATERIAL_SPECS: 'As-built material specs',
+  PERMITS: 'Verified permits',
 };
 
 function humanize(value: unknown) {

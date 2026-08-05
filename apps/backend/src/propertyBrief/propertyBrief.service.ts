@@ -70,6 +70,9 @@ function sectionTitle(section: PropertyBriefSectionInput) {
     OPEN_UNKNOWNS: 'Known gaps and unknowns',
     CLAIMS: 'Selected claim records',
     INSURANCE: 'Selected insurance records',
+    WARRANTIES: 'Active warranties',
+    MATERIAL_SPECS: 'As-built material specs',
+    PERMITS: 'Verified permits',
   }[section];
 }
 
@@ -364,6 +367,128 @@ async function assembleSections(input: {
       })),
     });
   }
+
+  // Slice 10 (buyer handoff / ownership transition): successor-value
+  // records — the buyer needs to know what's covered, what's installed, and
+  // what's permitted, so these are NOT in sensitiveSections. Financial
+  // fields (cost, purchase price, permit valuation) are excluded the same
+  // way claims/insurance already exclude claim numbers and settlement
+  // amounts above — successor value, not the seller's spend.
+  if (input.selectedSections.includes('WARRANTIES')) {
+    const warranties = await prisma.warranty.findMany({
+      where: { propertyId: input.propertyId },
+      orderBy: { expiryDate: 'desc' },
+      take: 25,
+    });
+    const items = warranties.map((warranty) => ({
+      key: warranty.id,
+      providerName: warranty.providerName,
+      category: warranty.category,
+      coverageDetails: warranty.coverageDetails,
+      startDate: warranty.startDate.toISOString(),
+      expiryDate: warranty.expiryDate.toISOString(),
+      asOf: warranty.updatedAt.toISOString(),
+    }));
+    sections.push({
+      sectionType: PropertyBriefSectionType.WARRANTIES,
+      title: sectionTitle('WARRANTIES'),
+      payload: json({ items, excludedFields: ['cost', 'policy number'] }),
+      sensitive: false,
+      asOf: input.asOf,
+      evidence: warranties.map((warranty) => ({
+        itemKey: warranty.id,
+        sourceEntityType: 'WARRANTY',
+        sourceEntityId: warranty.id,
+        sourceLabel: 'Canonical warranty record',
+        sourceAsOf: warranty.updatedAt,
+        verification: 'HOMEOWNER_RECORDED',
+      })),
+    });
+  }
+
+  if (input.selectedSections.includes('MATERIAL_SPECS')) {
+    const specs = await prisma.materialSpec.findMany({
+      where: { propertyId: input.propertyId, isActive: true, lifecycleStatus: 'AS_BUILT' },
+      orderBy: { updatedAt: 'desc' },
+      take: 25,
+      include: { room: { select: { name: true } } },
+    });
+    const items = specs.map((spec) => ({
+      key: spec.id,
+      label: spec.label,
+      category: spec.category,
+      surface: spec.surface,
+      room: spec.room?.name ?? null,
+      manufacturer: spec.manufacturer,
+      productLine: spec.productLine,
+      productName: spec.productName,
+      sku: spec.sku,
+      colorCode: spec.colorCode,
+      colorHex: spec.colorHex,
+      finish: spec.finish,
+      material: spec.material,
+      supplier: spec.supplier,
+      supplierUrl: spec.supplierUrl,
+      supplierDiscontinued: spec.supplierDiscontinued,
+      successorProductUrl: spec.successorProductUrl,
+      lotBatch: spec.lotBatch,
+      careInstructions: spec.careInstructions,
+      quantityRemaining: spec.quantityRemaining,
+      remainingStorageLocation: spec.remainingStorageLocation,
+      asOf: (spec.verifiedAt ?? spec.updatedAt).toISOString(),
+    }));
+    sections.push({
+      sectionType: PropertyBriefSectionType.MATERIAL_SPECS,
+      title: sectionTitle('MATERIAL_SPECS'),
+      payload: json({ items, excludedFields: ['purchase price', 'purchase date', 'quantity purchased'] }),
+      sensitive: false,
+      asOf: input.asOf,
+      evidence: specs.map((spec) => ({
+        itemKey: spec.id,
+        sourceEntityType: 'MATERIAL_SPEC',
+        sourceEntityId: spec.id,
+        sourceLabel: 'Verified as-built material record',
+        sourceAsOf: spec.verifiedAt ?? spec.updatedAt,
+        verification: spec.verificationConfidence,
+      })),
+    });
+  }
+
+  if (input.selectedSections.includes('PERMITS')) {
+    const permits = await prisma.propertyPermitRecord.findMany({
+      where: { propertyId: input.propertyId, isVerified: true, isActive: true },
+      orderBy: { issueDate: 'desc' },
+      take: 25,
+    });
+    const items = permits.map((permit) => ({
+      key: permit.id,
+      permitNumber: permit.permitNumber,
+      category: permit.category,
+      workTypes: permit.workTypes,
+      description: permit.description,
+      status: permit.status,
+      contractorName: permit.contractorName,
+      issueDate: permit.issueDate?.toISOString() ?? null,
+      finaledDate: permit.finaledDate?.toISOString() ?? null,
+      asOf: permit.updatedAt.toISOString(),
+    }));
+    sections.push({
+      sectionType: PropertyBriefSectionType.PERMITS,
+      title: sectionTitle('PERMITS'),
+      payload: json({ items, excludedFields: ['estimated cost', 'final cost'] }),
+      sensitive: false,
+      asOf: input.asOf,
+      evidence: permits.map((permit) => ({
+        itemKey: permit.id,
+        sourceEntityType: 'PERMIT',
+        sourceEntityId: permit.id,
+        sourceLabel: 'Verified permit record',
+        sourceAsOf: permit.officialObservedAt ?? permit.updatedAt,
+        verification: 'VERIFIED',
+      })),
+    });
+  }
+
   return sections;
 }
 
