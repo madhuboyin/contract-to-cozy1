@@ -8,6 +8,7 @@ import type {
   PropertyRecordVisibility,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { auditLog } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { uploadPropertyRecordVersionBuffer } from './storage/reportStorage';
 import { presignGetObject } from './storage/presign';
@@ -298,9 +299,12 @@ export class HomeRecordsService {
             fileSizeBytes: input.file.size,
             sha256: checksum,
             uploadedByUserId: input.userId,
-            // Route-level magic-byte/content validation (validateDocumentUpload)
-            // already ran before this service is invoked, so the upload is
-            // clean by the time a version row exists.
+            // Route-level magic-byte/content validation and content-threat
+            // heuristics (validateDocumentUpload → scanBufferForThreats:
+            // embedded executables, PDF active-content actions, EICAR test
+            // signature) already ran before this service is invoked. This is
+            // not a signature-based antivirus engine — CLEAN means "passed
+            // those checks," not "verified virus-free."
             scanStatus: 'CLEAN',
           },
         },
@@ -390,6 +394,8 @@ export class HomeRecordsService {
         sha256: checksum,
         uploadedByUserId: input.userId,
         supersedesVersionId: record.currentVersionId,
+        // See the comment on the record-creation path above — CLEAN means
+        // magic-byte + content-threat heuristics passed, not full AV scanning.
         scanStatus: 'CLEAN',
       },
     });
@@ -495,6 +501,11 @@ export class HomeRecordsService {
     });
     if (!record) throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
     if (record._count.links > 0 && !input.impactDecision) {
+      auditLog('HOME_RECORD_EVIDENCE_TRASH_BLOCKED', input.userId, {
+        propertyId: input.propertyId,
+        recordId: input.recordId,
+        activeLinkCount: record._count.links,
+      });
       throw new APIError(
         'This record is active evidence. Choose how its links should be handled before trashing it.',
         409,

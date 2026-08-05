@@ -150,7 +150,10 @@ export type AuditEvent =
   | 'PASSWORD_CHANGED'
   | 'SUSPICIOUS_FILE_UPLOAD'
   | 'MFA_ACCOUNT_LOCKED'
-  | 'CORS_BLOCKED';
+  | 'CORS_BLOCKED'
+  | 'PROPERTY_ACCESS_DENIED'
+  | 'HOME_RECORD_UNREVIEWED_PROMOTION_BLOCKED'
+  | 'HOME_RECORD_EVIDENCE_TRASH_BLOCKED';
 
 /**
  * Emit a structured security audit log line.

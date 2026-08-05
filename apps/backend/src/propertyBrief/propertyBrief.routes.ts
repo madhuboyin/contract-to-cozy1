@@ -163,6 +163,7 @@ router.post(
         expiresInDays: req.body.expiresInDays,
         downloadPolicy: req.body.downloadPolicy,
         sensitiveDataAcknowledged: req.body.sensitiveDataAcknowledged,
+        householdConsentAcknowledged: req.body.householdConsentAcknowledged,
         recipientName: req.body.recipientName,
         recipientEmail: req.body.recipientEmail,
       });

@@ -630,6 +630,7 @@ export async function createPropertyBriefShare(input: {
   expiresInDays: number;
   downloadPolicy: 'VIEW_ONLY' | 'ALLOW_DOWNLOAD';
   sensitiveDataAcknowledged: true;
+  householdConsentAcknowledged?: boolean;
   recipientName?: string | null;
   recipientEmail?: string | null;
 }) {
@@ -637,6 +638,28 @@ export async function createPropertyBriefShare(input: {
   if (brief.status === PropertyBriefStatus.ARCHIVED) {
     throw new APIError('Archived briefs cannot be shared.', 409, 'PROPERTY_BRIEF_ARCHIVED');
   }
+
+  // Sharing selected home information externally affects every other
+  // household member with access to this property, not just whoever clicks
+  // "share" — require an explicit acknowledgment before creating the link
+  // when someone else actually has that access. Solo-owned properties skip
+  // this: there's no one else to consider.
+  const otherHouseholdMemberCount = await prisma.householdMember.count({
+    where: {
+      propertyId: input.propertyId,
+      userId: { not: input.userId },
+      role: { in: ['CONTRIBUTOR', 'OWNER'] },
+    },
+  });
+  if (otherHouseholdMemberCount > 0 && !input.householdConsentAcknowledged) {
+    throw new APIError(
+      'Other household members have access to this property. Acknowledge that before sharing outside the household.',
+      409,
+      'PROPERTY_BRIEF_SHARE_HOUSEHOLD_CONSENT_REQUIRED',
+      { otherHouseholdMemberCount },
+    );
+  }
+
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000);
   // A share with a named recipient is a real invitation, not just an

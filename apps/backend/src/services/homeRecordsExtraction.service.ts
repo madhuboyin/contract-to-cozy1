@@ -9,6 +9,7 @@
 // has been explicitly CONFIRMED or CORRECTED by a homeowner.
 import type { ExpenseCategory, ExtractedFactCandidate, ExtractedFactReviewStatus, WarrantyCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { auditLog } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { downloadObjectBuffer } from './storage/reportStorage';
 import { documentIntelligenceService, type DocumentInsights } from './documentIntelligence.service';
@@ -273,6 +274,13 @@ export class HomeRecordsExtractionService {
       );
     });
     if (missing.length > 0) {
+      auditLog('HOME_RECORD_UNREVIEWED_PROMOTION_BLOCKED', input.userId, {
+        propertyId: input.propertyId,
+        recordId: input.recordId,
+        versionId: input.versionId,
+        targetDomain: 'WARRANTY',
+        missingFields: missing,
+      });
       throw new APIError(
         `Confirm ${missing.join(', ')} before creating a warranty.`,
         409,
@@ -420,6 +428,13 @@ export class HomeRecordsExtractionService {
       );
     });
     if (missing.length > 0) {
+      auditLog('HOME_RECORD_UNREVIEWED_PROMOTION_BLOCKED', input.userId, {
+        propertyId: input.propertyId,
+        recordId: input.recordId,
+        versionId: input.versionId,
+        targetDomain: 'EXPENSE',
+        missingFields: missing,
+      });
       throw new APIError(
         `Confirm ${missing.join(', ')} before creating an expense.`,
         409,

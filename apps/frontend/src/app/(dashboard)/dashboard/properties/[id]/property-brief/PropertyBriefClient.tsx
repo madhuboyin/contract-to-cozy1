@@ -28,6 +28,8 @@ import {
   type PropertyBriefSection,
   type PropertyBriefSectionType,
 } from './propertyBriefApi';
+import { api } from '@/lib/api/client';
+import { useAuth } from '@/lib/auth/AuthContext';
 
 const SECTION_LABELS: Record<PropertyBriefSectionType, string> = {
   PROPERTY_FACTS: 'Property facts',
@@ -106,12 +108,20 @@ function BriefSection({ section }: { section: PropertyBriefSection }) {
 
 export default function PropertyBriefClient({ propertyId }: { propertyId: string }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   const deepLinkedPurpose = searchParams.get('purpose') as PropertyBriefPurpose | null;
   const templatesQuery = useQuery({
     queryKey: ['property-brief-templates'],
     queryFn: getPropertyBriefTemplates,
   });
+  const householdMembersQuery = useQuery({
+    queryKey: ['household-members', propertyId],
+    queryFn: () => api.listHouseholdMembers(propertyId),
+  });
+  const otherHouseholdMemberCount = (householdMembersQuery.data ?? []).filter(
+    (member) => member.userId !== user?.id && (member.role === 'CONTRIBUTOR' || member.role === 'OWNER'),
+  ).length;
   const briefsQuery = useQuery({
     queryKey: ['property-briefs', propertyId],
     queryFn: () => listPropertyBriefs(propertyId),
@@ -134,6 +144,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
   const [expiresInDays, setExpiresInDays] = React.useState(14);
   const [downloadPolicy, setDownloadPolicy] = React.useState<'VIEW_ONLY' | 'ALLOW_DOWNLOAD'>('VIEW_ONLY');
   const [shareSensitiveAcknowledged, setShareSensitiveAcknowledged] = React.useState(false);
+  const [shareHouseholdConsentAcknowledged, setShareHouseholdConsentAcknowledged] = React.useState(false);
   const [recipientName, setRecipientName] = React.useState('');
   const [recipientEmail, setRecipientEmail] = React.useState('');
 
@@ -173,12 +184,14 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
       previewAcknowledged: true,
       limitationAcknowledged: true,
       sensitiveDataAcknowledged: true,
+      householdConsentAcknowledged: shareHouseholdConsentAcknowledged,
       recipientName: recipientName.trim() || undefined,
       recipientEmail: recipientEmail.trim() || undefined,
     }),
     onSuccess: async (share) => {
       setShareUrl(share.shareUrl);
       setShareSensitiveAcknowledged(false);
+      setShareHouseholdConsentAcknowledged(false);
       setRecipientName('');
       setRecipientEmail('');
       await Promise.all([
@@ -457,9 +470,17 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                   <input type="checkbox" checked={shareSensitiveAcknowledged} onChange={(event) => setShareSensitiveAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4" />
                   I reviewed the full property identity and selected records and understand this is a material sharing action.
                 </label>
+                {otherHouseholdMemberCount > 0 && (
+                  <label className="mt-2 flex items-start gap-3 rounded-xl border border-slate-200 p-3 text-xs leading-5 text-slate-700">
+                    <input type="checkbox" checked={shareHouseholdConsentAcknowledged} onChange={(event) => setShareHouseholdConsentAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4" />
+                    {otherHouseholdMemberCount === 1
+                      ? 'Another household member has access to this property. I\'ve considered them before sharing this outside the household.'
+                      : `${otherHouseholdMemberCount} other household members have access to this property. I've considered them before sharing this outside the household.`}
+                  </label>
+                )}
                 <button
                   type="button"
-                  disabled={shareMutation.isPending || !shareSensitiveAcknowledged}
+                  disabled={shareMutation.isPending || !shareSensitiveAcknowledged || (otherHouseholdMemberCount > 0 && !shareHouseholdConsentAcknowledged)}
                   onClick={() => shareMutation.mutate()}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >

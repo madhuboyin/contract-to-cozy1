@@ -1,9 +1,13 @@
 // apps/backend/src/utils/documentValidator.util.ts
 //
-// Magic-byte validation middleware for every file upload surface.
-// Multer's fileFilter only sees the client-supplied Content-Type header which
-// an attacker fully controls. These middlewares run AFTER multer has written
-// the file into memory (req.file.buffer) and verify the actual file bytes.
+// Magic-byte + content-threat-heuristic validation middleware for every file
+// upload surface. Multer's fileFilter only sees the client-supplied
+// Content-Type header which an attacker fully controls. These middlewares
+// run AFTER multer has written the file into memory (req.file.buffer) and
+// verify the actual file bytes, then run scanBufferForThreats (embedded
+// executables, PDF active-content actions, EICAR test signature) — not a
+// substitute for a real signature-based antivirus engine, but real content
+// inspection beyond "does this look like the declared file type."
 //
 // Exported validators (use the one that matches your endpoint's accepted types):
 //   validateDocumentUpload    — PDF + JPEG/PNG/WEBP  (document intelligence route)
@@ -81,6 +85,66 @@ function hasSvgSignature(buffer: Buffer): boolean {
   return head.startsWith('<?xml') || head.startsWith('<svg') || head.includes('<svg ');
 }
 
+// ---------------------------------------------------------------------------
+// Content-threat heuristics
+//
+// This is NOT a substitute for a real antivirus engine — there is no
+// signature database and no archive/macro unpacking. It catches the
+// specific, well-documented attack shapes that matter most for a
+// homeowner-document upload surface: a disguised executable smuggled in
+// under a document/image MIME type (polyglot or appended-payload files),
+// PDF active-content actions, and the industry-standard EICAR AV test
+// string (useful for verifying this pipeline actually rejects something,
+// end to end, without needing a real virus). Downstream, a version whose
+// scanStatus is CLEAN means "passed magic-byte validation and these
+// heuristics" — not "verified virus-free by a signature-based AV engine."
+// ---------------------------------------------------------------------------
+
+const EXECUTABLE_SIGNATURES: { reason: string; bytes: number[] }[] = [
+  { reason: 'EMBEDDED_PE_EXECUTABLE', bytes: [0x4d, 0x5a] }, // MZ
+  { reason: 'EMBEDDED_ELF_EXECUTABLE', bytes: [0x7f, 0x45, 0x4c, 0x46] }, // \x7fELF
+  { reason: 'EMBEDDED_MACHO_EXECUTABLE', bytes: [0xcf, 0xfa, 0xed, 0xfe] },
+];
+
+// None of the MIME types this validator accepts (PDF/JPEG/PNG/WEBP/HEIC/
+// XLSX) legitimately contain these sequences anywhere in the file, so any
+// occurrence at all is a genuine red flag, not just at offset 0.
+function findEmbeddedExecutable(buffer: Buffer): string | null {
+  for (const sig of EXECUTABLE_SIGNATURES) {
+    if (buffer.indexOf(Buffer.from(sig.bytes)) !== -1) return sig.reason;
+  }
+  return null;
+}
+
+const EICAR_TEST_STRING =
+  'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
+
+const PDF_ACTIVE_CONTENT_KEYWORDS = ['/JavaScript', '/JS', '/OpenAction', '/Launch', '/EmbeddedFile'];
+
+export interface ContentThreatFinding {
+  reason: string;
+  detail: string;
+}
+
+export function scanBufferForThreats(buffer: Buffer, mimeType: string): ContentThreatFinding | null {
+  const embedded = findEmbeddedExecutable(buffer);
+  if (embedded) return { reason: embedded, detail: embedded };
+
+  // Share one buffer→string conversion between the text-based checks below.
+  const text = buffer.toString('latin1');
+
+  if (text.includes(EICAR_TEST_STRING)) {
+    return { reason: 'EICAR_TEST_SIGNATURE', detail: 'EICAR_TEST_SIGNATURE' };
+  }
+
+  if (mimeType === PDF_TYPE) {
+    const keyword = PDF_ACTIVE_CONTENT_KEYWORDS.find((candidate) => text.includes(candidate));
+    if (keyword) return { reason: 'PDF_ACTIVE_CONTENT', detail: keyword };
+  }
+
+  return null;
+}
+
 function buildValidator(
   allowedTypes: Set<string>,
   label: string
@@ -143,6 +207,25 @@ function buildValidator(
       return;
     }
 
+    // Content-threat heuristics (embedded executables, PDF active-content
+    // actions, EICAR test signature) — see scanBufferForThreats above.
+    const threat = scanBufferForThreats(file.buffer, file.mimetype);
+    if (threat) {
+      auditLog('SUSPICIOUS_FILE_UPLOAD', (req as any).user?.userId ?? null, {
+        ip: req.ip,
+        reason: threat.reason,
+        detail: threat.detail,
+        declaredMime: file.mimetype,
+        filename: file.originalname,
+        validator: label,
+      });
+      res.status(400).json({
+        success: false,
+        message: 'This file was rejected by content-safety checks.',
+      });
+      return;
+    }
+
     next();
   };
 }
@@ -185,6 +268,15 @@ function buildArrayValidator(allowedTypes: Set<string>, label: string) {
           filename: file.originalname, validator: label,
         });
         res.status(400).json({ success: false, message: 'File content does not match its declared type. Upload rejected.' });
+        return;
+      }
+      const threat = scanBufferForThreats(file.buffer, file.mimetype);
+      if (threat) {
+        auditLog('SUSPICIOUS_FILE_UPLOAD', (req as any).user?.userId ?? null, {
+          ip: req.ip, reason: threat.reason, detail: threat.detail, declaredMime: file.mimetype,
+          filename: file.originalname, validator: label,
+        });
+        res.status(400).json({ success: false, message: 'This file was rejected by content-safety checks.' });
         return;
       }
     }

@@ -109,6 +109,14 @@ export const createPropertyBriefShareSchema = z.object({
   previewAcknowledged: z.literal(true),
   limitationAcknowledged: z.literal(true),
   sensitiveDataAcknowledged: z.literal(true),
+  // Sharing selected home information externally is a decision that affects
+  // every household member with access to this property, not just the
+  // person creating the share — require an explicit acknowledgment rather
+  // than letting one member unilaterally share without any record that they
+  // considered the others. Required only when another household member
+  // actually exists (see createPropertyBriefShare) — enforced there, not
+  // here, since that check needs a DB lookup Zod can't do.
+  householdConsentAcknowledged: z.boolean().optional(),
   recipientName: z.string().trim().min(1).max(120).optional(),
   recipientEmail: z.string().trim().email().max(200).optional(),
 });

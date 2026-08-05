@@ -137,6 +137,7 @@ export async function createPropertyBriefShare(
     previewAcknowledged: true;
     limitationAcknowledged: true;
     sensitiveDataAcknowledged: true;
+    householdConsentAcknowledged?: boolean;
     recipientName?: string;
     recipientEmail?: string;
   },

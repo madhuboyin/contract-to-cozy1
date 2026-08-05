@@ -1,7 +1,7 @@
 // apps/backend/src/middleware/propertyAuth.middleware.ts
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
-import { logger } from '../lib/logger';
+import { logger, auditLog } from '../lib/logger';
 import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 import {
   securityAuthDenialsTotal,
@@ -33,6 +33,12 @@ export const propertyAuthMiddleware = async (
     const access = await resolvePropertyAccess(userId, propertyId);
 
     if (!access) {
+      auditLog('PROPERTY_ACCESS_DENIED', userId, {
+        ip: req.ip,
+        path: req.path,
+        method: req.method,
+        propertyId,
+      });
       securityPropertyScopeDenialsTotal.inc({
         source: 'property_auth_middleware',
         status_code: '404',
@@ -60,6 +66,15 @@ export const requireHouseholdRole = (minimumRole: 'CONTRIBUTOR' | 'OWNER') => {
   return (req: CustomRequest, res: Response, next: NextFunction) => {
     const role = req.householdRole;
     if (!role || ROLE_RANK[role] < ROLE_RANK[minimumRole]) {
+      auditLog('PROPERTY_ACCESS_DENIED', req.user?.userId ?? null, {
+        ip: req.ip,
+        path: req.path,
+        method: req.method,
+        propertyId: req.params.propertyId,
+        role: role ?? null,
+        requiredRole: minimumRole,
+        reason: 'household_role_floor',
+      });
       securityPropertyScopeDenialsTotal.inc({
         source: 'household_role_floor',
         status_code: '403',

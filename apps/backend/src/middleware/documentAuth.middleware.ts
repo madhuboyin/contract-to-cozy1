@@ -18,6 +18,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
+import { auditLog } from '../lib/logger';
 import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 
 export const requireDocumentOwnership = async (
@@ -52,12 +53,25 @@ export const requireDocumentOwnership = async (
 
     if (!isUploader) {
       if (!document.propertyId) {
+        auditLog('PROPERTY_ACCESS_DENIED', userId, {
+          path: req.path,
+          method: req.method,
+          documentId,
+          reason: 'not_uploader_and_no_property_link',
+        });
         res.status(404).json({ success: false, message: 'Document not found' });
         return;
       }
 
       const access = await resolvePropertyAccess(userId, document.propertyId);
       if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) {
+        auditLog('PROPERTY_ACCESS_DENIED', userId, {
+          path: req.path,
+          method: req.method,
+          documentId,
+          propertyId: document.propertyId,
+          role: access?.role ?? null,
+        });
         res.status(404).json({ success: false, message: 'Document not found' });
         return;
       }

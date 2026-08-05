@@ -7,6 +7,7 @@ const metricCalls = {
   auth: [],
   scope: [],
 };
+const auditCalls = [];
 
 const prismaMock = {
   householdMember: {
@@ -32,7 +33,7 @@ require.cache[loggerPath] = {
   loaded: true,
   exports: {
     logger: { info: () => {}, warn: () => {}, error: () => {} },
-    auditLog: () => {},
+    auditLog: (event, userId, meta) => auditCalls.push({ event, userId, meta }),
   },
 };
 
@@ -52,7 +53,7 @@ require.cache[metricsPath] = {
 };
 
 const { resolvePropertyAccess } = require('../../src/services/propertyAccess.service.ts');
-const { propertyAuthMiddleware } = require('../../src/middleware/propertyAuth.middleware.ts');
+const { propertyAuthMiddleware, requireHouseholdRole } = require('../../src/middleware/propertyAuth.middleware.ts');
 
 function createRes() {
   return {
@@ -92,12 +93,16 @@ test('propertyAuthMiddleware increments auth denial metric when unauthenticated'
 test('propertyAuthMiddleware increments scope denial metric when property ownership check fails', async () => {
   metricCalls.auth.length = 0;
   metricCalls.scope.length = 0;
+  auditCalls.length = 0;
 
   prismaMock.property.findFirst = async () => null;
 
   const req = {
     params: { propertyId: 'property-2' },
     user: { userId: 'user-2' },
+    ip: '127.0.0.1',
+    path: '/api/properties/property-2/records',
+    method: 'GET',
   };
   const res = createRes();
 
@@ -108,6 +113,38 @@ test('propertyAuthMiddleware increments scope denial metric when property owners
   assert.deepEqual(metricCalls.auth, []);
   assert.deepEqual(metricCalls.scope, [
     { source: 'property_auth_middleware', status_code: '404' },
+  ]);
+  assert.equal(auditCalls.length, 1);
+  assert.equal(auditCalls[0].event, 'PROPERTY_ACCESS_DENIED');
+  assert.equal(auditCalls[0].userId, 'user-2');
+  assert.equal(auditCalls[0].meta.propertyId, 'property-2');
+});
+
+test('requireHouseholdRole audit-logs a denial when the caller is below the required role floor', () => {
+  auditCalls.length = 0;
+  metricCalls.scope.length = 0;
+
+  const req = {
+    params: { propertyId: 'property-F' },
+    user: { userId: 'user-6' },
+    householdRole: 'VIEWER',
+    path: '/api/properties/property-F/records/rec-1/trash',
+    method: 'POST',
+  };
+  const res = createRes();
+  let nextCalled = false;
+
+  requireHouseholdRole('CONTRIBUTOR')(req, res, () => { nextCalled = true; });
+
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+  assert.equal(auditCalls.length, 1);
+  assert.equal(auditCalls[0].event, 'PROPERTY_ACCESS_DENIED');
+  assert.equal(auditCalls[0].userId, 'user-6');
+  assert.equal(auditCalls[0].meta.role, 'VIEWER');
+  assert.equal(auditCalls[0].meta.requiredRole, 'CONTRIBUTOR');
+  assert.deepEqual(metricCalls.scope, [
+    { source: 'household_role_floor', status_code: '403' },
   ]);
 });
 
