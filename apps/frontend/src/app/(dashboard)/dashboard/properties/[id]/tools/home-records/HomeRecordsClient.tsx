@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Archive,
@@ -135,6 +136,27 @@ const LINK_ENTITY_LABELS: Record<PropertyRecordLinkEntityType, string> = {
   EXPENSE: 'Expense',
   OTHER: 'Other',
 };
+
+// Slice 11 (unified experience) cross-link: a linked entity is otherwise
+// just a text label with no way to actually get to what it evidences.
+// List pages are used where no per-entity detail route is known (WARRANTY,
+// INSURANCE_POLICY, EXPENSE, PERMIT, HOME_EVENT) — still a real navigation
+// improvement over no link at all, and never wrong.
+function linkedEntityHref(propertyId: string, entityType: PropertyRecordLinkEntityType, entityId: string): string | null {
+  switch (entityType) {
+    case 'HOME_EVENT': return `/dashboard/properties/${propertyId}/timeline`;
+    case 'INVENTORY_ITEM': return `/dashboard/properties/${propertyId}/inventory`;
+    case 'MATERIAL_SPEC': return `/dashboard/properties/${propertyId}/materials/${entityId}`;
+    case 'PROJECT': return `/dashboard/properties/${propertyId}/projects/${entityId}`;
+    case 'WARRANTY': return `/dashboard/warranties`;
+    case 'INSURANCE_POLICY': return `/dashboard/insurance`;
+    case 'CLAIM': return `/dashboard/properties/${propertyId}/claims/${entityId}`;
+    case 'PERMIT': return `/dashboard/properties/${propertyId}/tools/permits`;
+    case 'PROPERTY_BRIEF': return `/dashboard/properties/${propertyId}/property-brief`;
+    case 'EXPENSE': return `/dashboard/expenses`;
+    case 'OTHER': return null;
+  }
+}
 
 const LINK_PURPOSE_LABELS: Record<PropertyRecordLinkPurpose, string> = {
   EVIDENCE: 'Evidence',
@@ -867,20 +889,28 @@ function RecordDetailSheet({
               </p>
               {record.links.length > 0 && (
                 <div className="space-y-1.5">
-                  {record.links.map((link) => (
-                    <div key={link.id} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
-                      <LinkIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                      <p className={cn(MOBILE_TYPE_TOKENS.caption, 'flex-1 text-gray-600')}>
+                  {record.links.map((link) => {
+                    const href = linkedEntityHref(propertyId, link.entityType, link.entityId);
+                    const labelText = (
+                      <p className={cn(MOBILE_TYPE_TOKENS.caption, 'flex-1', href ? 'text-blue-600' : 'text-gray-600')}>
                         {LINK_ENTITY_LABELS[link.entityType]} · {LINK_PURPOSE_LABELS[link.purpose]}
                         {link.label ? ` · ${link.label}` : ''}
                       </p>
-                      {link.broken === true && (
-                        <span title="This link's target record could no longer be found.">
-                          <StatusChip tone="danger">Broken</StatusChip>
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    );
+                    return (
+                      <div key={link.id} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                        <LinkIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                        {href ? (
+                          <Link href={href} className="min-w-0 flex-1 hover:underline">{labelText}</Link>
+                        ) : labelText}
+                        {link.broken === true && (
+                          <span title="This link's target record could no longer be found.">
+                            <StatusChip tone="danger">Broken</StatusChip>
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {record.allowedActions.link && (
@@ -966,11 +996,14 @@ type RecordView = 'ALL' | 'NEEDS_REVIEW' | 'EXPIRING';
 
 export default function HomeRecordsClient() {
   const { id: propertyId } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showTrashed, setShowTrashed] = React.useState(false);
   const [uploadOpen, setUploadOpen] = React.useState(false);
-  const [selectedRecordId, setSelectedRecordId] = React.useState<string | null>(null);
+  // Deep-linkable from elsewhere (e.g. a Timeline event's evidence link) —
+  // detail is otherwise a client-state-driven sheet with no URL of its own.
+  const [selectedRecordId, setSelectedRecordId] = React.useState<string | null>(() => searchParams.get('recordId'));
   const [search, setSearch] = React.useState('');
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
   const [recordTypeFilter, setRecordTypeFilter] = React.useState<PropertyRecordType | 'ALL'>('ALL');

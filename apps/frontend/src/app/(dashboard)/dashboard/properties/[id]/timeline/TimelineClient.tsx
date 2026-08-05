@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
@@ -344,12 +345,25 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                 label: 'Home Records evidence',
                 render: (event) => Array.isArray(event.propertyRecordLinks) && event.propertyRecordLinks.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
-                    {event.propertyRecordLinks.map((link) => (
-                      <Badge key={link.id}>
-                        {link.record?.title || 'Record'}
-                        {link.version ? ` (v${link.version.versionNumber}${link.version.scanStatus !== 'CLEAN' ? `, ${formatEnumLabel(link.version.scanStatus)}` : ''})` : ''}
-                      </Badge>
-                    ))}
+                    {event.propertyRecordLinks.map((link) => {
+                      const label = (
+                        <Badge>
+                          {link.record?.title || 'Record'}
+                          {link.version ? ` (v${link.version.versionNumber}${link.version.scanStatus !== 'CLEAN' ? `, ${formatEnumLabel(link.version.scanStatus)}` : ''})` : ''}
+                        </Badge>
+                      );
+                      return link.record?.id ? (
+                        <Link
+                          key={link.id}
+                          href={`/dashboard/properties/${params.id}/tools/home-records?recordId=${link.record.id}`}
+                          className="hover:underline"
+                        >
+                          {label}
+                        </Link>
+                      ) : (
+                        <React.Fragment key={link.id}>{label}</React.Fragment>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="mb-0 text-sm text-slate-500">Not evidenced by a Home Record</p>
