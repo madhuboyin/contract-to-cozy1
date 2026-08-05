@@ -4613,6 +4613,8 @@ enum SaleReadinessSourceType {
   PERMIT
   HOME_ACTION
   PROPERTY_RECORD
+  MATERIAL_SPEC
+  TIMELINE_EVENT
 }
 
 enum SaleReadinessCategory {

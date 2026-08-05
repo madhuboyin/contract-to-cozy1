@@ -1,6 +1,13 @@
 export type SaleCaseStatus = 'PREPARING' | 'LISTED' | 'UNDER_CONTRACT' | 'CLOSED' | 'CANCELLED';
 
-export type SaleReadinessSourceType = 'INSPECTION_FINDING' | 'PROJECT' | 'PERMIT' | 'HOME_ACTION' | 'PROPERTY_RECORD';
+export type SaleReadinessSourceType =
+  | 'INSPECTION_FINDING'
+  | 'PROJECT'
+  | 'PERMIT'
+  | 'HOME_ACTION'
+  | 'PROPERTY_RECORD'
+  | 'MATERIAL_SPEC'
+  | 'TIMELINE_EVENT';
 
 export type SaleReadinessCategory =
   | 'SAFETY_STRUCTURAL'

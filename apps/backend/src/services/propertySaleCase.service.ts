@@ -173,15 +173,89 @@ async function projectRecords(propertyId: string, role: HouseholdRole): Promise<
     }));
 }
 
+// A material spec can trigger more than one gap at once (e.g. never
+// finalized *and* its supplier went dark) — only the single most material
+// one is surfaced per spec, since the unique key is one row per source
+// entity. Ordered most-severe-first.
+async function projectMaterialSpecs(propertyId: string): Promise<ProjectedItem[]> {
+  const specs = await prisma.materialSpec.findMany({
+    where: { propertyId, isActive: true },
+    select: {
+      id: true, label: true, category: true, lifecycleStatus: true,
+      verificationConfidence: true, supplierDiscontinued: true, successorProductUrl: true,
+    },
+  });
+  const items: ProjectedItem[] = [];
+  for (const spec of specs) {
+    if (spec.lifecycleStatus !== 'AS_BUILT') {
+      items.push({
+        sourceEntityType: 'MATERIAL_SPEC',
+        sourceEntityId: spec.id,
+        category: 'SYSTEMS_MAINTENANCE',
+        requirementClass: 'VERIFICATION_NEEDED',
+        title: `${spec.label}: not yet finalized as-built`,
+        detail: `Status: ${spec.lifecycleStatus}`,
+      });
+    } else if (spec.verificationConfidence === 'REPORTED') {
+      items.push({
+        sourceEntityType: 'MATERIAL_SPEC',
+        sourceEntityId: spec.id,
+        category: 'DOCUMENTATION_RECORDS',
+        requirementClass: 'VERIFICATION_NEEDED',
+        title: `${spec.label}: as-built detail never verified`,
+        detail: 'Reported only — no supporting documentation or on-site verification on file.',
+      });
+    } else if (spec.supplierDiscontinued && !spec.successorProductUrl) {
+      items.push({
+        sourceEntityType: 'MATERIAL_SPEC',
+        sourceEntityId: spec.id,
+        category: 'PRESENTATION',
+        requirementClass: 'OPTIONAL_IMPROVEMENT',
+        title: `${spec.label}: supplier discontinued, no successor product on file`,
+        detail: 'Worth noting for a buyer who wants to match or repair this material later.',
+      });
+    }
+  }
+  return items;
+}
+
+const SIGNIFICANT_TIMELINE_EVENT_TYPES = new Set([
+  'IMPROVEMENT', 'REPAIR', 'CLAIM', 'INSPECTION', 'MILESTONE',
+]);
+const UNVERIFIED_TIMELINE_STATUSES = new Set(['UNVERIFIED', 'PENDING_CONFIRMATION']);
+
+async function projectTimelineEvents(propertyId: string): Promise<ProjectedItem[]> {
+  const events = await prisma.homeEvent.findMany({
+    where: {
+      propertyId,
+      isCurrent: true,
+      importance: { in: ['HIGH', 'HIGHLIGHT'] },
+      verificationStatus: { in: Array.from(UNVERIFIED_TIMELINE_STATUSES) as any },
+      type: { in: Array.from(SIGNIFICANT_TIMELINE_EVENT_TYPES) as any },
+    },
+    select: { id: true, title: true, type: true, verificationStatus: true },
+  });
+  return events.map((event) => ({
+    sourceEntityType: 'TIMELINE_EVENT' as const,
+    sourceEntityId: event.id,
+    category: 'DOCUMENTATION_RECORDS' as const,
+    requirementClass: 'VERIFICATION_NEEDED' as const,
+    title: `${event.title}: significant history event unverified`,
+    detail: `${event.type} — ${event.verificationStatus}`,
+  }));
+}
+
 async function syncReadinessItems(saleCaseId: string, propertyId: string, role: HouseholdRole): Promise<void> {
-  const [findings, projects, permits, homeActions, records] = await Promise.all([
+  const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents] = await Promise.all([
     projectInspectionFindings(propertyId),
     projectProjects(propertyId),
     projectPermits(propertyId),
     projectHomeActions(propertyId),
     projectRecords(propertyId, role),
+    projectMaterialSpecs(propertyId),
+    projectTimelineEvents(propertyId),
   ]);
-  const projected = [...findings, ...projects, ...permits, ...homeActions, ...records];
+  const projected = [...findings, ...projects, ...permits, ...homeActions, ...records, ...materialSpecs, ...timelineEvents];
   const projectedKeys = new Set(projected.map((p) => `${p.sourceEntityType}:${p.sourceEntityId}`));
 
   const existing = await prisma.saleReadinessItem.findMany({ where: { saleCaseId } });

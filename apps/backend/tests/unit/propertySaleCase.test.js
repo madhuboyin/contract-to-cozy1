@@ -16,6 +16,8 @@ let permitRecords = [];
 let unpermittedFlags = [];
 let workItems = []; // fed to the mocked listWorkItems usecase
 let homeRecords = []; // fed to the mocked homeRecordsService.list
+let materialSpecs = [];
+let homeEvents = [];
 
 let transitions = []; // in-memory PropertyTransition rows
 let nextTransitionId = 1;
@@ -34,6 +36,8 @@ function resetFixtures() {
   unpermittedFlags = [];
   workItems = [];
   homeRecords = [];
+  materialSpecs = [];
+  homeEvents = [];
   transitions = [];
   nextTransitionId = 1;
   briefShares = [];
@@ -140,6 +144,12 @@ require.cache[prismaPath] = {
       },
       permitUnpermittedFlag: {
         findMany: async () => unpermittedFlags,
+      },
+      materialSpec: {
+        findMany: async () => materialSpecs,
+      },
+      homeEvent: {
+        findMany: async () => homeEvents,
       },
       $transaction: async (input) => Promise.all(input),
     },
@@ -280,6 +290,90 @@ test('readiness projection maps HOME_ACTION safety tiers and skips closed/verifi
   const item = result.readinessItems.find((i) => i.sourceEntityId === 'wi-open');
   assert.equal(item.requirementClass, 'MATERIAL_BLOCKER');
   assert.equal(item.canonicalWorkItemId, 'wi-open');
+});
+
+test('readiness projection flags a material spec that was never finalized to as-built', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  materialSpecs = [{
+    id: 'spec-1', label: 'Kitchen quartz counters', category: 'COUNTERTOP', lifecycleStatus: 'INSTALLED',
+    verificationConfidence: 'REPORTED', supplierDiscontinued: false, successorProductUrl: null,
+  }];
+  const result = await PropertySaleCaseService.getCase('user-1', 'prop-1');
+  const item = result.readinessItems.find((i) => i.sourceEntityType === 'MATERIAL_SPEC');
+  assert.ok(item, 'expected a projected readiness item for the not-yet-as-built spec');
+  assert.equal(item.category, 'SYSTEMS_MAINTENANCE');
+  assert.equal(item.requirementClass, 'VERIFICATION_NEEDED');
+  assert.match(item.title, /not yet finalized as-built/);
+});
+
+test('readiness projection flags an as-built material spec that was only ever reported, never verified', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  materialSpecs = [{
+    id: 'spec-2', label: 'Roof shingles', category: 'ROOFING', lifecycleStatus: 'AS_BUILT',
+    verificationConfidence: 'REPORTED', supplierDiscontinued: false, successorProductUrl: null,
+  }];
+  const result = await PropertySaleCaseService.getCase('user-1', 'prop-1');
+  const item = result.readinessItems.find((i) => i.sourceEntityType === 'MATERIAL_SPEC');
+  assert.ok(item);
+  assert.equal(item.category, 'DOCUMENTATION_RECORDS');
+  assert.equal(item.requirementClass, 'VERIFICATION_NEEDED');
+  assert.match(item.title, /never verified/);
+});
+
+test('readiness projection only flags one gap per material spec, most-severe first', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  // Not yet AS_BUILT *and* would-be discontinued-supplier — only the
+  // not-as-built gap should surface, not both.
+  materialSpecs = [{
+    id: 'spec-3', label: 'Exterior siding', category: 'SIDING', lifecycleStatus: 'PROPOSED',
+    verificationConfidence: 'REPORTED', supplierDiscontinued: true, successorProductUrl: null,
+  }];
+  const result = await PropertySaleCaseService.getCase('user-1', 'prop-1');
+  const items = result.readinessItems.filter((i) => i.sourceEntityType === 'MATERIAL_SPEC');
+  assert.equal(items.length, 1);
+  assert.match(items[0].title, /not yet finalized as-built/);
+});
+
+test('readiness projection flags an AS_BUILT, verified spec with a discontinued supplier as a lower-urgency presentation note', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  materialSpecs = [{
+    id: 'spec-4', label: 'Custom tile backsplash', category: 'TILE', lifecycleStatus: 'AS_BUILT',
+    verificationConfidence: 'VERIFIED', supplierDiscontinued: true, successorProductUrl: null,
+  }];
+  const result = await PropertySaleCaseService.getCase('user-1', 'prop-1');
+  const item = result.readinessItems.find((i) => i.sourceEntityType === 'MATERIAL_SPEC');
+  assert.ok(item);
+  assert.equal(item.category, 'PRESENTATION');
+  assert.equal(item.requirementClass, 'OPTIONAL_IMPROVEMENT');
+});
+
+test('a fully verified, discontinued-with-successor material spec projects no readiness item at all', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  materialSpecs = [{
+    id: 'spec-5', label: 'Front door hardware', category: 'HARDWARE', lifecycleStatus: 'AS_BUILT',
+    verificationConfidence: 'VERIFIED', supplierDiscontinued: false, successorProductUrl: null,
+  }];
+  const result = await PropertySaleCaseService.getCase('user-1', 'prop-1');
+  assert.equal(result.readinessItems.filter((i) => i.sourceEntityType === 'MATERIAL_SPEC').length, 0);
+});
+
+test('readiness projection flags a significant, unverified Timeline event', async () => {
+  resetFixtures();
+  await PropertySaleCaseService.createCase('user-1', 'prop-1');
+  homeEvents = [{
+    id: 'event-1', title: 'Full roof replacement', type: 'IMPROVEMENT', verificationStatus: 'UNVERIFIED',
+  }];
+  const result = await PropertySaleCaseService.getCase('user-1', 'prop-1');
+  const item = result.readinessItems.find((i) => i.sourceEntityType === 'TIMELINE_EVENT');
+  assert.ok(item, 'expected a projected readiness item for the unverified significant event');
+  assert.equal(item.category, 'DOCUMENTATION_RECORDS');
+  assert.equal(item.requirementClass, 'VERIFICATION_NEEDED');
+  assert.equal(item.sourceEntityId, 'event-1');
 });
 
 test('a waived item stays waived across resync even while its source condition persists', async () => {
