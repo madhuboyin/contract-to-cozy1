@@ -5,6 +5,7 @@ import type {
   MaterialSpecExport,
   MaterialCategory,
   MaterialScopeLevel,
+  MaterialSurface,
   MaterialLifecycleStatus,
   MaterialComplianceCheckStatus,
   MaterialExtractionReview,
@@ -56,6 +57,7 @@ export interface CreateSpecInput {
   label: string;
   category: MaterialCategory;
   scopeLevel: MaterialScopeLevel;
+  surface?: MaterialSurface | null;
   roomId?: string | null;
   manufacturer?: string | null;
   productLine?: string | null;
@@ -68,6 +70,9 @@ export interface CreateSpecInput {
   material?: string | null;
   supplier?: string | null;
   supplierUrl?: string | null;
+  supplierCheckedAt?: string | null;
+  supplierDiscontinued?: boolean;
+  successorProductUrl?: string | null;
   purchaseDate?: string | null;
   quantityPurchased?: string | null;
   lotBatch?: string | null;
@@ -85,9 +90,17 @@ export interface CreateSpecInput {
   submittalDocumentIds?: string[];
 }
 
-export async function createSpec(propertyId: string, body: CreateSpecInput): Promise<MaterialSpec> {
-  const res = await api.post<{ spec: MaterialSpec }>(`/api/properties/${propertyId}/materials`, body);
-  return res.data.spec;
+export interface CreateSpecResult {
+  spec: MaterialSpec;
+  // Non-blocking: other active specs in the same category+surface(+room) —
+  // this may be the same real-world surface already captured, or a genuine
+  // second instance. Only populated when a `surface` was given.
+  possibleDuplicates: { id: string; label: string; lifecycleStatus: MaterialLifecycleStatus }[];
+}
+
+export async function createSpec(propertyId: string, body: CreateSpecInput): Promise<CreateSpecResult> {
+  const res = await api.post<CreateSpecResult>(`/api/properties/${propertyId}/materials`, body);
+  return res.data;
 }
 
 export async function updateSpec(propertyId: string, specId: string, body: Partial<CreateSpecInput> & { isActive?: boolean }): Promise<MaterialSpec> {

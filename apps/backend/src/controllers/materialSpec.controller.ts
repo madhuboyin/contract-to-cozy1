@@ -72,7 +72,7 @@ export async function createSpec(req: CustomRequest, res: Response, next: NextFu
       {},
       'materialSpecifications',
     );
-    const spec = await service.createSpec(propertyId, req.body, req.user!.userId);
+    const { spec, possibleDuplicates } = await service.createSpec(propertyId, req.body, req.user!.userId);
     const propertyContext = await getProjectComplianceEnvelope(propertyId, req.user!.userId, 'MATERIAL_SPECS');
 
     analyticsEmitter.track({
@@ -89,7 +89,7 @@ export async function createSpec(req: CustomRequest, res: Response, next: NextFu
       events: [materialSpecCompletionEvent(spec, 'create')],
     }).catch(() => undefined);
 
-    res.status(201).json({ success: true, data: { spec, propertyContext } });
+    res.status(201).json({ success: true, data: { spec, propertyContext, possibleDuplicates } });
   } catch (err) {
     next(err);
   }

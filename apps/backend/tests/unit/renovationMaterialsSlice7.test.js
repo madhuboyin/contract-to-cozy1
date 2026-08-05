@@ -89,3 +89,16 @@ test('Project delivery creates proposed material and completion requires verifie
   assert.match(projectSource, /material\.lifecycleStatus === 'AS_BUILT'/);
   assert.match(projectSource, /material\.verificationConfidence === 'VERIFIED'/);
 });
+
+test('Slice 5: same category+surface(+room) creation surfaces a non-blocking duplicate suggestion, and supplier freshness fields exist', () => {
+  const schema = fs.readFileSync(
+    path.join(__dirname, '../../prisma/schema.prisma'),
+    'utf8',
+  );
+  assert.match(schema, /supplierCheckedAt\s+DateTime\?/);
+  assert.match(schema, /supplierDiscontinued\s+Boolean\s+@default\(false\)/);
+  assert.match(schema, /successorProductUrl\s+String\?/);
+
+  assert.match(materialSource, /possibleDuplicates/);
+  assert.match(materialSource, /return \{ spec, possibleDuplicates \};/);
+});

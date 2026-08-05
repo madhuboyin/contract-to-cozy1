@@ -16158,6 +16158,12 @@ model MaterialSpec {
   material          String?
   supplier          String?
   supplierUrl       String?
+  // Product-source freshness — supplierUrl can go stale; these let a
+  // homeowner (or a future reminder job) know whether it's still good
+  // without re-checking every time the record is opened.
+  supplierCheckedAt     DateTime?
+  supplierDiscontinued  Boolean   @default(false)
+  successorProductUrl   String?
   purchaseDate      DateTime?
   quantityPurchased String?
   lotBatch          String?

@@ -4728,6 +4728,7 @@ export interface MaterialSpec {
   label: string; manufacturer?: string | null; productLine?: string | null; productName?: string | null;
   sku?: string | null; colorCode?: string | null; colorHex?: string | null; finish?: string | null;
   dimensions?: string | null; material?: string | null; supplier?: string | null; supplierUrl?: string | null;
+  supplierCheckedAt?: string | null; supplierDiscontinued: boolean; successorProductUrl?: string | null;
   purchaseDate?: string | null; quantityPurchased?: string | null; lotBatch?: string | null;
   notes?: string | null; isActive: boolean;
   linkedInventoryItemId?: string | null; projectId?: string | null;

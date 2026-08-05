@@ -25,8 +25,16 @@ import {
   deleteSpec,
   getSpec,
   reviewMaterialExtraction,
+  updateSpec,
 } from '../materialSpecApi';
 import { SpecForm } from '../MaterialSpecsClient';
+import { LifecycleForm, SubstitutionForm } from '../../projects/[projectId]/materials/page';
+
+const NEXT_ACTION: Record<string, string> = {
+  PROPOSED: 'Approve selection',
+  APPROVED: 'Record installation',
+  INSTALLED: 'Verify as-built',
+};
 
 const CATEGORY_LABELS: Record<string, string> = {
   PAINT: 'Paint', TILE: 'Tile', FLOORING: 'Flooring', GROUT: 'Grout',
@@ -86,6 +94,7 @@ export default function SpecDetailClient() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [lifecycleAction, setLifecycleAction] = useState<'transition' | 'substitute' | null>(null);
 
   useEffect(() => {
     if (!propertyId || !specId) return;
@@ -96,6 +105,21 @@ export default function SpecDetailClient() {
       .catch(() => setError('Failed to load material spec.'))
       .finally(() => setLoading(false));
   }, [propertyId, specId]);
+
+  const [markingChecked, setMarkingChecked] = useState(false);
+
+  async function handleMarkSupplierChecked() {
+    if (!propertyId || !specId) return;
+    setMarkingChecked(true);
+    try {
+      const updated = await updateSpec(propertyId, specId, { supplierCheckedAt: new Date().toISOString() });
+      setSpec(updated);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update supplier check date.', variant: 'destructive' });
+    } finally {
+      setMarkingChecked(false);
+    }
+  }
 
   async function handleDeletePhoto(photoId: string) {
     if (!propertyId || !specId) return;
@@ -203,6 +227,51 @@ export default function SpecDetailClient() {
           </div>
         </div>
 
+        {(NEXT_ACTION[spec.lifecycleStatus] || ['PROPOSED', 'APPROVED'].includes(spec.lifecycleStatus)) && (
+          <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Lifecycle</h2>
+            <div className="flex flex-wrap gap-2">
+              {NEXT_ACTION[spec.lifecycleStatus] && (
+                <Button
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setLifecycleAction(lifecycleAction === 'transition' ? null : 'transition')}
+                >
+                  {NEXT_ACTION[spec.lifecycleStatus]}
+                </Button>
+              )}
+              {['PROPOSED', 'APPROVED'].includes(spec.lifecycleStatus) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => setLifecycleAction(lifecycleAction === 'substitute' ? null : 'substitute')}
+                >
+                  Record substitution
+                </Button>
+              )}
+            </div>
+            {lifecycleAction === 'transition' && (
+              <div className="mt-3">
+                <LifecycleForm
+                  material={spec}
+                  propertyId={propertyId}
+                  onSaved={async () => { setLifecycleAction(null); setSpec(await getSpec(propertyId, specId)); toast({ title: 'Material updated' }); }}
+                />
+              </div>
+            )}
+            {lifecycleAction === 'substitute' && (
+              <div className="mt-3">
+                <SubstitutionForm
+                  material={spec}
+                  propertyId={propertyId}
+                  onSaved={async () => { setLifecycleAction(null); setSpec(await getSpec(propertyId, specId)); toast({ title: 'Substitution recorded' }); }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Identity</h2>
           <div className="grid grid-cols-2 gap-4">
@@ -263,6 +332,35 @@ export default function SpecDetailClient() {
             <DetailRow label="Remaining Material Location" value={spec.remainingStorageLocation} />
             <DetailRow label="Installed By" value={spec.installedByName} />
           </div>
+          {spec.supplierUrl && (
+            <>
+              <Separator className="my-4" />
+              <div className="flex flex-wrap items-center gap-2">
+                {spec.supplierDiscontinued && (
+                  <span className="inline-flex items-center rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                    Discontinued
+                  </span>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Supplier link {spec.supplierCheckedAt ? `last checked ${spec.supplierCheckedAt.slice(0, 10)}` : 'not yet checked'}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={handleMarkSupplierChecked}
+                  disabled={markingChecked}
+                >
+                  {markingChecked ? 'Saving…' : 'Mark checked today'}
+                </Button>
+              </div>
+              {spec.successorProductUrl && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Successor product: <a href={spec.successorProductUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{spec.successorProductUrl}</a>
+                </p>
+              )}
+            </>
+          )}
           {spec.lifecycleStatus === 'AS_BUILT' && (
             <>
               <Separator className="my-4" />

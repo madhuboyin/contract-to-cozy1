@@ -247,7 +247,7 @@ function AddMaterialForm({ propertyId, projectId, scopeVersionId, onSaved }: {
   );
 }
 
-function LifecycleForm({ material, propertyId, onSaved }: {
+export function LifecycleForm({ material, propertyId, onSaved }: {
   material: MaterialSpec;
   propertyId: string;
   onSaved: () => void;
@@ -335,7 +335,7 @@ function LifecycleForm({ material, propertyId, onSaved }: {
   );
 }
 
-function SubstitutionForm({ material, propertyId, onSaved }: {
+export function SubstitutionForm({ material, propertyId, onSaved }: {
   material: MaterialSpec;
   propertyId: string;
   onSaved: () => void;

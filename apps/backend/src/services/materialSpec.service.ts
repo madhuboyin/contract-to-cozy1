@@ -658,6 +658,9 @@ export class MaterialSpecService {
     material?: string | null;
     supplier?: string | null;
     supplierUrl?: string | null;
+    supplierCheckedAt?: string | null;
+    supplierDiscontinued?: boolean;
+    successorProductUrl?: string | null;
     purchaseDate?: string | null;
     quantityPurchased?: string | null;
     lotBatch?: string | null;
@@ -684,6 +687,24 @@ export class MaterialSpecService {
       colorHex = lookupColorHex(payload.manufacturer, payload.colorCode);
     }
 
+    // Same category + surface (+ room, for room-scoped items) suggests this
+    // may be the same real-world surface already captured — surfaced as a
+    // non-blocking suggestion, not a uniqueness constraint, since a homeowner
+    // may legitimately be recording a genuine replacement or a second spot.
+    const possibleDuplicates = payload.surface
+      ? await prisma.materialSpec.findMany({
+        where: {
+          propertyId,
+          isActive: true,
+          category: payload.category,
+          surface: payload.surface as any,
+          ...(payload.scopeLevel === 'ROOM' ? { roomId: payload.roomId ?? null } : {}),
+        },
+        select: { id: true, label: true, lifecycleStatus: true },
+        take: 3,
+      })
+      : [];
+
     const spec = await prisma.materialSpec.create({
       data: {
         propertyId,
@@ -703,6 +724,9 @@ export class MaterialSpecService {
         material: payload.material ?? null,
         supplier: payload.supplier ?? null,
         supplierUrl: payload.supplierUrl ?? null,
+        supplierCheckedAt: payload.supplierCheckedAt ? new Date(payload.supplierCheckedAt) : null,
+        supplierDiscontinued: payload.supplierDiscontinued ?? false,
+        successorProductUrl: payload.successorProductUrl ?? null,
         purchaseDate: payload.purchaseDate ? new Date(payload.purchaseDate) : null,
         quantityPurchased: payload.quantityPurchased ?? null,
         lotBatch: payload.lotBatch ?? null,
@@ -735,7 +759,7 @@ export class MaterialSpecService {
       },
     });
 
-    return spec;
+    return { spec, possibleDuplicates };
   }
 
   async updateSpec(propertyId: string, specId: string, payload: Partial<Parameters<MaterialSpecService['createSpec']>[1]>) {
@@ -778,6 +802,11 @@ export class MaterialSpecService {
     if (payload.material !== undefined) updateData.material = payload.material;
     if (payload.supplier !== undefined) updateData.supplier = payload.supplier;
     if (payload.supplierUrl !== undefined) updateData.supplierUrl = payload.supplierUrl;
+    if (payload.supplierCheckedAt !== undefined) {
+      updateData.supplierCheckedAt = payload.supplierCheckedAt ? new Date(payload.supplierCheckedAt) : null;
+    }
+    if (payload.supplierDiscontinued !== undefined) updateData.supplierDiscontinued = payload.supplierDiscontinued;
+    if (payload.successorProductUrl !== undefined) updateData.successorProductUrl = payload.successorProductUrl;
     if (payload.purchaseDate !== undefined) updateData.purchaseDate = payload.purchaseDate ? new Date(payload.purchaseDate) : null;
     if (payload.quantityPurchased !== undefined) updateData.quantityPurchased = payload.quantityPurchased;
     if (payload.lotBatch !== undefined) updateData.lotBatch = payload.lotBatch;

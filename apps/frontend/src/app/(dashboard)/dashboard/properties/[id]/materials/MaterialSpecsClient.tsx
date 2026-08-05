@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Plus, Search, X } from 'lucide-react';
 
-import type { InventoryRoom, MaterialCategory, MaterialSpec, MaterialSpecExport, MaterialScopeLevel } from '@/types';
+import type { InventoryRoom, MaterialCategory, MaterialSpec, MaterialSpecExport, MaterialScopeLevel, MaterialSurface } from '@/types';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,24 @@ const ALL_CATEGORIES: MaterialCategory[] = [
   'HARDWARE', 'TRIM_MOLDING', 'WALLPAPER', 'ROOFING', 'SIDING',
   'WINDOW', 'DOOR', 'INSULATION', 'OTHER',
 ];
+
+const SURFACE_LABELS: Record<MaterialSurface, string> = {
+  WALLS: 'Walls',
+  CEILING: 'Ceiling',
+  FLOOR: 'Floor',
+  BACKSPLASH: 'Backsplash',
+  SHOWER_WALLS: 'Shower walls',
+  SHOWER_FLOOR: 'Shower floor',
+  TUB_SURROUND: 'Tub surround',
+  COUNTERTOP: 'Countertop',
+  EXTERIOR_FACADE: 'Exterior facade',
+  TRIM: 'Trim',
+  DOORS: 'Doors',
+  WINDOWS: 'Windows',
+  CABINETRY: 'Cabinetry',
+  OTHER: 'Other',
+};
+const ALL_SURFACES = Object.keys(SURFACE_LABELS) as MaterialSurface[];
 
 function categoryBadgeClass(cat: MaterialCategory): string {
   switch (cat) {
@@ -148,6 +166,7 @@ function SpecForm({
 }: SpecFormProps) {
   const [label, setLabel] = useState(initialValues?.label ?? '');
   const [category, setCategory] = useState<MaterialCategory>(initialValues?.category ?? 'PAINT');
+  const [surface, setSurface] = useState<MaterialSurface | ''>(initialValues?.surface ?? '');
   const [scopeLevel, setScopeLevel] = useState<MaterialScopeLevel>(initialValues?.scopeLevel ?? 'PROPERTY');
   const [roomId, setRoomId] = useState<string>(initialValues?.roomId ?? '');
   const [manufacturer, setManufacturer] = useState(initialValues?.manufacturer ?? '');
@@ -156,6 +175,9 @@ function SpecForm({
   const [finish, setFinish] = useState(initialValues?.finish ?? '');
   const [sku, setSku] = useState(initialValues?.sku ?? '');
   const [supplier, setSupplier] = useState(initialValues?.supplier ?? '');
+  const [supplierUrl, setSupplierUrl] = useState(initialValues?.supplierUrl ?? '');
+  const [supplierDiscontinued, setSupplierDiscontinued] = useState(initialValues?.supplierDiscontinued ?? false);
+  const [successorProductUrl, setSuccessorProductUrl] = useState(initialValues?.successorProductUrl ?? '');
   const [notes, setNotes] = useState(initialValues?.notes ?? '');
   const [purchaseDate, setPurchaseDate] = useState(initialValues?.purchaseDate?.slice(0, 10) ?? '');
   const [quantityPurchased, setQuantityPurchased] = useState(initialValues?.quantityPurchased ?? '');
@@ -181,6 +203,7 @@ function SpecForm({
       const body: CreateSpecInput & { isActive?: boolean } = {
         label: label.trim(),
         category,
+        surface: surface || null,
         scopeLevel,
         roomId: scopeLevel === 'ROOM' && roomId ? roomId : null,
         manufacturer: manufacturer || null,
@@ -189,6 +212,7 @@ function SpecForm({
         finish: finish || null,
         sku: sku || null,
         supplier: supplier || null,
+        supplierUrl: supplierUrl || null,
         notes: notes || null,
         projectId: initialValues?.projectId ?? null,
         purchaseDate: purchaseDate || null,
@@ -196,14 +220,25 @@ function SpecForm({
         lotBatch: lotBatch || null,
         careInstructions: careInstructions || null,
       };
-      if (isEdit) body.isActive = isActive;
+      if (isEdit) {
+        body.isActive = isActive;
+        body.supplierDiscontinued = supplierDiscontinued;
+        body.successorProductUrl = successorProductUrl || null;
+      }
 
       let spec: MaterialSpec;
       if (isEdit && initialValues?.id) {
         const { updateSpec } = await import('./materialSpecApi');
         spec = await updateSpec(propertyId, initialValues.id, body);
       } else {
-        spec = await createSpec(propertyId, body);
+        const result = await createSpec(propertyId, body);
+        spec = result.spec;
+        if (result.possibleDuplicates.length > 0) {
+          toast({
+            title: 'Similar material already captured',
+            description: `${result.possibleDuplicates[0].label} covers the same category and surface. This is saved as a separate record — link or archive one if it's a duplicate.`,
+          });
+        }
       }
       onSuccess(spec);
     } catch {
@@ -235,6 +270,19 @@ function SpecForm({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="spec-surface">Surface (optional)</Label>
+        <Select value={surface || undefined} onValueChange={v => setSurface(v as MaterialSurface)}>
+          <SelectTrigger id="spec-surface"><SelectValue placeholder="Where is this installed?" /></SelectTrigger>
+          <SelectContent>
+            {ALL_SURFACES.map(s => (
+              <SelectItem key={s} value={s}>{SURFACE_LABELS[s]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">Helps flag when a room/surface already has a captured material.</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -303,6 +351,11 @@ function SpecForm({
         <Input id="spec-supplier" value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="e.g. Home Depot" />
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="spec-supplier-url">Supplier URL</Label>
+        <Input id="spec-supplier-url" type="url" value={supplierUrl} onChange={e => setSupplierUrl(e.target.value)} placeholder="Link to the product page" />
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="spec-date">Purchase Date</Label>
@@ -320,14 +373,30 @@ function SpecForm({
       </div>
 
       {isEdit && (
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="spec-active"
-            checked={isActive}
-            onCheckedChange={checked => setIsActive(Boolean(checked))}
-          />
-          <Label htmlFor="spec-active">Active</Label>
-        </div>
+        <>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="spec-active"
+              checked={isActive}
+              onCheckedChange={checked => setIsActive(Boolean(checked))}
+            />
+            <Label htmlFor="spec-active">Active</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="spec-discontinued"
+              checked={supplierDiscontinued}
+              onCheckedChange={checked => setSupplierDiscontinued(Boolean(checked))}
+            />
+            <Label htmlFor="spec-discontinued">Supplier product is discontinued</Label>
+          </div>
+          {supplierDiscontinued && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="spec-successor">Successor product URL</Label>
+              <Input id="spec-successor" type="url" value={successorProductUrl} onChange={e => setSuccessorProductUrl(e.target.value)} placeholder="Link to the replacement product, if known" />
+            </div>
+          )}
+        </>
       )}
 
       <div className="flex gap-2 pt-2">
