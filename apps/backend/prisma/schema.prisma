@@ -4594,6 +4594,124 @@ model SellerPrepLead {
   @@index([propertyId, leadType])
 }
 
+// Slice 8 of HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_
+// PLAN.md §6.4 "Sale transition". One shared case per property (not
+// per-user like SellerPrepPlan) — replaces the static ROI checklist with a
+// readiness journey projected from canonical findings/projects/permits/
+// Home Actions/records instead of self-reported completion.
+enum SaleCaseStatus {
+  PREPARING
+  LISTED
+  UNDER_CONTRACT
+  CLOSED
+  CANCELLED
+}
+
+enum SaleReadinessSourceType {
+  INSPECTION_FINDING
+  PROJECT
+  PERMIT
+  HOME_ACTION
+  PROPERTY_RECORD
+}
+
+enum SaleReadinessCategory {
+  SAFETY_STRUCTURAL
+  SYSTEMS_MAINTENANCE
+  PERMITS_DISCLOSURE
+  DOCUMENTATION_RECORDS
+  FINANCIAL_DECISION
+  PRESENTATION
+}
+
+// Mirrors plan §8's five distinguished requirement classes.
+enum SaleReadinessRequirementClass {
+  MATERIAL_BLOCKER
+  VERIFICATION_NEEDED
+  OPTIONAL_IMPROVEMENT
+  PRESENTATION
+  PROFESSIONAL_DECISION
+}
+
+enum SaleReadinessItemStatus {
+  OPEN
+  RESOLVED
+  WAIVED
+}
+
+model PropertySaleCase {
+  id              String         @id @default(uuid())
+  propertyId      String         @unique
+  status          SaleCaseStatus @default(PREPARING)
+  targetListDate  DateTime?
+  targetCloseDate DateTime?
+  listedAt        DateTime?
+  underContractAt DateTime?
+  closedAt        DateTime?
+  createdByUserId String
+  // Set when a canonical Home Action later triggers case creation; unused
+  // for now (parity with SellerPrepPlan.sourceActionId).
+  sourceActionId  String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  readinessItems SaleReadinessItem[]
+  transitions    PropertyTransition[]
+
+  @@index([status])
+}
+
+// Projected, not self-reported: each row is (re)synced from a canonical
+// source on read. sourceEntityType/sourceEntityId mirror OperationalWorkItem's
+// subjectType/subjectId pattern; canonicalWorkItemId points at the
+// OperationalWorkItem when the source is HOME_ACTION so status isn't
+// duplicated (plan §6.4: "reference canonical work items, not duplicate
+// their status").
+model SaleReadinessItem {
+  id                  String                         @id @default(uuid())
+  saleCaseId          String
+  sourceEntityType    SaleReadinessSourceType
+  sourceEntityId      String
+  category            SaleReadinessCategory
+  requirementClass    SaleReadinessRequirementClass
+  status              SaleReadinessItemStatus         @default(OPEN)
+  title               String
+  detail              String?
+  dueAt               DateTime?
+  canonicalWorkItemId String?
+  resolvedAt          DateTime?
+  // A homeowner-acknowledged "we're disclosing and not fixing this" decision
+  // (PROFESSIONAL_DECISION items especially) — distinct from RESOLVED, which
+  // means the underlying source itself cleared.
+  waivedAt            DateTime?
+  waivedByUserId      String?
+  waivedReason        String?
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
+
+  saleCase PropertySaleCase @relation(fields: [saleCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([saleCaseId, sourceEntityType, sourceEntityId])
+  @@index([saleCaseId, status])
+}
+
+model PropertyTransition {
+  id                      String    @id @default(uuid())
+  saleCaseId              String
+  effectiveAt             DateTime?
+  sellerRetentionDecision String?
+  // Loose reference to a PropertyBriefShare id (buyer handoff package);
+  // cross-module, intentionally not a Prisma relation.
+  buyerPackageId          String?
+  acceptedAt              DateTime?
+  completedAt             DateTime?
+  createdAt               DateTime  @default(now())
+
+  saleCase PropertySaleCase @relation(fields: [saleCaseId], references: [id], onDelete: Cascade)
+
+  @@index([saleCaseId])
+}
+
 // Generic app-wide product feedback (thumbs up/down + optional comment).
 // Originally seller-prep-only (SellerPrepFeedback); generalized so any page
 // in the app can submit feedback via POST /api/feedback. propertyId/page

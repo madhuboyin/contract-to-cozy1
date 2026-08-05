@@ -169,6 +169,15 @@ export default function SellerPrepOverview({
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* LEFT COLUMN: Main Interaction Area */}
       <div className="lg:col-span-8 space-y-6">
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          The checklist below is general, not calculated for this property. For a governed
+          readiness case built from this property&apos;s actual findings, projects, permits,
+          Home Actions, and records, see{' '}
+          <Link href={`/dashboard/properties/${propertyId}/tools/sale-case`} className="font-medium underline">
+            Sale Readiness
+          </Link>
+          .
+        </div>
         <Tabs defaultValue="checklist" className="w-full">
           {/* Layout Fix: Single row grid-cols-4 */}
           <TabsList className="no-scrollbar mb-6 flex h-auto overflow-x-auto p-1 bg-muted/50 md:grid md:w-full md:grid-cols-4">

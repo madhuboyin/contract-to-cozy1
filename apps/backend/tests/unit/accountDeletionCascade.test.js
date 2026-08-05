@@ -13,6 +13,7 @@ function createTx({ homeownerProfile = null } = {}) {
     sellerPrepPlanDeleteMany: [],
     sellerPrepLeadDeleteMany: [],
     feedbackDeleteMany: [],
+    propertySaleCaseDeleteMany: [],
     homeownerProfileDelete: [],
     householdMemberDeleteMany: [],
   };
@@ -38,6 +39,11 @@ function createTx({ homeownerProfile = null } = {}) {
     feedback: {
       deleteMany: async (args) => {
         calls.feedbackDeleteMany.push(args);
+      },
+    },
+    propertySaleCase: {
+      deleteMany: async (args) => {
+        calls.propertySaleCaseDeleteMany.push(args);
       },
     },
     householdMember: {

@@ -1,0 +1,385 @@
+// apps/backend/src/services/propertySaleCase.service.ts
+//
+// Slice 8 of HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_
+// PLAN.md — one property-shared PropertySaleCase replacing the per-user
+// SellerPrepPlan static checklist. Readiness items are projected (synced)
+// from canonical sources on every read rather than self-reported, per the
+// plan's exit gate: "Seller readiness reflects real property work and
+// records, not generic tasks or self-reported completion percentages."
+import type {
+  HouseholdRole,
+  SaleCaseStatus,
+  SaleReadinessCategory,
+  SaleReadinessItemStatus,
+  SaleReadinessRequirementClass,
+  SaleReadinessSourceType,
+} from '@prisma/client';
+import { prisma } from '../lib/prisma';
+import { auditLog } from '../lib/logger';
+import { APIError } from '../middleware/error.middleware';
+import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import { listWorkItems } from '../modules/homeOperations/application/listWorkItems.usecase';
+import { homeRecordsService } from './homeRecords.service';
+
+type ProjectedItem = {
+  sourceEntityType: SaleReadinessSourceType;
+  sourceEntityId: string;
+  category: SaleReadinessCategory;
+  requirementClass: SaleReadinessRequirementClass;
+  title: string;
+  detail?: string | null;
+  dueAt?: Date | null;
+  canonicalWorkItemId?: string | null;
+};
+
+const RECORD_TYPES_RELEVANT_TO_SALE = new Set([
+  'DEED', 'TAX_DOCUMENT', 'DISCLOSURE', 'SURVEY', 'PERMIT',
+  'INSURANCE_POLICY', 'WARRANTY', 'CLOSING_DOCUMENT',
+]);
+
+const UNRESOLVED_UNPERMITTED_FLAG_STATUSES = new Set([
+  'FLAGGED', 'INVESTIGATING', 'CONFIRMED_UNPERMITTED', 'WILL_REMEDIATE',
+]);
+
+const OPEN_PROJECT_STATUSES = new Set(['PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED']);
+
+const HOME_ACTION_TIER_MAP: Record<
+  string,
+  { category: SaleReadinessCategory; requirementClass: SaleReadinessRequirementClass }
+> = {
+  SAFETY_EMERGENCY: { category: 'SAFETY_STRUCTURAL', requirementClass: 'MATERIAL_BLOCKER' },
+  REGULATED_COVERAGE: { category: 'PERMITS_DISCLOSURE', requirementClass: 'VERIFICATION_NEEDED' },
+  MATERIAL_FINANCIAL: { category: 'FINANCIAL_DECISION', requirementClass: 'PROFESSIONAL_DECISION' },
+  LOW_CONSEQUENCE: { category: 'SYSTEMS_MAINTENANCE', requirementClass: 'OPTIONAL_IMPROVEMENT' },
+};
+
+const CLOSED_HOME_ACTION_STATES = new Set(['CLOSED', 'VERIFIED']);
+
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+async function projectInspectionFindings(propertyId: string): Promise<ProjectedItem[]> {
+  const findings = await prisma.inspectionFinding.findMany({
+    where: { propertyId, status: 'OPEN', severity: { not: 'INFORMATIONAL' } },
+    select: { id: true, severity: true, homeSystem: true, subsystem: true, inspectorDescription: true },
+  });
+  return findings.map((finding) => {
+    const isSafety = finding.severity === 'SAFETY';
+    const isMajor = finding.severity === 'MAJOR';
+    return {
+      sourceEntityType: 'INSPECTION_FINDING' as const,
+      sourceEntityId: finding.id,
+      category: isSafety || isMajor ? 'SAFETY_STRUCTURAL' : 'SYSTEMS_MAINTENANCE',
+      requirementClass: isSafety
+        ? 'MATERIAL_BLOCKER'
+        : isMajor
+          ? 'VERIFICATION_NEEDED'
+          : 'OPTIONAL_IMPROVEMENT',
+      title: `${finding.homeSystem}${finding.subsystem ? ` — ${finding.subsystem}` : ''}: unresolved inspection finding`,
+      detail: truncate(finding.inspectorDescription, 500),
+    };
+  });
+}
+
+async function projectProjects(propertyId: string): Promise<ProjectedItem[]> {
+  const projects = await prisma.projectRecord.findMany({
+    where: { propertyId, status: { in: Array.from(OPEN_PROJECT_STATUSES) as any } },
+    select: { id: true, name: true, status: true },
+  });
+  return projects.map((project) => ({
+    sourceEntityType: 'PROJECT' as const,
+    sourceEntityId: project.id,
+    category: 'SYSTEMS_MAINTENANCE' as const,
+    requirementClass: project.status === 'PLANNING' ? 'PROFESSIONAL_DECISION' as const : 'MATERIAL_BLOCKER' as const,
+    title: `Unfinished project: ${project.name}`,
+    detail: `Status: ${project.status}`,
+  }));
+}
+
+async function projectPermits(propertyId: string): Promise<ProjectedItem[]> {
+  const [unverified, unpermitted] = await Promise.all([
+    prisma.propertyPermitRecord.findMany({
+      where: { propertyId, isActive: true, isVerified: false },
+      select: { id: true, category: true, description: true },
+    }),
+    prisma.permitUnpermittedFlag.findMany({
+      where: { propertyId, status: { in: Array.from(UNRESOLVED_UNPERMITTED_FLAG_STATUSES) as any } },
+      select: { id: true, workType: true, flagReason: true, disclosureRisk: true },
+    }),
+  ]);
+
+  const fromRecords: ProjectedItem[] = unverified.map((permit) => ({
+    sourceEntityType: 'PERMIT' as const,
+    sourceEntityId: permit.id,
+    category: 'PERMITS_DISCLOSURE' as const,
+    requirementClass: 'VERIFICATION_NEEDED' as const,
+    title: `Unverified permit: ${permit.category}`,
+    detail: permit.description ?? null,
+  }));
+
+  const fromFlags: ProjectedItem[] = unpermitted.map((flag) => ({
+    sourceEntityType: 'PERMIT' as const,
+    // Distinct id-space from PropertyPermitRecord ids; unique constraint is
+    // per (saleCaseId, sourceEntityType, sourceEntityId) so no collision risk.
+    sourceEntityId: flag.id,
+    category: 'PERMITS_DISCLOSURE' as const,
+    requirementClass: 'PROFESSIONAL_DECISION' as const,
+    title: `Possible unpermitted work: ${flag.workType}`,
+    detail: `${flag.flagReason} (disclosure risk: ${flag.disclosureRisk})`,
+  }));
+
+  return [...fromRecords, ...fromFlags];
+}
+
+async function projectHomeActions(propertyId: string): Promise<ProjectedItem[]> {
+  const items = await listWorkItems({ propertyId });
+  return items
+    .filter((item) => !CLOSED_HOME_ACTION_STATES.has(item.state) && item.acceptanceState !== 'DECLINED')
+    .map((item) => {
+      const tier = HOME_ACTION_TIER_MAP[item.safetyTier] ?? HOME_ACTION_TIER_MAP.LOW_CONSEQUENCE;
+      return {
+        sourceEntityType: 'HOME_ACTION' as const,
+        sourceEntityId: item.id,
+        category: tier.category,
+        requirementClass: tier.requirementClass,
+        title: item.title,
+        detail: item.homeownerReason ?? null,
+        dueAt: item.dueAt,
+        canonicalWorkItemId: item.id,
+      };
+    });
+}
+
+async function projectRecords(propertyId: string, role: HouseholdRole): Promise<ProjectedItem[]> {
+  const records = await homeRecordsService.list(propertyId, role, { lifecycleStatus: 'ACTIVE' });
+  return records
+    .filter((record: any) =>
+      RECORD_TYPES_RELEVANT_TO_SALE.has(record.recordType) &&
+      (record.needsReview || record.expiryStatus === 'EXPIRED' || record.expiryStatus === 'EXPIRING_SOON'))
+    .map((record: any) => ({
+      sourceEntityType: 'PROPERTY_RECORD' as const,
+      sourceEntityId: record.id,
+      category: 'DOCUMENTATION_RECORDS' as const,
+      requirementClass: 'VERIFICATION_NEEDED' as const,
+      title: `${record.title}: needs review before listing`,
+      detail: record.expiryStatus === 'EXPIRED'
+        ? 'Expired'
+        : record.expiryStatus === 'EXPIRING_SOON'
+          ? 'Expiring soon'
+          : 'Pending extraction review',
+    }));
+}
+
+async function syncReadinessItems(saleCaseId: string, propertyId: string, role: HouseholdRole): Promise<void> {
+  const [findings, projects, permits, homeActions, records] = await Promise.all([
+    projectInspectionFindings(propertyId),
+    projectProjects(propertyId),
+    projectPermits(propertyId),
+    projectHomeActions(propertyId),
+    projectRecords(propertyId, role),
+  ]);
+  const projected = [...findings, ...projects, ...permits, ...homeActions, ...records];
+  const projectedKeys = new Set(projected.map((p) => `${p.sourceEntityType}:${p.sourceEntityId}`));
+
+  const existing = await prisma.saleReadinessItem.findMany({ where: { saleCaseId } });
+  const existingByKey = new Map(existing.map((item) => [`${item.sourceEntityType}:${item.sourceEntityId}`, item]));
+
+  await prisma.$transaction([
+    ...projected.map((item) => {
+      const key = `${item.sourceEntityType}:${item.sourceEntityId}`;
+      const current = existingByKey.get(key);
+      // A WAIVED item stays waived even while its source condition
+      // persists — that's the point of a waive (explicit disclose-and-
+      // accept decision). Only RESOLVED items get revived to OPEN.
+      const status: SaleReadinessItemStatus = current?.status === 'WAIVED' ? 'WAIVED' : 'OPEN';
+      return prisma.saleReadinessItem.upsert({
+        where: { saleCaseId_sourceEntityType_sourceEntityId: { saleCaseId, sourceEntityType: item.sourceEntityType, sourceEntityId: item.sourceEntityId } },
+        create: {
+          saleCaseId,
+          sourceEntityType: item.sourceEntityType,
+          sourceEntityId: item.sourceEntityId,
+          category: item.category,
+          requirementClass: item.requirementClass,
+          title: item.title,
+          detail: item.detail ?? null,
+          dueAt: item.dueAt ?? null,
+          canonicalWorkItemId: item.canonicalWorkItemId ?? null,
+          status,
+        },
+        update: {
+          category: item.category,
+          requirementClass: item.requirementClass,
+          title: item.title,
+          detail: item.detail ?? null,
+          dueAt: item.dueAt ?? null,
+          canonicalWorkItemId: item.canonicalWorkItemId ?? null,
+          status,
+          resolvedAt: null,
+        },
+      });
+    }),
+    // Sources that no longer appear (fixed, closed, resolved) — auto-resolve
+    // unless the homeowner had already waived it, which is a durable decision.
+    ...existing
+      .filter((item) => !projectedKeys.has(`${item.sourceEntityType}:${item.sourceEntityId}`) && item.status === 'OPEN')
+      .map((item) => prisma.saleReadinessItem.update({
+        where: { id: item.id },
+        data: { status: 'RESOLVED' as SaleReadinessItemStatus, resolvedAt: new Date() },
+      })),
+  ]);
+}
+
+async function requireAccess(userId: string, propertyId: string, minimumRole?: 'CONTRIBUTOR' | 'OWNER') {
+  const access = await resolvePropertyAccess(userId, propertyId);
+  if (!access) throw new APIError('Property not found or unauthorized', 404, 'PROPERTY_NOT_FOUND');
+  if (minimumRole && ROLE_RANK[access.role] < ROLE_RANK[minimumRole]) {
+    throw new APIError('Insufficient household role', 403, 'SALE_CASE_ROLE_INSUFFICIENT');
+  }
+  return access;
+}
+
+export class PropertySaleCaseService {
+  static async getCase(userId: string, propertyId: string) {
+    const access = await requireAccess(userId, propertyId);
+    const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
+    if (!saleCase) {
+      const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { propertyUse: true } });
+      return {
+        propertyId,
+        saleIntentConfirmed: false,
+        canCreate: property?.propertyUse === 'FOR_SALE' && ROLE_RANK[access.role] >= ROLE_RANK.CONTRIBUTOR,
+        saleCase: null,
+        readinessItems: [],
+      };
+    }
+
+    await syncReadinessItems(saleCase.id, propertyId, access.role);
+    const readinessItems = await prisma.saleReadinessItem.findMany({
+      where: { saleCaseId: saleCase.id },
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return {
+      propertyId,
+      saleIntentConfirmed: true,
+      canCreate: false,
+      saleCase,
+      readinessItems,
+    };
+  }
+
+  static async createCase(userId: string, propertyId: string) {
+    const access = await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { propertyUse: true } });
+    if (property?.propertyUse !== 'FOR_SALE') {
+      throw new APIError(
+        'Confirm the property is for sale before starting a sale case.',
+        409,
+        'SALE_CASE_INTENT_NOT_CONFIRMED',
+      );
+    }
+
+    const existing = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
+    if (existing) return existing;
+
+    const saleCase = await prisma.propertySaleCase.create({
+      data: { propertyId, createdByUserId: userId, status: 'PREPARING' },
+    });
+    auditLog('SALE_CASE_CREATED', userId, { propertyId, saleCaseId: saleCase.id });
+    await syncReadinessItems(saleCase.id, propertyId, access.role);
+    return saleCase;
+  }
+
+  static async updateTargetDates(
+    userId: string,
+    propertyId: string,
+    updates: { targetListDate?: Date | null; targetCloseDate?: Date | null },
+  ) {
+    await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
+    if (!saleCase) throw new APIError('Sale case not found', 404, 'SALE_CASE_NOT_FOUND');
+    return prisma.propertySaleCase.update({ where: { id: saleCase.id }, data: updates });
+  }
+
+  static async transitionStatus(userId: string, propertyId: string, nextStatus: SaleCaseStatus) {
+    await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
+    if (!saleCase) throw new APIError('Sale case not found', 404, 'SALE_CASE_NOT_FOUND');
+
+    const FORWARD_ORDER: SaleCaseStatus[] = ['PREPARING', 'LISTED', 'UNDER_CONTRACT', 'CLOSED'];
+    const currentIndex = FORWARD_ORDER.indexOf(saleCase.status);
+    const nextIndex = FORWARD_ORDER.indexOf(nextStatus);
+    const isForwardStep = currentIndex >= 0 && nextIndex === currentIndex + 1;
+    const isCancellation = nextStatus === 'CANCELLED' && saleCase.status !== 'CLOSED' && saleCase.status !== 'CANCELLED';
+    if (!isForwardStep && !isCancellation) {
+      throw new APIError(
+        `Cannot move sale case from ${saleCase.status} to ${nextStatus}`,
+        409,
+        'SALE_CASE_TRANSITION_INVALID',
+      );
+    }
+
+    const timestampField = nextStatus === 'LISTED'
+      ? 'listedAt'
+      : nextStatus === 'UNDER_CONTRACT'
+        ? 'underContractAt'
+        : nextStatus === 'CLOSED'
+          ? 'closedAt'
+          : null;
+
+    const updated = await prisma.propertySaleCase.update({
+      where: { id: saleCase.id },
+      data: { status: nextStatus, ...(timestampField ? { [timestampField]: new Date() } : {}) },
+    });
+    auditLog('SALE_CASE_STATUS_CHANGED', userId, { propertyId, saleCaseId: saleCase.id, from: saleCase.status, to: nextStatus });
+    return updated;
+  }
+
+  static async setItemDecision(
+    userId: string,
+    propertyId: string,
+    itemId: string,
+    action: 'WAIVE' | 'REOPEN',
+    reason?: string,
+  ) {
+    await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    const item = await prisma.saleReadinessItem.findFirst({
+      where: { id: itemId, saleCase: { propertyId } },
+    });
+    if (!item) throw new APIError('Readiness item not found', 404, 'SALE_READINESS_ITEM_NOT_FOUND');
+
+    if (action === 'WAIVE') {
+      return prisma.saleReadinessItem.update({
+        where: { id: itemId },
+        data: { status: 'WAIVED', waivedAt: new Date(), waivedByUserId: userId, waivedReason: reason ?? null },
+      });
+    }
+    return prisma.saleReadinessItem.update({
+      where: { id: itemId },
+      data: { status: 'OPEN', waivedAt: null, waivedByUserId: null, waivedReason: null },
+    });
+  }
+
+  static async recordTransition(
+    userId: string,
+    propertyId: string,
+    input: {
+      effectiveAt?: Date | null;
+      sellerRetentionDecision?: string | null;
+      buyerPackageId?: string | null;
+    },
+  ) {
+    await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
+    if (!saleCase) throw new APIError('Sale case not found', 404, 'SALE_CASE_NOT_FOUND');
+    return prisma.propertyTransition.create({
+      data: {
+        saleCaseId: saleCase.id,
+        effectiveAt: input.effectiveAt ?? null,
+        sellerRetentionDecision: input.sellerRetentionDecision ?? null,
+        buyerPackageId: input.buyerPackageId ?? null,
+      },
+    });
+  }
+}

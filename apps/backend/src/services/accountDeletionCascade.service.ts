@@ -73,6 +73,11 @@ export async function cascadeDeleteOwnedProperties(
     await tx.sellerPrepPlan.deleteMany({ where: { propertyId: property.id } });
     await tx.sellerPrepLead.deleteMany({ where: { propertyId: property.id } });
     await tx.feedback.deleteMany({ where: { propertyId: property.id } });
+    // PropertySaleCase → SaleReadinessItem/PropertyTransition cascade via a
+    // real Prisma relation, but PropertySaleCase.propertyId itself is a
+    // loose FK (no relation to Property), so it needs the same explicit
+    // cleanup as SellerPrepPlan above.
+    await tx.propertySaleCase.deleteMany({ where: { propertyId: property.id } });
   }
 
   // Cascades Property + every properly FK'd property-scoped table (the vast
