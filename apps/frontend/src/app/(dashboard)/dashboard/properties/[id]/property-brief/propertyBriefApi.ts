@@ -5,7 +5,8 @@ export type PropertyBriefPurpose =
   | 'CONTRACTOR_SERVICE_PROFESSIONAL'
   | 'HOUSEHOLD_TRUSTED_CONTACT'
   | 'INSURER_CLAIM_SUPPORT'
-  | 'PROSPECTIVE_BUYER';
+  | 'PROSPECTIVE_BUYER'
+  | 'LISTING_AGENT';
 
 export type PropertyBriefSectionType =
   | 'PROPERTY_FACTS'

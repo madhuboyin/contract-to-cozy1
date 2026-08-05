@@ -279,6 +279,9 @@ function SaleCaseBody({
               ? 'No open readiness items right now — this reflects real property records, not a fixed checklist.'
               : `${openCount} open readiness item${openCount === 1 ? '' : 's'} projected from your property's records.`}
           </p>
+          <Link href={`/dashboard/properties/${propertyId}/property-brief?purpose=LISTING_AGENT`}>
+            <Button size="sm" variant="outline">Compose agent package</Button>
+          </Link>
         </MobileCard>
       </MobileSection>
 

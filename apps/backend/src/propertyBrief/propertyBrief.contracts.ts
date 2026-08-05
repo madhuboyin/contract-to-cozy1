@@ -6,6 +6,7 @@ export const PROPERTY_BRIEF_PURPOSES = [
   'HOUSEHOLD_TRUSTED_CONTACT',
   'INSURER_CLAIM_SUPPORT',
   'PROSPECTIVE_BUYER',
+  'LISTING_AGENT',
 ] as const;
 
 export const PROPERTY_BRIEF_SECTIONS = [
@@ -61,6 +62,20 @@ export const PROPERTY_BRIEF_TEMPLATES: Record<PropertyBriefPurposeInput, {
     // Successor value only — claims/insurance stay off allowedSections
     // entirely for this purpose (a buyer should not inherit the seller's
     // claim or policy history), not just excluded by default.
+    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
+    allowedSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'DOCUMENTS', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
+    sensitiveSections: ['DOCUMENTS'],
+  },
+  LISTING_AGENT: {
+    label: 'Listing agent',
+    // Slice 8's "agent/listing package composition" — same successor-value
+    // section set as PROSPECTIVE_BUYER (a real-estate professional working
+    // the listing needs the same disclosure-safe facts a buyer eventually
+    // sees, not the seller's private claim/policy history), reusing the
+    // common handoff infrastructure rather than duplicating it. The
+    // distinct purpose value exists so recipient-facing copy, analytics,
+    // and any future agent-specific section can diverge later without
+    // affecting PROSPECTIVE_BUYER shares already sent.
     defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
     allowedSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'DOCUMENTS', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
     sensitiveSections: ['DOCUMENTS'],
