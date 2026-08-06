@@ -4700,6 +4700,12 @@ enum SaleReadinessSourceType {
   PROPERTY_RECORD
   MATERIAL_SPEC
   TIMELINE_EVENT
+  // Sale Readiness Value-Maximization Checklist plan §4.2: new Tier 1
+  // projectors surfaced during Phase 2 build-out that don't fit any
+  // existing source type.
+  INVENTORY_ITEM
+  MAINTENANCE_TASK
+  WARRANTY
 }
 
 enum SaleReadinessCategory {

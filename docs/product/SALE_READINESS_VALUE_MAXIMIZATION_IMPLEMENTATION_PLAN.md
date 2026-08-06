@@ -360,14 +360,14 @@ All 10 design decisions in §8 are resolved. This is the concrete build sequence
 
 ### Phase 2 — Backend: Tier 1 projectors (`propertySaleCase.service.ts`, §4.2)
 
-Lowest risk — extends the existing, proven pure-derivation projector pattern (`projectInspectionFindings`, `projectProjects`, etc.), no new UI dependency.
+**Done 2026-08-06.** Backend typechecks clean. Extended the existing, proven pure-derivation projector pattern (`projectInspectionFindings`, `projectProjects`, etc.), no new UI dependency. Surfaced a real schema gap along the way — 3 new `SaleReadinessSourceType` values were needed (`INVENTORY_ITEM`, `MAINTENANCE_TASK`, `WARRANTY`), added and validated.
 
-1. Broaden `projectInspectionFindings` (or add a parallel projector) to surface `INFORMATIONAL`/minor findings under `PRESENTATION`/`OPTIONAL_IMPROVEMENT` instead of dropping them.
-2. New "aging/near-end-of-life systems" projector — reads `InventoryItem.installedOn`/`purchasedOn` against a small, self-contained expected-lifespan reference table, written fresh for this projector; does not call `maintenancePrediction.service.ts` (§6, Phase 0.3 finding: different problem, not fit for reuse).
-3. New "lapsed routine maintenance" projector (`PropertyMaintenanceTask`).
-4. New "expiring/transferable warranties" projector (positive-signal framing, not a gap).
-5. §4.4a's broadened evidence search for `SAFETY_STRUCTURAL`/`FINANCIAL_DECISION`/`PERMITS_DISCLOSURE` categories — check `InspectionFinding`/`PropertyMaintenanceTask`/`ProjectRecord`/`PropertyRecord`/`HomeEvent` for a sufficiently detailed record before falling back to the soft "log an inspection" prompt (§4.10's copy).
-6. All new Home-Action-sourced projectors apply the existing `isWeatherAdvisoryOnly` filter (§2).
+1. ~~Broaden `projectInspectionFindings`~~ — done. `INFORMATIONAL`/`MONITOR`/`MINOR` findings now surface under `PRESENTATION`/`OPTIONAL_IMPROVEMENT` (previously `INFORMATIONAL` was dropped entirely; `MINOR`/`MONITOR` landed in `SYSTEMS_MAINTENANCE`).
+2. ~~New "aging/near-end-of-life systems" projector~~ — done, `projectAgingSystems`. Reads `InventoryItem.installedOn`/`purchasedOn` against a self-contained expected-lifespan table (HVAC 18yr, roof/exterior 22yr, appliance 13yr, water heater 11yr via name-hint matching, same convention `maintenancePrediction.service.ts` itself uses) — no dependency on that service, confirming the Phase 0.3 finding. Flags at 85% of expected life, not only once fully past it.
+3. ~~New "lapsed routine maintenance" projector~~ — done, `projectLapsedMaintenance`. `PropertyMaintenanceTask` overdue by 60+ days.
+4. ~~New "expiring/transferable warranties" projector~~ — done, `projectTransferableWarranties`. Positive-signal framing (`PRESENTATION` category) — an active warranty transferring to a buyer, not a gap to fix.
+5. ~~§4.4a's broadened evidence search~~ — done, `projectStructuralSystemEvidence`. Scoped to roof/foundation/electrical/plumbing (the systems a buyer's inspection most commonly focuses on); checks `PropertyMaintenanceTask`/`ProjectRecord` for a sufficiently detailed (40+ char) completed record before conceding no data; only runs for systems not already covered by a real finding/permit/home-action signal (computed via `keywordsCoveredBy`, checked in `syncReadinessItems` before this projector runs) — never duplicates or overrides an existing Tier 1 item.
+6. ~~Weather-advisory filter on new Home-Action-sourced projectors~~ — n/a for this phase's new projectors (none are Home-Action-sourced); the existing filter on `projectHomeActions` from §2 is unchanged.
 
 ### Phase 3 — Backend: Tier 2 catalog, gating, mandatory-fact evaluation, entry flow
 

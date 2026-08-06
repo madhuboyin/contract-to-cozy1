@@ -61,9 +61,14 @@ function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
+// Sale Readiness Value-Maximization Checklist plan §4.2 item 1: MINOR/
+// MONITOR/INFORMATIONAL findings used to be dropped entirely (or, for MINOR/
+// MONITOR, folded into SYSTEMS_MAINTENANCE) — they're exactly the kind of
+// cosmetic-adjacent signal relevant to maximizing sale price even though
+// they're not blockers, so they now surface under PRESENTATION instead.
 async function projectInspectionFindings(propertyId: string): Promise<ProjectedItem[]> {
   const findings = await prisma.inspectionFinding.findMany({
-    where: { propertyId, status: 'OPEN', severity: { not: 'INFORMATIONAL' } },
+    where: { propertyId, status: 'OPEN' },
     select: { id: true, severity: true, homeSystem: true, subsystem: true, inspectorDescription: true },
   });
   return findings.map((finding) => {
@@ -72,7 +77,7 @@ async function projectInspectionFindings(propertyId: string): Promise<ProjectedI
     return {
       sourceEntityType: 'INSPECTION_FINDING' as const,
       sourceEntityId: finding.id,
-      category: isSafety || isMajor ? 'SAFETY_STRUCTURAL' : 'SYSTEMS_MAINTENANCE',
+      category: isSafety || isMajor ? 'SAFETY_STRUCTURAL' : 'PRESENTATION',
       requirementClass: isSafety
         ? 'MATERIAL_BLOCKER'
         : isMajor
@@ -261,8 +266,198 @@ async function projectTimelineEvents(propertyId: string): Promise<ProjectedItem[
   }));
 }
 
+// Sale Readiness Value-Maximization Checklist plan §4.2 item 2: flags
+// verified InventoryItems nearing or past a typical expected service life.
+// Deliberately does not call maintenancePrediction.service.ts — that service
+// solves a different problem (recurring maintenance due-dates with
+// gamification streak side-effects), not "is this near end of life" (see
+// plan §6/Phase 0.3). Lifespan figures below are standard, widely-cited
+// industry rules of thumb (the same kind of general knowledge
+// maintenancePrediction.service.ts itself leans on for its own age-based
+// priority bump), not sourced financial claims — unlike the Tier 2 ROI
+// content in §4.3, which does require citation.
+const WATER_HEATER_NAME_HINTS = ['water heater', 'hot water', 'tankless'];
+const AGING_SYSTEM_EXPECTED_LIFESPAN_YEARS: Partial<Record<string, number>> = {
+  HVAC: 18,
+  ROOF_EXTERIOR: 22,
+  APPLIANCE: 13,
+};
+const WATER_HEATER_EXPECTED_LIFESPAN_YEARS = 11;
+// Flag once an item has used most of its expected life, not only once
+// fully "expired" — a buyer's inspector will ask about a 16-year-old HVAC
+// unit before it's technically past average, so waiting for 100% would
+// surface this too late to act on before listing.
+const AGING_SYSTEM_NEAR_END_RATIO = 0.85;
+const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+
+function resolveExpectedLifespanYears(category: string, name: string): number | null {
+  const isWaterHeater = (category === 'PLUMBING' || category === 'APPLIANCE')
+    && WATER_HEATER_NAME_HINTS.some((hint) => name.toLowerCase().includes(hint));
+  if (isWaterHeater) return WATER_HEATER_EXPECTED_LIFESPAN_YEARS;
+  return AGING_SYSTEM_EXPECTED_LIFESPAN_YEARS[category] ?? null;
+}
+
+async function projectAgingSystems(propertyId: string): Promise<ProjectedItem[]> {
+  const items = await prisma.inventoryItem.findMany({
+    where: { propertyId, isVerified: true },
+    select: { id: true, name: true, category: true, installedOn: true, purchasedOn: true },
+  });
+  const now = Date.now();
+  const results: ProjectedItem[] = [];
+  for (const item of items) {
+    const baseDate = item.installedOn ?? item.purchasedOn;
+    if (!baseDate) continue;
+    const expectedLifespanYears = resolveExpectedLifespanYears(item.category, item.name);
+    if (!expectedLifespanYears) continue;
+    const ageYears = (now - baseDate.getTime()) / MS_PER_YEAR;
+    if (ageYears < expectedLifespanYears * AGING_SYSTEM_NEAR_END_RATIO) continue;
+    const pastExpectedLife = ageYears >= expectedLifespanYears;
+    results.push({
+      sourceEntityType: 'INVENTORY_ITEM' as const,
+      sourceEntityId: item.id,
+      category: 'SYSTEMS_MAINTENANCE' as const,
+      requirementClass: pastExpectedLife ? 'VERIFICATION_NEEDED' as const : 'OPTIONAL_IMPROVEMENT' as const,
+      title: `${item.name}: ${pastExpectedLife ? 'past' : 'nearing'} typical replacement age`,
+      detail: `About ${ageYears.toFixed(0)} years old — typical expected life for this type is around ${expectedLifespanYears} years. Buyers and inspectors often ask about aging systems like this before closing.`,
+    });
+  }
+  return results;
+}
+
+// Sale Readiness Value-Maximization Checklist plan §4.2 item 3: deferred
+// homeowner-tracked maintenance, overdue by a meaningful margin (not merely
+// due today/yesterday). A lapsed task may already also surface via
+// projectHomeActions (PropertyMaintenanceTask records sync to a real
+// OperationalWorkItem) — some overlap with that projector is possible and
+// accepted, the same way this codebase already tolerates comparable overlap
+// elsewhere (e.g. a project and its originating inspection finding).
+const LAPSED_MAINTENANCE_GRACE_DAYS = 60;
+const LAPSED_MAINTENANCE_OPEN_STATUSES = new Set(['PENDING', 'IN_PROGRESS', 'NEEDS_REVIEW']);
+
+async function projectLapsedMaintenance(propertyId: string): Promise<ProjectedItem[]> {
+  const graceBoundary = new Date(Date.now() - LAPSED_MAINTENANCE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+  const tasks = await prisma.propertyMaintenanceTask.findMany({
+    where: {
+      propertyId,
+      status: { in: Array.from(LAPSED_MAINTENANCE_OPEN_STATUSES) as any },
+      nextDueDate: { lt: graceBoundary },
+    },
+    select: { id: true, title: true, nextDueDate: true },
+  });
+  return tasks.map((task) => ({
+    sourceEntityType: 'MAINTENANCE_TASK' as const,
+    sourceEntityId: task.id,
+    category: 'SYSTEMS_MAINTENANCE' as const,
+    requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+    title: `${task.title}: overdue maintenance`,
+    detail: task.nextDueDate
+      ? `Was due ${task.nextDueDate.toISOString().slice(0, 10)} — catching up before listing avoids a buyer's inspection flagging it.`
+      : null,
+    dueAt: task.nextDueDate,
+  }));
+}
+
+// Sale Readiness Value-Maximization Checklist plan §4.2 item 4: positive-
+// signal framing, not a gap — an active warranty transferring to a buyer is
+// a real selling point worth highlighting, distinct from every other
+// projector in this file, which surfaces something to fix or verify.
+const WARRANTY_MIN_REMAINING_DAYS = 30;
+
+async function projectTransferableWarranties(propertyId: string): Promise<ProjectedItem[]> {
+  const minRemainingBoundary = new Date(Date.now() + WARRANTY_MIN_REMAINING_DAYS * 24 * 60 * 60 * 1000);
+  const warranties = await prisma.warranty.findMany({
+    where: { propertyId, expiryDate: { gte: minRemainingBoundary } },
+    select: { id: true, providerName: true, category: true, expiryDate: true },
+  });
+  return warranties.map((warranty) => ({
+    sourceEntityType: 'WARRANTY' as const,
+    sourceEntityId: warranty.id,
+    category: 'PRESENTATION' as const,
+    requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+    title: `${warranty.providerName} ${warranty.category.toLowerCase().replace(/_/g, ' ')} warranty: transferable to buyer`,
+    detail: `Active through ${warranty.expiryDate.toISOString().slice(0, 10)} — worth highlighting in your listing and agent package.`,
+  }));
+}
+
+// Sale Readiness Value-Maximization Checklist plan §4.4a: for the structural
+// systems a buyer's inspection most commonly focuses on, check whether a
+// homeowner-logged maintenance task or completed project still contains a
+// real, substantive assessment before concluding there's genuinely no data.
+// "Sufficient detail" means a real notes/description field, not a bare
+// status flag — the same weak-proxy rule §3.6 already applies elsewhere.
+// Only runs for keywords not already covered by findings/permits/home
+// actions (computed by the caller) — never duplicates or overrides a real
+// Tier 1 signal that already exists.
+const STRUCTURAL_SYSTEM_KEYWORDS: Record<string, SaleReadinessCategory> = {
+  roof: 'SAFETY_STRUCTURAL',
+  foundation: 'SAFETY_STRUCTURAL',
+  electrical: 'SAFETY_STRUCTURAL',
+  plumbing: 'SAFETY_STRUCTURAL',
+};
+const STRUCTURAL_EVIDENCE_MIN_DETAIL_LENGTH = 40;
+
+function keywordsCoveredBy(items: ProjectedItem[]): Set<string> {
+  const covered = new Set<string>();
+  const haystack = items.map((item) => `${item.title} ${item.detail ?? ''}`.toLowerCase());
+  for (const keyword of Object.keys(STRUCTURAL_SYSTEM_KEYWORDS)) {
+    if (haystack.some((text) => text.includes(keyword))) covered.add(keyword);
+  }
+  return covered;
+}
+
+async function projectStructuralSystemEvidence(
+  propertyId: string,
+  alreadyCoveredKeywords: Set<string>,
+): Promise<ProjectedItem[]> {
+  const remainingKeywords = Object.keys(STRUCTURAL_SYSTEM_KEYWORDS).filter((k) => !alreadyCoveredKeywords.has(k));
+  if (remainingKeywords.length === 0) return [];
+
+  const [tasks, projects] = await Promise.all([
+    prisma.propertyMaintenanceTask.findMany({
+      where: { propertyId, status: 'COMPLETED' },
+      select: { id: true, title: true, description: true, category: true },
+    }),
+    prisma.projectRecord.findMany({
+      where: { propertyId, status: 'COMPLETED' },
+      select: { id: true, name: true, description: true },
+    }),
+  ]);
+
+  const results: ProjectedItem[] = [];
+  for (const keyword of remainingKeywords) {
+    const task = tasks.find((t) =>
+      (t.description?.length ?? 0) >= STRUCTURAL_EVIDENCE_MIN_DETAIL_LENGTH
+      && `${t.title} ${t.category ?? ''}`.toLowerCase().includes(keyword));
+    if (task) {
+      results.push({
+        sourceEntityType: 'MAINTENANCE_TASK' as const,
+        sourceEntityId: task.id,
+        category: STRUCTURAL_SYSTEM_KEYWORDS[keyword],
+        requirementClass: 'VERIFICATION_NEEDED' as const,
+        title: `${task.title}: reviewed via maintenance record`,
+        detail: truncate(task.description ?? '', 500),
+      });
+      continue;
+    }
+    const project = projects.find((p) =>
+      (p.description?.length ?? 0) >= STRUCTURAL_EVIDENCE_MIN_DETAIL_LENGTH
+      && p.name.toLowerCase().includes(keyword));
+    if (project) {
+      results.push({
+        sourceEntityType: 'PROJECT' as const,
+        sourceEntityId: project.id,
+        category: STRUCTURAL_SYSTEM_KEYWORDS[keyword],
+        requirementClass: 'VERIFICATION_NEEDED' as const,
+        title: `${project.name}: reviewed via completed project record`,
+        detail: truncate(project.description ?? '', 500),
+      });
+    }
+  }
+  return results;
+}
+
 async function syncReadinessItems(saleCaseId: string, propertyId: string, role: HouseholdRole): Promise<void> {
-  const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents] = await Promise.all([
+  const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents, agingSystems, lapsedMaintenance, transferableWarranties] = await Promise.all([
     projectInspectionFindings(propertyId),
     projectProjects(propertyId),
     projectPermits(propertyId),
@@ -270,8 +465,21 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
     projectRecords(propertyId, role),
     projectMaterialSpecs(propertyId),
     projectTimelineEvents(propertyId),
+    projectAgingSystems(propertyId),
+    projectLapsedMaintenance(propertyId),
+    projectTransferableWarranties(propertyId),
   ]);
-  const projected = [...findings, ...projects, ...permits, ...homeActions, ...records, ...materialSpecs, ...timelineEvents];
+  // Structural evidence search (§4.4a) runs after the above so it can skip
+  // any structural system already covered by a real finding/permit/home
+  // action — never duplicates or overrides an existing Tier 1 signal.
+  const structuralEvidence = await projectStructuralSystemEvidence(
+    propertyId,
+    keywordsCoveredBy([...findings, ...permits, ...homeActions]),
+  );
+  const projected = [
+    ...findings, ...projects, ...permits, ...homeActions, ...records, ...materialSpecs, ...timelineEvents,
+    ...agingSystems, ...lapsedMaintenance, ...transferableWarranties, ...structuralEvidence,
+  ];
   const projectedKeys = new Set(projected.map((p) => `${p.sourceEntityType}:${p.sourceEntityId}`));
 
   const existing = await prisma.saleReadinessItem.findMany({ where: { saleCaseId } });
