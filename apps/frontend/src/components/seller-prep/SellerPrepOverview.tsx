@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { LeadCaptureModal } from "@/components/seller-prep/LeadCaptureModal";
 import { AgentInterviewGuide } from "./AgentInterviewGuide";
+import { SellerPrepEntryFlowGate } from "./SellerPrepEntryFlowGate";
 
 interface ComparableHome {
   address: string;
@@ -54,16 +55,7 @@ export default function SellerPrepOverview({
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* LEFT COLUMN: Main Interaction Area */}
       <div className="lg:col-span-8 space-y-6">
-        <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 space-y-2">
-          <p className="font-medium">Sale readiness now lives in one governed case.</p>
-          <p>
-            Findings, unfinished projects, permits, Home Actions, and records are projected
-            directly from this property — not a generic checklist.
-          </p>
-          <Link href={`/dashboard/properties/${propertyId}/tools/sale-case`}>
-            <Button size="sm" className="mt-1">Open Sale Readiness</Button>
-          </Link>
-        </div>
+        <SellerPrepEntryFlowGate propertyId={propertyId} />
         <Tabs defaultValue="market" className="w-full">
           <TabsList className="no-scrollbar mb-6 flex h-auto overflow-x-auto p-1 bg-muted/50 md:grid md:w-full md:grid-cols-2">
             <TabsTrigger value="market" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">

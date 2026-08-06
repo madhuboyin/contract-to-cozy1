@@ -126,6 +126,15 @@ export default function InventoryClient() {
   const actionFromUrl = searchParams.get('action');
   const filterFromUrl = searchParams.get('filter');
   const categoryFromUrl = searchParams.get('category') as InventoryItemCategory | null;
+  // Sale Readiness Value-Maximization Checklist plan §4.4b/§10 Phase 6:
+  // Seller Prep's entry-flow routing card deep-links here with a returnTo,
+  // same contract as /dashboard/warranties's existing returnTo support —
+  // auto-return once an item is saved instead of leaving the homeowner to
+  // navigate back manually.
+  const safeReturnTo = useMemo(() => {
+    const raw = searchParams.get('returnTo');
+    return raw && raw.startsWith('/dashboard/') ? raw : null;
+  }, [searchParams]);
 
   // CTAs across the sidebar promise specific missing-data scopes ("Complete age
   // assessment", "Add warranty details") via ?filter=/?action= — map those onto
@@ -825,6 +834,10 @@ export default function InventoryClient() {
                 actionType: 'canonical_fact_inventory_item_created',
               });
             }
+          }
+          if (safeReturnTo) {
+            router.push(safeReturnTo);
+            return;
           }
           await refreshAll();
         }}

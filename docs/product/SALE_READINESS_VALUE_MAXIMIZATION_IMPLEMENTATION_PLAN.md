@@ -399,10 +399,14 @@ All 10 design decisions in §8 are resolved. This is the concrete build sequence
 
 ### Phase 6 — Frontend: Seller Prep entry flow (§4.4b, on `SellerPrepOverview.tsx`/its page)
 
-1. "Collecting your home's details and preparing your checklist…" loading state (§4.10) on open.
-2. All-present case: forward straight to Sale Case, no interruption.
-3. Scalar-fields-missing case: inline quick form (roof/HVAC/water heater/electrical age), then forward.
-4. Appliance/warranty-missing case: routing card(s) deep-linking to Inventory/Warranty add-flows (reusing commit `10e561e`'s deep-link/return pattern), auto-return and re-evaluate on save.
+**Done 2026-08-06.** Frontend + backend typecheck clean, lint clean. **Live browser verification skipped this session** — the local Docker dev DB has pre-existing schema drift unrelated to this plan (a broken `insurance_quote_request_events` table blocks a normal `prisma db push`); user chose not to force-reset the local DB to unblock it, so this phase is typecheck/lint-verified only, not click-tested. Do that before considering Phase 6 fully done.
+
+New component `apps/frontend/src/components/seller-prep/SellerPrepEntryFlowGate.tsx` replaces the static "Open Sale Readiness" banner button in `SellerPrepOverview.tsx` with a state machine (`idle → checking → blocked/error`) — deliberately keeps its own minimal local copy of the entry-flow request/response shape and the generic `PATCH /context/:factKey` call rather than importing `sale-case/saleCaseApi.ts`, matching that file's own documented "tool directories stay self-contained rather than cross-importing" convention. The secondary "Sale Readiness" text link in the sidebar (contextual mention, not the primary CTA) was deliberately left as a plain link, not re-gated — Sale Case itself doesn't hard-enforce the mandatory-fact gate server-side, so this isn't a bypass of anything load-bearing.
+
+1. ~~Loading state~~ — done, exact §4.10 copy, shown while `GET .../sale-case/entry-flow` (built in Phase 3) resolves.
+2. ~~All-present case~~ — done: `readyForChecklist` → immediate `router.push` to Sale Case, no interruption.
+3. ~~Scalar-fields-missing case~~ — done: inline quick form for whichever of the 4 fields (`structure.roofReplacementYear`, `systems.hvacInstallYear`, `systems.waterHeaterInstallYear`, `structure.electricalPanelAgeYears`) are missing, always shown together per §4.4b's resolved "one quick form regardless of count" design (not the superseded ≤3/>3 threshold copy variant). Saves via the existing generic fact-capture endpoint, then re-runs the check.
+4. ~~Appliance/warranty-missing case~~ — done, both routing cards render together when both gaps exist (never sequential steps, per §4.4b). Warranty routes to `/dashboard/warranties?action=new&propertyId=…&returnTo=…`, which already auto-returns on save (pre-existing pattern). Inventory needed a small, targeted extension — `InventoryClient.tsx` had no `returnTo` support on its main page at all (only its coverage sub-page did) — added the same `sanitizeReturnTo` + redirect-on-save pattern there (hooks into the single existing `InventoryItemDrawer.onSaved` callback). Both routing cards append `?entryFlowRecheck=1` to the return URL so the gate re-runs its check automatically the moment the homeowner lands back on Seller Prep, rather than requiring another click.
 
 ### Phase 7 — Frontend: Sale Case page (`SaleCaseClient.tsx`, §4.9/§4.9a)
 
