@@ -474,7 +474,7 @@ export function listWorkItemsForProperty(filter: ListWorkItemsFilter) {
       subjectType: filter.subjectType,
       subjectId: filter.subjectId,
     },
-    include: { executions: true },
+    include: { executions: true, sources: true },
     orderBy: [{ priority: 'asc' }, { updatedAt: 'desc' }],
   });
 }

@@ -137,10 +137,23 @@ async function projectPermits(propertyId: string): Promise<ProjectedItem[]> {
   return [...fromRecords, ...fromFlags];
 }
 
+// Forecast-driven advisories (e.g. "Multi-day heat risk ahead") are
+// proposed straight from environment insights with no PropertyMaintenanceTask
+// behind them (no EXECUTION-role source — see listWorkItems.usecase.ts's
+// hasExecutionBackedSource) and always land at LOW_CONSEQUENCE. They're
+// forward-looking weather prep, not something a buyer's inspection would
+// flag or that blocks a sale, so they shouldn't inflate the readiness count.
+function isWeatherAdvisoryOnly(item: Awaited<ReturnType<typeof listWorkItems>>[number]): boolean {
+  return item.obligationType === 'MAINTENANCE_TASK'
+    && item.safetyTier === 'LOW_CONSEQUENCE'
+    && !item.hasExecutionBackedSource;
+}
+
 async function projectHomeActions(propertyId: string): Promise<ProjectedItem[]> {
   const items = await listWorkItems({ propertyId });
   return items
     .filter((item) => !CLOSED_HOME_ACTION_STATES.has(item.state) && item.acceptanceState !== 'DECLINED')
+    .filter((item) => !isWeatherAdvisoryOnly(item))
     .map((item) => {
       const tier = HOME_ACTION_TIER_MAP[item.safetyTier] ?? HOME_ACTION_TIER_MAP.LOW_CONSEQUENCE;
       return {

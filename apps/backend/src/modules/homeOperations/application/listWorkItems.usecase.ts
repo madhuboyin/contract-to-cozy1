@@ -67,6 +67,15 @@ export async function listWorkItems(input: ListWorkItemsInput) {
       role: execution.role,
       responsibleParty: execution.responsibleParty,
     })),
+    // A source with role EXECUTION means a real domain record (e.g. a
+    // PropertyMaintenanceTask) backs this item — see maintenanceTask
+    // .adapter.ts's doc comment ("once a task exists it IS the execution
+    // record"). Without one, the item exists only as a proposed candidate
+    // from its TRIGGER source (e.g. a forecast-driven environment insight
+    // via homeActionSourcePromotion.service.ts's
+    // adaptEnvironmentInsightsToHomeActions) — callers use this to tell
+    // "real, homeowner-tracked work" apart from "advisory only."
+    hasExecutionBackedSource: item.sources.some((source) => source.active && source.sourceRole === 'EXECUTION'),
     reconciliationPending: pendingWorkItemIds.has(item.id),
     supersededByWorkItemId: item.supersededByWorkItemId,
     createdAt: item.createdAt,
