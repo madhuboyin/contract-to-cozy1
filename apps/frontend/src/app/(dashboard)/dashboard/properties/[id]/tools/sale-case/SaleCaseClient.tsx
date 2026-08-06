@@ -91,16 +91,26 @@ const REQUIREMENT_CLASS_TONE: Record<SaleReadinessRequirementClass, StatusChipTo
 // sourceEntityType/sourceEntityId (propertySaleCase.service.ts projects
 // them straight from canonical records), but nothing rendered them as a
 // link back to that source — a homeowner could see "unverified material
-// spec" with no way to jump to it. Scoped to the source types this pass
-// was asked to wire (Material Specs, Home Records, Timeline); the other
-// source types (inspection findings, projects, permits, Home Actions)
-// don't yet have a confirmed per-item deep-link route and are left as
-// plain text rather than guessing at one.
+// spec" with no way to jump to it.
+//
+// PROJECT and HOME_ACTION added in a follow-up pass — both already had a
+// real per-item route/deep-link (projects/[projectId]; home-operations's
+// existing ?focusWorkItemId= param, confirmed via grep), they just hadn't
+// been wired here yet.
+//
+// INSPECTION_FINDING and PERMIT remain unlinked: inspection-hub has no
+// per-finding anchor (only a per-report route), and permits has no
+// deep-link at all — plus the backend maps two different models
+// (PropertyPermitRecord and PermitUnpermittedFlag) onto the same
+// 'PERMIT' sourceEntityType, so an id alone can't say which one it is.
+// Left as plain text rather than guessing at a route.
 function sourceEntityHref(propertyId: string, item: SaleReadinessItem): string | null {
   switch (item.sourceEntityType) {
     case 'MATERIAL_SPEC': return `/dashboard/properties/${propertyId}/materials/${item.sourceEntityId}`;
     case 'PROPERTY_RECORD': return `/dashboard/properties/${propertyId}/tools/home-records?recordId=${item.sourceEntityId}`;
     case 'TIMELINE_EVENT': return `/dashboard/properties/${propertyId}/timeline?eventId=${item.sourceEntityId}`;
+    case 'PROJECT': return `/dashboard/properties/${propertyId}/projects/${item.sourceEntityId}`;
+    case 'HOME_ACTION': return `/dashboard/properties/${propertyId}/home-operations?focusWorkItemId=${item.sourceEntityId}`;
     default: return null;
   }
 }

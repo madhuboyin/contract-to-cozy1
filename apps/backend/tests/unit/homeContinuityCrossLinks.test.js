@@ -69,7 +69,7 @@ test('a Timeline event sourced from a Material Spec renders a real link back to 
   assert.match(timelineClient, /\/dashboard\/properties\/\$\{params\.id\}\/materials\/\$\{event\.sourceEntityId\}/);
 });
 
-test('Sale Case readiness items link back to their Material Spec / Home Record / Timeline Event source', () => {
+test('Sale Case readiness items link back to their Material Spec / Home Record / Timeline Event / Project / Home Action source', () => {
   const saleCaseClient = readRepository(
     'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sale-case/SaleCaseClient.tsx',
   );
@@ -77,7 +77,34 @@ test('Sale Case readiness items link back to their Material Spec / Home Record /
   assert.match(saleCaseClient, /case 'MATERIAL_SPEC': return `\/dashboard\/properties\/\$\{propertyId\}\/materials\/\$\{item\.sourceEntityId\}`/);
   assert.match(saleCaseClient, /case 'PROPERTY_RECORD': return `\/dashboard\/properties\/\$\{propertyId\}\/tools\/home-records\?recordId=\$\{item\.sourceEntityId\}`/);
   assert.match(saleCaseClient, /case 'TIMELINE_EVENT': return `\/dashboard\/properties\/\$\{propertyId\}\/timeline\?eventId=\$\{item\.sourceEntityId\}`/);
+  // Follow-up pass: these two were wrongly deferred initially — both
+  // already had a real per-item route/deep-link, they just hadn't been
+  // wired here yet.
+  assert.match(saleCaseClient, /case 'PROJECT': return `\/dashboard\/properties\/\$\{propertyId\}\/projects\/\$\{item\.sourceEntityId\}`/);
+  assert.match(saleCaseClient, /case 'HOME_ACTION': return `\/dashboard\/properties\/\$\{propertyId\}\/home-operations\?focusWorkItemId=\$\{item\.sourceEntityId\}`/);
   assert.match(saleCaseClient, /const sourceHref = sourceEntityHref\(propertyId, item\)/);
+});
+
+test('INSPECTION_FINDING and PERMIT stay unlinked in Sale Case — no addressable per-item route exists for either yet', () => {
+  const saleCaseClient = readRepository(
+    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sale-case/SaleCaseClient.tsx',
+  );
+  assert.doesNotMatch(saleCaseClient, /case 'INSPECTION_FINDING':/);
+  assert.doesNotMatch(saleCaseClient, /case 'PERMIT':/);
+
+  // inspection-hub only has a per-report route, not a per-finding one.
+  const openItemsPage = readRepository(
+    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inspection-hub/open-items/page.tsx',
+  );
+  assert.doesNotMatch(openItemsPage, /searchParams\.get\('findingId'\)/);
+
+  // permits has no deep-link support, and the backend maps two different
+  // models (PropertyPermitRecord and PermitUnpermittedFlag) onto the same
+  // 'PERMIT' sourceEntityType, so a route alone wouldn't disambiguate.
+  const permitsPage = readRepository(
+    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/permits/page.tsx',
+  );
+  assert.doesNotMatch(permitsPage, /searchParams\.get\('permitId'\)/);
 });
 
 test('the two Seller Prep "dashboard card" components are not actually mounted anywhere — the plan\'s "no permanent passive cards" requirement is already satisfied by omission, not by design', () => {
