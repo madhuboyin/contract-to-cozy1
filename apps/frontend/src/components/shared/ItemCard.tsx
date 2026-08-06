@@ -361,7 +361,7 @@ export default function ItemCard({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                router.push(`/dashboard/properties/${item.propertyId}/edit?section=responsibility`);
+                router.push(`/dashboard/properties/${item.propertyId}/edit#responsibility`);
               }}
               className="flex flex-1 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-100"
             >

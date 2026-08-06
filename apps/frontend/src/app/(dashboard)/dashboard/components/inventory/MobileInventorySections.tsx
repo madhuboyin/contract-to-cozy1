@@ -815,7 +815,7 @@ export function MobileInventoryItemCard({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                router.push(`/dashboard/properties/${item.propertyId}/edit?section=responsibility`);
+                router.push(`/dashboard/properties/${item.propertyId}/edit#responsibility`);
               }}
               className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700"
             >

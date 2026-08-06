@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 import { buildHealthInsightResolutionHref } from '@/lib/navigation/healthInsightRouting';
+import { anchorForHealthFactor, propertyEditHref } from '@/lib/property/editPageAnchors';
 
 const HIGH_PRIORITY_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
@@ -145,14 +146,24 @@ const renderContextualButton = (insight: { factor: string; status: string; score
         );
     }
     
-    // Actions related to updating missing data (Safety, Documents)
-    if (insight.factor.includes('Safety') || 
-        insight.factor.includes('Documents') || 
-        insight.status.includes('Missing Data')) {
-        
+    // Documents live in the documents workspace, not the property record.
+    if (insight.factor.includes('Documents')) {
         return (
             <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
-                <Link href={`/dashboard/properties/${propertyId}/edit`}>
+                <Link href={`/dashboard/documents?propertyId=${propertyId}`}>
+                    Upload Documents <Settings className="ml-2 h-4 w-4" />
+                </Link>
+            </Button>
+        );
+    }
+
+    // Actions related to updating missing data (Safety and other property-record factors)
+    if (insight.factor.includes('Safety') ||
+        insight.status.includes('Missing Data')) {
+
+        return (
+            <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+                <Link href={propertyEditHref(propertyId, anchorForHealthFactor(insight.factor))}>
                     Update Profile Data <Settings className="ml-2 h-4 w-4" />
                 </Link>
             </Button>

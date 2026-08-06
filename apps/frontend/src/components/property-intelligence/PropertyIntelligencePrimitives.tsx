@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { anchorForFactLabel, propertyEditHref } from '@/lib/property/editPageAnchors';
 
 type CoverageState = 'CURRENT' | 'DEGRADED' | 'STALE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | string;
 
@@ -109,7 +110,7 @@ export function MissingFactPrompt({
           <p className="mt-1 text-sm leading-6 text-amber-900">{benefit}</p>
           <p className="mt-2 text-xs text-amber-800">Missing: {uniqueFacts.map(humanize).join(', ')}.</p>
           <Link
-            href={`/dashboard/properties/${encodeURIComponent(propertyId)}/edit?focus=property-intelligence`}
+            href={propertyEditHref(propertyId, anchorForFactLabel(uniqueFacts[0]))}
             className="mt-3 inline-flex min-h-11 items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-950 outline-none transition-colors hover:bg-amber-100 focus-visible:ring-2 focus-visible:ring-amber-600 motion-reduce:transition-none"
           >
             Update Home Record <ArrowRight className="h-4 w-4" aria-hidden="true" />

@@ -69,6 +69,7 @@ import HomeRecordReadinessCard from './components/HomeRecordReadinessCard';
 import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner';
 import PropertyHubTemplate from './components/PropertyHubTemplate';
 import { buildHealthInsightResolutionHref } from '@/lib/navigation/healthInsightRouting';
+import { anchorForHealthFactor, propertyEditHref } from '@/lib/property/editPageAnchors';
 
 
 
@@ -204,14 +205,22 @@ const renderContextualButton = (insight: any, propertyId: string) => {
     );
   }
 
-  // 2. Actions related to updating missing data (Safety, Documents)
-  if (insight.factor.includes('Safety') ||
-    insight.factor.includes('Documents') ||
-    insight.status.includes('Missing Data')) {
-
+  // 2. Documents live in the documents workspace, not the property record.
+  if (insight.factor.includes('Documents')) {
     return (
       <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
-        <Link href={`/dashboard/properties/${propertyId}/edit`}>
+        <Link href={`/dashboard/documents?propertyId=${propertyId}`}>
+          Upload Documents <Settings className="ml-2 h-4 w-4" />
+        </Link>
+      </Button>
+    );
+  }
+
+  // Actions related to updating missing data (Safety and other property-record factors)
+  if (insight.factor.includes('Safety') || insight.status.includes('Missing Data')) {
+    return (
+      <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+        <Link href={propertyEditHref(propertyId, anchorForHealthFactor(insight.factor))}>
           Update Profile Data <Settings className="ml-2 h-4 w-4" />
         </Link>
       </Button>

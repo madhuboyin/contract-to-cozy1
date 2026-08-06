@@ -640,7 +640,7 @@ function EligibilityContextCard({
           <div className="mt-4 flex flex-wrap gap-2">
             {needsValue && (
               <Link
-                href={`/dashboard/properties/${propertyId}/edit`}
+                href={`/dashboard/properties/${propertyId}/edit?focus=home-value`}
                 className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 Update property value

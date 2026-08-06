@@ -9,6 +9,7 @@ import {
 } from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { anchorForHealthFactor, propertyEditHref } from '@/lib/property/editPageAnchors';
 
 export type UrgentActionItem = ResolutionCenterAction;
 
@@ -196,7 +197,7 @@ export function getHealthInsightSetupRoute(factorTitle: string, propertyId: stri
   const t = factorTitle.toLowerCase();
   if (t.includes('appliance')) return `/dashboard/properties/${propertyId}/inventory`;
   if (t.includes('document')) return `/dashboard/documents?propertyId=${propertyId}`;
-  return `/dashboard/properties/${propertyId}/edit`;
+  return propertyEditHref(propertyId, anchorForHealthFactor(factorTitle));
 }
 
 export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string): string {

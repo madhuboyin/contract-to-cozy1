@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   Activity,
@@ -27,6 +27,7 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { api } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { navigateBackWithDashboardFallback } from "@/lib/navigation/backNavigation";
+import { anchorForHealthFactor, propertyEditHref } from "@/lib/property/editPageAnchors";
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -326,7 +327,7 @@ function getPrimaryCta(
     }
     return {
       label: "Complete property setup",
-      href: `/dashboard/properties/${propertyId}/edit`,
+      href: propertyEditHref(propertyId, anchorForHealthFactor(factorName)),
     };
   }
   if (isAppliance) {
@@ -1264,6 +1265,117 @@ function normalizeInsight(item: unknown): HealthInsight | null {
   return { factor, status, score, details: details.length ? details : undefined };
 }
 
+// ── Inline property-record editors ──────────────────────────────────────────
+// Answering "what year was the HVAC installed" or "do you have smoke
+// detectors" doesn't need a trip to the full property edit form — these
+// save the single field directly and refresh this page's health data.
+
+type YearFieldKey = "yearBuilt" | "hvacInstallYear" | "waterHeaterInstallYear" | "roofReplacementYear" | "electricalPanelAge";
+
+function InlineYearField({
+  propertyId,
+  fieldKey,
+  label,
+}: {
+  propertyId: string;
+  fieldKey: YearFieldKey;
+  label: string;
+}) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSave = async () => {
+    const parsed = Number(value);
+    if (!value || !Number.isFinite(parsed) || parsed <= 0) {
+      setError("Enter a valid number");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.updateProperty(propertyId, { [fieldKey]: parsed });
+      await queryClient.invalidateQueries({ queryKey: ["property", propertyId] });
+      setValue("");
+    } catch (err) {
+      setError("Could not save — try again");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <input
+        type="number"
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={label}
+        className="h-8 w-28 rounded-md border border-slate-300 px-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+      />
+      <Button size="sm" className="h-8" onClick={handleSave} disabled={saving}>
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+      </Button>
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </div>
+  );
+}
+
+type SafetyFieldKey = "hasSmokeDetectors" | "hasCoDetectors" | "hasSecuritySystem" | "hasFireExtinguisher";
+
+function InlineSafetyToggle({
+  propertyId,
+  fieldKey,
+}: {
+  propertyId: string;
+  fieldKey: SafetyFieldKey;
+}) {
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = React.useState(false);
+
+  const handleAnswer = async (value: boolean) => {
+    setSaving(true);
+    try {
+      await api.updateProperty(propertyId, { [fieldKey]: value });
+      await queryClient.invalidateQueries({ queryKey: ["property", propertyId] });
+    } catch (err) {
+      // Swallow — the field stays "unknown" and the buttons stay clickable to retry.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => handleAnswer(true)}
+        disabled={saving}
+        className="rounded-md border border-emerald-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+      >
+        Yes
+      </button>
+      <button
+        type="button"
+        onClick={() => handleAnswer(false)}
+        disabled={saving}
+        className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+      >
+        No
+      </button>
+    </div>
+  );
+}
+
+function systemKindToFieldKey(kind: SystemKind): YearFieldKey {
+  if (kind === "water-heater") return "waterHeaterInstallYear";
+  if (kind === "hvac") return "hvacInstallYear";
+  if (kind === "roof") return "roofReplacementYear";
+  return "electricalPanelAge";
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function HealthInsightFocusPage() {
@@ -1384,12 +1496,12 @@ export default function HealthInsightFocusPage() {
 
   // Safety Factor details
   const showSafetyDetails = isSafetyFactor(insight?.factor);
-  const safetyDevices = showSafetyDetails && prop
+  const safetyDevices: Array<{ label: string; present: boolean | null | undefined; fieldKey: SafetyFieldKey }> = showSafetyDetails && prop
     ? [
-        { label: "Smoke detectors", present: prop.hasSmokeDetectors },
-        { label: "CO detectors",    present: prop.hasCoDetectors },
-        { label: "Security system", present: prop.hasSecuritySystem },
-        { label: "Fire extinguisher", present: prop.hasFireExtinguisher },
+        { label: "Smoke detectors", present: prop.hasSmokeDetectors, fieldKey: "hasSmokeDetectors" },
+        { label: "CO detectors",    present: prop.hasCoDetectors, fieldKey: "hasCoDetectors" },
+        { label: "Security system", present: prop.hasSecuritySystem, fieldKey: "hasSecuritySystem" },
+        { label: "Fire extinguisher", present: prop.hasFireExtinguisher, fieldKey: "hasFireExtinguisher" },
       ]
     : [];
 
@@ -1499,15 +1611,14 @@ export default function HealthInsightFocusPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2.5">
-                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-                  <p className="text-sm text-slate-600">
-                    Year built is missing.{" "}
-                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-teal-600 font-medium hover:underline">
-                      Add it to your property profile
-                    </Link>{" "}
-                    to unlock age-specific guidance.
-                  </p>
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-slate-600">
+                      Year built is missing — add it to unlock age-specific guidance.
+                    </p>
+                    <InlineYearField propertyId={propertyId} fieldKey="yearBuilt" label="e.g. 1998" />
+                  </div>
                 </div>
               )}
             </div>
@@ -1554,15 +1665,18 @@ export default function HealthInsightFocusPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2.5">
-                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-                  <p className="text-sm text-slate-600">
-                    {getSystemMissingDataLabel(systemKind!)} is missing.{" "}
-                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-teal-600 font-medium hover:underline">
-                      Add it to your property profile
-                    </Link>{" "}
-                    to unlock age-specific guidance.
-                  </p>
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-slate-600">
+                      {getSystemMissingDataLabel(systemKind!)} is missing — add it to unlock age-specific guidance.
+                    </p>
+                    <InlineYearField
+                      propertyId={propertyId}
+                      fieldKey={systemKindToFieldKey(systemKind!)}
+                      label={systemKind === "electrical-panel" ? "e.g. 12 (years old)" : "e.g. 2015"}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1573,7 +1687,7 @@ export default function HealthInsightFocusPage() {
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Major systems</p>
               <div className="grid grid-cols-2 gap-2">
-                {systemsSummaryItems.map(({ label, age, tier, lifespan }) => (
+                {systemsSummaryItems.map(({ label, kind, age, tier, lifespan }) => (
                   <div key={label} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
                     <p className="text-xs text-slate-500 mb-1">{label.charAt(0).toUpperCase() + label.slice(1)}</p>
                     {age !== null && tier !== null ? (
@@ -1584,10 +1698,14 @@ export default function HealthInsightFocusPage() {
                         </span>
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400">
-                        Not recorded &middot;{" "}
-                        <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-teal-600 hover:underline">Add it</Link>
-                      </p>
+                      <div>
+                        <p className="text-xs text-slate-400 mb-1">Not recorded</p>
+                        <InlineYearField
+                          propertyId={propertyId}
+                          fieldKey={systemKindToFieldKey(kind)}
+                          label={kind === "electrical-panel" ? "yrs old" : "year"}
+                        />
+                      </div>
                     )}
                     {age !== null && (
                       <div className="mt-1.5 h-1 rounded-full bg-slate-200 overflow-hidden">
@@ -1691,25 +1809,23 @@ export default function HealthInsightFocusPage() {
           {showSafetyDetails && safetyDevices.length > 0 && (
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Safety devices</p>
-              <div className="grid grid-cols-2 gap-y-2 gap-x-4">
-                {safetyDevices.map(({ label, present }) => (
-                  <div key={label} className="flex items-center gap-1.5">
-                    {present === true
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                      : present === false
-                      ? <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-                      : <span className="h-3.5 w-3.5 rounded-full bg-slate-200 shrink-0 inline-block" />}
-                    <span className={`text-xs ${present === true ? "text-slate-700" : present === false ? "text-red-600 font-medium" : "text-slate-400"}`}>
-                      {label}{present === null ? " (unknown)" : ""}
-                    </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2.5 gap-x-4">
+                {safetyDevices.map(({ label, present, fieldKey }) => (
+                  <div key={label} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {present === true
+                        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        : present === false
+                        ? <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                        : <span className="h-3.5 w-3.5 rounded-full bg-slate-200 shrink-0 inline-block" />}
+                      <span className={`text-xs ${present === true ? "text-slate-700" : present === false ? "text-red-600 font-medium" : "text-slate-400"}`}>
+                        {label}{present == null ? " (unknown)" : ""}
+                      </span>
+                    </div>
+                    {present == null && <InlineSafetyToggle propertyId={propertyId} fieldKey={fieldKey} />}
                   </div>
                 ))}
               </div>
-              {safetyDevices.some(d => d.present === null) && (
-                <p className="text-[11px] text-slate-400 mt-2">
-                  Update your property profile to record which devices are installed.
-                </p>
-              )}
             </div>
           )}
 

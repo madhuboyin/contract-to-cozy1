@@ -6,7 +6,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -370,13 +370,81 @@ function RadarEmptyState({
   );
 }
 
+// Location setup only needs city/state/zip, not a trip to the full
+// property edit form — save them directly and refresh Radar's readiness.
+function InlineLocationForm({ propertyId, property }: { propertyId: string; property?: Property | null }) {
+  const queryClient = useQueryClient();
+  const [city, setCity] = React.useState(property?.city ?? '');
+  const [state, setState] = React.useState(property?.state ?? '');
+  const [zipCode, setZipCode] = React.useState(property?.zipCode ?? '');
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!city.trim() || !state.trim() || !zipCode.trim()) {
+      setError('City, state, and ZIP are all needed.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.updateProperty(propertyId, { city: city.trim(), state: state.trim(), zipCode: zipCode.trim() });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['radar-overview', propertyId] }),
+        queryClient.invalidateQueries({ queryKey: ['home-event-radar-property', propertyId] }),
+      ]);
+    } catch (err) {
+      setError('Could not save — try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[2fr_1fr_1fr]">
+        <input
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          placeholder="City"
+          className="h-9 rounded-lg border border-current/20 bg-white/90 px-2.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-current"
+        />
+        <input
+          value={state}
+          onChange={(e) => setState(e.target.value)}
+          placeholder="State"
+          maxLength={2}
+          className="h-9 rounded-lg border border-current/20 bg-white/90 px-2.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-current"
+        />
+        <input
+          value={zipCode}
+          onChange={(e) => setZipCode(e.target.value)}
+          placeholder="ZIP"
+          className="h-9 rounded-lg border border-current/20 bg-white/90 px-2.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-current"
+        />
+      </div>
+      {error && <p className="mb-0 text-xs font-medium text-rose-700">{error}</p>}
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving}
+        className="inline-flex min-h-[36px] items-center rounded-xl bg-amber-950 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+      >
+        {saving ? 'Saving…' : 'Save location'}
+      </button>
+    </div>
+  );
+}
+
 function RadarMonitoringNotice({
   overview,
+  property,
   isLoading,
   isError,
   onRetry,
 }: {
   overview?: RadarOverview;
+  property?: Property | null;
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
@@ -453,12 +521,7 @@ function RadarMonitoringNotice({
                 </p>
               </div>
             ) : readiness?.action === 'edit_property' ? (
-              <Link
-                href={`/dashboard/properties/${encodeURIComponent(overview.propertyId)}/edit`}
-                className="mt-3 inline-flex min-h-[40px] items-center rounded-xl bg-amber-950 px-4 py-2 text-xs font-semibold text-white"
-              >
-                {readiness.actionLabel}
-              </Link>
+              <InlineLocationForm propertyId={overview.propertyId} property={property} />
             ) : (
               <p className="mb-0 mt-2 text-xs font-medium">
                 {formatRadarLastCheck(overview.lastSuccessfulCheckAt)}
@@ -895,6 +958,7 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
         <div className="space-y-5">
           <RadarMonitoringNotice
             overview={overviewQuery.data ?? undefined}
+            property={propertyQuery.data ?? undefined}
             isLoading={overviewQuery.isLoading}
             isError={overviewQuery.isError}
             onRetry={() => void overviewQuery.refetch()}

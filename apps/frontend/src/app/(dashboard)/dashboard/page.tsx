@@ -51,6 +51,7 @@ import { WinCard } from '@/components/shared/WinCard';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { Button } from '@/components/ui/button';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { anchorForHealthFactor, propertyEditHref } from '@/lib/property/editPageAnchors';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { ConfidenceBadge as PremiumConfidenceBadge, MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import {
@@ -551,7 +552,7 @@ function getHealthInsightSetupRoute(factorTitle: string, propertyId: string): st
   const t = factorTitle.toLowerCase();
   if (t.includes('appliance')) return `/dashboard/properties/${propertyId}/inventory`;
   if (t.includes('document')) return `/dashboard/documents?propertyId=${propertyId}`;
-  return `/dashboard/properties/${propertyId}/edit`;
+  return propertyEditHref(propertyId, anchorForHealthFactor(factorTitle));
 }
 
 function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string): string {
