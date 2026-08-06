@@ -94,6 +94,19 @@ This is the concrete mechanism behind "the mix should vary with data quality": a
 
 New content must cite a real source (e.g. a remodeling cost-vs-value report), matching the "View data sources" disclaimer convention already present on the page.
 
+**Sourced content: found 2026-08-06 (Phase 0.4).** Three real, current reports cover all 6 categories. One honest gap, not papered over: interior paint has no clean cost-recovery percentage in the available data (it's tracked by recommendation frequency instead of ROI%) — no fabricated percentage is forced onto it just to match the other five's shape.
+
+| Category | Content | Source |
+|---|---|---|
+| Interior paint | #1 most-recommended pre-listing project — 50% of agents recommend painting the whole home before listing | NAR/NARI 2025 Remodeling Impact Report |
+| Curb appeal/landscaping | Exterior projects deliver the highest ROI of any category — 8 of the top 10 highest-ROI projects nationally are exterior; a new front door alone recovers 100% of cost | Zonda 2025 Cost vs. Value Report; NAR 2025 Remodeling Impact Report |
+| Flooring | Refinishing existing hardwood returns ~147% of cost — highest ROI of any interior project tracked; new hardwood installation returns ~118% | NAR 2025 Remodeling Impact Report |
+| Kitchen | A minor kitchen remodel ($28k–$30k) delivers ~113% ROI — the best return of any interior project; major renovations recoup only 38–50% | Zonda 2025 Cost vs. Value Report |
+| Bathroom | A midrange bathroom remodel recoups ~80% of cost — the strongest interior ROI after a minor kitchen update | Zonda 2025 Cost vs. Value Report |
+| Decluttering & staging | Decluttering is the most-recommended pre-listing task (96% of agents); staged homes saw 1–10% higher buyer offers per 29% of agents, and 49% of agents reported faster sales | NAR 2025 Profile of Home Staging |
+
+Sources: [2025 Remodeling Impact Report - NARI](https://nari.org/nari-blog-main/2025-remodeling-impact-report/) · [Zonda 2025 Cost vs. Value Report](https://zondahome.com/2025-cost-vs-value-report/) · [NAR Report Reveals Home Staging Boosts Sale Prices and Reduces Time on Market](https://www.nar.realtor/newsroom/nar-report-reveals-home-staging-boosts-sale-prices-and-reduces-time-on-market)
+
 ### 4.4 Category decision logic — summary table
 
 | Category | Tier 1 (data-derived) source | Confirm-eligible signal | Fallback if none of the above |
@@ -187,7 +200,11 @@ Each question is short, single-select (except #8, multi-select pick-list), and a
 
 Answers persist as **durable property facts**, not a Sale-Case-local payload, so they're reusable by any other feature and don't need re-asking once given (only re-surfaced for confirmation if something changes, e.g. a new project gets logged after the last confirmed state).
 
-**Open technical question, not yet resolved (§8):** the existing property-context fact system (`apps/backend/src/modules/propertyContext/` — `catalog/factCatalog.ts`, `application/getPropertyContext.ts`, `infrastructure/prismaAssemblers.ts`) assembles facts under fixed scopes (`LOCATION, STRUCTURE, EXTERIOR, RESPONSIBILITY, SYSTEMS, SAFETY, MAINTENANCE`). It's unconfirmed whether these are backed by a generic key-value fact table (cheap to extend with new keys like `paintCondition`) or by dedicated typed Prisma columns per fact (each new fact = a schema change). This needs a short investigation spike before implementation — it changes both the schema-change surface area and whether a new scope (e.g. `PRESENTATION` or `SALE_PREP`) needs to be added to the catalog.
+**Fact-storage spike: resolved 2026-08-06.** Not a generic key-value table — each fact key (e.g. `'structure.roofType'`, `'exterior.hasLawn'`) is registered in `capturePropertyFact.ts`'s `propertyFacts`/`exteriorFacts` mapping objects to a real, dedicated Prisma column (on `Property` directly, or a one-to-one profile table like `PropertyExteriorProfile`), each with a Zod schema and a `writeCanonicalFact` case (`apps/backend/src/modules/propertyContext/application/capturePropertyFact.ts`). `PropertyFactEvidence` is a separate provenance/audit log (source, confidence, observedAt, supersededAt) — not the value storage itself. So each new fact genuinely is a schema change, not a cheap key add.
+
+The scope taxonomy (`catalog/factCatalog.ts`'s `PROPERTY_FACT_CATALOG`) is larger than originally assumed — `CORE`, `LOCATION`, `STRUCTURE`, `EXTERIOR`, `RESPONSIBILITY`, `SYSTEMS`, `SAFETY`, `MAINTENANCE`, `ROOMS`, `INVENTORY`, `INSPECTION`, `COVERAGE`, `RISK`, and more — and none of them fit cosmetic condition. `STRUCTURE` covers types (roof type, foundation type), not current cosmetic state; `EXTERIOR` covers feature presence (has a lawn, has a pool), not condition.
+
+**Resulting plan for the 6 self-reported facts** (paint/curb-appeal/flooring/kitchen/bathroom/staging conditions): add a new one-to-one Prisma model, `PropertySalePrepProfile`, mirroring `PropertyExteriorProfile`'s exact existing pattern — one row per property, one column per fact. Add a new `PropertyContextScope` value (`SALE_PREP`) to the scope enum, register the 6 facts in `PROPERTY_FACT_CATALOG`, and add a matching `salePrepFacts` mapping object in `capturePropertyFact.ts` (same shape as `exteriorFacts`), each `writable: true`. One deviation worth flagging: every existing fact's `correctionPath` points to a Property Edit page anchor (`/dashboard/properties/:propertyId/edit#section`) — these 6 facts don't have a natural Property Edit section, since they're meant to be answered inline on Sale Case (§4.5), not edited there. `correctionPath` for these should point back to the Sale Case question card instead, the one deliberate departure from the existing convention.
 
 ### 4.7 Budget and timeline handling
 
@@ -270,8 +287,8 @@ Tone throughout is deliberately flat/factual — no exclamation points, no "hot 
 ### Backend
 - `apps/backend/src/services/propertySaleCase.service.ts` — add new Tier 1 projectors (§4.2); add Tier 2 catalog evaluation + per-category gating logic (§4.3/§4.4); extend `syncReadinessItems` to call both.
 - `apps/backend/src/data/` — new static catalog file for the Tier 2 cosmetic categories (mirrors `seasonalTaskTemplates.json`'s pattern), including fresh, sourced reference ROI%/cost-bucket content (§4.3).
-- `apps/backend/src/modules/propertyContext/` — extend fact catalog with new fact keys once §4.6's storage-mechanism question is resolved.
-- `apps/backend/prisma/schema.prisma` — add `enum SalePrepBudgetRange` + `PropertySaleCase.budgetRange` (§4.7); add any new fact-storage schema needed (§4.6); no migration scripts — edit schema directly, `npx prisma db push` run manually by the user per project convention.
+- `apps/backend/src/modules/propertyContext/` — add `SALE_PREP` scope; register 6 new fact keys in `catalog/factCatalog.ts`'s `PROPERTY_FACT_CATALOG`; add a `salePrepFacts` mapping object in `application/capturePropertyFact.ts` (mirrors `exteriorFacts`), each with `correctionPath` pointing back to the Sale Case question card rather than a Property Edit anchor (§4.6).
+- `apps/backend/prisma/schema.prisma` — add `enum SalePrepBudgetRange` + `PropertySaleCase.budgetRange` (§4.7); add new model `PropertySalePrepProfile` (one-to-one with `Property`, mirrors `PropertyExteriorProfile`) for the 6 self-reported facts (§4.6); no migration scripts — edit schema directly, `npx prisma db push` run manually by the user per project convention.
 - Home Actions integration (§4.8): new "Sale prep" source kind + adapter in `apps/backend/src/services/homeActionSourcePromotion.service.ts` / `apps/backend/src/productFramework/homeActionSourceAdapters.ts`, following the existing adapter pattern (`adaptHomeActionSource`); update `WORK_ITEM_ELIGIBLE_SOURCE_KINDS`/`resolveObligation`/`resolveSubject` in `homeActionWorkItem.adapter.ts`.
 - Delete `apps/backend/src/sellerPrep/engines/valueCalculator.engine.ts` (§8.9).
 
@@ -283,9 +300,9 @@ Tone throughout is deliberately flat/factual — no exclamation points, no "hot 
 
 ## 6. Dependencies
 
-- Weather-advisory exclusion fix (§2) should be committed first — new Home-Action-sourced projectors build on the same filtered path.
-- §4.6's fact-storage investigation must resolve before any new fact keys are added — determines schema-change surface area.
-- If Tier 1's "aging systems" projector uses `maintenancePrediction.service.ts`, that service needs review — it's currently unwired from any live feature; confirm it's fit for reuse rather than dead/stale logic.
+- ~~Weather-advisory exclusion fix (§2) should be committed first~~ — **done**, commit `42aaabc`.
+- ~~§4.6's fact-storage investigation~~ — **resolved 2026-08-06, see §4.6.** Not a generic key-value table; each fact needs a real Prisma column. New `PropertySalePrepProfile` model + `SALE_PREP` scope planned for the 6 self-reported facts.
+- ~~"Aging systems" projector's dependency on `maintenancePrediction.service.ts`~~ — **resolved 2026-08-06: not reused.** It's a live, mounted feature (`/api/...` via `maintenancePrediction.routes.ts`), not dead code — but it solves a different problem (recurring maintenance due-dates with gamification streak side-effects via `incrementStreak`, only for HVAC/water-heater/roof), not "flag aging/near-end-of-life systems." Reusing it would misuse its output and pull in irrelevant gamification behavior. Phase 2's aging-systems projector instead reads `InventoryItem.installedOn`/`purchasedOn` directly against a small, self-contained expected-lifespan reference — no dependency on this service.
 - Tier 2 reference content (§4.3) needs fresh sourcing (a real remodeling cost-vs-value report or similar) before it can ship — not pulled from any existing code.
 - Home Operations integration (§4.8, resolved) has a wider blast radius than Sale Case alone — new item types will appear in the general Home Operations feed and must carry the new "Sale prep" source-kind tag so they're reviewed against that feed's existing UX assumptions and don't appear unexplained.
 - §4.8's new Home Action source kind requires updates to `WORK_ITEM_ELIGIBLE_SOURCE_KINDS`, `resolveObligation`/`resolveSubject` (`homeActionWorkItem.adapter.ts`), and the `HomeActionSourceKind` taxonomy (`productFramework/homeActionSourceAdapters.ts`) — same pattern as existing source kinds, but touches shared Home Actions infrastructure, not just Sale Case code.
@@ -325,16 +342,18 @@ All 10 design decisions in §8 are resolved. This is the concrete build sequence
 
 ### Phase 0 — Prerequisites (do first, blocks everything else)
 
-1. Commit the uncommitted weather-advisory fix (§2) — three files already modified (`workItemRepository.ts`, `listWorkItems.usecase.ts`, `propertySaleCase.service.ts`). New Tier 1 Home-Action projectors in Phase 2 build on this same filtered path.
-2. **Fact-storage spike (§4.6)** — determine whether the property-context fact system (`apps/backend/src/modules/propertyContext/`) is backed by a generic key-value table (cheap to extend) or per-fact typed Prisma columns (each new fact = a schema change), and whether a new catalog scope is needed. This gates every self-reported fact in §4.5/§4.10 — cannot build the question/answer UI or storage until this is answered. Output: a confirmed storage shape for `paintCondition`, `curbAppealCondition`, `flooringCondition`, `kitchenCondition`, `bathroomCondition`, `stagingReadiness`.
-3. Confirm `maintenancePrediction.service.ts`'s fitness for reuse in Phase 2's "aging systems" projector (§6) — it's currently unwired from any live feature; verify its logic isn't stale before building on it. If unfit, drop that specific projector from Phase 2's scope rather than block on it.
-4. Source real citable content for Tier 2's 6 categories (§4.3, §8.2) — a remodeling cost-vs-value report or equivalent, matching the "View data sources" convention already on the page. Needed before Phase 3 can ship real (non-placeholder) reference content.
+1. ~~Commit the uncommitted weather-advisory fix (§2)~~ — **done**, commit `42aaabc`.
+2. ~~Fact-storage spike (§4.6)~~ — **done 2026-08-06.** Not a generic key-value table; new `PropertySalePrepProfile` model + `SALE_PREP` scope planned for the 6 self-reported facts. See §4.6 for full detail.
+3. ~~Confirm `maintenancePrediction.service.ts`'s fitness for reuse~~ — **done 2026-08-06: not reused.** It's live (mounted at `/api/...`) but solves a different problem (recurring due-dates + gamification streaks). Phase 2's aging-systems projector reads `InventoryItem` directly instead. See §6.
+4. ~~Source real citable content for Tier 2's 6 categories~~ — **done 2026-08-06.** Sourced from the NAR/NARI 2025 Remodeling Impact Report, Zonda 2025 Cost vs. Value Report, and NAR 2025 Profile of Home Staging. Full content + citations in §4.3.
+
+**Phase 0 complete.** Ready to begin Phase 1.
 
 ### Phase 1 — Schema (apps/backend/prisma/schema.prisma, edit directly, no migration scripts — user runs `npx prisma db push`)
 
 1. `enum SalePrepBudgetRange { UNDER_5K, FIVE_TO_15K, FIFTEEN_TO_30K, OVER_30K }` + `PropertySaleCase.budgetRange SalePrepBudgetRange?` (§4.7, §8.8).
 2. New Home Action source kind for Sale Prep tagging (§4.8, §8.3) — whatever schema-level enum/type change that requires in the Home Actions source-kind taxonomy.
-3. Whatever Phase 0.2's fact-storage spike determined is needed for the 6 self-reported facts (§4.6).
+3. New model `PropertySalePrepProfile` (one-to-one with `Property`, mirroring `PropertyExteriorProfile`'s pattern) with the 6 self-reported condition fields (§4.6); new `SALE_PREP` value on the `PropertyContextScope` enum.
 4. Notify the user to run `npx prisma generate` + `npx prisma db push`, and `npx prisma generate` in `apps/workers/` — done manually per project convention, not by this plan.
 
 ### Phase 2 — Backend: Tier 1 projectors (`propertySaleCase.service.ts`, §4.2)
@@ -342,7 +361,7 @@ All 10 design decisions in §8 are resolved. This is the concrete build sequence
 Lowest risk — extends the existing, proven pure-derivation projector pattern (`projectInspectionFindings`, `projectProjects`, etc.), no new UI dependency.
 
 1. Broaden `projectInspectionFindings` (or add a parallel projector) to surface `INFORMATIONAL`/minor findings under `PRESENTATION`/`OPTIONAL_IMPROVEMENT` instead of dropping them.
-2. New "aging/near-end-of-life systems" projector (from `InventoryItem`, if Phase 0.3 confirms `maintenancePrediction.service.ts` is fit for reuse).
+2. New "aging/near-end-of-life systems" projector — reads `InventoryItem.installedOn`/`purchasedOn` against a small, self-contained expected-lifespan reference table, written fresh for this projector; does not call `maintenancePrediction.service.ts` (§6, Phase 0.3 finding: different problem, not fit for reuse).
 3. New "lapsed routine maintenance" projector (`PropertyMaintenanceTask`).
 4. New "expiring/transferable warranties" projector (positive-signal framing, not a gap).
 5. §4.4a's broadened evidence search for `SAFETY_STRUCTURAL`/`FINANCIAL_DECISION`/`PERMITS_DISCLOSURE` categories — check `InspectionFinding`/`PropertyMaintenanceTask`/`ProjectRecord`/`PropertyRecord`/`HomeEvent` for a sufficiently detailed record before falling back to the soft "log an inspection" prompt (§4.10's copy).
