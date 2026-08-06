@@ -18,7 +18,11 @@ let storageUploadCalls = 0;
 const transactionWrites = [];
 const recordCreateCalls = [];
 const versionCreateCalls = [];
+const versionUpdateCalls = [];
 const linkCreateCalls = [];
+let extractFullTextResult = null;
+let extractFullTextError = null;
+const extractFullTextCalls = [];
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {
@@ -30,7 +34,7 @@ require.cache[prismaPath] = {
       propertyRecordVersion: {
         findFirst: async () => duplicateVersion,
         create: async (args) => { versionCreateCalls.push(args); return {}; },
-        update: async () => ({}),
+        update: async (args) => { versionUpdateCalls.push(args); return {}; },
         findUniqueOrThrow: async () => ({}),
       },
       propertyRecord: {
@@ -109,6 +113,30 @@ require.cache[presignPath] = {
   loaded: true,
   exports: { presignGetObject: async () => null },
 };
+
+// extractVersionText's require('./documentIntelligence.service') is lazy
+// (inside the async fire-and-forget body, not a top-level import — see the
+// comment on that method), but require.cache substitution still intercepts
+// it: both resolve to the same absolute path.
+const intelligencePath = require.resolve('../../src/services/documentIntelligence.service.ts');
+require.cache[intelligencePath] = {
+  id: intelligencePath,
+  filename: intelligencePath,
+  loaded: true,
+  exports: {
+    documentIntelligenceService: {
+      extractFullText: async (buffer, mimeType) => {
+        extractFullTextCalls.push({ buffer, mimeType });
+        if (extractFullTextError) throw extractFullTextError;
+        return extractFullTextResult;
+      },
+    },
+  },
+};
+
+function flushMicrotasks() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 const { HomeRecordsService } = require('../../src/services/homeRecords.service.ts');
 
@@ -428,4 +456,89 @@ test('a real resolution dialog exists in the frontend — choose new-version vs 
     'utf8',
   );
   assert.match(api, /export async function checkPossibleVersion/);
+});
+
+// Slice 4 (§8): "add OCR/full-text and structured search" — full-text
+// extraction is fire-and-forget from create()/addVersion() (never blocks
+// or fails the upload) and only updates the version when it actually
+// produced text.
+
+test('create() triggers full-text extraction and stores the result once it resolves, without blocking the response', async () => {
+  duplicateVersion = null;
+  storageUploadCalls = 0;
+  versionUpdateCalls.length = 0;
+  extractFullTextCalls.length = 0;
+  extractFullTextError = null;
+  extractFullTextResult = { text: 'Extracted warranty terms and coverage dates.' };
+
+  await service.create({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    file,
+    title: 'Warranty',
+    recordType: 'WARRANTY',
+    sensitivity: 'STANDARD',
+    visibility: 'HOUSEHOLD',
+  });
+  // create() itself must already have returned by this point — the
+  // extraction call below is confirmed via a post-hoc flush, not because
+  // create() awaited it.
+  await flushMicrotasks();
+
+  assert.equal(extractFullTextCalls.length, 1);
+  assert.equal(extractFullTextCalls[0].mimeType, file.mimetype);
+  const extractionUpdate = versionUpdateCalls.find((call) => call.data?.extractedText);
+  assert.ok(extractionUpdate, 'expected a propertyRecordVersion.update call carrying the extracted text');
+  assert.equal(extractionUpdate.data.extractedText, 'Extracted warranty terms and coverage dates.');
+  assert.ok(extractionUpdate.data.textExtractedAt instanceof Date);
+});
+
+test('a failed or empty extraction never throws out of create()/addVersion() and never writes a stale update', async () => {
+  duplicateVersion = null;
+  storageUploadCalls = 0;
+  versionUpdateCalls.length = 0;
+  extractFullTextCalls.length = 0;
+  extractFullTextError = new Error('AI service unavailable');
+  extractFullTextResult = null;
+
+  // create() itself must resolve normally despite the extraction failure.
+  await service.create({
+    propertyId: 'property-1',
+    userId: 'user-1',
+    file,
+    title: 'Warranty',
+    recordType: 'WARRANTY',
+    sensitivity: 'STANDARD',
+    visibility: 'HOUSEHOLD',
+  });
+  await flushMicrotasks();
+
+  assert.equal(extractFullTextCalls.length, 1);
+  assert.equal(versionUpdateCalls.find((call) => call.data?.extractedText), undefined);
+
+  // Also true for an extraction that succeeds but returns no text (e.g. a
+  // scanned page with nothing readable) — no update either.
+  extractFullTextError = null;
+  extractFullTextResult = null;
+  versionUpdateCalls.length = 0;
+  recordForVersion = {
+    id: 'record-1',
+    lifecycleStatus: 'ACTIVE',
+    currentVersionId: 'version-1',
+    versions: [{ id: 'version-1', versionNumber: 1, sha256: 'different-hash' }],
+  };
+  await service.addVersion({ propertyId: 'property-1', recordId: 'record-1', userId: 'user-1', file });
+  await flushMicrotasks();
+  assert.equal(versionUpdateCalls.find((call) => call.data?.extractedText), undefined);
+});
+
+test("list()'s search matches extracted document content, not just title/description, without regressing when extraction hasn't run", async () => {
+  const source = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/homeRecords.service.ts'),
+    'utf8',
+  );
+  const searchClause = source.slice(source.indexOf('search?.trim() ?'), source.indexOf('} : {}),', source.indexOf('search?.trim() ?')));
+  assert.match(searchClause, /title:\s*\{\s*contains/);
+  assert.match(searchClause, /description:\s*\{\s*contains/);
+  assert.match(searchClause, /currentVersion:\s*\{\s*extractedText:\s*\{\s*contains/);
 });

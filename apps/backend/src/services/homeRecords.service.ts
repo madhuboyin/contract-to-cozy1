@@ -164,6 +164,11 @@ export class HomeRecordsService {
           OR: [
             { title: { contains: search.trim(), mode: 'insensitive' as const } },
             { description: { contains: search.trim(), mode: 'insensitive' as const } },
+            // Slice 4: full-text — searches the actual document content
+            // (see extractVersionText), not just what was typed at upload.
+            // Null on records where extraction hasn't run or failed, so
+            // those still only match on title/description above.
+            { currentVersion: { extractedText: { contains: search.trim(), mode: 'insensitive' as const } } },
           ],
         } : {}),
       },
@@ -359,6 +364,8 @@ export class HomeRecordsService {
       throw error;
     }
 
+    this.extractVersionText(versionId, input.file.buffer, input.file.mimetype);
+
     const created = await prisma.propertyRecord.findUniqueOrThrow({
         where: { id: recordId },
         include: { currentVersion: true },
@@ -444,6 +451,8 @@ export class HomeRecordsService {
       }).catch(() => undefined);
       throw error;
     }
+
+    this.extractVersionText(versionId, input.file.buffer, input.file.mimetype);
 
     return prisma.propertyRecordVersion.findUniqueOrThrow({ where: { id: versionId } });
   }
@@ -652,6 +661,32 @@ export class HomeRecordsService {
     } catch (err) {
       logger.warn({ err, propertyId, recordId }, 'Home Operations record-review sync failed after a Home Records write');
     }
+  }
+
+  // Slice 4 (§8): "add OCR/full-text and structured search". Fire-and-forget
+  // from create()/addVersion() — never awaited by the caller, so a slow or
+  // failed AI call never adds latency to (or fails) the upload response.
+  // Deliberately a lazy require, not a top-level import: documentIntelligence
+  // .service.ts constructs its singleton eagerly and throws if GEMINI_API_KEY
+  // is unset, which would otherwise break every caller of this file (Sale
+  // Case, the Home Actions bridge, etc.) at module-load time in any
+  // environment/test that doesn't set the key — this file has never
+  // depended on that key before and shouldn't start requiring it just to
+  // be imported.
+  private extractVersionText(versionId: string, buffer: Buffer, mimeType: string): void {
+    void (async () => {
+      try {
+        const { documentIntelligenceService } = require('./documentIntelligence.service') as typeof import('./documentIntelligence.service');
+        const result = await documentIntelligenceService.extractFullText(buffer, mimeType);
+        if (!result?.text) return;
+        await prisma.propertyRecordVersion.update({
+          where: { id: versionId },
+          data: { extractedText: result.text, textExtractedAt: new Date() },
+        });
+      } catch (err) {
+        logger.warn({ err, versionId }, 'Full-text extraction failed; record remains searchable by title/description only');
+      }
+    })();
   }
 
   // Shared by assertEntityScope (link-creation guard) and get() (broken-link

@@ -1129,7 +1129,7 @@ export default function HomeRecordsClient() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search records by title or description"
+                placeholder="Search records — including text inside documents"
                 className="pl-9"
               />
             </div>
@@ -1143,6 +1143,12 @@ export default function HomeRecordsClient() {
               </SelectContent>
             </Select>
           </div>
+          {search.trim() && (
+            <p className="text-xs text-gray-500">
+              Searching titles, descriptions, and document content. Newly uploaded files may take a
+              moment before their content is searchable.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-1.5">
             <Button variant={view === 'ALL' ? 'default' : 'outline'} size="sm" className="h-7 rounded-full px-3 text-xs" onClick={() => setView('ALL')}>
               All records

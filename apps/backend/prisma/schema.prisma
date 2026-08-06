@@ -3891,6 +3891,15 @@ model PropertyRecordVersion {
   supersedesVersionId String?
   createdAt           DateTime                      @default(now())
 
+  // Slice 4 (§8): "add OCR/full-text and structured search" — populated
+  // best-effort after upload (see homeRecords.service.ts's
+  // extractVersionText), never blocking the upload itself. Null until
+  // extraction completes or if it fails; search still falls back to
+  // title/description in that case.
+  extractedText   String?   @db.Text
+  ocrQualityScore Float?
+  textExtractedAt DateTime?
+
   record            PropertyRecord           @relation("PropertyRecordVersions", fields: [recordId], references: [id], onDelete: Cascade)
   currentForRecord  PropertyRecord?           @relation("PropertyRecordCurrentVersion")
   supersedesVersion PropertyRecordVersion?    @relation("PropertyRecordVersionSupersession", fields: [supersedesVersionId], references: [id], onDelete: SetNull)

@@ -222,6 +222,50 @@ export class DocumentIntelligenceService {
     }
   }
 
+  // Slice 4 of the continuity plan (§8): "add OCR/full-text and structured
+  // search" — a separate, simpler call from analyzeDocument()'s structured-
+  // field extraction (different prompt, no JSON schema, no record-type
+  // restriction). Callers treat a thrown error or null text as "extraction
+  // unavailable for this document" and keep the record searchable by
+  // title/description alone — never a reason to fail the upload itself.
+  async extractFullText(
+    fileBuffer: Buffer,
+    mimeType: string,
+  ): Promise<{ text: string } | null> {
+    const base64Data = fileBuffer.toString('base64');
+    const response = await documentIntelligenceCircuit.execute(async () =>
+      withTimeout(
+        async () =>
+          this.ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: [{
+              role: 'user',
+              parts: [
+                {
+                  text: 'Transcribe all readable text from this document, in reading order. '
+                    + 'Return only the transcribed text with no commentary, headers, or markdown formatting. '
+                    + 'If the document contains no readable text, return an empty response.',
+                },
+                { inlineData: { mimeType, data: base64Data } },
+              ],
+            }],
+            config: {
+              maxOutputTokens: 4000,
+              temperature: 0,
+            },
+          }),
+        {
+          timeoutMs: DOCUMENT_AI_TIMEOUT_MS,
+          operation: 'document_text_extraction',
+        },
+      )
+    );
+
+    const text = response.text?.trim();
+    if (!text) return null;
+    return { text };
+  }
+
   async autoCreateInsurancePolicy(
     homeownerProfileId: string,
     propertyId: string,
