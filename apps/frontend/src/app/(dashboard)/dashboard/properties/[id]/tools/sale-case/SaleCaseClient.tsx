@@ -218,11 +218,11 @@ export default function SaleCaseClient() {
     <MobilePageContainer className="lg:max-w-5xl lg:px-8 lg:pb-10">
       <div className="mb-4 hidden items-center gap-2 lg:flex">
         <Link
-          href={`/dashboard/properties/${propertyId}`}
+          href={`/dashboard/properties/${propertyId}/seller-prep`}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to property
+          Back to Sale Readiness
         </Link>
       </div>
 

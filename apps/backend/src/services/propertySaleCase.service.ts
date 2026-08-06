@@ -327,7 +327,7 @@ export class PropertySaleCaseService {
       const hasContributorAccess = ROLE_RANK[access.role] >= ROLE_RANK.CONTRIBUTOR;
       return {
         propertyId,
-        saleIntentConfirmed: false,
+        saleIntentConfirmed: property?.propertyUse === 'FOR_SALE',
         canCreate: property?.propertyUse === 'FOR_SALE' && hasContributorAccess,
         canConfirmSaleIntent: hasContributorAccess,
         currentPropertyUse: property?.propertyUse ?? null,
