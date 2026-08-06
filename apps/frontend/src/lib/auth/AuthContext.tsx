@@ -2,9 +2,18 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { User, LoginInput, RegisterInput, LoginResponse, RegisterResponse, MfaChallengeResponse } from '@/types';
 import { api } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
+
+// Session-scoped client state that must not leak from one authenticated
+// session into the next in the same browser tab (e.g. a cached property list
+// or selected-property id from a previous account showing up post-login).
+function clearSessionScopedClientState() {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem('selectedPropertyId');
+}
 
 type AuthLoginResult = LoginResponse | MfaChallengeResponse;
 
@@ -57,6 +66,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // --- Utility Getters ---
   const isAuthenticated = !!user;
@@ -71,9 +81,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
     setLoading(false);
     await api.logout();
+    // Drop any cached queries and the selected-property id so the next
+    // session in this tab (a different account, or a re-login) can't see
+    // this session's data via a stale React Query cache or localStorage.
+    queryClient.clear();
+    clearSessionScopedClientState();
     router.replace('/login');
     router.refresh();
-  }, [router]);
+  }, [router, queryClient]);
 
   // FIX 3: Define refreshUser using the common fetchCurrentUser logic
   const refreshUser = useCallback(async () => {
@@ -98,11 +113,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const { user } = loginData as LoginResponse;
 
+      // A prior session in this tab may have left cached queries (property
+      // list, selected property, etc.) behind — drop them before this
+      // session's data starts populating the cache.
+      queryClient.clear();
+      clearSessionScopedClientState();
       setUser(user);
       return { success: true, sessionEstablished: true, user };
     }
     return null;
-  }, []);
+  }, [queryClient]);
 
   const completeMfaChallenge = useCallback(
     async (mfaToken: string, code: string): Promise<LoginResponse | null> => {
@@ -110,10 +130,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!response.success) return null;
 
       const loginData = extractApiData<LoginResponse>(response.data);
+      queryClient.clear();
+      clearSessionScopedClientState();
       setUser(loginData.user);
       return { success: true, sessionEstablished: true, user: loginData.user };
     },
-    []
+    [queryClient]
   );
 
   const completeMfaRecoveryChallenge = useCallback(
@@ -122,10 +144,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!response.success) return null;
 
       const loginData = extractApiData<LoginResponse>(response.data);
+      queryClient.clear();
+      clearSessionScopedClientState();
       setUser(loginData.user);
       return { success: true, sessionEstablished: true, user: loginData.user };
     },
-    []
+    [queryClient]
   );
 
   const register = useCallback(async (data: RegisterInput): Promise<RegisterResponse | null> => {
