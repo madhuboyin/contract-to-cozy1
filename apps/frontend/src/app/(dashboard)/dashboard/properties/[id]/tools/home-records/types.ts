@@ -183,3 +183,63 @@ export interface CreateRecordResult {
   record: PropertyRecordSummary;
   possibleVersionOf: { id: string; title: string; currentVersionId: string | null } | null;
 }
+
+// Batch mobile scan: several photos captured in one phone-camera session,
+// each becoming its own record sharing one title/recordType/sensitivity/
+// visibility (per-item title gets a "(1 of 3)" suffix server-side). Not a
+// multi-page-PDF assembly — see homeRecords.service.ts's createBatch().
+export interface CreateBatchInput {
+  files: File[];
+  title: string;
+  recordType: PropertyRecordType;
+  sensitivity: PropertyRecordSensitivity;
+  visibility: PropertyRecordVisibility;
+}
+
+export interface CreateBatchResult {
+  created: {
+    fileName: string;
+    record: PropertyRecordSummary;
+    possibleVersionOf: { id: string; title: string; currentVersionId: string | null } | null;
+  }[];
+  failed: { fileName: string; message: string; code?: string }[];
+}
+
+// Export/download audit trail: a presigned URL is issued straight to S3, so
+// this records the click that requested one — an honest proxy signal (the
+// same class of signal Property Brief's accessCount already uses), not
+// literal proof the file was opened.
+export interface PropertyRecordDownloadEvent {
+  id: string;
+  occurredAt: string;
+  fileName: string | null;
+  userName: string | null;
+  userEmail: string | null;
+}
+
+// Storage/recovery SLOs: real, already-enforced numbers (the actual trash
+// recovery window, current counts of scan/integrity/purge problems) — not a
+// fabricated uptime/durability percentage this app has no telemetry to back.
+export interface PropertyRecordStorageHealth {
+  recoveryWindowDays: number;
+  scanIssueCount: number;
+  integrityMismatchCount: number;
+  purgeFailureCount: number;
+  stalePurgeCount: number;
+  healthy: boolean;
+}
+
+export type PropertyRecordSavedSearchView = 'ALL' | 'NEEDS_REVIEW' | 'EXPIRING';
+
+// A named bookmark of the list page's own filter bar (search text + type +
+// view chip), re-run live against list() — not a stored result set.
+export interface PropertyRecordSavedSearch {
+  id: string;
+  propertyId: string;
+  createdByUserId: string;
+  name: string;
+  search: string | null;
+  recordType: PropertyRecordType | null;
+  view: PropertyRecordSavedSearchView;
+  createdAt: string;
+}

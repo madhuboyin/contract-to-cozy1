@@ -73,11 +73,22 @@ function sectionTitle(section: PropertyBriefSectionInput) {
     WARRANTIES: 'Active warranties',
     MATERIAL_SPECS: 'As-built material specs',
     PERMITS: 'Verified permits',
+    EMERGENCY_INFO: 'Emergency contacts & critical information',
   }[section];
 }
 
+// Slice 6's "resale-safe/successor-safe projection policy" — the other
+// half of HomeEventVisibility enforcement beyond PRIVATE. PROSPECTIVE_BUYER
+// and LISTING_AGENT are the two purposes whose recipient is, by definition,
+// evaluating whether to acquire/list the property — the narrowest audience
+// this system has. HOUSEHOLD-visibility events (real, but not vetted by the
+// homeowner for an external buyer/agent) must not leak into that package
+// just because they're not PRIVATE.
+const RESALE_SAFE_PURPOSES = new Set<PropertyBriefPurposeInput>(['PROSPECTIVE_BUYER', 'LISTING_AGENT']);
+
 async function assembleSections(input: {
   propertyId: string;
+  purpose: PropertyBriefPurposeInput;
   selectedSections: PropertyBriefSectionInput[];
   documentIds: string[];
   asOf: Date;
@@ -193,9 +204,16 @@ async function assembleSections(input: {
         // Enforcement half of HomeEventVisibility (the schema enum existed
         // since an earlier slice with zero enforcement anywhere — a
         // homeowner marking an event PRIVATE previously had no effect on
-        // what left the household via a Property Brief). HOUSEHOLD/
-        // SHARE_LINK/RESALE_PACK are unaffected — same behavior as before.
-        visibility: { not: 'PRIVATE' },
+        // what left the household via a Property Brief). For most purposes
+        // this stays "not PRIVATE" (HOUSEHOLD/SHARE_LINK/RESALE_PACK all
+        // included, unchanged). For the two resale-safe purposes, only
+        // events the homeowner has explicitly marked RESALE_PACK qualify —
+        // see RESALE_SAFE_PURPOSES above. This can legitimately mean an
+        // empty (or thin) Verified History section for a buyer/agent brief
+        // until the homeowner marks events for it — under-inclusion is the
+        // correct failure mode for an external-audience package, not
+        // silently including everything not explicitly private.
+        visibility: RESALE_SAFE_PURPOSES.has(input.purpose) ? 'RESALE_PACK' : { not: 'PRIVATE' },
         verificationStatus: {
           in: [
             HomeEventVerificationStatus.HOMEOWNER_CONFIRMED,
@@ -495,6 +513,69 @@ async function assembleSections(input: {
     });
   }
 
+  if (input.selectedSections.includes('EMERGENCY_INFO')) {
+    const will = await prisma.homeDigitalWill.findUnique({
+      where: { propertyId: input.propertyId },
+      include: {
+        trustedContacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+        sections: {
+          include: { entries: { where: { isEmergency: true }, orderBy: [{ priority: 'desc' }, { sortOrder: 'asc' }] } },
+        },
+      },
+    });
+    const contactItems = (will?.trustedContacts ?? []).map((contact) => ({
+      key: contact.id,
+      kind: 'CONTACT' as const,
+      name: contact.name,
+      relationship: contact.relationship ?? contact.role,
+      isPrimary: contact.isPrimary,
+      phone: contact.phone,
+      email: contact.email,
+      asOf: contact.updatedAt.toISOString(),
+    }));
+    const entryItems = (will?.sections ?? []).flatMap((section) =>
+      section.entries.map((entry) => ({
+        key: entry.id,
+        kind: 'ENTRY' as const,
+        sectionTitle: section.title,
+        title: entry.title,
+        priority: entry.priority,
+        summary: entry.summary || entry.content || null,
+        asOf: entry.updatedAt.toISOString(),
+      })),
+    );
+    sections.push({
+      sectionType: PropertyBriefSectionType.EMERGENCY_INFO,
+      title: sectionTitle('EMERGENCY_INFO'),
+      // Same content emergencyPacket.service.ts's PDF already surfaces —
+      // real, homeowner-authored trusted contacts and isEmergency-flagged
+      // Digital Will entries, not a fabricated summary.
+      payload: json({ items: [...contactItems, ...entryItems] }),
+      sensitive: true,
+      asOf: input.asOf,
+      evidence: [
+        ...(will?.trustedContacts ?? []).map((contact) => ({
+          itemKey: contact.id,
+          sourceEntityType: 'HOME_DIGITAL_WILL_CONTACT',
+          sourceEntityId: contact.id,
+          sourceLabel: 'Home Digital Will trusted contact',
+          sourceAsOf: contact.updatedAt,
+          verification: 'HOMEOWNER_RECORDED',
+        })),
+        ...(will?.sections ?? []).flatMap((section) =>
+          section.entries.map((entry) => ({
+            itemKey: entry.id,
+            sourceEntityType: 'HOME_DIGITAL_WILL_ENTRY',
+            sourceEntityId: entry.id,
+            sourceLabel: 'Home Digital Will entry',
+            sourceAsOf: entry.updatedAt,
+            verification: 'HOMEOWNER_RECORDED',
+          })),
+        ),
+      ],
+    });
+  }
+
   return sections;
 }
 
@@ -521,6 +602,22 @@ export async function listEligiblePropertyBriefDocuments(propertyId: string) {
   });
 }
 
+// Slice 7's "stale-item review/reminders": a brief is an immutable snapshot
+// taken at asOf (see assembleSections) — there is no republish/refresh
+// mechanism (a separate, still-open item), so an old ACTIVE share may be
+// showing a recipient facts that have since changed underneath it, with no
+// homeowner-facing signal that's happening. 90 days is a real, documented
+// threshold, not a fabricated urgency score — "the underlying data could
+// plausibly have drifted," nothing more precise is knowable from this data.
+const STALE_BRIEF_THRESHOLD_DAYS = 90;
+
+export function computeBriefStaleness(asOf: Date, hasActiveShare: boolean, now: Date = new Date()) {
+  const ageDays = Math.floor((now.getTime() - asOf.getTime()) / 86_400_000);
+  // Only meaningful when a live recipient link actually exists — a
+  // snapshot nobody can currently view isn't a review priority.
+  return { ageDays, isStale: hasActiveShare && ageDays >= STALE_BRIEF_THRESHOLD_DAYS };
+}
+
 // Property-shared, not creator-scoped — any household member can see every
 // brief on this property, matching Home Records' pattern. Previously
 // filtered by createdByUserId, which made one co-owner's briefs invisible
@@ -528,7 +625,7 @@ export async function listEligiblePropertyBriefDocuments(propertyId: string) {
 // completion) that need to revoke a share someone else on the household
 // created.
 export async function listPropertyBriefs(propertyId: string) {
-  return prisma.propertyBrief.findMany({
+  const briefs = await prisma.propertyBrief.findMany({
     where: { propertyId, status: { not: PropertyBriefStatus.ARCHIVED } },
     orderBy: { createdAt: 'desc' },
     include: {
@@ -542,6 +639,11 @@ export async function listPropertyBriefs(propertyId: string) {
         },
       },
     },
+  });
+
+  return briefs.map((brief) => {
+    const hasActiveShare = brief.shares.some((share) => share.status === 'ACTIVE');
+    return { ...brief, ...computeBriefStaleness(brief.asOf, hasActiveShare) };
   });
 }
 
@@ -558,6 +660,7 @@ export async function createPropertyBrief(input: {
   const asOf = new Date();
   const sections = await assembleSections({
     propertyId: input.propertyId,
+    purpose: input.purpose,
     selectedSections,
     documentIds: input.documentIds,
     asOf,
@@ -609,6 +712,93 @@ export async function createPropertyBrief(input: {
     },
   });
   return brief;
+}
+
+// Slice 7's "republish notifications": a brief was a create-once snapshot
+// with no refresh path at all. Re-runs assembleSections() against live
+// data with the SAME purpose/selectedSections (documentIds are
+// reconstructed from the existing DOCUMENTS section's evidence links,
+// since they were never stored anywhere else on the brief) and replaces
+// the section rows only if something actually changed — a real per-
+// section deep-equality diff, not a blind always-changed assumption, so a
+// homeowner isn't told "updated" when nothing moved. Returns which
+// section types changed so the caller (the route) can both report it
+// honestly and decide whether to notify recipients.
+// Pure and directly testable without a prisma mock — a real per-section
+// deep-equality diff, not a blind always-changed assumption. A section
+// present before and now absent (or vice versa) also counts as changed:
+// deep-equality against `undefined` is false, so that case falls out of
+// the same check without a separate branch.
+export function diffBriefSections(
+  previous: { sectionType: PropertyBriefSectionType; payload: unknown }[],
+  fresh: { sectionType: PropertyBriefSectionType; payload: unknown }[],
+): PropertyBriefSectionType[] {
+  const previousBySectionType = new Map(previous.map((section) => [section.sectionType, section]));
+  return fresh
+    .filter((section) => {
+      const match = previousBySectionType.get(section.sectionType);
+      return !match || JSON.stringify(match.payload) !== JSON.stringify(section.payload);
+    })
+    .map((section) => section.sectionType);
+}
+
+export async function republishPropertyBrief(input: {
+  propertyId: string;
+  briefId: string;
+}) {
+  const existing = await findAccessibleBrief(input.propertyId, input.briefId);
+  if (existing.status === PropertyBriefStatus.ARCHIVED) {
+    throw new APIError('An archived brief cannot be republished.', 409, 'PROPERTY_BRIEF_ARCHIVED');
+  }
+
+  const documentIds = existing.sections
+    .find((section) => section.sectionType === PropertyBriefSectionType.DOCUMENTS)
+    ?.evidenceLinks.map((link) => link.documentId)
+    .filter((id): id is string => Boolean(id)) ?? [];
+
+  const asOf = new Date();
+  const freshSections = await assembleSections({
+    propertyId: input.propertyId,
+    purpose: existing.purpose as PropertyBriefPurposeInput,
+    selectedSections: existing.selectedSections as PropertyBriefSectionInput[],
+    documentIds,
+    asOf,
+  });
+
+  const changedSectionTypes = diffBriefSections(existing.sections, freshSections);
+
+  if (changedSectionTypes.length === 0) {
+    return { changed: false, changedSectionTypes: [] as PropertyBriefSectionType[], brief: existing };
+  }
+
+  await prisma.$transaction([
+    prisma.propertyBriefSection.deleteMany({ where: { briefId: input.briefId } }),
+    prisma.propertyBrief.update({
+      where: { id: input.briefId },
+      data: {
+        asOf,
+        sections: {
+          create: freshSections.map((section, index) => ({
+            sectionType: section.sectionType,
+            title: section.title,
+            payload: section.payload,
+            sensitive: section.sensitive,
+            sortOrder: index,
+            asOf: section.asOf,
+            evidenceLinks: {
+              create: section.evidence.map((proof) => ({
+                ...proof,
+                documentId: proof.documentId ?? null,
+              })),
+            },
+          })),
+        },
+      },
+    }),
+  ]);
+
+  const republished = await findAccessibleBrief(input.propertyId, input.briefId);
+  return { changed: true, changedSectionTypes, brief: republished };
 }
 
 // Property-shared, not creator-scoped — see listPropertyBriefs above. The

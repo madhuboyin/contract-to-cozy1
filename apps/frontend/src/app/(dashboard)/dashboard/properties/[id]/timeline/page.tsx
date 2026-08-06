@@ -1251,29 +1251,45 @@ export default function Page() {
                 <button type="button" onClick={async () => { await confirmHomeEvent(propertyId, activeEvent.id, 'HOMEOWNER_CONFIRMED', 'Confirmed by homeowner in Timeline review.'); await refreshTimeline(); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Confirm event</button>
                 <button type="button" onClick={async () => { await confirmHomeEvent(propertyId, activeEvent.id, 'DISPUTED', 'Disputed by homeowner in Timeline review.'); await refreshTimeline(); }} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700">Mark disputed</button>
                 {(() => {
-                  const currentVisibility = activeEventQuery.data?.visibility ?? activeEvent.visibility;
-                  const isPrivate = currentVisibility === 'PRIVATE';
+                  const event = activeEvent;
+                  const currentVisibility = activeEventQuery.data?.visibility ?? event.visibility;
+                  async function applyVisibility(next: 'PRIVATE' | 'HOUSEHOLD' | 'RESALE_PACK') {
+                    try {
+                      setTimelineActionError(null);
+                      await setHomeEventVisibility(propertyId, event.id, next);
+                      await refreshTimeline();
+                      queryClient.invalidateQueries({ queryKey: ['homeEvent', propertyId, event.id] });
+                    } catch { setTimelineActionError('The visibility change could not be saved.'); }
+                  }
+                  const options: { value: 'PRIVATE' | 'HOUSEHOLD' | 'RESALE_PACK'; label: string }[] = [
+                    { value: 'PRIVATE', label: 'Private' },
+                    { value: 'HOUSEHOLD', label: 'Household' },
+                    { value: 'RESALE_PACK', label: 'Include in buyer/resale packages' },
+                  ];
                   return (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          setTimelineActionError(null);
-                          await setHomeEventVisibility(propertyId, activeEvent.id, isPrivate ? 'HOUSEHOLD' : 'PRIVATE');
-                          await refreshTimeline();
-                          queryClient.invalidateQueries({ queryKey: ['homeEvent', propertyId, activeEvent.id] });
-                        } catch { setTimelineActionError('The visibility change could not be saved.'); }
-                      }}
-                      className="flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold"
-                    >
-                      <Lock className="h-3 w-3" />
-                      {isPrivate ? 'Make household-visible' : 'Keep private'}
-                    </button>
+                    <>
+                      {options.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          disabled={currentVisibility === option.value}
+                          onClick={() => applyVisibility(option.value)}
+                          className={`flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                            currentVisibility === option.value ? 'border-sky-600 bg-sky-50 text-sky-700' : ''
+                          }`}
+                        >
+                          {option.value === 'PRIVATE' && <Lock className="h-3 w-3" />}
+                          {option.label}
+                        </button>
+                      ))}
+                    </>
                   );
                 })()}
               </div>
               <p className="text-[11px] text-[hsl(var(--mobile-text-muted))]">
                 Private events are never included in a Property Brief or any other share sent outside your household.
+                Only events marked "Include in buyer/resale packages" appear in a Property Brief for a prospective
+                buyer or listing agent — Household-visible events don't automatically carry over to that audience.
               </p>
               <select value={evidenceType} onChange={(event) => setEvidenceType(event.target.value as typeof evidenceType)} className="min-h-[40px] w-full rounded-lg border px-3 text-sm">
                 <option value="USER_ATTESTATION">Homeowner attestation</option><option value="DOCUMENT">Vault document</option><option value="RECEIPT">Receipt</option><option value="INVOICE">Invoice</option><option value="INSPECTION">Inspection</option><option value="CLAIM">Claim</option><option value="REPAIR_RECORD">Repair record</option>

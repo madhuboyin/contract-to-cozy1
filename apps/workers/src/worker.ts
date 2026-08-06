@@ -12,6 +12,7 @@ import { calculateHealthScore } from './utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest, runWeeklyHomeBriefDigest } from './jobs/sendEmailNotification.job';
 import { sendFeedbackNotificationJob } from './jobs/sendFeedbackNotification.job';
 import { sendPropertyBriefInvitationJob } from './jobs/sendPropertyBriefInvitation.job';
+import { sendPropertyBriefUpdateNoticeJob } from './jobs/sendPropertyBriefUpdateNotice.job';
 import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
 import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
 import { generateSeasonalChecklists } from './jobs/seasonalChecklistGeneration.job';
@@ -992,6 +993,8 @@ function startWorker() {
         await sendFeedbackNotificationJob(job.data);
       } else if (job.name === 'SEND_PROPERTY_BRIEF_INVITATION') {
         await sendPropertyBriefInvitationJob(job.data);
+      } else if (job.name === 'SEND_PROPERTY_BRIEF_UPDATE_NOTICE') {
+        await sendPropertyBriefUpdateNoticeJob(job.data);
       } else {
         // WKR-009: a producer/consumer name mismatch silently "completed"
         // instead of surfacing — fail loudly instead.

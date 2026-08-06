@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
-import { validateDocumentUpload } from '../utils/documentValidator.util';
+import { validateDocumentUpload, validateDocumentArrayUpload } from '../utils/documentValidator.util';
 import type { CustomRequest } from '../types';
 import { homeRecordsService } from '../services/homeRecords.service';
 import { homeRecordsExtractionService } from '../services/homeRecordsExtraction.service';
@@ -54,6 +54,21 @@ const createRecordSchema = z.object({
   retainUntil: z.string().datetime().optional(),
   effectiveFrom: z.string().datetime().optional(),
   effectiveTo: z.string().datetime().optional(),
+});
+
+const savedSearchViewSchema = z.enum(['ALL', 'NEEDS_REVIEW', 'EXPIRING']);
+const createSavedSearchSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  search: z.string().trim().max(200).optional(),
+  recordType: recordTypeSchema.optional(),
+  view: savedSearchViewSchema.default('ALL'),
+});
+
+const createBatchSchema = z.object({
+  title: z.string().trim().min(1).max(240),
+  recordType: recordTypeSchema,
+  sensitivity: sensitivitySchema.default('STANDARD'),
+  visibility: visibilitySchema.default('HOUSEHOLD'),
 });
 
 const createLinkSchema = z.object({
@@ -152,6 +167,64 @@ router.get('/properties/:propertyId/records/possible-version', async (req: Custo
   }
 });
 
+router.get(
+  '/properties/:propertyId/records/saved-searches',
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const savedSearches = await homeRecordsService.listSavedSearches(req.params.propertyId);
+      return res.json({ success: true, data: { savedSearches } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/properties/:propertyId/records/storage-health',
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const storageHealth = await homeRecordsService.getStorageHealth(req.params.propertyId);
+      return res.json({ success: true, data: { storageHealth } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/records/saved-searches',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(createSavedSearchSchema, req.body ?? {});
+      const savedSearch = await homeRecordsService.createSavedSearch({
+        propertyId: req.params.propertyId,
+        userId: req.user!.userId,
+        name: input.name,
+        search: input.search,
+        recordType: input.recordType,
+        view: input.view,
+      });
+      return res.status(201).json({ success: true, data: { savedSearch } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.delete(
+  '/properties/:propertyId/records/saved-searches/:savedSearchId',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      await homeRecordsService.deleteSavedSearch(req.params.propertyId, req.params.savedSearchId);
+      return res.status(204).send();
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
 router.post(
   '/properties/:propertyId/records',
   requireHouseholdRole('CONTRIBUTOR'),
@@ -174,6 +247,35 @@ router.post(
         retainUntil: input.retainUntil ? new Date(input.retainUntil) : null,
         effectiveFrom: input.effectiveFrom ? new Date(input.effectiveFrom) : null,
         effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
+      });
+      return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/records/batch',
+  requireHouseholdRole('CONTRIBUTOR'),
+  uploadRateLimiter,
+  upload.array('files', 10),
+  validateDocumentArrayUpload,
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const files = req.files as Express.Multer.File[] | undefined;
+      if (!files || files.length === 0) {
+        return res.status(400).json({ success: false, message: 'At least one file is required.' });
+      }
+      const input = parseOrThrow(createBatchSchema, req.body);
+      const result = await homeRecordsService.createBatch({
+        propertyId: req.params.propertyId,
+        userId: req.user!.userId,
+        files,
+        title: input.title,
+        recordType: input.recordType,
+        sensitivity: input.sensitivity,
+        visibility: input.visibility,
       });
       return res.status(201).json({ success: true, data: result });
     } catch (error) {
@@ -211,6 +313,36 @@ router.post(
         file: req.file,
       });
       return res.status(201).json({ success: true, data: { version: { ...version, storageKey: undefined } } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/records/:recordId/versions/:versionId/register-download',
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      await homeRecordsService.registerDownload({
+        propertyId: req.params.propertyId,
+        recordId: req.params.recordId,
+        versionId: req.params.versionId,
+        userId: req.user!.userId,
+        role: req.householdRole!,
+      });
+      return res.status(201).json({ success: true });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/properties/:propertyId/records/:recordId/download-history',
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const downloadHistory = await homeRecordsService.listDownloadHistory(req.params.propertyId, req.params.recordId, req.householdRole!);
+      return res.json({ success: true, data: { downloadHistory } });
     } catch (error) {
       return next(error);
     }
@@ -410,6 +542,25 @@ router.post(
         userId: req.user!.userId,
       });
       return res.status(201).json({ success: true, data: { expense } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/records/:recordId/extractions/promote-insurance-policy',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(promoteFromVersionSchema, req.body ?? {});
+      const insurancePolicy = await homeRecordsExtractionService.promoteInsurancePolicy({
+        propertyId: req.params.propertyId,
+        recordId: req.params.recordId,
+        versionId: input.versionId,
+        userId: req.user!.userId,
+      });
+      return res.status(201).json({ success: true, data: { insurancePolicy } });
     } catch (error) {
       return next(error);
     }

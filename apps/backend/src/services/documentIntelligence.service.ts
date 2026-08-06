@@ -101,6 +101,32 @@ Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
   "suggestedActions": ["action1", "action2"]
 }`;
 
+// Material Specs' AI-review pipeline (Slice 5 of the continuity plan):
+// extracts only what's visibly printed on a product photo (paint can,
+// tile box, hardware label) — deliberately narrower than
+// DOCUMENT_ANALYSIS_PROMPT's warranty/receipt/insurance fields, since
+// those aren't visible on a product label. No confidence-per-field: the
+// model returns one overall number, same limitation already documented
+// on homeRecordsExtraction.service.ts's warranty/receipt candidates.
+const MATERIAL_PHOTO_ANALYSIS_PROMPT = `Analyze this photo of a home material or product (e.g. paint can, tile box, flooring sample, hardware label, or product sticker).
+
+Extract ONLY what is visibly printed or shown on the label/packaging in the photo. Do not guess or infer a value that is not actually visible — leave it null instead.
+
+Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
+{
+  "confidence": 0.0-1.0,
+  "extractedData": {
+    "manufacturer": "string or null",
+    "productLine": "string or null",
+    "productName": "string or null",
+    "sku": "string or null",
+    "colorCode": "string or null",
+    "finish": "string or null",
+    "dimensions": "string or null",
+    "material": "string or null"
+  }
+}`;
+
 const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 10_000);
 const DOCUMENT_AI_TIMEOUT_MS = Number(process.env.DOCUMENT_AI_TIMEOUT_MS || DEFAULT_AI_TIMEOUT_MS);
 const AI_CIRCUIT_FAILURE_THRESHOLD = Number(process.env.AI_CIRCUIT_FAILURE_THRESHOLD || 3);
@@ -264,6 +290,60 @@ export class DocumentIntelligenceService {
     const text = response.text?.trim();
     if (!text) return null;
     return { text };
+  }
+
+  // See MATERIAL_PHOTO_ANALYSIS_PROMPT above. Deliberately lets
+  // AITimeoutError/AICircuitOpenError/upstream errors propagate — this is
+  // always called from a fire-and-forget wrapper (materialSpec.service.ts's
+  // runPhotoExtraction) whose own try/catch is the actual failure boundary,
+  // matching extractFullText()'s same contract.
+  async analyzeMaterialPhoto(
+    fileBuffer: Buffer,
+    mimeType: string,
+  ): Promise<{ candidateFields: Record<string, string>; confidence: number }> {
+    const base64Data = fileBuffer.toString('base64');
+    const response = await documentIntelligenceCircuit.execute(async () =>
+      withTimeout(
+        async () =>
+          this.ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: [{
+              role: 'user',
+              parts: [
+                { text: MATERIAL_PHOTO_ANALYSIS_PROMPT },
+                { inlineData: { mimeType, data: base64Data } },
+              ],
+            }],
+            config: {
+              maxOutputTokens: 500,
+              temperature: 0.1,
+            },
+          }),
+        {
+          timeoutMs: DOCUMENT_AI_TIMEOUT_MS,
+          operation: 'material_photo_analysis',
+        },
+      )
+    );
+
+    const text = response.text;
+    if (!text) return { candidateFields: {}, confidence: 0 };
+
+    const cleanedText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    let parsed: { confidence?: number; extractedData?: Record<string, unknown> };
+    try {
+      parsed = JSON.parse(cleanedText);
+    } catch (error) {
+      logger.warn({ err: error }, '[DOC-INTELLIGENCE] Non-JSON material-photo AI response; treating as nothing extracted');
+      return { candidateFields: {}, confidence: 0 };
+    }
+
+    const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0;
+    const candidateFields: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed.extractedData ?? {})) {
+      if (typeof value === 'string' && value.trim()) candidateFields[key] = value.trim();
+    }
+    return { candidateFields, confidence };
   }
 
   async autoCreateInsurancePolicy(

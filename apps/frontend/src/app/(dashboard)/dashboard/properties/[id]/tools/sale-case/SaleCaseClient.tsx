@@ -87,6 +87,24 @@ const REQUIREMENT_CLASS_TONE: Record<SaleReadinessRequirementClass, StatusChipTo
   PRESENTATION: 'info',
 };
 
+// Slice 11 cross-linking: readiness items already carry real
+// sourceEntityType/sourceEntityId (propertySaleCase.service.ts projects
+// them straight from canonical records), but nothing rendered them as a
+// link back to that source — a homeowner could see "unverified material
+// spec" with no way to jump to it. Scoped to the source types this pass
+// was asked to wire (Material Specs, Home Records, Timeline); the other
+// source types (inspection findings, projects, permits, Home Actions)
+// don't yet have a confirmed per-item deep-link route and are left as
+// plain text rather than guessing at one.
+function sourceEntityHref(propertyId: string, item: SaleReadinessItem): string | null {
+  switch (item.sourceEntityType) {
+    case 'MATERIAL_SPEC': return `/dashboard/properties/${propertyId}/materials/${item.sourceEntityId}`;
+    case 'PROPERTY_RECORD': return `/dashboard/properties/${propertyId}/tools/home-records?recordId=${item.sourceEntityId}`;
+    case 'TIMELINE_EVENT': return `/dashboard/properties/${propertyId}/timeline?eventId=${item.sourceEntityId}`;
+    default: return null;
+  }
+}
+
 function groupByRequirementClass(items: SaleReadinessItem[]) {
   const open = items.filter((item) => item.status === 'OPEN');
   const groups = new Map<SaleReadinessRequirementClass, SaleReadinessItem[]>();
@@ -289,7 +307,9 @@ function SaleCaseBody({
         <MobileSection key={group.requirementClass} className="mb-4">
           <MobileSectionHeader title={REQUIREMENT_CLASS_LABELS[group.requirementClass]} />
           <div className="space-y-2">
-            {group.items.map((item) => (
+            {group.items.map((item) => {
+              const sourceHref = sourceEntityHref(propertyId, item);
+              return (
               <MobileCard key={item.id} className="space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -300,6 +320,11 @@ function SaleCaseBody({
                       <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
                         {item.detail}
                       </p>
+                    ) : null}
+                    {sourceHref ? (
+                      <Link href={sourceHref} className="mt-1 inline-block text-xs font-medium text-sky-700 hover:underline">
+                        View source →
+                      </Link>
                     ) : null}
                   </div>
                   <StatusChip tone={REQUIREMENT_CLASS_TONE[item.requirementClass]}>
@@ -319,7 +344,8 @@ function SaleCaseBody({
                   </div>
                 ) : null}
               </MobileCard>
-            ))}
+              );
+            })}
           </div>
         </MobileSection>
       ))}

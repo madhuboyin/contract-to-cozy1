@@ -21,6 +21,7 @@ import {
   getPropertyBriefTemplates,
   listEligiblePropertyBriefDocuments,
   listPropertyBriefs,
+  republishPropertyBrief,
   revokePropertyBriefShare,
   testPropertyBriefShareAccess,
   type PropertyBrief,
@@ -41,6 +42,7 @@ const SECTION_LABELS: Record<PropertyBriefSectionType, string> = {
   WARRANTIES: 'Active warranties',
   MATERIAL_SPECS: 'As-built material specs',
   PERMITS: 'Verified permits',
+  EMERGENCY_INFO: 'Emergency contacts & critical information',
 };
 
 function humanize(value: unknown) {
@@ -227,6 +229,26 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
       ]);
     },
   });
+  // Slice 7's republish notifications — re-assemble against live data and,
+  // only if something actually changed, notify active recipients. Result
+  // is shown inline per-brief rather than a toast, matching this page's
+  // existing no-toast-library convention.
+  const [republishResult, setRepublishResult] = React.useState<{
+    briefId: string;
+    changed: boolean;
+    changedSectionTypes: PropertyBriefSectionType[];
+    notifiedRecipientCount: number;
+  } | null>(null);
+  const republishMutation = useMutation({
+    mutationFn: (briefId: string) => republishPropertyBrief(propertyId, briefId),
+    onSuccess: async (result, briefId) => {
+      setRepublishResult({ briefId, ...result });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['property-briefs', propertyId] }),
+        queryClient.invalidateQueries({ queryKey: ['property-brief-preview', propertyId, briefId] }),
+      ]);
+    },
+  });
 
   const changePurpose = (nextPurpose: PropertyBriefPurpose) => {
     setPurpose(nextPurpose);
@@ -361,21 +383,56 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
               <h2 className="font-semibold text-slate-950">Saved briefs</h2>
               <div className="mt-3 space-y-2">
                 {(briefsQuery.data ?? []).map((brief) => (
-                  <button
-                    key={brief.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedBriefId(brief.id);
-                      setShareUrl(null);
-                      setShareSensitiveAcknowledged(false);
-                    }}
-                    className="w-full rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50"
-                  >
-                    <span className="block text-sm font-semibold text-slate-900">{brief.title}</span>
-                    <span className="mt-1 block text-xs text-slate-500">
-                      {humanize(brief.purpose)} · {new Date(brief.asOf).toLocaleDateString()} · {humanize(brief.status)}
-                    </span>
-                  </button>
+                  <div key={brief.id} className="w-full rounded-xl border border-slate-200 p-3 hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedBriefId(brief.id);
+                        setShareUrl(null);
+                        setShareSensitiveAcknowledged(false);
+                      }}
+                      className="w-full text-left"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="block text-sm font-semibold text-slate-900">{brief.title}</span>
+                        {brief.isStale && (
+                          <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                            Review — {brief.ageDays}d old
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {humanize(brief.purpose)} · {new Date(brief.asOf).toLocaleDateString()} · {humanize(brief.status)}
+                      </span>
+                      {brief.isStale && (
+                        <span className="mt-1 block text-xs text-amber-700">
+                          This snapshot is active and shared, but hasn't been refreshed in {brief.ageDays} days — the
+                          underlying property data may have changed since.
+                        </span>
+                      )}
+                    </button>
+                    {brief.shares.some((share) => share.status === 'ACTIVE') && (
+                      <div className="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2">
+                        <button
+                          type="button"
+                          disabled={republishMutation.isPending && republishMutation.variables === brief.id}
+                          onClick={() => republishMutation.mutate(brief.id)}
+                          className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                        >
+                          {republishMutation.isPending && republishMutation.variables === brief.id
+                            ? 'Checking for changes…'
+                            : 'Check for updates & republish'}
+                        </button>
+                        {republishResult?.briefId === brief.id && (
+                          <span className="text-xs text-slate-600">
+                            {republishResult.changed
+                              ? `Updated — ${republishResult.changedSectionTypes.length} section(s) changed${republishResult.notifiedRecipientCount > 0 ? `, ${republishResult.notifiedRecipientCount} recipient(s) notified` : ''}.`
+                              : 'No changes found — still current.'}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </section>

@@ -117,6 +117,23 @@ export async function addPhoto(propertyId: string, specId: string, body: { photo
   return res.data.photo;
 }
 
+// The real photo-capture entry point this domain never had — addPhoto()
+// above requires a photoUrl/fileKey the caller must already possess, but
+// nothing in the app ever produced one. This uploads the actual file, and
+// best-effort fires AI extraction against it server-side (see
+// materialSpec.service.ts's uploadPhoto/runPhotoExtraction).
+export async function uploadPhoto(propertyId: string, specId: string, file: File, caption?: string): Promise<MaterialSpecPhoto> {
+  const formData = new FormData();
+  formData.append('photo', file);
+  if (caption) formData.append('caption', caption);
+  const res = await api.postFormData<{ photo: MaterialSpecPhoto }>(
+    `/api/properties/${propertyId}/materials/${specId}/photos/upload`,
+    formData,
+  );
+  if (!res.success) throw new Error(res.message ?? 'Failed to upload photo.');
+  return res.data.photo;
+}
+
 export async function deletePhoto(propertyId: string, specId: string, photoId: string): Promise<void> {
   await api.delete(`/api/properties/${propertyId}/materials/${specId}/photos/${photoId}`);
 }

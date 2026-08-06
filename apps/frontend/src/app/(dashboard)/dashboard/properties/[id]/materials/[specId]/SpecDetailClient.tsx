@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Edit2, ExternalLink, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Camera, Edit2, ExternalLink, Loader2, Trash2, X } from 'lucide-react';
 
 import type { MaterialSpec } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ import {
   getSpec,
   reviewMaterialExtraction,
   updateSpec,
+  uploadPhoto,
 } from '../materialSpecApi';
 import { SpecForm } from '../MaterialSpecsClient';
 import { LifecycleForm, SubstitutionForm } from '../../projects/[projectId]/materials/page';
@@ -128,6 +129,26 @@ export default function SpecDetailClient() {
       setSpec(prev => prev ? { ...prev, photos: prev.photos.filter(p => p.id !== photoId) } : prev);
     } catch {
       toast({ title: 'Error', description: 'Failed to delete photo.', variant: 'destructive' });
+    }
+  }
+
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  async function handleUploadPhoto(file: File) {
+    if (!propertyId || !specId) return;
+    setUploadingPhoto(true);
+    try {
+      await uploadPhoto(propertyId, specId, file);
+      // Re-fetches rather than appending the returned photo locally — a
+      // photo upload may also have just staged a NEEDS_REVIEW extraction
+      // row in the background, and getSpec() is the one place that reads
+      // both together.
+      setSpec(await getSpec(propertyId, specId));
+      toast({ title: 'Photo added', description: 'AI is checking it for readable product details.' });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to upload photo.', variant: 'destructive' });
+    } finally {
+      setUploadingPhoto(false);
     }
   }
 
@@ -392,9 +413,30 @@ export default function SpecDetailClient() {
           )}
         </div>
 
-        {spec.photos.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Photos</h2>
+        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">Photos</h2>
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-indigo-700 hover:text-indigo-800">
+              {uploadingPhoto ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+              Add photo
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                disabled={uploadingPhoto || spec.photos.length >= 10}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) handleUploadPhoto(file);
+                }}
+              />
+            </label>
+          </div>
+          {spec.photos.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No photos yet. Add one and we'll check it for readable manufacturer, color, and finish details.
+            </p>
+          ) : (
             <div className="flex gap-3 overflow-x-auto pb-1">
               {spec.photos
                 .slice()
@@ -419,8 +461,8 @@ export default function SpecDetailClient() {
                   </div>
                 ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {spec.extractionReviews?.some(review => review.status === 'NEEDS_REVIEW') && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-5">
@@ -452,6 +494,28 @@ export default function SpecDetailClient() {
                   </div>
                 ))}
             </div>
+          </div>
+        )}
+
+        {spec.homeRecordLinks && spec.homeRecordLinks.length > 0 && (
+          <div className="mb-4 rounded-lg border border-gray-200 bg-white p-5">
+            <h2 className="mb-1 text-sm font-semibold text-gray-700">Home Records evidence</h2>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Records linked to this spec from Home Records — separate from the submittal/receipt/warranty documents above.
+            </p>
+            <ul className="space-y-1.5">
+              {spec.homeRecordLinks.map((link) => (
+                <li key={link.linkId}>
+                  <a
+                    href={`/dashboard/properties/${propertyId}/tools/home-records?recordId=${link.recordId}`}
+                    className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 hover:border-gray-300 hover:bg-gray-50"
+                  >
+                    <span className="truncate">{link.title}</span>
+                    <span className="ml-2 shrink-0 text-xs text-muted-foreground">{link.recordType.replaceAll('_', ' ')}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

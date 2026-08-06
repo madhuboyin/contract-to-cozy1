@@ -50,7 +50,10 @@ export const getPropertyIntelligenceQueue = createLazyQueue<PropertyIntelligence
 // row or the Notification/NotificationDelivery models.
 // 'SEND_PROPERTY_BRIEF_INVITATION' (Slice 7 of the continuity plan) is the
 // same kind of direct ad-hoc send — a Property Brief recipient is
-// deliberately not a platform User.
+// deliberately not a platform User. 'SEND_PROPERTY_BRIEF_UPDATE_NOTICE'
+// (republish notifications) is the same pattern again — no shareUrl, since
+// republishing never rotates the share token and the recipient's original
+// link (never stored in plaintext server-side) still works.
 export interface EmailNotificationJobPayload {
   notificationDeliveryId?: string;
   to?: string;
@@ -64,6 +67,7 @@ export interface EmailNotificationJobPayload {
   propertyAddress?: string;
   shareUrl?: string;
   expiresAt?: string;
+  changedSections?: string[];
 }
 
 export const getEmailNotificationQueue = createLazyQueue<EmailNotificationJobPayload>(

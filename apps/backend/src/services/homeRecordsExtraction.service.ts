@@ -1,10 +1,11 @@
 // apps/backend/src/services/homeRecordsExtraction.service.ts
 //
 // Turns AI document analysis into reviewable ExtractedFactCandidate rows
-// instead of writing canonical records directly. WARRANTY and RECEIPT have
-// implemented promotion contracts today (see promoteWarranty/promoteExpense)
-// — WARRANTY is the exact domain the audit flagged for automatic, unreviewed
-// warranty creation (HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
+// instead of writing canonical records directly. WARRANTY, RECEIPT, and
+// INSURANCE_POLICY have implemented promotion contracts today (see
+// promoteWarranty/promoteExpense/promoteInsurancePolicy) — WARRANTY is the
+// exact domain the audit flagged for automatic, unreviewed warranty creation
+// (HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
 // §1.1). No field is ever written to a canonical record until its candidate
 // has been explicitly CONFIRMED or CORRECTED by a homeowner.
 import type { ExpenseCategory, ExtractedFactCandidate, ExtractedFactReviewStatus, WarrantyCategory } from '@prisma/client';
@@ -15,6 +16,7 @@ import { downloadObjectBuffer } from './storage/reportStorage';
 import { documentIntelligenceService, type DocumentInsights } from './documentIntelligence.service';
 import { homeRecordsService } from './homeRecords.service';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
+import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
 
 // Best-effort bridge into Home Operations (Slice 4 of the continuity
 // plan) — re-reads the record's freshly recomputed needsReview/
@@ -63,6 +65,19 @@ type ExpenseFieldKey =
 const EXPENSE_CATEGORY_VALUES = new Set<ExpenseCategory>([
   'REPAIR_SERVICE', 'PROPERTY_TAX', 'HOA_FEE', 'UTILITY', 'APPLIANCE', 'MATERIALS', 'OTHER',
 ]);
+
+// Required fields mirror stageExtractedPolicyTerm's own required params
+// (insurancePolicyRecord.service.ts) — promotion calls straight into that
+// existing staging function rather than re-implementing insurance-record
+// creation, so the two must agree on what's mandatory.
+const INSURANCE_POLICY_REQUIRED_FIELD_KEYS = ['carrierName', 'policyNumber'] as const;
+const INSURANCE_POLICY_OPTIONAL_FIELD_KEYS = [
+  'coverageType', 'premiumAmount', 'deductibleAmount', 'dwellingLimit',
+  'personalPropertyLimit', 'liabilityLimit', 'valuationBasis', 'termStart', 'termEnd',
+] as const;
+type InsurancePolicyFieldKey =
+  | (typeof INSURANCE_POLICY_REQUIRED_FIELD_KEYS)[number]
+  | (typeof INSURANCE_POLICY_OPTIONAL_FIELD_KEYS)[number];
 
 function toIsoDate(value: Date): string {
   return value.toISOString().slice(0, 10);
@@ -134,6 +149,39 @@ function receiptCandidatesFromInsights(
   return candidates;
 }
 
+function insurancePolicyCandidatesFromInsights(
+  insights: DocumentInsights,
+): { fieldKey: InsurancePolicyFieldKey; proposedValue: string }[] {
+  const { extractedData } = insights;
+  const candidates: { fieldKey: InsurancePolicyFieldKey; proposedValue: string }[] = [];
+
+  if (extractedData.carrierName) candidates.push({ fieldKey: 'carrierName', proposedValue: extractedData.carrierName });
+  if (extractedData.policyNumber) candidates.push({ fieldKey: 'policyNumber', proposedValue: extractedData.policyNumber });
+  if (extractedData.coverageType) candidates.push({ fieldKey: 'coverageType', proposedValue: extractedData.coverageType });
+  if (extractedData.premiumAmount != null) {
+    candidates.push({ fieldKey: 'premiumAmount', proposedValue: String(extractedData.premiumAmount) });
+  }
+  if (extractedData.deductible != null) {
+    candidates.push({ fieldKey: 'deductibleAmount', proposedValue: String(extractedData.deductible) });
+  }
+  if (extractedData.dwellingLimit != null) {
+    candidates.push({ fieldKey: 'dwellingLimit', proposedValue: String(extractedData.dwellingLimit) });
+  }
+  if (extractedData.personalPropertyLimit != null) {
+    candidates.push({ fieldKey: 'personalPropertyLimit', proposedValue: String(extractedData.personalPropertyLimit) });
+  }
+  if (extractedData.liabilityLimit != null) {
+    candidates.push({ fieldKey: 'liabilityLimit', proposedValue: String(extractedData.liabilityLimit) });
+  }
+  if (extractedData.valuationBasis) {
+    candidates.push({ fieldKey: 'valuationBasis', proposedValue: extractedData.valuationBasis });
+  }
+  if (extractedData.startDate) candidates.push({ fieldKey: 'termStart', proposedValue: toIsoDate(extractedData.startDate) });
+  if (extractedData.expiryDate) candidates.push({ fieldKey: 'termEnd', proposedValue: toIsoDate(extractedData.expiryDate) });
+
+  return candidates;
+}
+
 export class HomeRecordsExtractionService {
   async runExtraction(input: {
     propertyId: string;
@@ -155,15 +203,24 @@ export class HomeRecordsExtractionService {
         'PROPERTY_RECORD_VERSION_NOT_CLEAN',
       );
     }
-    // Only WARRANTY and RECEIPT have a promotion contract implemented — see file header.
-    if (version.record.recordType !== 'WARRANTY' && version.record.recordType !== 'RECEIPT') {
+    // Only WARRANTY, RECEIPT, and INSURANCE_POLICY have a promotion contract
+    // implemented — see file header.
+    if (
+      version.record.recordType !== 'WARRANTY'
+      && version.record.recordType !== 'RECEIPT'
+      && version.record.recordType !== 'INSURANCE_POLICY'
+    ) {
       throw new APIError(
-        'AI review is available for warranty and receipt records in this release.',
+        'AI review is available for warranty, receipt, and insurance policy records in this release.',
         422,
         'PROPERTY_RECORD_EXTRACTION_UNSUPPORTED_TYPE',
       );
     }
-    const targetDomain = version.record.recordType === 'WARRANTY' ? 'WARRANTY' as const : 'EXPENSE' as const;
+    const targetDomain = version.record.recordType === 'WARRANTY'
+      ? 'WARRANTY' as const
+      : version.record.recordType === 'RECEIPT'
+        ? 'EXPENSE' as const
+        : 'INSURANCE_POLICY' as const;
 
     // Idempotent: re-running analysis on an already-analyzed version would
     // either duplicate candidates or silently discard homeowner review
@@ -188,7 +245,9 @@ export class HomeRecordsExtractionService {
     const confidence = insights.confidence ?? 0;
     const fieldCandidates = targetDomain === 'WARRANTY'
       ? warrantyCandidatesFromInsights(insights)
-      : receiptCandidatesFromInsights(insights);
+      : targetDomain === 'EXPENSE'
+        ? receiptCandidatesFromInsights(insights)
+        : insurancePolicyCandidatesFromInsights(insights);
     const rows = [
       {
         propertyRecordVersionId: version.id,
@@ -571,6 +630,140 @@ export class HomeRecordsExtractionService {
     });
 
     return expense;
+  }
+
+  async promoteInsurancePolicy(input: {
+    propertyId: string;
+    recordId: string;
+    versionId: string;
+    userId: string;
+  }) {
+    const version = await prisma.propertyRecordVersion.findFirst({
+      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId } },
+    });
+    if (!version) throw new APIError('Record version not found.', 404, 'PROPERTY_RECORD_VERSION_NOT_FOUND');
+
+    const candidates = await prisma.extractedFactCandidate.findMany({
+      where: {
+        propertyRecordVersionId: version.id,
+        targetDomain: 'INSURANCE_POLICY',
+        fieldKey: { not: DOCUMENT_TYPE_FIELD_KEY },
+      },
+    });
+    const byField = new Map(candidates.map((candidate) => [candidate.fieldKey, candidate]));
+
+    const missing = INSURANCE_POLICY_REQUIRED_FIELD_KEYS.filter((key) => {
+      const candidate = byField.get(key);
+      return (
+        !candidate
+        || !candidate.reviewedValue
+        || (candidate.reviewStatus !== 'CONFIRMED' && candidate.reviewStatus !== 'CORRECTED')
+      );
+    });
+    if (missing.length > 0) {
+      auditLog('HOME_RECORD_UNREVIEWED_PROMOTION_BLOCKED', input.userId, {
+        propertyId: input.propertyId,
+        recordId: input.recordId,
+        versionId: input.versionId,
+        targetDomain: 'INSURANCE_POLICY',
+        missingFields: missing,
+      });
+      throw new APIError(
+        `Confirm ${missing.join(', ')} before staging this insurance policy.`,
+        409,
+        'PROPERTY_RECORD_EXTRACTION_PROMOTION_INCOMPLETE',
+        { missingFields: missing },
+      );
+    }
+    if (candidates.some((candidate) => candidate.promotedEntityId)) {
+      throw new APIError(
+        'An insurance policy was already staged from this analysis.',
+        409,
+        'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
+      );
+    }
+
+    const property = await prisma.property.findUnique({
+      where: { id: input.propertyId },
+      select: { homeownerProfileId: true },
+    });
+    if (!property) throw new APIError('Property not found.', 404, 'PROPERTY_NOT_FOUND');
+
+    const carrierName = byField.get('carrierName')!.reviewedValue!;
+    const policyNumber = byField.get('policyNumber')!.reviewedValue!;
+
+    const numberField = (key: InsurancePolicyFieldKey): number | undefined => {
+      const raw = byField.get(key)?.reviewedValue;
+      if (!raw) return undefined;
+      const parsed = Number(raw);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    };
+    const dateField = (key: InsurancePolicyFieldKey): Date | undefined => {
+      const raw = byField.get(key)?.reviewedValue;
+      if (!raw) return undefined;
+      const parsed = new Date(raw);
+      return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+    };
+
+    const usedCandidateIds = INSURANCE_POLICY_REQUIRED_FIELD_KEYS.map((key) => byField.get(key)!.id)
+      .concat(
+        INSURANCE_POLICY_OPTIONAL_FIELD_KEYS.filter((key) => byField.get(key)).map((key) => byField.get(key)!.id),
+      );
+
+    // Reuses the existing InsurancePolicyTerm/Fact staging pipeline
+    // (insurancePolicyRecord.service.ts) instead of writing a canonical
+    // insurance record directly — that system already has its own richer
+    // confirmation workflow (confirmPolicyFact) that these facts still need
+    // to go through per-field. This call runs in its own transaction (see
+    // stageExtractedPolicyTerm), so it's deliberately not nested inside a
+    // second one here — it's already idempotent on (policyId, sourceDocumentId)
+    // if the candidate-marking step below were to fail and this got retried.
+    const staged = await stageExtractedPolicyTerm({
+      homeownerProfileId: property.homeownerProfileId,
+      userId: input.userId,
+      propertyId: input.propertyId,
+      carrierName,
+      policyNumber,
+      coverageType: byField.get('coverageType')?.reviewedValue ?? undefined,
+      premiumAmount: numberField('premiumAmount'),
+      deductibleAmount: numberField('deductibleAmount'),
+      dwellingLimit: numberField('dwellingLimit'),
+      personalPropertyLimit: numberField('personalPropertyLimit'),
+      liabilityLimit: numberField('liabilityLimit'),
+      valuationBasis: byField.get('valuationBasis')?.reviewedValue ?? undefined,
+      termStart: dateField('termStart'),
+      termEnd: dateField('termEnd'),
+      sourceText: `Reviewed in Home Records from "${version.originalFileName}"`,
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.extractedFactCandidate.updateMany({
+        where: { id: { in: usedCandidateIds } },
+        data: { promotedEntityType: 'INSURANCE_POLICY_TERM', promotedEntityId: staged.term.id },
+      });
+
+      await tx.propertyRecordLink.create({
+        data: {
+          recordId: input.recordId,
+          versionId: version.id,
+          entityType: 'INSURANCE_POLICY',
+          entityId: staged.policy.id,
+          purpose: 'EVIDENCE',
+          createdByUserId: input.userId,
+        },
+      });
+
+      // Unlike promoteWarranty/promoteExpense, no HomeEvent is created here:
+      // the staged term and its facts are still UNVERIFIED/PENDING until a
+      // homeowner confirms each one via confirmPolicyFact (the insurance
+      // domain's own review workflow). Posting a Timeline milestone now would
+      // assert coverage is verified when it isn't yet — that would repeat the
+      // exact "invented certainty" failure mode the audit flagged. Once that
+      // per-fact confirmation lands, the coverage/insurance surfaces already
+      // reflect it directly.
+    });
+
+    return staged;
   }
 }
 

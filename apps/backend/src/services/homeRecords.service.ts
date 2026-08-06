@@ -54,6 +54,16 @@ type CreateVersionInput = {
   file: RecordFile;
 };
 
+type CreateBatchInput = {
+  propertyId: string;
+  userId: string;
+  files: RecordFile[];
+  title: string;
+  recordType: PropertyRecordType;
+  sensitivity: PropertyRecordSensitivity;
+  visibility: PropertyRecordVisibility;
+};
+
 function sha256(buffer: Buffer): string {
   return createHash('sha256').update(buffer).digest('hex');
 }
@@ -196,6 +206,161 @@ export class HomeRecordsService {
         : false,
       expiryStatus: expiryStatus(record.effectiveTo, now, soonThreshold),
     })));
+  }
+
+  // Saved retrievals: a named bookmark of the list page's own filter state
+  // (search text / recordType / view chip), re-run live against list()
+  // rather than a stored result set. Property-shared, matching this
+  // domain's household-wide read model rather than per-creator filtering.
+  async listSavedSearches(propertyId: string) {
+    return prisma.propertyRecordSavedSearch.findMany({
+      where: { propertyId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createSavedSearch(input: {
+    propertyId: string;
+    userId: string;
+    name: string;
+    search?: string | null;
+    recordType?: PropertyRecordType | null;
+    view: 'ALL' | 'NEEDS_REVIEW' | 'EXPIRING';
+  }) {
+    return prisma.propertyRecordSavedSearch.create({
+      data: {
+        propertyId: input.propertyId,
+        createdByUserId: input.userId,
+        name: input.name,
+        search: input.search || null,
+        recordType: input.recordType ?? null,
+        view: input.view,
+      },
+    });
+  }
+
+  async deleteSavedSearch(propertyId: string, savedSearchId: string) {
+    const existing = await prisma.propertyRecordSavedSearch.findFirst({
+      where: { id: savedSearchId, propertyId },
+      select: { id: true },
+    });
+    if (!existing) throw new APIError('Saved search not found.', 404, 'PROPERTY_RECORD_SAVED_SEARCH_NOT_FOUND');
+    await prisma.propertyRecordSavedSearch.delete({ where: { id: savedSearchId } });
+  }
+
+  // Export/download audit trail: presigned URLs go straight to S3, so the
+  // backend never sees the actual download request — this records the
+  // click that requested one instead. That's an honest, existing-precedent
+  // proxy signal (matches Property Brief's accessCount/testAccess pattern),
+  // not literal proof the file was opened. Reuses the generic AuditLog
+  // table (same one insurancePolicyRecord.service.ts already writes real,
+  // queryable rows to) rather than a new bespoke log model.
+  async registerDownload(input: {
+    propertyId: string;
+    recordId: string;
+    versionId: string;
+    userId: string;
+    role: HouseholdRole;
+  }): Promise<void> {
+    const version = await prisma.propertyRecordVersion.findFirst({
+      where: {
+        id: input.versionId,
+        recordId: input.recordId,
+        record: { propertyId: input.propertyId, ...visibleWhere(input.role) },
+      },
+      select: { id: true, originalFileName: true },
+    });
+    if (!version) throw new APIError('Record version not found.', 404, 'PROPERTY_RECORD_VERSION_NOT_FOUND');
+
+    await prisma.auditLog.create({
+      data: {
+        userId: input.userId,
+        action: 'property_record_version_downloaded',
+        entityType: 'PropertyRecordVersion',
+        entityId: version.id,
+        metadata: { propertyId: input.propertyId, recordId: input.recordId, fileName: version.originalFileName },
+      },
+    });
+  }
+
+  async listDownloadHistory(propertyId: string, recordId: string, role: HouseholdRole) {
+    const record = await prisma.propertyRecord.findFirst({
+      where: { id: recordId, propertyId, ...visibleWhere(role) },
+      select: { versions: { select: { id: true } } },
+    });
+    if (!record) throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
+
+    const versionIds = record.versions.map((version) => version.id);
+    if (versionIds.length === 0) return [];
+
+    const events = await prisma.auditLog.findMany({
+      where: {
+        action: 'property_record_version_downloaded',
+        entityType: 'PropertyRecordVersion',
+        entityId: { in: versionIds },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    const userIds = [...new Set(events.map((event) => event.userId).filter((id): id is string => Boolean(id)))];
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true, email: true } })
+      : [];
+    const userById = new Map(users.map((user) => [user.id, user]));
+
+    return events.map((event) => {
+      const user = event.userId ? userById.get(event.userId) : undefined;
+      const metadata = event.metadata as { fileName?: string } | null;
+      return {
+        id: event.id,
+        occurredAt: event.createdAt,
+        fileName: metadata?.fileName ?? null,
+        userName: user ? `${user.firstName} ${user.lastName}`.trim() : null,
+        userEmail: user?.email ?? null,
+      };
+    });
+  }
+
+  // Storage/recovery SLOs: reports the real, already-enforced numbers
+  // (trash's actual recovery window, current counts of scan/integrity/purge
+  // problems) rather than a fabricated uptime/durability percentage this
+  // codebase has no real telemetry to back — same "don't invent a number"
+  // principle applied to Seller Prep's ROI ranges and Coverage's confidence
+  // scores elsewhere in this plan. `stalePurgeCount` is the one real
+  // "recovery isn't happening on schedule" signal: a purge job still open
+  // well past recoveryWindowDays + a grace period means the automated purge
+  // path (apps/workers' property-record-purge runner) isn't keeping up.
+  async getStorageHealth(propertyId: string) {
+    const stalePurgeThreshold = new Date(Date.now() - (TRASH_RECOVERY_DAYS + 7) * 86_400_000);
+
+    const [scanIssueCount, integrityMismatchCount, purgeFailureCount, stalePurgeCount] = await Promise.all([
+      prisma.propertyRecordVersion.count({
+        where: { record: { propertyId }, scanStatus: { in: ['FAILED', 'QUARANTINED'] } },
+      }),
+      prisma.propertyRecordVersion.count({
+        where: { record: { propertyId }, integrityStatus: 'MISMATCH' },
+      }),
+      prisma.propertyRecordPurgeJob.count({
+        where: { record: { propertyId }, state: 'FAILED' },
+      }),
+      prisma.propertyRecordPurgeJob.count({
+        where: {
+          record: { propertyId },
+          state: { in: ['PENDING', 'ELIGIBLE', 'PROCESSING'] },
+          requestedAt: { lt: stalePurgeThreshold },
+        },
+      }),
+    ]);
+
+    return {
+      recoveryWindowDays: TRASH_RECOVERY_DAYS,
+      scanIssueCount,
+      integrityMismatchCount,
+      purgeFailureCount,
+      stalePurgeCount,
+      healthy: scanIssueCount === 0 && integrityMismatchCount === 0 && purgeFailureCount === 0 && stalePurgeCount === 0,
+    };
   }
 
   async get(propertyId: string, recordId: string, role: HouseholdRole) {
@@ -379,6 +544,49 @@ export class HomeRecordsService {
       },
       possibleVersionOf,
     };
+  }
+
+  // Batch mobile scan entry point: several photos captured in one phone-camera
+  // session, each becoming its own record (e.g. scanning 3 separate warranty
+  // cards or receipts back to back). This is deliberately NOT "stitch N pages
+  // into one multi-page document" — a phone camera captures ONE physical page
+  // per shot, and PropertyRecordVersion is a single-file model; combining
+  // pages into one PDF is a real added capability (image→PDF assembly), not
+  // just wiring, and is out of scope here. Each file goes through the exact
+  // same create() path (dedup, storage upload, integrity check) as a single
+  // upload — one bad file in the batch (duplicate content, storage failure)
+  // is reported per-item and does not abort the rest of the batch, since a
+  // homeowner mid-scan has no way to know in advance which shot will collide.
+  async createBatch(input: CreateBatchInput) {
+    const created: Array<{
+      fileName: string;
+      record: Awaited<ReturnType<HomeRecordsService['create']>>['record'];
+      possibleVersionOf: Awaited<ReturnType<HomeRecordsService['create']>>['possibleVersionOf'];
+    }> = [];
+    const failed: Array<{ fileName: string; message: string; code?: string }> = [];
+
+    for (const [index, file] of input.files.entries()) {
+      const title = input.files.length > 1 ? `${input.title} (${index + 1} of ${input.files.length})` : input.title;
+      try {
+        const result = await this.create({
+          propertyId: input.propertyId,
+          userId: input.userId,
+          file,
+          title,
+          recordType: input.recordType,
+          sensitivity: input.sensitivity,
+          visibility: input.visibility,
+        });
+        created.push({ fileName: file.originalname, record: result.record, possibleVersionOf: result.possibleVersionOf });
+      } catch (error) {
+        const message = error instanceof APIError ? error.message : 'Upload failed.';
+        const code = error instanceof APIError ? error.code : undefined;
+        logger.warn({ err: error, propertyId: input.propertyId, fileName: file.originalname }, 'Batch scan: one file failed, continuing with the rest');
+        failed.push({ fileName: file.originalname, message, code });
+      }
+    }
+
+    return { created, failed };
   }
 
   async addVersion(input: CreateVersionInput) {

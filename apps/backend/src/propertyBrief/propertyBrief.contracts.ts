@@ -19,6 +19,14 @@ export const PROPERTY_BRIEF_SECTIONS = [
   'WARRANTIES',
   'MATERIAL_SPECS',
   'PERMITS',
+  // Slice 7's "fold Home Digital Will's authored content into a Property
+  // Brief template" — emergency contacts + isEmergency-flagged Digital
+  // Will entries, the same content emergencyPacket.service.ts's PDF
+  // already surfaces. Only HOMEOWNER_REFERENCE/HOUSEHOLD_TRUSTED_CONTACT
+  // allow it below (both use the full PROPERTY_BRIEF_SECTIONS spread) —
+  // every buyer/agent/contractor/insurer purpose uses an explicit list
+  // that deliberately omits it.
+  'EMERGENCY_INFO',
 ] as const;
 
 export type PropertyBriefPurposeInput = (typeof PROPERTY_BRIEF_PURPOSES)[number];
@@ -37,19 +45,32 @@ export const PROPERTY_BRIEF_TEMPLATES: Record<PropertyBriefPurposeInput, {
     label: 'Homeowner reference',
     defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
     allowedSections: [...PROPERTY_BRIEF_SECTIONS],
-    sensitiveSections: ['DOCUMENTS', 'CLAIMS', 'INSURANCE'],
+    sensitiveSections: ['DOCUMENTS', 'CLAIMS', 'INSURANCE', 'EMERGENCY_INFO'],
   },
   CONTRACTOR_SERVICE_PROFESSIONAL: {
     label: 'Contractor or service professional',
-    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS'],
-    allowedSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'DOCUMENTS', 'OPEN_UNKNOWNS'],
+    // Governed Material Specs handoff (Slice 5 of the continuity plan,
+    // unblocked once Slice 7's share/access-log/revoke foundation
+    // existed): a new contractor doing follow-up work needs to know the
+    // exact paint code/tile/flooring already installed, and whether
+    // related permits already exist, not just "verified history." Same
+    // successor-value MATERIAL_SPECS assembly PROSPECTIVE_BUYER/
+    // LISTING_AGENT already use (AS_BUILT + isActive only) — no new
+    // service-layer code, purely widening this purpose's allowed sections.
+    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
+    allowedSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'DOCUMENTS', 'OPEN_UNKNOWNS', 'WARRANTIES', 'MATERIAL_SPECS', 'PERMITS'],
     sensitiveSections: ['DOCUMENTS'],
   },
   HOUSEHOLD_TRUSTED_CONTACT: {
     label: 'Household or trusted contact',
-    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS'],
+    // EMERGENCY_INFO defaults on for this purpose specifically — a trusted
+    // contact (house-sitter, nearby family) is exactly who needs emergency
+    // contacts and critical Digital Will entries, unlike every other
+    // purpose. Still gated as sensitive below (real personal contact
+    // info), so it still requires explicit acknowledgement before sharing.
+    defaultSections: ['PROPERTY_FACTS', 'VERIFIED_HISTORY', 'OPEN_UNKNOWNS', 'EMERGENCY_INFO'],
     allowedSections: [...PROPERTY_BRIEF_SECTIONS],
-    sensitiveSections: ['DOCUMENTS', 'CLAIMS', 'INSURANCE'],
+    sensitiveSections: ['DOCUMENTS', 'CLAIMS', 'INSURANCE', 'EMERGENCY_INFO'],
   },
   INSURER_CLAIM_SUPPORT: {
     label: 'Insurer or claim support',

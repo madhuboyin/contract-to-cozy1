@@ -1,11 +1,17 @@
 import { api } from '@/lib/api/client';
 import type {
+  CreateBatchInput,
+  CreateBatchResult,
   CreateRecordInput,
   CreateRecordResult,
   ExtractedFactCandidate,
   PropertyRecordDetail,
+  PropertyRecordDownloadEvent,
   PropertyRecordLinkEntityType,
   PropertyRecordLinkPurpose,
+  PropertyRecordSavedSearch,
+  PropertyRecordSavedSearchView,
+  PropertyRecordStorageHealth,
   PropertyRecordSummary,
   PropertyRecordType,
 } from './types';
@@ -49,6 +55,24 @@ export async function createRecord(
     formData,
   );
   if (!res.success) throw new Error(res.message ?? 'Failed to add record.');
+  return res.data;
+}
+
+export async function createBatchRecords(
+  propertyId: string,
+  input: CreateBatchInput,
+): Promise<CreateBatchResult> {
+  const formData = new FormData();
+  for (const file of input.files) formData.append('files', file);
+  formData.append('title', input.title);
+  formData.append('recordType', input.recordType);
+  formData.append('sensitivity', input.sensitivity);
+  formData.append('visibility', input.visibility);
+  const res = await api.postFormData<CreateBatchResult>(
+    `/api/properties/${propertyId}/records/batch`,
+    formData,
+  );
+  if (!res.success) throw new Error(res.message ?? 'Failed to add records.');
   return res.data;
 }
 
@@ -170,4 +194,58 @@ export async function promoteExpense(
     { versionId },
   );
   return res.data.expense;
+}
+
+export async function promoteInsurancePolicy(
+  propertyId: string,
+  recordId: string,
+  versionId: string,
+): Promise<{ id: string }> {
+  const res = await api.post<{ insurancePolicy: { policy: { id: string }; term: { id: string } } }>(
+    `/api/properties/${propertyId}/records/${recordId}/extractions/promote-insurance-policy`,
+    { versionId },
+  );
+  return res.data.insurancePolicy.policy;
+}
+
+export async function listSavedSearches(propertyId: string): Promise<PropertyRecordSavedSearch[]> {
+  const res = await api.get<{ savedSearches: PropertyRecordSavedSearch[] }>(
+    `/api/properties/${propertyId}/records/saved-searches`,
+  );
+  return res.data.savedSearches;
+}
+
+export async function createSavedSearch(
+  propertyId: string,
+  input: { name: string; search?: string; recordType?: PropertyRecordType; view: PropertyRecordSavedSearchView },
+): Promise<PropertyRecordSavedSearch> {
+  const res = await api.post<{ savedSearch: PropertyRecordSavedSearch }>(
+    `/api/properties/${propertyId}/records/saved-searches`,
+    input,
+  );
+  return res.data.savedSearch;
+}
+
+export async function deleteSavedSearch(propertyId: string, savedSearchId: string): Promise<void> {
+  await api.delete(`/api/properties/${propertyId}/records/saved-searches/${savedSearchId}`);
+}
+
+// Fire-and-forget from the caller's perspective — registering the click
+// must never block or fail the actual download.
+export async function registerDownload(propertyId: string, recordId: string, versionId: string): Promise<void> {
+  await api.post(`/api/properties/${propertyId}/records/${recordId}/versions/${versionId}/register-download`, {});
+}
+
+export async function listDownloadHistory(propertyId: string, recordId: string): Promise<PropertyRecordDownloadEvent[]> {
+  const res = await api.get<{ downloadHistory: PropertyRecordDownloadEvent[] }>(
+    `/api/properties/${propertyId}/records/${recordId}/download-history`,
+  );
+  return res.data.downloadHistory;
+}
+
+export async function getStorageHealth(propertyId: string): Promise<PropertyRecordStorageHealth> {
+  const res = await api.get<{ storageHealth: PropertyRecordStorageHealth }>(
+    `/api/properties/${propertyId}/records/storage-health`,
+  );
+  return res.data.storageHealth;
 }

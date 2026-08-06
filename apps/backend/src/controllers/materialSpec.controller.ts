@@ -185,6 +185,20 @@ export async function addPhoto(req: CustomRequest, res: Response, next: NextFunc
   }
 }
 
+export async function uploadPhoto(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { propertyId, specId } = req.params;
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) return res.status(400).json({ success: false, message: 'Photo file is required.' });
+    const photo = await service.uploadPhoto(propertyId, specId, req.user!.userId, file, {
+      caption: typeof req.body?.caption === 'string' ? req.body.caption : null,
+    });
+    res.status(201).json({ success: true, data: { photo } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function deletePhoto(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { propertyId, specId, photoId } = req.params;

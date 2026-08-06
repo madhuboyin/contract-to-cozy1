@@ -5,8 +5,12 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   Archive,
   ArchiveRestore,
+  Bookmark,
+  BookmarkPlus,
+  Camera,
   Check,
   Download,
   FileText,
@@ -63,11 +67,19 @@ import {
   addVersion,
   archiveRecord,
   checkPossibleVersion,
+  createBatchRecords,
   createRecord,
+  createSavedSearch,
+  deleteSavedSearch,
   getRecord,
+  getStorageHealth,
+  listDownloadHistory,
   listRecords,
+  listSavedSearches,
   promoteExpense,
+  promoteInsurancePolicy,
   promoteWarranty,
+  registerDownload,
   restoreRecord,
   reviewCandidate,
   runExtraction,
@@ -77,11 +89,14 @@ import {
   type PossibleVersionMatch,
 } from './homeRecordsApi';
 import type {
+  CreateBatchInput,
+  CreateBatchResult,
   CreateRecordInput,
   ExtractedFactCandidate,
   PropertyRecordDetail,
   PropertyRecordLinkEntityType,
   PropertyRecordLinkPurpose,
+  PropertyRecordSavedSearch,
   PropertyRecordSensitivity,
   PropertyRecordSummary,
   PropertyRecordType,
@@ -177,9 +192,10 @@ const LIFECYCLE_TONE: Record<string, 'good' | 'elevated' | 'danger' | 'info'> = 
   TRASHED: 'danger',
 };
 
-// WARRANTY and RECEIPT records have an AI review/promotion path today — see
-// homeRecordsExtraction.service.ts. '_documentType' is excluded here: it's
-// the AI's informational overall classification, not a reviewable field.
+// WARRANTY, RECEIPT, and INSURANCE_POLICY records have an AI review/promotion
+// path today — see homeRecordsExtraction.service.ts. '_documentType' is
+// excluded here: it's the AI's informational overall classification, not a
+// reviewable field.
 const WARRANTY_REQUIRED_FIELD_KEYS = ['providerName', 'startDate', 'expiryDate'];
 const WARRANTY_FIELD_LABELS: Record<string, string> = {
   providerName: 'Provider / manufacturer',
@@ -196,6 +212,21 @@ const EXPENSE_FIELD_LABELS: Record<string, string> = {
   amount: 'Amount',
   transactionDate: 'Transaction date',
   category: 'Category',
+};
+
+const INSURANCE_POLICY_REQUIRED_FIELD_KEYS = ['carrierName', 'policyNumber'];
+const INSURANCE_POLICY_FIELD_LABELS: Record<string, string> = {
+  carrierName: 'Carrier',
+  policyNumber: 'Policy number',
+  coverageType: 'Coverage type',
+  premiumAmount: 'Premium',
+  deductibleAmount: 'Deductible',
+  dwellingLimit: 'Dwelling limit',
+  personalPropertyLimit: 'Personal property limit',
+  liabilityLimit: 'Liability limit',
+  valuationBasis: 'Valuation basis',
+  termStart: 'Term start date',
+  termEnd: 'Term end date',
 };
 
 const REVIEW_STATUS_TONE: Record<string, 'good' | 'elevated' | 'danger' | 'info'> = {
@@ -368,6 +399,173 @@ function UploadDialog({
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             Add record
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Batch mobile scan dialog ────────────────────────────────────────────────
+// Several photos captured in one phone-camera session (e.g. 3 warranty cards
+// scanned back to back), each becoming its own record sharing one recordType/
+// sensitivity/visibility — not a multi-page-PDF assembly. See
+// homeRecords.service.ts's createBatch() for why that's a separate, deferred
+// capability. `capture="environment"` opens the rear camera directly on
+// mobile browsers that support it; desktop/other browsers just fall back to
+// their normal multi-file picker.
+const MAX_BATCH_FILES = 10;
+
+function BatchScanDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  isSubmitting,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (input: CreateBatchInput) => void;
+  isSubmitting: boolean;
+}) {
+  const [files, setFiles] = React.useState<File[]>([]);
+  const [title, setTitle] = React.useState('');
+  const [recordType, setRecordType] = React.useState<PropertyRecordType>('OTHER');
+  const [sensitivity, setSensitivity] = React.useState<PropertyRecordSensitivity>('STANDARD');
+  const [visibility, setVisibility] = React.useState<PropertyRecordVisibility>('HOUSEHOLD');
+  const [fileError, setFileError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!open) {
+      setFiles([]);
+      setTitle('');
+      setRecordType('OTHER');
+      setSensitivity('STANDARD');
+      setVisibility('HOUSEHOLD');
+      setFileError(null);
+    }
+  }, [open]);
+
+  function handleFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (selected.length === 0) return;
+
+    const accepted: File[] = [];
+    for (const candidate of selected) {
+      if (!ALLOWED_MIME_TYPES.has(candidate.type)) {
+        setFileError('Only PDF, JPEG, PNG, and WEBP files are supported.');
+        continue;
+      }
+      if (candidate.size > MAX_FILE_BYTES) {
+        setFileError('Each file must be under 10 MB.');
+        continue;
+      }
+      accepted.push(candidate);
+    }
+    setFiles((prev) => {
+      const combined = [...prev, ...accepted];
+      if (combined.length > MAX_BATCH_FILES) {
+        setFileError(`Up to ${MAX_BATCH_FILES} files per batch.`);
+        return combined.slice(0, MAX_BATCH_FILES);
+      }
+      return combined;
+    });
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  const canSubmit = files.length > 0 && title.trim().length > 0 && !isSubmitting;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Batch scan</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="batch-files">Photos</Label>
+            <Input
+              id="batch-files"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              onChange={handleFilesChange}
+            />
+            {fileError && <p className="mt-1 text-xs text-red-600">{fileError}</p>}
+            <p className="mt-1 text-xs text-gray-400">
+              Scan multiple documents in one pass — each photo becomes its own record. Up to {MAX_BATCH_FILES} at a time.
+            </p>
+            {files.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {files.map((f, i) => (
+                  <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-2 py-1.5 text-xs text-gray-600">
+                    <span className="truncate">{f.name} · {formatBytes(f.size)}</span>
+                    <button type="button" onClick={() => removeFile(i)} className="shrink-0 text-gray-400 hover:text-red-600">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="batch-title">Title</Label>
+            <Input id="batch-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={240} />
+            {files.length > 1 && (
+              <p className="mt-1 text-xs text-gray-400">
+                Each record is titled &ldquo;{title.trim() || 'Title'} (1 of {files.length})&rdquo;, &ldquo;(2 of {files.length})&rdquo;, etc.
+              </p>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <Label>Record type</Label>
+              <Select value={recordType} onValueChange={(v) => setRecordType(v as PropertyRecordType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(RECORD_TYPE_LABELS) as [PropertyRecordType, string][]).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Sensitivity</Label>
+              <Select value={sensitivity} onValueChange={(v) => setSensitivity(v as PropertyRecordSensitivity)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(SENSITIVITY_LABELS) as [PropertyRecordSensitivity, string][]).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Visibility</Label>
+              <Select value={visibility} onValueChange={(v) => setVisibility(v as PropertyRecordVisibility)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(VISIBILITY_LABELS) as [PropertyRecordVisibility, string][]).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
+          <Button
+            disabled={!canSubmit}
+            onClick={() => onSubmit({ files, title: title.trim(), recordType, sensitivity, visibility })}
+            className="gap-2"
+          >
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+            {files.length > 1 ? `Add ${files.length} records` : 'Add record'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -600,6 +798,17 @@ const EXPENSE_EXTRACTION_CONFIG: ExtractionDomainConfig = {
   errorToastTitle: 'Could not log expense',
 };
 
+const INSURANCE_POLICY_EXTRACTION_CONFIG: ExtractionDomainConfig = {
+  requiredFieldKeys: INSURANCE_POLICY_REQUIRED_FIELD_KEYS,
+  fieldLabels: INSURANCE_POLICY_FIELD_LABELS,
+  promote: promoteInsurancePolicy,
+  promoteButtonLabel: 'Stage insurance policy from confirmed details',
+  promotedMessage:
+    'This policy was staged for coverage review. Confirm its remaining details from the Insurance workspace.',
+  successToastTitle: 'Insurance policy staged',
+  errorToastTitle: 'Could not stage insurance policy',
+};
+
 function ExtractionReviewSection({
   propertyId,
   recordId,
@@ -770,6 +979,20 @@ function RecordDetailSheet({
     onError: (e: any) => toast({ title: 'Could not update expiration', description: e?.message, variant: 'destructive' }),
   });
 
+  const [downloadHistoryOpen, setDownloadHistoryOpen] = React.useState(false);
+  const downloadHistoryQuery = useQuery({
+    queryKey: ['home-records', propertyId, 'download-history', recordId],
+    queryFn: () => listDownloadHistory(propertyId, recordId),
+    enabled: downloadHistoryOpen,
+  });
+
+  // Presigned URLs go straight to S3 — the backend never sees the real
+  // download request, so this registers the click that requested one.
+  // Fire-and-forget: must never block or fail the actual download.
+  function handleDownloadClick(versionId: string) {
+    registerDownload(propertyId, recordId, versionId).catch(() => undefined);
+  }
+
   const record = detailQuery.data;
 
   return (
@@ -863,16 +1086,45 @@ function RecordDetailSheet({
                       </p>
                     </div>
                     {v.id === record.currentVersion?.id && record.currentVersion?.downloadUrl && (
-                      <a href={record.currentVersion.downloadUrl} target="_blank" rel="noreferrer" className="shrink-0 text-gray-400 hover:text-gray-700">
+                      <a
+                        href={record.currentVersion.downloadUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() => handleDownloadClick(v.id)}
+                        className="shrink-0 text-gray-400 hover:text-gray-700"
+                      >
                         <Download className="h-4 w-4" />
                       </a>
                     )}
                   </div>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => setDownloadHistoryOpen((prev) => !prev)}
+                className="text-xs text-gray-400 underline decoration-dotted hover:text-gray-600"
+              >
+                {downloadHistoryOpen ? 'Hide download history' : 'View download history'}
+              </button>
+              {downloadHistoryOpen && (
+                <div className="space-y-1 rounded-xl border border-gray-200 bg-gray-50 p-2.5">
+                  {downloadHistoryQuery.isLoading ? (
+                    <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-400')}>Loading…</p>
+                  ) : (downloadHistoryQuery.data?.length ?? 0) === 0 ? (
+                    <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-400')}>No downloads recorded yet.</p>
+                  ) : (
+                    downloadHistoryQuery.data!.map((event) => (
+                      <p key={event.id} className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
+                        {event.userName || event.userEmail || 'A household member'} · {formatDate(event.occurredAt)}
+                        {event.fileName ? ` · ${event.fileName}` : ''}
+                      </p>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
-            {(record.recordType === 'WARRANTY' || record.recordType === 'RECEIPT')
+            {(record.recordType === 'WARRANTY' || record.recordType === 'RECEIPT' || record.recordType === 'INSURANCE_POLICY')
               && record.currentVersion?.scanStatus === 'CLEAN' && (
               <ExtractionReviewSection
                 propertyId={propertyId}
@@ -881,7 +1133,13 @@ function RecordDetailSheet({
                 candidates={
                   record.versions.find((v) => v.id === record.currentVersion?.id)?.extractedFacts ?? []
                 }
-                config={record.recordType === 'WARRANTY' ? WARRANTY_EXTRACTION_CONFIG : EXPENSE_EXTRACTION_CONFIG}
+                config={
+                  record.recordType === 'WARRANTY'
+                    ? WARRANTY_EXTRACTION_CONFIG
+                    : record.recordType === 'RECEIPT'
+                      ? EXPENSE_EXTRACTION_CONFIG
+                      : INSURANCE_POLICY_EXTRACTION_CONFIG
+                }
               />
             )}
 
@@ -1004,6 +1262,7 @@ export default function HomeRecordsClient() {
   const queryClient = useQueryClient();
   const [showTrashed, setShowTrashed] = React.useState(false);
   const [uploadOpen, setUploadOpen] = React.useState(false);
+  const [batchScanOpen, setBatchScanOpen] = React.useState(false);
   // A real resolution flow, not just an after-the-fact toast: holds the
   // pending upload + its possible-version match while the homeowner
   // decides whether this is a new version of an existing record.
@@ -1018,6 +1277,8 @@ export default function HomeRecordsClient() {
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
   const [recordTypeFilter, setRecordTypeFilter] = React.useState<PropertyRecordType | 'ALL'>('ALL');
   const [view, setView] = React.useState<RecordView>('ALL');
+  const [savingSearchOpen, setSavingSearchOpen] = React.useState(false);
+  const [savingSearchName, setSavingSearchName] = React.useState('');
 
   React.useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -1034,6 +1295,50 @@ export default function HomeRecordsClient() {
     enabled: Boolean(propertyId),
     staleTime: 2 * 60 * 1000,
   });
+
+  const savedSearchesQuery = useQuery({
+    queryKey: ['home-records-saved-searches', propertyId],
+    queryFn: () => listSavedSearches(propertyId),
+    enabled: Boolean(propertyId) && !showTrashed,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const storageHealthQuery = useQuery({
+    queryKey: ['home-records-storage-health', propertyId],
+    queryFn: () => getStorageHealth(propertyId),
+    enabled: Boolean(propertyId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const createSavedSearchMutation = useMutation({
+    mutationFn: (input: Parameters<typeof createSavedSearch>[1]) => createSavedSearch(propertyId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-records-saved-searches', propertyId] });
+      setSavingSearchOpen(false);
+      setSavingSearchName('');
+      toast({ title: 'Search saved' });
+    },
+    onError: (e: any) => {
+      toast({ title: 'Could not save search', description: e?.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteSavedSearchMutation = useMutation({
+    mutationFn: (savedSearchId: string) => deleteSavedSearch(propertyId, savedSearchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-records-saved-searches', propertyId] });
+    },
+    onError: (e: any) => {
+      toast({ title: 'Could not remove saved search', description: e?.message, variant: 'destructive' });
+    },
+  });
+
+  function applySavedSearch(saved: PropertyRecordSavedSearch) {
+    setSearch(saved.search ?? '');
+    setDebouncedSearch(saved.search ?? '');
+    setRecordTypeFilter(saved.recordType ?? 'ALL');
+    setView(saved.view);
+  }
 
   const createMutation = useMutation({
     mutationFn: (input: Parameters<typeof createRecord>[1]) => createRecord(propertyId, input),
@@ -1052,6 +1357,28 @@ export default function HomeRecordsClient() {
     },
     onError: (e: any) => {
       toast({ title: 'Could not add record', description: e?.message, variant: 'destructive' });
+    },
+  });
+
+  const createBatchMutation = useMutation({
+    mutationFn: (input: CreateBatchInput) => createBatchRecords(propertyId, input),
+    onSuccess: (result: CreateBatchResult) => {
+      queryClient.invalidateQueries({ queryKey: ['home-records', propertyId] });
+      setBatchScanOpen(false);
+      const createdCount = result.created.length;
+      const failedCount = result.failed.length;
+      toast({
+        title: failedCount === 0
+          ? `${createdCount} ${createdCount === 1 ? 'record' : 'records'} added`
+          : `${createdCount} of ${createdCount + failedCount} added`,
+        description: failedCount > 0
+          ? `Could not add: ${result.failed.map((f) => f.fileName).join(', ')}`
+          : undefined,
+        variant: failedCount > 0 && createdCount === 0 ? 'destructive' : undefined,
+      });
+    },
+    onError: (e: any) => {
+      toast({ title: 'Batch scan failed', description: e?.message, variant: 'destructive' });
     },
   });
 
@@ -1104,6 +1431,23 @@ export default function HomeRecordsClient() {
       />
       <HomeToolHeader toolId="home-records" propertyId={propertyId} />
 
+      {storageHealthQuery.data && !storageHealthQuery.data.healthy && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className={cn(MOBILE_TYPE_TOKENS.caption, 'text-amber-800')}>
+            <p className="font-medium">Storage needs attention</p>
+            <p>
+              {[
+                storageHealthQuery.data.scanIssueCount > 0 ? `${storageHealthQuery.data.scanIssueCount} file(s) failed content validation` : null,
+                storageHealthQuery.data.integrityMismatchCount > 0 ? `${storageHealthQuery.data.integrityMismatchCount} file(s) failed integrity verification` : null,
+                storageHealthQuery.data.purgeFailureCount > 0 ? `${storageHealthQuery.data.purgeFailureCount} trash cleanup job(s) failed` : null,
+                storageHealthQuery.data.stalePurgeCount > 0 ? `${storageHealthQuery.data.stalePurgeCount} trash cleanup job(s) running past schedule` : null,
+              ].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+        </div>
+      )}
+
       <MobileCard className="flex flex-wrap items-center justify-between gap-3 border border-gray-200 bg-white p-4">
         <div className="flex items-center gap-2">
           <Button variant={!showTrashed ? 'default' : 'outline'} size="sm" onClick={() => setShowTrashed(false)}>
@@ -1114,10 +1458,16 @@ export default function HomeRecordsClient() {
           </Button>
         </div>
         {!showTrashed && (
-          <Button size="sm" className="gap-1.5" onClick={() => setUploadOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Add record
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setBatchScanOpen(true)}>
+              <Camera className="h-4 w-4" />
+              Batch scan
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => setUploadOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Add record
+            </Button>
+          </div>
         )}
       </MobileCard>
 
@@ -1172,6 +1522,65 @@ export default function HomeRecordsClient() {
               Expiring or outdated{expiringCount > 0 ? ` (${expiringCount})` : ''}
             </Button>
           </div>
+
+          {((savedSearchesQuery.data?.length ?? 0) > 0 || isFiltering) && (
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2">
+              <Bookmark className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              {(savedSearchesQuery.data ?? []).map((saved) => (
+                <span key={saved.id} className="group inline-flex items-center gap-1 rounded-full bg-gray-100 py-0.5 pl-3 pr-1 text-xs text-gray-600">
+                  <button type="button" onClick={() => applySavedSearch(saved)} className="hover:text-gray-900">
+                    {saved.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteSavedSearchMutation.mutate(saved.id)}
+                    className="rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-red-600"
+                    aria-label={`Remove saved search "${saved.name}"`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              {isFiltering && !savingSearchOpen && (
+                <button
+                  type="button"
+                  onClick={() => setSavingSearchOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-3 py-0.5 text-xs text-gray-500 hover:border-gray-400 hover:text-gray-700"
+                >
+                  <BookmarkPlus className="h-3 w-3" />
+                  Save this search
+                </button>
+              )}
+              {savingSearchOpen && (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    autoFocus
+                    value={savingSearchName}
+                    onChange={(e) => setSavingSearchName(e.target.value)}
+                    placeholder="Name this search"
+                    maxLength={120}
+                    className="h-7 w-40 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={!savingSearchName.trim() || createSavedSearchMutation.isPending}
+                    onClick={() => createSavedSearchMutation.mutate({
+                      name: savingSearchName.trim(),
+                      search: debouncedSearch || undefined,
+                      recordType: recordTypeFilter === 'ALL' ? undefined : recordTypeFilter,
+                      view,
+                    })}
+                  >
+                    {createSavedSearchMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setSavingSearchOpen(false); setSavingSearchName(''); }}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1209,6 +1618,13 @@ export default function HomeRecordsClient() {
         onOpenChange={setUploadOpen}
         isSubmitting={createMutation.isPending}
         onSubmit={handleUploadSubmit}
+      />
+
+      <BatchScanDialog
+        open={batchScanOpen}
+        onOpenChange={setBatchScanOpen}
+        isSubmitting={createBatchMutation.isPending}
+        onSubmit={(input) => createBatchMutation.mutate(input)}
       />
 
       <Dialog open={Boolean(pendingVersionResolution)} onOpenChange={(open) => { if (!open) setPendingVersionResolution(null); }}>

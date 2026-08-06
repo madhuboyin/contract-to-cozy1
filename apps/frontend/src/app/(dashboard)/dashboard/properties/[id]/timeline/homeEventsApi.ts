@@ -52,6 +52,11 @@ export interface HomeEvent {
   createdAt: string;
   updatedAt: string;
   documents: HomeEventDocument[];
+  // Generic origin pointer (Warranty/Expense promotion, Material Spec
+  // as-built verification, etc.) — distinct from propertyRecordLinks
+  // below, which is a typed Home Records link, not this opaque pointer.
+  sourceEntityType?: string | null;
+  sourceEntityId?: string | null;
   parentEventId?: string | null;
   groupType?: string | null;
   revision?: number;
@@ -145,13 +150,16 @@ export async function correctHomeEvent(
   return response.data.event;
 }
 
-// Restricted to the two household-internal choices, matching the backend
-// schema — a homeowner marking something PRIVATE excludes it from every
-// externally-shared Property Brief section (see propertyBrief.service.ts).
+// Matches the backend schema's 3 settable values (SHARE_LINK stays
+// reserved/unexposed — no downstream consumer distinguishes it from
+// HOUSEHOLD yet). PRIVATE excludes an event from every externally-shared
+// Property Brief section; RESALE_PACK is what makes it eligible to appear
+// in a PROSPECTIVE_BUYER/LISTING_AGENT brief specifically — see
+// propertyBrief.service.ts's assembleSections().
 export async function setHomeEventVisibility(
   propertyId: string,
   eventId: string,
-  visibility: 'PRIVATE' | 'HOUSEHOLD',
+  visibility: 'PRIVATE' | 'HOUSEHOLD' | 'RESALE_PACK',
 ) {
   await api.patch(
     `/api/properties/${propertyId}/home-events/${eventId}/visibility`,

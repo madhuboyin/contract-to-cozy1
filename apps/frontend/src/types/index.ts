@@ -4769,6 +4769,19 @@ export interface MaterialSpec {
     notes?: string | null;
     occurredAt: string;
   }>;
+  // Read-only: Home Records evidence linked to this spec via the typed
+  // PropertyRecordLink graph (created from the Home Records side — see
+  // homeRecords "Link to another record"). Separate from
+  // submittalDocumentIds/approvalDocumentIds/etc. above, which still point
+  // at the legacy Document model.
+  homeRecordLinks?: Array<{
+    linkId: string;
+    recordId: string;
+    title: string;
+    recordType: string;
+    lifecycleStatus: string;
+    purpose: string;
+  }>;
 }
 
 export interface MaterialExtractionReview {

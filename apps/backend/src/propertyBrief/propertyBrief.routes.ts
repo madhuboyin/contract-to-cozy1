@@ -19,6 +19,7 @@ import {
   getSharedPropertyBrief,
   listEligiblePropertyBriefDocuments,
   listPropertyBriefs,
+  republishPropertyBrief,
   revokePropertyBriefShare,
   renderPropertyBriefPdf,
   testPropertyBriefShareAccess,
@@ -144,6 +145,66 @@ router.get(
           req.user.userId,
           uuid.parse(req.params.briefId),
         ),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/property-briefs/:briefId/republish',
+  authenticate,
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user?.userId) return res.status(401).json({ success: false });
+      const result = await republishPropertyBrief({
+        propertyId: req.params.propertyId,
+        briefId: uuid.parse(req.params.briefId),
+      });
+
+      // Fire-and-forget, same pattern as the invitation send below — a
+      // failed enqueue must never fail the republish itself. Only notifies
+      // when something actually changed and only recipients with a real
+      // ACTIVE share + email on file (a share the homeowner revoked, or one
+      // with no recipient email, has nobody to tell).
+      if (result.changed) {
+        const propertyAddress = [
+          result.brief.property.address,
+          result.brief.property.city,
+          result.brief.property.state,
+        ].filter(Boolean).join(', ');
+        for (const share of result.brief.shares) {
+          if (share.status !== 'ACTIVE' || !share.recipientEmail) continue;
+          getEmailNotificationQueue()
+            .add(
+              'SEND_PROPERTY_BRIEF_UPDATE_NOTICE',
+              {
+                to: share.recipientEmail,
+                recipientName: share.recipientName,
+                propertyBriefTitle: result.brief.title,
+                propertyAddress,
+                changedSections: result.changedSectionTypes,
+              },
+              { removeOnComplete: true, removeOnFail: true, attempts: 2 },
+            )
+            .catch((err) => {
+              logger.error({ err }, '[PropertyBriefRoutes] failed to enqueue update notice email');
+            });
+        }
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          changed: result.changed,
+          changedSectionTypes: result.changedSectionTypes,
+          notifiedRecipientCount: result.changed
+            ? result.brief.shares.filter((share) => share.status === 'ACTIVE' && share.recipientEmail).length
+            : 0,
+        },
       });
     } catch (error) {
       return next(error);

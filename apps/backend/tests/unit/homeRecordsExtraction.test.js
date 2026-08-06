@@ -86,6 +86,21 @@ require.cache[intelligencePath] = {
   },
 };
 
+const stagePolicyTermCalls = [];
+let stagePolicyTermResult = { policy: { id: 'policy-1' }, term: { id: 'term-1' } };
+const policyRecordPath = require.resolve('../../src/services/insurancePolicyRecord.service.ts');
+require.cache[policyRecordPath] = {
+  id: policyRecordPath,
+  filename: policyRecordPath,
+  loaded: true,
+  exports: {
+    stageExtractedPolicyTerm: async (input) => {
+      stagePolicyTermCalls.push(input);
+      return stagePolicyTermResult;
+    },
+  },
+};
+
 const { HomeRecordsExtractionService } = require('../../src/services/homeRecordsExtraction.service.ts');
 const service = new HomeRecordsExtractionService();
 
@@ -433,6 +448,140 @@ test('promoteExpense refuses to run twice against the same analysis', async () =
 
   await assert.rejects(
     service.promoteExpense({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
+  );
+});
+
+test('runExtraction stages a document-type candidate plus mapped insurance fields for an INSURANCE_POLICY record', async () => {
+  prismaMock.extractedFactCandidate.findMany = async () => existingCandidates;
+  versionForRecord = {
+    id: 'version-1',
+    storageKey: 'key-1',
+    mimeType: 'application/pdf',
+    originalFileName: 'homeowners-policy.pdf',
+    scanStatus: 'CLEAN',
+    record: { lifecycleStatus: 'ACTIVE', recordType: 'INSURANCE_POLICY' },
+  };
+  existingCandidates = [];
+  analyzeResult = {
+    documentType: 'INSURANCE_POLICY',
+    confidence: 0.9,
+    extractedData: {
+      carrierName: 'State Farm',
+      policyNumber: 'SF-12345',
+      coverageType: 'HO-3',
+      premiumAmount: 1450,
+      deductible: 1000,
+      dwellingLimit: 350000,
+      personalPropertyLimit: 175000,
+      liabilityLimit: 300000,
+      valuationBasis: 'Replacement Cost',
+      startDate: new Date('2026-01-01T00:00:00.000Z'),
+      expiryDate: new Date('2027-01-01T00:00:00.000Z'),
+    },
+    suggestedActions: [],
+  };
+  createManyCalls.length = 0;
+
+  await service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
+
+  assert.equal(createManyCalls.length, 1);
+  const rows = createManyCalls[0].data;
+  const byField = Object.fromEntries(rows.map((r) => [r.fieldKey, r]));
+
+  assert.equal(rows.every((r) => r.targetDomain === 'INSURANCE_POLICY'), true);
+  assert.equal(byField._documentType.proposedValue, 'INSURANCE_POLICY');
+  assert.equal(byField.carrierName.proposedValue, 'State Farm');
+  assert.equal(byField.policyNumber.proposedValue, 'SF-12345');
+  assert.equal(byField.coverageType.proposedValue, 'HO-3');
+  assert.equal(byField.premiumAmount.proposedValue, '1450');
+  assert.equal(byField.deductibleAmount.proposedValue, '1000');
+  assert.equal(byField.dwellingLimit.proposedValue, '350000');
+  assert.equal(byField.personalPropertyLimit.proposedValue, '175000');
+  assert.equal(byField.liabilityLimit.proposedValue, '300000');
+  assert.equal(byField.valuationBasis.proposedValue, 'Replacement Cost');
+  assert.equal(byField.termStart.proposedValue, '2026-01-01');
+  assert.equal(byField.termEnd.proposedValue, '2027-01-01');
+});
+
+test('promoteInsurancePolicy blocks staging until every required field is confirmed or corrected', async () => {
+  versionForRecord = { id: 'version-1' };
+  candidatesForPromotion = [
+    { id: 'c-carrier', fieldKey: 'carrierName', reviewStatus: 'CONFIRMED', reviewedValue: 'State Farm', promotedEntityId: null },
+    { id: 'c-policy', fieldKey: 'policyNumber', reviewStatus: 'PENDING', reviewedValue: null, promotedEntityId: null },
+  ];
+  prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
+
+  await assert.rejects(
+    service.promoteInsurancePolicy({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    (err) => {
+      assert.equal(err.code, 'PROPERTY_RECORD_EXTRACTION_PROMOTION_INCOMPLETE');
+      assert.ok(err.details.missingFields.includes('policyNumber'));
+      return true;
+    },
+  );
+});
+
+test('promoteInsurancePolicy stages a policy term via stageExtractedPolicyTerm, links it, and marks candidates promoted', async () => {
+  versionForRecord = { id: 'version-1', originalFileName: 'homeowners-policy.pdf' };
+  candidatesForPromotion = [
+    { id: 'c-carrier', fieldKey: 'carrierName', reviewStatus: 'CONFIRMED', reviewedValue: 'State Farm', promotedEntityId: null },
+    { id: 'c-policy', fieldKey: 'policyNumber', reviewStatus: 'CONFIRMED', reviewedValue: 'SF-12345', promotedEntityId: null },
+    { id: 'c-coverage', fieldKey: 'coverageType', reviewStatus: 'CONFIRMED', reviewedValue: 'HO-3', promotedEntityId: null },
+    { id: 'c-premium', fieldKey: 'premiumAmount', reviewStatus: 'CORRECTED', reviewedValue: '1500', promotedEntityId: null },
+  ];
+  prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
+  propertyForPromotion = { homeownerProfileId: 'homeowner-1' };
+  stagePolicyTermCalls.length = 0;
+  stagePolicyTermResult = { policy: { id: 'policy-1' }, term: { id: 'term-1' } };
+  transactionCalls.candidateUpdateManys.length = 0;
+  transactionCalls.linkCreates.length = 0;
+  transactionCalls.homeEventCreates.length = 0;
+  homeEventIdCounter = 0;
+
+  const staged = await service.promoteInsurancePolicy({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
+
+  assert.equal(staged.policy.id, 'policy-1');
+  assert.equal(staged.term.id, 'term-1');
+
+  assert.equal(stagePolicyTermCalls.length, 1);
+  const staging = stagePolicyTermCalls[0];
+  assert.equal(staging.homeownerProfileId, 'homeowner-1');
+  assert.equal(staging.userId, 'u1');
+  assert.equal(staging.propertyId, 'p1');
+  assert.equal(staging.carrierName, 'State Farm');
+  assert.equal(staging.policyNumber, 'SF-12345');
+  assert.equal(staging.coverageType, 'HO-3');
+  assert.equal(staging.premiumAmount, 1500);
+  assert.equal(staging.documentId, undefined);
+
+  assert.equal(transactionCalls.candidateUpdateManys[0].data.promotedEntityType, 'INSURANCE_POLICY_TERM');
+  assert.equal(transactionCalls.candidateUpdateManys[0].data.promotedEntityId, 'term-1');
+  assert.deepEqual(
+    transactionCalls.candidateUpdateManys[0].where.id.in.sort(),
+    ['c-carrier', 'c-coverage', 'c-policy', 'c-premium'].sort(),
+  );
+
+  assert.equal(transactionCalls.linkCreates[0].data.entityType, 'INSURANCE_POLICY');
+  assert.equal(transactionCalls.linkCreates[0].data.entityId, 'policy-1');
+  assert.equal(transactionCalls.linkCreates[0].data.purpose, 'EVIDENCE');
+
+  // Unlike promoteWarranty/promoteExpense, no HomeEvent is created — the
+  // staged facts are still UNVERIFIED until confirmed per-field through the
+  // insurance domain's own review workflow.
+  assert.equal(transactionCalls.homeEventCreates.length, 0);
+});
+
+test('promoteInsurancePolicy refuses to run twice against the same analysis', async () => {
+  versionForRecord = { id: 'version-1' };
+  candidatesForPromotion = [
+    { id: 'c-carrier', fieldKey: 'carrierName', reviewStatus: 'CONFIRMED', reviewedValue: 'State Farm', promotedEntityId: 'term-1' },
+    { id: 'c-policy', fieldKey: 'policyNumber', reviewStatus: 'CONFIRMED', reviewedValue: 'SF-12345', promotedEntityId: 'term-1' },
+  ];
+  prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
+
+  await assert.rejects(
+    service.promoteInsurancePolicy({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
     (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
   );
 });

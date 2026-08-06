@@ -882,14 +882,17 @@ export class HomeEventsService {
   // go through updateHomeEvent's supersede-with-a-new-revision flow (which
   // would also reset verificationStatus off EVIDENCE_VERIFIED and change the
   // event's id, breaking anything referencing it by sourceEntityId). This is
-  // the enforcement half of HomeEventVisibility (schema had the
+  // the setter half of HomeEventVisibility (schema had the
   // PRIVATE/HOUSEHOLD/SHARE_LINK/RESALE_PACK enum since an earlier slice
-  // but nothing ever let a homeowner set it) — see
-  // propertyBrief.service.ts's assembleSections for the other half.
+  // but nothing ever let a homeowner set it) — see propertyBrief.service
+  // .ts's assembleSections for the enforcement half: PRIVATE is excluded
+  // from every Property Brief purpose, and RESALE_PACK is *required* for
+  // the two resale-safe purposes (PROSPECTIVE_BUYER/LISTING_AGENT).
+  // SHARE_LINK stays unsettable here — no downstream consumer yet.
   async setVisibility(args: {
     propertyId: string;
     eventId: string;
-    visibility: 'PRIVATE' | 'HOUSEHOLD';
+    visibility: 'PRIVATE' | 'HOUSEHOLD' | 'RESALE_PACK';
   }) {
     const result = await prisma.homeEvent.updateMany({
       where: {

@@ -2196,6 +2196,32 @@ class APIClient {
     return response.blob();
   }
 
+  // Slice 7's "secure offline/emergency packet" — same auth pattern as
+  // downloadRiskReportPdf above (cookie-based, credentials: 'include').
+  async downloadEmergencyPacketPdf(propertyId: string): Promise<Blob> {
+    const response = await fetch(
+      `${this.baseURL}/api/properties/${propertyId}/home-digital-will/emergency-packet.pdf`,
+      { method: 'GET', credentials: 'include' },
+    );
+
+    if (!response.ok) {
+      let errorMessage = 'Failed to download the emergency packet.';
+      let errorData: any = null;
+      try {
+        errorData = await response.json();
+        errorMessage = errorData.message || response.statusText;
+      } catch {
+        errorMessage = response.statusText;
+      }
+      const err: any = new APIError(errorMessage, response.status);
+      err.payload = errorData;
+      err.status = response.status;
+      throw err;
+    }
+
+    return response.blob();
+  }
+
 // Find the APIClient class and add these methods
 
   // ==========================================================================

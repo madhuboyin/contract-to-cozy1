@@ -1849,10 +1849,20 @@ enum PropertyRecordPurgeState {
   FAILED
 }
 
-// WARRANTY and EXPENSE have implemented promotion contracts (see
-// homeRecordsExtraction.service.ts). INSURANCE_POLICY is reserved for a
-// future slice — insurance already has its own bespoke staging path via
-// InsurancePolicyTerm/InsurancePolicyFact, unrelated to this model today.
+// Mirrors HomeRecordsClient.tsx's RecordView union — a saved retrieval is a
+// lightweight bookmark of the search bar's own filter state (search text +
+// type + view chip), not a separate query engine.
+enum PropertyRecordSavedSearchView {
+  ALL
+  NEEDS_REVIEW
+  EXPIRING
+}
+
+// WARRANTY, EXPENSE, and INSURANCE_POLICY all have implemented promotion
+// contracts (see homeRecordsExtraction.service.ts). INSURANCE_POLICY's
+// promotion reuses insurance's own bespoke staging path
+// (InsurancePolicyTerm/InsurancePolicyFact via stageExtractedPolicyTerm)
+// rather than writing a canonical record directly — see promoteInsurancePolicy().
 enum ExtractedFactTargetDomain {
   WARRANTY
   EXPENSE
@@ -2938,6 +2948,7 @@ model Property {
   newHomeEvidenceRecords     NewHomeEvidenceRecord[]
   documents                  Document[]                  @relation("PropertyDocuments")
   propertyRecords            PropertyRecord[]
+  propertyRecordSavedSearches PropertyRecordSavedSearch[]
   coverPhoto                 Document?                   @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
@@ -3982,6 +3993,28 @@ model PropertyRecordPurgeJob {
   @@index([state, eligibleAt])
   @@index([recordId, requestedAt(sort: Desc)])
   @@map("property_record_purge_jobs")
+}
+
+// A saved retrieval: a named bookmark of a search/filter combination on the
+// Home Records list page, not a stored query result — re-running it always
+// reflects the live record set. Deliberately property-shared (not
+// per-creator-filtered on read), matching Home Records' own household-wide
+// access model rather than Property Brief's now-fixed-but-once-buggy
+// creator-scoping pattern.
+model PropertyRecordSavedSearch {
+  id              String                        @id @default(uuid())
+  propertyId      String
+  createdByUserId String
+  name            String
+  search          String?
+  recordType      PropertyRecordType?
+  view            PropertyRecordSavedSearchView @default(ALL)
+  createdAt       DateTime                      @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@map("property_record_saved_searches")
 }
 
 // ============================================================================
@@ -13804,6 +13837,12 @@ enum PropertyBriefSectionType {
   WARRANTIES
   MATERIAL_SPECS
   PERMITS
+  // Slice 7's "fold Home Digital Will's authored content into a Property
+  // Brief template" — trusted-contact-only (HOUSEHOLD_TRUSTED_CONTACT),
+  // never buyer/agent/contractor: emergency contacts + isEmergency-flagged
+  // Digital Will entries, the same content emergencyPacket.service.ts's
+  // PDF already surfaces, now flowing through the governed share pipeline.
+  EMERGENCY_INFO
 }
 
 enum PropertyBriefStatus {

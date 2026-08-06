@@ -41,6 +41,45 @@ test('a Timeline event\'s "Home Records evidence" badge (Slice 6) links back to 
   assert.match(timelineClient, /tools\/home-records\?recordId=\$\{link\.record\.id\}/);
 });
 
+// Picked up mid-turn after the original 9-item list finished: Material
+// Specs and Sale Case (Seller Prep's actual replacement — the old static
+// checklist was fully retired earlier this session) still weren't wired
+// into this same cross-link work, even though both already had the real
+// data (sourceEntityType/sourceEntityId on SaleReadinessItem;
+// PropertyRecordLink support on Material Specs from the 9-item pass) —
+// nothing rendered it as a link yet.
+
+test('a Material Spec\'s AS_BUILT transition creates a real Timeline HomeEvent, not just its own bespoke MaterialLifecycleEvent log', () => {
+  const service = readRepository('apps/backend/src/services/materialSpec.service.ts');
+  const asBuiltIndex = service.indexOf("payload.toStatus === 'AS_BUILT'", service.indexOf('materialLifecycleEvent.create'));
+  assert.ok(asBuiltIndex > 0);
+  const block = service.slice(asBuiltIndex, service.indexOf('return updated;', asBuiltIndex));
+  assert.match(block, /tx\.homeEvent\.create/);
+  assert.match(block, /sourceEntityType: 'MATERIAL_SPEC'/);
+  assert.match(block, /sourceEntityId: specId/);
+  assert.match(block, /verificationStatus: 'EVIDENCE_VERIFIED'/);
+  assert.match(block, /idempotencyKey: `material-spec-as-built:\$\{specId\}`/);
+});
+
+test('a Timeline event sourced from a Material Spec renders a real link back to it', () => {
+  const timelineClient = readRepository(
+    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/timeline/TimelineClient.tsx',
+  );
+  assert.match(timelineClient, /event\.sourceEntityType === 'MATERIAL_SPEC' && event\.sourceEntityId/);
+  assert.match(timelineClient, /\/dashboard\/properties\/\$\{params\.id\}\/materials\/\$\{event\.sourceEntityId\}/);
+});
+
+test('Sale Case readiness items link back to their Material Spec / Home Record / Timeline Event source', () => {
+  const saleCaseClient = readRepository(
+    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sale-case/SaleCaseClient.tsx',
+  );
+  assert.match(saleCaseClient, /function sourceEntityHref/);
+  assert.match(saleCaseClient, /case 'MATERIAL_SPEC': return `\/dashboard\/properties\/\$\{propertyId\}\/materials\/\$\{item\.sourceEntityId\}`/);
+  assert.match(saleCaseClient, /case 'PROPERTY_RECORD': return `\/dashboard\/properties\/\$\{propertyId\}\/tools\/home-records\?recordId=\$\{item\.sourceEntityId\}`/);
+  assert.match(saleCaseClient, /case 'TIMELINE_EVENT': return `\/dashboard\/properties\/\$\{propertyId\}\/timeline\?eventId=\$\{item\.sourceEntityId\}`/);
+  assert.match(saleCaseClient, /const sourceHref = sourceEntityHref\(propertyId, item\)/);
+});
+
 test('the two Seller Prep "dashboard card" components are not actually mounted anywhere — the plan\'s "no permanent passive cards" requirement is already satisfied by omission, not by design', () => {
   const orphanFiles = [
     'apps/frontend/src/components/seller-prep/SellerPrepDashboardCard.tsx',

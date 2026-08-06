@@ -11,6 +11,7 @@ import {
   Check,
   ChevronRight,
   ClipboardList,
+  Download,
   FileText,
   Info,
   Loader2,
@@ -29,6 +30,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api/client';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1454,11 +1456,37 @@ function EmergencyViewSection({
 
 function EmergencyView({
   will,
+  propertyId,
   onExit,
 }: {
   will: DigitalWill;
+  propertyId: string;
   onExit: () => void;
 }) {
+  const { toast } = useToast();
+  const [downloadingPacket, setDownloadingPacket] = React.useState(false);
+
+  // Slice 7's "secure offline/emergency packet" — a real downloadable copy
+  // for when the app itself isn't reachable, not just this in-app view.
+  async function handleDownloadPacket() {
+    setDownloadingPacket(true);
+    try {
+      const blob = await api.downloadEmergencyPacketPdf(propertyId);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'emergency-packet.pdf';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: 'Could not download the emergency packet', variant: 'destructive' });
+    } finally {
+      setDownloadingPacket(false);
+    }
+  }
+
   const emergencySection = will.sections.find((s) => s.type === 'EMERGENCY');
   const utilitiesSection = will.sections.find((s) => s.type === 'UTILITIES');
   const criticalInfoSection = will.sections.find((s) => s.type === 'CRITICAL_INFO');
@@ -1499,15 +1527,27 @@ function EmergencyView({
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onExit}
-            className="shrink-0 gap-1.5 border-amber-200 text-amber-800 hover:border-amber-300 hover:bg-amber-100"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Exit
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPacket}
+              disabled={downloadingPacket}
+              className="gap-1.5 border-amber-200 text-amber-800 hover:border-amber-300 hover:bg-amber-100"
+            >
+              {downloadingPacket ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Save offline PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExit}
+              className="gap-1.5 border-amber-200 text-amber-800 hover:border-amber-300 hover:bg-amber-100"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Exit
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -2637,7 +2677,7 @@ export default function HomeDigitalWillClient() {
   if (emergencyMode) {
     return (
       <>
-        <EmergencyView will={will} onExit={() => setEmergencyMode(false)} />
+        <EmergencyView will={will} propertyId={propertyId} onExit={() => setEmergencyMode(false)} />
         {/* Sheets still available if user exits back */}
       </>
     );

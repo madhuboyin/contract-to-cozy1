@@ -7,7 +7,15 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { logger } from '../lib/logger';
 import { presignGetObject } from './storage/presign';
+import { uploadDocumentBuffer } from './storage/reportStorage';
+
+type UploadedPhotoFile = {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+};
 
 // Static paint brand color-code → hex lookup (BM, SW, Behr, PPG representative values)
 const PAINT_COLOR_HEX: Record<string, Record<string, string>> = {
@@ -244,6 +252,40 @@ export class MaterialSpecService {
           notes: payload.notes,
         },
       });
+
+      // Slice 11 cross-linking: AS_BUILT is the one lifecycle transition
+      // that's already gated on real, verified evidence (exact identity,
+      // installation evidence, receipt — see the check above) — the same
+      // "only promote a genuinely verified fact" bar Slice 6 used for
+      // Warranty/Expense. Material Specs previously created zero HomeEvent
+      // rows despite having its own bespoke MaterialLifecycleEvent log
+      // (confirmed via grep before this pass), so this real installation
+      // fact never reached Timeline. occurredAt is the real installation
+      // date, not today, matching Slice 6's "the real historical fact
+      // happened then" principle.
+      if (payload.toStatus === 'AS_BUILT') {
+        const occurredAt = updated.installedAt ?? new Date();
+        const identity = [updated.manufacturer, updated.productName].filter(Boolean).join(' ') || updated.label;
+        await tx.homeEvent.create({
+          data: {
+            propertyId,
+            createdById: actorUserId,
+            type: 'MILESTONE',
+            title: `Material verified as-built: ${updated.label}`,
+            summary: `${identity} confirmed installed and verified, evidenced by receipt and installation documentation.`,
+            occurredAt,
+            datePrecision: 'EXACT_DATE',
+            observationKind: 'EVIDENCE_DERIVED',
+            verificationStatus: 'EVIDENCE_VERIFIED',
+            sourceType: 'DOMAIN_ENTITY',
+            sourceEntityType: 'MATERIAL_SPEC',
+            sourceEntityId: specId,
+            sourceBadge: 'DOCUMENT_BACKED',
+            idempotencyKey: `material-spec-as-built:${specId}`,
+          },
+        });
+      }
+
       return updated;
     });
   }
@@ -638,7 +680,33 @@ export class MaterialSpecService {
       },
     });
     if (!spec) throw new APIError('Material spec not found', 404, 'SPEC_NOT_FOUND');
-    return spec;
+
+    // Read-only reconciliation with Home Records' typed PropertyRecordLink
+    // graph — link CREATION already works today (Home Records' addLink()
+    // already validates MATERIAL_SPEC entityIds via entityExists()), the
+    // gap was purely that this detail page never surfaced the incoming
+    // links. Deliberately does NOT touch submittalDocumentIds/
+    // approvalDocumentIds/receiptDocumentId/etc. or any lifecycle-gate
+    // logic below — those still read/write the legacy Document model
+    // exactly as before. A full migration of that write path is a
+    // separate, larger, DB-untested change, not done here.
+    const homeRecordLinks = await prisma.propertyRecordLink.findMany({
+      where: { entityType: 'MATERIAL_SPEC', entityId: specId, record: { propertyId } },
+      include: { record: { select: { id: true, title: true, recordType: true, lifecycleStatus: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      ...spec,
+      homeRecordLinks: homeRecordLinks.map((link) => ({
+        linkId: link.id,
+        recordId: link.record.id,
+        title: link.record.title,
+        recordType: link.record.recordType,
+        lifecycleStatus: link.record.lifecycleStatus,
+        purpose: link.purpose,
+      })),
+    };
   }
 
   async createSpec(propertyId: string, payload: {
@@ -896,6 +964,84 @@ export class MaterialSpecService {
     });
 
     return photo;
+  }
+
+  // The photo-capture upload endpoint this domain never had — addPhoto()
+  // above always required the caller to already have a photoUrl/fileKey
+  // from storage elsewhere, but nothing in the app ever uploaded a file to
+  // get one (confirmed via grep: addPhoto has zero real UI callers).
+  // Reuses the same generic S3 buffer-upload helper Document Vault already
+  // uses, and buildPresignedPhotoUrl() above (also previously unused) to
+  // serve a real signed URL back rather than storing a static string that
+  // would go stale/private-bucket-inaccessible.
+  async uploadPhoto(
+    propertyId: string,
+    specId: string,
+    userId: string,
+    file: UploadedPhotoFile,
+    options: { caption?: string | null } = {},
+  ) {
+    await this.assertSpecBelongs(propertyId, specId);
+
+    const existing = await prisma.materialSpecPhoto.count({ where: { materialSpecId: specId } });
+    if (existing >= 10) throw new APIError('Maximum 10 photos per spec', 400, 'PHOTO_LIMIT_EXCEEDED');
+
+    const { key } = await uploadDocumentBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      userId,
+      propertyId,
+    });
+
+    const photo = await prisma.materialSpecPhoto.create({
+      data: {
+        materialSpecId: specId,
+        propertyId,
+        photoUrl: (await buildPresignedPhotoUrl(key)) ?? '',
+        fileKey: key,
+        caption: options.caption ?? null,
+        sortOrder: existing,
+      },
+    });
+
+    this.runPhotoExtraction(propertyId, specId, key, file.buffer, file.mimetype);
+
+    return photo;
+  }
+
+  // Fire-and-forget, matching homeRecords.service.ts's extractVersionText
+  // convention exactly (same lazy require for the same reason —
+  // documentIntelligence.service.ts's singleton throws at construction if
+  // GEMINI_API_KEY is unset, and this file is imported widely enough that
+  // a top-level import would break module load in any env/test without
+  // the key). Never blocks or fails the photo upload; a failed or
+  // nothing-extracted analysis just means no review row gets created —
+  // the homeowner can still fill in fields by hand as before.
+  private runPhotoExtraction(propertyId: string, specId: string, photoKey: string, buffer: Buffer, mimeType: string): void {
+    void (async () => {
+      try {
+        const { documentIntelligenceService } = require('./documentIntelligence.service') as typeof import('./documentIntelligence.service');
+        const insights = await documentIntelligenceService.analyzeMaterialPhoto(buffer, mimeType);
+        if (Object.keys(insights.candidateFields).length === 0) return;
+
+        const confidence = Object.fromEntries(
+          Object.keys(insights.candidateFields).map((key) => [key, insights.confidence]),
+        );
+        await prisma.materialExtractionReview.create({
+          data: {
+            materialSpecId: specId,
+            propertyId,
+            sourcePhotoKey: photoKey,
+            extractionMethod: 'DOCUMENT_AI',
+            candidateFields: insights.candidateFields,
+            confidence,
+          },
+        });
+      } catch (err) {
+        logger.warn({ err, propertyId, specId }, 'Material photo AI extraction failed; spec fields remain editable by hand only');
+      }
+    })();
   }
 
   async deletePhoto(propertyId: string, specId: string, photoId: string) {

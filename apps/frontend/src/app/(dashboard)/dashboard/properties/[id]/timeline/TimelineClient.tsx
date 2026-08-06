@@ -344,7 +344,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
               },
               {
                 key: 'propertyRecordLinks',
-                label: 'Home Records evidence',
+                label: 'Evidence & source',
                 render: (event) => Array.isArray(event.propertyRecordLinks) && event.propertyRecordLinks.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {event.propertyRecordLinks.map((link) => {
@@ -367,6 +367,13 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                       );
                     })}
                   </div>
+                ) : event.sourceEntityType === 'MATERIAL_SPEC' && event.sourceEntityId ? (
+                  <Link
+                    href={`/dashboard/properties/${params.id}/materials/${event.sourceEntityId}`}
+                    className="hover:underline"
+                  >
+                    <Badge>View material spec</Badge>
+                  </Link>
                 ) : (
                   <p className="mb-0 text-sm text-slate-500">Not evidenced by a Home Record</p>
                 ),

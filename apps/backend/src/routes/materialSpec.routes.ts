@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
-import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
+import { validateImageUpload } from '../utils/documentValidator.util';
 
 import {
   listSpecs,
@@ -12,6 +14,7 @@ import {
   updateSpec,
   deleteSpec,
   addPhoto,
+  uploadPhoto,
   deletePhoto,
   reorderPhotos,
   requestExport,
@@ -42,6 +45,16 @@ const router = Router();
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    const allowed = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (allowed.has(file.mimetype)) return callback(null, true);
+    callback(new Error('Only JPEG, PNG, and WEBP photos are supported.'));
+  },
+});
 
 // ── Static routes first (before :specId to avoid parameter shadowing) ────────
 
@@ -135,6 +148,15 @@ router.post(
   propertyAuthMiddleware,
   validateBody(addPhotoBodySchema),
   addPhoto
+);
+
+router.post(
+  '/properties/:propertyId/materials/:specId/photos/upload',
+  propertyAuthMiddleware,
+  uploadRateLimiter,
+  photoUpload.single('photo'),
+  validateImageUpload,
+  uploadPhoto,
 );
 
 router.delete(

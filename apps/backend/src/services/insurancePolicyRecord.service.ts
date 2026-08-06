@@ -13,7 +13,12 @@ export interface ExtractedPolicyTermInput {
   homeownerProfileId: string;
   userId?: string;
   propertyId: string;
-  documentId: string;
+  // Optional: a legacy Document Vault row. Home Records (the canonical
+  // PropertyRecord model, a separate system — see homeRecordsExtraction
+  // .service.ts) has no such row, so callers there omit this and the
+  // ownership/existence check below is skipped entirely rather than
+  // failing on a lookup that could never succeed.
+  documentId?: string;
   carrierName: string;
   policyNumber: string;
   coverageType?: string;
@@ -124,15 +129,19 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
     });
     if (!property) throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
 
-    const document = await tx.document.findFirst({
-      where: {
-        id: input.documentId,
-        propertyId: input.propertyId,
-        ...(input.userId ? { uploadedBy: input.userId } : {}),
-      },
-      select: { id: true, uploadedBy: true },
-    });
-    if (!document) throw new APIError('Policy source document not found', 404, 'DOCUMENT_NOT_FOUND');
+    const document = input.documentId
+      ? await tx.document.findFirst({
+          where: {
+            id: input.documentId,
+            propertyId: input.propertyId,
+            ...(input.userId ? { uploadedBy: input.userId } : {}),
+          },
+          select: { id: true, uploadedBy: true },
+        })
+      : null;
+    if (input.documentId && !document) {
+      throw new APIError('Policy source document not found', 404, 'DOCUMENT_NOT_FOUND');
+    }
 
     const policy =
       (await tx.insurancePolicy.findFirst({
@@ -157,7 +166,7 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
       }));
 
     const existingTerm = await tx.insurancePolicyTerm.findFirst({
-      where: { insurancePolicyId: policy.id, sourceDocumentId: input.documentId },
+      where: { insurancePolicyId: policy.id, sourceDocumentId: document?.id ?? null },
       include: { facts: true },
     });
     if (existingTerm) return { policy, term: existingTerm };
@@ -169,7 +178,7 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
         termStart: input.termStart,
         termEnd: input.termEnd,
         annualPremium: input.premiumAmount,
-        sourceDocumentId: input.documentId,
+        sourceDocumentId: document?.id ?? null,
         status: 'PENDING_CONFIRMATION',
         verificationStatus: 'UNVERIFIED',
         facts: { create: extractedFacts(input) },
@@ -184,14 +193,14 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
 
     await tx.auditLog.create({
       data: {
-        userId: input.userId ?? document.uploadedBy,
+        userId: input.userId ?? document?.uploadedBy ?? null,
         action: 'insurance_policy_term_extracted',
         entityType: 'InsurancePolicyTerm',
         entityId: term.id,
         newValues: {
           propertyId: input.propertyId,
           policyId: policy.id,
-          sourceDocumentId: input.documentId,
+          sourceDocumentId: document?.id ?? null,
           factCount: term.facts.length,
           verificationStatus: 'UNVERIFIED',
         },

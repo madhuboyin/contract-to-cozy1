@@ -1,8 +1,10 @@
-import { Router } from 'express';
+import { Response, NextFunction, Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { CustomRequest } from '../types';
+import { generateEmergencyPacketPdf } from '../services/emergencyPacket.service';
 
 import {
   getDigitalWillByProperty,
@@ -60,6 +62,28 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createDigitalWillBodySchema),
   createDigitalWillForProperty,
+);
+
+// GET /api/properties/:propertyId/home-digital-will/emergency-packet.pdf
+// Slice 7's "secure offline/emergency packet" — same CONTRIBUTOR+ floor as
+// reading the will itself (not a token-based external share; this is for
+// the household's own offline use). Registered before the will's own
+// generic PATCH-by-id routes below since it's a distinct, property-scoped
+// action, not a will-id-scoped one.
+router.get(
+  '/properties/:propertyId/home-digital-will/emergency-packet.pdf',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const pdf = await generateEmergencyPacketPdf(req.params.propertyId);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="emergency-packet.pdf"');
+      return res.send(pdf);
+    } catch (error) {
+      return next(error);
+    }
+  },
 );
 
 // PATCH /api/home-digital-wills/:id

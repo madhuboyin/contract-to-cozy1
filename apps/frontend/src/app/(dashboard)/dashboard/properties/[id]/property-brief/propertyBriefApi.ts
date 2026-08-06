@@ -17,7 +17,8 @@ export type PropertyBriefSectionType =
   | 'INSURANCE'
   | 'WARRANTIES'
   | 'MATERIAL_SPECS'
-  | 'PERMITS';
+  | 'PERMITS'
+  | 'EMERGENCY_INFO';
 
 export type PropertyBriefTemplate = {
   purpose: PropertyBriefPurpose;
@@ -83,6 +84,13 @@ export type PropertyBrief = {
   shares: PropertyBriefShare[];
   property?: { name: string | null; address: string; city: string; state: string; zipCode: string };
   safetyTier?: 'LOW_CONSEQUENCE' | 'MATERIAL_FINANCIAL' | 'SAFETY_EMERGENCY';
+  // Slice 7's stale-item review/reminders — a brief is a frozen snapshot
+  // (no republish mechanism yet), so an old ACTIVE share may show a
+  // recipient facts that have since changed. Only true when a live share
+  // actually exists AND the snapshot is 90+ days old (see
+  // propertyBrief.service.ts's listPropertyBriefs).
+  ageDays?: number;
+  isStale?: boolean;
 };
 
 export type EligiblePropertyBriefDocument = {
@@ -127,6 +135,17 @@ export async function getPropertyBriefPreview(propertyId: string, briefId: strin
     `/api/properties/${propertyId}/property-briefs/${briefId}/preview`,
   );
   return response.data as PropertyBrief;
+}
+
+// Slice 7's republish notifications: re-assembles the brief against live
+// data and, only if something actually changed, notifies each ACTIVE
+// share's recipient (no fresh link needed — the token doesn't rotate).
+export async function republishPropertyBrief(propertyId: string, briefId: string) {
+  const response = await api.post(
+    `/api/properties/${propertyId}/property-briefs/${briefId}/republish`,
+    {},
+  );
+  return response.data as { changed: boolean; changedSectionTypes: PropertyBriefSectionType[]; notifiedRecipientCount: number };
 }
 
 export async function createPropertyBriefShare(

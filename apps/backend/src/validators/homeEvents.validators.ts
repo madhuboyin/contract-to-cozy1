@@ -77,12 +77,14 @@ export const confirmHomeEventBodySchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 
-// Only the two household-internal choices — SHARE_LINK/RESALE_PACK are
-// reserved schema values with no dedicated UI/enforcement path yet, so they
-// are not exposed as settable here to avoid implying a distinction that
-// nothing downstream actually honors.
+// RESALE_PACK now has a real downstream consumer (propertyBrief.service
+// .ts's assembleSections() requires it exactly for PROSPECTIVE_BUYER/
+// LISTING_AGENT briefs — Slice 6's "resale-safe projection policy"), so it's
+// exposed here too. SHARE_LINK remains reserved/unexposed: nothing
+// downstream distinguishes it from HOUSEHOLD yet, so offering it as a
+// choice would imply a distinction that isn't real.
 export const setHomeEventVisibilityBodySchema = z.object({
-  visibility: z.enum(['PRIVATE', 'HOUSEHOLD']),
+  visibility: z.enum(['PRIVATE', 'HOUSEHOLD', 'RESALE_PACK']),
 });
 
 export const addHomeEventEvidenceBodySchema = z.object({
