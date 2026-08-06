@@ -1547,89 +1547,133 @@ Every record response should include:
 
 ### 10.1 Records and evidence
 
-- [ ] Property-scoped listing returns only records the user may access for that
+- [x] Property-scoped listing returns only records the user may access for that
       property.
-- [ ] Household viewers can read permitted records but cannot mutate them.
-- [ ] Contributors and owners follow explicit mutation floors.
-- [ ] Every original has SHA-256, object metadata, scan state, uploader, and
+- [x] Household viewers can read permitted records but cannot mutate them.
+- [x] Contributors and owners follow explicit mutation floors.
+- [x] Every original has SHA-256, object metadata, scan state, uploader, and
       immutable version identity.
-- [ ] Duplicate content is detected.
-- [ ] A replacement file creates a new version rather than overwriting history.
-- [ ] One record can support multiple domain entities.
-- [ ] Extracted fields are candidates with citations and review state.
-- [ ] No unreviewed candidate creates or changes a canonical record.
-- [ ] Raw document content is absent from logs and analytics.
-- [ ] Trash is reversible until purge eligibility.
-- [ ] Sole active evidence cannot be purged without an explicit impact
+- [x] Duplicate content is detected.
+- [x] A replacement file creates a new version rather than overwriting history.
+- [x] One record can support multiple domain entities.
+- [x] Extracted fields are candidates with citations and review state.
+- [x] No unreviewed candidate creates or changes a canonical record.
+- [x] Raw document content is absent from logs and analytics.
+- [x] Trash is reversible until purge eligibility.
+- [x] Sole active evidence cannot be purged without an explicit impact
       resolution.
-- [ ] Object purge cannot leave a live database version pointing to a missing
+- [x] Object purge cannot leave a live database version pointing to a missing
       object.
 
 ### 10.2 Timeline
 
 - [ ] Uploading a generic file does not create a property-history event.
-- [ ] Confirming an underlying event can create one idempotent Timeline event.
-- [ ] Event evidence points to the correct record version.
+      **Gap (verified 2026-08-06):** true for the new Home Records upload
+      path, but the legacy Document Vault upload path
+      (`document.routes.ts`, `home-management.service.ts`) still calls
+      `HomeEventsAutoGen.onDocumentUploaded()` unconditionally on every
+      upload.
+- [x] Confirming an underlying event can create one idempotent Timeline event.
+- [x] Event evidence points to the correct record version.
 - [ ] Removing evidence updates the event trust state or requires replacement.
-- [ ] Resale/successor projection is explicit and separate from household
+      **Gap (verified 2026-08-06):** no route or service method exists to
+      remove evidence from a Home Event at all, so this has never been
+      exercised.
+- [x] Resale/successor projection is explicit and separate from household
       visibility.
-- [ ] Private seller history is not inherited by a buyer.
-- [ ] Handoff packages reference canonical event revisions.
+- [x] Private seller history is not inherited by a buyer.
+- [x] Handoff packages reference canonical event revisions.
 
 ### 10.3 Home Continuity Plan
 
-- [ ] A contact label alone never counts as access.
+**Verified 2026-08-06: the real recipient-access foundation (invite, accept,
+expire, revoke, access log, test access, household consent) was built and is
+genuinely solid — but it lives entirely in the reused Property Brief share
+system (`PropertyBriefShare`/`PropertyBriefAccessLog`, purpose
+`HOUSEHOLD_TRUSTED_CONTACT`). The Home Digital Will's own `publishWill()`
+readiness gate (`evaluateHomeDigitalWillHandoffReadiness`) was never wired to
+that system — it still only checks that content exists (an emergency
+instruction + a reachable primary contact), so "publish the Continuity Plan"
+and "invite/accept a recipient" remain two disconnected flows rather than one
+governed journey. The items below are checked where the underlying
+capability is real and working; unchecked where the specific integrated
+behavior described isn't actually enforced.**
+
+- [x] A contact label alone never counts as access.
 - [ ] A recipient must be invited and accept before the plan is ready.
+      **Gap:** `publishWill()`'s readiness gate never checks
+      acceptance/access state, only content presence.
 - [ ] Recipient identity is bound to the grant.
-- [ ] Access is limited to the previewed scope.
-- [ ] Emergency-only access cannot read other sections/items.
-- [ ] Grants can start, expire, and be revoked.
-- [ ] Every access is logged.
-- [ ] The owner can test access.
+      **Gap:** binding is "whoever opens the emailed link," not tied to a
+      verified identity, and not specific to the Continuity Plan flow.
+- [x] Access is limited to the previewed scope.
+- [x] Emergency-only access cannot read other sections/items.
+- [x] Grants can start, expire, and be revoked.
+- [x] Every access is logged.
+- [x] The owner can test access.
 - [ ] Published revisions are immutable.
-- [ ] Material updates require explicit republish/recipient notification policy.
+      **Gap:** `republishPropertyBrief()` deletes and recreates the same
+      brief's sections in place; there is no revision chain or
+      `supersedesPackageId`-style history to look back at.
+- [x] Material updates require explicit republish/recipient notification policy.
 - [ ] Stale critical information creates a review need.
+      **Gap:** no stale-entry/review-cadence calculation exists for Digital
+      Will entries.
 - [ ] The experience states that it grants information access, not legal
       authority.
+      **Gap:** no non-legal-authority disclaimer copy exists anywhere in the
+      frontend.
 
 ### 10.4 Material Specs
 
-- [ ] Photo/label extraction requires field confirmation.
-- [ ] Exact-match language appears only when identity evidence supports it.
-- [ ] As-built identity cannot be silently overwritten.
-- [ ] Substitutions retain lineage.
-- [ ] Receipt, warranty, manual, approval, and installation evidence use common
+- [x] Photo/label extraction requires field confirmation.
+- [x] Exact-match language appears only when identity evidence supports it.
+- [x] As-built identity cannot be silently overwritten.
+- [x] Substitutions retain lineage.
+- [x] Receipt, warranty, manual, approval, and installation evidence use common
       typed record links.
-- [ ] Duplicate room/surface records are flagged.
-- [ ] Repair/reorder output distinguishes current, stale, discontinued, and
+- [x] Duplicate room/surface records are flagged.
+- [x] Repair/reorder output distinguishes current, stale, discontinued, and
       alternate source state.
-- [ ] Professional sharing uses a scoped expiring package.
+- [x] Professional sharing uses a scoped expiring package.
 
 ### 10.5 Sale readiness and transition
 
-- [ ] No Sale Case is created before confirmed sale intent.
-- [ ] One property Sale Case is shared under household roles.
-- [ ] Seller work references canonical Home Actions/Projects.
-- [ ] Marking work complete does not infer spend or value.
-- [ ] No generic static ROI/uplift is presented as property-specific.
-- [ ] Buyer/agent packages show included and excluded records.
-- [ ] Sensitive records are excluded by default.
-- [ ] Closing/ownership change requires verification and explicit decisions.
-- [ ] Buyer access does not confer seller account access.
-- [ ] Seller retention policy is recorded.
-- [ ] Temporary professional access is revoked as configured.
+- [x] No Sale Case is created before confirmed sale intent.
+- [x] One property Sale Case is shared under household roles.
+- [x] Seller work references canonical Home Actions/Projects.
+- [x] Marking work complete does not infer spend or value.
+- [x] No generic static ROI/uplift is presented as property-specific.
+- [x] Buyer/agent packages show included and excluded records.
+- [x] Sensitive records are excluded by default.
+- [x] Closing/ownership change requires verification and explicit decisions.
+- [x] Buyer access does not confer seller account access.
+- [x] Seller retention policy is recorded.
+- [x] Temporary professional access is revoked as configured.
 
 ### 10.6 Commercial integrity
 
-- [ ] No provider CTA appears without a working fulfillment path.
-- [ ] Property access is verified before a request is created.
-- [ ] Contact information submitted by the user is stored and used only under
+**Verified 2026-08-06: Slice 9 deliberately did not build a lead-broadcast/
+quote-matching commercial workflow (the plan's own section title hedges "if
+retained," and no precedent for a lead-broadcast model exists anywhere in
+this codebase). Instead, Seller Prep's "contractor help" CTA now routes
+directly into the real, pre-existing Providers/Bookings platform — so most
+of the items below are satisfied by removing the unbacked promise/lead
+capture rather than building fulfillment for it. That is a legitimate way to
+satisfy an invariant like these, but is a different shape of "done" than the
+plan's original wording (match/delivery/quote/close lifecycle) implies.**
+
+- [x] No provider CTA appears without a working fulfillment path.
+- [x] Property access is verified before a request is created.
+- [x] Contact information submitted by the user is stored and used only under
       explicit consent.
-- [ ] Recipient/provider identity and purpose are disclosed.
-- [ ] Referral or compensation terms are disclosed.
+- [x] Recipient/provider identity and purpose are disclosed.
+- [x] Referral or compensation terms are disclosed.
 - [ ] Licensing/verification claims include review source and freshness.
-- [ ] Response-time claims are backed by an SLO.
-- [ ] The user can withdraw the request and consent where applicable.
+      **Gap:** the `VerifiedProBadge` shown to homeowners discloses what was
+      reviewed but not when — no freshness/last-verified date is rendered.
+- [x] Response-time claims are backed by an SLO.
+- [x] The user can withdraw the request and consent where applicable.
 
 ---
 
