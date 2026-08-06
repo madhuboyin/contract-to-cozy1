@@ -630,13 +630,98 @@ function seasonLabel(season: string): string {
 }
 
 async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
-  // Seasonal templates remain an applicability source, but executable work is
-  // represented exclusively by the auto-promoted PropertyMaintenanceTask.
-  // Returning an aggregate action here would recreate a second work system
-  // and can duplicate each canonical seasonal task on Home.
-  void propertyId;
-  void db;
-  return [];
+  const now = new Date();
+  const checklists = await db.seasonalChecklist.findMany({
+    where: {
+      propertyId,
+      status: { in: ['PENDING', 'IN_PROGRESS'] },
+      seasonEndDate: { gte: now },
+    },
+    orderBy: { seasonStartDate: 'asc' },
+    take: 4,
+    include: { items: { orderBy: [{ priority: 'asc' }, { recommendedDate: 'asc' }] } },
+  });
+
+  // Generation may prepare the next season before the current one closes.
+  // Select only after removing empty/stale candidates so one checklist with
+  // no actionable items cannot hide a later applicable checklist. Prefer the
+  // active checklist, then the nearest upcoming checklist.
+  const actionableChecklists = checklists.map((checklist) => {
+    const pendingItems = checklist.items.filter((item) =>
+      item.status === 'RECOMMENDED' ||
+      item.status === 'ADDED' ||
+      (item.status === 'SNOOZED' && (!item.snoozedUntil || item.snoozedUntil <= now)),
+    );
+    return { checklist, pendingItems };
+  }).filter(({ pendingItems }) => pendingItems.length > 0)
+    .sort((a, b) => {
+      const aActive = a.checklist.seasonStartDate <= now && a.checklist.seasonEndDate >= now;
+      const bActive = b.checklist.seasonStartDate <= now && b.checklist.seasonEndDate >= now;
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      return a.checklist.seasonStartDate.getTime() - b.checklist.seasonStartDate.getTime();
+    });
+
+  return actionableChecklists.slice(0, 1).map(({ checklist, pendingItems }) => {
+
+    const criticalCount = pendingItems.filter((item) => item.priority === 'CRITICAL').length;
+    const active = checklist.seasonStartDate <= now && checklist.seasonEndDate >= now;
+    const daysUntilStart = Math.max(0, Math.ceil((checklist.seasonStartDate.getTime() - now.getTime()) / 86_400_000));
+    const daysRemaining = Math.max(0, Math.ceil((checklist.seasonEndDate.getTime() - now.getTime()) / 86_400_000));
+    const displaySeason = seasonLabel(checklist.season);
+    const progress = `${checklist.tasksCompleted} of ${checklist.totalTasks} complete`;
+    const priority: HomeAction['priority'] = active && criticalCount > 0
+      ? 'NOW'
+      : criticalCount > 0 || (active && daysRemaining <= 14)
+        ? 'SOON'
+        : 'PLAN';
+    const timingSummary = active
+      ? `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remain in ${displaySeason.toLowerCase()}.`
+      : `${displaySeason} starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}.`;
+
+    return adaptHomeActionSource('MAINTENANCE', {
+      id: `seasonal-checklist:${checklist.id}`,
+      propertyId,
+      lineageId: `seasonal-checklist:${checklist.id}`,
+      sourceEntityId: checklist.id,
+      sourceVersion: checklist.updatedAt.toISOString(),
+      state: checklist.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
+      priority,
+      signal: `${displaySeason} seasonal checklist: ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} remaining`,
+      whyItMatters: `${progress}. ${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? '' : 's'} still need attention. ` : ''}${timingSummary}`,
+      recommendedAction: `Review the ${displaySeason} seasonal checklist`,
+      expectedOutcome: `Complete or deliberately manage the remaining ${displaySeason.toLowerCase()} preparation tasks before the seasonal window closes.`,
+      timing: {
+        dueAt: checklist.seasonEndDate.toISOString(),
+        windowStart: checklist.seasonStartDate.toISOString(),
+        windowEnd: checklist.seasonEndDate.toISOString(),
+        rationale: timingSummary,
+      },
+      evidence: pendingItems.slice(0, 50).map((item) => ({
+        id: item.id,
+        type: 'SYSTEM_DERIVATION' as const,
+        label: item.title,
+        source: `${displaySeason} seasonal checklist`,
+        observedAt: item.updatedAt.toISOString(),
+        freshness: 'CURRENT' as const,
+        confidence: 1,
+      })),
+      assumptions: [],
+      options: [],
+      tradeoffs: [],
+      confidence: { score: 1, label: 'HIGH', missing: [] },
+      governance: lowConsequenceGovernance('phase2-seasonal-v1'),
+      primaryCta: {
+        kind: 'REVIEW',
+        label: 'View seasonal checklist',
+        href: `/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`,
+      },
+      secondaryCtas: [],
+      feedbackControls: ['CORRECT_FACT'],
+      relatedJourneyId: null,
+      createdAt: checklist.createdAt.toISOString(),
+      lastEvaluatedAt: checklist.updatedAt.toISOString(),
+    });
+  });
 }
 
 async function loadRecallActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
