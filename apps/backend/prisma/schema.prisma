@@ -3168,6 +3168,7 @@ model Property {
 
   // Property Context Platform canonical extensions and provenance.
   exteriorProfile      PropertyExteriorProfile?
+  salePrepProfile      PropertySalePrepProfile?
   responsibilities     PropertyResponsibility[]
   propertyFactEvidence PropertyFactEvidence[]
 
@@ -3202,6 +3203,47 @@ model PropertyExteriorProfile {
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_exterior_profiles")
+}
+
+// Sale Readiness Value-Maximization Checklist plan §4.5/§4.6: the 6 curated
+// self-reported facts that have no structured signal anywhere else in this
+// schema (there is and never will be a "wall paint condition" column) —
+// mirrors PropertyExteriorProfile's exact one-row-per-property pattern.
+// Registered as property-context facts under a new SALE_PREP scope
+// (domain/contracts.ts — TypeScript-only, not a schema change) via
+// capturePropertyFact.ts's salePrepFacts mapping, same as exteriorFacts.
+enum PropertyCosmeticCondition {
+  FRESH
+  SOME_WEAR
+  NEEDS_REFRESH
+}
+
+enum PropertyRoomUpdateStatus {
+  RECENTLY_UPDATED
+  DATED_BUT_FUNCTIONAL
+  NEEDS_WORK
+}
+
+enum PropertyStagingReadiness {
+  READY_TO_SHOW
+  NEEDS_SOME_WORK
+  NEEDS_SIGNIFICANT_WORK
+}
+
+model PropertySalePrepProfile {
+  id                  String                     @id @default(uuid())
+  propertyId          String                     @unique
+  paintCondition      PropertyCosmeticCondition?
+  curbAppealCondition PropertyCosmeticCondition?
+  flooringCondition   PropertyCosmeticCondition?
+  kitchenStatus       PropertyRoomUpdateStatus?
+  bathroomStatus      PropertyRoomUpdateStatus?
+  stagingReadiness    PropertyStagingReadiness?
+  updatedAt           DateTime                   @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_sale_prep_profiles")
 }
 
 model PropertyResponsibility {
@@ -4684,6 +4726,21 @@ enum SaleReadinessItemStatus {
   WAIVED
 }
 
+// Sale Readiness Value-Maximization Checklist plan §4.7: homeowner's stated
+// budget for pre-sale prep work, used to rank Tier 2 tasks by ROI-per-dollar
+// and flag over-budget ones rather than hide them. Bucketed (not a raw cents
+// integer) to match the single-select-pill UI used for every other curated
+// question (§4.5) and to avoid false precision on what's inherently a rough,
+// forward-looking commitment. Mirrors valueCalculator.engine.ts's existing
+// (dormant) bucket convention, but typed instead of that file's unvalidated
+// string.
+enum SalePrepBudgetRange {
+  UNDER_5K
+  FIVE_TO_15K
+  FIFTEEN_TO_30K
+  OVER_30K
+}
+
 model PropertySaleCase {
   id              String         @id @default(uuid())
   propertyId      String         @unique
@@ -4697,6 +4754,7 @@ model PropertySaleCase {
   // Set when a canonical Home Action later triggers case creation; unused
   // for now (parity with SellerPrepPlan.sourceActionId).
   sourceActionId  String?
+  budgetRange     SalePrepBudgetRange?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -20721,6 +20779,14 @@ enum OperationalWorkSourceType {
   INCIDENT
   HAZARD_OBSERVATION
   RECALL
+  // Sale Readiness Value-Maximization Checklist plan §4.8: a dedicated
+  // source kind (not overloading MAINTENANCE) so ROI-maximizing sale-prep
+  // tasks carry a distinguishable "Sale prep" badge wherever they surface,
+  // including the general Home Operations feed. Full adapter wiring
+  // (obligationType mapping, HomeActionSourceKind taxonomy entry) is Phase 4
+  // work, not added here — this is only the schema-level enum value Phase 4
+  // depends on.
+  SALE_PREP
   COVERAGE
   INSPECTION_FINDING
   PROPERTY_RECORD

@@ -351,10 +351,12 @@ All 10 design decisions in §8 are resolved. This is the concrete build sequence
 
 ### Phase 1 — Schema (apps/backend/prisma/schema.prisma, edit directly, no migration scripts — user runs `npx prisma db push`)
 
-1. `enum SalePrepBudgetRange { UNDER_5K, FIVE_TO_15K, FIFTEEN_TO_30K, OVER_30K }` + `PropertySaleCase.budgetRange SalePrepBudgetRange?` (§4.7, §8.8).
-2. New Home Action source kind for Sale Prep tagging (§4.8, §8.3) — whatever schema-level enum/type change that requires in the Home Actions source-kind taxonomy.
-3. New model `PropertySalePrepProfile` (one-to-one with `Property`, mirroring `PropertyExteriorProfile`'s pattern) with the 6 self-reported condition fields (§4.6); new `SALE_PREP` value on the `PropertyContextScope` enum.
-4. Notify the user to run `npx prisma generate` + `npx prisma db push`, and `npx prisma generate` in `apps/workers/` — done manually per project convention, not by this plan.
+**Done 2026-08-06.** Correction along the way: `PropertyContextScope` (domain/contracts.ts) turned out to be a TypeScript-only type, not a Prisma enum — so the `SALE_PREP` scope addition moved to Phase 3/6 code work, not this schema phase. Backend `npx prisma generate` run locally (safe, no DB write); `npx prisma db push` still pending, run manually by the user per project convention.
+
+1. ~~`enum SalePrepBudgetRange` + `PropertySaleCase.budgetRange`~~ (§4.7, §8.8) — done.
+2. ~~New `SALE_PREP` value on `OperationalWorkSourceType`~~ (§4.8, §8.3) — done. Full adapter wiring (obligationType mapping, `HomeActionSourceKind` taxonomy entry) is still Phase 4 work.
+3. ~~New model `PropertySalePrepProfile`~~ (one-to-one with `Property`, mirrors `PropertyExteriorProfile`) with the 6 self-reported condition fields, plus 3 supporting enums (`PropertyCosmeticCondition`, `PropertyRoomUpdateStatus`, `PropertyStagingReadiness`) (§4.6) — done. The `SALE_PREP` `PropertyContextScope` value itself is TS-only, deferred to Phase 3/6.
+4. **Still pending — needs the user:** `npx prisma db push`, then `npx prisma generate` in `apps/workers/` to resync its client.
 
 ### Phase 2 — Backend: Tier 1 projectors (`propertySaleCase.service.ts`, §4.2)
 
