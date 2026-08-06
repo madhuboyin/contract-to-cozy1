@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, RefreshCw, Loader2, AlertTriangle, Shield, Plus } from 'lucide-react';
@@ -17,6 +17,11 @@ const RESOLVED_STATUSES: PermitUnpermittedFlagStatus[] = ['CONFIRMED_PERMITTED',
 export default function FlagsPage() {
   const searchParams = useSearchParams();
   const propertyId = searchParams.get('propertyId') ?? '';
+  // Deep-link support (Sale Case PERMIT_UNPERMITTED_FLAG cross-link) — no
+  // per-flag detail page exists, so "deep link" here means scroll-into-view
+  // + highlight, same pattern as inspection-hub/open-items' findingId.
+  const deepLinkedFlagId = searchParams.get('flagId');
+  const scrolledToDeepLinkRef = useRef(false);
 
   const [flags, setFlags] = useState<PermitFlagItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +50,14 @@ export default function FlagsPage() {
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, [load]);
+
+  useEffect(() => {
+    if (!deepLinkedFlagId || scrolledToDeepLinkRef.current || loading) return;
+    const el = document.getElementById(`flag-${deepLinkedFlagId}`);
+    if (!el) return;
+    scrolledToDeepLinkRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [deepLinkedFlagId, loading, flags]);
 
   async function handleFlagUpdate(flagId: string, patch: UpdateFlagPayload) {
     const updated = await api.updatePermitFlag(propertyId, flagId, patch);
@@ -202,16 +215,18 @@ export default function FlagsPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((flag) => (
-            <UnpermittedFlagCard
-              key={flag.id}
-              propertyId={propertyId}
-              flag={flag}
-              onUpdate={(patch) => handleFlagUpdate(flag.id, patch)}
-              onCreateRemediationCase={async () => {
-                await api.createPermitFlagRemediationCase(propertyId, flag.id);
-                await load();
-              }}
-            />
+            <div key={flag.id} id={`flag-${flag.id}`}>
+              <UnpermittedFlagCard
+                propertyId={propertyId}
+                flag={flag}
+                highlighted={flag.id === deepLinkedFlagId}
+                onUpdate={(patch) => handleFlagUpdate(flag.id, patch)}
+                onCreateRemediationCase={async () => {
+                  await api.createPermitFlagRemediationCase(propertyId, flag.id);
+                  await load();
+                }}
+              />
+            </div>
           ))}
         </div>
       )}

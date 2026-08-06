@@ -4,6 +4,7 @@ export type SaleReadinessSourceType =
   | 'INSPECTION_FINDING'
   | 'PROJECT'
   | 'PERMIT'
+  | 'PERMIT_UNPERMITTED_FLAG'
   | 'HOME_ACTION'
   | 'PROPERTY_RECORD'
   | 'MATERIAL_SPEC'

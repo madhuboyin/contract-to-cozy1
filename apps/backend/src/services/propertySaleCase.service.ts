@@ -121,9 +121,12 @@ async function projectPermits(propertyId: string): Promise<ProjectedItem[]> {
   }));
 
   const fromFlags: ProjectedItem[] = unpermitted.map((flag) => ({
-    sourceEntityType: 'PERMIT' as const,
-    // Distinct id-space from PropertyPermitRecord ids; unique constraint is
-    // per (saleCaseId, sourceEntityType, sourceEntityId) so no collision risk.
+    // Distinct source type from PropertyPermitRecord's 'PERMIT' above —
+    // these are two different Prisma models (PropertyPermitRecord vs.
+    // PermitUnpermittedFlag), so collapsing them onto one sourceEntityType
+    // made an id alone ambiguous to resolve. Split so each type maps to
+    // exactly one model and one real deep-link.
+    sourceEntityType: 'PERMIT_UNPERMITTED_FLAG' as const,
     sourceEntityId: flag.id,
     category: 'PERMITS_DISCLOSURE' as const,
     requirementClass: 'PROFESSIONAL_DECISION' as const,

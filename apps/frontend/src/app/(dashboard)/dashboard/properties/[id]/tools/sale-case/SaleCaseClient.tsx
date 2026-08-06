@@ -104,11 +104,18 @@ const REQUIREMENT_CLASS_TONE: Record<SaleReadinessRequirementClass, StatusChipTo
 // every open finding for the property with no report-scoping needed, so
 // no report id is required in this href.
 //
-// PERMIT remains unlinked: permits has no deep-link at all — plus the
-// backend maps two different models (PropertyPermitRecord and
-// PermitUnpermittedFlag) onto the same 'PERMIT' sourceEntityType, so an
-// id alone can't say which one it is. Left as plain text rather than
-// guessing at a route.
+// PERMIT fixed in a third follow-up pass: the backend previously mapped
+// two different models (PropertyPermitRecord and PermitUnpermittedFlag)
+// onto the same 'PERMIT' sourceEntityType, so an id alone couldn't say
+// which one it was. propertySaleCase.service.ts now emits a distinct
+// PERMIT_UNPERMITTED_FLAG type for the flags model, so each type maps to
+// exactly one model. PERMIT (PropertyPermitRecord) already had a real
+// per-item route (same one PermitCard uses in the permits hub);
+// PERMIT_UNPERMITTED_FLAG's flags page gained flagId deep-link support
+// (scroll-into-view + highlight + auto-expand, mirroring open-items'
+// findingId — no per-flag detail page exists to open instead). Both
+// routes are global (/dashboard/permits/...), not property-scoped, so
+// propertyId is forwarded as a query param the same way PermitCard does.
 function sourceEntityHref(propertyId: string, item: SaleReadinessItem): string | null {
   switch (item.sourceEntityType) {
     case 'MATERIAL_SPEC': return `/dashboard/properties/${propertyId}/materials/${item.sourceEntityId}`;
@@ -117,6 +124,8 @@ function sourceEntityHref(propertyId: string, item: SaleReadinessItem): string |
     case 'PROJECT': return `/dashboard/properties/${propertyId}/projects/${item.sourceEntityId}`;
     case 'HOME_ACTION': return `/dashboard/properties/${propertyId}/home-operations?focusWorkItemId=${item.sourceEntityId}`;
     case 'INSPECTION_FINDING': return `/dashboard/properties/${propertyId}/inspection-hub/open-items?findingId=${item.sourceEntityId}`;
+    case 'PERMIT': return `/dashboard/permits/${item.sourceEntityId}?propertyId=${propertyId}`;
+    case 'PERMIT_UNPERMITTED_FLAG': return `/dashboard/permits/flags?propertyId=${propertyId}&flagId=${item.sourceEntityId}`;
     default: return null;
   }
 }

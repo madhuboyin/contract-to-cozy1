@@ -69,7 +69,7 @@ test('a Timeline event sourced from a Material Spec renders a real link back to 
   assert.match(timelineClient, /\/dashboard\/properties\/\$\{params\.id\}\/materials\/\$\{event\.sourceEntityId\}/);
 });
 
-test('Sale Case readiness items link back to their Material Spec / Home Record / Timeline Event / Project / Home Action / Inspection Finding source', () => {
+test('Sale Case readiness items link back to their Material Spec / Home Record / Timeline Event / Project / Home Action / Inspection Finding / Permit source', () => {
   const saleCaseClient = readRepository(
     'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sale-case/SaleCaseClient.tsx',
   );
@@ -86,6 +86,12 @@ test('Sale Case readiness items link back to their Material Spec / Home Record /
   // deep-link support (scroll-into-view + highlight — no per-finding
   // detail sheet exists to open instead).
   assert.match(saleCaseClient, /case 'INSPECTION_FINDING': return `\/dashboard\/properties\/\$\{propertyId\}\/inspection-hub\/open-items\?findingId=\$\{item\.sourceEntityId\}`/);
+  // Third follow-up pass: PERMIT split into two distinct source types (see
+  // below) so each maps to exactly one model and one real route — PERMIT
+  // (PropertyPermitRecord) reuses the same per-item route PermitCard
+  // already links to from the permits hub.
+  assert.match(saleCaseClient, /case 'PERMIT': return `\/dashboard\/permits\/\$\{item\.sourceEntityId\}\?propertyId=\$\{propertyId\}`/);
+  assert.match(saleCaseClient, /case 'PERMIT_UNPERMITTED_FLAG': return `\/dashboard\/permits\/flags\?propertyId=\$\{propertyId\}&flagId=\$\{item\.sourceEntityId\}`/);
   assert.match(saleCaseClient, /const sourceHref = sourceEntityHref\(propertyId, item\)/);
 });
 
@@ -99,19 +105,30 @@ test('open-items/page.tsx supports a real findingId deep-link — scroll-into-vi
   assert.match(openItemsPage, /scrollIntoView/);
 });
 
-test('PERMIT stays unlinked in Sale Case — no addressable per-item route exists, and the backend conflates two models under one source type', () => {
-  const saleCaseClient = readRepository(
-    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sale-case/SaleCaseClient.tsx',
-  );
-  assert.doesNotMatch(saleCaseClient, /case 'PERMIT':/);
+test('the backend splits PERMIT into two distinct source types instead of conflating PropertyPermitRecord and PermitUnpermittedFlag under one', () => {
+  const schema = readRepository('apps/backend/prisma/schema.prisma');
+  assert.match(schema, /enum SaleReadinessSourceType \{[^}]*PERMIT\n[^}]*PERMIT_UNPERMITTED_FLAG/);
 
-  // permits has no deep-link support, and the backend maps two different
-  // models (PropertyPermitRecord and PermitUnpermittedFlag) onto the same
-  // 'PERMIT' sourceEntityType, so a route alone wouldn't disambiguate.
-  const permitsPage = readRepository(
-    'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/permits/page.tsx',
+  const service = readRepository('apps/backend/src/services/propertySaleCase.service.ts');
+  const fromFlagsIndex = service.indexOf('const fromFlags');
+  assert.ok(fromFlagsIndex > 0);
+  const fromFlagsBlock = service.slice(fromFlagsIndex, service.indexOf('return [...fromRecords, ...fromFlags];'));
+  assert.match(fromFlagsBlock, /sourceEntityType: 'PERMIT_UNPERMITTED_FLAG' as const/);
+
+  const fromRecordsIndex = service.indexOf('const fromRecords');
+  const fromRecordsBlock = service.slice(fromRecordsIndex, fromFlagsIndex);
+  assert.match(fromRecordsBlock, /sourceEntityType: 'PERMIT' as const/);
+});
+
+test('permits/flags/page.tsx supports a real flagId deep-link — scroll-into-view and highlight the matching card', () => {
+  const flagsPage = readRepository(
+    'apps/frontend/src/app/(dashboard)/dashboard/permits/flags/page.tsx',
   );
-  assert.doesNotMatch(permitsPage, /searchParams\.get\('permitId'\)/);
+  assert.match(flagsPage, /searchParams\.get\('flagId'\)/);
+  assert.match(flagsPage, /id=\{`flag-\$\{flag\.id\}`\}/);
+  assert.match(flagsPage, /document\.getElementById\(`flag-\$\{deepLinkedFlagId\}`\)/);
+  assert.match(flagsPage, /scrollIntoView/);
+  assert.match(flagsPage, /highlighted=\{flag\.id === deepLinkedFlagId\}/);
 });
 
 test('the two Seller Prep "dashboard card" components are not actually mounted anywhere — the plan\'s "no permanent passive cards" requirement is already satisfied by omission, not by design', () => {

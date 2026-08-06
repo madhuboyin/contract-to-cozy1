@@ -271,7 +271,7 @@ test('readiness projection classifies an unresolved unpermitted-work flag as a p
     id: 'flag-1', workType: 'DECK', flagReason: 'No permit on file for rear deck.', disclosureRisk: 'MODERATE', status: 'FLAGGED',
   }];
   const result = await PropertySaleCaseService.getCase('user-1', 'prop-1');
-  const item = result.readinessItems.find((i) => i.sourceEntityType === 'PERMIT' && i.sourceEntityId === 'flag-1');
+  const item = result.readinessItems.find((i) => i.sourceEntityType === 'PERMIT_UNPERMITTED_FLAG' && i.sourceEntityId === 'flag-1');
   assert.ok(item);
   assert.equal(item.category, 'PERMITS_DISCLOSURE');
   assert.equal(item.requirementClass, 'PROFESSIONAL_DECISION');

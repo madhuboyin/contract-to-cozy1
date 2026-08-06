@@ -18,6 +18,7 @@ interface Props {
   flag: PermitFlagItem;
   onUpdate: (patch: UpdateFlagPayload) => Promise<void>;
   onCreateRemediationCase: () => Promise<void>;
+  highlighted?: boolean;
 }
 
 const RESOLVED_STATUSES: PermitUnpermittedFlagStatus[] = [
@@ -29,8 +30,9 @@ export default function UnpermittedFlagCard({
   flag,
   onUpdate,
   onCreateRemediationCase,
+  highlighted,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(!!highlighted);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState(flag.resolutionNotes ?? '');
@@ -93,7 +95,7 @@ export default function UnpermittedFlagCard({
   const isResolved = RESOLVED_STATUSES.includes(flag.status);
 
   return (
-    <div className={`overflow-hidden rounded-2xl border bg-[hsl(var(--mobile-card-bg))] ${isResolved ? 'opacity-80' : ''}`}>
+    <div className={`overflow-hidden rounded-2xl border bg-[hsl(var(--mobile-card-bg))] ${isResolved ? 'opacity-80' : ''} ${highlighted ? 'ring-2 ring-sky-400' : ''}`}>
       <button
         className="flex w-full items-start gap-3 p-4 text-left"
         onClick={() => setExpanded((value) => !value)}
