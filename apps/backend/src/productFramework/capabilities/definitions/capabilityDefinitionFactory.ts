@@ -443,19 +443,24 @@ const CONTEXTUAL_DEFINITIONS: Record<string, ContextualDefinition> = {
 const RELATED_CAPABILITIES: Record<string, string[]> = {
   'break-even': ['sell-hold-rent', 'ownership-costs', 'capital-timeline'],
   'capital-timeline': ['reserve-fund', 'home-timeline', 'seller-prep'],
-  documents: ['property-brief', 'home-timeline', 'material-specs'],
+  // Moved from 'documents' → 'home-records': this related-capabilities set
+  // (property-brief/home-timeline/material-specs) describes the canonical
+  // records capability's natural relations — that's 'home-records' now
+  // that the two ids no longer share one entry (see understandHome.ts and
+  // the 4 other references below, also repointed).
+  'home-records': ['property-brief', 'home-timeline', 'material-specs'],
   'ownership-costs': ['property-tax', 'coverage-intelligence', 'budget'],
   financing: ['capital-timeline', 'mortgage-refinance-radar', 'break-even'],
   'guidance-overview': ['status-board', 'home-event-radar', 'home-risk-replay'],
   'home-digital-twin': ['capital-timeline', 'status-board', 'home-risk-replay'],
-  'home-digital-will': ['property-brief', 'documents', 'home-timeline'],
+  'home-digital-will': ['property-brief', 'home-records', 'home-timeline'],
   'home-event-radar': ['home-risk-replay', 'home-timeline', 'status-board'],
   'home-briefing': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-habit-coach': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-renovation-risk-advisor': ['project-tracker', 'permits', 'hoa-compliance'],
   'home-risk-replay': ['home-event-radar', 'home-timeline', 'status-board'],
   'home-timeline': ['property-brief', 'home-risk-replay', 'seller-prep'],
-  'material-specs': ['documents', 'project-tracker', 'property-brief'],
+  'material-specs': ['home-records', 'project-tracker', 'property-brief'],
   'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'ownership-costs'],
   'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
   'negotiation-shield': ['service-price-radar', 'quote-comparison', 'ownership-costs'],
@@ -466,10 +471,10 @@ const RELATED_CAPABILITIES: Record<string, string[]> = {
   'reserve-fund': ['capital-timeline', 'ownership-costs', 'break-even'],
   'savings-benefits': ['property-tax', 'coverage-intelligence', 'mortgage-refinance-radar'],
   'sell-hold-rent': ['break-even', 'ownership-costs', 'capital-timeline'],
-  'seller-prep': ['property-brief', 'home-timeline', 'documents'],
+  'seller-prep': ['property-brief', 'home-timeline', 'home-records'],
   'service-price-radar': ['negotiation-shield', 'quote-comparison', 'ownership-costs'],
   'status-board': ['home-event-radar', 'home-risk-replay', 'home-timeline'],
-  'property-brief': ['home-timeline', 'documents', 'status-board'],
+  'property-brief': ['home-timeline', 'home-records', 'status-board'],
 };
 
 function completionSignal(seed: CapabilitySeed): string {

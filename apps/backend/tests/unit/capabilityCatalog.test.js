@@ -32,7 +32,7 @@ test('catalog projection is serializable, narrow, and excludes workflow-only cap
   });
 
   assert.doesNotThrow(() => CapabilityCatalogSchema.parse(result));
-  assert.equal(result.capabilities.length, 42);
+  assert.equal(result.capabilities.length, 45);
   assert.equal(result.capabilities.some((entry) => entry.id === 'quote-comparison'), false);
 
   const material = result.capabilities.find((entry) => entry.id === 'material-specs');
@@ -51,7 +51,7 @@ test('catalog can include workflow-only capabilities for an explicit workflow co
     includeWorkflowContext: true,
   });
 
-  assert.equal(result.capabilities.length, 43);
+  assert.equal(result.capabilities.length, 46);
   assert.equal(result.capabilities.find((entry) => entry.id === 'quote-comparison').workflowOnly, true);
 });
 

@@ -2,14 +2,61 @@ import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 
 export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
   {
+    // Slice 1 of HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_
+    // IMPLEMENTATION_PLAN.md flagged this exact gap. Confirmed via
+    // toolLifecycle.contract.ts that the id 'documents' is already the
+    // analytics/lifecycle-canonical id for the LEGACY document tool
+    // specifically — it has two existing aliases ('document-vault' and
+    // 'vault' both canonicalize to 'documents'). This entry's content had
+    // drifted to describe the canonical PropertyRecord-based Home Records
+    // tool instead (label "Home Records", livingHomeRecordReads/Writes
+    // full of property-record/record-version/record-link concepts) while
+    // its id still meant the legacy tool everywhere else in the codebase
+    // — a real inconsistency, not just a stale route. Fixed by restoring
+    // this entry's content to accurately describe what id 'documents'
+    // actually is (mobileToolCatalog.ts now calls it "Quick Document
+    // Scan"), and adding a new 'home-records' entry below for the
+    // canonical system, which never had its own capability entry before.
     id: 'documents',
-    version: 2,
-    label: 'Home Records',
-    description: 'Keep property files organized as reviewable evidence for the home.',
-    routeTemplate: '/dashboard/properties/[id]/documents',
-    routeAliases: ['/dashboard/documents'],
+    version: 3,
+    label: 'Quick Document Scan',
+    description: 'Scan a file and store it with AI-assisted analysis.',
+    routeTemplate: '/dashboard/documents',
     outcomeCategory: 'UNDERSTAND_HOME',
     rolloutKey: 'DOCUMENT_VAULT',
+    releaseStage: 'ACTIVE',
+    safetyTier: 'LOW_CONSEQUENCE',
+    completionKind: 'ARTIFACT_CREATED',
+    mode: 'CATALOG_ONLY',
+    iconName: 'file-check',
+    intentAliases: [
+      'quick document scan',
+      'scan a document',
+      'upload a single file',
+      'ai document analysis',
+    ],
+    homeownerOutcome:
+      'Quickly scan and store a single file with AI-assisted analysis, without the versioning or household-wide visibility of the canonical Home Records tool.',
+    livingHomeRecordReads: ['property-context', 'document'],
+    livingHomeRecordWrites: ['document'],
+    expectedOutput: 'A stored document with AI-extracted metadata.',
+    completionSignal: 'document_scanned_and_stored',
+    outputEntityTypes: ['DOCUMENT'],
+  },
+  {
+    // The canonical PropertyRecord-based Home Records tool — property-
+    // owned, versioned, trash/restore, visible to the whole household
+    // rather than uploader-only. This is the real "manage my home's
+    // records" destination per the continuity plan; id 'documents' above
+    // is the older, narrower quick-scan tool. New DISCOVERABLE_TOOL_IDS
+    // entry added in toolLifecycle.contract.ts to match.
+    id: 'home-records',
+    version: 1,
+    label: 'Home Records',
+    description: 'Keep property files organized as reviewable evidence for the home.',
+    routeTemplate: '/dashboard/properties/[id]/tools/home-records',
+    outcomeCategory: 'UNDERSTAND_HOME',
+    rolloutKey: 'HOME_RECORDS',
     releaseStage: 'BETA',
     safetyTier: 'LOW_CONSEQUENCE',
     completionKind: 'ARTIFACT_CREATED',
@@ -17,7 +64,7 @@ export const UNDERSTAND_HOME_CAPABILITIES = buildCapabilityDefinitions([
     iconName: 'file-check',
     intentAliases: [
       'home records',
-      'document vault',
+      'property records',
       'find a home document',
       'upload property records',
       'home receipts warranties and manuals',

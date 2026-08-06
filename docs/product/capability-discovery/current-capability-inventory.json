@@ -17,13 +17,13 @@
     "aiCatalogEntries": 30,
     "homeCatalogEntries": 35,
     "overlappingEntries": 20,
-    "distinctCapabilities": 45,
+    "distinctCapabilities": 46,
     "routeVerified": 45,
     "canonicalRelationshipCoverage": 29,
     "contextualCapabilities": 23,
-    "workflowOnly": 1,
-    "lifecycleCanonicalized": 45,
-    "catalogOnlyCapabilities": 21
+    "workflowOnly": 2,
+    "lifecycleCanonicalized": 46,
+    "catalogOnlyCapabilities": 22
   },
   "capabilities": [
     {
@@ -156,20 +156,20 @@
     },
     {
       "id": "documents",
-      "label": "Home Records",
+      "label": "Quick Document Scan",
       "sources": [
         "ai"
       ],
-      "canonicalRoute": "/dashboard/properties/[id]/documents",
+      "canonicalRoute": "/dashboard/documents",
       "routeVerified": true,
       "workflowOnly": false,
       "outcomeCategory": "UNDERSTAND_HOME",
       "rolloutKey": "DOCUMENT_VAULT",
-      "releaseStage": "BETA",
+      "releaseStage": "ACTIVE",
       "safetyTier": "LOW_CONSEQUENCE",
       "completionKind": "ARTIFACT_CREATED",
       "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": true,
+      "canonicalRelationshipCoverage": false,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -360,7 +360,9 @@
     {
       "id": "home-operations",
       "label": "Home Operations",
-      "sources": ["home"],
+      "sources": [
+        "home"
+      ],
       "canonicalRoute": "/dashboard/properties/[id]/home-operations",
       "routeVerified": true,
       "workflowOnly": false,
@@ -371,6 +373,24 @@
       "completionKind": "OUTCOME_VERIFIED",
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": false,
+      "recommendationDisposition": "CATALOG_ONLY"
+    },
+    {
+      "id": "home-records",
+      "label": "Home Records",
+      "sources": [
+        "ai"
+      ],
+      "canonicalRoute": "/dashboard/properties/[id]/tools/home-records",
+      "routeVerified": false,
+      "workflowOnly": false,
+      "outcomeCategory": "UNDERSTAND_HOME",
+      "rolloutKey": "HOME_RECORDS",
+      "releaseStage": "BETA",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "ARTIFACT_CREATED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CATALOG_ONLY"
     },
     {
@@ -448,6 +468,24 @@
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
     },
     {
+      "id": "maintenance",
+      "label": "Maintenance",
+      "sources": [
+        "home"
+      ],
+      "canonicalRoute": "/dashboard/maintenance",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "MAINTAIN_PREVENT",
+      "rolloutKey": "MAINTENANCE",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "ACTION_COMPLETED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": false,
+      "recommendationDisposition": "CATALOG_ONLY"
+    },
+    {
       "id": "material-specs",
       "label": "Material Specs",
       "sources": [
@@ -464,22 +502,6 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
-    },
-    {
-      "id": "maintenance",
-      "label": "Maintenance",
-      "sources": ["home"],
-      "canonicalRoute": "/dashboard/maintenance",
-      "routeVerified": true,
-      "workflowOnly": false,
-      "outcomeCategory": "MAINTAIN_PREVENT",
-      "rolloutKey": "MAINTENANCE",
-      "releaseStage": "ACTIVE",
-      "safetyTier": "LOW_CONSEQUENCE",
-      "completionKind": "ACTION_COMPLETED",
-      "lifecycleCanonicalized": true,
-      "canonicalRelationshipCoverage": false,
-      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "mortgage-refinance-radar",

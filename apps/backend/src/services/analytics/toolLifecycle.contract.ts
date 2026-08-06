@@ -18,6 +18,12 @@ export type ToolLifecycleStage = typeof TOOL_LIFECYCLE_STAGES[number];
 const DISCOVERABLE_TOOL_IDS = new Set([
   'emergency',
   'documents',
+  // The canonical PropertyRecord-based Home Records tool — distinct from
+  // 'documents' above (the legacy quick-scan tool, matching that id's
+  // existing 'document-vault'/'vault' aliases). Added when
+  // understandHome.ts gained its own capability entry for it (Slice 1 of
+  // HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md).
+  'home-records',
   'budget',
   'modifications',
   'coverage-intelligence',

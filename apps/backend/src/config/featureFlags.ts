@@ -63,6 +63,15 @@ function djb2Hash(str: string): number {
 const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   EMERGENCY_HELP:            { label: 'Emergency Help',              defaultPct: 10  },
   DOCUMENT_VAULT:            { label: 'Document Vault',              defaultPct: 25  },
+  // The canonical PropertyRecord-based Home Records tool — the id
+  // 'documents'/DOCUMENT_VAULT above is the older, narrower legacy
+  // quick-scan tool. This rollout key already existed on the frontend
+  // tool registry (ROLLOUT_KEY_BY_TOOL_ID) with no matching entry here,
+  // so its capability's real rollout status/cohort could never resolve —
+  // Slice 1 of HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_
+  // IMPLEMENTATION_PLAN.md. 25% matches its capability entry's own
+  // releaseStage: 'BETA'.
+  HOME_RECORDS:              { label: 'Home Records',                defaultPct: 25  },
   BUDGET_PLANNER:            { label: 'Budget Planner',              defaultPct: 25  },
   COVERAGE_INTELLIGENCE:     { label: 'Coverage Intelligence',       defaultPct: 100 },
   RISK_PREMIUM_OPTIMIZER:    { label: 'Risk Premium Optimizer',      defaultPct: 100 },
