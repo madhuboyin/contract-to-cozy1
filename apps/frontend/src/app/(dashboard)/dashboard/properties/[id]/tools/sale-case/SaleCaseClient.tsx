@@ -45,6 +45,7 @@ import {
   type BuyerPackageShareOption,
   type RevocableShareOption,
 } from './saleCaseApi';
+import { MaximizeReturnSection } from './MaximizeReturnSection';
 import {
   CATEGORY_LABELS,
   RETENTION_DECISION_LABELS,
@@ -132,8 +133,15 @@ function sourceEntityHref(propertyId: string, item: SaleReadinessItem): string |
   }
 }
 
+// Sale Readiness Value-Maximization Checklist plan §4.9/§10 Phase 7: items
+// with category PRESENTATION render in the new "Maximize your return"
+// section instead — excluded here so they don't appear twice. Every
+// PRESENTATION-category item happens to also carry requirementClass
+// OPTIONAL_IMPROVEMENT, but OPTIONAL_IMPROVEMENT isn't exclusive to
+// PRESENTATION (e.g. near-end-of-life SYSTEMS_MAINTENANCE items also use
+// it), so the split has to be on category, not requirementClass.
 function groupByRequirementClass(items: SaleReadinessItem[]) {
-  const open = items.filter((item) => item.status === 'OPEN');
+  const open = items.filter((item) => item.status === 'OPEN' && item.category !== 'PRESENTATION');
   const groups = new Map<SaleReadinessRequirementClass, SaleReadinessItem[]>();
   for (const item of open) {
     const bucket = groups.get(item.requirementClass) ?? [];
@@ -143,6 +151,29 @@ function groupByRequirementClass(items: SaleReadinessItem[]) {
   return REQUIREMENT_CLASS_ORDER
     .map((requirementClass) => ({ requirementClass, items: groups.get(requirementClass) ?? [] }))
     .filter((group) => group.items.length > 0);
+}
+
+// Sale Readiness Value-Maximization Checklist plan §4.1/§4.4a/§4.10/§10
+// Phase 7: SAFETY_STRUCTURAL is the one category §4.1 says must never get a
+// generic/guessed item — absence of data means silence or a soft
+// data-collection prompt, never a claim. The backend's structural-evidence
+// search (propertySaleCase.service.ts's projectStructuralSystemEvidence)
+// only ever emits an item when it FINDS evidence — it stays silent
+// otherwise, by design, rather than emitting a "no data" row. This computes
+// the same four-keyword check client-side (frontend-only per this phase's
+// scope) purely to decide which soft prompts to show; it never invents a
+// verdict about the property itself.
+const STRUCTURAL_KEYWORDS: Array<{ key: string; label: string }> = [
+  { key: 'roof', label: 'roof' },
+  { key: 'foundation', label: 'foundation' },
+  { key: 'electrical', label: 'electrical system' },
+  { key: 'plumbing', label: 'plumbing' },
+];
+
+function structuralGapsWithoutEvidence(items: SaleReadinessItem[]): Array<{ key: string; label: string }> {
+  const structural = items.filter((item) => item.status === 'OPEN' && item.category === 'SAFETY_STRUCTURAL');
+  const haystack = structural.map((item) => `${item.title} ${item.detail ?? ''}`.toLowerCase());
+  return STRUCTURAL_KEYWORDS.filter(({ key }) => !haystack.some((text) => text.includes(key)));
 }
 
 export default function SaleCaseClient() {
@@ -363,34 +394,17 @@ function SaleCaseBody({
   completeTransitionPending: boolean;
 }) {
   const saleCase = overview.saleCase;
+  const presentationItems = overview.readinessItems.filter((item) => item.status === 'OPEN' && item.category === 'PRESENTATION');
   const groups = groupByRequirementClass(overview.readinessItems);
   const waived = overview.readinessItems.filter((item) => item.status === 'WAIVED');
-  const openCount = overview.readinessItems.filter((item) => item.status === 'OPEN').length;
+  const structuralGaps = structuralGapsWithoutEvidence(overview.readinessItems);
   const nextStep = NEXT_STATUS[saleCase.status];
 
   return (
     <>
-      <MobileSection className="mb-4">
-        <MobileCard className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <StatusChip tone={STATUS_TONE[saleCase.status]}>{saleCase.status}</StatusChip>
-            {nextStep ? (
-              <Button size="sm" variant="outline" onClick={() => onTransition(nextStep.status)} disabled={transitionPending}>
-                {transitionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {nextStep.label}
-              </Button>
-            ) : null}
-          </div>
-          <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
-            {openCount === 0
-              ? 'No open readiness items right now — this reflects real property records, not a fixed checklist.'
-              : `${openCount} open readiness item${openCount === 1 ? '' : 's'} projected from your property's records.`}
-          </p>
-          <Link href={`/dashboard/properties/${propertyId}/property-brief?purpose=LISTING_AGENT`}>
-            <Button size="sm" variant="outline">Compose agent package</Button>
-          </Link>
-        </MobileCard>
-      </MobileSection>
+      {/* Primary content (§4.9/§4.9a): value-maximization section + question
+          card, above the fold, ahead of the compliance-oriented groups. */}
+      <MaximizeReturnSection propertyId={propertyId} items={presentationItems} />
 
       {groups.map((group) => (
         <MobileSection key={group.requirementClass} className="mb-4">
@@ -439,6 +453,24 @@ function SaleCaseBody({
         </MobileSection>
       ))}
 
+      {structuralGaps.length > 0 ? (
+        <MobileSection className="mb-4">
+          <MobileSectionHeader title="Not enough information yet" />
+          <div className="space-y-2">
+            {structuralGaps.map((gap) => (
+              <MobileCard key={gap.key} className="space-y-2">
+                <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+                  We don&apos;t have enough information about your {gap.label} to check this — log an inspection to see if it affects your sale readiness.
+                </p>
+                <Link href={`/dashboard/properties/${propertyId}/inspection-hub`} className="text-xs font-medium text-sky-700 hover:underline">
+                  Log an inspection →
+                </Link>
+              </MobileCard>
+            ))}
+          </div>
+        </MobileSection>
+      ) : null}
+
       {waived.length > 0 ? (
         <MobileSection className="mb-4">
           <MobileSectionHeader title="Disclosed, not addressed" />
@@ -464,12 +496,41 @@ function SaleCaseBody({
         </MobileSection>
       ) : null}
 
-      {groups.length === 0 && waived.length === 0 ? (
+      {groups.length === 0 && waived.length === 0 && presentationItems.length === 0 ? (
         <EmptyStateCard
           title="Nothing outstanding"
           description="No open findings, unfinished projects, unverified permits, Home Actions, or record gaps are currently projected for this property."
         />
       ) : null}
+
+      {/* §4.9a: "Compose agent package" stays with primary content — it's a
+          real readiness action, not transaction-status tracking. */}
+      <MobileSection className="mb-4">
+        <MobileCard className="space-y-2">
+          <Link href={`/dashboard/properties/${propertyId}/property-brief?purpose=LISTING_AGENT`}>
+            <Button size="sm" variant="outline">Compose agent package</Button>
+          </Link>
+        </MobileCard>
+      </MobileSection>
+
+      {/* §4.9a: demoted, muted "Sale status" row — never fully hidden, just
+          no longer the page's primary job. */}
+      <MobileSection className="mb-4">
+        <MobileCard variant="compact" className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <StatusChip tone={STATUS_TONE[saleCase.status]}>{saleCase.status}</StatusChip>
+            {nextStep ? (
+              <Button size="sm" variant="outline" onClick={() => onTransition(nextStep.status)} disabled={transitionPending}>
+                {transitionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {nextStep.label}
+              </Button>
+            ) : null}
+          </div>
+          <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+            Track when this home goes live, under contract, and closes.
+          </p>
+        </MobileCard>
+      </MobileSection>
 
       {saleCase.status === 'CLOSED' ? (
         <MobileSection className="mb-4">

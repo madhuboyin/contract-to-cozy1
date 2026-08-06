@@ -1,9 +1,12 @@
 import { api } from '@/lib/api/client';
 import type {
+  NotableUpgradeCandidate,
   PropertySaleCase,
   PropertyTransition,
   SaleCaseOverview,
   SaleCaseStatus,
+  SalePrepBudgetRange,
+  SalePrepQuestionStatus,
   SaleReadinessItem,
   SaleTransitionRetentionDecision,
 } from './types';
@@ -37,6 +40,33 @@ export async function updateTargetDates(
 export async function transitionStatus(propertyId: string, status: SaleCaseStatus): Promise<PropertySaleCase> {
   const res = await api.patch<{ saleCase: PropertySaleCase }>(`/api/properties/${propertyId}/sale-case/status`, { status });
   return res.data.saleCase;
+}
+
+// Plan §4.5 grouped question card — the 6 condition-fact answers route
+// through the pre-existing generic property-context fact-capture endpoint
+// (§10 Phase 3), not a sale-case-specific one.
+export async function patchSalePrepFact(propertyId: string, factKey: string, value: unknown): Promise<void> {
+  await api.patch(`/api/properties/${propertyId}/context/${factKey}`, { value });
+}
+
+export async function getSalePrepQuestionStatus(propertyId: string): Promise<SalePrepQuestionStatus> {
+  const res = await api.get<SalePrepQuestionStatus>(`/api/properties/${propertyId}/sale-case/prep-questions`);
+  return res.data;
+}
+
+export async function updateBudgetRange(propertyId: string, budgetRange: SalePrepBudgetRange | null): Promise<PropertySaleCase> {
+  const res = await api.patch<{ saleCase: PropertySaleCase }>(`/api/properties/${propertyId}/sale-case/budget`, { budgetRange });
+  return res.data.saleCase;
+}
+
+export async function getNotableUpgradeCandidates(propertyId: string): Promise<NotableUpgradeCandidate[]> {
+  const res = await api.get<{ candidates: NotableUpgradeCandidate[] }>(`/api/properties/${propertyId}/sale-case/notable-upgrades`);
+  return res.data.candidates;
+}
+
+export async function confirmNotableUpgrades(propertyId: string, keys: string[]): Promise<string[]> {
+  const res = await api.post<{ confirmedUpgradeKeys: string[] }>(`/api/properties/${propertyId}/sale-case/notable-upgrades/confirm`, { keys });
+  return res.data.confirmedUpgradeKeys;
 }
 
 export async function setItemDecision(
