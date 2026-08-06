@@ -14,6 +14,7 @@ import {
   attachHomeEventDocument,
   detachHomeEventDocument,
   confirmHomeEvent,
+  setHomeEventVisibility,
   addHomeEventEvidence,
   exportHomeEvents,
   getHomeEventAnnualRecap,
@@ -26,6 +27,7 @@ import {
   listHomeEventsQuerySchema,
   deleteHomeEventBodySchema,
   confirmHomeEventBodySchema,
+  setHomeEventVisibilityBodySchema,
   addHomeEventEvidenceBodySchema,
   exportHomeEventsBodySchema,
 } from '../validators/homeEvents.validators';
@@ -89,6 +91,14 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(confirmHomeEventBodySchema),
   confirmHomeEvent,
+);
+
+router.patch(
+  '/properties/:propertyId/home-events/:eventId/visibility',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(setHomeEventVisibilityBodySchema),
+  setHomeEventVisibility,
 );
 
 router.post(

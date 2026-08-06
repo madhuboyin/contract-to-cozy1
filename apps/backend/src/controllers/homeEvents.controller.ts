@@ -144,6 +144,19 @@ export async function confirmHomeEvent(req: CustomRequest, res: Response, next: 
   }
 }
 
+export async function setHomeEventVisibility(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await service.setVisibility({
+      propertyId: req.params.propertyId,
+      eventId: req.params.eventId,
+      visibility: req.body.visibility,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function addHomeEventEvidence(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const evidence = await service.addEvidence({

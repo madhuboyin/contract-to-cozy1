@@ -84,6 +84,7 @@ function toHomeEventFromTimelineEntry(entry: TimelineProjectionEntry): HomeEvent
     propertyId: '',
     type: (entry.eventType as HomeEvent['type']) ?? 'MILESTONE',
     subtype: null, // never expose raw signal keys or internal codes as visible badges
+    visibility: 'HOUSEHOLD', // a synthetic projection entry, never marked private
     importance: 'NORMAL',
     occurredAt: entry.occurredAt,
     endAt: null,
@@ -307,6 +308,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                 render: (event) => (
                   <div className="flex flex-wrap gap-1.5">
                     {event.type ? <Badge>{formatEnumLabel(event.type)}</Badge> : null}
+                    {event.visibility === 'PRIVATE' ? <Badge>Private</Badge> : null}
                     {shortImportanceLabel(event.importance) ? <Badge>{shortImportanceLabel(event.importance)}</Badge> : null}
                     {event.subtype && event.subtype !== event.type ? <Badge>{formatEnumLabel(event.subtype)}</Badge> : null}
                     <Badge>{formatEnumLabel(event.observationKind)}</Badge>

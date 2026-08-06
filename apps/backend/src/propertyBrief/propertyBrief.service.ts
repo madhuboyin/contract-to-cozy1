@@ -190,6 +190,12 @@ async function assembleSections(input: {
         propertyId: input.propertyId,
         isCurrent: true,
         deletedAt: null,
+        // Enforcement half of HomeEventVisibility (the schema enum existed
+        // since an earlier slice with zero enforcement anywhere — a
+        // homeowner marking an event PRIVATE previously had no effect on
+        // what left the household via a Property Brief). HOUSEHOLD/
+        // SHARE_LINK/RESALE_PACK are unaffected — same behavior as before.
+        visibility: { not: 'PRIVATE' },
         verificationStatus: {
           in: [
             HomeEventVerificationStatus.HOMEOWNER_CONFIRMED,

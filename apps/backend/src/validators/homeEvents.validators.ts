@@ -77,6 +77,14 @@ export const confirmHomeEventBodySchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 
+// Only the two household-internal choices — SHARE_LINK/RESALE_PACK are
+// reserved schema values with no dedicated UI/enforcement path yet, so they
+// are not exposed as settable here to avoid implying a distinction that
+// nothing downstream actually honors.
+export const setHomeEventVisibilityBodySchema = z.object({
+  visibility: z.enum(['PRIVATE', 'HOUSEHOLD']),
+});
+
 export const addHomeEventEvidenceBodySchema = z.object({
   evidenceType: HomeEventEvidenceTypeSchema,
   documentId: z.string().uuid().optional().nullable(),

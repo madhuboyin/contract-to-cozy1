@@ -878,6 +878,31 @@ export class HomeEventsService {
     });
   }
 
+  // A privacy preference, not a factual correction — deliberately does not
+  // go through updateHomeEvent's supersede-with-a-new-revision flow (which
+  // would also reset verificationStatus off EVIDENCE_VERIFIED and change the
+  // event's id, breaking anything referencing it by sourceEntityId). This is
+  // the enforcement half of HomeEventVisibility (schema had the
+  // PRIVATE/HOUSEHOLD/SHARE_LINK/RESALE_PACK enum since an earlier slice
+  // but nothing ever let a homeowner set it) — see
+  // propertyBrief.service.ts's assembleSections for the other half.
+  async setVisibility(args: {
+    propertyId: string;
+    eventId: string;
+    visibility: 'PRIVATE' | 'HOUSEHOLD';
+  }) {
+    const result = await prisma.homeEvent.updateMany({
+      where: {
+        id: args.eventId,
+        propertyId: args.propertyId,
+        isCurrent: true,
+        deletedAt: null,
+      },
+      data: { visibility: args.visibility },
+    });
+    if (result.count === 0) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
+  }
+
   async addEvidence(args: {
     propertyId: string;
     eventId: string;

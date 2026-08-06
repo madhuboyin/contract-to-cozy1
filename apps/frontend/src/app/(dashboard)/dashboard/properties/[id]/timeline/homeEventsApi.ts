@@ -8,6 +8,7 @@ export type HomeEventType =
   | 'NOTE' | 'MILESTONE' | 'OTHER';
 
 export type HomeEventImportance = 'LOW' | 'NORMAL' | 'HIGH' | 'HIGHLIGHT';
+export type HomeEventVisibility = 'PRIVATE' | 'HOUSEHOLD' | 'SHARE_LINK' | 'RESALE_PACK';
 export type HomeEventDatePrecision = 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';
 export type HomeEventObservationKind =
   | 'OBSERVED' | 'USER_REPORTED' | 'EVIDENCE_DERIVED' | 'INFERRED' | 'SYSTEM_GENERATED';
@@ -33,6 +34,7 @@ export interface HomeEvent {
   type: HomeEventType;
   subtype: string | null;
   importance: HomeEventImportance;
+  visibility: HomeEventVisibility;
   occurredAt: string;
   endAt: string | null;
   datePrecision: HomeEventDatePrecision;
@@ -96,6 +98,7 @@ export type CreateHomeEventPayload = {
   type: HomeEventType;
   title: string;
   occurredAt: string; // ISO datetime
+  visibility?: HomeEventVisibility;
   summary?: string | null;
   amount?: number | null;
   datePrecision?: HomeEventDatePrecision;
@@ -140,6 +143,20 @@ export async function correctHomeEvent(
     payload,
   );
   return response.data.event;
+}
+
+// Restricted to the two household-internal choices, matching the backend
+// schema — a homeowner marking something PRIVATE excludes it from every
+// externally-shared Property Brief section (see propertyBrief.service.ts).
+export async function setHomeEventVisibility(
+  propertyId: string,
+  eventId: string,
+  visibility: 'PRIVATE' | 'HOUSEHOLD',
+) {
+  await api.patch(
+    `/api/properties/${propertyId}/home-events/${eventId}/visibility`,
+    { visibility },
+  );
 }
 
 export async function confirmHomeEvent(

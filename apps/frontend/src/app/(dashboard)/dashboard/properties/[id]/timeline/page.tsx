@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, Lock, Plus, Search, X } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -17,6 +17,7 @@ import {
   getHomeEvent,
   getHomeEventAnnualRecap,
   listHomeEvents,
+  setHomeEventVisibility,
   type HomeEvent,
   type HomeEventDatePrecision,
   TimelineProjectionEntry,
@@ -130,6 +131,7 @@ function toTimelineEvent(entry: TimelineProjectionEntry): HomeEvent {
     type: (entry.eventType as HomeEventType) ?? 'MILESTONE',
     subtype: entry.kind === 'SIGNAL' ? signalKey ?? null : entry.eventType,
     importance: derivedImportance,
+    visibility: 'HOUSEHOLD', // a synthetic projection entry, never marked private
     occurredAt: entry.occurredAt,
     title: entry.title,
     summary:
@@ -525,6 +527,7 @@ export default function Page() {
   const [logSummary, setLogSummary] = useState('');
   const [logDatePrecision, setLogDatePrecision] = useState<HomeEventDatePrecision>('EXACT_DATE');
   const [logParentEventId, setLogParentEventId] = useState('');
+  const [logPrivate, setLogPrivate] = useState(false);
   const [logSubmitting, setLogSubmitting] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
   const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
@@ -699,6 +702,7 @@ export default function Page() {
         datePrecision: logDatePrecision,
         parentEventId: logParentEventId || null,
         groupType: logParentEventId ? 'HOME_HISTORY_STORY' : null,
+        visibility: logPrivate ? 'PRIVATE' : undefined,
       });
       setLogTitle('');
       setLogDate('');
@@ -706,6 +710,7 @@ export default function Page() {
       setLogDatePrecision('EXACT_DATE');
       setLogParentEventId('');
       setLogSummary('');
+      setLogPrivate(false);
       setShowLogForm(false);
       queryClient.invalidateQueries({ queryKey: ['homeEvents', propertyId] });
       refetch();
@@ -1127,6 +1132,17 @@ export default function Page() {
               </div>
             </div>
 
+            <label className="flex items-center gap-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
+              <input
+                type="checkbox"
+                checked={logPrivate}
+                onChange={(e) => setLogPrivate(e.target.checked)}
+                disabled={logSubmitting}
+                className="h-4 w-4 rounded border-[hsl(var(--mobile-border-subtle))]"
+              />
+              Keep this private — never included in anything shared outside your household
+            </label>
+
             {logError && (
               <p className="text-xs text-red-600">{logError}</p>
             )}
@@ -1234,7 +1250,31 @@ export default function Page() {
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={async () => { await confirmHomeEvent(propertyId, activeEvent.id, 'HOMEOWNER_CONFIRMED', 'Confirmed by homeowner in Timeline review.'); await refreshTimeline(); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Confirm event</button>
                 <button type="button" onClick={async () => { await confirmHomeEvent(propertyId, activeEvent.id, 'DISPUTED', 'Disputed by homeowner in Timeline review.'); await refreshTimeline(); }} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700">Mark disputed</button>
+                {(() => {
+                  const currentVisibility = activeEventQuery.data?.visibility ?? activeEvent.visibility;
+                  const isPrivate = currentVisibility === 'PRIVATE';
+                  return (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          setTimelineActionError(null);
+                          await setHomeEventVisibility(propertyId, activeEvent.id, isPrivate ? 'HOUSEHOLD' : 'PRIVATE');
+                          await refreshTimeline();
+                          queryClient.invalidateQueries({ queryKey: ['homeEvent', propertyId, activeEvent.id] });
+                        } catch { setTimelineActionError('The visibility change could not be saved.'); }
+                      }}
+                      className="flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold"
+                    >
+                      <Lock className="h-3 w-3" />
+                      {isPrivate ? 'Make household-visible' : 'Keep private'}
+                    </button>
+                  );
+                })()}
               </div>
+              <p className="text-[11px] text-[hsl(var(--mobile-text-muted))]">
+                Private events are never included in a Property Brief or any other share sent outside your household.
+              </p>
               <select value={evidenceType} onChange={(event) => setEvidenceType(event.target.value as typeof evidenceType)} className="min-h-[40px] w-full rounded-lg border px-3 text-sm">
                 <option value="USER_ATTESTATION">Homeowner attestation</option><option value="DOCUMENT">Vault document</option><option value="RECEIPT">Receipt</option><option value="INVOICE">Invoice</option><option value="INSPECTION">Inspection</option><option value="CLAIM">Claim</option><option value="REPAIR_RECORD">Repair record</option>
               </select>
