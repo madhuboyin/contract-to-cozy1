@@ -139,6 +139,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
   const [sensitiveAcknowledged, setSensitiveAcknowledged] = React.useState(false);
   const [selectedBriefId, setSelectedBriefId] = React.useState<string | null>(null);
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
+  const [shareInvitationEmail, setShareInvitationEmail] = React.useState<string | null>(null);
   const [copyComplete, setCopyComplete] = React.useState(false);
   const [selectedDocumentIds, setSelectedDocumentIds] = React.useState<string[]>([]);
   const [expiresInDays, setExpiresInDays] = React.useState(14);
@@ -173,6 +174,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
     onSuccess: async (brief) => {
       setSelectedBriefId(brief.id);
       setShareUrl(null);
+      setShareInvitationEmail(null);
       setShareSensitiveAcknowledged(false);
       await queryClient.invalidateQueries({ queryKey: ['property-briefs', propertyId] });
     },
@@ -190,6 +192,7 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
     }),
     onSuccess: async (share) => {
       setShareUrl(share.shareUrl);
+      setShareInvitationEmail(share.recipientEmail ?? null);
       setShareSensitiveAcknowledged(false);
       setShareHouseholdConsentAcknowledged(false);
       setRecipientName('');
@@ -464,7 +467,8 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                   </label>
                 </div>
                 <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
-                  Naming a recipient lets you see whether they've opened the link yet — you still need to send it to them yourself; this doesn't email it for you.
+                  Adding a recipient email sends them the link directly and lets you see whether they've opened it yet.
+                  Leave it blank to just get a copyable link you send yourself.
                 </p>
                 <label className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 p-3 text-xs leading-5 text-slate-700">
                   <input type="checkbox" checked={shareSensitiveAcknowledged} onChange={(event) => setShareSensitiveAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4" />
@@ -489,6 +493,11 @@ export default function PropertyBriefClient({ propertyId }: { propertyId: string
                 </button>
                 {shareUrl && (
                   <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    {shareInvitationEmail && (
+                      <p className="mb-2 text-xs font-medium text-emerald-900">
+                        We&rsquo;ve emailed this link to {shareInvitationEmail}. You can also share it directly below.
+                      </p>
+                    )}
                     <p className="break-all text-xs text-emerald-950">{shareUrl}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button

@@ -723,7 +723,14 @@ export async function createPropertyBriefShare(input: {
       hasRecipient,
     },
   });
-  return { ...share, token };
+  // Reused by the route to enqueue the invitation email — already loaded
+  // via findAccessibleBrief above, no extra query needed.
+  return {
+    ...share,
+    token,
+    propertyBriefTitle: brief.title,
+    propertyAddress: [brief.property.address, brief.property.city, brief.property.state].filter(Boolean).join(', '),
+  };
 }
 
 export async function revokePropertyBriefShare(input: {

@@ -11,6 +11,7 @@ import { Worker, Queue } from 'bullmq';
 import { calculateHealthScore } from './utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest, runWeeklyHomeBriefDigest } from './jobs/sendEmailNotification.job';
 import { sendFeedbackNotificationJob } from './jobs/sendFeedbackNotification.job';
+import { sendPropertyBriefInvitationJob } from './jobs/sendPropertyBriefInvitation.job';
 import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
 import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
 import { generateSeasonalChecklists } from './jobs/seasonalChecklistGeneration.job';
@@ -989,6 +990,8 @@ function startWorker() {
         await sendEmailNotificationJob(job.data.notificationDeliveryId);
       } else if (job.name === 'SEND_FEEDBACK_NOTIFICATION') {
         await sendFeedbackNotificationJob(job.data);
+      } else if (job.name === 'SEND_PROPERTY_BRIEF_INVITATION') {
+        await sendPropertyBriefInvitationJob(job.data);
       } else {
         // WKR-009: a producer/consumer name mismatch silently "completed"
         // instead of surfacing — fail loudly instead.

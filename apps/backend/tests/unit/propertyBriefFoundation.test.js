@@ -170,7 +170,11 @@ test('Slice 7: shares support a named recipient with real acceptance tracking an
     'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/property-brief/PropertyBriefClient.tsx',
   );
   assert.match(ownerUi, /Test access/);
-  // Must not overclaim automated delivery — the plan's §1.1 flagged exactly
-  // this kind of gap for the old Home Digital Will preview.
-  assert.match(ownerUi, /doesn't email it for you/);
 });
+
+// A later pass (2026-08-05) closed the "doesn't email it for you" gap this
+// same test used to lock down — a real send path now exists
+// (sendPropertyBriefInvitation.job.ts) — see
+// propertyBriefInvitationDelivery.test.js for the send-path coverage. The
+// UI copy above no longer disclaims delivery because delivery is real, not
+// because the disclaimer requirement went away.

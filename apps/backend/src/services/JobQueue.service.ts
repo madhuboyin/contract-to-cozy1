@@ -48,6 +48,9 @@ export const getPropertyIntelligenceQueue = createLazyQueue<PropertyIntelligence
 // 'SEND_FEEDBACK_NOTIFICATION' job (added for the pilot feedback channel)
 // carries a direct recipient/subject payload — it isn't tied to a User
 // row or the Notification/NotificationDelivery models.
+// 'SEND_PROPERTY_BRIEF_INVITATION' (Slice 7 of the continuity plan) is the
+// same kind of direct ad-hoc send — a Property Brief recipient is
+// deliberately not a platform User.
 export interface EmailNotificationJobPayload {
   notificationDeliveryId?: string;
   to?: string;
@@ -56,6 +59,11 @@ export interface EmailNotificationJobPayload {
   page?: string;
   userEmail?: string;
   userId?: string;
+  recipientName?: string | null;
+  propertyBriefTitle?: string;
+  propertyAddress?: string;
+  shareUrl?: string;
+  expiresAt?: string;
 }
 
 export const getEmailNotificationQueue = createLazyQueue<EmailNotificationJobPayload>(

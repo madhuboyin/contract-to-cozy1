@@ -5,6 +5,8 @@ import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { CustomRequest } from '../types';
+import { logger } from '../lib/logger';
+import { getEmailNotificationQueue } from '../services/JobQueue.service';
 import {
   createPropertyBriefSchema,
   createPropertyBriefShareSchema,
@@ -170,11 +172,37 @@ router.post(
         recipientEmail: req.body.recipientEmail,
       });
       const origin = req.headers.origin || process.env.FRONTEND_URL || '';
+      const shareUrl = `${origin}/property-brief/share/${encodeURIComponent(result.token)}`;
+
+      // Fire-and-forget: a failed enqueue or failed send must never fail
+      // the share itself — the recipient can still be reached via the copy-
+      // able link either way. Closes the gap Slice 7 originally left open
+      // ("you still need to send it yourself") now that a real send path
+      // exists (see sendPropertyBriefInvitation.job.ts).
+      if (result.recipientEmail) {
+        getEmailNotificationQueue()
+          .add(
+            'SEND_PROPERTY_BRIEF_INVITATION',
+            {
+              to: result.recipientEmail,
+              recipientName: result.recipientName,
+              propertyBriefTitle: result.propertyBriefTitle,
+              propertyAddress: result.propertyAddress,
+              shareUrl,
+              expiresAt: result.expiresAt.toISOString(),
+            },
+            { removeOnComplete: true, removeOnFail: true, attempts: 2 },
+          )
+          .catch((err) => {
+            logger.error({ err }, '[PropertyBriefRoutes] failed to enqueue invitation email');
+          });
+      }
+
       return res.status(201).json({
         success: true,
         data: {
           ...result,
-          shareUrl: `${origin}/property-brief/share/${encodeURIComponent(result.token)}`,
+          shareUrl,
         },
       });
     } catch (error) {
