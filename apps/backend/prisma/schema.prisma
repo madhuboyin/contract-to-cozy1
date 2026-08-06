@@ -20791,6 +20791,13 @@ enum OperationalObligationType {
   // through canonical Home Actions" — a Home Record with pending
   // extraction review or an expired/expiring effective period.
   RECORD_REVIEW
+  // Sale Readiness Value-Maximization Checklist plan §4.8/§10 Phase 4: a
+  // distinct obligation type (not MAINTENANCE_TASK) so propertySaleCase
+  // .service.ts's projectHomeActions can filter these back out — without
+  // it, a promoted sale-prep work item would re-surface in Sale Case's own
+  // checklist as a second, duplicate HOME_ACTION-sourced item wrapping the
+  // very SaleReadinessItem that spawned it.
+  SALE_PREP_TASK
 }
 
 enum OperationalWorkSourceType {

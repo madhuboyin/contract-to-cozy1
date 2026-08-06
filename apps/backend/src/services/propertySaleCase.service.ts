@@ -160,11 +160,22 @@ function isWeatherAdvisoryOnly(item: Awaited<ReturnType<typeof listWorkItems>>[n
     && !item.hasExecutionBackedSource;
 }
 
+// Sale Readiness Value-Maximization Checklist plan §4.8/§10 Phase 4: a
+// SALE_PREP_TASK work item was itself promoted FROM a SaleReadinessItem
+// (loadSalePrepActions in homeActionSourcePromotion.service.ts) — surfacing
+// it back here would duplicate the very row that spawned it under a second
+// sourceEntityType ('HOME_ACTION' vs. the original 'SALE_PREP_SELF_REPORT'/
+// 'SALE_PREP_GENERIC').
+function isSalePrepTask(item: Awaited<ReturnType<typeof listWorkItems>>[number]): boolean {
+  return item.obligationType === 'SALE_PREP_TASK';
+}
+
 async function projectHomeActions(propertyId: string): Promise<ProjectedItem[]> {
   const items = await listWorkItems({ propertyId });
   return items
     .filter((item) => !CLOSED_HOME_ACTION_STATES.has(item.state) && item.acceptanceState !== 'DECLINED')
     .filter((item) => !isWeatherAdvisoryOnly(item))
+    .filter((item) => !isSalePrepTask(item))
     .map((item) => {
       const tier = HOME_ACTION_TIER_MAP[item.safetyTier] ?? HOME_ACTION_TIER_MAP.LOW_CONSEQUENCE;
       return {

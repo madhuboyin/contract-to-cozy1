@@ -23,6 +23,7 @@ export const WORK_ITEM_ELIGIBLE_SOURCE_KINDS: ReadonlySet<HomeAction['source']['
   'INCIDENT',
   'RECALL',
   'COVERAGE',
+  'SALE_PREP',
 ]);
 
 /**
@@ -101,6 +102,16 @@ function resolveObligation(action: HomeAction): { obligationType: OperationalObl
   }
   if (action.source.kind === 'INCIDENT') {
     return { obligationType: 'INCIDENT_RESPONSE', obligationSlug: `incident-${action.source.entityId}` };
+  }
+  if (action.source.kind === 'SALE_PREP') {
+    // Sale Readiness Value-Maximization Checklist plan §4.8/§10 Phase 4: a
+    // dedicated obligation type (not MAINTENANCE_TASK) so propertySaleCase
+    // .service.ts's projectHomeActions can filter these back out of the
+    // general Home Action pool before re-projecting it into Sale Case's own
+    // checklist — otherwise the promoted work item would re-surface there
+    // as a second, duplicate item wrapping the SaleReadinessItem that
+    // spawned it.
+    return { obligationType: 'SALE_PREP_TASK', obligationSlug: `sale-prep-${action.source.entityId}` };
   }
   // RECALL
   return { obligationType: 'INCIDENT_RESPONSE', obligationSlug: `recall-${action.source.entityId}` };
@@ -199,6 +210,7 @@ const SOURCE_TYPE_BY_KIND: Partial<Record<HomeAction['source']['kind'], Operatio
   INCIDENT: 'INCIDENT',
   RECALL: 'RECALL',
   COVERAGE: 'COVERAGE',
+  SALE_PREP: 'SALE_PREP',
 };
 
 /**

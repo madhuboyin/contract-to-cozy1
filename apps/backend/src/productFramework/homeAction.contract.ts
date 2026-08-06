@@ -16,6 +16,8 @@ export const HOME_ACTION_SOURCE_KINDS = [
   'SYSTEM',
   'SAVINGS_BENEFITS',
   'INSPECTION_FINDING',
+  // Sale Readiness Value-Maximization Checklist plan §4.8/§10 Phase 4.
+  'SALE_PREP',
 ] as const;
 
 export const HOMEOWNER_JOBS = ['STAY_AHEAD', 'DECIDE', 'MAJOR_MOMENT'] as const;

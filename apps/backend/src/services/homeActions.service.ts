@@ -85,6 +85,11 @@ const SOURCE_KINDS_WITHOUT_COMPLETION_ADAPTER = new Set<HomeAction['source']['ki
   'SYSTEM',
   'SAVINGS_BENEFITS',
   'INSPECTION_FINDING',
+  // Completion here happens by the homeowner updating the underlying
+  // self-reported condition on Sale Case, not a COMPLETE command against
+  // the promoted work item — same untracked-source pattern as every other
+  // kind in this set.
+  'SALE_PREP',
 ]);
 
 export const HomeActionCommandSchema = z.object({

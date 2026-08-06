@@ -186,6 +186,7 @@ function actionEntityType(
     SYSTEM: null,
     SAVINGS_BENEFITS: null,
     INSPECTION_FINDING: null,
+    SALE_PREP: null,
   }[action.source.kind];
 }
 

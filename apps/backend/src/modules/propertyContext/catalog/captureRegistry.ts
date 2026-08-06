@@ -6,6 +6,9 @@ import {
   OccupancyStatus,
   OutdoorSpaceType,
   OwnershipForm,
+  PropertyCosmeticCondition,
+  PropertyRoomUpdateStatus,
+  PropertyStagingReadiness,
   PropertyUse,
   ResponsibleParty,
   RoofType,
@@ -74,6 +77,15 @@ const inputSchemas: Record<string, CaptureInputSchema> = {
   'systems.heatingType': enumSchema(Object.values(HeatingType)),
   'systems.coolingType': enumSchema(Object.values(CoolingType)),
   'systems.waterHeaterType': enumSchema(Object.values(WaterHeaterType)),
+  'systems.hvacInstallYear': { type: 'INTEGER', min: 1600, max: 2200, unit: 'year' },
+  'systems.waterHeaterInstallYear': { type: 'INTEGER', min: 1600, max: 2200, unit: 'year' },
+  // Sale Readiness Value-Maximization Checklist plan §4.5/§4.6.
+  'salePrep.paintCondition': enumSchema(Object.values(PropertyCosmeticCondition)),
+  'salePrep.curbAppealCondition': enumSchema(Object.values(PropertyCosmeticCondition)),
+  'salePrep.flooringCondition': enumSchema(Object.values(PropertyCosmeticCondition)),
+  'salePrep.kitchenStatus': enumSchema(Object.values(PropertyRoomUpdateStatus)),
+  'salePrep.bathroomStatus': enumSchema(Object.values(PropertyRoomUpdateStatus)),
+  'salePrep.stagingReadiness': enumSchema(Object.values(PropertyStagingReadiness)),
 };
 
 for (const key of [
@@ -102,6 +114,14 @@ const copy: Record<string, CaptureCopy> = {
     helpText: 'This determines whether outdoor recommendations apply to this home.',
     allowNotSure: true,
   },
+  'systems.hvacInstallYear': { title: 'HVAC install year', question: 'What year was the HVAC system installed?', allowNotSure: true },
+  'systems.waterHeaterInstallYear': { title: 'Water heater install year', question: 'What year was the water heater installed?', allowNotSure: true },
+  'salePrep.paintCondition': { title: 'Interior paint', question: 'What condition is the interior paint in?', allowNotSure: true },
+  'salePrep.curbAppealCondition': { title: 'Curb appeal & landscaping', question: 'What condition is the curb appeal in?', allowNotSure: true },
+  'salePrep.flooringCondition': { title: 'Flooring', question: 'What condition is the flooring in?', allowNotSure: true },
+  'salePrep.kitchenStatus': { title: 'Kitchen', question: 'How up to date is the kitchen?', allowNotSure: true },
+  'salePrep.bathroomStatus': { title: 'Bathrooms', question: 'How up to date are the bathrooms?', allowNotSure: true },
+  'salePrep.stagingReadiness': { title: 'Decluttering & staging', question: 'How ready is the home to show to buyers?', allowNotSure: true },
 };
 
 function defaultCopy(factKey: string): CaptureCopy {

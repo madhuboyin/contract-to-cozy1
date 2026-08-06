@@ -32,7 +32,7 @@ const RECOMMENDATION_FEEDBACK: HomeAction['feedbackControls'] = [
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -1145,6 +1145,88 @@ async function loadProjectActions(propertyId: string, db: HomeActionSourceDb): P
       secondaryCtas: [], feedbackControls: RECOMMENDATION_FEEDBACK,
       relatedJourneyId: project.guidanceJourneyId ?? null,
       createdAt: project.createdAt.toISOString(), lastEvaluatedAt: project.updatedAt.toISOString(),
+    });
+  });
+}
+
+// Sale Readiness Value-Maximization Checklist plan §4.8/§10 Phase 4: only
+// the self-reported and generic-fallback Tier 2 checklist items (§4.3) get
+// promoted here — every other SaleReadinessItem source (inspection
+// findings, permits, projects, records, material specs, timeline events,
+// aging systems, lapsed maintenance, warranties, structural evidence,
+// upgrade-evidence confirms, confirmed-upgrade highlights) already has its
+// own real-world domain record and lifecycle elsewhere in the app (several
+// already flow through Home Actions themselves via projectHomeActions).
+// Promoting those too would double-track the same obligation under two
+// different sources. propertySaleCase.service.ts's projectHomeActions
+// filters obligationType 'SALE_PREP_TASK' back out of its own output so a
+// promoted item here never re-surfaces in Sale Case as a second, duplicate
+// HOME_ACTION-sourced item wrapping the very row that spawned it.
+const SALE_PREP_PROMOTABLE_SOURCE_TYPES = ['SALE_PREP_SELF_REPORT', 'SALE_PREP_GENERIC'] as const;
+
+async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
+  if (!db.propertySaleCase || !db.saleReadinessItem) return [];
+  const saleCase = await db.propertySaleCase.findUnique({ where: { propertyId }, select: { id: true } });
+  if (!saleCase) return [];
+
+  const items = await db.saleReadinessItem.findMany({
+    where: {
+      saleCaseId: saleCase.id,
+      status: 'OPEN',
+      sourceEntityType: { in: Array.from(SALE_PREP_PROMOTABLE_SOURCE_TYPES) as any },
+    },
+    select: { id: true, sourceEntityType: true, title: true, detail: true, updatedAt: true, createdAt: true },
+  });
+
+  const governance = lowConsequenceGovernance('sale-prep-v1');
+  return items.map((item) => {
+    const isSelfReported = item.sourceEntityType === 'SALE_PREP_SELF_REPORT';
+    const confidence = isSelfReported ? 1 : 0.4;
+    return adaptHomeActionSource('SALE_PREP', {
+      id: `sale-prep:${item.id}`,
+      propertyId,
+      lineageId: `sale-prep:${item.id}`,
+      sourceEntityId: item.id,
+      sourceVersion: item.updatedAt.toISOString(),
+      job: 'MAJOR_MOMENT',
+      state: 'OPEN',
+      priority: 'CONSIDER',
+      signal: item.title,
+      whyItMatters: item.detail ?? 'Part of your pre-sale value-maximization checklist.',
+      recommendedAction: 'Review and address before listing',
+      expectedOutcome: 'A stronger buyer impression and support for your target sale price.',
+      timing: {
+        dueAt: null,
+        windowStart: null,
+        windowEnd: null,
+        rationale: 'Best completed before listing your home for sale.',
+      },
+      evidence: [{
+        id: item.id,
+        type: 'SYSTEM_DERIVATION',
+        label: item.title,
+        source: isSelfReported ? 'Your Sale Case answers' : 'Sale Readiness Checklist (general guidance)',
+        observedAt: item.updatedAt.toISOString(),
+        freshness: 'CURRENT',
+        confidence,
+      }],
+      ...guidanceDecisionContract(governance),
+      confidence: {
+        score: confidence,
+        label: confidenceLabel(confidence),
+        missing: isSelfReported ? [] : ['Verified condition assessment'],
+      },
+      governance,
+      primaryCta: {
+        kind: 'REVIEW',
+        label: 'Open sale checklist',
+        href: `/dashboard/properties/${propertyId}/tools/sale-case`,
+      },
+      secondaryCtas: [],
+      feedbackControls: RECOMMENDATION_FEEDBACK,
+      relatedJourneyId: null,
+      createdAt: item.createdAt.toISOString(),
+      lastEvaluatedAt: item.updatedAt.toISOString(),
     });
   });
 }
@@ -2357,6 +2439,7 @@ export async function getPromotedHomeActions(
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
     loadInspectionFindingActions(propertyId, db),
+    loadSalePrepActions(propertyId, db),
     options.includePersonalization === false ? Promise.resolve([]) : loadPersonalizationActions(propertyId, db),
     loadRefinanceDataRequiredActions(propertyId, db),
     loadRefinanceOpportunityActions(propertyId, db, options.evaluatedAt),

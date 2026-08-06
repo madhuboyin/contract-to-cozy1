@@ -38,6 +38,9 @@ const SOURCE_DEFAULT_JOBS: Record<HomeActionSourceKind, HomeAction['job']> = {
   SYSTEM: 'STAY_AHEAD',
   SAVINGS_BENEFITS: 'DECIDE',
   INSPECTION_FINDING: 'DECIDE',
+  // These tasks only exist because of an active sale — the "major moment"
+  // driving them, same framing as PROJECT rather than routine STAY_AHEAD work.
+  SALE_PREP: 'MAJOR_MOMENT',
 };
 
 const SOURCE_DESCRIPTIONS: Record<HomeActionSourceKind, string> = {
@@ -51,6 +54,7 @@ const SOURCE_DESCRIPTIONS: Record<HomeActionSourceKind, string> = {
   SYSTEM: 'System-derived risk, lifecycle, and data-quality actions.',
   SAVINGS_BENEFITS: 'Reviewed benefit, rebate, and credit matches with a material value or closing deadline.',
   INSPECTION_FINDING: 'Confirmed inspection report findings awaiting a homeowner accept/dismiss disposition.',
+  SALE_PREP: 'Value-maximizing presentation and cosmetic prep tasks tied to an active sale case.',
 };
 
 function createAdapter(kind: HomeActionSourceKind): SourceAdapterDefinition {
