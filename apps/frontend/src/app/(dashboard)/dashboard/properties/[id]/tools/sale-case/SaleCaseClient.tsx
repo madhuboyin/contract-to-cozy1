@@ -207,7 +207,7 @@ export default function SaleCaseClient() {
   const overview = overviewQuery.data;
 
   return (
-    <MobilePageContainer>
+    <MobilePageContainer className="lg:max-w-5xl lg:px-8 lg:pb-10">
       <div className="mb-4 hidden items-center gap-2 lg:flex">
         <Link
           href={`/dashboard/properties/${propertyId}`}
