@@ -70,11 +70,23 @@ test('fabricated ROI/uplift claims are removed from the readiness report and its
   assert.doesNotMatch(controller, /estimatedUpliftRange/);
   assert.doesNotMatch(controller, /roiRange\}\s*ROI/);
 
-  // ValueEstimatorCard/BudgetTrackerCard (the fabricated $-figure engine) are
-  // gated behind feature flags that default to false and are not set
-  // anywhere in the repo's env config — confirmed dormant, not touched here.
+  // ValueEstimatorCard/BudgetTrackerCard (the fabricated $-figure engine) and
+  // their feature flags were removed outright by the Sale Readiness
+  // Value-Maximization Checklist plan's Phase 5 cleanup (§8.9) — no longer
+  // just dormant behind a flag, the files and flags don't exist at all.
+  assert.equal(
+    fs.existsSync(path.join(repositoryRoot, 'apps/frontend/src/components/seller-prep/ValueEstimatorCard.tsx')),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(path.join(repositoryRoot, 'apps/frontend/src/components/seller-prep/BudgetTrackerCard.tsx')),
+    false,
+  );
+  assert.equal(fs.existsSync(path.join(backendRoot, 'src/sellerPrep/engines/valueCalculator.engine.ts')), false);
+
   const featureFlags = readRepository('apps/frontend/src/lib/featureFlags.ts');
-  assert.match(featureFlags, /VALUE_ESTIMATOR: process\.env\.NEXT_PUBLIC_FEATURE_VALUE_ESTIMATOR === 'true'/);
+  assert.doesNotMatch(featureFlags, /VALUE_ESTIMATOR/);
+  assert.doesNotMatch(featureFlags, /BUDGET_TRACKER/);
 
   // The per-item ROI%/cost-bucket line in the default-visible checklist tab
   // (not behind any flag) must not claim a property-specific ROI figure.

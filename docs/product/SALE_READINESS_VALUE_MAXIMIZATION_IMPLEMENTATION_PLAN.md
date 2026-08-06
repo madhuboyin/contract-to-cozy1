@@ -392,8 +392,10 @@ All 10 design decisions in §8 are resolved. This is the concrete build sequence
 
 ### Phase 5 — Backend: cleanup (§8.9)
 
-1. Delete `apps/backend/src/sellerPrep/engines/valueCalculator.engine.ts`.
-2. Delete `apps/frontend/src/components/seller-prep/BudgetTrackerCard.tsx`, `ValueEstimatorCard.tsx`, and remove their `FEATURE_FLAGS.VALUE_ESTIMATOR`/`BUDGET_TRACKER` references.
+**Done 2026-08-06.** Backend + frontend typecheck clean; targeted seller-prep test suites (backend and frontend) all pass. Went slightly beyond the two literal line items below since "remove outright, not left dormant" (§8.9) implied following every real reference through, not just the entry points named in the plan.
+
+1. ~~Delete `apps/backend/src/sellerPrep/engines/valueCalculator.engine.ts`~~ — done. Its only real caller, `sellerPrep.service.ts`'s `getOverview`, had the `calculateBudgetAndValue` call and the `budget`/`value` fields it fed (both branches of the return, plus the response type) removed too — a dead computed value with no consumer left is itself a dormant remnant. Confirmed via repo-wide grep that no other file imported anything from the deleted engine (one false-positive substring match against an unrelated `getCostEstimates` helper in `homeStatusBoard.service.ts` ruled out).
+2. ~~Delete `apps/frontend/src/components/seller-prep/BudgetTrackerCard.tsx`, `ValueEstimatorCard.tsx`, and remove their `FEATURE_FLAGS.VALUE_ESTIMATOR`/`BUDGET_TRACKER` references~~ — done, `featureFlags.ts` and `SellerPrepOverview.tsx`. The "Finance" tab in `SellerPrepOverview.tsx` existed solely to host these two cards — with both gone it would've been an empty, pointless tab, so it was removed too (`TabsList` now 2 columns: Market/Agents), rather than left as a dormant empty remnant of the same kind this phase exists to clean up. Also removed the two flags' env-var wiring from `infrastructure/kubernetes/apps/frontend/deployment.yaml` (the `frontend-feature-flags` ConfigMap itself is created outside this repo, not a tracked file). Updated `tests/unit/sellerPrepTrustContainment.test.js`'s "fabricated ROI/uplift claims" test, which had asserted the old flag-gated-off state (`VALUE_ESTIMATOR` flag exists and defaults false) — now asserts the stronger guarantee that the files and flags don't exist at all.
 
 ### Phase 6 — Frontend: Seller Prep entry flow (§4.4b, on `SellerPrepOverview.tsx`/its page)
 

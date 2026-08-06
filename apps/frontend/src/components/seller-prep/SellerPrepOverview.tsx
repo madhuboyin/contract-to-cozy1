@@ -15,13 +15,9 @@ import {
   TrendingUp,
   AlertCircle,
   LayoutDashboard,
-  DollarSign,
   Users
 } from "lucide-react";
 import { LeadCaptureModal } from "@/components/seller-prep/LeadCaptureModal";
-import { FEATURE_FLAGS } from "@/lib/featureFlags";
-import { BudgetTrackerCard } from "./BudgetTrackerCard";
-import { ValueEstimatorCard } from "./ValueEstimatorCard";
 import { AgentInterviewGuide } from "./AgentInterviewGuide";
 
 interface ComparableHome {
@@ -37,35 +33,6 @@ interface ComparableHome {
 interface SellerPrepOverviewProps {
   overview: {
     interviews?: any[];
-    budget?: {
-      totalBudget: number;
-      spentAmount: number;
-      remainingTasks: Array<{
-        title: string;
-        estimatedCost: number;
-      }>;
-    };
-    value?: {
-      completedImprovements: Array<{
-        title: string;
-        roiRange: string;
-        estimatedCost: number;
-      }>;
-      remainingImprovements: Array<{
-        title: string;
-        roiRange: string;
-        estimatedCost: number;
-        priority: string;
-      }>;
-      completedValueIncrease: {
-        minValue: number;
-        maxValue: number;
-      };
-      potentialValueIncrease: {
-        minValue: number;
-        maxValue: number;
-      };
-    };
   };
   comparables: ComparableHome[];
   propertyId: string;
@@ -98,10 +65,7 @@ export default function SellerPrepOverview({
           </Link>
         </div>
         <Tabs defaultValue="market" className="w-full">
-          <TabsList className="no-scrollbar mb-6 flex h-auto overflow-x-auto p-1 bg-muted/50 md:grid md:w-full md:grid-cols-3">
-            <TabsTrigger value="financials" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">
-              <DollarSign className="h-4 w-4 hidden sm:inline" /> <span>Finance</span>
-            </TabsTrigger>
+          <TabsList className="no-scrollbar mb-6 flex h-auto overflow-x-auto p-1 bg-muted/50 md:grid md:w-full md:grid-cols-2">
             <TabsTrigger value="market" className="flex shrink-0 items-center gap-2 text-xs md:text-sm py-2 px-3 md:px-1">
               <TrendingUp className="h-4 w-4 hidden sm:inline" /> <span>Market</span>
             </TabsTrigger>
@@ -109,16 +73,6 @@ export default function SellerPrepOverview({
               <Users className="h-4 w-4 hidden sm:inline" /> <span>Agents</span>
             </TabsTrigger>
           </TabsList>
-
-          {/* TAB: Budget & Value Estimates */}
-          <TabsContent value="financials" className="space-y-6 outline-none">
-            {FEATURE_FLAGS.VALUE_ESTIMATOR && overview.value && (
-              <ValueEstimatorCard {...overview.value} />
-            )}
-            {FEATURE_FLAGS.BUDGET_TRACKER && overview.budget && (
-              <BudgetTrackerCard {...overview.budget} />
-            )}
-          </TabsContent>
 
           {/* TAB: Comps */}
           <TabsContent value="market" className="space-y-6 outline-none">

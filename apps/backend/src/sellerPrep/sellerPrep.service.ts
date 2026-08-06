@@ -2,7 +2,6 @@
 import { prisma } from '../lib/prisma';
 import { resolveCompsProvider } from './providers/compsResolver';
 import { buildSellerReadinessReport } from './reports/sellerReadiness.builder';
-import { calculateBudgetAndValue } from './engines/valueCalculator.engine';
 import { resolvePropertyAccess } from '../services/propertyAccess.service';
 import { getPlanningContextEnvelope, getPlanningContextDecisions } from '../services/planningContext/context';
 
@@ -36,8 +35,6 @@ export class SellerPrepService {
     completionPercent: number;
     preferences: any;
     personalizedSummary: string | null;
-    budget: any;
-    value: any;
     interviews: any[]; // NEW: Added for agent comparison
     startDate: string | null;
     context: Awaited<ReturnType<typeof getPlanningContextEnvelope>>;
@@ -81,8 +78,6 @@ export class SellerPrepService {
           completionPercent: 0,
           preferences: null,
           personalizedSummary: null,
-          budget: null,
-          value: null,
           interviews: [],
           startDate: null,
           context: await getPlanningContextEnvelope(propertyId, userId, 'SELLER_PREP', null),
@@ -105,10 +100,6 @@ export class SellerPrepService {
     }
 
     const preferences = plan.preferences as any;
-    const budgetAndValue = calculateBudgetAndValue(
-      plan.items as any[],
-      preferences?.budget
-    );
 
     const contextEnvelope = await getPlanningContextEnvelope(
       propertyId,
@@ -124,8 +115,6 @@ export class SellerPrepService {
       completionPercent: 0,
       preferences,
       personalizedSummary: null,
-      budget: budgetAndValue.budget,
-      value: budgetAndValue.value,
       interviews: plan.interviews || [], // NEW: Return saved interviews
       startDate: plan.createdAt.toISOString(),
       context: contextEnvelope,
