@@ -13,6 +13,7 @@ import type {
   SaleReadinessItemStatus,
   SaleReadinessRequirementClass,
   SaleReadinessSourceType,
+  SalePrepBudgetRange,
   SaleTransitionRetentionDecision,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -22,6 +23,11 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { listWorkItems } from '../modules/homeOperations/application/listWorkItems.usecase';
 import { homeRecordsService } from './homeRecords.service';
 import { revokePropertyBriefShare } from '../propertyBrief/propertyBrief.service';
+import {
+  SALE_PREP_VALUE_CATALOG,
+  findSalePrepValueCatalogEntry,
+  type SalePrepValueCategoryKey,
+} from '../data/salePrepValueCatalog';
 
 type ProjectedItem = {
   sourceEntityType: SaleReadinessSourceType;
@@ -396,11 +402,24 @@ const STRUCTURAL_SYSTEM_KEYWORDS: Record<string, SaleReadinessCategory> = {
 };
 const STRUCTURAL_EVIDENCE_MIN_DETAIL_LENGTH = 40;
 
-function keywordsCoveredBy(items: ProjectedItem[]): Set<string> {
+function keywordsCoveredBy(items: ProjectedItem[], keywords: string[]): Set<string> {
   const covered = new Set<string>();
   const haystack = items.map((item) => `${item.title} ${item.detail ?? ''}`.toLowerCase());
-  for (const keyword of Object.keys(STRUCTURAL_SYSTEM_KEYWORDS)) {
+  for (const keyword of keywords) {
     if (haystack.some((text) => text.includes(keyword))) covered.add(keyword);
+  }
+  return covered;
+}
+
+// Same idea as keywordsCoveredBy, but returns the catalog CATEGORY keys
+// (e.g. 'curbAppeal') rather than the raw matched keyword strings (e.g.
+// 'curb appeal') — the two differ for several categories, so this can't
+// reuse keywordsCoveredBy's return value directly.
+function coveredSalePrepCategories(items: ProjectedItem[]): Set<SalePrepValueCategoryKey> {
+  const haystack = items.map((item) => `${item.title} ${item.detail ?? ''}`.toLowerCase());
+  const covered = new Set<SalePrepValueCategoryKey>();
+  for (const entry of SALE_PREP_VALUE_CATALOG) {
+    if (haystack.some((text) => text.includes(entry.keyword))) covered.add(entry.category);
   }
   return covered;
 }
@@ -456,6 +475,251 @@ async function projectStructuralSystemEvidence(
   return results;
 }
 
+// Sale Readiness Value-Maximization Checklist plan §4.3/§4.4/§10 Phase 3:
+// the Tier 2 gating cascade for the 6 curated cosmetic categories (§4.5).
+// Evaluated in priority order by syncReadinessItems: (1) a Tier 1 item
+// already covers the category → nothing more to do; (2) a completed
+// project/finalized material spec exists (this function) → a "confirm
+// current state" item, framed distinctly from a flat claim since a 2019
+// record doesn't guarantee 2026 condition (§3.6); (3) the homeowner has
+// answered the corresponding question → a personalized item, or nothing if
+// they reported it's already in good shape; (4) nothing at all → the
+// generic labeled catalog fallback (projectGenericFallbacks).
+
+// Paint/curb-appeal/staging have no comparable record type — §4.4's table
+// lists "prior answer only" for those, so only kitchen/bathroom/flooring
+// are checked here.
+const COSMETIC_UPGRADE_EVIDENCE_CATEGORIES: SalePrepValueCategoryKey[] = ['kitchen', 'bathroom', 'flooring'];
+const COSMETIC_EVIDENCE_MIN_DETAIL_LENGTH = 20;
+
+async function projectCosmeticUpgradeEvidence(
+  propertyId: string,
+  alreadyCoveredCategories: Set<SalePrepValueCategoryKey>,
+): Promise<{ items: ProjectedItem[]; coveredCategories: Set<SalePrepValueCategoryKey> }> {
+  const remaining = COSMETIC_UPGRADE_EVIDENCE_CATEGORIES.filter((c) => !alreadyCoveredCategories.has(c));
+  if (remaining.length === 0) return { items: [], coveredCategories: new Set() };
+
+  const [projects, materialSpecs] = await Promise.all([
+    prisma.projectRecord.findMany({
+      where: { propertyId, status: 'COMPLETED' },
+      select: { id: true, name: true, description: true },
+    }),
+    prisma.materialSpec.findMany({
+      where: { propertyId, isActive: true, lifecycleStatus: 'AS_BUILT' },
+      select: { id: true, label: true, category: true },
+    }),
+  ]);
+
+  const items: ProjectedItem[] = [];
+  const coveredCategories = new Set<SalePrepValueCategoryKey>();
+  for (const categoryKey of remaining) {
+    const entry = findSalePrepValueCatalogEntry(categoryKey);
+    const project = projects.find((p) =>
+      (p.description?.length ?? 0) >= COSMETIC_EVIDENCE_MIN_DETAIL_LENGTH
+      && p.name.toLowerCase().includes(entry.keyword));
+    if (project) {
+      items.push({
+        sourceEntityType: 'PROJECT' as const,
+        sourceEntityId: project.id,
+        category: 'PRESENTATION' as const,
+        requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+        title: `${project.name}: confirm current condition`,
+        detail: `A completed project on file — still holding up well, or worth a touch-up before listing? ${truncate(project.description ?? '', 300)}`,
+      });
+      coveredCategories.add(categoryKey);
+      continue;
+    }
+    const spec = materialSpecs.find((m) =>
+      m.label.toLowerCase().includes(entry.keyword) || String(m.category ?? '').toLowerCase().includes(entry.keyword));
+    if (spec) {
+      items.push({
+        sourceEntityType: 'MATERIAL_SPEC' as const,
+        sourceEntityId: spec.id,
+        category: 'PRESENTATION' as const,
+        requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+        title: `${spec.label}: confirm current condition`,
+        detail: 'On file as an as-built material — still holding up well, or worth a touch-up before listing?',
+      });
+      coveredCategories.add(categoryKey);
+    }
+  }
+  return { items, coveredCategories };
+}
+
+const SELF_REPORT_CONDITION_LABELS: Record<string, string> = {
+  FRESH: 'Fresh', SOME_WEAR: 'Some wear', NEEDS_REFRESH: 'Needs a refresh',
+  RECENTLY_UPDATED: 'Recently updated', DATED_BUT_FUNCTIONAL: 'Dated but functional', NEEDS_WORK: 'Needs work',
+  READY_TO_SHOW: 'Ready to show', NEEDS_SOME_WORK: 'Needs some work', NEEDS_SIGNIFICANT_WORK: 'Needs significant work',
+};
+// Only the "worth acting on" answers produce a checklist item — a
+// homeowner reporting their kitchen is already "Recently updated" isn't a
+// task, it's a satisfied category with nothing to show.
+const SELF_REPORT_NEEDS_ATTENTION = new Set(['NEEDS_REFRESH', 'NEEDS_WORK', 'NEEDS_SOME_WORK', 'NEEDS_SIGNIFICANT_WORK']);
+const SELF_REPORT_FIELD_TITLES: Record<SalePrepValueCategoryKey, string> = {
+  paint: 'Interior paint', curbAppeal: 'Curb appeal & landscaping', flooring: 'Flooring',
+  kitchen: 'Kitchen', bathroom: 'Bathrooms', staging: 'Decluttering & staging',
+};
+
+// Returns both the rendered items AND every category the homeowner has
+// answered at all (regardless of value) — a category reported as already
+// in good shape produces no item, but must still suppress the generic
+// fallback below, since it genuinely isn't unanswered.
+async function projectSelfReportedConditions(
+  propertyId: string,
+  alreadyCoveredCategories: Set<SalePrepValueCategoryKey>,
+): Promise<{ items: ProjectedItem[]; answeredCategories: Set<SalePrepValueCategoryKey> }> {
+  const profile = await prisma.propertySalePrepProfile.findUnique({ where: { propertyId } });
+  if (!profile) return { items: [], answeredCategories: new Set() };
+
+  const answered: Array<{ category: SalePrepValueCategoryKey; value: string | null }> = [
+    { category: 'paint', value: profile.paintCondition },
+    { category: 'curbAppeal', value: profile.curbAppealCondition },
+    { category: 'flooring', value: profile.flooringCondition },
+    { category: 'kitchen', value: profile.kitchenStatus },
+    { category: 'bathroom', value: profile.bathroomStatus },
+    { category: 'staging', value: profile.stagingReadiness },
+  ];
+
+  const items: ProjectedItem[] = [];
+  const answeredCategories = new Set<SalePrepValueCategoryKey>();
+  for (const { category, value } of answered) {
+    if (!value) continue;
+    answeredCategories.add(category);
+    if (alreadyCoveredCategories.has(category) || !SELF_REPORT_NEEDS_ATTENTION.has(value)) continue;
+    const entry = findSalePrepValueCatalogEntry(category);
+    items.push({
+      sourceEntityType: 'SALE_PREP_SELF_REPORT' as const,
+      sourceEntityId: category,
+      category: 'PRESENTATION' as const,
+      requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+      title: `${SELF_REPORT_FIELD_TITLES[category]}: ${SELF_REPORT_CONDITION_LABELS[value] ?? value}`,
+      detail: `${entry.detail} (${entry.source})`,
+    });
+  }
+  return { items, answeredCategories };
+}
+
+// The last-resort fallback: nothing derived, nothing self-reported. Clearly
+// labeled as unverified — never presented as if the system knows this
+// property's actual condition (§3.6, §4.1).
+function projectGenericFallbacks(alreadyCoveredCategories: Set<SalePrepValueCategoryKey>): ProjectedItem[] {
+  return SALE_PREP_VALUE_CATALOG
+    .filter((entry) => !alreadyCoveredCategories.has(entry.category))
+    .map((entry) => ({
+      sourceEntityType: 'SALE_PREP_GENERIC' as const,
+      sourceEntityId: entry.category,
+      category: 'PRESENTATION' as const,
+      requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+      title: entry.title,
+      detail: `${entry.detail} (${entry.source}) — general guidance, not verified against your records.`,
+    }));
+}
+
+// Sale Readiness Value-Maximization Checklist plan §4.5 question 8: once a
+// homeowner confirms a candidate upgrade, it becomes a real, positive-signal
+// item (same framing as projectTransferableWarranties) worth highlighting
+// to a buyer, not a gap to fix.
+async function projectConfirmedUpgrades(propertyId: string): Promise<ProjectedItem[]> {
+  const profile = await prisma.propertySalePrepProfile.findUnique({
+    where: { propertyId },
+    select: { confirmedUpgradeKeys: true },
+  });
+  if (!profile || profile.confirmedUpgradeKeys.length === 0) return [];
+
+  const results: ProjectedItem[] = [];
+  for (const key of profile.confirmedUpgradeKeys) {
+    const [sourceType, sourceId] = key.split(':');
+    if (!sourceType || !sourceId) continue;
+    if (sourceType === 'PROJECT') {
+      const project = await prisma.projectRecord.findFirst({ where: { id: sourceId, propertyId }, select: { id: true, name: true } });
+      if (project) {
+        results.push({
+          sourceEntityType: 'PROJECT' as const,
+          sourceEntityId: `highlight:${project.id}`,
+          category: 'PRESENTATION' as const,
+          requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+          title: `${project.name}: confirmed as a listing highlight`,
+          detail: 'Worth featuring in your listing and agent package.',
+        });
+      }
+    } else if (sourceType === 'MATERIAL_SPEC') {
+      const spec = await prisma.materialSpec.findFirst({ where: { id: sourceId, propertyId }, select: { id: true, label: true } });
+      if (spec) {
+        results.push({
+          sourceEntityType: 'MATERIAL_SPEC' as const,
+          sourceEntityId: `highlight:${spec.id}`,
+          category: 'PRESENTATION' as const,
+          requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+          title: `${spec.label}: confirmed as a listing highlight`,
+          detail: 'Worth featuring in your listing and agent package.',
+        });
+      }
+    } else if (sourceType === 'TIMELINE_EVENT') {
+      const event = await prisma.homeEvent.findFirst({ where: { id: sourceId, propertyId }, select: { id: true, title: true } });
+      if (event) {
+        results.push({
+          sourceEntityType: 'TIMELINE_EVENT' as const,
+          sourceEntityId: `highlight:${event.id}`,
+          category: 'PRESENTATION' as const,
+          requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+          title: `${event.title}: confirmed as a listing highlight`,
+          detail: 'Worth featuring in your listing and agent package.',
+        });
+      }
+    }
+  }
+  return results;
+}
+
+// Sale Readiness Value-Maximization Checklist plan §4.4b/§10 Phase 3: the
+// Seller Prep entry-flow gate, evaluated separately from readiness items
+// (this isn't a checklist item — it decides whether the checklist can even
+// be built meaningfully yet). Split by data shape, not a count threshold —
+// the 4 scalar Property fields are always inline-collectible regardless of
+// how many are missing; appliance/warranty gaps always route to their
+// existing dedicated Inventory/Warranty flows instead.
+export type MandatoryScalarField = 'roofReplacementYear' | 'hvacInstallYear' | 'waterHeaterInstallYear' | 'electricalPanelAge';
+export interface MandatoryFactCoverage {
+  scalarMissing: MandatoryScalarField[];
+  inventoryMissing: boolean;
+  warrantyMissing: boolean;
+  readyForChecklist: boolean;
+}
+
+async function checkMandatoryFactCoverage(propertyId: string): Promise<MandatoryFactCoverage> {
+  const [property, inventoryItem, warranty] = await Promise.all([
+    prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { roofReplacementYear: true, hvacInstallYear: true, waterHeaterInstallYear: true, electricalPanelAge: true },
+    }),
+    prisma.inventoryItem.findFirst({
+      where: {
+        propertyId,
+        condition: { not: 'UNKNOWN' },
+        OR: [{ installedOn: { not: null } }, { purchasedOn: { not: null } }],
+      },
+      select: { id: true },
+    }),
+    prisma.warranty.findFirst({ where: { propertyId }, select: { id: true } }),
+  ]);
+
+  const scalarMissing: MandatoryScalarField[] = [];
+  if (!property?.roofReplacementYear) scalarMissing.push('roofReplacementYear');
+  if (!property?.hvacInstallYear) scalarMissing.push('hvacInstallYear');
+  if (!property?.waterHeaterInstallYear) scalarMissing.push('waterHeaterInstallYear');
+  if (!property?.electricalPanelAge) scalarMissing.push('electricalPanelAge');
+
+  const inventoryMissing = !inventoryItem;
+  const warrantyMissing = !warranty;
+
+  return {
+    scalarMissing,
+    inventoryMissing,
+    warrantyMissing,
+    readyForChecklist: scalarMissing.length === 0 && !inventoryMissing && !warrantyMissing,
+  };
+}
+
 async function syncReadinessItems(saleCaseId: string, propertyId: string, role: HouseholdRole): Promise<void> {
   const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents, agingSystems, lapsedMaintenance, transferableWarranties] = await Promise.all([
     projectInspectionFindings(propertyId),
@@ -474,11 +738,24 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
   // action — never duplicates or overrides an existing Tier 1 signal.
   const structuralEvidence = await projectStructuralSystemEvidence(
     propertyId,
-    keywordsCoveredBy([...findings, ...permits, ...homeActions]),
+    keywordsCoveredBy([...findings, ...permits, ...homeActions], Object.keys(STRUCTURAL_SYSTEM_KEYWORDS)),
   );
+
+  // Tier 2 gating cascade (§4.3/§4.4) for the 6 cosmetic categories — each
+  // stage only fills in categories the previous stage didn't already cover.
+  const tier1CoveredCategories = coveredSalePrepCategories([...findings, ...homeActions, ...materialSpecs]);
+  const { items: upgradeEvidenceItems, coveredCategories: upgradeCoveredCategories } =
+    await projectCosmeticUpgradeEvidence(propertyId, tier1CoveredCategories);
+  const evidenceCoveredCategories = new Set([...tier1CoveredCategories, ...upgradeCoveredCategories]);
+  const { items: selfReportedItems, answeredCategories } = await projectSelfReportedConditions(propertyId, evidenceCoveredCategories);
+  const fullyCoveredCategories = new Set([...evidenceCoveredCategories, ...answeredCategories]);
+  const genericFallbacks = projectGenericFallbacks(fullyCoveredCategories);
+  const confirmedUpgrades = await projectConfirmedUpgrades(propertyId);
+
   const projected = [
     ...findings, ...projects, ...permits, ...homeActions, ...records, ...materialSpecs, ...timelineEvents,
     ...agingSystems, ...lapsedMaintenance, ...transferableWarranties, ...structuralEvidence,
+    ...upgradeEvidenceItems, ...selfReportedItems, ...genericFallbacks, ...confirmedUpgrades,
   ];
   const projectedKeys = new Set(projected.map((p) => `${p.sourceEntityType}:${p.sourceEntityId}`));
 
@@ -578,6 +855,120 @@ export class PropertySaleCaseService {
       readinessItems,
       transitions,
     };
+  }
+
+  // Sale Readiness Value-Maximization Checklist plan §4.4b/§10 Phase 3: the
+  // Seller Prep entry-flow gate — evaluated separately from getCase since
+  // it decides whether the checklist can be built meaningfully yet, not a
+  // checklist item itself.
+  static async getEntryFlowStatus(userId: string, propertyId: string) {
+    await requireAccess(userId, propertyId);
+    return checkMandatoryFactCoverage(propertyId);
+  }
+
+  // Plan §4.5: current answers for the grouped question card. Question
+  // wording/copy lives in the frontend (§4.10) — this just reports which of
+  // the 6 condition facts + budget are still null so the card knows what's
+  // still unanswered.
+  static async getSalePrepQuestionStatus(userId: string, propertyId: string) {
+    await requireAccess(userId, propertyId);
+    const [profile, saleCase] = await Promise.all([
+      prisma.propertySalePrepProfile.findUnique({ where: { propertyId } }),
+      prisma.propertySaleCase.findUnique({ where: { propertyId }, select: { budgetRange: true } }),
+    ]);
+    return {
+      paintCondition: profile?.paintCondition ?? null,
+      curbAppealCondition: profile?.curbAppealCondition ?? null,
+      flooringCondition: profile?.flooringCondition ?? null,
+      kitchenStatus: profile?.kitchenStatus ?? null,
+      bathroomStatus: profile?.bathroomStatus ?? null,
+      stagingReadiness: profile?.stagingReadiness ?? null,
+      budgetRange: saleCase?.budgetRange ?? null,
+    };
+  }
+
+  static async updateBudgetRange(userId: string, propertyId: string, budgetRange: SalePrepBudgetRange | null) {
+    await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
+    if (!saleCase) throw new APIError('Sale case not found', 404, 'SALE_CASE_NOT_FOUND');
+    return prisma.propertySaleCase.update({ where: { id: saleCase.id }, data: { budgetRange } });
+  }
+
+  // Plan §4.5 question 8: pre-populated pick-list from real project/
+  // material/event history — the record itself is direct evidence an
+  // upgrade happened (§3.6), unlike the condition questions above.
+  static async getNotableUpgradeCandidates(userId: string, propertyId: string) {
+    await requireAccess(userId, propertyId);
+    const profile = await prisma.propertySalePrepProfile.findUnique({
+      where: { propertyId },
+      select: { confirmedUpgradeKeys: true },
+    });
+    const confirmed = new Set(profile?.confirmedUpgradeKeys ?? []);
+
+    const [projects, materialSpecs, events] = await Promise.all([
+      prisma.projectRecord.findMany({
+        where: { propertyId, status: 'COMPLETED' },
+        select: { id: true, name: true, description: true },
+        take: 20,
+      }),
+      prisma.materialSpec.findMany({
+        where: { propertyId, isActive: true, lifecycleStatus: 'AS_BUILT' },
+        select: { id: true, label: true },
+        take: 20,
+      }),
+      prisma.homeEvent.findMany({
+        where: { propertyId, isCurrent: true, importance: { in: ['HIGH', 'HIGHLIGHT'] }, type: { in: ['IMPROVEMENT', 'MILESTONE'] } },
+        select: { id: true, title: true, summary: true },
+        take: 20,
+      }),
+    ]);
+
+    return {
+      candidates: [
+        ...projects.map((p) => ({
+          sourceEntityType: 'PROJECT' as const, sourceEntityId: p.id, title: p.name,
+          detail: p.description ?? null, confirmed: confirmed.has(`PROJECT:${p.id}`),
+        })),
+        ...materialSpecs.map((m) => ({
+          sourceEntityType: 'MATERIAL_SPEC' as const, sourceEntityId: m.id, title: m.label,
+          detail: null, confirmed: confirmed.has(`MATERIAL_SPEC:${m.id}`),
+        })),
+        ...events.map((e) => ({
+          sourceEntityType: 'TIMELINE_EVENT' as const, sourceEntityId: e.id, title: e.title,
+          detail: e.summary ?? null, confirmed: confirmed.has(`TIMELINE_EVENT:${e.id}`),
+        })),
+      ],
+    };
+  }
+
+  static async confirmNotableUpgrades(userId: string, propertyId: string, keys: string[]) {
+    const access = await requireAccess(userId, propertyId, 'CONTRIBUTOR');
+    // Validate every key actually references a real record on this
+    // property — never trust client-supplied composite keys blindly.
+    const validated: string[] = [];
+    for (const key of keys) {
+      const [sourceType, sourceId] = key.split(':');
+      if (!sourceType || !sourceId) continue;
+      if (sourceType === 'PROJECT') {
+        if (await prisma.projectRecord.findFirst({ where: { id: sourceId, propertyId }, select: { id: true } })) validated.push(key);
+      } else if (sourceType === 'MATERIAL_SPEC') {
+        if (await prisma.materialSpec.findFirst({ where: { id: sourceId, propertyId }, select: { id: true } })) validated.push(key);
+      } else if (sourceType === 'TIMELINE_EVENT') {
+        if (await prisma.homeEvent.findFirst({ where: { id: sourceId, propertyId }, select: { id: true } })) validated.push(key);
+      }
+    }
+
+    await prisma.propertySalePrepProfile.upsert({
+      where: { propertyId },
+      create: { propertyId, confirmedUpgradeKeys: validated },
+      update: { confirmedUpgradeKeys: validated },
+    });
+
+    // Resync so confirmed upgrades appear as real readiness items right away.
+    const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
+    if (saleCase) await syncReadinessItems(saleCase.id, propertyId, access.role);
+
+    return { confirmedUpgradeKeys: validated };
   }
 
   static async createCase(userId: string, propertyId: string) {

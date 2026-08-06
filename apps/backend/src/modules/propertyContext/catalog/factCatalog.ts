@@ -61,6 +61,13 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'systems.heatingType', scope: 'SYSTEMS', canonicalOwner: 'Property.heatingType', correctionPath: propertyPath('systems'), writable: true },
   { key: 'systems.coolingType', scope: 'SYSTEMS', canonicalOwner: 'Property.coolingType', correctionPath: propertyPath('systems'), writable: true },
   { key: 'systems.waterHeaterType', scope: 'SYSTEMS', canonicalOwner: 'Property.waterHeaterType', correctionPath: propertyPath('systems'), writable: true },
+  // Sale Readiness Value-Maximization Checklist plan §4.4b/§10 Phase 3: the
+  // Property fields already existed (hvacInstallYear, waterHeaterInstallYear)
+  // but were never exposed as capturable facts until the mandatory-fact
+  // entry flow needed them alongside the already-registered
+  // structure.roofReplacementYear / structure.electricalPanelAgeYears.
+  { key: 'systems.hvacInstallYear', scope: 'SYSTEMS', canonicalOwner: 'Property.hvacInstallYear', correctionPath: propertyPath('systems'), writable: true },
+  { key: 'systems.waterHeaterInstallYear', scope: 'SYSTEMS', canonicalOwner: 'Property.waterHeaterInstallYear', correctionPath: propertyPath('systems'), writable: true },
   { key: 'systems.installedItemTypes', scope: 'SYSTEMS', canonicalOwner: 'InventoryItem', correctionPath: '/dashboard/properties/:propertyId/inventory', writable: false },
   { key: 'safety.hasSmokeDetectors', scope: 'SAFETY', canonicalOwner: 'Property.hasSmokeDetectors', correctionPath: propertyPath('safety'), writable: true },
   { key: 'safety.hasCoDetectors', scope: 'SAFETY', canonicalOwner: 'Property.hasCoDetectors', correctionPath: propertyPath('safety'), writable: true },
@@ -109,6 +116,18 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'product.propertyOrigin', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'PropertyOnboarding.propertyOrigin', correctionPath: '/dashboard/properties/:propertyId/onboarding', writable: false },
   { key: 'product.canViewFacts', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'HouseholdMember.role', correctionPath: null, writable: false },
   { key: 'product.canCorrectFacts', scope: 'PRODUCT_CONTEXT', canonicalOwner: 'HouseholdMember.role', correctionPath: null, writable: false },
+  // Sale Readiness Value-Maximization Checklist plan §4.5/§4.6/§10 Phase 3.
+  // correctionPath deliberately does not follow this catalog's usual
+  // Property Edit anchor convention — these facts are answered inline on
+  // the Sale Case question card (§4.5), not via property setup, since
+  // there's no general-property-profile reason to ask a homeowner about
+  // paint condition outside a sale context.
+  { key: 'salePrep.paintCondition', scope: 'SALE_PREP', canonicalOwner: 'PropertySalePrepProfile.paintCondition', correctionPath: '/dashboard/properties/:propertyId/tools/sale-case', writable: true },
+  { key: 'salePrep.curbAppealCondition', scope: 'SALE_PREP', canonicalOwner: 'PropertySalePrepProfile.curbAppealCondition', correctionPath: '/dashboard/properties/:propertyId/tools/sale-case', writable: true },
+  { key: 'salePrep.flooringCondition', scope: 'SALE_PREP', canonicalOwner: 'PropertySalePrepProfile.flooringCondition', correctionPath: '/dashboard/properties/:propertyId/tools/sale-case', writable: true },
+  { key: 'salePrep.kitchenStatus', scope: 'SALE_PREP', canonicalOwner: 'PropertySalePrepProfile.kitchenStatus', correctionPath: '/dashboard/properties/:propertyId/tools/sale-case', writable: true },
+  { key: 'salePrep.bathroomStatus', scope: 'SALE_PREP', canonicalOwner: 'PropertySalePrepProfile.bathroomStatus', correctionPath: '/dashboard/properties/:propertyId/tools/sale-case', writable: true },
+  { key: 'salePrep.stagingReadiness', scope: 'SALE_PREP', canonicalOwner: 'PropertySalePrepProfile.stagingReadiness', correctionPath: '/dashboard/properties/:propertyId/tools/sale-case', writable: true },
 ] as const satisfies readonly PropertyFactDefinition[];
 
 const catalogByKey = new Map<string, PropertyFactDefinition>(

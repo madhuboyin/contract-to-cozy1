@@ -204,6 +204,28 @@ export const exteriorAssembler: PropertyContextAssembler = {
   },
 };
 
+// Sale Readiness Value-Maximization Checklist plan §4.6/§10 Phase 3.
+export const salePrepAssembler: PropertyContextAssembler = {
+  scope: 'SALE_PREP',
+  async assemble(propertyId, now) {
+    const [profile, evidence] = await Promise.all([
+      prisma.propertySalePrepProfile.findUnique({ where: { propertyId } }),
+      loadEvidence(propertyId, 'SALE_PREP'),
+    ]);
+    const values: Record<string, unknown> = {
+      'salePrep.paintCondition': profile?.paintCondition,
+      'salePrep.curbAppealCondition': profile?.curbAppealCondition,
+      'salePrep.flooringCondition': profile?.flooringCondition,
+      'salePrep.kitchenStatus': profile?.kitchenStatus,
+      'salePrep.bathroomStatus': profile?.bathroomStatus,
+      'salePrep.stagingReadiness': profile?.stagingReadiness,
+    };
+    return Object.entries(values).map(([key, value]) =>
+      withPropertyId(createPropertyFact(key, value, evidence.get(key), now), propertyId),
+    );
+  },
+};
+
 const responsibilityFactKeys: Record<PropertyResponsibilityScope, string> = {
   ROOF: 'responsibility.roof',
   BUILDING_EXTERIOR: 'responsibility.buildingExterior',
@@ -266,6 +288,8 @@ export const systemsAssembler: PropertyContextAssembler = {
           heatingType: true,
           coolingType: true,
           waterHeaterType: true,
+          hvacInstallYear: true,
+          waterHeaterInstallYear: true,
           inventoryItems: { select: { category: true, name: true, tags: true } },
         },
       }),
@@ -280,6 +304,8 @@ export const systemsAssembler: PropertyContextAssembler = {
       'systems.heatingType': property.heatingType === 'UNKNOWN' ? null : property.heatingType,
       'systems.coolingType': property.coolingType === 'UNKNOWN' ? null : property.coolingType,
       'systems.waterHeaterType': property.waterHeaterType === 'UNKNOWN' ? null : property.waterHeaterType,
+      'systems.hvacInstallYear': property.hvacInstallYear,
+      'systems.waterHeaterInstallYear': property.waterHeaterInstallYear,
       'systems.installedItemTypes': installedItemTypes,
     };
     return Object.entries(values).map(([key, value]) =>
@@ -1023,6 +1049,7 @@ export const INITIAL_PROPERTY_CONTEXT_ASSEMBLERS: PropertyContextAssembler[] = [
   locationAssembler,
   structureAssembler,
   exteriorAssembler,
+  salePrepAssembler,
   responsibilityAssembler,
   systemsAssembler,
   safetyAssembler,

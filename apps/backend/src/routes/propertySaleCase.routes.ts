@@ -27,6 +27,14 @@ const itemDecisionSchema = z.object({
 
 const retentionDecisionSchema = z.enum(['RETAIN_PRIVATE_ONLY', 'SHARE_SELECTED_HISTORY']);
 
+const budgetRangeSchema = z.object({
+  budgetRange: z.enum(['UNDER_5K', 'FIVE_TO_15K', 'FIFTEEN_TO_30K', 'OVER_30K']).nullable(),
+});
+
+const confirmNotableUpgradesSchema = z.object({
+  keys: z.array(z.string().min(1)).max(50),
+});
+
 const recordTransitionSchema = z.object({
   effectiveAt: z.string().datetime().nullable().optional(),
   sellerRetentionDecision: retentionDecisionSchema.nullable().optional(),
@@ -185,6 +193,78 @@ router.post(
         req.params.propertyId,
         req.params.transitionId,
         { revokeShareIds: input.revokeShareIds },
+      );
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/properties/:propertyId/sale-case/entry-flow',
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const result = await PropertySaleCaseService.getEntryFlowStatus(req.user!.userId, req.params.propertyId);
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/properties/:propertyId/sale-case/prep-questions',
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const result = await PropertySaleCaseService.getSalePrepQuestionStatus(req.user!.userId, req.params.propertyId);
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.patch(
+  '/properties/:propertyId/sale-case/budget',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(budgetRangeSchema, req.body ?? {});
+      const saleCase = await PropertySaleCaseService.updateBudgetRange(
+        req.user!.userId,
+        req.params.propertyId,
+        input.budgetRange,
+      );
+      return res.json({ success: true, data: { saleCase } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/properties/:propertyId/sale-case/notable-upgrades',
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const result = await PropertySaleCaseService.getNotableUpgradeCandidates(req.user!.userId, req.params.propertyId);
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/properties/:propertyId/sale-case/notable-upgrades/confirm',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(confirmNotableUpgradesSchema, req.body ?? {});
+      const result = await PropertySaleCaseService.confirmNotableUpgrades(
+        req.user!.userId,
+        req.params.propertyId,
+        input.keys,
       );
       return res.json({ success: true, data: result });
     } catch (error) {

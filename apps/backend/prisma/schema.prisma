@@ -3239,7 +3239,14 @@ model PropertySalePrepProfile {
   kitchenStatus       PropertyRoomUpdateStatus?
   bathroomStatus      PropertyRoomUpdateStatus?
   stagingReadiness    PropertyStagingReadiness?
-  updatedAt           DateTime                   @updatedAt
+  // Plan §4.5 question 8 ("notable upgrades to highlight"): the homeowner's
+  // confirmed selection from a pre-populated pick-list of real
+  // ProjectRecord/MaterialSpec/HomeEvent history. Stored as
+  // "sourceEntityType:sourceEntityId" composite keys (same shape
+  // syncReadinessItems already uses internally) rather than a join table —
+  // a simple confirmed-or-not set, no per-selection metadata needed.
+  confirmedUpgradeKeys String[]                   @default([])
+  updatedAt             DateTime                  @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
@@ -4706,6 +4713,14 @@ enum SaleReadinessSourceType {
   INVENTORY_ITEM
   MAINTENANCE_TASK
   WARRANTY
+  // Plan §4.3/§4.4 (Phase 3): the Tier 2 gating logic's two non-Tier-1
+  // outcomes — a personalized item built from the homeowner's own answer to
+  // a curated question (§4.5), or the generic labeled catalog fallback when
+  // nothing else applies. Neither has a "real" backing row the way every
+  // other source type here does, so sourceEntityId is a synthetic key (the
+  // category name) rather than a foreign id.
+  SALE_PREP_SELF_REPORT
+  SALE_PREP_GENERIC
 }
 
 enum SaleReadinessCategory {

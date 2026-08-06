@@ -371,13 +371,15 @@ All 10 design decisions in §8 are resolved. This is the concrete build sequence
 
 ### Phase 3 — Backend: Tier 2 catalog, gating, mandatory-fact evaluation, entry flow
 
-1. New static catalog file (`apps/backend/src/data/`, mirrors `seasonalTaskTemplates.json`'s pattern) for the 6 `PRESENTATION` categories, with Phase 0.4's sourced reference content.
-2. Per-category gating logic (§4.3/§4.4's decision table) in `propertySaleCase.service.ts`: Tier 1 item exists → show it; else genuine evidence (prior fact, real inspection assessment, or upgrade-history record) → confirm-style item; else self-reported answer exists → personalized item; else → generic labeled fallback.
-3. Mandatory-fact coverage check (§4.4b) against the 6 fields confirmed in the schema check: `roofReplacementYear`, `hvacInstallYear`, `waterHeaterInstallYear`, `electricalPanelAge`, `InventoryItem` completeness, `Warranty` presence.
-4. New endpoint(s) for the Seller Prep entry flow (§4.4b): evaluate coverage, return the scalar-fields-missing list (inline-collectible) separately from appliance/warranty gaps (routed to Inventory/Warranty).
-5. New endpoint(s) for the grouped question card (§4.5): list unanswered questions, submit an answer (writes to the Phase 0.2 fact store), return the resulting swapped-in personalized item.
-6. Notable-upgrades endpoint: pre-populate candidates from `ProjectRecord`/`MaterialSpec`/`HomeEvent`, accept a confirmed selection.
-7. `syncReadinessItems` calls all of the above alongside the existing seven projectors.
+**Done 2026-08-06.** Backend typechecks clean. Condition-fact question answers route through the pre-existing generic `PATCH /properties/:id/context/:factKey` fact-capture endpoint rather than a bespoke one (confirmed generic and already wired); only the entry-flow, question-status, budget, and notable-upgrades endpoints needed new routes.
+
+1. ~~New static catalog file~~ — done, `apps/backend/src/data/salePrepValueCatalog.ts`. 6 `PRESENTATION` categories (paint/curbAppeal/flooring/kitchen/bathroom/staging) with Phase 0.4's sourced reference content; exports `SALE_PREP_VALUE_CATALOG`, `SalePrepValueCategoryKey`, `findSalePrepValueCatalogEntry()`.
+2. ~~Per-category gating logic~~ — done. `coveredSalePrepCategories`, `projectCosmeticUpgradeEvidence` (kitchen/bathroom/flooring evidence from completed `ProjectRecord`/finalized `MaterialSpec`), `projectSelfReportedConditions` (reads `PropertySalePrepProfile`), `projectGenericFallbacks`, and `projectConfirmedUpgrades` implement the full cascade in `propertySaleCase.service.ts`, wired into `syncReadinessItems`.
+3. ~~Mandatory-fact coverage check~~ — done, `checkMandatoryFactCoverage`. Checks the 4 scalar `Property` fields (always inline-collectible regardless of count) plus at-least-one-`InventoryItem`-with-condition+date and at-least-one-`Warranty`.
+4. ~~New endpoint(s) for the Seller Prep entry flow~~ — done. `GET /properties/:propertyId/sale-case/entry-flow` → `PropertySaleCaseService.getEntryFlowStatus`.
+5. ~~New endpoint(s) for the grouped question card~~ — done. `GET /properties/:propertyId/sale-case/prep-questions` (status) + `PATCH /properties/:propertyId/sale-case/budget` (budget answer); the 6 condition-fact answers reuse the existing generic context fact-capture endpoint with `salePrep.*` fact keys, no new route needed.
+6. ~~Notable-upgrades endpoint~~ — done. `GET /properties/:propertyId/sale-case/notable-upgrades` (candidates from `ProjectRecord`/`MaterialSpec`/`HomeEvent`) + `POST /properties/:propertyId/sale-case/notable-upgrades/confirm` (validates each key against a real record on the property before persisting to `PropertySalePrepProfile.confirmedUpgradeKeys`).
+7. ~~`syncReadinessItems` calls all of the above~~ — done, alongside the existing seven Phase 2 projectors.
 
 ### Phase 4 — Backend: Home Actions integration (§4.8)
 

@@ -21,6 +21,11 @@ export const PROPERTY_CONTEXT_SCOPES = [
   'GUIDANCE_STATE',
   'PRODUCT_CONTEXT',
   'OPTIONAL_HOUSEHOLD',
+  // Sale Readiness Value-Maximization Checklist plan §4.6: the 6 curated
+  // self-reported cosmetic-condition facts (§4.5) — no existing scope fits
+  // (STRUCTURE covers types, not current condition; EXTERIOR covers feature
+  // presence, not condition).
+  'SALE_PREP',
 ] as const;
 
 export type PropertyContextScope = typeof PROPERTY_CONTEXT_SCOPES[number];

@@ -13,6 +13,9 @@ import {
   HeatingType,
   CoolingType,
   WaterHeaterType,
+  PropertyCosmeticCondition,
+  PropertyRoomUpdateStatus,
+  PropertyStagingReadiness,
 } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
@@ -56,6 +59,8 @@ const propertyFacts = {
   'systems.heatingType': { field: 'heatingType', schema: z.nativeEnum(HeatingType).nullable() },
   'systems.coolingType': { field: 'coolingType', schema: z.nativeEnum(CoolingType).nullable() },
   'systems.waterHeaterType': { field: 'waterHeaterType', schema: z.nativeEnum(WaterHeaterType).nullable() },
+  'systems.hvacInstallYear': { field: 'hvacInstallYear', schema: nullableNonNegativeInteger },
+  'systems.waterHeaterInstallYear': { field: 'waterHeaterInstallYear', schema: nullableNonNegativeInteger },
   'safety.hasSmokeDetectors': { field: 'hasSmokeDetectors', schema: nullableBoolean },
   'safety.hasCoDetectors': { field: 'hasCoDetectors', schema: nullableBoolean },
   'safety.hasSecuritySystem': { field: 'hasSecuritySystem', schema: nullableBoolean },
@@ -76,6 +81,18 @@ const exteriorFacts = {
   'exterior.hasIrrigation': { field: 'hasIrrigation', schema: nullableBoolean },
   'exterior.hasOutdoorFaucets': { field: 'hasOutdoorFaucets', schema: nullableBoolean },
   'exterior.hasDrainageIssues': { field: 'hasDrainageIssues', schema: nullableBoolean },
+} as const;
+
+// Sale Readiness Value-Maximization Checklist plan §4.6/§10 Phase 3. Written
+// to PropertySalePrepProfile, mirroring exteriorFacts's one-row-per-property
+// pattern.
+const salePrepFacts = {
+  'salePrep.paintCondition': { field: 'paintCondition', schema: z.nativeEnum(PropertyCosmeticCondition).nullable() },
+  'salePrep.curbAppealCondition': { field: 'curbAppealCondition', schema: z.nativeEnum(PropertyCosmeticCondition).nullable() },
+  'salePrep.flooringCondition': { field: 'flooringCondition', schema: z.nativeEnum(PropertyCosmeticCondition).nullable() },
+  'salePrep.kitchenStatus': { field: 'kitchenStatus', schema: z.nativeEnum(PropertyRoomUpdateStatus).nullable() },
+  'salePrep.bathroomStatus': { field: 'bathroomStatus', schema: z.nativeEnum(PropertyRoomUpdateStatus).nullable() },
+  'salePrep.stagingReadiness': { field: 'stagingReadiness', schema: z.nativeEnum(PropertyStagingReadiness).nullable() },
 } as const;
 
 const responsibilityScopes: Record<string, PropertyResponsibilityScope> = {
@@ -103,7 +120,7 @@ export const capturePropertyFactInputSchema = z.object({
 export type CapturePropertyFactInput = z.infer<typeof capturePropertyFactInputSchema>;
 
 export function isContextCaptureSupported(factKey: string): boolean {
-  return factKey in propertyFacts || factKey in exteriorFacts || factKey in responsibilityScopes;
+  return factKey in propertyFacts || factKey in exteriorFacts || factKey in salePrepFacts || factKey in responsibilityScopes;
 }
 
 export function normalizeCaptureValue(factKey: string, value: unknown): unknown {
@@ -113,6 +130,9 @@ export function normalizeCaptureValue(factKey: string, value: unknown): unknown 
   }
   if (factKey in exteriorFacts) {
     return exteriorFacts[factKey as keyof typeof exteriorFacts].schema.parse(value);
+  }
+  if (factKey in salePrepFacts) {
+    return salePrepFacts[factKey as keyof typeof salePrepFacts].schema.parse(value);
   }
   if (factKey in responsibilityScopes) {
     return z.nativeEnum(ResponsibleParty).parse(value ?? 'UNKNOWN');
@@ -200,6 +220,17 @@ export async function writeCanonicalFact(
       patch.hasPrivateOutdoorSpace = true;
     }
     await tx.propertyExteriorProfile.upsert({
+      where: { propertyId },
+      create: { propertyId, ...patch },
+      update: patch,
+    });
+    return;
+  }
+
+  if (factKey in salePrepFacts) {
+    const mapping = salePrepFacts[factKey as keyof typeof salePrepFacts];
+    const patch: Record<string, unknown> = { [mapping.field]: value };
+    await tx.propertySalePrepProfile.upsert({
       where: { propertyId },
       create: { propertyId, ...patch },
       update: patch,
