@@ -305,6 +305,11 @@ export function LifecycleForm({ material, propertyId, onSaved }: {
     <form onSubmit={submit} className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
       <p className="text-xs font-semibold">Move to {toStatus.replace('_', ' ')}</p>
       {error && <p className="text-xs text-rose-700">{error}</p>}
+      <p className="text-[11px] text-slate-500">
+        A linked Home Record (via that record&apos;s &quot;Link to another record&quot;) with the matching
+        purpose also counts as evidence — you don&apos;t have to enter document IDs here if you&apos;ve
+        already linked one.
+      </p>
       <Input value={evidence} onChange={e => setEvidence(e.target.value)} placeholder="Evidence document IDs, comma-separated" />
       {toStatus === 'APPROVED' && (
         <>

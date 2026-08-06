@@ -151,6 +151,23 @@ export class MaterialSpecService {
     ];
     await this.assertDocumentsBelong(propertyId, allEvidenceIds);
 
+    // Migration onto the typed PropertyRecordLink model (Slice 5): the
+    // legacy *DocumentIds fields above stay exactly as they were — every
+    // existing gate below still honors them first, zero behavior change
+    // for specs that only ever use them. What's new: a real Home Record
+    // (linked via Home Records' own "Link to another record" — already
+    // fully functional as of an earlier pass) can ALSO satisfy these same
+    // evidence requirements, via PropertyRecordLink.purpose values that
+    // map 1:1 onto this domain's evidence categories. This is additive —
+    // no existing validation logic is rewritten, only widened to accept a
+    // second, more governed evidence source going forward.
+    const linkedPurposes = ['APPROVED', 'INSTALLED', 'AS_BUILT'].includes(payload.toStatus)
+      ? new Set((await prisma.propertyRecordLink.findMany({
+          where: { entityType: 'MATERIAL_SPEC', entityId: specId, record: { propertyId } },
+          select: { purpose: true },
+        })).map((link) => link.purpose))
+      : new Set<string>();
+
     const permitAttributeCheck = payload.permitAttributeCheck ?? spec.permitAttributeCheck;
     const hoaAttributeCheck = payload.hoaAttributeCheck ?? spec.hoaAttributeCheck;
     const checks = complianceCheckPassed({
@@ -168,10 +185,11 @@ export class MaterialSpecService {
     }
 
     if (payload.toStatus === 'APPROVED') {
-      if (
-        (payload.submittalDocumentIds ?? spec.submittalDocumentIds).length === 0
-        || (payload.approvalDocumentIds ?? []).length === 0
-      ) {
+      const submittalSatisfied = (payload.submittalDocumentIds ?? spec.submittalDocumentIds).length > 0
+        || linkedPurposes.has('SOURCE');
+      const approvalSatisfied = (payload.approvalDocumentIds ?? []).length > 0
+        || linkedPurposes.has('APPROVAL');
+      if (!submittalSatisfied || !approvalSatisfied) {
         throw new APIError(
           'Approval requires both submittal and approval evidence.',
           409,
@@ -180,7 +198,8 @@ export class MaterialSpecService {
       }
     }
     if (payload.toStatus === 'INSTALLED') {
-      if (payload.evidenceDocumentIds.length === 0 || !payload.quantityInstalled?.trim()) {
+      const evidenceSatisfied = payload.evidenceDocumentIds.length > 0 || linkedPurposes.has('EVIDENCE');
+      if (!evidenceSatisfied || !payload.quantityInstalled?.trim()) {
         throw new APIError(
           'Installation requires evidence and installed quantity.',
           409,
@@ -194,10 +213,12 @@ export class MaterialSpecService {
         && spec.productName?.trim()
         && (spec.sku?.trim() || spec.colorCode?.trim() || spec.lotBatch?.trim()),
       );
+      const evidenceSatisfied = payload.evidenceDocumentIds.length > 0 || linkedPurposes.has('EVIDENCE');
+      const receiptSatisfied = Boolean(payload.receiptDocumentId) || linkedPurposes.has('RECEIPT');
       if (
         !exactIdentityKnown
-        || payload.evidenceDocumentIds.length === 0
-        || !payload.receiptDocumentId
+        || !evidenceSatisfied
+        || !receiptSatisfied
         || payload.quantityRemaining == null
       ) {
         throw new APIError(
