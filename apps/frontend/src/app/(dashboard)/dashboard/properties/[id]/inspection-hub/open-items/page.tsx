@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import type { InspectionFinding, InspectionResolutionMethod } from '@/types';
@@ -138,6 +138,16 @@ const SYSTEM_FILTERS = ['ALL', ...Object.keys(SYSTEM_LABELS)];
 export default function OpenItemsPage() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  // Deep-link support (Slice 11 cross-linking) — this page already lists
+  // every open finding for the property with no report-scoping needed, so
+  // it's the right target for a Sale Case readiness item (or anything
+  // else) that references a specific finding by id. No detail sheet exists
+  // for a single finding, so "deep link" here means scroll-into-view +
+  // highlight the matching card, same idea as Home Records'/Timeline's
+  // deep-link params, adapted to this page's flat-list layout.
+  const deepLinkedFindingId = searchParams.get('findingId');
+  const scrolledToDeepLinkRef = useRef(false);
 
   const [findings, setFindings] = useState<InspectionFinding[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,6 +176,14 @@ export default function OpenItemsPage() {
   }, [propertyId, severityFilter, systemFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!deepLinkedFindingId || scrolledToDeepLinkRef.current || loading) return;
+    const el = document.getElementById(`finding-${deepLinkedFindingId}`);
+    if (!el) return;
+    scrolledToDeepLinkRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [deepLinkedFindingId, loading, findings]);
 
   const safetyFindings = findings.filter((f) => f.severity === 'SAFETY');
   const otherFindings = findings.filter((f) => f.severity !== 'SAFETY');
@@ -241,8 +259,13 @@ export default function OpenItemsPage() {
           <div className="space-y-3">
             {[...safetyFindings, ...otherFindings].map((finding) => {
               const cost = fmtCost(finding.estimatedCostCentsLow, finding.estimatedCostCentsHigh);
+              const isDeepLinked = finding.id === deepLinkedFindingId;
               return (
-                <MobileCard key={finding.id} variant="compact" className="space-y-2">
+                <div key={finding.id} id={`finding-${finding.id}`}>
+                <MobileCard
+                  variant="compact"
+                  className={`space-y-2 ${isDeepLinked ? 'ring-2 ring-sky-400' : ''}`}
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                       <StatusChip tone={SEVERITY_CHIP[finding.severity] ?? 'info'}>
@@ -278,6 +301,7 @@ export default function OpenItemsPage() {
                     )}
                   </div>
                 </MobileCard>
+                </div>
               );
             })}
           </div>

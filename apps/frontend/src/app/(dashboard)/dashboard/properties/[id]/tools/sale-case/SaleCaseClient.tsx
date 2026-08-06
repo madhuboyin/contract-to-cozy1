@@ -98,12 +98,17 @@ const REQUIREMENT_CLASS_TONE: Record<SaleReadinessRequirementClass, StatusChipTo
 // existing ?focusWorkItemId= param, confirmed via grep), they just hadn't
 // been wired here yet.
 //
-// INSPECTION_FINDING and PERMIT remain unlinked: inspection-hub has no
-// per-finding anchor (only a per-report route), and permits has no
-// deep-link at all — plus the backend maps two different models
-// (PropertyPermitRecord and PermitUnpermittedFlag) onto the same
-// 'PERMIT' sourceEntityType, so an id alone can't say which one it is.
-// Left as plain text rather than guessing at a route.
+// INSPECTION_FINDING added in a second follow-up pass: open-items/page.tsx
+// gained findingId deep-link support (scroll-into-view + highlight, since
+// there's no per-finding detail sheet to open) — that page already lists
+// every open finding for the property with no report-scoping needed, so
+// no report id is required in this href.
+//
+// PERMIT remains unlinked: permits has no deep-link at all — plus the
+// backend maps two different models (PropertyPermitRecord and
+// PermitUnpermittedFlag) onto the same 'PERMIT' sourceEntityType, so an
+// id alone can't say which one it is. Left as plain text rather than
+// guessing at a route.
 function sourceEntityHref(propertyId: string, item: SaleReadinessItem): string | null {
   switch (item.sourceEntityType) {
     case 'MATERIAL_SPEC': return `/dashboard/properties/${propertyId}/materials/${item.sourceEntityId}`;
@@ -111,6 +116,7 @@ function sourceEntityHref(propertyId: string, item: SaleReadinessItem): string |
     case 'TIMELINE_EVENT': return `/dashboard/properties/${propertyId}/timeline?eventId=${item.sourceEntityId}`;
     case 'PROJECT': return `/dashboard/properties/${propertyId}/projects/${item.sourceEntityId}`;
     case 'HOME_ACTION': return `/dashboard/properties/${propertyId}/home-operations?focusWorkItemId=${item.sourceEntityId}`;
+    case 'INSPECTION_FINDING': return `/dashboard/properties/${propertyId}/inspection-hub/open-items?findingId=${item.sourceEntityId}`;
     default: return null;
   }
 }
