@@ -324,10 +324,13 @@ export class PropertySaleCaseService {
     const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId } });
     if (!saleCase) {
       const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { propertyUse: true } });
+      const hasContributorAccess = ROLE_RANK[access.role] >= ROLE_RANK.CONTRIBUTOR;
       return {
         propertyId,
         saleIntentConfirmed: false,
-        canCreate: property?.propertyUse === 'FOR_SALE' && ROLE_RANK[access.role] >= ROLE_RANK.CONTRIBUTOR,
+        canCreate: property?.propertyUse === 'FOR_SALE' && hasContributorAccess,
+        canConfirmSaleIntent: hasContributorAccess,
+        currentPropertyUse: property?.propertyUse ?? null,
         saleCase: null,
         readinessItems: [],
         transitions: [],

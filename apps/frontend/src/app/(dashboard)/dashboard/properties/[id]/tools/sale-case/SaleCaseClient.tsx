@@ -30,8 +30,10 @@ import {
   type StatusChipTone,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
+import { PROPERTY_USE_LABELS, type PropertyUse } from '@/components/property/PropertyOwnershipResponsibilitySection';
 import {
   completeTransition,
+  confirmSaleIntent,
   createSaleCase,
   getSaleCase,
   listBuyerPackageShares,
@@ -163,6 +165,12 @@ export default function SaleCaseClient() {
     onError: (error: any) => toast({ title: 'Could not start sale case', description: error?.message, variant: 'destructive' }),
   });
 
+  const confirmIntentMutation = useMutation({
+    mutationFn: () => confirmSaleIntent(propertyId),
+    onSuccess: invalidate,
+    onError: (error: any) => toast({ title: 'Could not confirm sale intent', description: error?.message, variant: 'destructive' }),
+  });
+
   const transitionMutation = useMutation({
     mutationFn: (status: SaleCaseStatus) => transitionStatus(propertyId, status),
     onSuccess: invalidate,
@@ -229,14 +237,11 @@ export default function SaleCaseClient() {
           <Loader2 className="h-5 w-5 animate-spin text-[hsl(var(--mobile-text-muted))]" />
         </MobileCard>
       ) : !overview?.saleIntentConfirmed ? (
-        <EmptyStateCard
-          title="Confirm you're preparing to sell"
-          description="Sale Readiness only opens once this property is marked for sale, so it never appears uninvited."
-          action={
-            <Link href={`/dashboard/properties/${propertyId}/edit`}>
-              <Button size="sm">Update property details</Button>
-            </Link>
-          }
+        <ConfirmSaleIntentCard
+          propertyId={propertyId}
+          overview={overview}
+          onConfirm={() => confirmIntentMutation.mutate()}
+          pending={confirmIntentMutation.isPending}
         />
       ) : !overview.saleCase ? (
         <EmptyStateCard
@@ -268,6 +273,65 @@ export default function SaleCaseClient() {
 
       <BottomSafeAreaReserve />
     </MobilePageContainer>
+  );
+}
+
+// Sale Readiness gates on one property field (propertyUse === 'FOR_SALE').
+// This confirms it inline, in place, rather than routing the homeowner
+// through the full ~30-field property edit form for a single toggle — the
+// full form remains reachable as a de-emphasized fallback for anyone who
+// wants to review other property details while they're at it, and that
+// fallback round-trips back here via returnTo instead of dead-ending on
+// the property overview.
+function ConfirmSaleIntentCard({
+  propertyId,
+  overview,
+  onConfirm,
+  pending,
+}: {
+  propertyId: string;
+  overview: SaleCaseOverview | undefined;
+  onConfirm: () => void;
+  pending: boolean;
+}) {
+  const canConfirm = overview?.canConfirmSaleIntent !== false;
+  const currentUse = overview?.currentPropertyUse as PropertyUse | null | undefined;
+  const currentUseLabel = currentUse && currentUse !== 'FOR_SALE' && currentUse !== 'UNKNOWN'
+    ? PROPERTY_USE_LABELS[currentUse]
+    : null;
+  const editHref = `/dashboard/properties/${propertyId}/edit?focus=property-use&returnTo=${encodeURIComponent(`/dashboard/properties/${propertyId}/tools/sale-case`)}&fromSaleCase=1`;
+
+  return (
+    <MobileCard variant="compact" className="space-y-3 text-center">
+      <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>
+        Confirm you're preparing to sell
+      </p>
+      <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+        Sale Readiness only opens once this property is marked for sale, so it never appears uninvited.
+      </p>
+
+      {canConfirm ? (
+        <>
+          <div className="flex justify-center">
+            <Button size="sm" onClick={onConfirm} disabled={pending}>
+              {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Mark this home for sale
+            </Button>
+          </div>
+          <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+            This sets "How you use this home" to For sale on your property record.
+            {currentUseLabel ? ` It's currently set to "${currentUseLabel}".` : ''}
+          </p>
+          <Link href={editHref} className="mt-1 inline-block text-xs font-medium text-sky-700 hover:underline">
+            Review other property details instead →
+          </Link>
+        </>
+      ) : (
+        <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+          Ask a household owner or contributor to confirm this property is for sale.
+        </p>
+      )}
+    </MobileCard>
   );
 }
 

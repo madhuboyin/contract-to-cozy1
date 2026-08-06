@@ -601,7 +601,11 @@ export default function EditPropertyPage() {
     if (!raw || !raw.startsWith("/dashboard/properties/")) {
       return null;
     }
-    if (searchParams.get("fromOnboarding") === "1" || searchParams.get("fromHomeScore") === "1") {
+    if (
+      searchParams.get("fromOnboarding") === "1"
+      || searchParams.get("fromHomeScore") === "1"
+      || searchParams.get("fromSaleCase") === "1"
+    ) {
       return raw;
     }
     return null;
@@ -1092,6 +1096,7 @@ export default function EditPropertyPage() {
   const applianceCount = Array.isArray(watchAppliances) ? watchAppliances.length : 0;
   const [appliancesExpanded, setAppliancesExpanded] = React.useState(false);
   const [highlightHomeValue, setHighlightHomeValue] = React.useState(false);
+  const [highlightPropertyUse, setHighlightPropertyUse] = React.useState(false);
 
   React.useEffect(() => {
     const anchor = window.location.hash.slice(1);
@@ -1124,6 +1129,20 @@ export default function EditPropertyPage() {
     setHighlightHomeValue(true);
     const timeout = window.setTimeout(() => setHighlightHomeValue(false), 2200);
     return () => window.clearTimeout(timeout);
+  }, [searchParams]);
+
+  React.useEffect(() => {
+    if (searchParams.get("focus") !== "property-use") return;
+    const timeout = window.setTimeout(() => {
+      const target = document.getElementById("field-propertyUse");
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightPropertyUse(true);
+    }, 100);
+    const clear = window.setTimeout(() => setHighlightPropertyUse(false), 2300);
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearTimeout(clear);
+    };
   }, [searchParams]);
 
   React.useEffect(() => {
@@ -2215,7 +2234,12 @@ export default function EditPropertyPage() {
                       control={form.control}
                       name="propertyUse"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem
+                          className={cn(
+                            "rounded-md transition-shadow",
+                            highlightPropertyUse && "ring-2 ring-emerald-200",
+                          )}
+                        >
                           <FormLabel>How do you use this home?</FormLabel>
                           <p className="min-h-8 text-xs leading-4 text-muted-foreground">For example, your main home or a rental.</p>
                           <Select onValueChange={field.onChange} value={field.value}>

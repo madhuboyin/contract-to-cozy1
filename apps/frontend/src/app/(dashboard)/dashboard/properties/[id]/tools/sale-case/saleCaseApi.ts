@@ -18,6 +18,14 @@ export async function createSaleCase(propertyId: string): Promise<PropertySaleCa
   return res.data.saleCase;
 }
 
+// Sale Readiness gates on a single property attribute (propertyUse === 'FOR_SALE').
+// Confirming intent inline just flips that one field via the existing property
+// update endpoint, instead of routing the homeowner through the full property
+// edit form for what is really a one-field decision.
+export async function confirmSaleIntent(propertyId: string): Promise<void> {
+  await api.updateProperty(propertyId, { propertyUse: 'FOR_SALE' });
+}
+
 export async function updateTargetDates(
   propertyId: string,
   input: { targetListDate?: string | null; targetCloseDate?: string | null },

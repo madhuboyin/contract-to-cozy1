@@ -76,6 +76,8 @@ export interface SaleCaseOverview {
   propertyId: string;
   saleIntentConfirmed: boolean;
   canCreate: boolean;
+  canConfirmSaleIntent?: boolean;
+  currentPropertyUse?: string | null;
   saleCase: PropertySaleCase | null;
   readinessItems: SaleReadinessItem[];
   transitions: PropertyTransition[];
