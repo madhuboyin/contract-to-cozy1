@@ -62,6 +62,7 @@ import {
   addLink,
   addVersion,
   archiveRecord,
+  checkPossibleVersion,
   createRecord,
   getRecord,
   listRecords,
@@ -73,8 +74,10 @@ import {
   setEffectivePeriod,
   setRetention,
   trashRecord,
+  type PossibleVersionMatch,
 } from './homeRecordsApi';
 import type {
+  CreateRecordInput,
   ExtractedFactCandidate,
   PropertyRecordDetail,
   PropertyRecordLinkEntityType,
@@ -1001,6 +1004,13 @@ export default function HomeRecordsClient() {
   const queryClient = useQueryClient();
   const [showTrashed, setShowTrashed] = React.useState(false);
   const [uploadOpen, setUploadOpen] = React.useState(false);
+  // A real resolution flow, not just an after-the-fact toast: holds the
+  // pending upload + its possible-version match while the homeowner
+  // decides whether this is a new version of an existing record.
+  const [pendingVersionResolution, setPendingVersionResolution] = React.useState<{
+    input: CreateRecordInput;
+    match: NonNullable<PossibleVersionMatch>;
+  } | null>(null);
   // Deep-linkable from elsewhere (e.g. a Timeline event's evidence link) —
   // detail is otherwise a client-state-driven sheet with no URL of its own.
   const [selectedRecordId, setSelectedRecordId] = React.useState<string | null>(() => searchParams.get('recordId'));
@@ -1032,6 +1042,9 @@ export default function HomeRecordsClient() {
       setUploadOpen(false);
       toast({
         title: 'Record added',
+        // Rare fallback (e.g. a matching record appeared after the
+        // pre-flight check ran) — the real resolution flow is
+        // pendingVersionResolution below, not this toast.
         description: result.possibleVersionOf
           ? `A record named "${result.possibleVersionOf.title}" already exists — consider linking this as a new version instead.`
           : undefined,
@@ -1041,6 +1054,35 @@ export default function HomeRecordsClient() {
       toast({ title: 'Could not add record', description: e?.message, variant: 'destructive' });
     },
   });
+
+  const addVersionForResolutionMutation = useMutation({
+    mutationFn: (args: { recordId: string; file: File }) => addVersion(propertyId, args.recordId, args.file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-records', propertyId] });
+      setPendingVersionResolution(null);
+      setUploadOpen(false);
+      toast({ title: 'Added as a new version' });
+    },
+    onError: (e: any) => {
+      toast({ title: 'Could not add version', description: e?.message, variant: 'destructive' });
+    },
+  });
+
+  // Checks for a possible-version match before ever creating a record —
+  // real resolution instead of create()'s own after-the-fact toast.
+  async function handleUploadSubmit(input: CreateRecordInput) {
+    try {
+      const match = await checkPossibleVersion(propertyId, input.title, input.recordType);
+      if (match) {
+        setPendingVersionResolution({ input, match });
+        return;
+      }
+    } catch {
+      // Pre-flight check failing must not block uploading — fall through
+      // to create(), which still runs its own (after-the-fact) check.
+    }
+    createMutation.mutate(input);
+  }
 
   const records = recordsQuery.data ?? [];
   const needsReviewCount = records.filter((record) => record.needsReview).length;
@@ -1160,8 +1202,48 @@ export default function HomeRecordsClient() {
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         isSubmitting={createMutation.isPending}
-        onSubmit={(input) => createMutation.mutate(input)}
+        onSubmit={handleUploadSubmit}
       />
+
+      <Dialog open={Boolean(pendingVersionResolution)} onOpenChange={(open) => { if (!open) setPendingVersionResolution(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Is this a new version?</DialogTitle>
+          </DialogHeader>
+          {pendingVersionResolution && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                A record named <span className="font-medium text-gray-900">&ldquo;{pendingVersionResolution.match.title}&rdquo;</span> already
+                exists for this property. Add this upload as a new version of it, or create a separate record?
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  className="flex-1"
+                  disabled={addVersionForResolutionMutation.isPending}
+                  onClick={() => addVersionForResolutionMutation.mutate({
+                    recordId: pendingVersionResolution.match.id,
+                    file: pendingVersionResolution.input.file,
+                  })}
+                >
+                  Add as new version
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  disabled={createMutation.isPending}
+                  onClick={() => {
+                    const { input } = pendingVersionResolution;
+                    setPendingVersionResolution(null);
+                    createMutation.mutate(input);
+                  }}
+                >
+                  Create separate record
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {selectedRecordId && propertyId && (
         <RecordDetailSheet propertyId={propertyId} recordId={selectedRecordId} onClose={() => setSelectedRecordId(null)} />

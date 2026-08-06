@@ -10,6 +10,7 @@ let recordForVersion = null;
 let recordForTrash = null;
 let recordForLink = null;
 let recordForGet = null;
+let possibleVersionMatch = null;
 let warrantyLookupResult = null;
 let recordsForList = [];
 let pendingReviewGroups = [];
@@ -39,7 +40,7 @@ require.cache[prismaPath] = {
           if (args?.include?.links) return recordForGet;
           if (args?.include?.versions) return recordForVersion;
           if (args?.include?._count) return recordForTrash;
-          if (args?.select?.title !== undefined) return null; // possibleVersionOf lookup
+          if (args?.select?.title !== undefined) return possibleVersionMatch; // possibleVersionOf / checkPossibleVersion lookup
           if (args?.select?.currentVersionId !== undefined) return recordForLink;
           return null;
         },
@@ -375,4 +376,56 @@ test('list() flags needsReview from pending extracted-fact candidates and comput
   assert.equal(byId['record-expiring-soon'].expiryStatus, 'EXPIRING_SOON');
   assert.equal(byId['record-current'].expiryStatus, 'CURRENT');
   assert.equal(byId['record-needs-review'].expiryStatus, null);
+});
+
+// Slice 3's real duplicate/version resolution flow: checkPossibleVersion is
+// a pre-flight the frontend calls *before* uploading, reusing the exact
+// same match query create() already runs internally (findPossibleVersionMatch).
+
+test('checkPossibleVersion returns the matching record when one exists for this title/type', async () => {
+  possibleVersionMatch = { id: 'record-existing', title: 'HVAC Warranty', currentVersionId: 'version-9' };
+  const match = await service.checkPossibleVersion('property-1', 'HVAC Warranty', 'WARRANTY');
+  assert.deepEqual(match, { id: 'record-existing', title: 'HVAC Warranty', currentVersionId: 'version-9' });
+  possibleVersionMatch = null;
+});
+
+test('checkPossibleVersion returns null when no match exists', async () => {
+  possibleVersionMatch = null;
+  const match = await service.checkPossibleVersion('property-1', 'Brand New Thing', 'OTHER');
+  assert.equal(match, null);
+});
+
+test("create() and checkPossibleVersion() share one match implementation, not two drifting copies of the same query", () => {
+  const backendRoot = path.resolve(__dirname, '../..');
+  const source = fs.readFileSync(path.join(backendRoot, 'src/services/homeRecords.service.ts'), 'utf8');
+  assert.match(source, /async checkPossibleVersion\(propertyId: string, title: string, recordType: PropertyRecordType\) \{\s*return this\.findPossibleVersionMatch/);
+  assert.match(source, /possibleVersionOf = await this\.findPossibleVersionMatch\(input\.propertyId, input\.title, input\.recordType\)/);
+});
+
+test('the possible-version route is registered before the :recordId catch-all, so Express does not swallow it as a record id', () => {
+  const backendRoot = path.resolve(__dirname, '../..');
+  const routes = fs.readFileSync(path.join(backendRoot, 'src/routes/homeRecords.routes.ts'), 'utf8');
+  const possibleVersionIndex = routes.indexOf("'/properties/:propertyId/records/possible-version'");
+  const recordIdIndex = routes.indexOf("'/properties/:propertyId/records/:recordId'");
+  assert.ok(possibleVersionIndex > 0 && recordIdIndex > 0);
+  assert.ok(possibleVersionIndex < recordIdIndex);
+});
+
+test('a real resolution dialog exists in the frontend — choose new-version vs separate record before uploading, not an after-the-fact toast', () => {
+  const backendRoot = path.resolve(__dirname, '../..');
+  const repositoryRoot = path.resolve(backendRoot, '../..');
+  const client = fs.readFileSync(
+    path.join(repositoryRoot, 'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-records/HomeRecordsClient.tsx'),
+    'utf8',
+  );
+  assert.match(client, /checkPossibleVersion/);
+  assert.match(client, /pendingVersionResolution/);
+  assert.match(client, /Add as new version/);
+  assert.match(client, /Create separate record/);
+
+  const api = fs.readFileSync(
+    path.join(repositoryRoot, 'apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi.ts'),
+    'utf8',
+  );
+  assert.match(api, /export async function checkPossibleVersion/);
 });

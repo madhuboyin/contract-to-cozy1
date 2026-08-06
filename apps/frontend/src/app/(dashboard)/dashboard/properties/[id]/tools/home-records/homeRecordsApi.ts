@@ -52,6 +52,23 @@ export async function createRecord(
   return res.data;
 }
 
+export type PossibleVersionMatch = { id: string; title: string; currentVersionId: string | null } | null;
+
+// A real pre-flight check, not the after-the-fact toast create() alone
+// used to provide — lets the homeowner choose "add as a new version of X"
+// before a redundant record ever gets created.
+export async function checkPossibleVersion(
+  propertyId: string,
+  title: string,
+  recordType: PropertyRecordType,
+): Promise<PossibleVersionMatch> {
+  const res = await api.get<{ match: PossibleVersionMatch }>(
+    `/api/properties/${propertyId}/records/possible-version`,
+    { params: { title, recordType } },
+  );
+  return res.data.match;
+}
+
 export async function addVersion(
   propertyId: string,
   recordId: string,

@@ -243,6 +243,28 @@ export class HomeRecordsService {
     };
   }
 
+  // Slice 3's real duplicate/version resolution flow: a pre-flight check the
+  // frontend calls *before* uploading, so a homeowner can choose "add as a
+  // new version of X" and never create a redundant standalone record in the
+  // first place — instead of create()'s own possibleVersionOf hint, which
+  // only ever surfaced as an after-the-fact toast once the duplicate
+  // already existed.
+  async checkPossibleVersion(propertyId: string, title: string, recordType: PropertyRecordType) {
+    return this.findPossibleVersionMatch(propertyId, title, recordType);
+  }
+
+  private async findPossibleVersionMatch(propertyId: string, title: string, recordType: PropertyRecordType) {
+    return prisma.propertyRecord.findFirst({
+      where: {
+        propertyId,
+        lifecycleStatus: { not: 'TRASHED' },
+        recordType,
+        title: { equals: title, mode: 'insensitive' },
+      },
+      select: { id: true, title: true, currentVersionId: true },
+    });
+  }
+
   async create(input: CreateRecordInput) {
     const checksum = sha256(input.file.buffer);
     const duplicate = await prisma.propertyRecordVersion.findFirst({
@@ -258,15 +280,7 @@ export class HomeRecordsService {
       );
     }
 
-    const possibleVersionOf = await prisma.propertyRecord.findFirst({
-      where: {
-        propertyId: input.propertyId,
-        lifecycleStatus: { not: 'TRASHED' },
-        recordType: input.recordType,
-        title: { equals: input.title, mode: 'insensitive' },
-      },
-      select: { id: true, title: true, currentVersionId: true },
-    });
+    const possibleVersionOf = await this.findPossibleVersionMatch(input.propertyId, input.title, input.recordType);
 
     const recordId = randomUUID();
     const versionId = randomUUID();

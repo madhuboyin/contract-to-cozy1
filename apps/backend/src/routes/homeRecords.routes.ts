@@ -137,6 +137,21 @@ router.get('/properties/:propertyId/records', async (req: CustomRequest, res: Re
   }
 });
 
+router.get('/properties/:propertyId/records/possible-version', async (req: CustomRequest, res: Response, next: NextFunction) => {
+  try {
+    const title = typeof req.query.title === 'string' ? req.query.title.trim().slice(0, 240) : '';
+    const recordTypeRaw = typeof req.query.recordType === 'string' ? req.query.recordType : undefined;
+    const recordTypeResult = recordTypeRaw ? recordTypeSchema.safeParse(recordTypeRaw) : undefined;
+    if (!title || !recordTypeResult?.success) {
+      return res.status(400).json({ success: false, code: 'PROPERTY_RECORD_POSSIBLE_VERSION_INPUT_INVALID' });
+    }
+    const match = await homeRecordsService.checkPossibleVersion(req.params.propertyId, title, recordTypeResult.data);
+    return res.json({ success: true, data: { match } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post(
   '/properties/:propertyId/records',
   requireHouseholdRole('CONTRIBUTOR'),
