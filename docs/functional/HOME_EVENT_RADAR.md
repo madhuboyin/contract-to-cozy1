@@ -806,8 +806,9 @@ Property resolution:
 property setup from operational coverage initialization. A property without a
 usable point, state/postal combination, or state/locality combination receives
 `PROPERTY_SETUP_REQUIRED`, an explicit list of missing location fields, and an
-`Update home address` link. A property that already has usable geography
-but no materialized source-coverage rows receives
+inline city/state/ZIP form on the readiness card itself — the homeowner
+corrects it in place and the card re-evaluates without leaving Radar. A
+property that already has usable geography but no materialized source-coverage rows receives
 `MONITORING_NOT_INITIALIZED`; the UI says the first monitoring check is pending
 in plain homeowner language, explains that no action is required, and refreshes
 the overview automatically every 15 seconds while initialization remains pending.
