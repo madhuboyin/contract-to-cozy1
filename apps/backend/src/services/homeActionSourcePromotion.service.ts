@@ -1903,6 +1903,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
         select: {
           id: true, category: true, windowStart: true, windowEnd: true,
           estimatedCostMinCents: true, estimatedCostMaxCents: true, confidence: true, why: true,
+          inventoryItemId: true, inventoryItem: { select: { name: true } },
         },
       },
     },
@@ -1914,7 +1915,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
       ? `$${Math.round(item.estimatedCostMinCents / 100).toLocaleString()}–$${Math.round(item.estimatedCostMaxCents / 100).toLocaleString()}`
       : null;
     const windowLabel = item.windowStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    const categoryLabel = CAPITAL_TIMELINE_CATEGORY_LABEL[item.category] ?? 'System';
+    const categoryLabel = item.inventoryItem?.name ?? CAPITAL_TIMELINE_CATEGORY_LABEL[item.category] ?? 'System';
     const confidenceScore = CAPITAL_TIMELINE_CONFIDENCE_SCORE[item.confidence] ?? 0.5;
     const governance = materialFinancialGovernance('home-capital-timeline-window-v1');
     const decisionContract = guidanceDecisionContract(governance);
@@ -1955,7 +1956,9 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
       primaryCta: {
         kind: 'REVIEW',
         label: 'Review capital timeline',
-        href: `/dashboard/properties/${propertyId}/tools/capital-timeline`,
+        href: item.inventoryItemId
+          ? `/dashboard/properties/${propertyId}/tools/capital-timeline?itemId=${encodeURIComponent(item.inventoryItemId)}`
+          : `/dashboard/properties/${propertyId}/tools/capital-timeline`,
       },
       secondaryCtas: [],
       feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT'],
