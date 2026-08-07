@@ -12,7 +12,16 @@ import type { HomeOperationsTabKey } from './HomeOperationsTabs';
 const COMPLETED = new Set(['REPORTED_COMPLETE', 'VERIFIED', 'CLOSED']);
 const WAITING = new Set(['BLOCKED', 'DEFERRED']);
 
-export function classifyCanonicalWorkItem(item: WorkItemListEntryDTO): HomeOperationsTabKey {
+/**
+ * Returns null for a work item that was dismissed/not relevant/a duplicate/
+ * expired (state CLOSED with a disposition) — that's not "completed" (a
+ * disposition is explicitly not the same thing as genuine completion), but
+ * it's not live work either, so it must not fall through to the due-date
+ * check below and get miscategorized as "Today" just because its stale due
+ * date is in the past.
+ */
+export function classifyCanonicalWorkItem(item: WorkItemListEntryDTO): HomeOperationsTabKey | null {
+  if (item.state === 'CLOSED' && item.disposition) return null;
   if (item.supersededByWorkItemId) return 'completed';
   if (COMPLETED.has(item.state) && !item.disposition) return 'completed';
   if (item.state === 'IN_PROJECT' || item.obligationType === 'PROJECT_EXECUTION') return 'projects';
@@ -23,6 +32,16 @@ export function classifyCanonicalWorkItem(item: WorkItemListEntryDTO): HomeOpera
   endOfToday.setHours(23, 59, 59, 999);
   if (item.state === 'IN_PROGRESS' || item.priority === 'NOW' || due <= endOfToday.getTime()) return 'today';
   return 'upcoming';
+}
+
+// dueAt is UTC midnight of the event date (see environmentBoundary in
+// homeActionSourcePromotion.service.ts) — rendering it with the browser's
+// local timezone via toLocaleDateString() shifts it back a calendar day for
+// any timezone behind UTC. Read the UTC calendar date directly instead so
+// this always matches the day named in the item's title.
+function formatDueDate(dueAt: string): string {
+  const parsed = new Date(dueAt);
+  return new Date(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()).toLocaleDateString();
 }
 
 function executionHref(item: WorkItemListEntryDTO, propertyId: string): string | null {
@@ -69,7 +88,7 @@ export function CanonicalWorkPortfolio({
                 <h2 className="mt-3 text-lg font-semibold text-slate-950">{item.title}</h2>
                 <p className="mt-1 text-sm leading-6 text-slate-600">{item.homeownerReason}</p>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                  {item.dueAt ? <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />Due {new Date(item.dueAt).toLocaleDateString()}</span> : null}
+                  {item.dueAt ? <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />Due {formatDueDate(item.dueAt)}</span> : null}
                   <span className="inline-flex items-center gap-1"><UserRound className="h-3.5 w-3.5" />{item.ownerUserId ? 'Assigned' : 'Unassigned'}</span>
                   {COMPLETED.has(item.state) && !item.disposition ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Outcome recorded</span> : null}
                 </div>

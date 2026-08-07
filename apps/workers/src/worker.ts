@@ -59,6 +59,7 @@ import { runHomeOperationsDueDigest } from './jobs/homeOperationsDueDigest.job';
 import { runHomeOperationsReconciliation } from './jobs/homeOperationsReconciliation.job';
 import { runWeeklyRetentionReportJob } from './jobs/weeklyRetentionReport.job';
 import { expireGuidanceSignalsJob } from './jobs/expireGuidanceSignals.job';
+import { runExpireStaleWorkItemCandidatesJob } from './jobs/expireStaleWorkItemCandidates.job';
 import { runSharedDataBackfillJob } from './jobs/sharedDataBackfill.job';
 import { runSharedDataConsistencyAuditJob } from './jobs/sharedDataConsistencyAudit.job';
 import { runSharedSignalRefreshJob } from './jobs/sharedSignalRefresh.job';
@@ -415,6 +416,7 @@ const CRON_HANDLERS: Record<string, (opts?: { dryRun?: boolean; propertyId?: str
   },
   'home-operations-due-digest':      async () => runHomeOperationsDueDigest(),
   'home-operations-reconciliation':  async (opts) => runHomeOperationsReconciliation(opts),
+  'expire-stale-work-item-candidates': async (opts) => runExpireStaleWorkItemCandidatesJob(opts),
   'shared-data-backfill':            async (opts) => { await runSharedDataBackfillJob(opts); },
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
   'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },

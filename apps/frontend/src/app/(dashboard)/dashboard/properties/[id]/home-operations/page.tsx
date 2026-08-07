@@ -107,7 +107,8 @@ function tabCounts(actions: RankedHomeActionDTO[]): Record<HomeOperationsTabKey,
     today: [], upcoming: [], waiting: [], projects: [], routines: [], completed: [],
   };
   for (const action of actions) {
-    byTab[classifyHomeOperationsTab(action)].push(action);
+    const tab = classifyHomeOperationsTab(action);
+    if (tab) byTab[tab].push(action);
   }
   return byTab;
 }
@@ -152,7 +153,10 @@ export default function HomeOperationsPage() {
   const workItems: WorkItemListEntryDTO[] = workItemsQuery.data ?? [];
   const canonicalByTab = useMemo(() => {
     const result: Record<HomeOperationsTabKey, WorkItemListEntryDTO[]> = { today: [], upcoming: [], waiting: [], projects: [], routines: [], completed: [] };
-    for (const item of workItems) result[classifyCanonicalWorkItem(item)].push(item);
+    for (const item of workItems) {
+      const tab = classifyCanonicalWorkItem(item);
+      if (tab) result[tab].push(item);
+    }
     return result;
   }, [workItems]);
   const advisoryByTab = useMemo(() => {
@@ -168,7 +172,8 @@ export default function HomeOperationsPage() {
     if (hasAppliedFocusTab || (!focusActionId && !focusWorkItemId) || !query.data) return;
     const canonicalMatch = focusWorkItemId ? workItems.find((item) => item.id === focusWorkItemId) : null;
     if (canonicalMatch) {
-      setActiveTab(classifyCanonicalWorkItem(canonicalMatch));
+      const tab = classifyCanonicalWorkItem(canonicalMatch);
+      if (tab) setActiveTab(tab);
       setHasAppliedFocusTab(true);
       return;
     }
@@ -180,7 +185,10 @@ export default function HomeOperationsPage() {
         action.deduplication.mergedActionIds.includes(focusActionId)
       )),
     );
-    if (match) setActiveTab(classifyHomeOperationsTab(match));
+    if (match) {
+      const tab = classifyHomeOperationsTab(match);
+      if (tab) setActiveTab(tab);
+    }
     setHasAppliedFocusTab(true);
   }, [focusActionId, focusWorkItemId, hasAppliedFocusTab, query.data, workItems]);
 

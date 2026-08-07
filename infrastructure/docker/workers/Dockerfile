@@ -251,6 +251,7 @@ COPY apps/backend/src/modules/homeOperations/adapters/maintenanceTask.adapter.ts
      src/shared/backend/modules/homeOperations/adapters/
 COPY apps/backend/src/modules/homeOperations/application/resolveWorkItem.usecase.ts \
      apps/backend/src/modules/homeOperations/application/transitionWorkItem.usecase.ts \
+     apps/backend/src/modules/homeOperations/application/expireStaleWorkItemCandidates.usecase.ts \
      src/shared/backend/modules/homeOperations/application/
 COPY apps/backend/src/modules/homeOperations/domain/sourceAdapter.ts \
      apps/backend/src/modules/homeOperations/domain/transitions.ts \

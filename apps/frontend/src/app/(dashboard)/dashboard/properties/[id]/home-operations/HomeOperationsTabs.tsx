@@ -43,10 +43,19 @@ const WAITING_STATES = new Set(['BLOCKED', 'DEFERRED']);
  * -only sources, or a same-request resolution failure) fall back to
  * priority/due-date, which is exactly what "Recommended for your home"
  * (not yet accepted) work looks like today.
+ *
+ * Returns null for a work item that was dismissed/not relevant/a duplicate/
+ * expired (state CLOSED with a disposition) — that is not "completed" (see
+ * the comment below), but it is not live work either, so it must not fall
+ * through to the due-date check below and get miscategorized as "Today"
+ * just because its stale due date is in the past.
  */
-export function classifyHomeOperationsTab(action: RankedHomeActionDTO): HomeOperationsTabKey {
+export function classifyHomeOperationsTab(action: RankedHomeActionDTO): HomeOperationsTabKey | null {
   const workItem = action.workItem;
 
+  if (workItem?.state === 'CLOSED' && workItem.disposition) {
+    return null;
+  }
   // Genuine completion is state ∈ {REPORTED_COMPLETE, VERIFIED, CLOSED} with
   // disposition null — a CLOSED item WITH a disposition was dismissed/not
   // relevant/a duplicate/expired, not completed (see Slice 1's disposition
