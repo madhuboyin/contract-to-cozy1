@@ -15,7 +15,8 @@ import {
   TrendingUp,
   AlertCircle,
   LayoutDashboard,
-  Users
+  Users,
+  Wrench,
 } from "lucide-react";
 import { LeadCaptureModal } from "@/components/seller-prep/LeadCaptureModal";
 import { AgentInterviewGuide } from "./AgentInterviewGuide";
@@ -70,8 +71,11 @@ export default function SellerPrepOverview({
           <TabsContent value="market" className="space-y-6 outline-none">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-purple-600" /> Comparable Sales
+                <CardTitle className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100">
+                    <TrendingUp className="h-5 w-5 text-purple-600" />
+                  </div>
+                  Comparable Sales
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -102,21 +106,27 @@ export default function SellerPrepOverview({
       <div className="lg:col-span-4 space-y-6">
         <Card className="sticky top-6">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gray-700">
-              <LayoutDashboard className="h-4 w-4" /> Readiness Dashboard
+            <CardTitle className="text-sm font-semibold flex items-center gap-3 text-gray-700">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100">
+                <LayoutDashboard className="h-4 w-4 text-sky-600" />
+              </div>
+              Readiness Dashboard
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="text-xs text-gray-600">
-              Governed readiness status lives on{' '}
-              <Link href={`/dashboard/properties/${propertyId}/tools/sale-case`} className="font-medium text-blue-600 underline">
-                Sale Readiness
-              </Link>
-              . This page covers comps, agent comparisons, and contractor help.
+              Your governed readiness checklist — required facts, findings, and permits — is
+              tracked above, in Sale Readiness. This page covers comps, agent comparisons, and
+              contractor help.
             </div>
 
             <div className="pt-4 border-t space-y-3">
-              <h4 className="text-xs font-bold text-gray-500 tracking-normal">Contractor help</h4>
+              <h4 className="text-xs font-bold text-gray-500 tracking-normal flex items-center gap-2">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100">
+                  <Wrench className="h-3.5 w-3.5 text-blue-600" />
+                </div>
+                Contractor help
+              </h4>
               <p className="text-xs text-gray-600">
                 Browse licensed, verified providers on the platform and book one directly —
                 this actually reaches a provider, unlike the note below.

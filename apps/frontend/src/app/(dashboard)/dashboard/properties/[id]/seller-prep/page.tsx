@@ -20,7 +20,6 @@ import HomeToolHeader from "@/components/tools/HomeToolHeader";
 import { PropertyContextCapturePanel } from "@/components/property-context/PropertyContextCapturePanel";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
-import { SellerPrepDisclaimer } from "@/components/seller-prep/SellerPrepDisclaimer";
 import { CapabilityDiscoveryAnchor } from "@/features/tools/CapabilityDiscoveryAnchor";
 // Note: this page used to mount its own seller-prep-scoped FeedbackWidget
 // here. That's superseded by the app-wide FeedbackWidget now mounted once
@@ -195,8 +194,6 @@ export default function SellerPrepPage() {
 
         <HomeToolHeader toolId="seller-prep" propertyId={propertyId as string} />
       </div>
-
-      <SellerPrepDisclaimer />
 
       <CapabilityDiscoveryAnchor
         anchor="SELLER_INTENT_ACTIVE"

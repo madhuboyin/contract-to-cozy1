@@ -20,14 +20,22 @@
 // saleCaseApi.ts/types.ts — saleCaseApi.ts itself documents this
 // "tool directories stay self-contained rather than cross-importing"
 // convention for the exact same reason.
+//
+// Best-in-class UI pass (2026-08-06): auto-checks on mount instead of
+// waiting for a manual "Open Sale Readiness" click — a homeowner who's
+// already fully ready gets forwarded with zero clicks instead of reading a
+// callout just to click a button that immediately redirects them anyway.
+// Icon-circle treatment matches the language established on the Sale Case
+// page (ListChecks in a sky-100 circle) for visual consistency between the
+// two governed-readiness surfaces.
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { ListChecks, Loader2 } from "lucide-react";
 import { api } from "@/lib/api/client";
 
 type MandatoryScalarField = "roofReplacementYear" | "hvacInstallYear" | "waterHeaterInstallYear" | "electricalPanelAge";
@@ -95,11 +103,11 @@ async function saveMandatoryAppliances(propertyId: string, answers: Partial<Reco
   });
 }
 
-type GateState = "idle" | "checking" | "blocked" | "error";
+type GateState = "checking" | "blocked" | "error";
 
 export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) {
   const router = useRouter();
-  const [state, setState] = useState<GateState>("idle");
+  const [state, setState] = useState<GateState>("checking");
   const [coverage, setCoverage] = useState<MandatoryFactCoverage | null>(null);
   const [scalarDraft, setScalarDraft] = useState<Partial<Record<MandatoryScalarField, string>>>({});
   const [applianceDraft, setApplianceDraft] = useState<Partial<Record<MandatoryApplianceType, string>>>({});
@@ -126,6 +134,13 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
       setState("error");
     }
   }, [propertyId, router, saleCasePath]);
+
+  useEffect(() => {
+    void check();
+    // Auto-run once on mount only — `check` is stable across the fields it
+    // closes over for the lifetime of this component instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saveAndContinue = async () => {
     if (!coverage) return;
@@ -154,33 +169,20 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
     }
   };
 
-  if (state === "idle") {
-    return (
-      <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 space-y-2">
-        <p className="font-medium">Sale readiness now lives in one governed case.</p>
-        <p>
-          Findings, unfinished projects, permits, Home Actions, and records are projected
-          directly from this property — not a generic checklist.
-        </p>
-        <Button size="sm" className="mt-1" onClick={() => void check()}>
-          Open Sale Readiness
-        </Button>
-      </div>
-    );
-  }
-
   if (state === "checking") {
     return (
-      <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 flex items-center gap-2">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Collecting your home&rsquo;s details and preparing your checklist…</span>
+      <div className="flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100">
+          <Loader2 className="h-5 w-5 animate-spin text-sky-600" />
+        </div>
+        <span>Checking your home&rsquo;s details and preparing your Sale Readiness case…</span>
       </div>
     );
   }
 
   if (state === "error") {
     return (
-      <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900 space-y-2">
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 space-y-2">
         <p>{error ?? "Something went wrong."}</p>
         <Button size="sm" variant="outline" onClick={() => void check()}>Try again</Button>
       </div>
@@ -194,13 +196,18 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
     && missing.applianceMissing.every((type) => !applianceDraft[type]);
 
   return (
-    <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 space-y-4">
-      <p className="font-medium">
-        A few quick details about your home will help us build an accurate, personalized checklist.
-      </p>
+    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900 space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100">
+          <ListChecks className="h-5 w-5 text-sky-600" />
+        </div>
+        <p className="font-medium pt-1.5">
+          A few quick details about your home will help us build an accurate, personalized checklist.
+        </p>
+      </div>
 
       {hasQuickFacts ? (
-        <div className="space-y-3 rounded-md border border-blue-200 bg-white p-3">
+        <div className="space-y-3 rounded-xl border border-sky-200 bg-white p-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {missing.scalarMissing.map((field) => {
               const config = SCALAR_FIELD_CONFIG[field];
@@ -252,7 +259,7 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
       ) : null}
 
       {missing.warrantyMissing ? (
-        <div className="rounded-md border border-blue-100 bg-white/60 p-3 flex items-center justify-between gap-3">
+        <div className="rounded-xl border border-sky-100 bg-white/60 p-3 flex items-center justify-between gap-3">
           <div>
             <p className="text-sm text-gray-800">No warranty on file yet.</p>
             <p className="text-xs text-gray-500">Optional — doesn&rsquo;t block your checklist, but worth adding if you have one.</p>
