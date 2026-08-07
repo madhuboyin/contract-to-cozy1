@@ -156,7 +156,7 @@ async function evaluateRequirement(
     ...publicDefinition
   } = definition;
   const capture = definition.mode === 'RELATIONAL'
-    ? { ...publicDefinition, inputSchema: await resolveRelationalCaptureSchema(context.propertyId, definition, operationInput) }
+    ? { ...publicDefinition, ...(await resolveRelationalCaptureSchema(context.propertyId, definition, operationInput)) }
     : publicDefinition;
   const requirementId = createHash('sha256')
     .update(`${contractKey}:${requirement.factKey}:${requirement.captureKey}:${JSON.stringify(inputForRequirementId(operationInput))}`)

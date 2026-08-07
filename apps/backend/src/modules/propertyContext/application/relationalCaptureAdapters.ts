@@ -45,11 +45,17 @@ function parseDateOnly(values: Record<string, unknown>, key: string): Date {
   return date;
 }
 
+export interface RelationalCaptureResolution {
+  inputSchema: RelationalCaptureInputSchema;
+  title: string;
+  question: string;
+}
+
 export async function resolveRelationalCaptureSchema(
   propertyId: string,
   definition: ContextCaptureDefinition,
   operationInput?: Record<string, unknown>,
-): Promise<RelationalCaptureInputSchema> {
+): Promise<RelationalCaptureResolution> {
   if (definition.mode !== 'RELATIONAL' || !definition.relationalAdapterKey) {
     throw new Error('Capture is not backed by a relational adapter.');
   }
@@ -63,6 +69,7 @@ export async function resolveRelationalCaptureSchema(
       where: { id: entityId, propertyId },
       select: {
         id: true,
+        name: true,
         condition: true,
         installedOn: true,
         purchasedOn: true,
@@ -118,16 +125,24 @@ export async function resolveRelationalCaptureSchema(
         });
     }
     return {
-      ...definition.inputSchema,
-      entityId: item.id,
-      fields,
-      currentValues: {
-        condition: item.condition,
-        installedOn: item.installedOn?.toISOString().slice(0, 10) ?? '',
-        purchasedOn: item.purchasedOn?.toISOString().slice(0, 10) ?? '',
-        replacementValueUsd: item.replacementCostCents ? item.replacementCostCents / 100 : undefined,
-        coverageChoice,
+      inputSchema: {
+        ...definition.inputSchema,
+        entityId: item.id,
+        fields,
+        currentValues: {
+          condition: item.condition,
+          installedOn: item.installedOn?.toISOString().slice(0, 10) ?? '',
+          purchasedOn: item.purchasedOn?.toISOString().slice(0, 10) ?? '',
+          replacementValueUsd: item.replacementCostCents ? item.replacementCostCents / 100 : undefined,
+          coverageChoice,
+        },
       },
+      title: definition.relationalAdapterKey === 'INVENTORY_ITEM_LIFECYCLE'
+        ? `Improve ${item.name}’s lifecycle estimate`
+        : definition.title,
+      question: definition.relationalAdapterKey === 'INVENTORY_ITEM_LIFECYCLE'
+        ? `Confirm the condition and approximate install or purchase date for ${item.name}.`
+        : definition.question,
     };
   }
   if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE') {
@@ -173,7 +188,11 @@ export async function resolveRelationalCaptureSchema(
       description: warranty.category,
     }));
   }
-  return { ...definition.inputSchema, options, createFields };
+  return {
+    inputSchema: { ...definition.inputSchema, options, createFields },
+    title: definition.title,
+    question: definition.question,
+  };
 }
 
 function parseOptionalDateOnly(values: Record<string, unknown>, key: string): Date | null {
