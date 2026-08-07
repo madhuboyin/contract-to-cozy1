@@ -112,6 +112,16 @@ export async function syncPropertyApplianceInventoryItems(
             installedOn,
             roomId,
             tags: nextTags,
+            // A homeowner directly entered this via the property/Seller
+            // Prep appliance form — same "USER_REPORTED" convention
+            // inventory.service.ts's own manual create path uses. Without
+            // this, these items were invisible to projectAgingSystems
+            // (propertySaleCase.service.ts), which requires isVerified —
+            // a real, silent gap found via direct product feedback: a
+            // homeowner-entered appliance age was never actually reaching
+            // any downstream insight.
+            isVerified: true,
+            verificationSource: 'USER_REPORTED',
           },
         })
       );
@@ -126,6 +136,8 @@ export async function syncPropertyApplianceInventoryItems(
             roomId,
             sourceHash,
             tags: nextTags,
+            isVerified: true,
+            verificationSource: 'USER_REPORTED',
           },
         })
       );

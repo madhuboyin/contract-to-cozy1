@@ -23,6 +23,17 @@ export interface SalePrepValueCatalogEntry {
   title: string;
   detail: string;
   source: string;
+  // Rough cost tier for this category's typical project scope, reusing the
+  // same 4 buckets as the homeowner's own budget question (§4.7) — used
+  // internally by propertySaleCase.service.ts to flag items that likely
+  // exceed the homeowner's stated pre-sale budget (§10, added after direct
+  // product feedback that the captured budgetRange was write-only and
+  // never affected the checklist). Directional only, not a new sourced
+  // financial claim — kitchen/bathroom map to the dollar figures already
+  // cited in `detail` above; the rest are ordinary, uncited cost-tier
+  // judgment calls (a repaint or a decluttering pass is inexpensive
+  // relative to a remodel), never surfaced to the homeowner as a number.
+  costBucket: 'UNDER_5K' | 'FIVE_TO_15K' | 'FIFTEEN_TO_30K' | 'OVER_30K';
 }
 
 export const SALE_PREP_VALUE_CATALOG: readonly SalePrepValueCatalogEntry[] = [
@@ -32,6 +43,7 @@ export const SALE_PREP_VALUE_CATALOG: readonly SalePrepValueCatalogEntry[] = [
     title: 'Refresh interior paint before listing',
     detail: 'Painting the entire home is the #1 most-recommended pre-listing project — 50% of real estate agents recommend it to sellers, more than any other project.',
     source: 'NAR/NARI 2025 Remodeling Impact Report',
+    costBucket: 'UNDER_5K',
   },
   {
     category: 'curbAppeal',
@@ -39,6 +51,7 @@ export const SALE_PREP_VALUE_CATALOG: readonly SalePrepValueCatalogEntry[] = [
     title: 'Invest in curb appeal and landscaping',
     detail: 'Exterior projects deliver the highest ROI of any category — 8 of the top 10 highest-ROI projects nationally are exterior; a new front door alone recovers about 100% of its cost at resale.',
     source: 'Zonda 2025 Cost vs. Value Report; NAR/NARI 2025 Remodeling Impact Report',
+    costBucket: 'UNDER_5K',
   },
   {
     category: 'flooring',
@@ -46,6 +59,7 @@ export const SALE_PREP_VALUE_CATALOG: readonly SalePrepValueCatalogEntry[] = [
     title: 'Refresh or refinish flooring',
     detail: 'Refinishing existing hardwood floors returns about 147% of its cost at resale — the highest ROI of any interior project tracked; new hardwood installation returns roughly 118%.',
     source: 'NAR/NARI 2025 Remodeling Impact Report',
+    costBucket: 'FIVE_TO_15K',
   },
   {
     category: 'kitchen',
@@ -53,6 +67,7 @@ export const SALE_PREP_VALUE_CATALOG: readonly SalePrepValueCatalogEntry[] = [
     title: 'Consider a minor kitchen refresh',
     detail: 'A minor kitchen remodel ($28k–30k) delivers about 113% ROI — the best return of any interior project. Major kitchen renovations, by contrast, typically recoup only 38–50%.',
     source: 'Zonda 2025 Cost vs. Value Report',
+    costBucket: 'FIFTEEN_TO_30K',
   },
   {
     category: 'bathroom',
@@ -60,6 +75,7 @@ export const SALE_PREP_VALUE_CATALOG: readonly SalePrepValueCatalogEntry[] = [
     title: 'Consider a midrange bathroom refresh',
     detail: 'A midrange bathroom remodel recoups about 80% of its cost at resale — the strongest interior ROI after a minor kitchen update.',
     source: 'Zonda 2025 Cost vs. Value Report',
+    costBucket: 'FIFTEEN_TO_30K',
   },
   {
     category: 'staging',
@@ -67,6 +83,7 @@ export const SALE_PREP_VALUE_CATALOG: readonly SalePrepValueCatalogEntry[] = [
     title: 'Declutter and consider staging',
     detail: 'Decluttering is the most-recommended pre-listing task, cited by 96% of agents. Staged homes saw 1–10% higher buyer offers per 29% of agents surveyed, and 49% of agents reported faster sales.',
     source: 'NAR 2025 Profile of Home Staging',
+    costBucket: 'UNDER_5K',
   },
 ] as const;
 

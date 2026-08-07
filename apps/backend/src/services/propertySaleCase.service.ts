@@ -627,6 +627,33 @@ function projectGenericFallbacks(alreadyCoveredCategories: Set<SalePrepValueCate
     }));
 }
 
+// Plan §4.7/§10: the homeowner's stated pre-sale budget was captured but
+// never actually read anywhere — found via direct product feedback. Applied
+// only to self-reported/generic-fallback items (both keyed directly by
+// SalePrepValueCategoryKey via sourceEntityId) — not the evidence-backed
+// "confirm current condition" items, which aren't a "should I spend money
+// on this" prompt the same way; they're a record already on file.
+const BUDGET_RANK: Record<SalePrepBudgetRange, number> = {
+  UNDER_5K: 0,
+  FIVE_TO_15K: 1,
+  FIFTEEN_TO_30K: 2,
+  OVER_30K: 3,
+};
+
+function applyBudgetContext(items: ProjectedItem[], budgetRange: SalePrepBudgetRange | null): ProjectedItem[] {
+  if (!budgetRange) return items;
+  const budgetRank = BUDGET_RANK[budgetRange];
+  return items.map((item) => {
+    const categoryKey = item.sourceEntityId as SalePrepValueCategoryKey;
+    const entry = SALE_PREP_VALUE_CATALOG.find((candidate) => candidate.category === categoryKey);
+    if (!entry || BUDGET_RANK[entry.costBucket] <= budgetRank) return item;
+    return {
+      ...item,
+      detail: `${item.detail ?? ''} This project type typically costs more than your stated pre-sale budget — you may want to deprioritize it or plan for a smaller-scope version.`.trim(),
+    };
+  });
+}
+
 // Sale Readiness Value-Maximization Checklist plan §4.5 question 8: once a
 // homeowner confirms a candidate upgrade, it becomes a real, positive-signal
 // item (same framing as projectTransferableWarranties) worth highlighting
@@ -787,10 +814,14 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
   const genericFallbacks = projectGenericFallbacks(fullyCoveredCategories);
   const confirmedUpgrades = await projectConfirmedUpgrades(propertyId);
 
+  const saleCaseForBudget = await prisma.propertySaleCase.findUnique({ where: { id: saleCaseId }, select: { budgetRange: true } });
+  const budgetedSelfReportedItems = applyBudgetContext(selfReportedItems, saleCaseForBudget?.budgetRange ?? null);
+  const budgetedGenericFallbacks = applyBudgetContext(genericFallbacks, saleCaseForBudget?.budgetRange ?? null);
+
   const projected = [
     ...findings, ...projects, ...permits, ...homeActions, ...records, ...materialSpecs, ...timelineEvents,
     ...agingSystems, ...lapsedMaintenance, ...transferableWarranties, ...structuralEvidence,
-    ...upgradeEvidenceItems, ...selfReportedItems, ...genericFallbacks, ...confirmedUpgrades,
+    ...upgradeEvidenceItems, ...budgetedSelfReportedItems, ...budgetedGenericFallbacks, ...confirmedUpgrades,
   ];
   const projectedKeys = new Set(projected.map((p) => `${p.sourceEntityType}:${p.sourceEntityId}`));
 
