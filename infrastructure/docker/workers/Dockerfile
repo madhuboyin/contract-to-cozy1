@@ -170,6 +170,7 @@ COPY apps/backend/src/services/incidents/incident.utils.ts \
      apps/backend/src/services/incidents/incident.orchestrator.ts \
      apps/backend/src/services/incidents/incident.scoring.ts \
      apps/backend/src/services/incidents/incident.events.ts \
+     apps/backend/src/services/incidents/expireWeatherPreparationIncidents.usecase.ts \
      src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/integrations/incidentNotification.service.ts src/shared/backend/services/incidents/integrations/
 # Transitive dependencies used by incident notification context and coverage

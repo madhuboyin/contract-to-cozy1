@@ -468,6 +468,25 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     humanApprovalClass: 'NONE',
   },
   {
+    key: 'expire-stale-weather-preparations',
+    name: 'Expire Stale Weather Preparations',
+    description:
+      'Auto-resolves WEATHER_PREPARATION incidents (a forecast-anchored storm-prep checklist, e.g. "Heavy rain expected Monday" preparation) a few days after their weather window has passed. Without this, a fully mitigated or even untouched preparation checklist sits under the Incidents page\'s "Active" filter forever, since nothing else ever revisits it once the forecast moves on.',
+    category: 'RISK_SAFETY',
+    schedule: 'Daily at 1:50 AM EST',
+    cronExpression: '50 1 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'expire-stale-weather-preparations',
+    triggerSupported: true,
+    impact: 'HOMEOWNER_STATE',
+    customerJob: 'STAY_AHEAD',
+    defaultEnabledInBeta: true,
+    supportsDryRun: true,
+    supportsPropertyScope: true,
+    humanApprovalClass: 'NONE',
+  },
+  {
     key: 'airnow-air-quality',
     name: 'EPA AirNow Air Quality',
     description:
