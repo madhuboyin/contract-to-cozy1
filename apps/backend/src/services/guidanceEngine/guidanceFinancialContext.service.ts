@@ -7,6 +7,7 @@ export type GuidanceFinancialContext = {
   fundingGapFlag: boolean;
   costOfDelay: number;
   coverageImpact: CoverageImpact;
+  upcomingCost: number;
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -89,6 +90,7 @@ export class GuidanceFinancialContextService {
       fundingGapFlag,
       costOfDelay: guidanceValidationService.sanitizeCostOfDelay(costOfDelay),
       coverageImpact,
+      upcomingCost,
     };
   }
 }

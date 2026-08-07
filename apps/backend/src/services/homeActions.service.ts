@@ -15,6 +15,7 @@ import { getPromotedHomeActions } from './homeActionSourcePromotion.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { NewHomeSetupService } from './newHomeSetup.service';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
+import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinancialContext.service';
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { materializeRecommendationsForProperty } from '../modules/personalization/application/materializeRecommendations.usecase';
 import { getAggregationPropertyContext } from './aggregationContext/context';
@@ -350,6 +351,69 @@ export function selectEligibleActiveJourney<T extends { id: string }>(
       .filter((id): id is string => Boolean(id)),
   );
   return journeys.find((journey) => eligibleJourneyIds.has(journey.id)) ?? null;
+}
+
+function formatMomentCurrency(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function humanizeCapitalTimelineCategory(category: string): string {
+  return category.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** For item-less journeys (no inventoryItemId), trace the originating signal back to what it's actually about — an incident, or a capital-timeline system/category. */
+async function resolveJourneyMomentSubject(journey: {
+  inventoryItemId?: string | null;
+  primarySignal?: { sourceEntityType: string | null; sourceEntityId: string | null; metadataJson: unknown } | null;
+}): Promise<string | null> {
+  if (journey.inventoryItemId) return null; // already named in the moment title via "for {item}"
+
+  const signal = journey.primarySignal;
+  if (!signal) return null;
+
+  const metadata = (signal.metadataJson && typeof signal.metadataJson === 'object' ? signal.metadataJson : {}) as Record<string, unknown>;
+  if (typeof metadata.incidentTitle === 'string' && metadata.incidentTitle.trim()) {
+    return metadata.incidentTitle.trim();
+  }
+
+  if (signal.sourceEntityType === 'RESERVE_FUND_LINE_ITEM' && signal.sourceEntityId) {
+    const timelineItem = await prisma.homeCapitalTimelineItem.findUnique({
+      where: { id: signal.sourceEntityId },
+      select: { category: true, inventoryItem: { select: { name: true } } },
+    });
+    if (timelineItem) {
+      return timelineItem.inventoryItem?.name ?? humanizeCapitalTimelineCategory(timelineItem.category);
+    }
+  }
+
+  return null;
+}
+
+/** Homeowner-facing summary of what a guidance journey is actually about, so a bare display title (e.g. "Review a financial exposure") isn't shown without any grounding. */
+async function buildJourneyMomentContext(journey: {
+  inventoryItemId?: string | null;
+  derivedSnapshotJson?: unknown;
+  primarySignal?: { sourceEntityType: string | null; sourceEntityId: string | null; metadataJson: unknown } | null;
+}): Promise<string | null> {
+  const subject = await resolveJourneyMomentSubject(journey);
+
+  if (!journey.derivedSnapshotJson) return subject;
+  const { upcomingCost, coverageImpact } = guidanceFinancialContextService.evaluate({ journey });
+  if (upcomingCost <= 0) return subject;
+
+  const amount = formatMomentCurrency(upcomingCost);
+  const coverageNote =
+    coverageImpact === 'NOT_COVERED'
+      ? 'not covered by current policy or warranty'
+      : coverageImpact === 'PARTIAL'
+        ? 'coverage only partially confirmed'
+        : 'coverage status not yet confirmed';
+
+  return subject ? `${subject} — ${amount} at stake, ${coverageNote}.` : `${amount} at stake — ${coverageNote}.`;
 }
 
 async function loadCurrentCoverageStates(propertyId: string): Promise<Map<string, CoverageStateForHomeAction>> {
@@ -830,6 +894,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
         take: 20,
         include: {
           inventoryItem: { select: { name: true, assetType: true, category: true } },
+          primarySignal: { select: { sourceEntityType: true, sourceEntityId: true, metadataJson: true } },
           steps: {
             where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
             orderBy: { stepOrder: 'asc' },
@@ -868,12 +933,15 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
   const projectIssue = activeProject?.issues[0] ?? null;
   const activeJourney = selectEligibleActiveJourney(activeJourneyCandidates, feed.actions);
   const journeyStep = activeJourney?.steps[0] ?? null;
+  const activeJourneyMomentContext =
+    !activeProject && activeJourney ? await buildJourneyMomentContext(activeJourney) : null;
   const activeMajorMoment = activeProject
     ? {
         kind: 'PROJECT' as const,
         id: activeProject.id,
         title: activeProject.name,
         stage: activeProject.status,
+        context: null,
         blocker: projectIssue?.description ?? null,
         nextMilestone: projectMilestone?.name ?? 'Review project status',
         href: `/dashboard/properties/${propertyId}/projects/${activeProject.id}`,
@@ -886,6 +954,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
             ? `${getGuidanceJourneyDisplayTitle(activeJourney.journeyTypeKey, activeJourney.issueType)} for ${getHomeAssetDisplayLabel(activeJourney.inventoryItem)}`
             : getGuidanceJourneyDisplayTitle(activeJourney.journeyTypeKey, activeJourney.issueType),
           stage: activeJourney.decisionStage,
+          context: activeJourneyMomentContext,
           blocker: journeyStep?.status === 'BLOCKED' ? journeyStep.description ?? journeyStep.label : null,
           nextMilestone: journeyStep?.label ?? 'Continue the current decision',
           href: `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${encodeURIComponent(activeJourney.id)}`,

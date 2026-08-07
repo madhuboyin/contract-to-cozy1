@@ -579,6 +579,7 @@ export type UnifiedHomeDTO = {
     id: string;
     title: string;
     stage: string;
+    context: string | null;
     blocker: string | null;
     nextMilestone: string;
     href: string;
