@@ -460,6 +460,15 @@ export async function loadGuidanceActions(
     const correctionHref = isCoverageJourney && journey.inventoryItemId
       ? `/dashboard/properties/${propertyId}/inventory/items/${encodeURIComponent(journey.inventoryItemId)}/coverage?sourceActionId=${encodeURIComponent(actionId)}&returnTo=${encodeURIComponent('/dashboard')}`
       : `/dashboard/properties/${propertyId}/onboarding`;
+    const withheldRecommendedAction = isCoverageJourney
+      ? subjectLabel
+        ? coverageUncertain
+          ? `Confirm coverage for ${subjectLabel}`
+          : `Add coverage information for ${subjectLabel}`
+        : coverageUncertain
+          ? `Confirm coverage for ${title}`
+          : `Add coverage information for ${title}`
+      : `Review home information for ${subjectLabel ?? title} before continuing`;
     const href = resolveGuidanceHref({
       propertyId,
       journeyId: journey.id,
@@ -483,14 +492,8 @@ export async function loadGuidanceActions(
         : step?.description ?? 'This active journey preserves the evidence and decisions needed for the next home outcome.',
       recommendedAction: recommendationResponse.materialActionAllowed
         ? step?.label ?? 'Continue this home decision'
-        : recommendationResponse.safeNextAction,
-      withheldRecommendedAction: subjectLabel
-        ? isCoverageJourney
-          ? coverageUncertain
-            ? `Confirm coverage for ${subjectLabel}`
-            : `Add coverage information for ${subjectLabel}`
-          : `Review home information for ${subjectLabel} before continuing`
-        : undefined,
+        : withheldRecommendedAction ?? recommendationResponse.safeNextAction,
+      withheldRecommendedAction,
       expectedOutcome: 'Advance the active journey without losing its property, evidence, or decision context.',
       timing: {
         dueAt: null,
@@ -1927,7 +1930,7 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
       priority: 'PLAN',
       signal: `${categoryLabel} replacement window is approaching (${windowLabel}).`,
       whyItMatters: item.why,
-      recommendedAction: 'Review the capital timeline for this system',
+      recommendedAction: `Review the capital timeline for ${categoryLabel}`,
       expectedOutcome: costRange
         ? `A planning range (${costRange}) to budget or reserve against before this window arrives.`
         : 'A planning window to budget or reserve against before it arrives.',
