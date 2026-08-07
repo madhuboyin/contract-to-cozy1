@@ -4,7 +4,20 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Calendar,
+  ClipboardCheck,
+  EyeOff,
+  FileText,
+  Loader2,
+  Scale,
+  Search,
+  Sparkles,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -88,6 +101,26 @@ const REQUIREMENT_CLASS_TONE: Record<SaleReadinessRequirementClass, StatusChipTo
   PROFESSIONAL_DECISION: 'needsAction',
   OPTIONAL_IMPROVEMENT: 'elevated',
   PRESENTATION: 'info',
+};
+
+// Visual language for readiness item cards — a color-coded icon circle so
+// the page reads as distinguishable content instead of a uniform stack of
+// identical rectangles (direct feedback: the flat card list "looked like
+// a bunch of horizontal cards").
+const REQUIREMENT_CLASS_ICON: Record<SaleReadinessRequirementClass, LucideIcon> = {
+  MATERIAL_BLOCKER: AlertTriangle,
+  VERIFICATION_NEEDED: ClipboardCheck,
+  PROFESSIONAL_DECISION: Scale,
+  OPTIONAL_IMPROVEMENT: Wrench,
+  PRESENTATION: Sparkles,
+};
+
+const REQUIREMENT_CLASS_ICON_STYLE: Record<SaleReadinessRequirementClass, { bg: string; fg: string }> = {
+  MATERIAL_BLOCKER: { bg: 'bg-red-100', fg: 'text-red-700' },
+  VERIFICATION_NEEDED: { bg: 'bg-amber-100', fg: 'text-amber-700' },
+  PROFESSIONAL_DECISION: { bg: 'bg-amber-100', fg: 'text-amber-700' },
+  OPTIONAL_IMPROVEMENT: { bg: 'bg-sky-100', fg: 'text-sky-700' },
+  PRESENTATION: { bg: 'bg-sky-100', fg: 'text-sky-700' },
 };
 
 // Slice 11 cross-linking: readiness items already carry real
@@ -406,65 +439,77 @@ function SaleCaseBody({
           card, above the fold, ahead of the compliance-oriented groups. */}
       <MaximizeReturnSection propertyId={propertyId} items={presentationItems} />
 
-      {groups.map((group) => (
+      {groups.map((group) => {
+        const GroupIcon = REQUIREMENT_CLASS_ICON[group.requirementClass];
+        const iconStyle = REQUIREMENT_CLASS_ICON_STYLE[group.requirementClass];
+        return (
         <MobileSection key={group.requirementClass} className="mb-4">
           <MobileSectionHeader title={REQUIREMENT_CLASS_LABELS[group.requirementClass]} />
           <div className="space-y-2">
             {group.items.map((item) => {
               const sourceHref = sourceEntityHref(propertyId, item);
               return (
-              <MobileCard key={item.id} className="space-y-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+              <MobileCard key={item.id} className="flex gap-3">
+                <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', iconStyle.bg)}>
+                  <GroupIcon className={cn('h-5 w-5', iconStyle.fg)} />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-start justify-between gap-3">
                     <p className={cn('mb-0.5 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
                       {item.title}
                     </p>
-                    {item.detail ? (
-                      <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-                        {item.detail}
-                      </p>
-                    ) : null}
-                    {sourceHref ? (
-                      <Link href={sourceHref} className="mt-1 inline-block text-xs font-medium text-sky-700 hover:underline">
-                        View source →
-                      </Link>
-                    ) : null}
+                    <StatusChip tone={REQUIREMENT_CLASS_TONE[item.requirementClass]}>
+                      {CATEGORY_LABELS[item.category]}
+                    </StatusChip>
                   </div>
-                  <StatusChip tone={REQUIREMENT_CLASS_TONE[item.requirementClass]}>
-                    {CATEGORY_LABELS[item.category]}
-                  </StatusChip>
+                  {item.detail ? (
+                    <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                      {item.detail}
+                    </p>
+                  ) : null}
+                  {sourceHref ? (
+                    <Link href={sourceHref} className="mt-1 inline-block text-xs font-medium text-sky-700 hover:underline">
+                      View source →
+                    </Link>
+                  ) : null}
+                  {item.requirementClass === 'PROFESSIONAL_DECISION' ? (
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onDecision(item.id, 'WAIVE')}
+                        disabled={decisionPending}
+                      >
+                        Disclose and waive
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-                {item.requirementClass === 'PROFESSIONAL_DECISION' ? (
-                  <div className="flex justify-end">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onDecision(item.id, 'WAIVE')}
-                      disabled={decisionPending}
-                    >
-                      Disclose and waive
-                    </Button>
-                  </div>
-                ) : null}
               </MobileCard>
               );
             })}
           </div>
         </MobileSection>
-      ))}
+        );
+      })}
 
       {structuralGaps.length > 0 ? (
         <MobileSection className="mb-4">
           <MobileSectionHeader title="Not enough information yet" />
           <div className="space-y-2">
             {structuralGaps.map((gap) => (
-              <MobileCard key={gap.key} className="space-y-2">
-                <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
-                  We don&apos;t have enough information about your {gap.label} to check this — log an inspection to see if it affects your sale readiness.
-                </p>
-                <Link href={`/dashboard/properties/${propertyId}/inspection-hub`} className="text-xs font-medium text-sky-700 hover:underline">
-                  Log an inspection →
-                </Link>
+              <MobileCard key={gap.key} className="flex gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                  <Search className="h-5 w-5 text-slate-600" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+                    We don&apos;t have enough information about your {gap.label} to check this — log an inspection to see if it affects your sale readiness.
+                  </p>
+                  <Link href={`/dashboard/properties/${propertyId}/inspection-hub`} className="text-xs font-medium text-sky-700 hover:underline">
+                    Log an inspection →
+                  </Link>
+                </div>
               </MobileCard>
             ))}
           </div>
@@ -476,19 +521,24 @@ function SaleCaseBody({
           <MobileSectionHeader title="Disclosed, not addressed" />
           <div className="space-y-2">
             {waived.map((item) => (
-              <MobileCard key={item.id} className="space-y-2">
-                <p className={cn('mb-0 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
-                  {item.title}
-                </p>
-                {item.waivedReason ? (
-                  <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-                    "{item.waivedReason}"
+              <MobileCard key={item.id} className="flex gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                  <EyeOff className="h-5 w-5 text-slate-600" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className={cn('mb-0 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+                    {item.title}
                   </p>
-                ) : null}
-                <div className="flex justify-end">
-                  <Button size="sm" variant="ghost" onClick={() => onDecision(item.id, 'REOPEN')} disabled={decisionPending}>
-                    Reopen
-                  </Button>
+                  {item.waivedReason ? (
+                    <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                      "{item.waivedReason}"
+                    </p>
+                  ) : null}
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => onDecision(item.id, 'REOPEN')} disabled={decisionPending}>
+                      Reopen
+                    </Button>
+                  </div>
                 </div>
               </MobileCard>
             ))}
@@ -506,9 +556,20 @@ function SaleCaseBody({
       {/* §4.9a: "Compose agent package" stays with primary content — it's a
           real readiness action, not transaction-status tracking. */}
       <MobileSection className="mb-4">
-        <MobileCard className="space-y-2">
+        <MobileCard className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100">
+            <FileText className="h-5 w-5 text-violet-700" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className={cn('mb-0.5 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+              Compose agent package
+            </p>
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+              Bundle your readiness details into a package for your listing agent.
+            </p>
+          </div>
           <Link href={`/dashboard/properties/${propertyId}/property-brief?purpose=LISTING_AGENT`}>
-            <Button size="sm" variant="outline">Compose agent package</Button>
+            <Button size="sm" variant="outline">Open</Button>
           </Link>
         </MobileCard>
       </MobileSection>
@@ -516,19 +577,22 @@ function SaleCaseBody({
       {/* §4.9a: demoted, muted "Sale status" row — never fully hidden, just
           no longer the page's primary job. */}
       <MobileSection className="mb-4">
-        <MobileCard variant="compact" className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <StatusChip tone={STATUS_TONE[saleCase.status]}>{saleCase.status}</StatusChip>
-            {nextStep ? (
-              <Button size="sm" variant="outline" onClick={() => onTransition(nextStep.status)} disabled={transitionPending}>
-                {transitionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {nextStep.label}
-              </Button>
-            ) : null}
+        <MobileCard variant="compact" className="flex items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--mobile-bg-muted))]">
+            <Calendar className="h-4 w-4 text-[hsl(var(--mobile-text-secondary))]" />
           </div>
-          <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-            Track when this home goes live, under contract, and closes.
-          </p>
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <StatusChip tone={STATUS_TONE[saleCase.status]}>{saleCase.status}</StatusChip>
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+              Track when this home goes live, under contract, and closes.
+            </p>
+          </div>
+          {nextStep ? (
+            <Button size="sm" variant="outline" onClick={() => onTransition(nextStep.status)} disabled={transitionPending}>
+              {transitionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {nextStep.label}
+            </Button>
+          ) : null}
         </MobileCard>
       </MobileSection>
 
