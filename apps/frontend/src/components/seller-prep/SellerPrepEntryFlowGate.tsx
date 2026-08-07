@@ -2,10 +2,18 @@
 //
 // Sale Readiness Value-Maximization Checklist plan §4.4b/§10 Phase 6: the
 // Seller Prep entry-flow gate. Replaces the plain "Open Sale Readiness"
-// link with a check against the 6 mandatory baseline facts — if anything's
-// missing, this renders the inline scalar quick-form and/or Inventory/
-// Warranty routing cards right here instead of forwarding, then re-checks
-// once everything's resolved.
+// link with a check against the mandatory baseline facts — if anything's
+// missing, this renders inline capture for all of it right here instead of
+// forwarding, then re-checks once everything's resolved.
+//
+// Reworked per direct product feedback (2026-08-06): appliance capture used
+// to route the homeowner away to the Inventory page ("Add to Inventory")
+// for a vague "at least one item" bar. Now every one of a fixed set of
+// appliances every home has (refrigerator, dishwasher, kitchen range,
+// washer & dryer) is captured inline, right here, alongside the scalar
+// system-age fields — one combined form, one save, no page hop. Warranty
+// coverage is reported but no longer blocks the checklist; it's optional
+// context a homeowner can add later, not a mandatory fact.
 //
 // Deliberately keeps its own minimal local copy of the entry-flow request/
 // response shape and PATCH call rather than importing sale-case's own
@@ -14,8 +22,8 @@
 // convention for the exact same reason.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,10 +31,11 @@ import { Loader2 } from "lucide-react";
 import { api } from "@/lib/api/client";
 
 type MandatoryScalarField = "roofReplacementYear" | "hvacInstallYear" | "waterHeaterInstallYear" | "electricalPanelAge";
+type MandatoryApplianceType = "REFRIGERATOR" | "DISHWASHER" | "OVEN_RANGE" | "WASHER_DRYER";
 
 interface MandatoryFactCoverage {
   scalarMissing: MandatoryScalarField[];
-  inventoryMissing: boolean;
+  applianceMissing: MandatoryApplianceType[];
   warrantyMissing: boolean;
   readyForChecklist: boolean;
 }
@@ -34,16 +43,18 @@ interface MandatoryFactCoverage {
 const CURRENT_YEAR = new Date().getFullYear();
 
 const SCALAR_FIELD_CONFIG: Record<MandatoryScalarField, { factKey: string; label: string; unit: string; min: number; max: number }> = {
-  roofReplacementYear: { factKey: "structure.roofReplacementYear", label: "Roof replacement year", unit: "year", min: 1600, max: CURRENT_YEAR },
-  hvacInstallYear: { factKey: "systems.hvacInstallYear", label: "HVAC install year", unit: "year", min: 1600, max: CURRENT_YEAR },
-  waterHeaterInstallYear: { factKey: "systems.waterHeaterInstallYear", label: "Water heater install year", unit: "year", min: 1600, max: CURRENT_YEAR },
+  roofReplacementYear: { factKey: "structure.roofReplacementYear", label: "Roof replacement", unit: "year", min: 1600, max: CURRENT_YEAR },
+  hvacInstallYear: { factKey: "systems.hvacInstallYear", label: "HVAC install", unit: "year", min: 1600, max: CURRENT_YEAR },
+  waterHeaterInstallYear: { factKey: "systems.waterHeaterInstallYear", label: "Water heater install", unit: "year", min: 1600, max: CURRENT_YEAR },
   electricalPanelAge: { factKey: "structure.electricalPanelAgeYears", label: "Electrical panel age", unit: "years", min: 0, max: 150 },
 };
 
-function sanitizeReturnTo(raw: string | null): string | null {
-  if (!raw || !raw.startsWith("/dashboard/")) return null;
-  return raw;
-}
+const APPLIANCE_CONFIG: Record<MandatoryApplianceType, { label: string; unit: string }> = {
+  REFRIGERATOR: { label: "Refrigerator", unit: "year installed/purchased" },
+  DISHWASHER: { label: "Dishwasher", unit: "year installed/purchased" },
+  OVEN_RANGE: { label: "Kitchen range / oven", unit: "year installed/purchased" },
+  WASHER_DRYER: { label: "Washer & dryer", unit: "year installed/purchased" },
+};
 
 async function getEntryFlowStatus(propertyId: string): Promise<MandatoryFactCoverage> {
   const res = await api.get<MandatoryFactCoverage>(`/api/properties/${propertyId}/sale-case/entry-flow`);
@@ -54,20 +65,48 @@ async function patchPropertyContextFact(propertyId: string, factKey: string, val
   await api.patch(`/api/properties/${propertyId}/context/${factKey}`, { value });
 }
 
+// Appliance capture reuses the property's existing canonical "major
+// appliances" projection (propertyApplianceInventory.service.ts) rather
+// than a raw InventoryItem — same model the property edit form already
+// uses, and the only one with a clean type+year write shape. The sync is a
+// full replace, so any save has to carry the complete list forward, not
+// just the newly-answered types.
+async function saveMandatoryAppliances(propertyId: string, answers: Partial<Record<MandatoryApplianceType, string>>): Promise<void> {
+  const current = await api.getProperty(propertyId);
+  if (!current.success) throw new Error(current.message || "Could not load property details.");
+  const existing: Array<{ id?: string; type: string; installYear: number | undefined }> = (current.data.majorAppliances ?? [])
+    .map((appliance: { id: string; assetType: string; installationYear: number | null }) => ({
+      id: appliance.id,
+      type: appliance.assetType,
+      installYear: appliance.installationYear ?? undefined,
+    }));
+  const merged = [...existing];
+  for (const [type, value] of Object.entries(answers)) {
+    if (!value) continue;
+    const installYear = Number(value);
+    const index = merged.findIndex((appliance) => appliance.type === type);
+    if (index >= 0) merged[index] = { ...merged[index], installYear };
+    else merged.push({ type, installYear });
+  }
+  await api.updateProperty(propertyId, {
+    majorAppliances: merged
+      .filter((appliance) => typeof appliance.installYear === "number")
+      .map((appliance) => ({ id: appliance.id, type: appliance.type, installYear: appliance.installYear as number })),
+  });
+}
+
 type GateState = "idle" | "checking" | "blocked" | "error";
 
 export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [state, setState] = useState<GateState>("idle");
   const [coverage, setCoverage] = useState<MandatoryFactCoverage | null>(null);
-  const [draft, setDraft] = useState<Partial<Record<MandatoryScalarField, string>>>({});
+  const [scalarDraft, setScalarDraft] = useState<Partial<Record<MandatoryScalarField, string>>>({});
+  const [applianceDraft, setApplianceDraft] = useState<Partial<Record<MandatoryApplianceType, string>>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const saleCasePath = `/dashboard/properties/${propertyId}/tools/sale-case`;
-  const returnPath = `${pathname}?entryFlowRecheck=1`;
 
   const check = useCallback(async () => {
     setState("checking");
@@ -79,7 +118,8 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
         return;
       }
       setCoverage(result);
-      setDraft({});
+      setScalarDraft({});
+      setApplianceDraft({});
       setState("blocked");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not check your home's details.");
@@ -87,30 +127,25 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
     }
   }, [propertyId, router, saleCasePath]);
 
-  // A homeowner returning from the Warranty add-flow (which auto-returns on
-  // save) lands back here with this marker — re-run the check immediately
-  // rather than making them click "Open Sale Readiness" again.
-  useEffect(() => {
-    if (searchParams.get("entryFlowRecheck") !== "1") return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("entryFlowRecheck");
-    const stripped = params.toString();
-    router.replace(stripped ? `${pathname}?${stripped}` : pathname);
-    void check();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const saveScalarFields = async () => {
+  const saveAndContinue = async () => {
     if (!coverage) return;
-    const entries = coverage.scalarMissing
-      .map((field) => [field, draft[field]] as const)
+    const scalarEntries = coverage.scalarMissing
+      .map((field) => [field, scalarDraft[field]] as const)
       .filter(([, value]) => value !== undefined && value !== "");
-    if (entries.length === 0) return;
+    const applianceEntries = Object.fromEntries(
+      coverage.applianceMissing
+        .map((type) => [type, applianceDraft[type]] as const)
+        .filter(([, value]) => value !== undefined && value !== ""),
+    );
+    if (scalarEntries.length === 0 && Object.keys(applianceEntries).length === 0) return;
     setSaving(true);
     setError(null);
     try {
-      await Promise.all(entries.map(([field, value]) =>
-        patchPropertyContextFact(propertyId, SCALAR_FIELD_CONFIG[field].factKey, Number(value))));
+      await Promise.all([
+        ...scalarEntries.map(([field, value]) =>
+          patchPropertyContextFact(propertyId, SCALAR_FIELD_CONFIG[field].factKey, Number(value))),
+        Object.keys(applianceEntries).length > 0 ? saveMandatoryAppliances(propertyId, applianceEntries) : Promise.resolve(),
+      ]);
       await check();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save those details.");
@@ -154,18 +189,18 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
 
   // blocked
   const missing = coverage!;
-  const hasScalarGap = missing.scalarMissing.length > 0;
-  const hasRoutedGap = missing.inventoryMissing || missing.warrantyMissing;
+  const hasQuickFacts = missing.scalarMissing.length > 0 || missing.applianceMissing.length > 0;
+  const nothingFilledIn = missing.scalarMissing.every((field) => !scalarDraft[field])
+    && missing.applianceMissing.every((type) => !applianceDraft[type]);
 
   return (
     <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 space-y-4">
       <p className="font-medium">
-        A few more details about your home will help us build an accurate, personalized checklist.
+        A few quick details about your home will help us build an accurate, personalized checklist.
       </p>
 
-      {hasScalarGap ? (
+      {hasQuickFacts ? (
         <div className="space-y-3 rounded-md border border-blue-200 bg-white p-3">
-          <p className="text-sm font-medium text-gray-900">Just a couple more details before we build your checklist:</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {missing.scalarMissing.map((field) => {
               const config = SCALAR_FIELD_CONFIG[field];
@@ -179,8 +214,27 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
                     type="number"
                     min={config.min}
                     max={config.max}
-                    value={draft[field] ?? ""}
-                    onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))}
+                    value={scalarDraft[field] ?? ""}
+                    onChange={(event) => setScalarDraft((current) => ({ ...current, [field]: event.target.value }))}
+                    className="bg-white"
+                  />
+                </div>
+              );
+            })}
+            {missing.applianceMissing.map((type) => {
+              const config = APPLIANCE_CONFIG[type];
+              return (
+                <div key={type} className="space-y-1">
+                  <Label htmlFor={`entry-flow-appliance-${type}`} className="text-xs text-gray-700">
+                    {config.label} ({config.unit})
+                  </Label>
+                  <Input
+                    id={`entry-flow-appliance-${type}`}
+                    type="number"
+                    min={1900}
+                    max={CURRENT_YEAR}
+                    value={applianceDraft[type] ?? ""}
+                    onChange={(event) => setApplianceDraft((current) => ({ ...current, [type]: event.target.value }))}
                     className="bg-white"
                   />
                 </div>
@@ -189,40 +243,23 @@ export function SellerPrepEntryFlowGate({ propertyId }: { propertyId: string }) 
           </div>
           <Button
             size="sm"
-            disabled={saving || missing.scalarMissing.every((field) => !draft[field])}
-            onClick={() => void saveScalarFields()}
+            disabled={saving || nothingFilledIn}
+            onClick={() => void saveAndContinue()}
           >
             {saving ? "Saving…" : "Save and continue"}
           </Button>
         </div>
       ) : null}
 
-      {hasRoutedGap ? (
-        <div className="space-y-2">
-          {missing.inventoryMissing ? (
-            <div className="rounded-md border border-blue-200 bg-white p-3 flex items-center justify-between gap-3">
-              <p className="text-sm text-gray-800">
-                Log at least one home system or appliance with its condition and install or purchase date.
-              </p>
-              <a
-                href={`/dashboard/properties/${propertyId}/inventory?filter=missing-age&returnTo=${encodeURIComponent(returnPath)}`}
-                className="shrink-0"
-              >
-                <Button size="sm" variant="outline">Add to Inventory</Button>
-              </a>
-            </div>
-          ) : null}
-          {missing.warrantyMissing ? (
-            <div className="rounded-md border border-blue-200 bg-white p-3 flex items-center justify-between gap-3">
-              <p className="text-sm text-gray-800">Add at least one warranty on file for this property.</p>
-              <a
-                href={`/dashboard/warranties?action=new&propertyId=${propertyId}&returnTo=${encodeURIComponent(returnPath)}`}
-                className="shrink-0"
-              >
-                <Button size="sm" variant="outline">Add a warranty</Button>
-              </a>
-            </div>
-          ) : null}
+      {missing.warrantyMissing ? (
+        <div className="rounded-md border border-blue-100 bg-white/60 p-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-gray-800">No warranty on file yet.</p>
+            <p className="text-xs text-gray-500">Optional — doesn&rsquo;t block your checklist, but worth adding if you have one.</p>
+          </div>
+          <a href={`/dashboard/warranties?action=new&propertyId=${propertyId}`} className="shrink-0">
+            <Button size="sm" variant="ghost">Add a warranty</Button>
+          </a>
         </div>
       ) : null}
 

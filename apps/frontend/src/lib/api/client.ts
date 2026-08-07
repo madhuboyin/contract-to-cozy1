@@ -1619,6 +1619,7 @@ class APIClient {
       isEquityVerified?: boolean;
       coverPhotoDocumentId?: string | null;
       applianceAges?: any;
+      majorAppliances?: Array<{ id?: string; type: string; installYear: number }>;
     }
   ): Promise<APIResponse<Property>> {
     const response = await this.request<Property>(`/api/properties/${id}`, {

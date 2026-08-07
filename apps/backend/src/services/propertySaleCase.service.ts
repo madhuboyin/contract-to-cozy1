@@ -23,6 +23,7 @@ import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { listWorkItems } from '../modules/homeOperations/application/listWorkItems.usecase';
 import { homeRecordsService } from './homeRecords.service';
 import { revokePropertyBriefShare } from '../propertyBrief/propertyBrief.service';
+import { listPropertyApplianceInventory } from './propertyApplianceInventory.service';
 import {
   SALE_PREP_VALUE_CATALOG,
   findSalePrepValueCatalogEntry,
@@ -687,30 +688,45 @@ async function projectConfirmedUpgrades(propertyId: string): Promise<ProjectedIt
 // (this isn't a checklist item — it decides whether the checklist can even
 // be built meaningfully yet). Split by data shape, not a count threshold —
 // the 4 scalar Property fields are always inline-collectible regardless of
-// how many are missing; appliance/warranty gaps always route to their
-// existing dedicated Inventory/Warranty flows instead.
+// how many are missing.
+//
+// Reworked per direct product feedback (2026-08-06): the original design
+// gated on "at least one InventoryItem, any type" and treated a missing
+// warranty as an equal, checklist-blocking gap — both resolved by routing
+// the homeowner away to a separate page. Two problems: (1) "any one item"
+// isn't a meaningful bar — a home with only a garden hose logged would
+// pass; (2) a warranty is a nice-to-have for the sale-prep checklist, not
+// something every home has or needs to produce a checklist. Reworked to:
+// require each of a small, fixed set of appliances every home actually
+// has (matching `propertyApplianceInventory.service.ts`'s existing
+// canonical appliance-type taxonomy, reused rather than inventing a new
+// one) with a captured install/purchase year, captured inline on Seller
+// Prep itself — no more routing away. Warranty coverage is still reported
+// but no longer gates `readyForChecklist`; it's optional context, not a
+// mandatory fact.
 export type MandatoryScalarField = 'roofReplacementYear' | 'hvacInstallYear' | 'waterHeaterInstallYear' | 'electricalPanelAge';
+
+// Subset of propertyApplianceInventory.service.ts's canonical appliance
+// types — every home has these; MICROWAVE_HOOD/WATER_SOFTENER are real
+// canonical types too but not universal, so they stay out of the
+// mandatory set.
+export type MandatoryApplianceType = 'REFRIGERATOR' | 'DISHWASHER' | 'OVEN_RANGE' | 'WASHER_DRYER';
+export const MANDATORY_APPLIANCE_TYPES: MandatoryApplianceType[] = ['REFRIGERATOR', 'DISHWASHER', 'OVEN_RANGE', 'WASHER_DRYER'];
+
 export interface MandatoryFactCoverage {
   scalarMissing: MandatoryScalarField[];
-  inventoryMissing: boolean;
+  applianceMissing: MandatoryApplianceType[];
   warrantyMissing: boolean;
   readyForChecklist: boolean;
 }
 
 async function checkMandatoryFactCoverage(propertyId: string): Promise<MandatoryFactCoverage> {
-  const [property, inventoryItem, warranty] = await Promise.all([
+  const [property, majorAppliances, warranty] = await Promise.all([
     prisma.property.findUnique({
       where: { id: propertyId },
       select: { roofReplacementYear: true, hvacInstallYear: true, waterHeaterInstallYear: true, electricalPanelAge: true },
     }),
-    prisma.inventoryItem.findFirst({
-      where: {
-        propertyId,
-        condition: { not: 'UNKNOWN' },
-        OR: [{ installedOn: { not: null } }, { purchasedOn: { not: null } }],
-      },
-      select: { id: true },
-    }),
+    listPropertyApplianceInventory(propertyId),
     prisma.warranty.findFirst({ where: { propertyId }, select: { id: true } }),
   ]);
 
@@ -720,14 +736,22 @@ async function checkMandatoryFactCoverage(propertyId: string): Promise<Mandatory
   if (!property?.waterHeaterInstallYear) scalarMissing.push('waterHeaterInstallYear');
   if (!property?.electricalPanelAge) scalarMissing.push('electricalPanelAge');
 
-  const inventoryMissing = !inventoryItem;
+  // A type only counts as "captured" once it has a real install/purchase
+  // year on file — matches the old bar's rigor (name alone wasn't
+  // enough), just against the appliance-specific model instead of a
+  // generic InventoryItem's condition+date fields.
+  const capturedTypes = new Set(
+    majorAppliances.filter((appliance) => appliance.installationYear != null).map((appliance) => appliance.assetType),
+  );
+  const applianceMissing = MANDATORY_APPLIANCE_TYPES.filter((type) => !capturedTypes.has(type));
+
   const warrantyMissing = !warranty;
 
   return {
     scalarMissing,
-    inventoryMissing,
+    applianceMissing,
     warrantyMissing,
-    readyForChecklist: scalarMissing.length === 0 && !inventoryMissing && !warrantyMissing,
+    readyForChecklist: scalarMissing.length === 0 && applianceMissing.length === 0,
   };
 }
 
