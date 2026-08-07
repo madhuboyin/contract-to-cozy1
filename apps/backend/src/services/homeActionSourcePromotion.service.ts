@@ -460,15 +460,13 @@ export async function loadGuidanceActions(
     const correctionHref = isCoverageJourney && journey.inventoryItemId
       ? `/dashboard/properties/${propertyId}/inventory/items/${encodeURIComponent(journey.inventoryItemId)}/coverage?sourceActionId=${encodeURIComponent(actionId)}&returnTo=${encodeURIComponent('/dashboard')}`
       : `/dashboard/properties/${propertyId}/onboarding`;
-    const withheldRecommendedAction = isCoverageJourney
-      ? subjectLabel
+    const withheldRecommendedAction = subjectLabel
+      ? isCoverageJourney
         ? coverageUncertain
           ? `Confirm coverage for ${subjectLabel}`
           : `Add coverage information for ${subjectLabel}`
-        : coverageUncertain
-          ? `Confirm coverage for ${title}`
-          : `Add coverage information for ${title}`
-      : `Review home information for ${subjectLabel ?? title} before continuing`;
+        : `Review home information for ${subjectLabel} before continuing`
+      : journeyTitle;
     const href = resolveGuidanceHref({
       propertyId,
       journeyId: journey.id,
@@ -494,7 +492,9 @@ export async function loadGuidanceActions(
         ? step?.label ?? 'Continue this home decision'
         : withheldRecommendedAction ?? recommendationResponse.safeNextAction,
       withheldRecommendedAction,
-      expectedOutcome: 'Advance the active journey without losing its property, evidence, or decision context.',
+      expectedOutcome: subjectLabel
+        ? `Keeps ${subjectLabel}'s property, evidence, and decision context intact while you continue.`
+        : `Keeps this property's evidence and decision context intact as you ${journeyTitle.charAt(0).toLowerCase()}${journeyTitle.slice(1)}.`,
       timing: {
         dueAt: null,
         windowStart: journey.startedAt.toISOString(),
