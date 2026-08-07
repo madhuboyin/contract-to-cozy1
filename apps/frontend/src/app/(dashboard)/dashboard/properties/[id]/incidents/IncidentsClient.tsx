@@ -50,7 +50,7 @@ export default function IncidentsClient() {
     try {
       const res = await listIncidents({
         propertyId,
-        status: status === 'ALL' ? undefined : status,
+        status,
         includeSuppressed,
         limit: 30,
       });

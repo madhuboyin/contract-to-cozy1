@@ -146,7 +146,7 @@ export const confirmIncidentActionCreated = async (req: CustomRequest, res: Resp
 export const listIncidents = async (req: CustomRequest, res: Response) => {
   try {
     const propertyId = req.params.propertyId;
-    const status = req.query.status as IncidentStatus | undefined;
+    const status = req.query.status as IncidentStatus | 'ALL' | undefined;
     const includeSuppressed = String(req.query.includeSuppressed || 'false') === 'true';
     const archived = req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined;
     const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : undefined;

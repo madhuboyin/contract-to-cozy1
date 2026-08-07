@@ -621,7 +621,14 @@ export class IncidentService {
     // ACTIVE lifecycle stage — incidents sit in DETECTED/EVALUATED/ACTIONED/MITIGATED
     // before or instead of ever reaching that exact enum value, so matching it
     // literally hid live incidents that hadn't (yet) been evaluated into ACTIVE.
-    if (q.status && q.status !== 'ACTIVE') {
+    //
+    // 'ALL' is a separate, explicit signal from the no-status default below —
+    // without this branch, the frontend's "All" filter (which sent no status
+    // param at all) fell into the same default as "Active" and could never
+    // actually show a resolved/expired/suppressed incident.
+    if (q.status === 'ALL') {
+      // no status filter — every lifecycle state, including terminal ones
+    } else if (q.status && q.status !== 'ACTIVE') {
       where.status = q.status;
     } else {
       // By default, exclude terminal states (RESOLVED, EXPIRED, SUPPRESSED)

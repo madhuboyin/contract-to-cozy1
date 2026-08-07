@@ -49,7 +49,12 @@ import {
 
   export type ListIncidentsQuery = {
     propertyId: string;
-    status?: IncidentStatus;
+    // 'ALL' is a distinct signal from omitting status entirely — omitting it
+    // defaults to the "currently live" non-terminal set (see listIncidents),
+    // while 'ALL' explicitly means every status including RESOLVED/EXPIRED/
+    // SUPPRESSED. Collapsing the two made the UI's "All" filter behave
+    // identically to "Active".
+    status?: IncidentStatus | 'ALL';
     includeSuppressed?: boolean;
     archived?: boolean; // Filter by archived status
     limit?: number;

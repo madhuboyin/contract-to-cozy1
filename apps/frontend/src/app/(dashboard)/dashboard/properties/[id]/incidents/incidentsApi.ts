@@ -10,7 +10,7 @@ import type {
 
 export async function listIncidents(args: {
   propertyId: string;
-  status?: IncidentStatus;
+  status?: IncidentStatus | 'ALL';
   includeSuppressed?: boolean;
   limit?: number;
   cursor?: string | null;
