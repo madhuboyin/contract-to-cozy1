@@ -4745,6 +4745,14 @@ enum SaleReadinessItemStatus {
   OPEN
   RESOLVED
   WAIVED
+  // Value-aware checklist plan (2026-08-07, §12 Stage 3): a homeowner has
+  // explicitly committed to this item (e.g. selected it from the
+  // budget-based recommendation) — distinct from RESOLVED, which means the
+  // underlying source itself cleared (verified done), and from OPEN, which
+  // means undecided. Same honest "committed to, not verified done" framing
+  // this app already uses elsewhere (Hidden Savings' CLAIMED→PURSUING
+  // rename) — never implies the work is actually finished.
+  PURSUING
 }
 
 // Sale Readiness Value-Maximization Checklist plan §4.7: homeowner's stated
@@ -4810,6 +4818,22 @@ model SaleReadinessItem {
   waivedAt            DateTime?
   waivedByUserId      String?
   waivedReason        String?
+  // Value-aware checklist plan (2026-08-07, §12 Stage 3): a durable
+  // homeowner decision to pursue this item, parallel to waivedAt/
+  // waivedByUserId above. Set via PropertySaleCaseService.setItemDecision's
+  // new PURSUE/UNPURSUE actions.
+  pursuedAt           DateTime?
+  pursuedByUserId     String?
+  // Value-aware checklist plan (2026-08-07, §10 Stage 1): real, sourced,
+  // property-size-personalized cost/value-add ranges — only ever populated
+  // for the 6 cosmetic PRESENTATION categories with real citable data
+  // (propertySaleCase.service.ts's projectors leave these null for every
+  // other item type rather than inventing a number). See
+  // salePrepValueCatalog.ts for the sourcing and personalization logic.
+  estimatedCostMinCents      Int?
+  estimatedCostMaxCents      Int?
+  estimatedValueAddMinCents  Int?
+  estimatedValueAddMaxCents  Int?
   createdAt           DateTime                       @default(now())
   updatedAt           DateTime                       @updatedAt
 

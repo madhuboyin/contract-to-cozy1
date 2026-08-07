@@ -72,7 +72,7 @@ export async function confirmNotableUpgrades(propertyId: string, keys: string[])
 export async function setItemDecision(
   propertyId: string,
   itemId: string,
-  action: 'WAIVE' | 'REOPEN',
+  action: 'WAIVE' | 'REOPEN' | 'PURSUE' | 'UNPURSUE',
   reason?: string,
 ): Promise<SaleReadinessItem> {
   const res = await api.patch<{ item: SaleReadinessItem }>(

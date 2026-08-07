@@ -21,7 +21,7 @@ const transitionStatusSchema = z.object({
 });
 
 const itemDecisionSchema = z.object({
-  action: z.enum(['WAIVE', 'REOPEN']),
+  action: z.enum(['WAIVE', 'REOPEN', 'PURSUE', 'UNPURSUE']),
   reason: z.string().trim().max(500).optional(),
 });
 

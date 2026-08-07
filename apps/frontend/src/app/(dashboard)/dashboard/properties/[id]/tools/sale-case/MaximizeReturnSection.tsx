@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Bath,
+  CheckCircle2,
   ChefHat,
   DollarSign,
   Layers,
@@ -29,6 +30,7 @@ import {
   Sparkles,
   Star,
   TreePine,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -39,11 +41,13 @@ import {
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
+import { SellerPrepDisclaimer } from '@/components/seller-prep/SellerPrepDisclaimer';
 import {
   confirmNotableUpgrades,
   getNotableUpgradeCandidates,
   getSalePrepQuestionStatus,
   patchSalePrepFact,
+  setItemDecision,
   updateBudgetRange,
 } from './saleCaseApi';
 import {
@@ -118,6 +122,102 @@ function isConfirmKnownSignal(item: SaleReadinessItem): boolean {
   return item.title.includes('confirm current condition');
 }
 
+const CENTS_FORMATTER = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+function formatCents(cents: number): string {
+  return CENTS_FORMATTER.format(cents / 100);
+}
+
+function formatCentsRange(minCents: number, maxCents: number): string {
+  return minCents === maxCents ? formatCents(minCents) : `${formatCents(minCents)}–${formatCents(maxCents)}`;
+}
+
+interface DollarRange { minCents: number; maxCents: number }
+
+// Value-aware checklist plan (2026-08-07, §12 Stage 2): sums cost/value-add
+// only across whatever's actually rendered right now — generic-fallback
+// items still behind the personalize wizard aren't counted yet, so the
+// total never references content the homeowner hasn't seen. Cost and
+// value-add are summed independently (not every item with a cost has a
+// value-add, e.g. staging) rather than skipping an item just because one
+// of its two figures is missing.
+function aggregateSalePrepValue(items: SaleReadinessItem[]): { cost: DollarRange | null; valueAdd: DollarRange | null; itemCount: number } {
+  let costMin = 0;
+  let costMax = 0;
+  let hasCost = false;
+  let valueMin = 0;
+  let valueMax = 0;
+  let hasValue = false;
+  let itemCount = 0;
+  for (const item of items) {
+    if (item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null) {
+      costMin += item.estimatedCostMinCents;
+      costMax += item.estimatedCostMaxCents;
+      hasCost = true;
+      itemCount += 1;
+    }
+    if (item.estimatedValueAddMinCents != null && item.estimatedValueAddMaxCents != null) {
+      valueMin += item.estimatedValueAddMinCents;
+      valueMax += item.estimatedValueAddMaxCents;
+      hasValue = true;
+    }
+  }
+  return {
+    cost: hasCost ? { minCents: costMin, maxCents: costMax } : null,
+    valueAdd: hasValue ? { minCents: valueMin, maxCents: valueMax } : null,
+    itemCount,
+  };
+}
+
+function YourReturnSummary({ items }: { items: SaleReadinessItem[] }) {
+  const { cost, valueAdd, itemCount } = aggregateSalePrepValue(items);
+  if (!cost && !valueAdd) return null;
+
+  // Reuses SellerPrepDisclaimer as-is (same ROI-sourcing disclaimer + "View
+  // data sources" dialog already shown on Seller Prep) rather than
+  // duplicating the copy here — this is the first place on the Sale Case
+  // page that surfaces real dollar figures, so it needs the same caveat.
+
+  return (
+    <div className="mb-3 space-y-2">
+      <MobileCard className="space-y-3 border-emerald-200 bg-emerald-50/40">
+        <div className="flex items-center gap-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+            <TrendingUp className="h-5 w-5 text-emerald-700" />
+          </div>
+          <div>
+            <p className={cn('mb-0 font-semibold text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+              Your return
+            </p>
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+              Across {itemCount} item{itemCount === 1 ? '' : 's'} with a cost estimate
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {cost ? (
+            <div>
+              <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Estimated cost</p>
+              <p className={cn('mb-0 font-semibold text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+                {formatCentsRange(cost.minCents, cost.maxCents)}
+              </p>
+            </div>
+          ) : null}
+          {valueAdd ? (
+            <div>
+              <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Estimated value added</p>
+              <p className={cn('mb-0 font-semibold text-emerald-700', MOBILE_TYPE_TOKENS.body)}>
+                {formatCentsRange(valueAdd.minCents, valueAdd.maxCents)}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </MobileCard>
+      <SellerPrepDisclaimer />
+    </div>
+  );
+}
+
 export function MaximizeReturnSection({
   propertyId,
   items,
@@ -159,6 +259,16 @@ export function MaximizeReturnSection({
     onSuccess: invalidate,
   });
 
+  // §12 Stage 3: pursue/un-pursue an item, typically one from the
+  // budget-based recommendation. Self-contained here (not threaded down
+  // from SaleCaseClient's own decisionMutation) to stay consistent with
+  // how this component already manages all of its own mutations.
+  const decisionMutation = useMutation({
+    mutationFn: ({ itemId, action }: { itemId: string; action: 'PURSUE' | 'UNPURSUE' }) =>
+      setItemDecision(propertyId, itemId, action),
+    onSuccess: invalidate,
+  });
+
   const loading = questionStatusQuery.isLoading || upgradesQuery.isLoading;
   const status = questionStatusQuery.data;
   const unconfirmedUpgrades = (upgradesQuery.data ?? []).filter((candidate) => !candidate.confirmed);
@@ -182,6 +292,7 @@ export function MaximizeReturnSection({
   // so they never wait on this.
   const revealGeneric = wizardDismissed || (!loading && steps.length === 0);
   const showWizard = !loading && steps.length > 0 && !wizardDismissed;
+  const visibleItems = revealGeneric ? items : realItems;
 
   if (loading) {
     return (
@@ -203,10 +314,18 @@ export function MaximizeReturnSection({
         subtitle="Value-boosting improvements before you list, personalized to your home."
       />
 
+      <YourReturnSummary items={visibleItems} />
+
       {realItems.length > 0 ? (
         <div className="mb-3 space-y-2">
           {realItems.map((item) => (
-            <ItemCard key={item.id} item={item} />
+            <ItemCard
+              key={item.id}
+              item={item}
+              pursuePending={decisionMutation.isPending}
+              onPursue={() => decisionMutation.mutate({ itemId: item.id, action: 'PURSUE' })}
+              onUnpursue={() => decisionMutation.mutate({ itemId: item.id, action: 'UNPURSUE' })}
+            />
           ))}
         </div>
       ) : null}
@@ -225,7 +344,13 @@ export function MaximizeReturnSection({
       {revealGeneric && genericItems.length > 0 ? (
         <div className="mt-3 space-y-2">
           {genericItems.map((item) => (
-            <ItemCard key={item.id} item={item} />
+            <ItemCard
+              key={item.id}
+              item={item}
+              pursuePending={decisionMutation.isPending}
+              onPursue={() => decisionMutation.mutate({ itemId: item.id, action: 'PURSUE' })}
+              onUnpursue={() => decisionMutation.mutate({ itemId: item.id, action: 'UNPURSUE' })}
+            />
           ))}
         </div>
       ) : null}
@@ -499,14 +624,32 @@ function UpgradesStep({
   );
 }
 
-function ItemCard({ item }: { item: SaleReadinessItem }) {
+function ItemCard({
+  item,
+  pursuePending,
+  onPursue,
+  onUnpursue,
+}: {
+  item: SaleReadinessItem;
+  pursuePending: boolean;
+  onPursue: () => void;
+  onUnpursue: () => void;
+}) {
   const generic = isGenericFallback(item);
   const confirmSignal = isConfirmKnownSignal(item);
   const categoryKey = generic ? item.sourceEntityId : null;
   const Icon = (categoryKey ? CATEGORY_ICONS[categoryKey] : null) ?? Star;
+  const pursuing = item.status === 'PURSUING';
+  // §12 Stage 3: pursue-tracking only makes sense for items the budget
+  // recommendation could actually consider (cosmetic items with a cost
+  // estimate) — not a generic "track anything" control.
+  const canPursue = item.estimatedCostMinCents != null && (item.status === 'OPEN' || pursuing);
 
   return (
-    <MobileCard className={cn('flex gap-3', confirmSignal && 'border-sky-200 bg-sky-50/40')}>
+    <MobileCard className={cn(
+      'flex gap-3',
+      pursuing ? 'border-violet-300 bg-violet-50/50' : confirmSignal && 'border-sky-200 bg-sky-50/40',
+    )}>
       <div className={cn(
         'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
         generic ? 'bg-amber-100' : confirmSignal ? 'bg-sky-100' : 'bg-emerald-100',
@@ -514,15 +657,22 @@ function ItemCard({ item }: { item: SaleReadinessItem }) {
         <Icon className={cn('h-5 w-5', generic ? 'text-amber-700' : confirmSignal ? 'text-sky-700' : 'text-emerald-700')} />
       </div>
       <div className="min-w-0 flex-1 space-y-1">
-        {generic ? (
-          <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-            General guidance — not verified against your records
-          </span>
-        ) : confirmSignal ? (
-          <span className="inline-block rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">
-            Based on your records
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {item.recommendedForBudget ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800">
+              <Sparkles className="h-3 w-3" /> Recommended for your budget
+            </span>
+          ) : null}
+          {generic ? (
+            <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+              General guidance — not verified against your records
+            </span>
+          ) : confirmSignal ? (
+            <span className="inline-block rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">
+              Based on your records
+            </span>
+          ) : null}
+        </div>
         <p className={cn('mb-0.5 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
           {item.title}
         </p>
@@ -530,6 +680,31 @@ function ItemCard({ item }: { item: SaleReadinessItem }) {
           <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
             {item.detail}
           </p>
+        ) : null}
+        {item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null ? (
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5">
+            <span className="text-[11px] font-medium text-[hsl(var(--mobile-text-secondary))]">
+              Est. cost {formatCentsRange(item.estimatedCostMinCents, item.estimatedCostMaxCents)}
+            </span>
+            {item.estimatedValueAddMinCents != null && item.estimatedValueAddMaxCents != null ? (
+              <span className="text-[11px] font-medium text-emerald-700">
+                Est. value add {formatCentsRange(item.estimatedValueAddMinCents, item.estimatedValueAddMaxCents)}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {canPursue ? (
+          <div className="flex justify-end pt-1">
+            {pursuing ? (
+              <Button size="sm" variant="outline" className="border-violet-300 text-violet-800" disabled={pursuePending} onClick={onUnpursue}>
+                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Pursuing — remove
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" disabled={pursuePending} onClick={onPursue}>
+                Pursue this
+              </Button>
+            )}
+          </div>
         ) : null}
       </div>
     </MobileCard>

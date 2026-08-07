@@ -83,11 +83,13 @@ export function SellerPrepDisclaimer() {
             <div className="border-l-4 border-amber-500 pl-4">
               <h4 className="font-semibold text-sm mb-1">Our methodology (today)</h4>
               <p className="text-sm text-gray-600">
-                This checklist is a small, fixed set of general improvement categories drawn
-                from the reports above. It is the same for every property today — it does not
-                currently adjust for your regional costs, property type, market conditions, or
-                timeline. Treat the ranges as general reference points, not a calculation for
-                your home.
+                This checklist draws a small, fixed set of general improvement categories from
+                the reports above. Where a report gives a real per-square-foot rate, cost
+                estimates scale with your home&apos;s actual square footage or bedroom count —
+                otherwise they stay at the national average. They still do not adjust for your
+                regional costs, market conditions, or timeline, and not every category has a
+                cost or value-add figure at all (some reports simply don&apos;t track one).
+                Treat the ranges as general reference points, not a calculation for your home.
               </p>
             </div>
 

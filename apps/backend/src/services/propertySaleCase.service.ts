@@ -10,6 +10,7 @@ import type {
   HouseholdRole,
   SaleCaseStatus,
   SaleReadinessCategory,
+  SaleReadinessItem,
   SaleReadinessItemStatus,
   SaleReadinessRequirementClass,
   SaleReadinessSourceType,
@@ -27,7 +28,9 @@ import { listPropertyApplianceInventory } from './propertyApplianceInventory.ser
 import {
   SALE_PREP_VALUE_CATALOG,
   findSalePrepValueCatalogEntry,
+  estimateSalePrepCostAndValueAdd,
   type SalePrepValueCategoryKey,
+  type SalePrepPropertySizeContext,
 } from '../data/salePrepValueCatalog';
 
 type ProjectedItem = {
@@ -39,6 +42,15 @@ type ProjectedItem = {
   detail?: string | null;
   dueAt?: Date | null;
   canonicalWorkItemId?: string | null;
+  // "Value-aware checklist" plan (2026-08-07, §10 Stage 1) — real, sourced,
+  // property-size-personalized dollar ranges. Only ever populated for the
+  // 3 cosmetic Tier 2 projectors (self-report/generic-fallback/upgrade-
+  // evidence); every other projector leaves these undefined rather than
+  // inventing a number for categories with no sourced cost/ROI data.
+  estimatedCostMinCents?: number | null;
+  estimatedCostMaxCents?: number | null;
+  estimatedValueAddMinCents?: number | null;
+  estimatedValueAddMaxCents?: number | null;
 };
 
 const RECORD_TYPES_RELEVANT_TO_SALE = new Set([
@@ -507,6 +519,7 @@ const COSMETIC_EVIDENCE_MIN_DETAIL_LENGTH = 20;
 async function projectCosmeticUpgradeEvidence(
   propertyId: string,
   alreadyCoveredCategories: Set<SalePrepValueCategoryKey>,
+  sizeContext: SalePrepPropertySizeContext,
 ): Promise<{ items: ProjectedItem[]; coveredCategories: Set<SalePrepValueCategoryKey> }> {
   const remaining = COSMETIC_UPGRADE_EVIDENCE_CATEGORIES.filter((c) => !alreadyCoveredCategories.has(c));
   if (remaining.length === 0) return { items: [], coveredCategories: new Set() };
@@ -526,6 +539,7 @@ async function projectCosmeticUpgradeEvidence(
   const coveredCategories = new Set<SalePrepValueCategoryKey>();
   for (const categoryKey of remaining) {
     const entry = findSalePrepValueCatalogEntry(categoryKey);
+    const estimate = estimateSalePrepCostAndValueAdd(categoryKey, sizeContext);
     const project = projects.find((p) =>
       (p.description?.length ?? 0) >= COSMETIC_EVIDENCE_MIN_DETAIL_LENGTH
       && p.name.toLowerCase().includes(entry.keyword));
@@ -537,6 +551,10 @@ async function projectCosmeticUpgradeEvidence(
         requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
         title: `${project.name}: confirm current condition`,
         detail: `A completed project on file — still holding up well, or worth a touch-up before listing? ${truncate(project.description ?? '', 300)}`,
+        estimatedCostMinCents: estimate.costRangeCents?.minCents ?? null,
+        estimatedCostMaxCents: estimate.costRangeCents?.maxCents ?? null,
+        estimatedValueAddMinCents: estimate.valueAddRangeCents?.minCents ?? null,
+        estimatedValueAddMaxCents: estimate.valueAddRangeCents?.maxCents ?? null,
       });
       coveredCategories.add(categoryKey);
       continue;
@@ -551,6 +569,10 @@ async function projectCosmeticUpgradeEvidence(
         requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
         title: `${spec.label}: confirm current condition`,
         detail: 'On file as an as-built material — still holding up well, or worth a touch-up before listing?',
+        estimatedCostMinCents: estimate.costRangeCents?.minCents ?? null,
+        estimatedCostMaxCents: estimate.costRangeCents?.maxCents ?? null,
+        estimatedValueAddMinCents: estimate.valueAddRangeCents?.minCents ?? null,
+        estimatedValueAddMaxCents: estimate.valueAddRangeCents?.maxCents ?? null,
       });
       coveredCategories.add(categoryKey);
     }
@@ -579,6 +601,7 @@ const SELF_REPORT_FIELD_TITLES: Record<SalePrepValueCategoryKey, string> = {
 async function projectSelfReportedConditions(
   propertyId: string,
   alreadyCoveredCategories: Set<SalePrepValueCategoryKey>,
+  sizeContext: SalePrepPropertySizeContext,
 ): Promise<{ items: ProjectedItem[]; answeredCategories: Set<SalePrepValueCategoryKey> }> {
   const profile = await prisma.propertySalePrepProfile.findUnique({ where: { propertyId } });
   if (!profile) return { items: [], answeredCategories: new Set() };
@@ -599,6 +622,7 @@ async function projectSelfReportedConditions(
     answeredCategories.add(category);
     if (alreadyCoveredCategories.has(category) || !SELF_REPORT_NEEDS_ATTENTION.has(value)) continue;
     const entry = findSalePrepValueCatalogEntry(category);
+    const estimate = estimateSalePrepCostAndValueAdd(category, sizeContext);
     items.push({
       sourceEntityType: 'SALE_PREP_SELF_REPORT' as const,
       sourceEntityId: category,
@@ -606,6 +630,10 @@ async function projectSelfReportedConditions(
       requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
       title: `${SELF_REPORT_FIELD_TITLES[category]}: ${SELF_REPORT_CONDITION_LABELS[value] ?? value}`,
       detail: `${entry.detail} (${entry.source})`,
+      estimatedCostMinCents: estimate.costRangeCents?.minCents ?? null,
+      estimatedCostMaxCents: estimate.costRangeCents?.maxCents ?? null,
+      estimatedValueAddMinCents: estimate.valueAddRangeCents?.minCents ?? null,
+      estimatedValueAddMaxCents: estimate.valueAddRangeCents?.maxCents ?? null,
     });
   }
   return { items, answeredCategories };
@@ -614,17 +642,27 @@ async function projectSelfReportedConditions(
 // The last-resort fallback: nothing derived, nothing self-reported. Clearly
 // labeled as unverified — never presented as if the system knows this
 // property's actual condition (§3.6, §4.1).
-function projectGenericFallbacks(alreadyCoveredCategories: Set<SalePrepValueCategoryKey>): ProjectedItem[] {
+function projectGenericFallbacks(
+  alreadyCoveredCategories: Set<SalePrepValueCategoryKey>,
+  sizeContext: SalePrepPropertySizeContext,
+): ProjectedItem[] {
   return SALE_PREP_VALUE_CATALOG
     .filter((entry) => !alreadyCoveredCategories.has(entry.category))
-    .map((entry) => ({
-      sourceEntityType: 'SALE_PREP_GENERIC' as const,
-      sourceEntityId: entry.category,
-      category: 'PRESENTATION' as const,
-      requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
-      title: entry.title,
-      detail: `${entry.detail} (${entry.source}) — general guidance, not verified against your records.`,
-    }));
+    .map((entry) => {
+      const estimate = estimateSalePrepCostAndValueAdd(entry.category, sizeContext);
+      return {
+        sourceEntityType: 'SALE_PREP_GENERIC' as const,
+        sourceEntityId: entry.category,
+        category: 'PRESENTATION' as const,
+        requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+        title: entry.title,
+        detail: `${entry.detail} (${entry.source}) — general guidance, not verified against your records.`,
+        estimatedCostMinCents: estimate.costRangeCents?.minCents ?? null,
+        estimatedCostMaxCents: estimate.costRangeCents?.maxCents ?? null,
+        estimatedValueAddMinCents: estimate.valueAddRangeCents?.minCents ?? null,
+        estimatedValueAddMaxCents: estimate.valueAddRangeCents?.maxCents ?? null,
+      };
+    });
 }
 
 // Plan §4.7/§10: the homeowner's stated pre-sale budget was captured but
@@ -652,6 +690,59 @@ function applyBudgetContext(items: ProjectedItem[], budgetRange: SalePrepBudgetR
       detail: `${item.detail ?? ''} This project type typically costs more than your stated pre-sale budget — you may want to deprioritize it or plan for a smaller-scope version.`.trim(),
     };
   });
+}
+
+// Value-aware checklist plan (2026-08-07, §12 Stage 3): the "top N within
+// budget" recommendation. Uses each stated budget's upper bound as a
+// generous ceiling (e.g. "$5k-15k" → up to $15,000) — OVER_30K has no real
+// ceiling, so it's unbounded (the item-count cap below still limits it).
+const BUDGET_CEILING_CENTS: Record<SalePrepBudgetRange, number> = {
+  UNDER_5K: 500_000,
+  FIVE_TO_15K: 1_500_000,
+  FIFTEEN_TO_30K: 3_000_000,
+  OVER_30K: Number.POSITIVE_INFINITY,
+};
+const BUDGET_RECOMMENDATION_MAX_ITEMS = 4;
+
+// Computed fresh on every read (getCase), never persisted — matches this
+// service's existing pattern for other derived state (e.g.
+// readyForChecklist). Only ranks OPEN items with both cost AND value-add
+// data on file (the cosmetic categories from Stage 1) — non-cosmetic items
+// never compete in this ranking (§4.1: unsafe to generalize a dollar value
+// for those), and items already WAIVED/PURSUING/RESOLVED don't need to be
+// recommended again. Greedy value-add-per-dollar selection, not an optimal
+// knapsack solve — transparent and good enough for "which few things
+// should I prioritize," not a promise of the mathematically best subset.
+function computeBudgetRecommendation(
+  items: Array<Pick<SaleReadinessItem, 'id' | 'status' | 'estimatedCostMinCents' | 'estimatedCostMaxCents' | 'estimatedValueAddMinCents' | 'estimatedValueAddMaxCents'>>,
+  budgetRange: SalePrepBudgetRange | null,
+): Set<string> {
+  if (!budgetRange) return new Set();
+  const ceilingCents = BUDGET_CEILING_CENTS[budgetRange];
+
+  const candidates = items
+    .filter((item) =>
+      item.status === 'OPEN'
+      && item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null
+      && item.estimatedValueAddMinCents != null && item.estimatedValueAddMaxCents != null)
+    .map((item) => {
+      const costMidCents = (item.estimatedCostMinCents! + item.estimatedCostMaxCents!) / 2;
+      const valueAddMidCents = (item.estimatedValueAddMinCents! + item.estimatedValueAddMaxCents!) / 2;
+      return { id: item.id, costMidCents, roiPerDollar: costMidCents > 0 ? valueAddMidCents / costMidCents : 0 };
+    })
+    .sort((a, b) => b.roiPerDollar - a.roiPerDollar);
+
+  const recommended = new Set<string>();
+  let cumulativeCostCents = 0;
+  for (const candidate of candidates) {
+    if (recommended.size >= BUDGET_RECOMMENDATION_MAX_ITEMS) break;
+    // Skip (don't stop) an item that doesn't fit — a cheaper, still-good
+    // item later in ROI order may still fit the remaining budget.
+    if (cumulativeCostCents + candidate.costMidCents > ceilingCents) continue;
+    recommended.add(candidate.id);
+    cumulativeCostCents += candidate.costMidCents;
+  }
+  return recommended;
 }
 
 // Sale Readiness Value-Maximization Checklist plan §4.5 question 8: once a
@@ -783,7 +874,7 @@ async function checkMandatoryFactCoverage(propertyId: string): Promise<Mandatory
 }
 
 async function syncReadinessItems(saleCaseId: string, propertyId: string, role: HouseholdRole): Promise<void> {
-  const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents, agingSystems, lapsedMaintenance, transferableWarranties] = await Promise.all([
+  const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents, agingSystems, lapsedMaintenance, transferableWarranties, sizeContextProperty] = await Promise.all([
     projectInspectionFindings(propertyId),
     projectProjects(propertyId),
     projectPermits(propertyId),
@@ -794,7 +885,16 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
     projectAgingSystems(propertyId),
     projectLapsedMaintenance(propertyId),
     projectTransferableWarranties(propertyId),
+    // Value-aware checklist plan (2026-08-07, §10 Stage 1): the property
+    // attributes the Tier 2 cosmetic projectors use to personalize cost/
+    // value-add estimates by actual home size, not a flat national figure.
+    prisma.property.findUnique({ where: { id: propertyId }, select: { propertySize: true, bedrooms: true, bathrooms: true } }),
   ]);
+  const sizeContext: SalePrepPropertySizeContext = {
+    propertySizeSqFt: sizeContextProperty?.propertySize ?? null,
+    bedrooms: sizeContextProperty?.bedrooms ?? null,
+    bathrooms: sizeContextProperty?.bathrooms ?? null,
+  };
   // Structural evidence search (§4.4a) runs after the above so it can skip
   // any structural system already covered by a real finding/permit/home
   // action — never duplicates or overrides an existing Tier 1 signal.
@@ -807,11 +907,11 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
   // stage only fills in categories the previous stage didn't already cover.
   const tier1CoveredCategories = coveredSalePrepCategories([...findings, ...homeActions, ...materialSpecs]);
   const { items: upgradeEvidenceItems, coveredCategories: upgradeCoveredCategories } =
-    await projectCosmeticUpgradeEvidence(propertyId, tier1CoveredCategories);
+    await projectCosmeticUpgradeEvidence(propertyId, tier1CoveredCategories, sizeContext);
   const evidenceCoveredCategories = new Set([...tier1CoveredCategories, ...upgradeCoveredCategories]);
-  const { items: selfReportedItems, answeredCategories } = await projectSelfReportedConditions(propertyId, evidenceCoveredCategories);
+  const { items: selfReportedItems, answeredCategories } = await projectSelfReportedConditions(propertyId, evidenceCoveredCategories, sizeContext);
   const fullyCoveredCategories = new Set([...evidenceCoveredCategories, ...answeredCategories]);
-  const genericFallbacks = projectGenericFallbacks(fullyCoveredCategories);
+  const genericFallbacks = projectGenericFallbacks(fullyCoveredCategories, sizeContext);
   const confirmedUpgrades = await projectConfirmedUpgrades(propertyId);
 
   const saleCaseForBudget = await prisma.propertySaleCase.findUnique({ where: { id: saleCaseId }, select: { budgetRange: true } });
@@ -834,8 +934,14 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
       const current = existingByKey.get(key);
       // A WAIVED item stays waived even while its source condition
       // persists — that's the point of a waive (explicit disclose-and-
-      // accept decision). Only RESOLVED items get revived to OPEN.
-      const status: SaleReadinessItemStatus = current?.status === 'WAIVED' ? 'WAIVED' : 'OPEN';
+      // accept decision). PURSUING is the same kind of durable homeowner
+      // decision (§12 Stage 3) — a homeowner who's committed to an item
+      // shouldn't have that silently reset just because the checklist
+      // re-synced. Only RESOLVED items get revived to OPEN.
+      const status: SaleReadinessItemStatus =
+        current?.status === 'WAIVED' ? 'WAIVED'
+        : current?.status === 'PURSUING' ? 'PURSUING'
+        : 'OPEN';
       return prisma.saleReadinessItem.upsert({
         where: { saleCaseId_sourceEntityType_sourceEntityId: { saleCaseId, sourceEntityType: item.sourceEntityType, sourceEntityId: item.sourceEntityId } },
         create: {
@@ -848,6 +954,10 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
           detail: item.detail ?? null,
           dueAt: item.dueAt ?? null,
           canonicalWorkItemId: item.canonicalWorkItemId ?? null,
+          estimatedCostMinCents: item.estimatedCostMinCents ?? null,
+          estimatedCostMaxCents: item.estimatedCostMaxCents ?? null,
+          estimatedValueAddMinCents: item.estimatedValueAddMinCents ?? null,
+          estimatedValueAddMaxCents: item.estimatedValueAddMaxCents ?? null,
           status,
         },
         update: {
@@ -857,6 +967,10 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
           detail: item.detail ?? null,
           dueAt: item.dueAt ?? null,
           canonicalWorkItemId: item.canonicalWorkItemId ?? null,
+          estimatedCostMinCents: item.estimatedCostMinCents ?? null,
+          estimatedCostMaxCents: item.estimatedCostMaxCents ?? null,
+          estimatedValueAddMinCents: item.estimatedValueAddMinCents ?? null,
+          estimatedValueAddMaxCents: item.estimatedValueAddMaxCents ?? null,
           status,
           resolvedAt: null,
         },
@@ -902,7 +1016,7 @@ export class PropertySaleCaseService {
     }
 
     await syncReadinessItems(saleCase.id, propertyId, access.role);
-    const [readinessItems, transitions] = await Promise.all([
+    const [readinessItemRows, transitions] = await Promise.all([
       prisma.saleReadinessItem.findMany({
         where: { saleCaseId: saleCase.id },
         orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
@@ -912,6 +1026,14 @@ export class PropertySaleCaseService {
         orderBy: { createdAt: 'desc' },
       }),
     ]);
+
+    // §12 Stage 3: computed fresh on every read, not persisted — see
+    // computeBudgetRecommendation's own comment for why.
+    const recommendedIds = computeBudgetRecommendation(readinessItemRows, saleCase.budgetRange);
+    const readinessItems = readinessItemRows.map((item) => ({
+      ...item,
+      recommendedForBudget: recommendedIds.has(item.id),
+    }));
 
     return {
       propertyId,
@@ -1108,7 +1230,7 @@ export class PropertySaleCaseService {
     userId: string,
     propertyId: string,
     itemId: string,
-    action: 'WAIVE' | 'REOPEN',
+    action: 'WAIVE' | 'REOPEN' | 'PURSUE' | 'UNPURSUE',
     reason?: string,
   ) {
     await requireAccess(userId, propertyId, 'CONTRIBUTOR');
@@ -1120,12 +1242,35 @@ export class PropertySaleCaseService {
     if (action === 'WAIVE') {
       return prisma.saleReadinessItem.update({
         where: { id: itemId },
-        data: { status: 'WAIVED', waivedAt: new Date(), waivedByUserId: userId, waivedReason: reason ?? null },
+        data: {
+          status: 'WAIVED', waivedAt: new Date(), waivedByUserId: userId, waivedReason: reason ?? null,
+          // WAIVE and PURSUE are mutually exclusive decisions on the same
+          // item — clear the other one if switching between them.
+          pursuedAt: null, pursuedByUserId: null,
+        },
       });
     }
+    // Value-aware checklist plan (2026-08-07, §12 Stage 3): a homeowner
+    // explicitly committing to an item, typically one surfaced by the
+    // budget-based recommendation — a durable decision, same pattern as
+    // WAIVE, not something that resets on the next checklist sync.
+    if (action === 'PURSUE') {
+      return prisma.saleReadinessItem.update({
+        where: { id: itemId },
+        data: {
+          status: 'PURSUING', pursuedAt: new Date(), pursuedByUserId: userId,
+          waivedAt: null, waivedByUserId: null, waivedReason: null,
+        },
+      });
+    }
+    // REOPEN and UNPURSUE both mean the same thing operationally — clear
+    // whichever durable decision was on file and return to undecided.
+    // Kept as two action names so the frontend can call the one that
+    // matches what the homeowner actually did (reopen a waived item vs.
+    // un-pursue a committed one), rather than one generically-named action.
     return prisma.saleReadinessItem.update({
       where: { id: itemId },
-      data: { status: 'OPEN', waivedAt: null, waivedByUserId: null, waivedReason: null },
+      data: { status: 'OPEN', waivedAt: null, waivedByUserId: null, waivedReason: null, pursuedAt: null, pursuedByUserId: null },
     });
   }
 

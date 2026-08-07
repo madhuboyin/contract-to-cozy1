@@ -427,7 +427,12 @@ function SaleCaseBody({
   completeTransitionPending: boolean;
 }) {
   const saleCase = overview.saleCase;
-  const presentationItems = overview.readinessItems.filter((item) => item.status === 'OPEN' && item.category === 'PRESENTATION');
+  // §12 Stage 3: PURSUING items must stay visible here — otherwise marking
+  // an item as "pursuing" would make it disappear from the checklist
+  // entirely the moment its status stops being OPEN, defeating the point
+  // of tracking it.
+  const presentationItems = overview.readinessItems.filter((item) =>
+    (item.status === 'OPEN' || item.status === 'PURSUING') && item.category === 'PRESENTATION');
   const groups = groupByRequirementClass(overview.readinessItems);
   const waived = overview.readinessItems.filter((item) => item.status === 'WAIVED');
   const structuralGaps = structuralGapsWithoutEvidence(overview.readinessItems);

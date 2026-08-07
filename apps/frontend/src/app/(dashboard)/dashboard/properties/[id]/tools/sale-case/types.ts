@@ -45,7 +45,7 @@ export type SaleReadinessRequirementClass =
   | 'PRESENTATION'
   | 'PROFESSIONAL_DECISION';
 
-export type SaleReadinessItemStatus = 'OPEN' | 'RESOLVED' | 'WAIVED';
+export type SaleReadinessItemStatus = 'OPEN' | 'RESOLVED' | 'WAIVED' | 'PURSUING';
 
 export type SaleTransitionRetentionDecision = 'RETAIN_PRIVATE_ONLY' | 'SHARE_SELECTED_HISTORY';
 
@@ -100,6 +100,19 @@ export interface SaleReadinessItem {
   resolvedAt: string | null;
   waivedAt: string | null;
   waivedReason: string | null;
+  // Value-aware checklist plan (2026-08-07, §12 Stage 1/2): real, sourced,
+  // property-size-personalized dollar ranges — only ever populated for the
+  // 6 cosmetic PRESENTATION categories with real citable data; null for
+  // every other item type.
+  estimatedCostMinCents: number | null;
+  estimatedCostMaxCents: number | null;
+  estimatedValueAddMinCents: number | null;
+  estimatedValueAddMaxCents: number | null;
+  // §12 Stage 3: computed fresh on every GET /sale-case, not a stored
+  // column — whether this item is one of the top picks for the
+  // homeowner's stated budget (value-add-per-dollar ranking, cosmetic
+  // items with cost+value data only).
+  recommendedForBudget: boolean;
 }
 
 export interface PropertyTransition {
