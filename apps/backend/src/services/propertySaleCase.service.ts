@@ -327,13 +327,25 @@ function resolveExpectedLifespanYears(category: string, name: string): number | 
   return AGING_SYSTEM_EXPECTED_LIFESPAN_YEARS[category] ?? null;
 }
 
-async function projectAgingSystems(propertyId: string): Promise<ProjectedItem[]> {
+interface AgingInventoryItem {
+  id: string;
+  name: string;
+  warrantyId: string | null;
+  ageYears: number;
+  expectedLifespanYears: number;
+  pastExpectedLife: boolean;
+}
+
+// Shared by projectAgingSystems and the warranty-suggestion projector below
+// — both need the exact same "is this near/past end of life" determination,
+// so it's computed once rather than defined twice with a risk of drifting.
+async function findAgingInventoryItems(propertyId: string): Promise<AgingInventoryItem[]> {
   const items = await prisma.inventoryItem.findMany({
     where: { propertyId, isVerified: true },
-    select: { id: true, name: true, category: true, installedOn: true, purchasedOn: true },
+    select: { id: true, name: true, category: true, installedOn: true, purchasedOn: true, warrantyId: true },
   });
   const now = Date.now();
-  const results: ProjectedItem[] = [];
+  const results: AgingInventoryItem[] = [];
   for (const item of items) {
     const baseDate = item.installedOn ?? item.purchasedOn;
     if (!baseDate) continue;
@@ -341,17 +353,54 @@ async function projectAgingSystems(propertyId: string): Promise<ProjectedItem[]>
     if (!expectedLifespanYears) continue;
     const ageYears = (now - baseDate.getTime()) / MS_PER_YEAR;
     if (ageYears < expectedLifespanYears * AGING_SYSTEM_NEAR_END_RATIO) continue;
-    const pastExpectedLife = ageYears >= expectedLifespanYears;
     results.push({
-      sourceEntityType: 'INVENTORY_ITEM' as const,
-      sourceEntityId: item.id,
-      category: 'SYSTEMS_MAINTENANCE' as const,
-      requirementClass: pastExpectedLife ? 'VERIFICATION_NEEDED' as const : 'OPTIONAL_IMPROVEMENT' as const,
-      title: `${item.name}: ${pastExpectedLife ? 'past' : 'nearing'} typical replacement age`,
-      detail: `About ${ageYears.toFixed(0)} years old — typical expected life for this type is around ${expectedLifespanYears} years. Buyers and inspectors often ask about aging systems like this before closing.`,
+      id: item.id,
+      name: item.name,
+      warrantyId: item.warrantyId,
+      ageYears,
+      expectedLifespanYears,
+      pastExpectedLife: ageYears >= expectedLifespanYears,
     });
   }
   return results;
+}
+
+function projectAgingSystems(agingItems: AgingInventoryItem[]): ProjectedItem[] {
+  return agingItems.map((item) => ({
+    sourceEntityType: 'INVENTORY_ITEM' as const,
+    sourceEntityId: item.id,
+    category: 'SYSTEMS_MAINTENANCE' as const,
+    requirementClass: item.pastExpectedLife ? 'VERIFICATION_NEEDED' as const : 'OPTIONAL_IMPROVEMENT' as const,
+    title: `${item.name}: ${item.pastExpectedLife ? 'past' : 'nearing'} typical replacement age`,
+    detail: `About ${item.ageYears.toFixed(0)} years old — typical expected life for this type is around ${item.expectedLifespanYears} years. Buyers and inspectors often ask about aging systems like this before closing.`,
+  }));
+}
+
+// Sale Readiness Value-Maximization Checklist plan §11 proposed enhancement,
+// now built: a homeowner-entered install/purchase year fed projectAgingSystems
+// above, but nothing ever acted on the *inverse* signal — an aging item with
+// no warranty on file. Positive-signal framing (a real action still
+// available, not a defect), same pattern as projectTransferableWarranties.
+// Reuses findAgingInventoryItems's exact aging determination rather than a
+// separate "aging" definition, and deliberately covers every aging category
+// findAgingInventoryItems already tracks (HVAC/roof/appliance/water heater),
+// not appliances only — the warranty-add flow itself isn't appliance-
+// specific, and an aging roof or HVAC system with no coverage is at least as
+// relevant to a buyer as an aging appliance. sourceEntityId is prefixed
+// (`warranty-suggestion:`) to stay distinct from the same InventoryItem's
+// own aging-system row above — same convention projectConfirmedUpgrades
+// already uses for its `highlight:` prefix.
+function projectWarrantySuggestions(agingItems: AgingInventoryItem[]): ProjectedItem[] {
+  return agingItems
+    .filter((item) => !item.warrantyId)
+    .map((item) => ({
+      sourceEntityType: 'INVENTORY_ITEM' as const,
+      sourceEntityId: `warranty-suggestion:${item.id}`,
+      category: 'PRESENTATION' as const,
+      requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
+      title: `${item.name}: consider adding a warranty before listing`,
+      detail: `About ${item.ageYears.toFixed(0)} years old with no warranty on file. A transferable home warranty can reassure buyers about an aging system like this and is worth highlighting if you add one before listing.`,
+    }));
 }
 
 // Sale Readiness Value-Maximization Checklist plan §4.2 item 3: deferred
@@ -594,6 +643,33 @@ const SELF_REPORT_FIELD_TITLES: Record<SalePrepValueCategoryKey, string> = {
   kitchen: 'Kitchen', bathroom: 'Bathrooms', staging: 'Decluttering & staging',
 };
 
+// Sale Readiness Value-Maximization Checklist plan §11 proposed enhancement,
+// now built: the "needs attention" value only ever decided *whether* an
+// item appeared — the rendered detail was identical catalog copy no matter
+// which value was picked. Of the 6 self-report fields, only
+// `stagingReadiness` actually has two distinct "needs attention" values
+// today (NEEDS_SOME_WORK vs NEEDS_SIGNIFICANT_WORK) — every other field's
+// milder "some wear"-equivalent value doesn't produce an item at all (see
+// SELF_REPORT_NEEDS_ATTENTION above), so it has nothing to differentiate
+// yet. Framed by a generic severity tier rather than one string per exact
+// enum value, so this is already correct for staging today and needs no
+// further change if any other field gains a second "needs attention" value
+// later. Deliberately text-only — it does NOT scale the cost/value-add
+// estimate by severity, since the sourced catalog data isn't stratified by
+// self-reported severity and this app doesn't invent unsourced numbers.
+type SelfReportSeverityTier = 'MODERATE' | 'SIGNIFICANT';
+const SELF_REPORT_SEVERITY_TIER: Record<string, SelfReportSeverityTier> = {
+  NEEDS_REFRESH: 'MODERATE',
+  NEEDS_WORK: 'MODERATE',
+  NEEDS_SOME_WORK: 'MODERATE',
+  NEEDS_SIGNIFICANT_WORK: 'SIGNIFICANT',
+};
+function selfReportSeverityFraming(tier: SelfReportSeverityTier): string {
+  return tier === 'SIGNIFICANT'
+    ? "You reported this needs significant work — worth tackling before listing photos and showings, since it's likely to stand out to buyers."
+    : 'You reported this needs some attention — even a lighter touch-up before listing can help first impressions.';
+}
+
 // Returns both the rendered items AND every category the homeowner has
 // answered at all (regardless of value) — a category reported as already
 // in good shape produces no item, but must still suppress the generic
@@ -623,13 +699,14 @@ async function projectSelfReportedConditions(
     if (alreadyCoveredCategories.has(category) || !SELF_REPORT_NEEDS_ATTENTION.has(value)) continue;
     const entry = findSalePrepValueCatalogEntry(category);
     const estimate = estimateSalePrepCostAndValueAdd(category, sizeContext);
+    const severityTier = SELF_REPORT_SEVERITY_TIER[value] ?? 'MODERATE';
     items.push({
       sourceEntityType: 'SALE_PREP_SELF_REPORT' as const,
       sourceEntityId: category,
       category: 'PRESENTATION' as const,
       requirementClass: 'OPTIONAL_IMPROVEMENT' as const,
       title: `${SELF_REPORT_FIELD_TITLES[category]}: ${SELF_REPORT_CONDITION_LABELS[value] ?? value}`,
-      detail: `${entry.detail} (${entry.source})`,
+      detail: `${selfReportSeverityFraming(severityTier)} ${entry.detail} (${entry.source})`,
       estimatedCostMinCents: estimate.costRangeCents?.minCents ?? null,
       estimatedCostMaxCents: estimate.costRangeCents?.maxCents ?? null,
       estimatedValueAddMinCents: estimate.valueAddRangeCents?.minCents ?? null,
@@ -874,7 +951,7 @@ async function checkMandatoryFactCoverage(propertyId: string): Promise<Mandatory
 }
 
 async function syncReadinessItems(saleCaseId: string, propertyId: string, role: HouseholdRole): Promise<void> {
-  const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents, agingSystems, lapsedMaintenance, transferableWarranties, sizeContextProperty] = await Promise.all([
+  const [findings, projects, permits, homeActions, records, materialSpecs, timelineEvents, agingInventoryItems, lapsedMaintenance, transferableWarranties, sizeContextProperty] = await Promise.all([
     projectInspectionFindings(propertyId),
     projectProjects(propertyId),
     projectPermits(propertyId),
@@ -882,7 +959,7 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
     projectRecords(propertyId, role),
     projectMaterialSpecs(propertyId),
     projectTimelineEvents(propertyId),
-    projectAgingSystems(propertyId),
+    findAgingInventoryItems(propertyId),
     projectLapsedMaintenance(propertyId),
     projectTransferableWarranties(propertyId),
     // Value-aware checklist plan (2026-08-07, §10 Stage 1): the property
@@ -890,6 +967,8 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
     // value-add estimates by actual home size, not a flat national figure.
     prisma.property.findUnique({ where: { id: propertyId }, select: { propertySize: true, bedrooms: true, bathrooms: true } }),
   ]);
+  const agingSystems = projectAgingSystems(agingInventoryItems);
+  const warrantySuggestions = projectWarrantySuggestions(agingInventoryItems);
   const sizeContext: SalePrepPropertySizeContext = {
     propertySizeSqFt: sizeContextProperty?.propertySize ?? null,
     bedrooms: sizeContextProperty?.bedrooms ?? null,
@@ -920,7 +999,7 @@ async function syncReadinessItems(saleCaseId: string, propertyId: string, role: 
 
   const projected = [
     ...findings, ...projects, ...permits, ...homeActions, ...records, ...materialSpecs, ...timelineEvents,
-    ...agingSystems, ...lapsedMaintenance, ...transferableWarranties, ...structuralEvidence,
+    ...agingSystems, ...warrantySuggestions, ...lapsedMaintenance, ...transferableWarranties, ...structuralEvidence,
     ...upgradeEvidenceItems, ...budgetedSelfReportedItems, ...budgetedGenericFallbacks, ...confirmedUpgrades,
   ];
   const projectedKeys = new Set(projected.map((p) => `${p.sourceEntityType}:${p.sourceEntityId}`));
