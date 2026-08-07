@@ -24,6 +24,29 @@ export interface RelationalCaptureSelection {
 const compact = (value: string) => value.trim().replace(/\s+/g, ' ');
 const normalized = (value: string) => compact(value).toLocaleLowerCase();
 
+const INVENTORY_ITEM_UPDATE_COPY: Partial<Record<RelationalAdapterKey, (itemName: string) => { title: string; question: string }>> = {
+  INVENTORY_ITEM_CONFIRMATION: (itemName) => ({
+    title: `Confirm ${itemName}`,
+    question: `We added ${itemName} based on your property details. Is it present at this home?`,
+  }),
+  INVENTORY_ITEM_COVERAGE_LIFECYCLE: (itemName) => ({
+    title: `Add lifecycle details for ${itemName}`,
+    question: `About when was ${itemName} installed, and what condition is it in?`,
+  }),
+  INVENTORY_ITEM_VALUE: (itemName) => ({
+    title: `Confirm replacement value for ${itemName}`,
+    question: `What would ${itemName} cost to replace today?`,
+  }),
+  INVENTORY_ITEM_COVERAGE_EVIDENCE: (itemName) => ({
+    title: `Confirm current coverage for ${itemName}`,
+    question: `Do you have warranty or insurance coverage for ${itemName}?`,
+  }),
+  INVENTORY_ITEM_LIFECYCLE: (itemName) => ({
+    title: `Improve ${itemName}’s lifecycle estimate`,
+    question: `Confirm the condition and approximate install or purchase date for ${itemName}.`,
+  }),
+};
+
 function requiredText(values: Record<string, unknown>, key: string): string {
   const value = values[key];
   if (typeof value !== 'string' || !value.trim()) throw new Error(`Relational capture is missing required field: ${key}`);
@@ -124,6 +147,7 @@ export async function resolveRelationalCaptureSchema(
           },
         });
     }
+    const copy = INVENTORY_ITEM_UPDATE_COPY[definition.relationalAdapterKey]?.(item.name);
     return {
       inputSchema: {
         ...definition.inputSchema,
@@ -137,12 +161,8 @@ export async function resolveRelationalCaptureSchema(
           coverageChoice,
         },
       },
-      title: definition.relationalAdapterKey === 'INVENTORY_ITEM_LIFECYCLE'
-        ? `Improve ${item.name}’s lifecycle estimate`
-        : definition.title,
-      question: definition.relationalAdapterKey === 'INVENTORY_ITEM_LIFECYCLE'
-        ? `Confirm the condition and approximate install or purchase date for ${item.name}.`
-        : definition.question,
+      title: copy?.title ?? definition.title,
+      question: copy?.question ?? definition.question,
     };
   }
   if (definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE') {
