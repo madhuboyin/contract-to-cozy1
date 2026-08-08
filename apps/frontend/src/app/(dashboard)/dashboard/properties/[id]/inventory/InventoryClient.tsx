@@ -61,6 +61,17 @@ function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'cove
   return 'covered';
 }
 
+const COVERAGE_ATTENTION_RANK: Record<ReturnType<typeof getCoverageStatus>, number> = {
+  uncovered: 0,
+  partial: 1,
+  waived: 2,
+  covered: 3,
+};
+
+function byNeedsAttentionFirst(a: InventoryItem, b: InventoryItem): number {
+  return COVERAGE_ATTENTION_RANK[getCoverageStatus(a)] - COVERAGE_ATTENTION_RANK[getCoverageStatus(b)];
+}
+
 function getCoveragePercent(item: InventoryItem): number {
   const status = getCoverageStatus(item);
   if (status === 'covered') return 100;
@@ -365,8 +376,8 @@ export default function InventoryClient() {
   const missingWarrantyCount = useMemo(() => items.filter((item) => isActionableCoverageGap(item) && !item.warrantyId).length, [items]);
 
   const groupedItems = useMemo(() => ({
-    systems: filteredItems.filter((item) => item.recordGroup === 'SYSTEMS_STRUCTURE'),
-    belongings: filteredItems.filter((item) => item.recordGroup !== 'SYSTEMS_STRUCTURE'),
+    systems: filteredItems.filter((item) => item.recordGroup === 'SYSTEMS_STRUCTURE').sort(byNeedsAttentionFirst),
+    belongings: filteredItems.filter((item) => item.recordGroup !== 'SYSTEMS_STRUCTURE').sort(byNeedsAttentionFirst),
   }), [filteredItems]);
 
   async function handleExportCsv() {
