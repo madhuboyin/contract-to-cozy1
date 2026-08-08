@@ -463,6 +463,7 @@ export type StartGuidanceJourneyInput = {
   issueType: string;
   inventoryItemId?: string;
   serviceKey?: string;
+  customIssueLabel?: string;
 };
 
 export type GuidanceIssueTypeOption = {

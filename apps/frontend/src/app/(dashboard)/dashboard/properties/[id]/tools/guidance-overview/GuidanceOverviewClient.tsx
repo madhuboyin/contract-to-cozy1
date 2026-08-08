@@ -393,6 +393,7 @@ export default function GuidanceOverviewClient() {
         issueType: selectedIssueType!,
         inventoryItemId: effectiveInventoryItemId,
         serviceKey: selectedServiceKey ?? undefined,
+        customIssueLabel: selectedCustomIssueLabel || undefined,
       });
     },
     onSuccess: (data) => {

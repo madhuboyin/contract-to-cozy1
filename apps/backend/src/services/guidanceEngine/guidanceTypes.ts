@@ -67,6 +67,8 @@ export type UserInitiatedJourneyInput = {
   issueType: string;
   inventoryItemId?: string | null;
   serviceKey?: string | null;
+  /** Free-text description the user typed via "describe it yourself" — grounds homeowner-facing summaries when the canonical issueType label alone isn't specific enough. */
+  customIssueLabel?: string | null;
 };
 
 export const REPAIR_REPLACE_BRANCH_CHOICES = [

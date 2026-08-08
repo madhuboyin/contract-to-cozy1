@@ -127,6 +127,7 @@ const startJourneyBodySchema = z.object({
   issueType: z.string().trim().min(1).max(120),
   inventoryItemId: z.string().uuid().optional(),
   serviceKey: z.string().trim().min(1).max(120).optional(),
+  customIssueLabel: z.string().trim().min(1).max(200).optional(),
 });
 
 const dismissJourneyBodySchema = z.object({

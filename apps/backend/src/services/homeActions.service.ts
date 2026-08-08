@@ -368,9 +368,17 @@ function humanizeCapitalTimelineCategory(category: string): string {
 /** For item-less journeys (no inventoryItemId), trace the originating signal back to what it's actually about — an incident, or a capital-timeline system/category. */
 async function resolveJourneyMomentSubject(journey: {
   inventoryItemId?: string | null;
+  contextSnapshotJson?: unknown;
   primarySignal?: { sourceEntityType: string | null; sourceEntityId: string | null; metadataJson: unknown } | null;
 }): Promise<string | null> {
   if (journey.inventoryItemId) return null; // already named in the moment title via "for {item}"
+
+  // User-initiated journeys (e.g. "Or describe it yourself") carry no signal at all —
+  // their contextSnapshotJson.userNote is the user's own words, the most reliable subject available.
+  const context = (journey.contextSnapshotJson && typeof journey.contextSnapshotJson === 'object' ? journey.contextSnapshotJson : {}) as Record<string, unknown>;
+  if (typeof context.userNote === 'string' && context.userNote.trim()) {
+    return context.userNote.trim();
+  }
 
   const signal = journey.primarySignal;
   if (!signal) return null;
@@ -414,6 +422,7 @@ async function resolveJourneyMomentSubject(journey: {
 /** Homeowner-facing summary of what a guidance journey is actually about, so a bare display title (e.g. "Review a financial exposure") isn't shown without any grounding. */
 async function buildJourneyMomentContext(journey: {
   inventoryItemId?: string | null;
+  contextSnapshotJson?: unknown;
   derivedSnapshotJson?: unknown;
   primarySignal?: { sourceEntityType: string | null; sourceEntityId: string | null; metadataJson: unknown } | null;
 }): Promise<string | null> {

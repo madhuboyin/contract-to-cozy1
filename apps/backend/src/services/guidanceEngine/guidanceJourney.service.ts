@@ -1933,6 +1933,8 @@ export class GuidanceJourneyService {
     const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
     const template = getTemplateByIssueType(issueType, input.scopeCategory, serviceKey);
 
+    const customIssueLabel = input.customIssueLabel?.trim();
+
     let journey = await this.createJourneyFromTemplate({
       propertyId,
       actorUserId,
@@ -1942,6 +1944,7 @@ export class GuidanceJourneyService {
       scopeId,
       inventoryItemId,
       serviceKey,
+      contextSnapshotPatch: customIssueLabel ? { userNote: customIssueLabel } : null,
     });
 
     // When arriving from a coverage analysis REPLACE_SOON verdict, the replacement
