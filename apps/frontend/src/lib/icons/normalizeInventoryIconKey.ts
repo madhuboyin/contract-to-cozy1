@@ -56,6 +56,14 @@ const ICON_KEY_ALIASES: Record<string, InventoryItemIconKey> = {
   hood: 'hood',
   range_hood: 'hood',
   vent_hood: 'hood',
+
+  roof: 'roof',
+  roofing: 'roof',
+
+  smoke_detector: 'smoke_detector',
+  smoke_alarm: 'smoke_detector',
+  co_detector: 'smoke_detector',
+  carbon_monoxide_detector: 'smoke_detector',
 };
 
 function toNormalizedToken(value?: string | null): string {
@@ -85,6 +93,8 @@ const HEURISTIC_RULES: Array<{ key: InventoryItemIconKey; test: (value: string) 
   { key: 'mirror', test: (value) => value.includes('mirror') },
   { key: 'hood', test: (value) => value.includes('hood') },
   { key: 'desk', test: (value) => value.includes('desk') },
+  { key: 'roof', test: (value) => value.includes('roof') },
+  { key: 'smoke_detector', test: (value) => value.includes('smoke') || value.includes('carbon_monoxide') || value.includes('detector') || value.includes('alarm') },
 ];
 
 export function normalizeInventoryIconKey(value?: string | null): InventoryItemIconKey | null {

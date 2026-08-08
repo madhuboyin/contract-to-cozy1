@@ -14,6 +14,8 @@ export const inventoryItemIconMapping = {
   computer_desk: 'Monitor',
   sofa: 'Sofa',
   hood: 'Wind',
+  roof: 'Umbrella',
+  smoke_detector: 'ShieldAlert',
 } as const;
 
 export type InventoryItemIconKey = keyof typeof inventoryItemIconMapping;

@@ -58,7 +58,10 @@ function normalizedAsset(item: CoverageItem): string {
 }
 
 export function getInventoryRecordGroup(item: CoverageItem): InventoryRecordGroup {
-  return item.tags.includes('PROPERTY_LEVEL_SYSTEM') || SYSTEM_CATEGORIES.has(String(item.category))
+  if (item.tags.includes('PROPERTY_LEVEL_SYSTEM') || SYSTEM_CATEGORIES.has(String(item.category))) {
+    return 'SYSTEMS_STRUCTURE';
+  }
+  return getResponsibilityScopeForAsset(normalizedAsset(item), String(item.category))
     ? 'SYSTEMS_STRUCTURE'
     : 'APPLIANCES_BELONGINGS';
 }
