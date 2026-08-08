@@ -386,6 +386,21 @@ export default function ItemCard({
             >
               Review responsibility
             </button>
+          ) : coverageStatus === 'not-required' ? (
+            <>
+              <span className="flex-1 text-xs font-medium text-slate-500">
+                Coverage not required
+              </span>
+
+              <button
+                type="button"
+                onClick={handleOpenReplaceRepair}
+                className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300"
+              >
+                <CheckCircle className="h-3 w-3 text-emerald-500" />
+                Replace/Repair
+              </button>
+            </>
           ) : (
             <>
               <div className="flex flex-1 items-center gap-1.5">
