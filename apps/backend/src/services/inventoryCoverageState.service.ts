@@ -220,7 +220,7 @@ export function buildInventoryCoveragePresentation(
       : missingContext.includes('RESPONSIBILITY')
         ? 'No warranty or insurance is linked yet. Confirm who is responsible before reviewing homeowner coverage.'
         : missingContext.includes('REPLACEMENT_VALUE')
-          ? 'No warranty or insurance is linked yet. Add a replacement value or review the estimate before comparing coverage.'
+          ? 'No warranty or insurance is linked yet.'
           : missingContext.includes('ITEM_CONFIRMATION')
             ? 'No warranty or insurance is linked yet. Confirm this system exists before reviewing coverage.'
             : 'No warranty or insurance is linked yet. Confirm whether you have coverage or are not sure.',

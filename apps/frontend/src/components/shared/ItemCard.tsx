@@ -338,7 +338,7 @@ export default function ItemCard({
           )}
         </div>
 
-        <div className={`flex items-center gap-2 pt-1 ${isCompact ? '' : 'mt-1'}`}>
+        <div className="mt-auto flex items-center gap-2 pt-1">
           {coverageStatus === 'missing' ? (
             <>
               <button
