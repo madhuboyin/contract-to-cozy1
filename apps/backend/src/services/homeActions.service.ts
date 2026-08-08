@@ -380,7 +380,9 @@ async function resolveJourneyMomentSubject(journey: {
     return metadata.incidentTitle.trim();
   }
 
-  if (signal.sourceEntityType === 'RESERVE_FUND_LINE_ITEM' && signal.sourceEntityId) {
+  if (!signal.sourceEntityId) return null;
+
+  if (signal.sourceEntityType === 'RESERVE_FUND_LINE_ITEM') {
     const timelineItem = await prisma.homeCapitalTimelineItem.findUnique({
       where: { id: signal.sourceEntityId },
       select: { category: true, inventoryItem: { select: { name: true } } },
@@ -388,6 +390,22 @@ async function resolveJourneyMomentSubject(journey: {
     if (timelineItem) {
       return timelineItem.inventoryItem?.name ?? humanizeCapitalTimelineCategory(timelineItem.category);
     }
+  }
+
+  if (signal.sourceEntityType === 'INCIDENT') {
+    const incident = await prisma.incident.findUnique({
+      where: { id: signal.sourceEntityId },
+      select: { title: true },
+    });
+    if (incident?.title) return incident.title;
+  }
+
+  if (signal.sourceEntityType === 'NEGOTIATION_SHIELD_CASE') {
+    const negotiationCase = await prisma.negotiationShieldCase.findUnique({
+      where: { id: signal.sourceEntityId },
+      select: { title: true },
+    });
+    if (negotiationCase?.title) return negotiationCase.title;
   }
 
   return null;
