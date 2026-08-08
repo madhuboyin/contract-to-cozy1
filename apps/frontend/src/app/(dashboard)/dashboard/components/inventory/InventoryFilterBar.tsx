@@ -5,7 +5,7 @@ import { Search, X } from 'lucide-react';
 import type { InventoryItemCategory, InventoryRoom } from '@/types';
 import { INVENTORY_CATEGORY_FILTER_OPTIONS } from '@/lib/config/inventoryConfig';
 
-type SmartFilterId = 'gaps' | 'no-value' | 'recalls' | 'not-required' | 'missing-age' | 'missing-date' | 'missing-warranty';
+type SmartFilterId = 'gaps' | 'incomplete' | 'no-value' | 'recalls' | 'not-required' | 'missing-age' | 'missing-date' | 'missing-warranty';
 
 type InventoryFilterBarProps = {
   searchQuery: string;
@@ -22,6 +22,7 @@ type InventoryFilterBarProps = {
   onToggleSmartFilter: (value: SmartFilterId) => void;
   rooms: InventoryRoom[];
   gapCount: number;
+  incompleteCount: number;
   missingValueCount: number;
   recallCount: number;
   notRequiredCount: number;
@@ -69,6 +70,7 @@ export default function InventoryFilterBar({
   onToggleSmartFilter,
   rooms,
   gapCount,
+  incompleteCount,
   missingValueCount,
   recallCount,
   notRequiredCount,
@@ -85,6 +87,14 @@ export default function InventoryFilterBar({
           label: `${gapCount} coverage gap${gapCount !== 1 ? 's' : ''}`,
           color: 'bg-red-100 border-red-200 text-red-700',
           activeColor: 'bg-red-200 border-red-300 text-red-800',
+        }
+      : null,
+    incompleteCount > 0
+      ? {
+          id: 'incomplete' as const,
+          label: `${incompleteCount} need${incompleteCount !== 1 ? '' : 's'} confirmation`,
+          color: 'bg-sky-100 border-sky-200 text-sky-700',
+          activeColor: 'bg-sky-200 border-sky-300 text-sky-800',
         }
       : null,
     missingValueCount > 0

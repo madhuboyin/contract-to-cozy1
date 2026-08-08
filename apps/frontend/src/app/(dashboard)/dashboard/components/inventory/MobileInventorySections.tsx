@@ -382,6 +382,7 @@ export function InventoryFiltersPanel({
   onToggleSmartFilter,
   rooms,
   gapCount,
+  incompleteCount,
   missingValueCount,
   recallCount,
   notRequiredCount,
@@ -405,6 +406,7 @@ export function InventoryFiltersPanel({
   onToggleSmartFilter: (value: SmartFilterId) => void;
   rooms: InventoryRoom[];
   gapCount: number;
+  incompleteCount: number;
   missingValueCount: number;
   recallCount: number;
   notRequiredCount: number;
@@ -417,6 +419,9 @@ export function InventoryFiltersPanel({
   const smartFilters = [
     gapCount > 0
       ? { id: 'gaps' as const, label: `${gapCount} coverage gap${gapCount === 1 ? '' : 's'}` }
+      : null,
+    incompleteCount > 0
+      ? { id: 'incomplete' as const, label: `${incompleteCount} need${incompleteCount === 1 ? 's' : ''} confirmation` }
       : null,
     missingValueCount > 0
       ? { id: 'no-value' as const, label: `${missingValueCount} missing value${missingValueCount === 1 ? '' : 's'}` }
@@ -511,18 +516,22 @@ export function InventoryFiltersPanel({
                 activeSmartFilter === filter.id
                   ? filter.id === 'gaps'
                     ? 'border-rose-300 bg-rose-100 text-rose-700'
-                    : filter.id === 'no-value'
-                      ? 'border-amber-300 bg-amber-100 text-amber-700'
-                      : filter.id === 'not-required'
-                        ? 'border-slate-300 bg-slate-200 text-slate-700'
-                        : 'border-orange-300 bg-orange-100 text-orange-700'
+                    : filter.id === 'incomplete'
+                      ? 'border-sky-300 bg-sky-100 text-sky-700'
+                      : filter.id === 'no-value'
+                        ? 'border-amber-300 bg-amber-100 text-amber-700'
+                        : filter.id === 'not-required'
+                          ? 'border-slate-300 bg-slate-200 text-slate-700'
+                          : 'border-orange-300 bg-orange-100 text-orange-700'
                   : filter.id === 'gaps'
                     ? 'border-rose-200 bg-rose-50 text-rose-700'
-                    : filter.id === 'no-value'
-                      ? 'border-amber-200 bg-amber-50 text-amber-700'
-                      : filter.id === 'not-required'
-                        ? 'border-slate-200 bg-slate-100 text-slate-600'
-                        : 'border-orange-200 bg-orange-50 text-orange-700',
+                    : filter.id === 'incomplete'
+                      ? 'border-sky-200 bg-sky-50 text-sky-700'
+                      : filter.id === 'no-value'
+                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                        : filter.id === 'not-required'
+                          ? 'border-slate-200 bg-slate-100 text-slate-600'
+                          : 'border-orange-200 bg-orange-50 text-orange-700',
               ].join(' ')}
             >
               {filter.label}

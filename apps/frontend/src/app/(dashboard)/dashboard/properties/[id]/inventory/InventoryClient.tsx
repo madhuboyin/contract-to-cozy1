@@ -77,6 +77,8 @@ function isActionableCoverageGap(item: InventoryItem): boolean {
 
 function smartFilterLabel(filter: SmartFilterId): string {
   switch (filter) {
+    case 'incomplete':
+      return 'needs confirmation';
     case 'no-value':
       return 'missing values';
     case 'not-required':
@@ -288,6 +290,7 @@ export default function InventoryClient() {
     }, 0);
 
     const gapCount = items.filter(isActionableCoverageGap).length;
+    const incompleteCount = items.filter((item) => item.coverageState === 'INCOMPLETE').length;
     const missingValueCount = items.filter((item) => !hasReplacementValue(item)).length;
     const docCount = items.filter((item) => (item.documents?.length ?? 0) > 0).length;
     const notRequiredCount = items.filter((item) => item.coverageState === 'NOT_REQUIRED' || item.coverageNotRequired).length;
@@ -297,6 +300,7 @@ export default function InventoryClient() {
       coveredValue,
       coverageRate: assessableValue > 0 ? (coveredValue / assessableValue) * 100 : 0,
       gapCount,
+      incompleteCount,
       missingValueCount,
       docCount,
       notRequiredCount,
@@ -325,6 +329,7 @@ export default function InventoryClient() {
       if (recallFilter === 'no-recalls' && hasRecall) return false;
 
       if (activeSmartFilter === 'gaps' && !isActionableCoverageGap(item)) return false;
+      if (activeSmartFilter === 'incomplete' && item.coverageState !== 'INCOMPLETE') return false;
       if (activeSmartFilter === 'no-value' && hasReplacementValue(item)) return false;
       if (activeSmartFilter === 'recalls' && !hasRecall) return false;
       if (activeSmartFilter === 'not-required' && !item.coverageNotRequired) return false;
@@ -347,7 +352,7 @@ export default function InventoryClient() {
     return count;
   }, [searchQuery, roomFilter, categoryFilter, docsFilter, recallFilter, activeSmartFilter]);
 
-  const portfolioFilter = (activeSmartFilter === 'gaps' || activeSmartFilter === 'no-value'
+  const portfolioFilter = (activeSmartFilter === 'gaps' || activeSmartFilter === 'incomplete' || activeSmartFilter === 'no-value'
     ? activeSmartFilter
     : null) as InventoryPortfolioFilter;
 
@@ -518,6 +523,7 @@ export default function InventoryClient() {
               onToggleSmartFilter={toggleSmartFilter}
               rooms={rooms}
               gapCount={portfolioStats.gapCount}
+              incompleteCount={portfolioStats.incompleteCount}
               missingValueCount={portfolioStats.missingValueCount}
               recallCount={recallCount}
               notRequiredCount={portfolioStats.notRequiredCount}
@@ -693,6 +699,7 @@ export default function InventoryClient() {
             onToggleSmartFilter={toggleSmartFilter}
             rooms={rooms}
             gapCount={portfolioStats.gapCount}
+            incompleteCount={portfolioStats.incompleteCount}
             missingValueCount={portfolioStats.missingValueCount}
             recallCount={recallCount}
             notRequiredCount={portfolioStats.notRequiredCount}

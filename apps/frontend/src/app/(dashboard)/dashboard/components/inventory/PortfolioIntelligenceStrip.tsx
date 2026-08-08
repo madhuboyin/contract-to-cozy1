@@ -4,13 +4,14 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { formatCurrency } from '@/lib/utils/format';
 
-type InventoryPortfolioFilter = 'gaps' | 'no-value' | null;
+type InventoryPortfolioFilter = 'gaps' | 'incomplete' | 'no-value' | null;
 
 export type PortfolioStats = {
   totalValue: number;
   coveredValue: number;
   coverageRate: number;
   gapCount: number;
+  incompleteCount: number;
   missingValueCount: number;
   docCount: number;
   notRequiredCount: number;
@@ -64,10 +65,11 @@ export default function PortfolioIntelligenceStrip({
   const animatedTotalValue = useCountUp(stats.totalValue);
   const animatedCoverageRate = useCountUp(stats.coverageRate);
   const animatedGapCount = useCountUp(stats.gapCount);
+  const animatedIncompleteCount = useCountUp(stats.incompleteCount);
   const animatedMissingValueCount = useCountUp(stats.missingValueCount);
 
   return (
-    <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-5">
+    <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-6">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -117,6 +119,31 @@ export default function PortfolioIntelligenceStrip({
           </p>
           <p className="mt-0.5 text-xs text-gray-400">
             {stats.gapCount === 0 ? 'All items protected' : 'items need coverage'}
+          </p>
+        </button>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.15 }}
+      >
+        <button
+          type="button"
+          onClick={() => onToggleFilter('incomplete')}
+          className={[
+            'w-full rounded-xl border bg-white p-4 text-left transition-all',
+            activeFilter === 'incomplete'
+              ? 'border-sky-300 bg-sky-50 ring-1 ring-sky-200'
+              : 'border-gray-200 hover:border-sky-200 hover:bg-sky-50/30',
+          ].join(' ')}
+        >
+          <p className="mb-1 text-[11px] font-semibold tracking-normal text-gray-400">Needs Confirmation</p>
+          <p className={`text-2xl font-display font-bold ${stats.incompleteCount > 0 ? 'text-sky-600' : 'text-emerald-600'}`}>
+            {Math.round(animatedIncompleteCount)}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-400">
+            {stats.incompleteCount === 0 ? 'All items confirmed' : 'items need info'}
           </p>
         </button>
       </motion.div>
