@@ -9,6 +9,7 @@ import {
   Download,
   Grid,
   History,
+  Info,
   Plus,
   Search,
   Shield,
@@ -691,31 +692,33 @@ export function MobileInventoryItemCard({
               <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
                 {titleCaseCategory(String(item.category || 'OTHER'))} · {getRoomLabel(item)}
               </p>
-              {item.provenanceLabel ? <p className="mb-0 mt-1 text-[11px] font-medium text-sky-700">{item.provenanceLabel}</p> : null}
             </div>
           </div>
 
-          <StatusChip
-            tone={
-              coverageStatus === 'confirmed'
-                ? 'good'
-                : coverageStatus === 'not-required' || coverageStatus === 'managed'
-                  ? 'info'
+          <span title={item.provenanceLabel || undefined} className="flex-shrink-0">
+            <StatusChip
+              tone={
+                coverageStatus === 'confirmed'
+                  ? 'good'
+                  : coverageStatus === 'not-required' || coverageStatus === 'managed'
+                    ? 'info'
+                    : coverageStatus === 'incomplete'
+                      ? 'elevated'
+                      : 'needsAction'
+              }
+            >
+              {item.provenanceLabel ? <Info className="mr-1 inline h-3 w-3 -translate-y-px" /> : null}
+              {item.coverageStateLabel || (coverageStatus === 'confirmed'
+                ? 'Coverage confirmed'
+                : coverageStatus === 'not-required'
+                  ? 'Coverage not required'
                   : coverageStatus === 'incomplete'
-                    ? 'elevated'
-                    : 'needsAction'
-            }
-          >
-            {item.coverageStateLabel || (coverageStatus === 'confirmed'
-              ? 'Coverage confirmed'
-              : coverageStatus === 'not-required'
-                ? 'Coverage not required'
-                : coverageStatus === 'incomplete'
-                  ? 'Coverage status incomplete'
-                  : coverageStatus === 'managed'
-                    ? 'Managed elsewhere'
-                    : 'Coverage missing')}
-          </StatusChip>
+                    ? 'Coverage status incomplete'
+                    : coverageStatus === 'managed'
+                      ? 'Managed elsewhere'
+                      : 'Coverage missing')}
+            </StatusChip>
+          </span>
         </div>
 
         {item.coverageStateDetail && coverageStatus !== 'confirmed' ? (
