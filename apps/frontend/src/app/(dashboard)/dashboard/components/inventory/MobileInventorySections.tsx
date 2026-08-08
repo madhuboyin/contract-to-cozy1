@@ -759,8 +759,8 @@ export function MobileInventoryItemCard({
           </div>
         </div>
 
-        <div className="h-1.5 overflow-hidden rounded-full bg-[hsl(var(--mobile-bg-muted))]">
-          {hasValue && hasAssessableCoverage ? (
+        {hasValue && hasAssessableCoverage ? (
+          <div className="h-1.5 overflow-hidden rounded-full bg-[hsl(var(--mobile-bg-muted))]">
             <div
               className={[
                 'h-full rounded-full transition-all duration-700',
@@ -770,8 +770,8 @@ export function MobileInventoryItemCard({
               ].join(' ')}
               style={{ width: `${coveragePercent}%` }}
             />
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
           {hasWarranty ? (

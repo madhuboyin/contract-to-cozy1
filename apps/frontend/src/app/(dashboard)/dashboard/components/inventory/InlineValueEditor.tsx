@@ -108,9 +108,9 @@ export default function InlineValueEditor({ itemId, onSave }: InlineValueEditorP
             event.stopPropagation();
             setEditing(true);
           }}
-          className="group flex items-center gap-1 text-xs font-medium text-teal-600 underline-offset-2 transition-colors hover:text-teal-700 hover:underline"
+          className="group flex items-center gap-1 text-sm font-semibold text-teal-600 underline-offset-2 transition-colors hover:text-teal-700 hover:underline"
         >
-          <Plus className="h-3 w-3 transition-transform group-hover:scale-110" />
+          <Plus className="h-3.5 w-3.5 transition-transform group-hover:scale-110" />
           Add value
         </motion.button>
       )}

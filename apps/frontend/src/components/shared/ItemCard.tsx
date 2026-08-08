@@ -303,8 +303,8 @@ export default function ItemCard({
             )}
           </div>
 
-          <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-            {hasReplacementValue && hasAssessableCoverage ? (
+          {hasReplacementValue && hasAssessableCoverage ? (
+            <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
                   coveragePercent === 100
@@ -315,8 +315,8 @@ export default function ItemCard({
                 }`}
                 style={{ width: `${coveragePercent}%` }}
               />
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-between">
@@ -373,7 +373,7 @@ export default function ItemCard({
                 isCompact ? 'py-2' : 'py-2.5',
               ].join(' ')}
             >
-              Complete coverage details
+              Complete details
             </button>
           ) : coverageStatus === 'managed' ? (
             <button
