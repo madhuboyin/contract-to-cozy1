@@ -117,8 +117,14 @@ export function isCriticalWeatherAction(action: RankedHomeActionDTO): boolean {
     action.evidence.some((evidence) => /weather|national weather service/i.test(evidence.source));
 }
 
+export function isAssetLifecycleAction(action: RankedHomeActionDTO): boolean {
+  return action.presentation?.variant === 'ASSET_LIFECYCLE' &&
+    action.presentation.subject?.kind === 'INVENTORY_ITEM';
+}
+
 export type AttentionEntry =
   | { kind: 'ACTION'; action: RankedHomeActionDTO }
+  | { kind: 'ASSET_LIFECYCLE'; action: RankedHomeActionDTO }
   | { kind: 'SEASONAL_CHECKLIST'; action: RankedHomeActionDTO }
   | { kind: 'CRITICAL_WEATHER'; action: RankedHomeActionDTO }
   | { kind: 'ENVIRONMENT'; action: RankedHomeActionDTO }
@@ -128,6 +134,7 @@ function entryForAction(action: RankedHomeActionDTO): AttentionEntry {
   if (isCriticalWeatherAction(action)) return { kind: 'CRITICAL_WEATHER', action };
   if (isEnvironmentAction(action)) return { kind: 'ENVIRONMENT', action };
   if (isSeasonalChecklistAction(action)) return { kind: 'SEASONAL_CHECKLIST', action };
+  if (isAssetLifecycleAction(action)) return { kind: 'ASSET_LIFECYCLE', action };
   return { kind: 'ACTION', action };
 }
 
@@ -508,6 +515,32 @@ export function CoverageCorrectionGroupCard({
   );
 }
 
+function AssetLifecycleFacts({ action }: { action: RankedHomeActionDTO }) {
+  const groups = action.presentation?.factGroups ?? [];
+  if (groups.length === 0) return null;
+
+  return (
+    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+      {groups.map((group) => (
+        <section key={group.label} className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+          <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{group.label}</h4>
+          <dl className="mt-2 divide-y divide-slate-200/70">
+            {group.facts.map((fact) => (
+              <div key={fact.key} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0" title={`Source: ${fact.source}`}>
+                <dt className="text-xs leading-5 text-slate-500">{fact.label}</dt>
+                <dd className={`max-w-[65%] text-right text-xs font-medium leading-5 ${fact.kind === 'MISSING' ? 'text-amber-700' : 'text-slate-800'}`}>
+                  {fact.value}
+                  {fact.kind === 'BENCHMARK' && <span className="ml-1 font-normal text-slate-400">typical</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function ActionCard({
   action,
   propertyId,
@@ -561,8 +594,11 @@ export function ActionCard({
   const canDefer = action.governance.safetyTier !== 'SAFETY_EMERGENCY' &&
     (action.feedbackControls.includes('DEFER') || action.feedbackControls.includes('SNOOZE'));
   const presentation = action.presentation;
+  const assetLifecycle = isAssetLifecycleAction(action);
   const headline = presentation?.headline ?? action.recommendedAction;
-  const summary = presentation?.summary ?? action.expectedOutcome;
+  const summary = assetLifecycle
+    ? presentation?.whyNow ?? presentation?.summary ?? action.expectedOutcome
+    : presentation?.summary ?? action.expectedOutcome;
 
   const toggleDetails = () => {
     const nextOpen = !detailsOpen;
@@ -599,6 +635,10 @@ export function ActionCard({
                 </div>
               ))}
             </dl>
+          )}
+          {assetLifecycle && <AssetLifecycleFacts action={action} />}
+          {assetLifecycle && presentation?.summary && (
+            <p className="mt-3 text-xs leading-5 text-slate-500">{presentation.summary}</p>
           )}
         </div>
       </div>
@@ -735,7 +775,7 @@ function AttentionEntryCard({
   propertyId: string;
   onChanged: () => Promise<unknown>;
 }) {
-  if (entry.kind === 'ACTION') {
+  if (entry.kind === 'ACTION' || entry.kind === 'ASSET_LIFECYCLE') {
     return <ActionCard action={entry.action} propertyId={propertyId} onChanged={onChanged} />;
   }
   if (entry.kind === 'CRITICAL_WEATHER') {

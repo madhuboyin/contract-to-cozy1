@@ -83,12 +83,13 @@ test('no twin and no needs-attention facts produce no fact-review action', async
   assert.equal(allClear.actions.some((a) => a.id.startsWith('home-digital-twin-fact-review')), false);
 });
 
-test('a HIGH-priority capital timeline item is promoted as a MATERIAL_FINANCIAL PLAN action', async () => {
+test('a HIGH-priority capital item becomes a standalone evidence-backed lifecycle action', async () => {
   const sources = baseSources({
     homeCapitalTimelineAnalysis: {
       findFirst: async () => ({
         id: 'analysis-1',
         computedAt: NOW,
+        inputsSnapshot: { _propertyContextVersion: 'context-v4' },
         items: [{
           id: 'item-1',
           category: 'ROOF',
@@ -98,6 +99,12 @@ test('a HIGH-priority capital timeline item is promoted as a MATERIAL_FINANCIAL 
           estimatedCostMaxCents: 1400000,
           confidence: 'HIGH',
           why: 'Roof is estimated at ~24.0 years old.',
+          inventoryItemId: 'roof-1',
+          inventoryItem: {
+            name: 'Roof', condition: 'GOOD', installedOn: new Date('2002-06-01'), purchasedOn: null,
+            lastServicedOn: null, isVerified: true, updatedAt: NOW,
+            warranty: null, linkedWarranties: [], insurancePolicy: null, homeEvents: [],
+          },
         }],
       }),
     },
@@ -107,23 +114,29 @@ test('a HIGH-priority capital timeline item is promoted as a MATERIAL_FINANCIAL 
   const action = result.actions.find((a) => a.id === 'home-capital-timeline-window:item-1');
 
   assert.ok(action, 'expected a capital timeline window action');
-  assert.equal(action.priority, 'PLAN');
+  assert.equal(action.priority, 'SOON');
   assert.equal(action.job, 'MAJOR_MOMENT');
   assert.equal(action.governance.safetyTier, 'MATERIAL_FINANCIAL');
-  assert.equal(action.primaryCta.href, '/dashboard/properties/property-1/tools/capital-timeline');
-  assert.equal(action.primaryCta.label, 'Plan replacement');
-  assert.equal(action.presentation.headline, 'Your roof may need a replacement plan');
-  assert.equal(action.presentation.summary.includes('nothing is urgent'), true);
+  assert.match(action.primaryCta.href, /^\/dashboard\/properties\/property-1\/tools\/capital-timeline\?/);
+  assert.match(action.primaryCta.href, /itemId=roof-1/);
+  assert.match(action.primaryCta.href, /sourceActionId=home-capital-timeline-window%3Aitem-1/);
+  assert.match(action.primaryCta.href, /contextVersion=context-v4/);
+  assert.equal(action.primaryCta.label, 'Plan Roof replacement');
+  assert.equal(action.presentation.variant, 'ASSET_LIFECYCLE');
+  assert.equal(action.presentation.headline, 'Plan ahead for Roof');
+  assert.equal(action.presentation.subject.id, 'roof-1');
+  assert.equal(action.presentation.group, null);
   assert.equal(action.presentation.detailLabel, 'Why this estimate?');
   assert.match(action.expectedOutcome, /\$9,000.*\$14,000/);
 });
 
-test('groups capital items in the same planning window into one homeowner recommendation', async () => {
+test('keeps nearby capital items standalone and presents every known item fact', async () => {
   const sources = baseSources({
     homeCapitalTimelineAnalysis: {
       findFirst: async () => ({
         id: 'analysis-1',
         computedAt: NOW,
+        inputsSnapshot: {},
         items: [
           {
             id: 'item-1', category: 'APPLIANCE',
@@ -131,7 +144,11 @@ test('groups capital items in the same planning window into one homeowner recomm
             estimatedCostMinCents: 80000, estimatedCostMaxCents: 250000,
             confidence: 'HIGH', why: 'Refrigerator age and condition projection.',
             inventoryItemId: 'fridge-1',
-            inventoryItem: { name: 'Refrigerator', condition: 'UNKNOWN', installedOn: new Date('2000-01-01'), purchasedOn: null },
+            inventoryItem: {
+              name: 'Refrigerator', condition: 'GOOD', installedOn: new Date('2018-01-01'), purchasedOn: null,
+              lastServicedOn: null, isVerified: false, updatedAt: NOW,
+              warranty: null, linkedWarranties: [], insurancePolicy: null, homeEvents: [],
+            },
           },
           {
             id: 'item-2', category: 'APPLIANCE',
@@ -139,7 +156,14 @@ test('groups capital items in the same planning window into one homeowner recomm
             estimatedCostMinCents: 80000, estimatedCostMaxCents: 250000,
             confidence: 'MEDIUM', why: 'Dishwasher age and fair condition projection.',
             inventoryItemId: 'dishwasher-1',
-            inventoryItem: { name: 'Dishwasher', condition: 'FAIR', installedOn: new Date('2010-01-01'), purchasedOn: null },
+            inventoryItem: {
+              name: 'Dishwasher', condition: 'FAIR', installedOn: new Date('2016-03-01'), purchasedOn: null,
+              lastServicedOn: new Date('2025-11-15'), isVerified: true, updatedAt: NOW,
+              warranty: { id: 'warranty-1', providerName: 'Acme', expiryDate: new Date('2027-03-01'), updatedAt: NOW },
+              linkedWarranties: [],
+              insurancePolicy: { id: 'policy-1', carrierName: 'Safe Home', expiryDate: null, isVerified: true, lastVerifiedAt: NOW, updatedAt: NOW },
+              homeEvents: [{ id: 'repair-1', type: 'REPAIR', occurredAt: new Date('2025-04-02'), verificationStatus: 'VERIFIED' }],
+            },
           },
         ],
       }),
@@ -149,12 +173,22 @@ test('groups capital items in the same planning window into one homeowner recomm
   const result = await getPromotedHomeActions('property-1', sources);
   const actions = result.actions.filter((action) => action.id.startsWith('home-capital-timeline-window'));
 
-  assert.equal(actions.length, 1);
-  assert.equal(actions[0].presentation.group.itemCount, 2);
-  assert.equal(actions[0].presentation.keyFacts.find((fact) => fact.label === 'Items').value, 'Refrigerator · Dishwasher');
-  assert.equal(actions[0].presentation.keyFacts.find((fact) => fact.label === 'Estimated budget').value, '$1,600–$5,000');
-  assert.equal(actions[0].primaryCta.label, 'Plan replacement budget');
-  assert.equal(actions[0].secondaryCtas[0].label, 'Update item details');
+  assert.equal(actions.length, 2);
+  assert.deepEqual(actions.map((action) => action.presentation.subject.label).sort(), ['Dishwasher', 'Refrigerator']);
+
+  const dishwasher = actions.find((action) => action.presentation.subject.id === 'dishwasher-1');
+  assert.ok(dishwasher);
+  const facts = Object.fromEntries(dishwasher.presentation.factGroups.flatMap((group) => group.facts.map((fact) => [fact.key, fact])));
+  assert.equal(facts.age.value, '10 years old · installed Mar 2016');
+  assert.equal(facts.condition.value, 'Fair');
+  assert.equal(facts['last-service'].value, 'Nov 2025');
+  assert.equal(facts.repairs.value, '1 recorded');
+  assert.equal(facts.warranty.value, 'Active · Acme · Mar 2027');
+  assert.equal(facts.insurance.value, 'Safe Home policy linked · coverage not confirmed');
+  assert.equal(facts.window.value, '2027–2028');
+  assert.equal(facts.budget.value, '$800–$2,500');
+  assert.match(dishwasher.primaryCta.href, /itemId=dishwasher-1/);
+  assert.equal(dishwasher.secondaryCtas[0].label, 'Update item details');
 });
 
 test('no HIGH-priority capital timeline items produce no window action', async () => {

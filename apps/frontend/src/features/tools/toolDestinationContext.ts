@@ -90,10 +90,13 @@ export function resolveToolDestinationContext(args: {
     (isInventoryEntity(context.sourceEntityType) ? entityId : null) ??
     journeyInventoryItemId ??
     (journey?.scopeCategory === 'ITEM' ? journeyScopeId : null);
-  const sourceTitle = sourceAction?.recommendedAction ??
+  const sourceTitle = sourceAction?.presentation?.headline ??
+    sourceAction?.recommendedAction ??
     journey?.explanation?.what ??
     (recommendationLabel ? `Recommended because: ${recommendationLabel}` : 'Continued from your Home plan');
-  const sourceSummary = sourceAction?.whyItMatters ??
+  const sourceSummary = sourceAction?.presentation?.whyNow ??
+    sourceAction?.presentation?.summary ??
+    sourceAction?.whyItMatters ??
     journey?.explanation?.why ??
     journey?.strategicAdvice ??
     null;

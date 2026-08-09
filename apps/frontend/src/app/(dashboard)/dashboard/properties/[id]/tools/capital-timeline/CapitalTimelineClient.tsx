@@ -1008,6 +1008,7 @@ export default function CapitalTimelineClient() {
   const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
   const [viewingItemId, setViewingItemId] = useState<string | null>(null);
   const [showCalcExplainer, setShowCalcExplainer] = useState(false);
+  const [showFullTimeline, setShowFullTimeline] = useState(false);
 
   const reqRef = React.useRef(0);
 
@@ -1132,6 +1133,14 @@ export default function CapitalTimelineClient() {
 
   // ─── Summary stats ──────────────────────────────────────────────
   const items = React.useMemo(() => data?.items ?? [], [data?.items]);
+  const focusedItem = React.useMemo(
+    () => focusedInventoryItemId
+      ? items.find((item) => item.inventoryItemId === focusedInventoryItemId) ?? null
+      : null,
+    [focusedInventoryItemId, items],
+  );
+  const focusedScopeActive = Boolean(focusedItem && !showFullTimeline);
+  const visibleItems = focusedScopeActive && focusedItem ? [focusedItem] : items;
   const contextInventoryItemId = focusedInventoryItemId ?? items.find((item) => item.inventoryItemId && (
     item.missingFactors.includes('INSTALL_DATE') || item.missingFactors.includes('CONDITION')
   ))?.inventoryItemId ?? null;
@@ -1141,8 +1150,6 @@ export default function CapitalTimelineClient() {
   );
 
   useEffect(() => {
-    if (!focusedInventoryItemId) return;
-    const focusedItem = items.find((item) => item.inventoryItemId === focusedInventoryItemId);
     if (!focusedItem) return;
     setExpandedItems((previous) => {
       if (previous.has(focusedItem.id)) return previous;
@@ -1150,19 +1157,19 @@ export default function CapitalTimelineClient() {
       next.add(focusedItem.id);
       return next;
     });
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById(`capital-item-${focusedItem.id}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [focusedInventoryItemId, items]);
-  const totalMin = items.reduce((s, i) => s + (i.estimatedCostMinCents ?? 0), 0);
-  const totalMax = items.reduce((s, i) => s + (i.estimatedCostMaxCents ?? 0), 0);
-  const highPriorityCount = items.filter((i) => i.priority === 'HIGH').length;
+  }, [focusedItem]);
+  const totalMin = visibleItems.reduce((s, i) => s + (i.estimatedCostMinCents ?? 0), 0);
+  const totalMax = visibleItems.reduce((s, i) => s + (i.estimatedCostMaxCents ?? 0), 0);
+  const highPriorityCount = visibleItems.filter((i) => i.priority === 'HIGH').length;
+  const focusedSummary = focusedItem
+    ? `${focusedItem.inventoryItem?.name || categoryLabel(focusedItem.category)}: ${windowLabel(focusedItem)}${
+      focusedItem.estimatedCostMinCents != null && focusedItem.estimatedCostMaxCents != null
+        ? `, ${money(focusedItem.estimatedCostMinCents)}–${money(focusedItem.estimatedCostMaxCents)} estimated`
+        : ', cost estimate not available'
+    }.`
+    : null;
 
-  const totalMonthlySavings = items
+  const totalMonthlySavings = visibleItems
     .filter((i) => i.priority === 'HIGH' || i.priority === 'MEDIUM')
     .reduce((sum, item) => {
       if (item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null) return sum;
@@ -1175,7 +1182,7 @@ export default function CapitalTimelineClient() {
   // Items already due (window open) are excluded from the smoothed monthly
   // rate above — there's no time left to spread their cost. Surfaced
   // separately so that money isn't just invisible from the summary.
-  const alreadyDueItems = items.filter(
+  const alreadyDueItems = visibleItems.filter(
     (i) =>
       (i.priority === 'HIGH' || i.priority === 'MEDIUM') &&
       i.estimatedCostMinCents != null &&
@@ -1189,14 +1196,18 @@ export default function CapitalTimelineClient() {
 
   const nextAction = (() => {
     if (!propertyId || !data) return null;
-    const firstHighPriority = items.find((item) => item.priority === 'HIGH');
+    const firstHighPriority = focusedScopeActive
+      ? focusedItem
+      : visibleItems.find((item) => item.priority === 'HIGH');
     if (firstHighPriority) {
       const mappedCategory = mapTimelineCategoryToRadarCategory(firstHighPriority.category);
       const itemLabel = firstHighPriority.inventoryItem?.name || categoryLabel(firstHighPriority.category);
       const p = new URLSearchParams({ launchSurface: 'home_tools', category: mappedCategory, label: itemLabel });
       return {
         label: `Price-check: ${itemLabel}`,
-        reason: 'Start with your highest-priority capital item before booking work.',
+        reason: focusedScopeActive
+          ? `Continue the selected ${itemLabel} recommendation before booking work.`
+          : 'Start with your highest-priority capital item before booking work.',
         href: `/dashboard/properties/${propertyId}/tools/service-price-radar?${p.toString()}`,
       };
     }
@@ -1298,6 +1309,21 @@ export default function CapitalTimelineClient() {
       {/* Data */}
       {data && !loading && (
         <>
+          {focusedItem && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50/80 px-4 py-3 text-sm dark:border-teal-800 dark:bg-teal-950/30">
+              <div>
+                <p className="font-semibold text-teal-950 dark:text-teal-100">
+                  {focusedScopeActive ? `Focused on ${focusedItem.inventoryItem?.name || categoryLabel(focusedItem.category)}` : 'Showing the full home timeline'}
+                </p>
+                <p className="mt-0.5 text-xs text-teal-800/80 dark:text-teal-300/80">
+                  Opened from your Home recommendation. The selected item and its planning numbers stay in context.
+                </p>
+              </div>
+              <Button size="sm" variant="outline" className="rounded-full bg-white/80" onClick={() => setShowFullTimeline((current) => !current)}>
+                {focusedScopeActive ? 'View full timeline' : 'Return to focused item'}
+              </Button>
+            </div>
+          )}
           {/* Summary Bar */}
           <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl sm:p-6 dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
@@ -1309,7 +1335,7 @@ export default function CapitalTimelineClient() {
               </div>
               <div>
                 <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-300">Items</p>
-                <p className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">{items.length}</p>
+                <p className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">{visibleItems.length}</p>
               </div>
               <div>
                 <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-300">High Priority</p>
@@ -1323,12 +1349,12 @@ export default function CapitalTimelineClient() {
               </div>
               <div>
                 <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-300">Confidence</p>
-                <div className="mt-1">{confidenceBadge(data.confidence)}</div>
+                <div className="mt-1">{confidenceBadge(focusedScopeActive && focusedItem ? focusedItem.confidence : data.confidence)}</div>
               </div>
             </div>
-            {data.summary && (
+            {(data.summary || focusedSummary) && (
               <p className="mt-4 border-t border-slate-200/70 pt-3 text-sm text-slate-600 dark:border-slate-700/70 dark:text-slate-300">
-                {data.summary}
+                {focusedScopeActive ? focusedSummary : data.summary}
               </p>
             )}
             {(totalMonthlySavings > 0 || alreadyDueCents > 0) && (
@@ -1339,7 +1365,9 @@ export default function CapitalTimelineClient() {
                       Recommended monthly set-aside
                     </p>
                     <p className="text-xs text-teal-600/80 dark:text-teal-500">
-                      Across all high &amp; medium priority items
+                      {focusedScopeActive && focusedItem
+                        ? `For ${focusedItem.inventoryItem?.name || categoryLabel(focusedItem.category)}`
+                        : 'Across all high & medium priority items'}
                     </p>
                     <p className="mt-1 text-2xl font-bold text-teal-700 dark:text-teal-300">
                       {money(Math.ceil(totalMonthlySavings))}
@@ -1382,9 +1410,10 @@ export default function CapitalTimelineClient() {
                       <span className="font-semibold text-slate-800 dark:text-slate-100">
                         Recommended monthly set-aside
                       </span>{' '}
-                      is the sum of (estimated cost midpoint ÷ months until due) for every high or medium
-                      priority item whose window hasn&apos;t opened yet — a smoothed monthly rate per item,
-                      added together. Low priority items aren&apos;t included.
+                      is the estimated cost midpoint divided by months until due for {focusedScopeActive
+                        ? 'the selected item'
+                        : 'each high or medium priority item whose window has not opened yet'}. Low priority
+                      items aren&apos;t included.
                     </p>
                     <p className="mt-2">
                       <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -1416,7 +1445,7 @@ export default function CapitalTimelineClient() {
           </div>
 
           {/* Visual Timeline Chart */}
-          {items.length > 0 && (
+          {visibleItems.length > 0 && (
             <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38 sm:p-5">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -1460,16 +1489,16 @@ export default function CapitalTimelineClient() {
                 </button>
               </div>
               {showChart && chartView === 'gantt' && (
-                <TimelineChart items={items} horizonYears={horizonYears} />
+                <TimelineChart items={visibleItems} horizonYears={horizonYears} />
               )}
               {showChart && chartView === 'table' && (
-                <YearCostTable items={items} horizonYears={horizonYears} />
+                <YearCostTable items={visibleItems} horizonYears={horizonYears} />
               )}
             </div>
           )}
 
           {/* Bundle Opportunity */}
-          {items.length > 1 && propertyId && (
+          {!focusedScopeActive && items.length > 1 && propertyId && (
             <BundleOpportunityCard items={items} propertyId={propertyId} />
           )}
 
@@ -1486,7 +1515,7 @@ export default function CapitalTimelineClient() {
             </div>
           ) : (
             <div className="space-y-3">
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 const isExpanded = expandedItems.has(item.id);
                 const isContextItem = Boolean(
                   focusedInventoryItemId && item.inventoryItemId === focusedInventoryItemId,

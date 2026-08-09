@@ -1,5 +1,6 @@
 import {
   groupAttentionActions,
+  isAssetLifecycleAction,
   isEnvironmentAction,
   resolveHomeAttentionState,
   splitHomeAttentionEntries,
@@ -62,6 +63,32 @@ describe('environment attention classification', () => {
       id: 'environment:heat-2026-07-27',
       source: { kind: 'MAINTENANCE' },
     } as RankedHomeActionDTO)).toBe(true);
+  });
+});
+
+describe('category-specific home card classification', () => {
+  it('routes only an inventory-backed asset presentation to the lifecycle card', () => {
+    const asset = {
+      id: 'home-capital-timeline-window:item-1',
+      source: { kind: 'SYSTEM' },
+      presentation: {
+        variant: 'ASSET_LIFECYCLE',
+        subject: { kind: 'INVENTORY_ITEM', id: 'dishwasher-1', label: 'Dishwasher' },
+      },
+    } as RankedHomeActionDTO;
+    const seasonal = {
+      id: 'seasonal-checklist:summer',
+      source: { kind: 'MAINTENANCE' },
+      presentation: {
+        variant: 'SEASONAL_CHECKLIST',
+        subject: { kind: 'CHECKLIST', id: 'summer', label: 'Summer checklist' },
+      },
+    } as RankedHomeActionDTO;
+
+    expect(isAssetLifecycleAction(asset)).toBe(true);
+    expect(isAssetLifecycleAction(seasonal)).toBe(false);
+    expect(groupAttentionActions([asset, seasonal]).map((entry) => entry.kind))
+      .toEqual(['ASSET_LIFECYCLE', 'SEASONAL_CHECKLIST']);
   });
 });
 

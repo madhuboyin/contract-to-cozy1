@@ -151,7 +151,7 @@ function EntryCard({
   propertyId: string;
   onChanged: () => Promise<unknown>;
 }) {
-  if (entry.kind === 'ACTION') {
+  if (entry.kind === 'ACTION' || entry.kind === 'ASSET_LIFECYCLE') {
     return <ActionCard action={entry.action} propertyId={propertyId} showSupportingDetails onChanged={onChanged} />;
   }
   if (entry.kind === 'CRITICAL_WEATHER') {

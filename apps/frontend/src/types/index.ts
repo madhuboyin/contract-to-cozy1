@@ -239,10 +239,34 @@ export type ActivationHomeActionDTO = {
     recommendedAction: string;
     expectedOutcome: string;
     presentation?: {
+      variant:
+        | 'ASSET_LIFECYCLE'
+        | 'SEASONAL_CHECKLIST'
+        | 'WEATHER_ALERT'
+        | 'ENVIRONMENT_PREPARATION'
+        | 'COVERAGE_REVIEW'
+        | 'GENERIC_ACTION';
       eyebrow: string | null;
       headline: string;
       summary: string;
+      whyNow: string | null;
       keyFacts: Array<{ label: string; value: string }>;
+      factGroups: Array<{
+        label: string;
+        facts: Array<{
+          key: string;
+          label: string;
+          value: string;
+          kind: 'RECORDED' | 'DERIVED' | 'BENCHMARK' | 'MISSING' | 'STALE' | 'CONFLICTED';
+          source: string;
+          observedAt: string | null;
+        }>;
+      }>;
+      subject: {
+        kind: 'INVENTORY_ITEM' | 'CHECKLIST' | 'PROPERTY' | 'EVENT';
+        id: string;
+        label: string;
+      } | null;
       detailLabel: string;
       group: {
         kind: 'CAPITAL_WINDOW' | 'SEASONAL_CHECKLIST' | 'RELATED_ACTIONS';

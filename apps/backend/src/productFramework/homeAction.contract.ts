@@ -121,13 +121,38 @@ const TradeoffSchema = z.object({
 });
 
 const HomeActionPresentationSchema = z.object({
+  variant: z.enum([
+    'ASSET_LIFECYCLE',
+    'SEASONAL_CHECKLIST',
+    'WEATHER_ALERT',
+    'ENVIRONMENT_PREPARATION',
+    'COVERAGE_REVIEW',
+    'GENERIC_ACTION',
+  ]),
   eyebrow: z.string().trim().min(1).max(80).nullable(),
   headline: z.string().trim().min(1).max(180),
   summary: z.string().trim().min(1).max(320),
+  whyNow: z.string().trim().min(1).max(500).nullable(),
   keyFacts: z.array(z.object({
     label: z.string().trim().min(1).max(80),
     value: z.string().trim().min(1).max(240),
   })).max(4),
+  factGroups: z.array(z.object({
+    label: z.string().trim().min(1).max(80),
+    facts: z.array(z.object({
+      key: z.string().trim().min(1).max(80),
+      label: z.string().trim().min(1).max(80),
+      value: z.string().trim().min(1).max(240),
+      kind: z.enum(['RECORDED', 'DERIVED', 'BENCHMARK', 'MISSING', 'STALE', 'CONFLICTED']),
+      source: z.string().trim().min(1).max(160),
+      observedAt: z.string().datetime().nullable(),
+    })).max(8),
+  })).max(4),
+  subject: z.object({
+    kind: z.enum(['INVENTORY_ITEM', 'CHECKLIST', 'PROPERTY', 'EVENT']),
+    id: z.string().trim().min(1).max(160),
+    label: z.string().trim().min(1).max(180),
+  }).nullable(),
   detailLabel: z.string().trim().min(1).max(80),
   group: z.object({
     kind: z.enum(['CAPITAL_WINDOW', 'SEASONAL_CHECKLIST', 'RELATED_ACTIONS']),

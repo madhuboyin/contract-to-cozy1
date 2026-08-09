@@ -13,6 +13,18 @@ function action(): RankedHomeActionDTO {
     whyItMatters: 'An uncovered repair could create an unexpected cost.',
     recommendedAction: 'Review furnace coverage',
     expectedOutcome: 'A documented coverage decision.',
+    presentation: {
+      variant: 'ASSET_LIFECYCLE',
+      eyebrow: 'Plan ahead',
+      headline: 'Plan ahead for Furnace',
+      summary: 'Review the known history before deciding what to do.',
+      whyNow: 'Furnace is 14 years old and its replacement window starts in 2027.',
+      keyFacts: [],
+      factGroups: [],
+      subject: { kind: 'INVENTORY_ITEM', id: 'furnace-1', label: 'Furnace' },
+      detailLabel: 'Why this estimate?',
+      group: null,
+    },
     timing: { dueAt: null, windowStart: null, windowEnd: null, rationale: 'Before service' },
     evidence: [],
     assumptions: [],
@@ -115,6 +127,8 @@ describe('resolveToolDestinationContext', () => {
     expect(result.recommendationLabel).toBe('Coverage gaps present');
     expect(result.prefill.itemId).toBe('furnace-1');
     expect(result.actionPlanHref).toContain('focusActionId=action-1');
+    expect(result.sourceTitle).toBe('Plan ahead for Furnace');
+    expect(result.sourceSummary).toBe('Furnace is 14 years old and its replacement window starts in 2027.');
   });
 
   it('uses journey scope to resume a tool and flags stale launch context', () => {
