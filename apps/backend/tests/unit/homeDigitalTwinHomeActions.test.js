@@ -111,7 +111,50 @@ test('a HIGH-priority capital timeline item is promoted as a MATERIAL_FINANCIAL 
   assert.equal(action.job, 'MAJOR_MOMENT');
   assert.equal(action.governance.safetyTier, 'MATERIAL_FINANCIAL');
   assert.equal(action.primaryCta.href, '/dashboard/properties/property-1/tools/capital-timeline');
+  assert.equal(action.primaryCta.label, 'Plan replacement');
+  assert.equal(action.presentation.headline, 'Your roof may need a replacement plan');
+  assert.equal(action.presentation.summary.includes('nothing is urgent'), true);
+  assert.equal(action.presentation.detailLabel, 'Why this estimate?');
   assert.match(action.expectedOutcome, /\$9,000.*\$14,000/);
+});
+
+test('groups capital items in the same planning window into one homeowner recommendation', async () => {
+  const sources = baseSources({
+    homeCapitalTimelineAnalysis: {
+      findFirst: async () => ({
+        id: 'analysis-1',
+        computedAt: NOW,
+        items: [
+          {
+            id: 'item-1', category: 'APPLIANCE',
+            windowStart: new Date('2027-01-01'), windowEnd: new Date('2028-01-01'),
+            estimatedCostMinCents: 80000, estimatedCostMaxCents: 250000,
+            confidence: 'HIGH', why: 'Refrigerator age and condition projection.',
+            inventoryItemId: 'fridge-1',
+            inventoryItem: { name: 'Refrigerator', condition: 'UNKNOWN', installedOn: new Date('2000-01-01'), purchasedOn: null },
+          },
+          {
+            id: 'item-2', category: 'APPLIANCE',
+            windowStart: new Date('2027-04-01'), windowEnd: new Date('2028-04-01'),
+            estimatedCostMinCents: 80000, estimatedCostMaxCents: 250000,
+            confidence: 'MEDIUM', why: 'Dishwasher age and fair condition projection.',
+            inventoryItemId: 'dishwasher-1',
+            inventoryItem: { name: 'Dishwasher', condition: 'FAIR', installedOn: new Date('2010-01-01'), purchasedOn: null },
+          },
+        ],
+      }),
+    },
+  });
+
+  const result = await getPromotedHomeActions('property-1', sources);
+  const actions = result.actions.filter((action) => action.id.startsWith('home-capital-timeline-window'));
+
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].presentation.group.itemCount, 2);
+  assert.equal(actions[0].presentation.keyFacts.find((fact) => fact.label === 'Items').value, 'Refrigerator · Dishwasher');
+  assert.equal(actions[0].presentation.keyFacts.find((fact) => fact.label === 'Estimated budget').value, '$1,600–$5,000');
+  assert.equal(actions[0].primaryCta.label, 'Plan replacement budget');
+  assert.equal(actions[0].secondaryCtas[0].label, 'Update item details');
 });
 
 test('no HIGH-priority capital timeline items produce no window action', async () => {

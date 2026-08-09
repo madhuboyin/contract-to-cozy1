@@ -1,6 +1,8 @@
 import {
+  groupAttentionActions,
   isEnvironmentAction,
   resolveHomeAttentionState,
+  splitHomeAttentionEntries,
 } from '@/components/home/UnifiedHomeSurface';
 import type { RankedHomeActionDTO } from '@/types';
 
@@ -60,5 +62,23 @@ describe('environment attention classification', () => {
       id: 'environment:heat-2026-07-27',
       source: { kind: 'MAINTENANCE' },
     } as RankedHomeActionDTO)).toBe(true);
+  });
+});
+
+describe('home card hierarchy', () => {
+  it('keeps urgent work separate from plan-ahead recommendations', () => {
+    const actions = [
+      { id: 'seasonal-checklist:1', priority: 'NOW', source: { kind: 'MAINTENANCE' } },
+      { id: 'capital:1', priority: 'PLAN', source: { kind: 'SYSTEM' } },
+      { id: 'context:1', priority: 'CONSIDER', source: { kind: 'SYSTEM' } },
+      { id: 'coverage:1', priority: 'SOON', source: { kind: 'COVERAGE' } },
+    ] as RankedHomeActionDTO[];
+
+    const split = splitHomeAttentionEntries(groupAttentionActions(actions));
+
+    expect(split.urgent.map((entry) => entry.kind === 'COVERAGE_CORRECTION_GROUP' ? 'coverage-group' : entry.action.id))
+      .toEqual(['seasonal-checklist:1', 'coverage:1']);
+    expect(split.planning.map((entry) => entry.kind === 'COVERAGE_CORRECTION_GROUP' ? 'coverage-group' : entry.action.id))
+      .toEqual(['capital:1', 'context:1']);
   });
 });

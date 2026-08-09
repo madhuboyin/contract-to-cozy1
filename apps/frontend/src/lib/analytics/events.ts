@@ -57,6 +57,9 @@ export type CtcEventName =
   | 'recommendation_shown'
   | 'action_taken'
   | 'action_completed'
+  | 'home_cards_viewed'
+  | 'home_card_detail_opened'
+  | 'home_card_correction_clicked'
   | 'tool_discovery_impression'
   | 'tool_discovery_clicked'
   | 'tool_discovery_catalog_searched'
@@ -223,6 +226,23 @@ export interface CtcEventProperties {
   recommendation_shown: { tool: CtcTool; confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH'; source: string };
   action_taken: { tool: CtcTool; actionType: string; propertyId: string };
   action_completed: { tool: CtcTool; actionType: string; propertyId: string };
+  home_cards_viewed: {
+    propertyId: string;
+    actionIds: string[];
+    urgentCount: number;
+    planCount: number;
+  };
+  home_card_detail_opened: {
+    propertyId: string;
+    actionId: string;
+    priority: string;
+    sourceKind: string;
+  };
+  home_card_correction_clicked: {
+    propertyId: string;
+    actionId: string;
+    sourceKind: string;
+  };
   data_quality_signal: {
     tool: CtcTool;
     propertyId: string;

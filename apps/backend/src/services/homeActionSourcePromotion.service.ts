@@ -680,6 +680,13 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
     const timingSummary = active
       ? `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remain in ${displaySeason.toLowerCase()}.`
       : `${displaySeason} starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}.`;
+    const priorityTasks = pendingItems.filter((item) => item.priority === 'CRITICAL');
+    const seasonalHeadline = criticalCount > 0
+      ? `${criticalCount} ${displaySeason.toLowerCase()} task${criticalCount === 1 ? ' needs' : 's need'} attention`
+      : `${pendingItems.length} ${displaySeason.toLowerCase()} task${pendingItems.length === 1 ? '' : 's'} to plan`;
+    const seasonalSummary = criticalCount > 0
+      ? `You have ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} left, but only ${criticalCount} ${criticalCount === 1 ? 'needs' : 'need'} attention now.`
+      : `A few timely tasks can help keep this home ready for ${displaySeason.toLowerCase()}.`;
 
     return adaptHomeActionSource('MAINTENANCE', {
       id: `seasonal-checklist:${checklist.id}`,
@@ -693,6 +700,20 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       whyItMatters: `${progress}. ${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? '' : 's'} still need attention. ` : ''}${timingSummary}`,
       recommendedAction: `Review the ${displaySeason} seasonal checklist`,
       expectedOutcome: `Complete or deliberately manage the remaining ${displaySeason.toLowerCase()} preparation tasks before the seasonal window closes.`,
+      presentation: {
+        eyebrow: `${displaySeason} checklist`,
+        headline: seasonalHeadline,
+        summary: seasonalSummary,
+        keyFacts: [
+          { label: 'Progress', value: progress },
+          { label: active ? 'Time left' : 'Starts in', value: active ? `${daysRemaining} days` : `${daysUntilStart} days` },
+          ...(priorityTasks.length > 0
+            ? [{ label: 'Start here', value: priorityTasks.slice(0, 2).map((item) => item.title).join(' · ').slice(0, 240).trim() }]
+            : []),
+        ],
+        detailLabel: 'Why these tasks?',
+        group: { kind: 'SEASONAL_CHECKLIST', itemCount: pendingItems.length },
+      },
       timing: {
         dueAt: checklist.seasonEndDate.toISOString(),
         windowStart: checklist.seasonStartDate.toISOString(),
@@ -715,7 +736,9 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       governance: lowConsequenceGovernance('phase2-seasonal-v1'),
       primaryCta: {
         kind: 'REVIEW',
-        label: 'View seasonal checklist',
+        label: criticalCount > 0
+          ? `See ${criticalCount} priority task${criticalCount === 1 ? '' : 's'}`
+          : `View ${displaySeason.toLowerCase()} tasks`,
         href: `/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`,
       },
       secondaryCtas: [],
@@ -1884,6 +1907,17 @@ const CAPITAL_TIMELINE_CATEGORY_LABEL: Record<string, string> = {
 
 const CAPITAL_TIMELINE_CONFIDENCE_SCORE: Record<string, number> = { HIGH: 0.85, MEDIUM: 0.6, LOW: 0.35 };
 
+function capitalWindowLabel(start: Date, end: Date): string {
+  const startYear = start.getFullYear();
+  const endYear = end.getFullYear();
+  return startYear === endYear ? String(startYear) : `${startYear}–${endYear}`;
+}
+
+function homeownerConditionLabel(value: string | undefined): string | null {
+  if (!value || value === 'UNKNOWN') return null;
+  return `${value.charAt(0)}${value.slice(1).toLowerCase()} condition`;
+}
+
 async function loadHomeCapitalTimelineMaterialWindowActions(
   propertyId: string,
   db: HomeActionSourceDb,
@@ -1903,65 +1937,149 @@ async function loadHomeCapitalTimelineMaterialWindowActions(
         select: {
           id: true, category: true, windowStart: true, windowEnd: true,
           estimatedCostMinCents: true, estimatedCostMaxCents: true, confidence: true, why: true,
-          inventoryItemId: true, inventoryItem: { select: { name: true } },
+          inventoryItemId: true,
+          inventoryItem: {
+            select: { name: true, condition: true, installedOn: true, purchasedOn: true },
+          },
         },
       },
     },
   });
   if (!analysis || analysis.items.length === 0) return [];
 
-  return analysis.items.map((item) => {
-    const costRange = item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null
-      ? `$${Math.round(item.estimatedCostMinCents / 100).toLocaleString()}–$${Math.round(item.estimatedCostMaxCents / 100).toLocaleString()}`
+  // Capital items in the same six-month planning window represent one
+  // household decision, not several repetitive homepage obligations.
+  const sixMonthsMs = 6 * 30.44 * 24 * 60 * 60 * 1000;
+  const groups: Array<typeof analysis.items> = [];
+  for (const item of analysis.items) {
+    const current = groups.at(-1);
+    const previous = current?.at(-1);
+    if (current && previous && item.windowStart.getTime() - previous.windowStart.getTime() <= sixMonthsMs) {
+      current.push(item);
+    } else {
+      groups.push([item]);
+    }
+  }
+
+  return groups.map((items, groupIndex) => {
+    const first = items[0];
+    const grouped = items.length > 1;
+    const labels = items.map((item) =>
+      item.inventoryItem?.name ?? CAPITAL_TIMELINE_CATEGORY_LABEL[item.category] ?? 'System');
+    const totalMinCents = items.every((item) => item.estimatedCostMinCents != null)
+      ? items.reduce((sum, item) => sum + (item.estimatedCostMinCents ?? 0), 0)
       : null;
-    const windowLabel = item.windowStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    const categoryLabel = item.inventoryItem?.name ?? CAPITAL_TIMELINE_CATEGORY_LABEL[item.category] ?? 'System';
-    const confidenceScore = CAPITAL_TIMELINE_CONFIDENCE_SCORE[item.confidence] ?? 0.5;
+    const totalMaxCents = items.every((item) => item.estimatedCostMaxCents != null)
+      ? items.reduce((sum, item) => sum + (item.estimatedCostMaxCents ?? 0), 0)
+      : null;
+    const costRange = totalMinCents != null && totalMaxCents != null
+      ? `$${Math.round(totalMinCents / 100).toLocaleString()}–$${Math.round(totalMaxCents / 100).toLocaleString()}`
+      : null;
+    const windowStart = items[0].windowStart;
+    const windowEnd = items.reduce(
+      (latest, item) => item.windowEnd > latest ? item.windowEnd : latest,
+      items[0].windowEnd,
+    );
+    const windowLabel = capitalWindowLabel(windowStart, windowEnd);
+    const categoryLabel = labels[0];
+    const confidenceScore = Math.min(...items.map((item) => CAPITAL_TIMELINE_CONFIDENCE_SCORE[item.confidence] ?? 0.5));
+    const confidenceLabel = confidenceScore >= 0.8 ? 'HIGH' : confidenceScore >= 0.5 ? 'MEDIUM' : 'LOW';
     const governance = materialFinancialGovernance('home-capital-timeline-window-v1');
     const decisionContract = guidanceDecisionContract(governance);
+    const conditions = [...new Set(items
+      .map((item) => homeownerConditionLabel(item.inventoryItem?.condition))
+      .filter((condition): condition is string => Boolean(condition)))];
+    const installYears = [...new Set(items
+      .map((item) => item.inventoryItem?.installedOn ?? item.inventoryItem?.purchasedOn)
+      .filter((date): date is Date => Boolean(date))
+      .map((date) => String(date.getFullYear())))];
+    const groupedItemList = labels.length === 2
+      ? `${labels[0]} and ${labels[1]}`
+      : `${labels.slice(0, -1).join(', ')}, and ${labels.at(-1)}`;
+    const specificGroupedHeadline = `Plan ahead for ${groupedItemList}`;
+    const headline = (grouped
+      ? specificGroupedHeadline.length <= 180 ? specificGroupedHeadline : `Plan ahead for ${items.length} home items`
+      : `Your ${categoryLabel.toLowerCase()} may need a replacement plan`).slice(0, 180).trim();
+    const summary = grouped
+      ? `These items share a similar estimated replacement window. If they are working well, nothing is urgent—this is a good time to prepare.`
+      : `A replacement window is approaching. If it is working well, nothing is urgent—this is a good time to prepare.`;
+    const keyFacts = [
+      ...(grouped ? [{ label: 'Items', value: labels.join(' · ').slice(0, 240).trim() }] : []),
+      { label: 'Planning window', value: windowLabel },
+      ...(costRange ? [{ label: 'Estimated budget', value: costRange }] : []),
+      ...(conditions.length > 0
+        ? [{ label: grouped ? 'Recorded condition' : 'Condition', value: conditions.join(' · ') }]
+        : installYears.length > 0
+          ? [{ label: grouped ? 'Recorded install years' : 'Installed', value: installYears.join(' · ') }]
+          : []),
+    ].slice(0, 4);
+    const actionId = grouped
+      ? `home-capital-timeline-window-group:${analysis.id}:${groupIndex}`
+      : `home-capital-timeline-window:${first.id}`;
+    const technicalExplanation = items
+      .map((item, index) => `${labels[index]}: ${item.why}`)
+      .join(' ')
+      .slice(0, 1200)
+      .trim();
 
     return adaptHomeActionSource('SYSTEM', {
-      id: `home-capital-timeline-window:${item.id}`,
+      id: actionId,
       propertyId,
-      lineageId: `home-capital-timeline-window:${item.id}`,
-      sourceEntityId: item.id,
+      lineageId: actionId,
+      sourceEntityId: grouped ? analysis.id : first.id,
       sourceVersion: analysis.computedAt.toISOString(),
       job: 'MAJOR_MOMENT',
       state: 'OPEN',
       priority: 'PLAN',
-      signal: `${categoryLabel} replacement window is approaching (${windowLabel}).`,
-      whyItMatters: item.why,
-      recommendedAction: `Review the capital timeline for ${categoryLabel}`,
+      signal: grouped
+        ? `${items.length} home items share an approaching replacement window (${windowLabel}).`
+        : `${categoryLabel} replacement window is approaching (${windowLabel}).`,
+      whyItMatters: technicalExplanation,
+      recommendedAction: grouped ? `Plan for ${items.length} upcoming replacements` : `Plan for ${categoryLabel}`,
       expectedOutcome: costRange
-        ? `A planning range (${costRange}) to budget or reserve against before this window arrives.`
+        ? `${grouped ? 'A combined' : 'A'} planning range (${costRange}) to budget or reserve against before this window arrives.`
         : 'A planning window to budget or reserve against before it arrives.',
+      presentation: {
+        eyebrow: grouped ? 'Coordinated plan' : null,
+        headline,
+        summary,
+        keyFacts,
+        detailLabel: 'Why this estimate?',
+        group: { kind: 'CAPITAL_WINDOW', itemCount: items.length },
+      },
       timing: {
         dueAt: null,
-        windowStart: item.windowStart.toISOString(),
-        windowEnd: item.windowEnd.toISOString(),
+        windowStart: windowStart.toISOString(),
+        windowEnd: windowEnd.toISOString(),
         rationale: "Reflects the capital timeline's predicted replacement window, not a fixed deadline.",
       },
-      evidence: [{
+      evidence: items.map((item, index) => ({
         id: item.id,
         type: 'SYSTEM_DERIVATION',
-        label: 'Capital Timeline projection',
+        label: `${labels[index]} capital projection`,
         source: 'Home Capital Timeline',
         observedAt: analysis.computedAt.toISOString(),
         freshness: 'CURRENT',
-        confidence: confidenceScore,
-      }],
+        confidence: CAPITAL_TIMELINE_CONFIDENCE_SCORE[item.confidence] ?? 0.5,
+      })),
       ...decisionContract,
-      confidence: { score: confidenceScore, label: item.confidence as 'LOW' | 'MEDIUM' | 'HIGH', missing: [] },
+      confidence: { score: confidenceScore, label: confidenceLabel, missing: [] },
       governance,
       primaryCta: {
         kind: 'REVIEW',
-        label: 'Review capital timeline',
-        href: item.inventoryItemId
-          ? `/dashboard/properties/${propertyId}/tools/capital-timeline?itemId=${encodeURIComponent(item.inventoryItemId)}`
+        label: grouped ? 'Plan replacement budget' : 'Plan replacement',
+        href: !grouped && first.inventoryItemId
+          ? `/dashboard/properties/${propertyId}/tools/capital-timeline?itemId=${encodeURIComponent(first.inventoryItemId)}`
           : `/dashboard/properties/${propertyId}/tools/capital-timeline`,
       },
-      secondaryCtas: [],
-      feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT'],
+      secondaryCtas: [{
+        kind: 'CORRECT_FACT',
+        label: 'Update item details',
+        href: !grouped && first.inventoryItemId
+          ? `/dashboard/properties/${propertyId}/inventory?tab=items&openItemId=${encodeURIComponent(first.inventoryItemId)}`
+          : `/dashboard/properties/${propertyId}/inventory?tab=items`,
+      }],
+      feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT', 'CORRECT_FACT'],
       relatedJourneyId: null,
       createdAt: analysis.computedAt.toISOString(),
       lastEvaluatedAt: analysis.computedAt.toISOString(),

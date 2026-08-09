@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
+  ChevronDown,
   Clock3,
   CloudLightning,
   CloudSun,
@@ -16,6 +17,7 @@ import {
   Home,
   MessageCircle,
   Milestone,
+  PencilLine,
   Radar,
   Settings2,
   ShieldCheck,
@@ -36,6 +38,7 @@ import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSecti
 import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigation';
 import { buildHomeEventRadarHref } from '@/features/homeEventRadar/radarDeepLinks';
 import { WorkItemManageDrawer } from '@/components/home/WorkItemManageDrawer';
+import { track } from '@/lib/analytics/events';
 
 /**
  * Home Operations Item #13 (§ launch-review gap): last carried by the
@@ -87,6 +90,12 @@ function priorityTone(priority: RankedHomeActionDTO['priority']) {
   if (priority === 'SOON') return 'border-amber-200 bg-amber-50 text-amber-700';
   if (priority === 'PLAN') return 'border-sky-200 bg-sky-50 text-sky-700';
   return 'border-slate-200 bg-slate-50 text-slate-600';
+}
+
+function priorityLabel(priority: RankedHomeActionDTO['priority']) {
+  if (priority === 'PLAN') return 'Plan ahead';
+  if (priority === 'CONSIDER') return 'Good to know';
+  return priority.charAt(0) + priority.slice(1).toLowerCase();
 }
 
 export function coverageCorrectionSubject(action: RankedHomeActionDTO): string | null {
@@ -360,20 +369,32 @@ export function SeasonalChecklistActionCard({
   propertyId: string;
   showSupportingDetails?: boolean;
 }) {
+  const [detailsOpen, setDetailsOpen] = React.useState(showSupportingDetails);
+  const presentation = action.presentation;
   return (
     <article className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline" className={priorityTone(action.priority)}>{action.priority}</Badge>
+        <Badge variant="outline" className={priorityTone(action.priority)}>{priorityLabel(action.priority)}</Badge>
         <span className="flex items-center gap-1 text-xs font-semibold text-emerald-800">
-          <CalendarDays className="h-4 w-4" />Seasonal checklist
+          <CalendarDays className="h-4 w-4" />{presentation?.eyebrow ?? 'Seasonal checklist'}
         </span>
-        <span className="text-xs text-slate-500">Priority #{action.ranking.rank}</span>
       </div>
-      <h3 className="mt-3 text-base font-semibold text-slate-950">{action.signal}</h3>
-      <p className="mt-1 text-sm leading-6 text-slate-600">{action.whyItMatters}</p>
-      {showSupportingDetails && (
+      <h3 className="mt-3 text-lg font-semibold tracking-tight text-slate-950">{presentation?.headline ?? action.signal}</h3>
+      <p className="mt-1 text-sm leading-6 text-slate-600">{presentation?.summary ?? action.whyItMatters}</p>
+      {presentation && presentation.keyFacts.length > 0 && (
+        <dl className="mt-3 grid gap-2 sm:grid-cols-3">
+          {presentation.keyFacts.map((fact) => (
+            <div key={`${fact.label}:${fact.value}`} className="rounded-xl bg-white/80 px-3 py-2.5">
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-emerald-800">{fact.label}</dt>
+              <dd className="mt-0.5 text-sm font-medium text-slate-800">{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {(detailsOpen || showSupportingDetails) && (
         <div className="mt-3 border-t border-emerald-100 pt-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Remaining tasks</p>
+          <p className="text-sm leading-6 text-slate-600">{action.whyItMatters}</p>
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-emerald-800">Remaining tasks</p>
           <ul className="mt-2 grid gap-2 sm:grid-cols-2">
             {action.evidence.map((evidence) => (
               <li key={evidence.id} className="rounded-lg bg-white/80 px-3 py-2 text-sm text-slate-700">{evidence.label}</li>
@@ -381,12 +402,35 @@ export function SeasonalChecklistActionCard({
           </ul>
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap gap-2">
         <Button asChild size="sm" className="rounded-full">
           <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
-            View seasonal checklist<ArrowRight className="ml-1 h-3.5 w-3.5" />
+            {action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" />
           </Link>
         </Button>
+        {presentation && !showSupportingDetails && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="rounded-full text-slate-500"
+            aria-expanded={detailsOpen}
+            onClick={() => {
+              const nextOpen = !detailsOpen;
+              setDetailsOpen(nextOpen);
+              if (nextOpen) {
+                track('home_card_detail_opened', {
+                  propertyId,
+                  actionId: action.id,
+                  priority: action.priority,
+                  sourceKind: action.source.kind,
+                });
+              }
+            }}
+          >
+            {presentation.detailLabel}
+            <ChevronDown className={`ml-1 h-3.5 w-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+          </Button>
+        )}
       </div>
     </article>
   );
@@ -478,6 +522,7 @@ export function ActionCard({
   const { toast } = useToast();
   const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
   const [manageOpen, setManageOpen] = React.useState(false);
+  const [detailsOpen, setDetailsOpen] = React.useState(showSupportingDetails);
 
   const execute = async (command: HomeActionCommand) => {
     setPending(command);
@@ -510,27 +555,59 @@ export function ActionCard({
     }
   };
 
-  const correctionHref = action.secondaryCtas.find((cta) => /correct|context/i.test(cta.label))?.href;
+  const correctionCta = action.secondaryCtas.find((cta) =>
+    cta.kind === 'CORRECT_FACT' || /correct|context|update.*detail/i.test(cta.label));
   const primaryHref = resolveHomeActionPrimaryHref(action, propertyId);
   const canDefer = action.governance.safetyTier !== 'SAFETY_EMERGENCY' &&
     (action.feedbackControls.includes('DEFER') || action.feedbackControls.includes('SNOOZE'));
+  const presentation = action.presentation;
+  const headline = presentation?.headline ?? action.recommendedAction;
+  const summary = presentation?.summary ?? action.expectedOutcome;
+
+  const toggleDetails = () => {
+    const nextOpen = !detailsOpen;
+    setDetailsOpen(nextOpen);
+    if (nextOpen) {
+      track('home_card_detail_opened', {
+        propertyId,
+        actionId: action.id,
+        priority: action.priority,
+        sourceKind: action.source.kind,
+      });
+    }
+  };
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className={priorityTone(action.priority)}>{action.priority}</Badge>
+            <Badge variant="outline" className={priorityTone(action.priority)}>{priorityLabel(action.priority)}</Badge>
+            {presentation?.eyebrow && <span className="text-xs font-medium text-slate-500">{presentation.eyebrow}</span>}
             {action.workItem?.acceptanceState === 'ACCEPTED' && (
               <Badge variant="outline" className="rounded-full border-teal-200 bg-teal-50 text-teal-700">In your plan</Badge>
             )}
           </div>
-          <h3 className="mt-3 text-base font-semibold text-slate-950">{action.recommendedAction}</h3>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{action.whyItMatters}</p>
+          <h3 className="mt-3 text-lg font-semibold tracking-tight text-slate-950">{headline}</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{summary}</p>
+          {presentation && presentation.keyFacts.length > 0 && (
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {presentation.keyFacts.map((fact) => (
+                <div key={`${fact.label}:${fact.value}`} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{fact.label}</dt>
+                  <dd className="mt-0.5 text-sm font-medium text-slate-800">{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </div>
       </div>
-      {showSupportingDetails && (
+      {(detailsOpen || showSupportingDetails) && (
         <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 md:grid-cols-2">
+          <div className="rounded-xl bg-slate-50 p-3 md:col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why you&apos;re seeing this</p>
+            <p className="mt-1 text-sm leading-6 text-slate-700">{action.whyItMatters}</p>
+          </div>
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Expected outcome</p>
             <p className="mt-1 text-sm leading-6 text-slate-700">{action.expectedOutcome}</p>
@@ -574,12 +651,12 @@ export function ActionCard({
         )}
         {canDefer && (
           <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute(action.feedbackControls.includes('DEFER') ? 'DEFER' : 'SNOOZE')}>
-            <Clock3 className="mr-1 h-3.5 w-3.5" />Remind in 7 days
+            <Clock3 className="mr-1 h-3.5 w-3.5" />{action.priority === 'PLAN' ? 'Remind me later' : 'Remind in 7 days'}
           </Button>
         )}
         {action.feedbackControls.includes('NOT_RELEVANT') && (
           <Button size="sm" variant="ghost" className="rounded-full text-slate-500" disabled={Boolean(pending)} onClick={() => execute('NOT_RELEVANT')}>
-            Not relevant
+            This doesn&apos;t apply
           </Button>
         )}
         {action.feedbackControls.includes('NO_MORTGAGE') && (
@@ -587,9 +664,30 @@ export function ActionCard({
             I don&apos;t have a mortgage
           </Button>
         )}
-        {correctionHref && (
+        {correctionCta && (
           <Button asChild size="sm" variant="ghost" className="rounded-full text-slate-500">
-            <Link href={correctionHref}>Correct facts</Link>
+            <Link
+              href={correctionCta.href}
+              onClick={() => track('home_card_correction_clicked', {
+                propertyId,
+                actionId: action.id,
+                sourceKind: action.source.kind,
+              })}
+            >
+              <PencilLine className="mr-1 h-3.5 w-3.5" />{correctionCta.label}
+            </Link>
+          </Button>
+        )}
+        {!showSupportingDetails && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="rounded-full text-slate-500"
+            aria-expanded={detailsOpen}
+            onClick={toggleDetails}
+          >
+            {presentation?.detailLabel ?? 'Why this?'}
+            <ChevronDown className={`ml-1 h-3.5 w-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
           </Button>
         )}
         {action.workItem && (
@@ -608,6 +706,54 @@ export function ActionCard({
         />
       )}
     </article>
+  );
+}
+
+function attentionEntryPriority(entry: AttentionEntry): RankedHomeActionDTO['priority'] {
+  return entry.kind === 'COVERAGE_CORRECTION_GROUP'
+    ? entry.actions[0].priority
+    : entry.action.priority;
+}
+
+export function splitHomeAttentionEntries(entries: AttentionEntry[], limit = 3) {
+  return {
+    urgent: entries
+      .filter((entry) => ['NOW', 'SOON'].includes(attentionEntryPriority(entry)))
+      .slice(0, limit),
+    planning: entries
+      .filter((entry) => ['PLAN', 'CONSIDER'].includes(attentionEntryPriority(entry)))
+      .slice(0, limit),
+  };
+}
+
+function AttentionEntryCard({
+  entry,
+  propertyId,
+  onChanged,
+}: {
+  entry: AttentionEntry;
+  propertyId: string;
+  onChanged: () => Promise<unknown>;
+}) {
+  if (entry.kind === 'ACTION') {
+    return <ActionCard action={entry.action} propertyId={propertyId} onChanged={onChanged} />;
+  }
+  if (entry.kind === 'CRITICAL_WEATHER') {
+    return <CriticalWeatherActionCard action={entry.action} propertyId={propertyId} />;
+  }
+  if (entry.kind === 'ENVIRONMENT') {
+    return <EnvironmentActionCard action={entry.action} propertyId={propertyId} onChanged={onChanged} />;
+  }
+  if (entry.kind === 'SEASONAL_CHECKLIST') {
+    return <SeasonalChecklistActionCard action={entry.action} propertyId={propertyId} />;
+  }
+  return (
+    <CoverageCorrectionGroupCard
+      actions={entry.actions}
+      subjects={entry.subjects}
+      propertyId={propertyId}
+      onChanged={onChanged}
+    />
   );
 }
 
@@ -631,6 +777,17 @@ export function UnifiedHomeSurface({
     }
   }, [markPostLoginReady, query.isLoading]);
 
+  React.useEffect(() => {
+    const actions = query.data?.attention.actions;
+    if (!actions) return;
+    track('home_cards_viewed', {
+      propertyId,
+      actionIds: actions.slice(0, 6).map((action) => action.id),
+      urgentCount: actions.filter((action) => action.priority === 'NOW' || action.priority === 'SOON').length,
+      planCount: actions.filter((action) => action.priority === 'PLAN' || action.priority === 'CONSIDER').length,
+    });
+  }, [propertyId, query.dataUpdatedAt, query.data?.attention.actions]);
+
   if (query.isLoading) {
     return <div className="py-16 text-center text-sm text-slate-500">Preparing your Home…</div>;
   }
@@ -645,7 +802,7 @@ export function UnifiedHomeSurface({
 
   const home = query.data;
   const attentionEntries = groupAttentionActions(home.attention.actions);
-  const visibleAttentionEntries = attentionEntries.slice(0, 5);
+  const { urgent: visibleAttentionEntries, planning: visiblePlanEntries } = splitHomeAttentionEntries(attentionEntries);
   const attentionState = resolveHomeAttentionState(
     home.attention.actions.length,
     home.propertyContext,
@@ -778,24 +935,40 @@ export function UnifiedHomeSurface({
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
             No action currently needs your attention.
           </div>
-        ) : visibleAttentionEntries.map((entry) => entry.kind === 'ACTION' ? (
-          <ActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} onChanged={() => query.refetch()} />
-        ) : entry.kind === 'CRITICAL_WEATHER' ? (
-          <CriticalWeatherActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} />
-        ) : entry.kind === 'ENVIRONMENT' ? (
-          <EnvironmentActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} onChanged={() => query.refetch()} />
-        ) : entry.kind === 'SEASONAL_CHECKLIST' ? (
-          <SeasonalChecklistActionCard key={entry.action.id} action={entry.action} propertyId={propertyId} />
-        ) : (
-          <CoverageCorrectionGroupCard
-            key={`coverage-group:${entry.actions.map((action) => action.id).join(':')}`}
-            actions={entry.actions}
-            subjects={entry.subjects}
+        ) : visibleAttentionEntries.length > 0 ? visibleAttentionEntries.map((entry) => (
+          <AttentionEntryCard
+            key={entry.kind === 'COVERAGE_CORRECTION_GROUP'
+              ? `coverage-group:${entry.actions.map((action) => action.id).join(':')}`
+              : entry.action.id}
+            entry={entry}
             propertyId={propertyId}
             onChanged={() => query.refetch()}
           />
-        ))}
+        )) : (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-800">
+            Nothing urgent needs your attention right now.
+          </div>
+        )}
       </section>
+
+      {visiblePlanEntries.length > 0 && (
+        <section aria-labelledby="plan-ahead-heading" className="space-y-3">
+          <div>
+            <h2 id="plan-ahead-heading" className="text-xl font-semibold text-slate-950">Plan ahead</h2>
+            <p className="text-sm text-slate-500">Useful preparation for upcoming costs and decisions—nothing here is urgent.</p>
+          </div>
+          {visiblePlanEntries.map((entry) => (
+            <AttentionEntryCard
+              key={entry.kind === 'COVERAGE_CORRECTION_GROUP'
+                ? `plan-coverage-group:${entry.actions.map((action) => action.id).join(':')}`
+                : `plan:${entry.action.id}`}
+              entry={entry}
+              propertyId={propertyId}
+              onChanged={() => query.refetch()}
+            />
+          ))}
+        </section>
+      )}
 
       <HomeEventRadarTopMatchCard propertyId={propertyId} />
 

@@ -120,6 +120,21 @@ const TradeoffSchema = z.object({
   summary: z.string().trim().min(1).max(500),
 });
 
+const HomeActionPresentationSchema = z.object({
+  eyebrow: z.string().trim().min(1).max(80).nullable(),
+  headline: z.string().trim().min(1).max(180),
+  summary: z.string().trim().min(1).max(320),
+  keyFacts: z.array(z.object({
+    label: z.string().trim().min(1).max(80),
+    value: z.string().trim().min(1).max(240),
+  })).max(4),
+  detailLabel: z.string().trim().min(1).max(80),
+  group: z.object({
+    kind: z.enum(['CAPITAL_WINDOW', 'SEASONAL_CHECKLIST', 'RELATED_ACTIONS']),
+    itemCount: z.number().int().min(1).max(50),
+  }).nullable(),
+});
+
 export const HomeActionSchema = z.object({
   id: z.string().trim().min(1).max(160),
   propertyId: z.string().trim().min(1).max(120),
@@ -136,6 +151,10 @@ export const HomeActionSchema = z.object({
   whyItMatters: z.string().trim().min(1).max(1200),
   recommendedAction: z.string().trim().min(1).max(1000),
   expectedOutcome: z.string().trim().min(1).max(1000),
+  // Homepage-ready copy stays separate from the complete evidence-backed
+  // explanation. This is optional while source adapters migrate, so the
+  // canonical action contract remains backward compatible.
+  presentation: HomeActionPresentationSchema.optional(),
   timing: z.object({
     dueAt: z.string().datetime().nullable(),
     windowStart: z.string().datetime().nullable(),

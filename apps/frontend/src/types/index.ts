@@ -238,6 +238,17 @@ export type ActivationHomeActionDTO = {
     whyItMatters: string;
     recommendedAction: string;
     expectedOutcome: string;
+    presentation?: {
+      eyebrow: string | null;
+      headline: string;
+      summary: string;
+      keyFacts: Array<{ label: string; value: string }>;
+      detailLabel: string;
+      group: {
+        kind: 'CAPITAL_WINDOW' | 'SEASONAL_CHECKLIST' | 'RELATED_ACTIONS';
+        itemCount: number;
+      } | null;
+    };
     timing: {
       dueAt: string | null;
       windowStart: string | null;
@@ -248,7 +259,7 @@ export type ActivationHomeActionDTO = {
     assumptions: Array<{ key: string; label: string; value: string; editable: boolean }>;
     confidence: { score: number | null; label: 'LOW' | 'MEDIUM' | 'HIGH'; missing: string[] };
     primaryCta: { label: string; href: string };
-    secondaryCtas: Array<{ label: string; href: string }>;
+    secondaryCtas: Array<{ kind?: string; label: string; href: string }>;
 };
 
 export type ActivationFirstValueDTO = {
