@@ -532,6 +532,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null; loading: boolean };
   const router = useRouter();
   const pathname = usePathname();
+  const isPropertyRecordOverview = /^\/dashboard\/properties\/[0-9a-f-]{36}\/?$/i.test(pathname || '');
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const { showWarning: showIdleWarning, secondsRemaining: idleSecondsRemaining, stayActive: stayIdleActive } = useIdleTimeout();
@@ -773,7 +774,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           <main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8">
             <PullToRefresh onRefresh={handleRefresh} disabled={!enablePullToRefresh}>
               <div
-                className="mx-auto w-full max-w-[1180px] px-4 py-5 md:px-8 md:py-8"
+                className={cn(
+                  'mx-auto w-full px-4 py-5 md:px-8 md:py-8',
+                  isPropertyRecordOverview ? 'max-w-[1520px]' : 'max-w-[1180px]',
+                )}
                 key={refreshKey}
               >
                 <DashboardBreadcrumbs />

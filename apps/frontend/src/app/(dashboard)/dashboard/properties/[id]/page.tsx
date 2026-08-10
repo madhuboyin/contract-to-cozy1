@@ -18,6 +18,7 @@ import type {
 } from '@/types';
 import PropertyRecordOverview, {
   calculatePropertyRecordCompleteness,
+  calculatePropertyRecordOverviewCompleteness,
 } from './components/PropertyRecordOverview';
 import PropertyRecordTemplate from './components/PropertyRecordTemplate';
 
@@ -42,10 +43,37 @@ function formatUpdatedAt(value: string): string {
 
 function propertyDisplayName(name: string | null, address: string): string {
   const normalized = name?.trim().toLowerCase();
-  if (!normalized || ['rental', 'home', 'my home', 'primary home'].includes(normalized)) {
+  if (!normalized || ['main', 'primary', 'rental', 'home', 'my home', 'primary home'].includes(normalized)) {
     return address || 'Property';
   }
   return name!.trim();
+}
+
+function resolvePrimaryRecordAction(
+  bootstrap: PropertyDashboardBootstrap,
+): { label: string; href: string } {
+  const { property, recordOverview } = bootstrap;
+  const editHref = `/dashboard/properties/${property.id}/edit`;
+  if (property.bedrooms == null || property.bathrooms == null) {
+    return { label: 'Add layout', href: `${editHref}#field-bedrooms` };
+  }
+  if (!property.yearBuilt) return { label: 'Add year built', href: editHref };
+  if (!property.propertySize) return { label: 'Add living area', href: editHref };
+  if ((recordOverview.sections.inventory.data?.totalCount ?? 0) === 0) {
+    return { label: 'Add first system', href: `/dashboard/properties/${property.id}/inventory` };
+  }
+  if ((recordOverview.sections.rooms.data?.count ?? 0) === 0) {
+    return { label: 'Add first room', href: `/dashboard/properties/${property.id}/rooms` };
+  }
+  if ((recordOverview.sections.documents.data?.totalCount ?? 0) === 0) {
+    return { label: 'Upload first document', href: `/dashboard/documents?propertyId=${encodeURIComponent(property.id)}` };
+  }
+  const nextFact = Object.values(recordOverview.context.snapshot?.facts ?? {})
+    .find((fact) => fact.state !== 'KNOWN' && fact.correctionPath?.startsWith('/dashboard/'));
+  return {
+    label: nextFact ? `Review ${nextFact.key.split('.').pop()?.replace(/([A-Z])/g, ' $1').toLowerCase() ?? 'details'}` : 'Review property record',
+    href: nextFact?.correctionPath?.replaceAll(':propertyId', encodeURIComponent(property.id)) ?? editHref,
+  };
 }
 
 function appendQueryParam(href: string, key: string, value: string): string {
@@ -81,9 +109,10 @@ export default function PropertyDetailPage() {
   const recordOverview = bootstrapQuery.data?.recordOverview ?? null;
 
   const recordCompleteness = useMemo(
-    () => recordOverview?.context.completeness?.completenessPercent
-      ?? (property ? calculatePropertyRecordCompleteness(property, onboarding) : 0),
-    [onboarding, property, recordOverview?.context.completeness?.completenessPercent],
+    () => property && recordOverview
+      ? calculatePropertyRecordOverviewCompleteness(property, recordOverview)
+      : property ? calculatePropertyRecordCompleteness(property, onboarding) : 0,
+    [onboarding, property, recordOverview],
   );
 
   useEffect(() => {
@@ -105,10 +134,10 @@ export default function PropertyDetailPage() {
 
   if (bootstrapQuery.isLoading) {
     return (
-      <div aria-busy="true" aria-label="Loading property record" role="status" className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div aria-busy="true" aria-label="Loading property record" role="status" className="w-full space-y-4">
         <span className="sr-only">Loading property record</span>
         <div className="h-64 animate-pulse rounded-2xl border border-slate-200 bg-slate-100 motion-reduce:animate-none" />
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="h-80 animate-pulse rounded-2xl bg-slate-100" />
           <div className="h-72 animate-pulse rounded-2xl bg-slate-100" />
         </div>
@@ -172,12 +201,10 @@ export default function PropertyDetailPage() {
     { label: 'Documents', href: `/dashboard/documents?propertyId=${encodeURIComponent(property.id)}&backTo=${backTo}` },
     { label: 'History', href: `/dashboard/properties/${property.id}/timeline?backTo=${backTo}` },
   ];
-  const firstImprovementHref = Object.values(recordOverview?.context.snapshot?.facts ?? {})
-    .find((fact) => fact.state !== 'KNOWN' && fact.correctionPath?.startsWith('/dashboard/'))
-    ?.correctionPath?.replaceAll(':propertyId', encodeURIComponent(property.id));
+  const primaryRecordAction = resolvePrimaryRecordAction(bootstrapQuery.data!);
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+    <div className="w-full">
       {FEATURE_FLAGS.PROPERTY_NARRATIVE_ENGINE && narrativeRun?.status === 'ACTIVE' ? (
         <NarrativeRevealOverlay
           run={narrativeRun}
@@ -202,7 +229,8 @@ export default function PropertyDetailPage() {
         completeness={recordCompleteness}
         lastUpdated={formatUpdatedAt(property.updatedAt)}
         editHref={`/dashboard/properties/${property.id}/edit`}
-        addHref={appendQueryParam(firstImprovementHref ?? `/dashboard/properties/${property.id}/edit`, 'recordAction', 'add')}
+        addHref={appendQueryParam(primaryRecordAction.href, 'recordAction', 'add')}
+        addLabel={primaryRecordAction.label}
         navigation={navigation}
       >
         {FEATURE_FLAGS.PROPERTY_RECORD_EXPERIENCE && recordOverview ? (

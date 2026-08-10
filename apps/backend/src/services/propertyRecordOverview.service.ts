@@ -115,7 +115,7 @@ export async function getPropertyRecordOverview(propertyId: string, userId: stri
     .map((item) => item.updatedAt)
     .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
   const verifiedDocuments = documentRows.filter((document) => document.verificationStatus === 'VERIFIED').length;
-  const linkedDocuments = documentRows.filter((document) => Boolean(document.inventoryItemId)).length;
+  const linkedDocuments = documentRows.filter((document) => Boolean(document.propertyId || document.inventoryItemId)).length;
   const latestDocument = documentRows[0] ?? null;
   const knownFactCount = context.data
     ? Object.values(context.data.facts).filter((fact) => fact.state === 'KNOWN').length

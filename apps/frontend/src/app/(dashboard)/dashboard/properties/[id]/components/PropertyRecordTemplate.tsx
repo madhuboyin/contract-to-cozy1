@@ -29,6 +29,7 @@ interface PropertyRecordTemplateProps {
   lastUpdated: string;
   editHref: string;
   addHref: string;
+  addLabel: string;
   navigation: PropertyRecordNavigationItem[];
   children: ReactNode;
 }
@@ -42,6 +43,7 @@ export default function PropertyRecordTemplate({
   lastUpdated,
   editHref,
   addHref,
+  addLabel,
   navigation,
   children,
 }: PropertyRecordTemplateProps) {
@@ -91,7 +93,7 @@ export default function PropertyRecordTemplate({
                   onClick={() => track('property_record_edit_started', { propertyId, source: 'HEADER_ADD' })}
                 >
                   <FilePlus2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Add to record
+                  {addLabel}
                 </Link>
               </Button>
             </div>
@@ -100,7 +102,7 @@ export default function PropertyRecordTemplate({
           <div className="mt-4 grid gap-3 rounded-xl border border-slate-200/80 bg-white/90 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="min-w-0">
               <div className="flex items-center justify-between gap-3 text-xs">
-                <span className="font-semibold text-slate-700">Record completeness</span>
+                <span className="font-semibold text-slate-700">Record completeness · 4 categories</span>
                 <span className="font-semibold text-emerald-700">{completeness}%</span>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">

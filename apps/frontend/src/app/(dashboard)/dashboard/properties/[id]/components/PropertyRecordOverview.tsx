@@ -37,6 +37,7 @@ interface RecordCategory {
   href: string;
   tone: RecordCategoryTone;
   issues: RecordQualityIssue[];
+  nextActionLabel?: string;
 }
 
 interface RecordQualityIssue {
@@ -194,6 +195,69 @@ export function calculatePropertyRecordCompleteness(
     (onboarding.steps.filter((step) => step.complete).length / onboarding.steps.length) * 100,
   );
   return Math.round(factScore * 0.7 + onboardingScore * 0.3);
+}
+
+export type PropertyRecordCategoryPercents = {
+  profile: number;
+  systems: number;
+  spaces: number;
+  documents: number;
+};
+
+export function calculatePropertyRecordCategoryPercents(
+  property: Property,
+  overview: PropertyRecordOverviewDTO,
+): PropertyRecordCategoryPercents {
+  const roomsCount = overview.sections.rooms.data?.count ?? 0;
+  const householdCount = overview.sections.household.data?.totalCount ?? 0;
+  const contextCompleteness = overview.context.completeness;
+  const profileFallback = percent([
+    property.address, property.city, property.state, property.zipCode,
+    property.dwellingType, property.ownershipForm, property.propertyUse,
+    property.occupancyStatus, property.propertySize, property.yearBuilt,
+    property.bedrooms, property.bathrooms,
+  ]);
+  const systemsFallback = percent([
+    property.heatingType, property.coolingType, property.waterHeaterType,
+    property.roofType, property.hvacInstallYear, property.waterHeaterInstallYear,
+    property.roofReplacementYear, property.foundationType, property.sidingType,
+  ]);
+  const spacesFallback = percent([
+    property.bedrooms, property.bathrooms, property.occupantsCount,
+    roomsCount > 0 ? roomsCount : null,
+    householdCount > 0 ? householdCount : null,
+  ]);
+  const documents = overview.sections.documents.data;
+  const documentsPercent = documents && documents.totalCount > 0
+    ? Math.round(((documents.linkedCount + documents.verifiedCount) / (documents.totalCount * 2)) * 100)
+    : 0;
+
+  return {
+    profile: aggregateScopeCompleteness(
+      contextCompleteness,
+      ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY'],
+      profileFallback,
+    ),
+    systems: aggregateScopeCompleteness(
+      contextCompleteness,
+      ['SYSTEMS', 'SAFETY', 'INVENTORY'],
+      systemsFallback,
+    ),
+    spaces: aggregateScopeCompleteness(
+      contextCompleteness,
+      ['ROOMS', 'OPTIONAL_HOUSEHOLD'],
+      spacesFallback,
+    ),
+    documents: documentsPercent,
+  };
+}
+
+export function calculatePropertyRecordOverviewCompleteness(
+  property: Property,
+  overview: PropertyRecordOverviewDTO,
+): number {
+  const values = Object.values(calculatePropertyRecordCategoryPercents(property, overview));
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
 function RecordPanel({
@@ -396,10 +460,14 @@ function RecordCompleteness({ propertyId, categories }: { propertyId: string; ca
                     ) : null}
                   </div>
                 </details>
-              ) : (
+              ) : category.percent === 100 ? (
                 <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200/70 pt-2 text-[11px] font-medium text-emerald-700">
                   <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                   No missing, stale, or conflicted facts in this category
+                </div>
+              ) : (
+                <div className="mt-2 border-t border-slate-200/70 pt-2 text-[11px] font-medium text-amber-700">
+                  {category.nextActionLabel ?? `Continue improving ${category.label.toLowerCase()}`}
                 </div>
               )}
             </div>
@@ -413,7 +481,7 @@ function RecordCompleteness({ propertyId, categories }: { propertyId: string; ca
           href={nextImprovement?.href ?? nextCategory.href}
           className="no-brand-style mt-4 flex min-h-[44px] items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber-900"
         >
-          <span>{nextImprovement ? `${nextImprovement.state === 'MISSING' ? 'Add' : 'Review'} ${nextImprovement.label.toLowerCase()}` : `Improve ${nextCategory.label.toLowerCase()}`}</span>
+          <span>{nextImprovement ? `${nextImprovement.state === 'MISSING' ? 'Add' : 'Review'} ${nextImprovement.label.toLowerCase()}` : nextCategory.nextActionLabel ?? `Improve ${nextCategory.label.toLowerCase()}`}</span>
           <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       ) : null}
@@ -676,61 +744,16 @@ export default function PropertyRecordOverview({
   const systemItemCount = overview.sections.inventory.data?.majorSystemCount ?? 0;
   const inventoryWithDocuments = overview.sections.inventory.data?.withDocumentCount ?? 0;
 
-  const profileFallbackPercent = percent([
-    property.address,
-    property.city,
-    property.state,
-    property.zipCode,
-    property.dwellingType,
-    property.ownershipForm,
-    property.propertyUse,
-    property.occupancyStatus,
-    property.propertySize,
-    property.yearBuilt,
-    property.bedrooms,
-    property.bathrooms,
-  ]);
-  const systemsFallbackPercent = percent([
-    property.heatingType,
-    property.coolingType,
-    property.waterHeaterType,
-    property.roofType,
-    property.hvacInstallYear,
-    property.waterHeaterInstallYear,
-    property.roofReplacementYear,
-    property.foundationType,
-    property.sidingType,
-  ]);
-  const spacesFallbackPercent = percent([
-    property.bedrooms,
-    property.bathrooms,
-    property.occupantsCount,
-    rooms.length > 0 ? rooms.length : null,
-    householdCount > 0 ? householdCount : null,
-  ]);
   const documentData = overview.sections.documents.data;
-  const documentsPercent = documentData
-    ? Math.round(((documentData.linkedCount + documentData.verifiedCount) / Math.max(2, documentData.totalCount * 2)) * 100)
-    : 0;
+  const categoryPercents = calculatePropertyRecordCategoryPercents(property, overview);
 
   const propertyDetailScopes: PropertyContextScope[] = ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY'];
   const systemsScopes: PropertyContextScope[] = ['SYSTEMS', 'SAFETY', 'INVENTORY'];
   const roomsScopes: PropertyContextScope[] = ['ROOMS', 'OPTIONAL_HOUSEHOLD'];
-  const profilePercent = aggregateScopeCompleteness(
-    contextCompleteness,
-    propertyDetailScopes,
-    profileFallbackPercent,
-  );
-  const systemsPercent = aggregateScopeCompleteness(
-    contextCompleteness,
-    systemsScopes,
-    systemsFallbackPercent,
-  );
-  const spacesPercent = aggregateScopeCompleteness(
-    contextCompleteness,
-    roomsScopes,
-    spacesFallbackPercent,
-  );
+  const profilePercent = categoryPercents.profile;
+  const systemsPercent = categoryPercents.systems;
+  const spacesPercent = categoryPercents.spaces;
+  const documentsPercent = categoryPercents.documents;
   const detailsHref = `/dashboard/properties/${propertyId}/edit`;
   const systemsHref = withBackTo(`/dashboard/properties/${propertyId}/inventory`);
   const roomsHref = withBackTo(`/dashboard/properties/${propertyId}/rooms`);
@@ -804,6 +827,7 @@ export default function PropertyRecordOverview({
       href: documentsHref,
       tone: categoryTone(documentsPercent),
       issues: [],
+      nextActionLabel: documentsCount === 0 ? 'Upload first document' : 'Review document evidence',
     },
   ];
 
@@ -947,7 +971,7 @@ export default function PropertyRecordOverview({
 
   return (
     <div className="space-y-5">
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="order-2 space-y-4 lg:order-1 lg:row-span-2">
           <RecordPanel
             id="property-details"
@@ -1060,21 +1084,6 @@ export default function PropertyRecordOverview({
             ) : null}
           </RecordPanel>
 
-          <RecordPanel
-            id="property-ownership-protection"
-            title="Ownership & protection"
-            description="Responsibility, household access, and the records that help protect this home."
-            href={`/dashboard/protect?propertyId=${encodeURIComponent(propertyId)}&backTo=${encodeURIComponent(propertyPath)}`}
-            actionLabel="Review protection"
-            icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}
-          >
-            <dl className="grid gap-x-6 sm:grid-cols-2">
-              <FactRow label="Ownership" value={formatEnum(property.ownershipForm)} fact={contextSnapshot?.facts['responsibility.ownershipForm']} propertyId={propertyId} />
-              <FactRow label="Your access" value={formatEnum(overview.accessRole)} />
-              <FactRow label="Household members" value={householdQuery.isError ? 'Unavailable' : String(householdCount)} missing={householdQuery.isError} />
-              <FactRow label="Verified documents" value={documentsQuery.isError ? 'Unavailable' : String(documentData?.verifiedCount ?? 0)} missing={documentsQuery.isError} />
-            </dl>
-          </RecordPanel>
         </div>
 
         <div className="contents">
