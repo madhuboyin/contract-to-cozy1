@@ -17,7 +17,6 @@ import {
   Home,
   MessageCircle,
   Milestone,
-  MoreHorizontal,
   PencilLine,
   Radar,
   Settings2,
@@ -866,7 +865,6 @@ export function ActionCard({
     || action.feedbackControls.includes('NOT_RELEVANT')
     || action.feedbackControls.includes('NO_MORTGAGE')
     || Boolean(correctionCta)
-    || !showSupportingDetails
     || Boolean(action.workItem);
   const visibleKeyFacts = presentation?.keyFacts.slice(0, detailsOpen || showSupportingDetails ? undefined : 4) ?? [];
 
@@ -972,23 +970,29 @@ export function ActionCard({
             <Clock3 className="mr-1 h-3.5 w-3.5" />{action.priority === 'PLAN' ? 'Remind me later' : 'Remind in 7 days'}
           </Button>
         )}
+        {!showSupportingDetails && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="rounded-full text-slate-600 hover:text-slate-900"
+            aria-expanded={detailsOpen}
+            onClick={toggleDetails}
+          >
+            {detailsOpen ? 'Hide supporting details' : presentation?.detailLabel ?? 'Why this?'}
+            <ChevronDown className={`ml-1 h-3.5 w-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+          </Button>
+        )}
         {hasOverflowActions && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="rounded-full text-slate-500" aria-label="More action options">
-                <MoreHorizontal className="h-4 w-4" />
+              <Button size="sm" variant="outline" className="rounded-full bg-white text-slate-600" aria-label="More action options">
+                More<ChevronDown className="ml-1 h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
               {action.feedbackControls.includes('ACKNOWLEDGE') && (
                 <DropdownMenuItem disabled={Boolean(pending)} onSelect={() => void execute('ACKNOWLEDGE')}>
                   <Check />Acknowledge
-                </DropdownMenuItem>
-              )}
-              {!showSupportingDetails && (
-                <DropdownMenuItem onSelect={toggleDetails}>
-                  <ChevronDown className={detailsOpen ? 'rotate-180' : ''} />
-                  {detailsOpen ? 'Hide supporting details' : presentation?.detailLabel ?? 'Why this?'}
                 </DropdownMenuItem>
               )}
               {correctionCta && (

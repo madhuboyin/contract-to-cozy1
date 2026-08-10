@@ -79,7 +79,7 @@ Implemented August 10, 2026:
 - Humanized Home Digital Twin headlines, field labels, currency, ratios, condition bands, confidence bands, estimate state, and provenance before they reach the Home renderer.
 - Made Home-fact reasons explain the homeowner decision affected, such as replacement timing or how much to set aside.
 - Reworked Sale Readiness cards so the collapsed summary reflects the homeowner’s answer, industry benchmarks identify their own source in supporting evidence, cost ranges are explicitly rough estimates, and the primary CTA remains short.
-- Limited collapsed generic action cards to four at-a-glance facts and moved acknowledgement, detail, correction, applicability, and management controls into an accessible overflow menu. The primary action and reminder or completion control remain visible.
+- Limited collapsed generic action cards to four at-a-glance facts. The primary action, reminder or completion control, and category-specific evidence disclosure remain visible. A bordered, labeled **More** menu contains acknowledgement, correction, applicability, and management controls; an unlabeled ellipsis is not used as the only affordance.
 - Replaced **Good to know** with **Worth reviewing** for `CONSIDER` actions.
 - Combined empty Decisions and Active Major Moment cards into one compact status row; populated states retain their complete presentations.
 - Standardized **Open actions**, qualified zero coverage gaps as **Known coverage gaps** based on current records, and avoided presenting incomplete records as certainty.

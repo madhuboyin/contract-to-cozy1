@@ -212,7 +212,7 @@ Carry the following into the destination:
 
 ### User control
 
-Retain correction, reminder, acknowledgement, and “doesn’t apply” controls without implying that the underlying work is complete. Keep the primary action and reminder or completion control visible; place acknowledgement, supporting detail, correction, applicability, and work-management controls in a clearly labeled overflow menu when showing them inline would create a toolbar of competing actions.
+Retain correction, reminder, acknowledgement, and “doesn’t apply” controls without implying that the underlying work is complete. Keep the primary action, reminder or completion control, and supporting-evidence disclosure visible. Place acknowledgement, correction, applicability, and work-management controls in a clearly labeled **More** menu when showing them inline would create a toolbar of competing actions. Do not use an unlabeled ellipsis as the only visual affordance.
 
 > **Home eligibility gate:** If the subject and reason cannot be stated specifically, the recommendation should not compete for attention on Home. Route it to setup, request named missing facts, or fail closed.
 
@@ -288,7 +288,7 @@ Delivered August 10, 2026:
 - Rewrote Home-fact headlines and reasons around the homeowner decision, for example **Confirm your HVAC system’s expected lifespan and condition** and the effect on replacement timing or how much to set aside.
 - Separated Sale Readiness self-report evidence from named industry guidance. The collapsed summary uses the homeowner’s answer; benchmark evidence and its source remain available in supporting details.
 - Shortened sale-prep and Home-fact primary CTAs, labeled cost ranges as rough estimates, and limited collapsed cards to four at-a-glance facts.
-- Kept one dominant primary action, a visible reminder or completion action where applicable, and a compact overflow menu for acknowledgement, evidence, correction, applicability, and management controls.
+- Kept one dominant primary action, a visible reminder or completion action where applicable, and a visible category-specific evidence disclosure such as **Why this estimate?** A bordered **More** button with a chevron contains acknowledgement, correction, applicability, and management controls.
 - Replaced **Good to know** with **Worth reviewing** for `CONSIDER` actions.
 - Combined empty Decisions and Active Major Moment cards into one compact status row while preserving the full cards when either area contains work.
 - Standardized **Open actions**, changed a zero count to **Known coverage gaps**, and qualified it with **Based on current records** so incomplete records do not imply certainty.
@@ -381,7 +381,7 @@ Measure:
 - A collapsed generic action card shows no more than four at-a-glance facts.
 - Raw field names, enum units, ratios, and system-derived source labels are not exposed as homeowner copy.
 - Self-reported Sale Readiness evidence and third-party benchmark evidence identify their respective sources separately.
-- Secondary controls remain available from an accessible overflow menu without competing with the primary action.
+- Supporting evidence has a visible labeled disclosure; remaining secondary controls are available from an accessible, labeled **More** menu without competing with the primary action.
 - The CTA opens the exact entity or missing field and preserves launch context.
 - Closed, cancelled, verified, expired, stale, inapplicable, and superseded sources do not resurface.
 - Category tests prove that asset fields do not leak into seasonal or weather cards, and vice versa.
