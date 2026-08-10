@@ -17,6 +17,7 @@ import {
   Home,
   MessageCircle,
   Milestone,
+  MoreHorizontal,
   PencilLine,
   Radar,
   Settings2,
@@ -33,6 +34,12 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/components/ui/use-toast';
 import { UnifiedHomeToolsSection } from '@/components/home/UnifiedHomeToolsSection';
 import { resolveHomeActionPrimaryHref } from '@/lib/navigation/homeActionNavigation';
@@ -94,8 +101,13 @@ function priorityTone(priority: RankedHomeActionDTO['priority']) {
 
 function priorityLabel(priority: RankedHomeActionDTO['priority']) {
   if (priority === 'PLAN') return 'Plan ahead';
-  if (priority === 'CONSIDER') return 'Good to know';
+  if (priority === 'CONSIDER') return 'Worth reviewing';
   return priority.charAt(0) + priority.slice(1).toLowerCase();
+}
+
+function homeownerPropertyName(name: string, address: string): string {
+  if (name.trim() && !/^(main|primary|home)$/i.test(name.trim())) return name.trim();
+  return address.split(',')[0]?.trim() || 'Your home';
 }
 
 export function coverageCorrectionSubject(action: RankedHomeActionDTO): string | null {
@@ -135,8 +147,11 @@ export function homeActionProvenance(action: RankedHomeActionDTO): {
     ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(observed)
     : null;
   const stale = evidence.freshness === 'STALE';
+  const source = /^(?:system[ _-]?derived|system derivation|default|inferred)$/i.test(evidence.source.trim())
+    ? 'Home Record estimate'
+    : evidence.source;
   return {
-    source: evidence.source,
+    source,
     observedLabel,
     freshness: stale ? 'May be outdated' : evidence.freshness === 'CURRENT' ? 'Current evidence' : 'Freshness unknown',
     stale,
@@ -494,7 +509,7 @@ function HomeFirstValueInsightCard({ insight }: { insight: HomeFirstValueInsight
           <p className="mt-2 text-sm leading-6 text-slate-600">{insight.detail}</p>
           <p className="mt-2 text-xs text-slate-500">Source: {insight.source}</p>
           <Button asChild size="sm" variant="outline" className="mt-4 rounded-full bg-white">
-            <Link href={insight.href}>View full home outlook<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+            <Link href={insight.href}>{watch ? 'Review outlook details' : 'View full home outlook'}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
           </Button>
         </div>
       </div>
@@ -847,6 +862,13 @@ export function ActionCard({
   const summary = assetLifecycle
     ? presentation?.whyNow ?? presentation?.summary ?? action.expectedOutcome
     : presentation?.summary ?? action.expectedOutcome;
+  const hasOverflowActions = action.feedbackControls.includes('ACKNOWLEDGE')
+    || action.feedbackControls.includes('NOT_RELEVANT')
+    || action.feedbackControls.includes('NO_MORTGAGE')
+    || Boolean(correctionCta)
+    || !showSupportingDetails
+    || Boolean(action.workItem);
+  const visibleKeyFacts = presentation?.keyFacts.slice(0, detailsOpen || showSupportingDetails ? undefined : 4) ?? [];
 
   const toggleDetails = () => {
     const nextOpen = !detailsOpen;
@@ -881,9 +903,9 @@ export function ActionCard({
               {` · ${provenance.freshness}`}
             </p>
           )}
-          {presentation && presentation.keyFacts.length > 0 && (
+          {visibleKeyFacts.length > 0 && (
             <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {presentation.keyFacts.map((fact) => (
+              {visibleKeyFacts.map((fact) => (
                 <div key={`${fact.label}:${fact.value}`} className="rounded-xl bg-slate-50 px-3 py-2.5">
                   <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{fact.label}</dt>
                   <dd className="mt-0.5 text-sm font-medium text-slate-800">{fact.value}</dd>
@@ -945,56 +967,61 @@ export function ActionCard({
             <Check className="mr-1 h-3.5 w-3.5" />Mark done
           </Button>
         )}
-        {!action.feedbackControls.includes('COMPLETE') && action.feedbackControls.includes('ACKNOWLEDGE') && (
-          <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute('ACKNOWLEDGE')}>
-            <Check className="mr-1 h-3.5 w-3.5" />Acknowledge
-          </Button>
-        )}
         {canDefer && (
           <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute(action.feedbackControls.includes('DEFER') ? 'DEFER' : 'SNOOZE')}>
             <Clock3 className="mr-1 h-3.5 w-3.5" />{action.priority === 'PLAN' ? 'Remind me later' : 'Remind in 7 days'}
           </Button>
         )}
-        {action.feedbackControls.includes('NOT_RELEVANT') && (
-          <Button size="sm" variant="ghost" className="rounded-full text-slate-500" disabled={Boolean(pending)} onClick={() => execute('NOT_RELEVANT')}>
-            This doesn&apos;t apply
-          </Button>
-        )}
-        {action.feedbackControls.includes('NO_MORTGAGE') && (
-          <Button size="sm" variant="ghost" className="rounded-full text-slate-500" disabled={Boolean(pending)} onClick={() => execute('NO_MORTGAGE')}>
-            I don&apos;t have a mortgage
-          </Button>
-        )}
-        {correctionCta && (
-          <Button asChild size="sm" variant="ghost" className="rounded-full text-slate-500">
-            <Link
-              href={correctionCta.href}
-              onClick={() => track('home_card_correction_clicked', {
-                propertyId,
-                actionId: action.id,
-                sourceKind: action.source.kind,
-              })}
-            >
-              <PencilLine className="mr-1 h-3.5 w-3.5" />{correctionCta.label}
-            </Link>
-          </Button>
-        )}
-        {!showSupportingDetails && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="rounded-full text-slate-500"
-            aria-expanded={detailsOpen}
-            onClick={toggleDetails}
-          >
-            {presentation?.detailLabel ?? 'Why this?'}
-            <ChevronDown className={`ml-1 h-3.5 w-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
-          </Button>
-        )}
-        {action.workItem && (
-          <Button size="sm" variant="ghost" className="rounded-full text-slate-500" onClick={() => setManageOpen(true)}>
-            <Settings2 className="mr-1 h-3.5 w-3.5" />Manage
-          </Button>
+        {hasOverflowActions && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="ghost" className="rounded-full text-slate-500" aria-label="More action options">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              {action.feedbackControls.includes('ACKNOWLEDGE') && (
+                <DropdownMenuItem disabled={Boolean(pending)} onSelect={() => void execute('ACKNOWLEDGE')}>
+                  <Check />Acknowledge
+                </DropdownMenuItem>
+              )}
+              {!showSupportingDetails && (
+                <DropdownMenuItem onSelect={toggleDetails}>
+                  <ChevronDown className={detailsOpen ? 'rotate-180' : ''} />
+                  {detailsOpen ? 'Hide supporting details' : presentation?.detailLabel ?? 'Why this?'}
+                </DropdownMenuItem>
+              )}
+              {correctionCta && (
+                <DropdownMenuItem asChild>
+                  <Link
+                    href={correctionCta.href}
+                    onClick={() => track('home_card_correction_clicked', {
+                      propertyId,
+                      actionId: action.id,
+                      sourceKind: action.source.kind,
+                    })}
+                  >
+                    <PencilLine />{correctionCta.label}
+                  </Link>
+                </DropdownMenuItem>
+              )}
+              {action.feedbackControls.includes('NOT_RELEVANT') && (
+                <DropdownMenuItem disabled={Boolean(pending)} onSelect={() => void execute('NOT_RELEVANT')}>
+                  This doesn&apos;t apply
+                </DropdownMenuItem>
+              )}
+              {action.feedbackControls.includes('NO_MORTGAGE') && (
+                <DropdownMenuItem disabled={Boolean(pending)} onSelect={() => void execute('NO_MORTGAGE')}>
+                  I don&apos;t have a mortgage
+                </DropdownMenuItem>
+              )}
+              {action.workItem && (
+                <DropdownMenuItem onSelect={() => setManageOpen(true)}>
+                  <Settings2 />Manage action
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
       {action.workItem && (
@@ -1119,7 +1146,9 @@ export function UnifiedHomeSurface({
     ? 'Review conflicting details'
     : home.propertyContext.staleFactCount > 0
       ? 'Refresh home details'
-      : 'Continue home setup';
+      : home.propertyContext.missingFactCount > 0
+        ? `Add ${home.propertyContext.missingFactCount} missing home fact${home.propertyContext.missingFactCount === 1 ? '' : 's'}`
+        : 'Continue home setup';
   const openAsk = () => {
     window.dispatchEvent(new CustomEvent('cozy-chat-open'));
   };
@@ -1144,27 +1173,27 @@ export function UnifiedHomeSurface({
       href: home.glance.systemsHref,
     },
     {
-      label: 'Coverage gaps',
+      label: home.glance.coverageGapCount === 0 ? 'Known coverage gaps' : 'Coverage gaps',
       value: home.glance.coverageGapCount,
-      detail: home.glance.coverageGapCount > 0 ? 'Review uncovered items' : 'Review coverage records',
+      detail: home.glance.coverageGapCount > 0 ? 'Review uncovered items' : 'Based on current records',
       href: home.glance.coverageHref,
     },
     {
-      label: 'Prioritized actions',
+      label: 'Open actions',
       value: home.glance.openWorkCount,
-      detail: 'Review your ranked action plan',
+      detail: 'Review your action plan',
       href: home.glance.workHref,
     },
   ];
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
-      <header className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white to-teal-50/50 p-6 shadow-sm md:p-8">
+      <header className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white to-teal-50/50 p-6 shadow-sm">
         <div className="flex items-start gap-3">
           <div className="rounded-2xl bg-teal-100 p-3 text-teal-700"><Home className="h-5 w-5" /></div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Home</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">{home.property.name}</h1>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">{homeownerPropertyName(home.property.name, home.property.address)}</h1>
             <p className="mt-1 text-sm text-slate-500">{home.property.address}</p>
           </div>
         </div>
@@ -1178,7 +1207,7 @@ export function UnifiedHomeSurface({
         <div className="flex items-end justify-between gap-4">
           <div>
             <h2 id="attention-heading" className="text-xl font-semibold text-slate-950">
-              {attentionState === 'OUTLOOK' ? 'Your first home outlook' : 'What needs attention'}
+              {attentionState === 'OUTLOOK' ? 'Your home outlook' : 'What needs attention'}
             </h2>
             <p className="text-sm text-slate-500">
               {attentionState === 'OUTLOOK'
@@ -1187,8 +1216,8 @@ export function UnifiedHomeSurface({
             </p>
           </div>
           {home.attention.totalCount > 0 && (
-            <Button asChild variant="ghost" size="sm" className="rounded-full text-teal-700 hover:text-teal-800">
-              <Link href={home.attention.planHref}>View full action plan</Link>
+            <Button asChild variant="outline" size="sm" className="rounded-full bg-white text-teal-700 hover:text-teal-800">
+              <Link href={home.attention.planHref}>Review open actions<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
             </Button>
           )}
         </div>
@@ -1273,27 +1302,34 @@ export function UnifiedHomeSurface({
 
       <HomeEventRadarTopMatchCard propertyId={propertyId} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="rounded-[24px] border-slate-200 shadow-sm">
-          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="h-5 w-5 text-teal-600" />Decisions to make</CardTitle><CardDescription>Material choices that need a deliberate answer.</CardDescription></CardHeader>
-          <CardContent className="space-y-3">
-            {home.decisions.length === 0 ? <p className="text-sm text-slate-500">No material decision is waiting right now.</p> : home.decisions.map((decision) => (
-              <Link key={decision.id} href={decision.primaryCta.href} className="block rounded-xl border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50/40">
-                <p className="font-semibold text-slate-900">{decision.recommendedAction}</p><p className="mt-1 text-xs text-slate-500">{decision.expectedOutcome}</p>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
+      {home.decisions.length === 0 && !home.activeMajorMoment ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+          <ShieldCheck className="h-5 w-5 shrink-0 text-teal-600" />
+          <p><span className="font-medium text-slate-900">No decisions need your attention.</span> No major project or guided plan is active.</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="rounded-[24px] border-slate-200 shadow-sm">
+            <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="h-5 w-5 text-teal-600" />Decisions to make</CardTitle><CardDescription>Choices that need your answer.</CardDescription></CardHeader>
+            <CardContent className="space-y-3">
+              {home.decisions.length === 0 ? <p className="text-sm text-slate-500">No decisions need your attention.</p> : home.decisions.map((decision) => (
+                <Link key={decision.id} href={decision.primaryCta.href} className="block rounded-xl border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50/40">
+                  <p className="font-semibold text-slate-900">{decision.recommendedAction}</p><p className="mt-1 text-xs text-slate-500">{decision.expectedOutcome}</p>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
 
-        <Card className="rounded-[24px] border-slate-200 shadow-sm">
-          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Milestone className="h-5 w-5 text-indigo-600" />Active major moment</CardTitle><CardDescription>Current stage, blocker, and next milestone.</CardDescription></CardHeader>
-          <CardContent>
-            {home.activeMajorMoment ? (
-              <div className="space-y-3"><Badge variant="outline">{home.activeMajorMoment.stage.replace(/_/g, ' ')}</Badge><h3 className="font-semibold text-slate-950">{home.activeMajorMoment.title}</h3>{home.activeMajorMoment.context && <p className="text-sm text-slate-600">{home.activeMajorMoment.context}</p>}{home.activeMajorMoment.blocker && <p className="flex gap-2 text-sm text-amber-700"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{home.activeMajorMoment.blocker}</p>}<p className="text-sm text-slate-600">Next: {home.activeMajorMoment.nextMilestone}</p><Button asChild size="sm" variant="outline" className="rounded-full"><Link href={home.activeMajorMoment.href}>Continue moment</Link></Button></div>
-            ) : <p className="text-sm text-slate-500">No major project or guided journey is active.</p>}
-          </CardContent>
-        </Card>
-      </div>
+          <Card className="rounded-[24px] border-slate-200 shadow-sm">
+            <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Milestone className="h-5 w-5 text-indigo-600" />Active major moment</CardTitle><CardDescription>Your current project or guided plan.</CardDescription></CardHeader>
+            <CardContent>
+              {home.activeMajorMoment ? (
+                <div className="space-y-3"><Badge variant="outline">{home.activeMajorMoment.stage.replace(/_/g, ' ')}</Badge><h3 className="font-semibold text-slate-950">{home.activeMajorMoment.title}</h3>{home.activeMajorMoment.context && <p className="text-sm text-slate-600">{home.activeMajorMoment.context}</p>}{home.activeMajorMoment.blocker && <p className="flex gap-2 text-sm text-amber-700"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{home.activeMajorMoment.blocker}</p>}<p className="text-sm text-slate-600">Next: {home.activeMajorMoment.nextMilestone}</p><Button asChild size="sm" variant="outline" className="rounded-full"><Link href={home.activeMajorMoment.href}>Continue</Link></Button></div>
+              ) : <p className="text-sm text-slate-500">No major project or guided plan is active.</p>}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Card className="rounded-[24px] border-slate-200 shadow-sm">
         <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5 text-sky-600" />Home at a glance</CardTitle><CardDescription>Systems, coverage, work, and recent changes supporting your next action.</CardDescription></CardHeader>

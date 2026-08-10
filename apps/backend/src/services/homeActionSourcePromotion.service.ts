@@ -1512,7 +1512,18 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
       ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(targetDate)
       : null;
     const category = String(item.category).toLowerCase().replace(/_/g, ' ');
-    const whyNow = `${stage.reason}. ${sentence(item.detail ?? `This ${category} item may affect ${stage.outcome}`)}`;
+    const [rawSubject, ...assessmentParts] = item.title.split(':');
+    const subject = rawSubject.trim() || item.title;
+    const assessment = assessmentParts.join(':').trim();
+    const actionVerb = /needs?|work|poor|not ready/i.test(assessment) ? 'improve' : 'review';
+    const homeownerHeadline = `${stage.headlinePrefix}: ${actionVerb} ${subject.toLowerCase()}`;
+    const personalSummary = isSelfReported
+      ? `${stage.reason}. You marked ${subject.toLowerCase()} as “${assessment || 'needs review'}.” Addressing it can support ${stage.outcome}.`
+      : `${stage.reason}. This ${category} item may affect ${stage.outcome}.`;
+    const whyNow = item.detail
+      ? `${personalSummary} General guidance: ${sentence(item.detail)}`
+      : personalSummary;
+    const catalogSourceMatch = item.detail?.match(/\((NAR|Zonda)[^)]+\)/i)?.[0]?.slice(1, -1) ?? null;
     const actionId = `sale-prep:${item.id}`;
     const focusParams = new URLSearchParams({
       focusItemId: item.id,
@@ -1538,23 +1549,23 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
       priority: 'CONSIDER',
       signal: item.title,
       whyItMatters: whyNow,
-      recommendedAction: `${stage.headlinePrefix}: ${item.title}`,
+      recommendedAction: homeownerHeadline,
       expectedOutcome: `A documented decision that protects ${stage.outcome}.`,
       presentation: {
         variant: 'SALE_PREPARATION',
         eyebrow: stage.eyebrow,
-        headline: `${stage.headlinePrefix}: ${item.title}`.slice(0, 180),
-        summary: whyNow.slice(0, 320),
+        headline: homeownerHeadline.slice(0, 180),
+        summary: personalSummary.slice(0, 320),
         whyNow: whyNow.slice(0, 500),
         keyFacts: [
           { label: 'Sale stage', value: String(saleCase.status).toLowerCase().replace(/_/g, ' ') },
           ...(dateLabel ? [{ label: saleCase.status === 'PREPARING' ? 'Target list date' : 'Target close date', value: dateLabel }] : []),
-          { label: 'Item', value: item.title.slice(0, 240) },
+          { label: assessment ? 'Current assessment' : 'Item', value: (assessment || subject).slice(0, 240) },
           { label: 'Source', value: isSelfReported ? 'Your Sale Readiness answers' : 'General sale-prep guidance' },
           { label: 'Category', value: category },
           { label: 'Impact', value: stage.outcome.slice(0, 240) },
           ...(item.dueAt ? [{ label: 'Due', value: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(item.dueAt) }] : []),
-          ...(costRange ? [{ label: 'Estimated cost', value: costRange }] : []),
+          ...(costRange ? [{ label: 'Rough cost estimate', value: costRange }] : []),
         ],
         factGroups: [],
         subject: { kind: 'SALE_READINESS_ITEM', id: item.id, label: item.title.slice(0, 180) },
@@ -1568,14 +1579,24 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
         rationale: stage.timing,
       },
       evidence: [{
-        id: item.id,
-        type: 'SYSTEM_DERIVATION',
-        label: item.title,
-        source: isSelfReported ? 'Your Sale Case answers' : 'Sale Readiness Checklist (general guidance)',
-        observedAt: item.updatedAt.toISOString(),
-        freshness: 'CURRENT',
-        confidence,
-      }],
+          id: item.id,
+          type: 'SYSTEM_DERIVATION',
+          label: assessment ? `${subject}: ${assessment}` : subject,
+          source: isSelfReported ? 'Your Sale Readiness answers' : 'Sale Readiness Checklist',
+          observedAt: item.updatedAt.toISOString(),
+          freshness: 'CURRENT',
+          confidence,
+        },
+        ...(catalogSourceMatch ? [{
+          id: `${item.id}:industry-guidance`,
+          type: 'SYSTEM_DERIVATION' as const,
+          label: 'General sale-preparation benchmark',
+          source: catalogSourceMatch,
+          observedAt: item.updatedAt.toISOString(),
+          freshness: 'CURRENT' as const,
+          confidence: 0.8,
+        }] : []),
+      ],
       ...guidanceDecisionContract(governance),
       confidence: {
         score: confidence,
@@ -1585,7 +1606,7 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
       governance,
       primaryCta: {
         kind: 'REVIEW',
-        label: `Review ${item.title}`.slice(0, 120),
+        label: 'Review sale-prep item',
         href: `/dashboard/properties/${propertyId}/tools/sale-case?${focusParams.toString()}`,
       },
       secondaryCtas: [],
@@ -2172,23 +2193,73 @@ function humanizeFactKey(value: unknown): string {
     .toLowerCase();
 }
 
+function homeownerFactLabel(fieldName: string): string {
+  if (/useful.?life|lifespan/i.test(fieldName)) return 'expected lifespan';
+  if (/condition.?score/i.test(fieldName)) return 'condition';
+  if (/annual.?operating.?cost/i.test(fieldName)) return 'estimated annual operating cost';
+  if (/confidence.?score/i.test(fieldName)) return 'confidence';
+  return humanizeFactKey(fieldName);
+}
+
+function homeownerComponentLabel(label: string): string {
+  if (/^hvac(?:\s+system)?$/i.test(label.trim())) return 'HVAC system';
+  return label.trim();
+}
+
 function affectedDecisionForFact(fieldName: string): string {
-  if (/install|age|life|condition|failure/i.test(fieldName)) return 'replacement timing forecast';
-  if (/cost|price|value/i.test(fieldName)) return 'capital budget forecast';
-  if (/warranty|insurance|coverage/i.test(fieldName)) return 'coverage decision';
-  if (/energy|operating|maintenance/i.test(fieldName)) return 'ownership-cost forecast';
-  return 'Home planning forecast';
+  if (/install|age|life|condition|failure/i.test(fieldName)) return 'replacement timing';
+  if (/cost|price|value|energy|operating|maintenance/i.test(fieldName)) return 'how much to set aside';
+  if (/warranty|insurance|coverage/i.test(fieldName)) return 'coverage decisions';
+  return 'future home planning';
+}
+
+function joinNatural(values: string[]): string {
+  if (values.length < 2) return values[0] ?? '';
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(', ')}, and ${values[values.length - 1]}`;
+}
+
+function scoreLabel(value: number, kind: 'condition' | 'confidence'): string {
+  if (kind === 'condition') {
+    if (value >= 0.75) return 'Good';
+    if (value >= 0.4) return 'Fair';
+    return 'Needs attention';
+  }
+  if (value >= 0.8) return 'High confidence';
+  if (value >= 0.5) return 'Medium confidence';
+  return 'Low confidence';
 }
 
 function projectedFactValue(fact: {
+  fieldName: string;
   valueText: string | null;
   valueNumeric: number | null;
   unit: string | null;
   factState: string;
 }): string {
   if (fact.valueText?.trim()) return fact.valueText.trim();
-  if (fact.valueNumeric != null) return `${fact.valueNumeric}${fact.unit ? ` ${fact.unit}` : ''}`;
+  if (fact.valueNumeric != null) {
+    const unit = String(fact.unit ?? '').toUpperCase();
+    if (unit === 'USD_PER_YEAR') {
+      return `${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(fact.valueNumeric)}/year`;
+    }
+    if (/condition.?score/i.test(fact.fieldName)) {
+      return `${scoreLabel(fact.valueNumeric, 'condition')} · ${Math.round(fact.valueNumeric * 100)}%`;
+    }
+    if (/confidence.?score/i.test(fact.fieldName)) {
+      return `${scoreLabel(fact.valueNumeric, 'confidence')} · ${Math.round(fact.valueNumeric * 100)}%`;
+    }
+    if (unit === 'YEARS') return `${fact.valueNumeric} years`;
+    if (unit === 'RATIO') return `${Math.round(fact.valueNumeric * 100)}%`;
+    return `${fact.valueNumeric}${fact.unit ? ` ${humanizeFactKey(fact.unit)}` : ''}`;
+  }
   return fact.factState === 'CONFLICTED' ? 'Conflicting records' : 'Needs confirmation';
+}
+
+function homeownerFactSource(sourceRecordType: string | null, sourceType: string): string {
+  const source = sourceRecordType ?? sourceType;
+  if (/system|default|derived|inferred/i.test(source)) return 'Home Record estimate';
+  return String(source).toLowerCase().replace(/[_-]+/g, ' ');
 }
 
 async function loadHomeDigitalTwinFactReviewActions(
@@ -2243,10 +2314,15 @@ async function loadHomeDigitalTwinFactReviewActions(
 
   const conflictCount = correctableFacts.filter((f) => f.factState === 'CONFLICTED').length;
   const displayedFacts = correctableFacts.slice(0, 4);
-  const namedFacts = displayedFacts.map((fact) => `${fact.componentLabel} ${humanizeFactKey(fact.fieldName)}`);
-  const headlineFacts = namedFacts.slice(0, 2).join(' and ');
+  const componentLabels = [...new Set(displayedFacts.map((fact) => homeownerComponentLabel(fact.componentLabel)))];
+  const factLabels = [...new Set(displayedFacts.map((fact) => homeownerFactLabel(fact.fieldName)))];
+  const headlineFacts = componentLabels.length === 1
+    ? `your ${componentLabels[0]}'s ${joinNatural(factLabels.slice(0, 2))}`
+    : joinNatural(displayedFacts.slice(0, 2).map((fact) => `${homeownerComponentLabel(fact.componentLabel)} ${homeownerFactLabel(fact.fieldName)}`));
   const affectedDecisions = [...new Set(displayedFacts.map((fact) => affectedDecisionForFact(fact.fieldName)))];
-  const reason = `These details are ${conflictCount > 0 ? 'conflicted or inferred' : 'currently inferred'} and affect ${affectedDecisions.join(' and ')}.`;
+  const reason = conflictCount > 0
+    ? `Some Home Record details conflict. Confirming them will improve ${joinNatural(affectedDecisions)}.`
+    : `These Home Record estimates affect ${joinNatural(affectedDecisions)}. Confirm them when convenient for more accurate guidance.`;
   const correctionHref = displayedFacts[0].correctionDestination!;
 
   return [adaptHomeActionSource('SYSTEM', {
@@ -2271,8 +2347,8 @@ async function loadHomeDigitalTwinFactReviewActions(
       summary: reason.slice(0, 320),
       whyNow: reason.slice(0, 500),
       keyFacts: displayedFacts.map((fact) => ({
-        label: `${fact.componentLabel} · ${humanizeFactKey(fact.fieldName)}`.slice(0, 80),
-        value: `${projectedFactValue(fact)} · ${String(fact.factState).toLowerCase()}`.slice(0, 240),
+        label: `${homeownerComponentLabel(fact.componentLabel)} · ${homeownerFactLabel(fact.fieldName)}`.slice(0, 80),
+        value: `${projectedFactValue(fact)}${['INFERRED', 'DEFAULT'].includes(fact.factState) ? ' · estimated' : ''}`.slice(0, 240),
       })),
       factGroups: [],
       subject: { kind: 'PROPERTY', id: propertyId, label: headlineFacts.slice(0, 180) },
@@ -2287,11 +2363,11 @@ async function loadHomeDigitalTwinFactReviewActions(
       windowEnd: null,
       rationale: 'Low urgency — review whenever convenient.',
     },
-    evidence: displayedFacts.map((fact) => ({
-      id: fact.id,
+    evidence: displayedFacts.map((fact, index) => ({
+      id: fact.id ?? `${twin.id}:projected-fact:${index}`,
       type: 'SYSTEM_DERIVATION',
-      label: `${fact.componentLabel} ${humanizeFactKey(fact.fieldName)}`,
-      source: fact.sourceRecordType ?? String(fact.sourceType).toLowerCase().replace(/_/g, ' '),
+      label: `${homeownerComponentLabel(fact.componentLabel)} ${homeownerFactLabel(fact.fieldName)}`,
+      source: homeownerFactSource(fact.sourceRecordType, fact.sourceType),
       observedAt: fact.observedAt?.toISOString() ?? twin.updatedAt.toISOString(),
       freshness: 'CURRENT',
       confidence: normalizeHomeActionConfidenceScore(fact.confidenceScore),
@@ -2303,12 +2379,12 @@ async function loadHomeDigitalTwinFactReviewActions(
     governance: lowConsequenceGovernance('home-digital-twin-fact-review-v1'),
     primaryCta: {
       kind: 'CORRECT_FACT',
-      label: `Review ${headlineFacts}`.slice(0, 120),
+      label: 'Review home facts',
       href: correctionHref,
     },
     secondaryCtas: displayedFacts.slice(1).map((fact) => ({
       kind: 'CORRECT_FACT' as const,
-      label: `Review ${fact.componentLabel} ${humanizeFactKey(fact.fieldName)}`.slice(0, 120),
+      label: `Review ${homeownerComponentLabel(fact.componentLabel)} ${homeownerFactLabel(fact.fieldName)}`.slice(0, 120),
       href: fact.correctionDestination!,
     })),
     feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT', 'CORRECT_FACT'],

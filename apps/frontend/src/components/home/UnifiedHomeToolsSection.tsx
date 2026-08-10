@@ -15,6 +15,12 @@ import {
 import { getDiscoverableTool } from '@/features/tools/toolDiscoveryRegistry';
 import { useCapabilityImpression } from '@/features/tools/useCapabilityImpression';
 
+const HOMEOWNER_TOOL_COPY: Record<string, string> = {
+  'ownership-costs': 'See where the cost of owning this home has changed.',
+  'seller-prep': 'Manage your checklist for listing, handoff, and closing.',
+  'home-event-radar': 'Monitor weather and local events that may affect this property.',
+};
+
 function CapabilitySuggestionCard({
   suggestion,
   propertyId,
@@ -57,6 +63,7 @@ function CapabilitySuggestionCard({
     ?? (suggestion.readiness.state === 'READY'
       ? 'Ready with the current Home Record.'
       : 'Add the requested context for a more useful result.');
+  const homeownerDescription = HOMEOWNER_TOOL_COPY[suggestion.capabilityId];
 
   return (
     <Link
@@ -95,20 +102,17 @@ function CapabilitySuggestionCard({
         <div className="rounded-xl bg-indigo-50 p-2 text-indigo-700">
           <ToolIcon className="h-5 w-5" />
         </div>
-        <Badge variant="outline" className="rounded-full border-indigo-200 bg-indigo-50 text-[10px] text-indigo-700">
-          {suggestion.readiness.state === 'READY'
-            ? 'Ready for this home'
-            : 'Needs more context'}
-        </Badge>
+        {suggestion.readiness.state !== 'READY' && (
+          <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+            Needs more context
+          </Badge>
+        )}
       </div>
       <h3 className="mt-3 font-semibold text-slate-950">{suggestion.label}</h3>
-      <p className="mt-2 text-sm leading-5 text-slate-700">{suggestion.whyNow}</p>
-      <p className="mt-2 text-sm leading-5 text-slate-500">
-        {suggestion.expectedOutcome}
-      </p>
-      <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
-        {readinessExplanation}
-      </p>
+      <p className="mt-2 text-sm leading-5 text-slate-600">{homeownerDescription ?? suggestion.expectedOutcome}</p>
+      {suggestion.readiness.state !== 'READY' && (
+        <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">{readinessExplanation}</p>
+      )}
       <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-indigo-700">
         {suggestion.launch.label}
         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -153,7 +157,7 @@ export function UnifiedHomeToolsSection({
             <Sparkles className="h-5 w-5 text-indigo-600" />Tools for this home
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Useful next steps selected from this home’s ranked actions and current record.
+            Useful next steps for this home, based on its current record.
           </p>
         </div>
         <Button asChild variant="outline" size="sm" className="w-fit rounded-full bg-white">
