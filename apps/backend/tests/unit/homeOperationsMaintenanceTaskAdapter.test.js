@@ -85,10 +85,11 @@ test('source role is EXECUTION, distinct from the recommendation-stage TRIGGER r
   assert.equal(proposed.source.sourceEntityId, 'task-1');
 });
 
-test('title/homeownerReason/dueAt are copied straight from the task', () => {
+test('task identity and prospective outcome remain distinct', () => {
   const proposed = maintenanceTaskSourceAdapter.propose(taskFixture(), 'property-1');
   assert.equal(proposed.title, 'Replace HVAC filter');
   assert.equal(proposed.homeownerReason, 'Monthly filter swap.');
+  assert.equal(proposed.expectedOutcome, 'Complete the task and record the outcome.');
   assert.equal(proposed.dueAt.toISOString(), '2026-08-01T00:00:00.000Z');
 });
 

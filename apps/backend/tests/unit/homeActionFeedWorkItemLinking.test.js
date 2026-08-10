@@ -105,7 +105,10 @@ require.cache[prismaPath] = {
   exports: { prisma: prismaMock },
 };
 
-const { linkWorkItemsAndReconcile } = require('../../src/services/homeActions.service.ts');
+const {
+  acceptedOperationalWorkHomeCopy,
+  linkWorkItemsAndReconcile,
+} = require('../../src/services/homeActions.service.ts');
 
 function rankedAction(overrides = {}) {
   return {
@@ -134,6 +137,36 @@ function reset() {
   workEvents.clear();
   failNextResolve = false;
 }
+
+test('accepted operational work shows its task identity instead of a legacy completed outcome', () => {
+  const copy = acceptedOperationalWorkHomeCopy({
+    title: 'Replace the HVAC filter',
+    homeownerReason: 'A clean filter supports airflow.',
+    expectedOutcome: 'The task is completed and recorded.',
+    state: 'ACCEPTED',
+  });
+
+  assert.deepEqual(copy, {
+    recommendedAction: 'Replace the HVAC filter',
+    expectedOutcome: 'Complete the task and record the outcome.',
+    primaryCtaLabel: 'Open work',
+  });
+});
+
+test('reported-complete operational work asks for verification instead of presenting completion as active work', () => {
+  const copy = acceptedOperationalWorkHomeCopy({
+    title: 'Service the furnace',
+    homeownerReason: 'The annual service was due.',
+    expectedOutcome: 'The task is completed and recorded.',
+    state: 'REPORTED_COMPLETE',
+  });
+
+  assert.deepEqual(copy, {
+    recommendedAction: 'Verify completion: Service the furnace',
+    expectedOutcome: 'Completion was reported and is waiting for verification.',
+    primaryCtaLabel: 'Review completion',
+  });
+});
 
 test('an eligible action is annotated with a resolved work item', async () => {
   reset();

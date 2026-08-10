@@ -76,7 +76,7 @@ export const maintenanceTaskSourceAdapter: WorkItemSourceAdapter<PropertyMainten
       occurrence: { obligationSlug: resolveObligationSlug(task) },
       title: task.title,
       homeownerReason: task.description ?? 'A maintenance task is tracked for your home.',
-      expectedOutcome: 'The task is completed and recorded.',
+      expectedOutcome: 'Complete the task and record the outcome.',
       priority: PRIORITY_MAP[task.priority],
       safetyTier: resolveSafetyTier(task.riskLevel),
       dueAt: task.nextDueDate,

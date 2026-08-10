@@ -603,6 +603,38 @@ export async function linkWorkItemsAndReconcile(propertyId: string, actions: Ran
     }));
 }
 
+type AcceptedOperationalWorkCopyInput = {
+  title: string;
+  expectedOutcome: string;
+  state: OperationalWorkItemState;
+};
+
+/**
+ * Accepted work stores an outcome separately from its task identity. Keep the
+ * outcome in the supporting copy instead of promoting it to the card title.
+ * The legacy maintenance outcome is normalized here so existing database rows
+ * are corrected immediately without requiring a backfill.
+ */
+export function acceptedOperationalWorkHomeCopy(item: AcceptedOperationalWorkCopyInput) {
+  if (item.state === 'REPORTED_COMPLETE') {
+    return {
+      recommendedAction: `Verify completion: ${item.title}`,
+      expectedOutcome: 'Completion was reported and is waiting for verification.',
+      primaryCtaLabel: 'Review completion',
+    };
+  }
+
+  const legacyCompletedOutcome = item.expectedOutcome.trim().toLowerCase() ===
+    'the task is completed and recorded.';
+  return {
+    recommendedAction: item.title,
+    expectedOutcome: legacyCompletedOutcome
+      ? 'Complete the task and record the outcome.'
+      : item.expectedOutcome,
+    primaryCtaLabel: 'Open work',
+  };
+}
+
 async function appendAcceptedOperationalWork(
   propertyId: string,
   actions: RankedHomeAction[],
@@ -629,6 +661,7 @@ async function appendAcceptedOperationalWork(
         : 'MAINTENANCE';
     const href = `/dashboard/properties/${propertyId}/home-operations?focusWorkItemId=${encodeURIComponent(item.id)}`;
     const material = item.safetyTier === 'MATERIAL_FINANCIAL' || item.safetyTier === 'REGULATED_COVERAGE';
+    const displayCopy = acceptedOperationalWorkHomeCopy(item);
     const now = new Date().toISOString();
     const homeAction = adaptHomeActionSource(sourceKind, {
       id: `operational-work:${item.id}`,
@@ -640,8 +673,8 @@ async function appendAcceptedOperationalWork(
       priority: item.priority,
       signal: item.title,
       whyItMatters: item.homeownerReason,
-      recommendedAction: item.expectedOutcome,
-      expectedOutcome: item.expectedOutcome,
+      recommendedAction: displayCopy.recommendedAction,
+      expectedOutcome: displayCopy.expectedOutcome,
       timing: {
         dueAt: item.dueAt?.toISOString() ?? null,
         windowStart: item.dueWindowStart?.toISOString() ?? null,
@@ -676,7 +709,7 @@ async function appendAcceptedOperationalWork(
         reviewedBy: [],
         policyVersion: 'home-operations-v1',
       },
-      primaryCta: { kind: item.safetyTier === 'SAFETY_EMERGENCY' ? 'ESCALATE' : 'REVIEW', label: 'Open work', href },
+      primaryCta: { kind: item.safetyTier === 'SAFETY_EMERGENCY' ? 'ESCALATE' : 'REVIEW', label: displayCopy.primaryCtaLabel, href },
       secondaryCtas: [],
       feedbackControls: ['CORRECT_FACT', 'SNOOZE'],
       relatedJourneyId: primaryExecution?.executionType === 'GUIDANCE' ? primaryExecution.executionEntityId : null,
