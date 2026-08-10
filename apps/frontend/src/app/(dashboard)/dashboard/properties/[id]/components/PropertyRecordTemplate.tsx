@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { track } from '@/lib/analytics/events';
 import { cn } from '@/lib/utils';
 
 export interface PropertyRecordNavigationItem {
@@ -20,6 +21,7 @@ export interface PropertyRecordNavigationItem {
 }
 
 interface PropertyRecordTemplateProps {
+  propertyId: string;
   title: string;
   address: string;
   metadata: string[];
@@ -32,6 +34,7 @@ interface PropertyRecordTemplateProps {
 }
 
 export default function PropertyRecordTemplate({
+  propertyId,
   title,
   address,
   metadata,
@@ -74,13 +77,19 @@ export default function PropertyRecordTemplate({
 
             <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
               <Button variant="outline" asChild className="min-h-[44px] justify-center">
-                <Link href={editHref}>
+                <Link
+                  href={editHref}
+                  onClick={() => track('property_record_edit_started', { propertyId, source: 'HEADER_EDIT' })}
+                >
                   <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
                   Edit property
                 </Link>
               </Button>
               <Button asChild className="min-h-[44px] justify-center bg-emerald-700 hover:bg-emerald-800">
-                <Link href={addHref}>
+                <Link
+                  href={addHref}
+                  onClick={() => track('property_record_edit_started', { propertyId, source: 'HEADER_ADD' })}
+                >
                   <FilePlus2 className="mr-2 h-4 w-4" aria-hidden="true" />
                   Add to record
                 </Link>
@@ -112,6 +121,7 @@ export default function PropertyRecordTemplate({
                 key={item.label}
                 href={item.href}
                 aria-current={item.active ? 'page' : undefined}
+                onClick={() => track('property_record_section_opened', { propertyId, section: item.label })}
                 className={cn(
                   'no-brand-style inline-flex min-h-[40px] shrink-0 items-center rounded-lg px-3 text-sm font-medium transition-colors',
                   item.active
@@ -135,6 +145,7 @@ export default function PropertyRecordTemplate({
                   key={item.label}
                   href={item.href}
                   aria-current={item.active ? 'page' : undefined}
+                  onClick={() => track('property_record_section_opened', { propertyId, section: item.label })}
                   className={cn(
                     'no-brand-style flex min-h-[44px] items-center justify-between rounded-lg px-3 text-sm font-medium',
                     item.active ? 'bg-emerald-50 text-emerald-800' : 'text-slate-700',

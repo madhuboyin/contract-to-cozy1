@@ -4,7 +4,7 @@
 
 **Surface:** Property page / Home Record
 
-**Status:** Proposed
+**Status:** Implemented in application code; progressive rollout and field validation remain operational follow-ups
 
 **Document date:** August 10, 2026
 

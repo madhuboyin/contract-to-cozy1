@@ -1168,7 +1168,7 @@ export function UnifiedHomeSurface({
           : home.propertyContext.missingFactCount > 0
             ? `Add ${home.propertyContext.missingFactCount} missing home fact${home.propertyContext.missingFactCount === 1 ? '' : 's'}`
             : 'Review your verified Home Record',
-      href: home.glance.recordHref,
+      href: `${home.glance.recordHref}#record-quality`,
     },
     {
       label: 'Systems tracked',
@@ -1336,7 +1336,7 @@ export function UnifiedHomeSurface({
       )}
 
       <Card className="rounded-[24px] border-slate-200 shadow-sm">
-        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5 text-sky-600" />Home at a glance</CardTitle><CardDescription>Systems, coverage, work, and recent changes supporting your next action.</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5 text-sky-600" />Home shortcuts</CardTitle><CardDescription>High-level pointers to the records and workspaces behind today&apos;s decisions.</CardDescription></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {glanceItems.map((item) => (
@@ -1354,7 +1354,6 @@ export function UnifiedHomeSurface({
               </Link>
             ))}
           </div>
-          {home.glance.recentChanges.length > 0 && <div className="mt-4 space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent changes</p>{home.glance.recentChanges.map((event) => <div key={event.id} className="flex items-start justify-between gap-3 border-t border-slate-100 py-2 text-sm"><span className="text-slate-700">{event.title}</span><span className="shrink-0 text-xs text-slate-400">{new Date(event.occurredAt).toLocaleDateString()}</span></div>)}</div>}
         </CardContent>
       </Card>
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -25,6 +26,11 @@ export default function HomeToolsPage() {
   const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
   const itemId = searchParams.get('itemId') || undefined;
+  const allowedToolIds = useMemo(() => {
+    const raw = searchParams.get('toolIds');
+    return raw ? [...new Set(raw.split(',').map((value) => value.trim()).filter(Boolean))] : undefined;
+  }, [searchParams]);
+  const isPropertyToolSet = Boolean(allowedToolIds?.length);
   const resolvedPropertyId = selectedPropertyId || propertyIdFromQuery;
   const propertyFallbackBackHref = '/dashboard';
   const backHref = resolveDashboardBackHref(searchParams.get('backTo'), propertyFallbackBackHref);
@@ -45,7 +51,12 @@ export default function HomeToolsPage() {
             {backLabel}
           </Link>
         </Button>
-        <MobilePageIntro title="Explore tools" subtitle="Decision, planning, protection, and home-intelligence tools in one place" />
+        <MobilePageIntro
+          title={isPropertyToolSet ? 'Property tools' : 'Explore tools'}
+          subtitle={isPropertyToolSet
+            ? 'Tools strongly connected to this property record, its systems, spaces, documents, and history'
+            : 'Decision, planning, protection, and home-intelligence tools in one place'}
+        />
       </MobileSection>
 
       <ExploreToolsCatalog
@@ -58,6 +69,7 @@ export default function HomeToolsPage() {
           itemId,
           contextVersion: homeQuery.data?.propertyContext.contextVersion,
         }}
+        allowedToolIds={allowedToolIds}
       />
 
       <MobileSection>

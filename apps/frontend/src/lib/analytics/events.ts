@@ -67,6 +67,12 @@ export type CtcEventName =
   | 'tool_discovery_clicked'
   | 'tool_discovery_catalog_searched'
   | 'tool_discovery_outcome'
+  // Property record
+  | 'property_record_viewed'
+  | 'property_record_section_opened'
+  | 'property_record_edit_started'
+  | 'property_record_missing_detail_opened'
+  | 'property_related_workspace_opened'
   // Savings
   | 'savings_projected'
   | 'savings_verified'
@@ -280,6 +286,7 @@ export interface CtcEventProperties {
     recommendationReasons?: string[];
     recommendationVersions?: string[];
     contextVersion?: string | null;
+    originSection?: string | null;
     sourceActionId?: string | null;
     sourceEntityType?: string | null;
     sourceEntityId?: string | null;
@@ -299,6 +306,7 @@ export interface CtcEventProperties {
     recommendationReason?: string | null;
     recommendationVersion?: string | null;
     contextVersion?: string | null;
+    originSection?: string | null;
     sourceActionId?: string | null;
     sourceEntityType?: string | null;
     sourceEntityId?: string | null;
@@ -320,6 +328,30 @@ export interface CtcEventProperties {
     recommendationReason?: string | null;
     recommendationVersion?: string | null;
     outcome: 'workflow_completed';
+  };
+  property_record_viewed: {
+    propertyId: string;
+    completenessPercent: number;
+    contextVersion?: string | null;
+    completenessSource: 'PROPERTY_CONTEXT' | 'PROFILE_FALLBACK';
+  };
+  property_record_section_opened: {
+    propertyId: string;
+    section: string;
+  };
+  property_record_edit_started: {
+    propertyId: string;
+    source: 'HEADER_EDIT' | 'HEADER_ADD';
+  };
+  property_record_missing_detail_opened: {
+    propertyId: string;
+    category: string;
+    factKey: string;
+    state: 'MISSING' | 'CONFLICTED' | 'STALE';
+  };
+  property_related_workspace_opened: {
+    propertyId: string;
+    workspace: string;
   };
   // Savings
   savings_projected: { tool: CtcTool; amountUsd: number; propertyId: string };

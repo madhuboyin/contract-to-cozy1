@@ -109,16 +109,24 @@ export function ExploreToolsCatalog({
   propertyId,
   context,
   launchContext,
+  allowedToolIds,
 }: {
   propertyId?: string;
   context?: ToolDiscoveryContext;
   launchContext?: Omit<ToolLaunchContext, 'launchSurface'>;
+  allowedToolIds?: string[];
 }) {
   const [query, setQuery] = React.useState('');
   const normalizedQuery = query.trim().toLowerCase();
   const catalogQuery = useCapabilityCatalog({ propertyId });
+  const allowedToolIdSet = React.useMemo(
+    () => allowedToolIds ? new Set(allowedToolIds) : null,
+    [allowedToolIds],
+  );
   const tools = React.useMemo<ExploreCapability[]>(
-    () => (catalogQuery.data?.capabilities ?? []).map((capability) => ({
+    () => (catalogQuery.data?.capabilities ?? [])
+      .filter((capability) => !allowedToolIdSet || allowedToolIdSet.has(capability.id))
+      .map((capability) => ({
       id: capability.id,
       label: capability.label,
       description: capability.shortDescription,
@@ -136,7 +144,7 @@ export function ExploreToolsCatalog({
       ),
       searchTerms: capabilitySearchTerms(capability),
     })),
-    [catalogQuery.data?.capabilities, context, launchContext, propertyId],
+    [allowedToolIdSet, catalogQuery.data?.capabilities, context, launchContext, propertyId],
   );
   const matchesQuery = React.useCallback((tool: ExploreCapability, groupTitle: string) => {
     if (!normalizedQuery) return true;

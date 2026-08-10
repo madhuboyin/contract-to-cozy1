@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import { ArrowLeft, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import NarrativeRevealOverlay from '@/components/narrative/NarrativeRevealOverlay';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
+import { track } from '@/lib/analytics/events';
 import { api } from '@/lib/api/client';
 import type {
   PropertyContextCompleteness,
@@ -67,6 +68,7 @@ export default function PropertyDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const trackedViewKey = useRef<string | null>(null);
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const bootstrapQuery = useQuery({
@@ -113,6 +115,20 @@ export default function PropertyDetailPage() {
       ?? (property ? calculatePropertyRecordCompleteness(property, onboarding) : 0),
     [onboarding, property, recordContextQuery.data?.completeness.completenessPercent],
   );
+
+  useEffect(() => {
+    if (!property) return;
+    const contextVersion = recordContextQuery.data?.completeness.contextVersion ?? null;
+    const viewKey = `${property.id}:${contextVersion ?? 'fallback'}`;
+    if (trackedViewKey.current === viewKey) return;
+    trackedViewKey.current = viewKey;
+    track('property_record_viewed', {
+      propertyId: property.id,
+      completenessPercent: recordCompleteness,
+      contextVersion,
+      completenessSource: contextVersion ? 'PROPERTY_CONTEXT' : 'PROFILE_FALLBACK',
+    });
+  }, [property, recordCompleteness, recordContextQuery.data?.completeness.contextVersion]);
 
   if (bootstrapQuery.isLoading) {
     return (
@@ -202,6 +218,7 @@ export default function PropertyDetailPage() {
       ) : null}
 
       <PropertyRecordTemplate
+        propertyId={property.id}
         title={title}
         address={contextAddress || property.address}
         metadata={metadata}
@@ -215,6 +232,8 @@ export default function PropertyDetailPage() {
           property={property}
           contextCompleteness={recordContextQuery.data?.completeness ?? null}
           contextSnapshot={recordContextQuery.data?.snapshot ?? null}
+          contextVersion={recordContextQuery.data?.snapshot.contextVersion ?? null}
+          enableConnectedTools={FEATURE_FLAGS.PROPERTY_RECORD_CONNECTED_TOOLS}
         />
       </PropertyRecordTemplate>
     </div>

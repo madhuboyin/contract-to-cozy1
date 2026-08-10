@@ -1,27 +1,24 @@
 'use client';
 
+import { useEffect, useRef, type ElementType } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
-  CalendarClock,
   CheckCircle2,
   ClipboardCheck,
-  FileCheck2,
   FileText,
   FolderKanban,
-  History,
   Home,
-  Leaf,
-  ListChecks,
   PackageSearch,
-  PiggyBank,
   ShieldCheck,
   Users,
   Wrench,
 } from 'lucide-react';
 
+import { getPropertyToolPresentations } from '@/features/tools/propertyToolPresentationPolicy';
 import { api } from '@/lib/api/client';
+import { track } from '@/lib/analytics/events';
 import type {
   Property,
   PropertyContextCompleteness,
@@ -34,6 +31,8 @@ import { listInventoryItems, listInventoryRooms } from '../../../inventory/inven
 import { getLatestTimeline } from '../tools/capital-timeline/capitalTimelineApi';
 import { getDigitalWill } from '../tools/home-digital-will/homeDigitalWillApi';
 import { listEligiblePlantAdvisorRooms } from '../tools/plant-advisor/plantAdvisorApi';
+import { listPropertyBriefs } from '../property-brief/propertyBriefApi';
+import { listHomeEvents } from '../timeline/homeEventsApi';
 
 type RecordCategoryTone = 'complete' | 'progress' | 'missing';
 
@@ -80,6 +79,12 @@ function formatDate(value: string | null | undefined): string {
     day: 'numeric',
     year: 'numeric',
   }).format(date);
+}
+
+function queryCount(isLoading: boolean, isError: boolean, value: number): string | number {
+  if (isLoading) return '…';
+  if (isError) return '—';
+  return value;
 }
 
 function categoryTone(value: number): RecordCategoryTone {
@@ -198,6 +203,7 @@ export function calculatePropertyRecordCompleteness(
 }
 
 function RecordPanel({
+  id,
   title,
   description,
   href,
@@ -206,6 +212,7 @@ function RecordPanel({
   children,
   className,
 }: {
+  id?: string;
   title: string;
   description: string;
   href: string;
@@ -215,7 +222,7 @@ function RecordPanel({
   className?: string;
 }) {
   return (
-    <section className={cn('rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5', className)}>
+    <section id={id} className={cn('scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5', className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
@@ -250,11 +257,11 @@ function FactRow({ label, value, missing = false }: { label: string; value: stri
   );
 }
 
-function RecordCompleteness({ categories }: { categories: RecordCategory[] }) {
+function RecordCompleteness({ propertyId, categories }: { propertyId: string; categories: RecordCategory[] }) {
   const nextCategory = [...categories].sort((a, b) => a.percent - b.percent)[0];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section id="record-quality" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Record quality</p>
         <h2 className="mb-0 text-base font-semibold text-slate-950">Completeness by category</h2>
@@ -323,6 +330,12 @@ function RecordCompleteness({ categories }: { categories: RecordCategory[] }) {
                       <Link
                         key={issue.key}
                         href={issue.href}
+                        onClick={() => track('property_record_missing_detail_opened', {
+                          propertyId,
+                          category: category.label,
+                          factKey: issue.key,
+                          state: issue.state,
+                        })}
                         className="no-brand-style flex min-h-[36px] items-center justify-between gap-3 rounded-lg bg-white px-2.5 text-xs text-slate-700 hover:text-emerald-800"
                       >
                         <span className="truncate">{issue.label}</span>
@@ -378,36 +391,85 @@ interface RelatedTool {
   state: string;
   href: string;
   action: string;
-  icon: React.ReactNode;
-  hasSavedState: boolean;
+  icon: ElementType;
+  statusTone: 'saved' | 'setup' | 'loading' | 'unavailable';
+  fallbackRank: number;
 }
 
-function RelatedPropertyTools({ tools, allToolsHref }: { tools: RelatedTool[]; allToolsHref: string }) {
+function RelatedPropertyTools({
+  propertyId,
+  contextVersion,
+  tools,
+  allToolsHref,
+}: {
+  propertyId: string;
+  contextVersion?: string | null;
+  tools: RelatedTool[];
+  allToolsHref: string;
+}) {
+  const trackedImpression = useRef<string | null>(null);
   const visible = tools.slice(0, 4);
   const additional = tools.slice(4);
+  const toolIds = tools.map((tool) => tool.id);
+  const impressionKey = `${propertyId}:${contextVersion ?? 'fallback'}:${toolIds.join(',')}`;
 
-  const renderTool = (tool: RelatedTool) => (
-    <Link
-      key={tool.id}
-      href={tool.href}
-      className="no-brand-style group flex min-h-[132px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-          {tool.icon}
+  useEffect(() => {
+    if (tools.length === 0 || trackedImpression.current === impressionKey) return;
+    trackedImpression.current = impressionKey;
+    track('tool_discovery_impression', {
+      propertyId,
+      surface: 'property_detail',
+      toolIds,
+      contextVersion,
+      originSection: 'OVERVIEW',
+      sourceEntityType: 'PROPERTY_RECORD',
+      sourceEntityId: propertyId,
+    });
+  }, [contextVersion, impressionKey, propertyId, toolIds, tools.length]);
+
+  const renderTool = (tool: RelatedTool, position: number) => {
+    const ToolIcon = tool.icon;
+    return (
+      <Link
+        key={tool.id}
+        href={tool.href}
+        onClick={() => track('tool_discovery_clicked', {
+          propertyId,
+          surface: 'property_detail',
+          toolId: tool.id,
+          position,
+          contextVersion,
+          originSection: 'OVERVIEW',
+          sourceEntityType: 'PROPERTY_RECORD',
+          sourceEntityId: propertyId,
+          readiness: tool.statusTone === 'unavailable' ? 'UNKNOWN' : tool.statusTone === 'loading' ? 'NEEDS_CONTEXT' : 'READY',
+        })}
+        className="no-brand-style group flex min-h-[132px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+            <ToolIcon className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <span className={cn(
+            'text-[11px] font-semibold',
+            tool.statusTone === 'saved'
+              ? 'text-emerald-700'
+              : tool.statusTone === 'unavailable'
+                ? 'text-rose-600'
+                : 'text-slate-500',
+          )}>
+            {tool.state}
+          </span>
+        </div>
+        <p className="mt-3 mb-0 text-sm font-semibold text-slate-950">{tool.name}</p>
+        <p className="mt-1 mb-0 line-clamp-2 text-xs leading-5 text-slate-500">{tool.relationship}</p>
+        <span className="mt-auto inline-flex items-center gap-1 pt-3 text-xs font-semibold text-emerald-700">
+          {tool.action}
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
         </span>
-        <span className={cn('text-[11px] font-semibold', tool.hasSavedState ? 'text-emerald-700' : 'text-slate-500')}>
-          {tool.state}
-        </span>
-      </div>
-      <p className="mt-3 mb-0 text-sm font-semibold text-slate-950">{tool.name}</p>
-      <p className="mt-1 mb-0 line-clamp-2 text-xs leading-5 text-slate-500">{tool.relationship}</p>
-      <span className="mt-auto inline-flex items-center gap-1 pt-3 text-xs font-semibold text-emerald-700">
-        {tool.action}
-        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-      </span>
-    </Link>
-  );
+      </Link>
+    );
+  };
 
   return (
     <section aria-labelledby="related-property-tools" className="space-y-3">
@@ -425,7 +487,9 @@ function RelatedPropertyTools({ tools, allToolsHref }: { tools: RelatedTool[]; a
         </Link>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{visible.map(renderTool)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {visible.map((tool, index) => renderTool(tool, index))}
+      </div>
 
       {additional.length > 0 ? (
         <details className="group rounded-xl border border-slate-200 bg-white">
@@ -433,7 +497,9 @@ function RelatedPropertyTools({ tools, allToolsHref }: { tools: RelatedTool[]; a
             <span className="group-open:hidden">Show {additional.length} more connected tools</span>
             <span className="hidden group-open:inline">Show fewer tools</span>
           </summary>
-          <div className="grid gap-3 border-t border-slate-100 p-3 sm:grid-cols-2">{additional.map(renderTool)}</div>
+          <div className="grid gap-3 border-t border-slate-100 p-3 sm:grid-cols-2">
+            {additional.map((tool, index) => renderTool(tool, visible.length + index))}
+          </div>
         </details>
       ) : null}
     </section>
@@ -483,6 +549,10 @@ function RelatedWorkspaces({ propertyId, backTo }: { propertyId: string; backTo:
           <Link
             key={item.label}
             href={item.href}
+            onClick={() => track('property_related_workspace_opened', {
+              propertyId,
+              workspace: item.label,
+            })}
             className="no-brand-style flex min-h-[64px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-emerald-200"
           >
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
@@ -503,10 +573,14 @@ export default function PropertyRecordOverview({
   property,
   contextCompleteness,
   contextSnapshot,
+  contextVersion,
+  enableConnectedTools = true,
 }: {
   property: Property;
   contextCompleteness?: PropertyContextCompleteness | null;
   contextSnapshot?: PropertyContextSnapshot | null;
+  contextVersion?: string | null;
+  enableConnectedTools?: boolean;
 }) {
   const propertyId = property.id;
   const propertyPath = `/dashboard/properties/${propertyId}`;
@@ -545,18 +619,39 @@ export default function PropertyRecordOverview({
     queryFn: () => getLatestTimeline(propertyId),
     staleTime: 5 * 60 * 1000,
     retry: false,
+    enabled: enableConnectedTools,
   });
   const continuityQuery = useQuery({
     queryKey: ['property-record', propertyId, 'continuity-plan'],
     queryFn: () => getDigitalWill(propertyId),
     staleTime: 5 * 60 * 1000,
     retry: false,
+    enabled: enableConnectedTools,
   });
   const plantAdvisorQuery = useQuery({
     queryKey: ['property-record', propertyId, 'plant-advisor-rooms'],
     queryFn: () => listEligiblePlantAdvisorRooms(propertyId),
     staleTime: 5 * 60 * 1000,
     retry: false,
+    enabled: enableConnectedTools,
+  });
+  const propertyBriefQuery = useQuery({
+    queryKey: ['property-record', propertyId, 'property-briefs'],
+    queryFn: () => listPropertyBriefs(propertyId),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    enabled: enableConnectedTools,
+  });
+  const homeTimelineQuery = useQuery({
+    queryKey: ['property-record', propertyId, 'home-timeline-summary'],
+    queryFn: async () => {
+      const response = await listHomeEvents(propertyId, { limit: 100 });
+      const payload = response.data.data;
+      return payload.timelineEntries?.length ?? payload.events.length;
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    enabled: enableConnectedTools,
   });
 
   const rooms = roomsQuery.data ?? [];
@@ -566,6 +661,8 @@ export default function PropertyRecordOverview({
   const timeline = capitalTimelineQuery.data?.analysis ?? null;
   const continuityPlan = continuityQuery.data?.will ?? null;
   const plantRooms = plantAdvisorQuery.data ?? [];
+  const propertyBriefs = propertyBriefQuery.data ?? [];
+  const homeTimelineEventCount = homeTimelineQuery.data ?? 0;
   const configuredPlantRooms = plantRooms.filter((room) => room.hasProfile).length;
   const savedPlants = plantRooms.reduce((sum, room) => sum + room.recommendationCounts.saved, 0);
   const plantHasState = configuredPlantRooms > 0 || savedPlants > 0;
@@ -662,7 +759,13 @@ export default function PropertyRecordOverview({
     },
     {
       label: 'Systems & inventory',
-      detail: systemItems.length > 0 ? `${systemItems.length} major systems tracked` : 'Add major systems and equipment',
+      detail: inventoryQuery.isError
+        ? 'Inventory status is temporarily unavailable'
+        : inventoryQuery.isLoading
+          ? 'Loading systems and equipment'
+          : systemItems.length > 0
+            ? `${systemItems.length} major systems tracked`
+            : 'Add major systems and equipment',
       percent: systemsPercent,
       href: systemsHref,
       tone: categoryTone(systemsPercent),
@@ -670,7 +773,11 @@ export default function PropertyRecordOverview({
     },
     {
       label: 'Rooms & household',
-      detail: `${rooms.length} rooms · ${household.length} household members`,
+      detail: roomsQuery.isError || householdQuery.isError
+        ? 'Some room or household data is unavailable'
+        : roomsQuery.isLoading || householdQuery.isLoading
+          ? 'Loading rooms and household'
+          : `${rooms.length} rooms · ${household.length} household members`,
       percent: spacesPercent,
       href: roomsHref,
       tone: categoryTone(spacesPercent),
@@ -678,7 +785,13 @@ export default function PropertyRecordOverview({
     },
     {
       label: 'Documents',
-      detail: documents.length > 0 ? `${documents.length} records attached` : 'Add inspections, warranties, and receipts',
+      detail: documentsQuery.isError
+        ? 'Document status is temporarily unavailable'
+        : documentsQuery.isLoading
+          ? 'Loading attached records'
+          : documents.length > 0
+            ? `${documents.length} records attached`
+            : 'Add inspections, warranties, and receipts',
       percent: documentsPercent,
       href: documentsHref,
       tone: categoryTone(documentsPercent),
@@ -688,70 +801,129 @@ export default function PropertyRecordOverview({
 
   const tools: RelatedTool[] = (() => {
     const timelineCount = timeline?.items.length ?? 0;
-    const continuityHasState = Boolean(continuityPlan);
-    return [
-      {
-        id: 'capital-timeline',
-        name: 'Home Capital Timeline',
-        relationship: 'Turn system ages and condition into a long-range replacement and capital plan.',
-        state: timelineCount > 0 ? `${timelineCount} events modeled` : `${systemItems.length} systems available`,
-        href: withBackTo(`/dashboard/properties/${propertyId}/tools/capital-timeline`),
-        action: timelineCount > 0 ? 'Review timeline' : 'Build timeline',
-        icon: <CalendarClock className="h-4 w-4" />,
-        hasSavedState: timelineCount > 0,
-      },
-      {
-        id: 'home-digital-will',
-        name: 'Home Continuity Plan',
-        relationship: 'Prepare selected home knowledge and instructions for trusted recipients.',
-        state: continuityPlan ? `${continuityPlan.completionPercent}% complete` : 'Not started',
-        href: withBackTo(`/dashboard/properties/${propertyId}/tools/home-digital-will`),
-        action: continuityPlan ? 'Review plan' : 'Set up plan',
-        icon: <FileCheck2 className="h-4 w-4" />,
-        hasSavedState: continuityHasState,
-      },
-      {
-        id: 'plant-advisor',
-        name: 'Plant Advisor',
-        relationship: 'Use room light, care preferences, and household context for better plant choices.',
-        state: plantHasState ? `${configuredPlantRooms} rooms · ${savedPlants} saved` : `${rooms.length} rooms available`,
-        href: withBackTo(`/dashboard/properties/${propertyId}/tools/plant-advisor`),
-        action: plantHasState ? 'Open advisor' : 'Set up a room',
-        icon: <Leaf className="h-4 w-4" />,
-        hasSavedState: plantHasState,
-      },
-      {
-        id: 'property-brief',
-        name: 'Property Brief',
-        relationship: 'Create a governed, shareable summary from selected property records.',
-        state: `${documents.length} documents available`,
-        href: withBackTo(`/dashboard/properties/${propertyId}/property-brief`),
-        action: 'Create or review brief',
-        icon: <FileText className="h-4 w-4" />,
-        hasSavedState: documents.length > 0,
-      },
-      {
-        id: 'home-timeline',
-        name: 'Home Timeline',
-        relationship: 'Review confirmed milestones, completed work, and durable property history.',
-        state: 'Property history',
-        href: withBackTo(`/dashboard/properties/${propertyId}/timeline`),
-        action: 'Open timeline',
-        icon: <History className="h-4 w-4" />,
-        hasSavedState: false,
-      },
-      {
-        id: 'status-board',
-        name: 'Status Board',
-        relationship: 'See the current condition and evidence available for tracked home systems.',
-        state: `${systemItems.length} systems represented`,
-        href: withBackTo(`/dashboard/properties/${propertyId}/status-board`),
-        action: 'Open status board',
-        icon: <ListChecks className="h-4 w-4" />,
-        hasSavedState: systemItems.length > 0,
-      },
-    ];
+    const latestBrief = [...propertyBriefs].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )[0];
+    return getPropertyToolPresentations({
+      propertyId,
+      returnTo: propertyPath,
+      contextVersion,
+    }).map((presentation): RelatedTool => {
+      let state = 'Ready to use';
+      let action = 'Open tool';
+      let statusTone: RelatedTool['statusTone'] = 'setup';
+
+      if (presentation.toolId === 'capital-timeline') {
+        state = capitalTimelineQuery.isLoading
+          ? 'Loading status'
+          : capitalTimelineQuery.isError
+            ? 'Status unavailable'
+            : timelineCount > 0
+              ? `${timelineCount} events modeled`
+              : `${systemItems.length} systems available`;
+        action = timelineCount > 0 ? 'Review timeline' : 'Build timeline';
+        statusTone = capitalTimelineQuery.isError ? 'unavailable' : capitalTimelineQuery.isLoading ? 'loading' : timelineCount > 0 ? 'saved' : 'setup';
+      } else if (presentation.toolId === 'home-digital-will') {
+        state = continuityQuery.isLoading
+          ? 'Loading status'
+          : continuityQuery.isError
+            ? 'Status unavailable'
+            : continuityPlan
+              ? `${continuityPlan.completionPercent}% complete`
+              : 'Not started';
+        action = continuityPlan ? 'Review plan' : 'Set up plan';
+        statusTone = continuityQuery.isError ? 'unavailable' : continuityQuery.isLoading ? 'loading' : continuityPlan ? 'saved' : 'setup';
+      } else if (presentation.toolId === 'plant-advisor') {
+        state = plantAdvisorQuery.isLoading
+          ? 'Loading status'
+          : plantAdvisorQuery.isError
+            ? 'Status unavailable'
+            : plantHasState
+              ? `${configuredPlantRooms} rooms · ${savedPlants} saved`
+              : `${rooms.length} rooms available`;
+        action = plantHasState ? 'Open advisor' : 'Set up a room';
+        statusTone = plantAdvisorQuery.isError ? 'unavailable' : plantAdvisorQuery.isLoading ? 'loading' : plantHasState ? 'saved' : 'setup';
+      } else if (presentation.toolId === 'property-brief') {
+        state = propertyBriefQuery.isLoading
+          ? 'Loading status'
+          : propertyBriefQuery.isError
+            ? 'Status unavailable'
+            : latestBrief?.isStale
+              ? 'Source records changed'
+              : latestBrief
+                ? `${formatEnum(latestBrief.status)} · ${formatDate(latestBrief.createdAt)}`
+                : `${documents.length} documents available`;
+        action = latestBrief ? 'Review brief' : 'Create brief';
+        statusTone = propertyBriefQuery.isError ? 'unavailable' : propertyBriefQuery.isLoading ? 'loading' : latestBrief ? 'saved' : 'setup';
+      } else if (presentation.toolId === 'home-timeline') {
+        state = homeTimelineQuery.isLoading
+          ? 'Loading status'
+          : homeTimelineQuery.isError
+            ? 'Status unavailable'
+            : homeTimelineEventCount > 0
+              ? `${homeTimelineEventCount} confirmed events`
+              : 'No confirmed events yet';
+        action = 'Open timeline';
+        statusTone = homeTimelineQuery.isError ? 'unavailable' : homeTimelineQuery.isLoading ? 'loading' : homeTimelineEventCount > 0 ? 'saved' : 'setup';
+      } else if (presentation.toolId === 'status-board') {
+        state = inventoryQuery.isLoading
+          ? 'Loading status'
+          : inventoryQuery.isError
+            ? 'Status unavailable'
+            : `${systemItems.length} systems represented`;
+        action = 'Open status board';
+        statusTone = inventoryQuery.isError ? 'unavailable' : inventoryQuery.isLoading ? 'loading' : systemItems.length > 0 ? 'saved' : 'setup';
+      }
+
+      return {
+        id: presentation.toolId,
+        name: presentation.label,
+        relationship: presentation.relationship,
+        state,
+        href: presentation.href,
+        action,
+        icon: presentation.icon,
+        statusTone,
+        fallbackRank: presentation.fallbackRank,
+      };
+    }).sort((a, b) => {
+      const aSaved = a.statusTone === 'saved' ? 0 : 1;
+      const bSaved = b.statusTone === 'saved' ? 0 : 1;
+      return aSaved - bSaved || a.fallbackRank - b.fallbackRank;
+    });
   })();
+  const toolById = new Map(tools.map((tool) => [tool.id, tool]));
+  const connectedToolHref = (
+    toolId: string,
+    fallbackHref: string,
+    section?: 'SYSTEMS' | 'ROOMS' | 'DOCUMENTS',
+  ) => {
+    if (!section) return toolById.get(toolId)?.href ?? fallbackHref;
+    const anchor = section === 'SYSTEMS' ? 'property-systems' : section === 'ROOMS' ? 'property-rooms' : 'property-documents';
+    return getPropertyToolPresentations({
+      propertyId,
+      returnTo: `${propertyPath}#${anchor}`,
+      contextVersion,
+      section,
+    }).find((tool) => tool.toolId === toolId)?.href ?? fallbackHref;
+  };
+  const trackContextualToolOpen = (toolId: string, originSection: string) => {
+    const tool = toolById.get(toolId);
+    track('tool_discovery_clicked', {
+      propertyId,
+      surface: 'property_detail',
+      toolId,
+      contextVersion,
+      originSection,
+      sourceEntityType: 'PROPERTY_RECORD',
+      sourceEntityId: propertyId,
+      readiness: tool?.statusTone === 'unavailable'
+        ? 'UNKNOWN'
+        : tool?.statusTone === 'loading'
+          ? 'NEEDS_CONTEXT'
+          : 'READY',
+    });
+  };
 
   const latestDocument = [...documents].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -762,6 +934,7 @@ export default function PropertyRecordOverview({
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
         <div className="space-y-4">
           <RecordPanel
+            id="property-details"
             title="Property profile"
             description="The essential identity and structure facts for this home."
             href={`/dashboard/properties/${propertyId}/edit`}
@@ -780,6 +953,7 @@ export default function PropertyRecordOverview({
 
           <div className="grid items-start gap-4 md:grid-cols-2">
             <RecordPanel
+              id="property-systems"
               title="Systems & inventory"
               description="Major systems, appliances, equipment, warranties, and supporting records."
               href={withBackTo(`/dashboard/properties/${propertyId}/inventory`)}
@@ -787,20 +961,24 @@ export default function PropertyRecordOverview({
               icon={<PackageSearch className="h-4 w-4" aria-hidden="true" />}
             >
               <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{systemItems.length}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Major systems</p></div>
-                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{inventory.length}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Total items</p></div>
-                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{inventoryWithDocuments}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">With records</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(inventoryQuery.isLoading, inventoryQuery.isError, systemItems.length)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Major systems</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(inventoryQuery.isLoading, inventoryQuery.isError, inventory.length)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Total items</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(inventoryQuery.isLoading, inventoryQuery.isError, inventoryWithDocuments)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">With records</p></div>
               </div>
-              <Link
-                href={withBackTo(`/dashboard/properties/${propertyId}/tools/capital-timeline`)}
-                className="no-brand-style mt-3 inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700"
-              >
-                Plan system lifecycle
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </Link>
+              {enableConnectedTools ? (
+                <Link
+                  href={connectedToolHref('capital-timeline', withBackTo(`/dashboard/properties/${propertyId}/tools/capital-timeline`), 'SYSTEMS')}
+                  onClick={() => trackContextualToolOpen('capital-timeline', 'SYSTEMS')}
+                  className="no-brand-style mt-3 inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700"
+                >
+                  Plan system lifecycle
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              ) : null}
             </RecordPanel>
 
             <RecordPanel
+              id="property-rooms"
               title="Rooms & household"
               description="Spaces, room context, occupants, and household access."
               href={withBackTo(`/dashboard/properties/${propertyId}/rooms`)}
@@ -808,23 +986,26 @@ export default function PropertyRecordOverview({
               icon={<Users className="h-4 w-4" aria-hidden="true" />}
             >
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{rooms.length}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Rooms recorded</p></div>
-                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{household.length}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Household members</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(roomsQuery.isLoading, roomsQuery.isError, rooms.length)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Rooms recorded</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(householdQuery.isLoading, householdQuery.isError, household.length)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Household members</p></div>
               </div>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
                 <Link href={withBackTo(`/dashboard/properties/${propertyId}/household`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
                   Manage household
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </Link>
-                <Link href={withBackTo(`/dashboard/properties/${propertyId}/tools/plant-advisor`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
-                  Open Plant Advisor
-                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                </Link>
+                {enableConnectedTools ? (
+                  <Link href={connectedToolHref('plant-advisor', withBackTo(`/dashboard/properties/${propertyId}/tools/plant-advisor`), 'ROOMS')} onClick={() => trackContextualToolOpen('plant-advisor', 'ROOMS')} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
+                    Open Plant Advisor
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
+                ) : null}
               </div>
             </RecordPanel>
           </div>
 
           <RecordPanel
+            id="property-documents"
             title="Documents"
             description="Inspections, warranties, policies, receipts, and other evidence attached to this property."
             href={documentsHref}
@@ -833,28 +1014,30 @@ export default function PropertyRecordOverview({
           >
             <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="mb-0 text-2xl font-semibold text-slate-950">{documents.length}</p>
+                <p className="mb-0 text-2xl font-semibold text-slate-950">{queryCount(documentsQuery.isLoading, documentsQuery.isError, documents.length)}</p>
                 <p className="mt-0.5 mb-0 text-xs text-slate-500">Documents attached to this property</p>
               </div>
               <Link href={documentsHref} className="no-brand-style inline-flex min-h-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
                 Upload document
               </Link>
             </div>
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-              <Link href={withBackTo(`/dashboard/properties/${propertyId}/property-brief`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
-                Create Property Brief
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </Link>
-              <Link href={withBackTo(`/dashboard/properties/${propertyId}/tools/home-digital-will`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
-                Prepare Continuity Plan
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </Link>
-            </div>
+            {enableConnectedTools ? (
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                <Link href={connectedToolHref('property-brief', withBackTo(`/dashboard/properties/${propertyId}/property-brief`), 'DOCUMENTS')} onClick={() => trackContextualToolOpen('property-brief', 'DOCUMENTS')} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
+                  Create Property Brief
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+                <Link href={connectedToolHref('home-digital-will', withBackTo(`/dashboard/properties/${propertyId}/tools/home-digital-will`), 'DOCUMENTS')} onClick={() => trackContextualToolOpen('home-digital-will', 'DOCUMENTS')} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
+                  Prepare Continuity Plan
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              </div>
+            ) : null}
           </RecordPanel>
         </div>
 
         <div className="space-y-4">
-          <RecordCompleteness categories={categories} />
+          <RecordCompleteness propertyId={propertyId} categories={categories} />
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex items-start justify-between gap-3">
@@ -882,10 +1065,14 @@ export default function PropertyRecordOverview({
         </div>
       </div>
 
-      <RelatedPropertyTools
-        tools={tools}
-        allToolsHref={`/dashboard/home-tools?propertyId=${encodeURIComponent(propertyId)}&backTo=${encodeURIComponent(propertyPath)}`}
-      />
+      {enableConnectedTools ? (
+        <RelatedPropertyTools
+          propertyId={propertyId}
+          contextVersion={contextVersion}
+          tools={tools}
+          allToolsHref={`/dashboard/home-tools?propertyId=${encodeURIComponent(propertyId)}&toolIds=${encodeURIComponent(tools.map((tool) => tool.id).join(','))}&backTo=${encodeURIComponent(propertyPath)}`}
+        />
+      ) : null}
       <RelatedWorkspaces propertyId={propertyId} backTo={propertyPath} />
     </div>
   );
