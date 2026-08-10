@@ -295,6 +295,8 @@ Delivered August 10, 2026:
 - Made missing-fact setup CTAs state the exact count.
 - Shortened **Tools for this home** cards to one homeowner-focused value statement. Ready-state badges and repeated readiness prose are omitted; missing-context guidance remains visible when the tool is not ready.
 - Added a stable evidence-ID fallback for projected Home Digital Twin facts so incomplete legacy or fixture records cannot invalidate an otherwise actionable Home card.
+- Replaced generic weather-journey copy with a dedicated presentation containing the named hazard, property, forecast window, severity, source freshness, preparation step, and affected systems when available. Weather journeys fail closed without a recognized hazard and future expiry, and a fresher same-hazard Environment or Incident action suppresses the journey duplicate.
+- Preserved weather title, summary, instruction, affected systems, source, effective window, and expiry when an Incident is bridged into Guidance. Generic **Add home information** is no longer emitted when no specific missing context can be named.
 - No database schema change or migration is required for this presentation increment.
 
 ## 5. Recommended implementation order
@@ -382,6 +384,7 @@ Measure:
 - Raw field names, enum units, ratios, and system-derived source labels are not exposed as homeowner copy.
 - Self-reported Sale Readiness evidence and third-party benchmark evidence identify their respective sources separately.
 - Supporting evidence has a visible labeled disclosure; remaining secondary controls are available from an accessible, labeled **More** menu without competing with the primary action.
+- Weather guidance names the hazard, active window, property impact, preparation step, and current source; an unbounded, expired, or same-hazard duplicate journey does not surface.
 - The CTA opens the exact entity or missing field and preserves launch context.
 - Closed, cancelled, verified, expired, stale, inapplicable, and superseded sources do not resurface.
 - Category tests prove that asset fields do not leak into seasonal or weather cards, and vice versa.
@@ -404,6 +407,7 @@ The August 10 production-polish increment was verified with:
 
 - backend TypeScript build;
 - frontend lint for the changed Home components;
+- twenty-four promoted-source tests, including live, unbounded, and same-hazard duplicate weather journeys;
 - nine focused Unified Home surface tests;
 - six Home Digital Twin Home Action tests;
 - seven Home Action presentation-registry tests; and

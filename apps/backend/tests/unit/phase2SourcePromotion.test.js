@@ -297,6 +297,79 @@ test('keeps the active weather incident and suppresses its duplicate guidance jo
   assert.equal(result.actions.some((action) => action.id === 'guidance:journey-weather'), false);
 });
 
+function groundedWeatherJourney(overrides = {}) {
+  return {
+    id: 'journey-grounded-weather', propertyId: 'property-1', inventoryItemId: null,
+    primarySignalId: 'signal-grounded-weather', journeyTypeKey: 'weather_risk_resolution',
+    issueDomain: 'WEATHER', issueType: 'Heat preparation', templateVersion: 'weather-risk@1.3.0',
+    status: 'ACTIVE', startedAt: NOW, createdAt: NOW, updatedAt: NOW, missingContextKeys: [],
+    contextSnapshotJson: {},
+    primarySignal: {
+      id: 'signal-grounded-weather', severity: 'HIGH', confidenceScore: 0.9,
+      signalIntentFamily: 'heat_risk', firstObservedAt: NOW, lastObservedAt: NOW,
+      expiresAt: LATER, sourceEntityType: 'WEATHER_FEED', sourceEntityId: 'forecast-1',
+      payloadJson: {
+        title: 'Multi-day heat risk ahead',
+        summary: 'Sustained heat can increase cooling-system demand at this home.',
+        instruction: 'Confirm the cooling system is ready before temperatures peak.',
+        effectiveFrom: NOW.toISOString(),
+        affectedSystems: ['Cooling system', 'Electrical'],
+        senderName: 'NWS Mount Holly NJ',
+      },
+      metadataJson: {},
+      ...overrides,
+    },
+    steps: [{
+      label: 'Review weather risk details', status: 'PENDING',
+      routePath: '/dashboard/properties/:propertyId?tab=incidents',
+    }],
+  };
+}
+
+test('presents a live bounded weather journey with hazard, window, impact, and preparation context', async () => {
+  const db = stubSources();
+  db.incident.findMany = async () => [];
+  db.guidanceJourney.findMany = async () => [groundedWeatherJourney()];
+
+  const result = await getPromotedHomeActions('property-1', db, {
+    evaluatedAt: NOW,
+    propertyLabel: '4203 Quailbridge',
+  });
+  const action = result.actions.find((candidate) => candidate.id === 'guidance:journey-grounded-weather');
+
+  assert.ok(action);
+  assert.equal(action.presentation.variant, 'WEATHER_ALERT');
+  assert.equal(action.presentation.headline, 'Multi-day heat risk ahead');
+  assert.equal(action.presentation.keyFacts.find((fact) => fact.label === 'Hazard').value, 'Extreme heat');
+  assert.equal(action.presentation.keyFacts.find((fact) => fact.label === 'Location').value, '4203 Quailbridge');
+  assert.equal(action.presentation.keyFacts.find((fact) => fact.label === 'Preparation').value, 'Confirm the cooling system is ready before temperatures peak.');
+  assert.equal(action.primaryCta.label, 'Review extreme heat details');
+  assert.equal(action.secondaryCtas.some((cta) => cta.label === 'Add home information'), false);
+});
+
+test('suppresses weather journeys without a live bounded signal', async () => {
+  const db = stubSources();
+  db.incident.findMany = async () => [];
+  db.guidanceJourney.findMany = async () => [groundedWeatherJourney({ expiresAt: null })];
+
+  const result = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW });
+  assert.equal(result.actions.some((action) => action.id === 'guidance:journey-grounded-weather'), false);
+});
+
+test('keeps fresher environment preparation and suppresses a same-hazard weather journey', async () => {
+  const db = stubSources();
+  db.incident.findMany = async () => [];
+  db.guidanceJourney.findMany = async () => [groundedWeatherJourney()];
+
+  const result = await getPromotedHomeActions('property-1', db, {
+    evaluatedAt: NOW,
+    environmentInsights: [environmentInsight()],
+  });
+
+  assert.ok(result.actions.some((action) => action.id === 'environment:heat-2026-07-20'));
+  assert.equal(result.actions.some((action) => action.id === 'guidance:journey-grounded-weather'), false);
+});
+
 test('promotes an active reviewed personalization recommendation with its Property Context version', async () => {
   const result = await getPromotedHomeActions('property-1', stubSources({ includePersonalization: true }));
   const action = result.actions.find((candidate) => candidate.id === 'personalization:personalization-1');

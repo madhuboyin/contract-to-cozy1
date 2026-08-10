@@ -347,6 +347,112 @@ function financialJourneyGrounding(journey: any, subjectLabel: string | null) {
   };
 }
 
+const WEATHER_HAZARD_COPY: Record<string, {
+  label: string;
+  implication: string;
+  preparation: string;
+}> = {
+  freeze_risk: {
+    label: 'Freezing conditions',
+    implication: 'Freezing temperatures can affect exposed plumbing, heating systems, and outdoor fixtures.',
+    preparation: 'Protect exposed pipes and confirm the heating system is ready.',
+  },
+  flood_risk: {
+    label: 'Flooding or heavy rain',
+    implication: 'Heavy rain can affect drainage, basements, roofing, and low-lying areas around this home.',
+    preparation: 'Check drainage paths and avoid entering flooded areas.',
+  },
+  hurricane_risk: {
+    label: 'Hurricane conditions',
+    implication: 'High winds and heavy rain can affect roofing, trees, outdoor property, and power service.',
+    preparation: 'Secure outdoor items and follow current local emergency guidance.',
+  },
+  wind_risk: {
+    label: 'Strong wind or storm conditions',
+    implication: 'Strong winds and storms can affect trees, roofing, outdoor items, and power service.',
+    preparation: 'Secure loose outdoor items and avoid exterior inspection during the storm.',
+  },
+  heat_risk: {
+    label: 'Extreme heat',
+    implication: 'Sustained heat can increase cooling demand and indoor comfort risk at this home.',
+    preparation: 'Confirm the cooling system is ready and keep the outdoor condenser area clear.',
+  },
+  wildfire_risk: {
+    label: 'Wildfire or smoke conditions',
+    implication: 'Smoke and nearby wildfire conditions can affect indoor air, outdoor activity, and evacuation readiness.',
+    preparation: 'Keep windows closed when advised and follow current local emergency guidance.',
+  },
+};
+
+function dateFromUnknown(value: unknown): Date | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function weatherWindowLabel(start: Date, end: Date): string {
+  const format = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+  const startLabel = format.format(start);
+  const endLabel = format.format(end);
+  return startLabel === endLabel ? endLabel : `${startLabel}–${endLabel}`;
+}
+
+function weatherJourneyGrounding(journey: any, propertyLabel: string, evaluatedAt: Date) {
+  const signal = journey.primarySignal;
+  const expiresAt = dateFromUnknown(signal?.expiresAt);
+  if (!signal || !expiresAt || expiresAt.getTime() <= evaluatedAt.getTime()) return null;
+
+  const family = String(signal.signalIntentFamily ?? '').toLowerCase();
+  const copy = WEATHER_HAZARD_COPY[family];
+  if (!copy) return null;
+
+  const payload = objectValue(signal.payloadJson);
+  const metadata = objectValue(signal.metadataJson);
+  const context = objectValue(journey.contextSnapshotJson);
+  const observedAt = dateFromUnknown(signal.lastObservedAt) ?? dateFromUnknown(journey.updatedAt) ?? evaluatedAt;
+  const effectiveFrom = dateFromUnknown(payload.effectiveFrom) ?? observedAt;
+  const sourceTitle = firstUsefulText(metadata.incidentTitle, payload.title);
+  const headline = sourceTitle && !/^review weather risk details$/i.test(sourceTitle)
+    ? sourceTitle
+    : `${copy.label} expected through ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(expiresAt)}`;
+  const implication = firstUsefulText(payload.homeImplication, payload.summary, context.homeImplication) ?? copy.implication;
+  const preparation = firstUsefulText(payload.instruction, payload.preparation, context.preparation) ?? copy.preparation;
+  const affectedSystems = Array.isArray(payload.affectedSystems)
+    ? payload.affectedSystems.filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+    : [];
+  const senderName = firstUsefulText(payload.senderName);
+  const source = senderName ? `National Weather Service — ${senderName}` : 'Current weather signal';
+  const severity = String(signal.severity ?? 'UNKNOWN').toLowerCase().replace(/_/g, ' ');
+  const observedLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(observedAt);
+
+  return {
+    family,
+    hazard: copy.label,
+    headline,
+    implication,
+    preparation,
+    affectedSystems,
+    source,
+    severity,
+    observedAt,
+    observedLabel,
+    effectiveFrom,
+    expiresAt,
+    windowLabel: weatherWindowLabel(effectiveFrom, expiresAt),
+    propertyLabel: propertyLabel.trim() || 'This property',
+  };
+}
+
+function environmentWeatherFamily(category: string): string | null {
+  if (category === 'heat') return 'heat_risk';
+  if (category === 'storm') return 'wind_risk';
+  if (category === 'rain' || category === 'flood') return 'flood_risk';
+  if (category === 'freeze' || category === 'snow') return 'freeze_risk';
+  if (category === 'wildfire' || category === 'wildfire_smoke') return 'wildfire_risk';
+  return null;
+}
+
 function environmentBoundary(value: string, endOfDay = false): Date | null {
   const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
     ? `${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`
@@ -481,6 +587,9 @@ export async function loadGuidanceActions(
   propertyId: string,
   db: HomeActionSourceDb,
   activeWeatherIncidentIds: Set<string> = new Set(),
+  activeEnvironmentWeatherFamilies: Set<string> = new Set(),
+  evaluatedAt = new Date(),
+  propertyLabel = 'This property',
 ): Promise<HomeAction[]> {
   // Home Operations Slice 4: once a Project has taken over a journey
   // (project.guidanceJourneyId), the journey stops being its own competing
@@ -511,7 +620,10 @@ export async function loadGuidanceActions(
           id: true,
           severity: true,
           confidenceScore: true,
+          signalIntentFamily: true,
+          firstObservedAt: true,
           lastObservedAt: true,
+          expiresAt: true,
           sourceEntityType: true,
           sourceEntityId: true,
           payloadJson: true,
@@ -571,12 +683,22 @@ export async function loadGuidanceActions(
       ? getHomeAssetDisplayLabel(journey.inventoryItem)
       : null;
     const isFinancialExposure = journey.journeyTypeKey === 'financial_exposure_resolution';
+    const isWeatherJourney = journey.issueDomain === 'WEATHER' || journey.journeyTypeKey === 'weather_risk_resolution';
     const financialGrounding = isFinancialExposure
       ? financialJourneyGrounding(journey, subjectLabel)
+      : null;
+    const weatherGrounding = isWeatherJourney
+      ? weatherJourneyGrounding(journey, propertyLabel, evaluatedAt)
       : null;
     // A material financial recommendation without an identifiable subject
     // and a concrete trigger or amount is not eligible to compete on Home.
     if (isFinancialExposure && !financialGrounding) return null;
+    // Weather guidance is only useful while it carries a live, bounded
+    // source signal. A current environment action for the same hazard owns
+    // Home presentation so the journey cannot duplicate fresher guidance.
+    if (isWeatherJourney && (!weatherGrounding || activeEnvironmentWeatherFamilies.has(weatherGrounding.family))) {
+      return null;
+    }
     const title = subjectLabel
       ? `${journeyTitle} for ${subjectLabel}`
       : journeyTitle;
@@ -627,22 +749,49 @@ export async function loadGuidanceActions(
       state: step?.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
       priority: journey.primarySignal?.severity === 'CRITICAL' ? 'NOW'
         : journey.primarySignal?.severity === 'HIGH' || step?.status === 'BLOCKED' ? 'SOON' : 'PLAN',
-      signal: financialHeadline ?? `${title}: ${step?.label ?? 'continue the active decision'}`,
-      whyItMatters: financialWhy ?? (coverageUncertain && subjectLabel
+      signal: weatherGrounding?.headline ?? financialHeadline ?? `${title}: ${step?.label ?? 'continue the active decision'}`,
+      whyItMatters: weatherGrounding?.implication ?? financialWhy ?? (coverageUncertain && subjectLabel
         ? `You previously said you were not sure whether ${subjectLabel} is covered. Confirm the current information, or ask to be reminded later.`
         : step?.description ?? 'This active journey preserves the evidence and decisions needed for the next home outcome.'),
-      recommendedAction: financialGrounding
+      recommendedAction: weatherGrounding
+        ? `Review ${weatherGrounding.hazard.toLowerCase()} details`
+        : financialGrounding
         ? `Review ${financialGrounding.subject} exposure`
         : recommendationResponse.materialActionAllowed
           ? step?.label ?? 'Continue this home decision'
         : withheldRecommendedAction ?? recommendationResponse.safeNextAction,
       withheldRecommendedAction,
-      expectedOutcome: financialGrounding
+      expectedOutcome: weatherGrounding
+        ? weatherGrounding.preparation
+        : financialGrounding
         ? `Clarify the amount, coverage, and next decision for ${financialGrounding.subject} before committing money.`
         : subjectLabel
           ? `Keeps ${subjectLabel}'s property, evidence, and decision context intact while you continue.`
         : `Keeps this property's evidence and decision context intact as you ${journeyTitle.charAt(0).toLowerCase()}${journeyTitle.slice(1)}.`,
-      ...(financialGrounding ? {
+      ...(weatherGrounding ? {
+        presentation: {
+          variant: 'WEATHER_ALERT' as const,
+          eyebrow: 'Weather risk',
+          headline: weatherGrounding.headline.slice(0, 180),
+          summary: weatherGrounding.implication.slice(0, 320),
+          whyNow: `${weatherGrounding.implication} ${weatherGrounding.preparation}`.slice(0, 500),
+          keyFacts: [
+            { label: 'Forecast window', value: weatherGrounding.windowLabel },
+            { label: 'Preparation', value: weatherGrounding.preparation.slice(0, 240) },
+            ...(weatherGrounding.affectedSystems.length > 0
+              ? [{ label: 'Affected systems', value: weatherGrounding.affectedSystems.slice(0, 3).join(' · ').slice(0, 240) }]
+              : []),
+            { label: 'Source freshness', value: `Observed ${weatherGrounding.observedLabel} · current` },
+            { label: 'Hazard', value: weatherGrounding.hazard },
+            { label: 'Location', value: weatherGrounding.propertyLabel.slice(0, 240) },
+            { label: 'Severity', value: weatherGrounding.severity },
+          ],
+          factGroups: [],
+          subject: { kind: 'EVENT' as const, id: journey.primarySignalId ?? journey.id, label: weatherGrounding.hazard },
+          detailLabel: 'Why this weather risk?',
+          group: null,
+        },
+      } : financialGrounding ? {
         presentation: {
           variant: 'FINANCIAL_EXPOSURE' as const,
           eyebrow: 'Financial planning',
@@ -670,15 +819,17 @@ export async function loadGuidanceActions(
       } : {}),
       timing: {
         dueAt: null,
-        windowStart: journey.startedAt.toISOString(),
-        windowEnd: null,
-        rationale: step?.status === 'BLOCKED' ? 'The current journey step is blocked and needs review.' : 'This is the next incomplete step in an active journey.',
+        windowStart: weatherGrounding?.effectiveFrom.toISOString() ?? journey.startedAt.toISOString(),
+        windowEnd: weatherGrounding?.expiresAt.toISOString() ?? null,
+        rationale: weatherGrounding
+          ? `This weather signal is current for ${weatherGrounding.windowLabel}.`
+          : step?.status === 'BLOCKED' ? 'The current journey step is blocked and needs review.' : 'This is the next incomplete step in an active journey.',
       },
       evidence: [{
         id: journey.primarySignal?.id ?? journey.id,
-        type: 'SYSTEM_DERIVATION',
-        label: title,
-        source: 'Guidance journey',
+        type: weatherGrounding ? 'EXTERNAL_SOURCE' : 'SYSTEM_DERIVATION',
+        label: weatherGrounding?.hazard ?? title,
+        source: weatherGrounding?.source ?? 'Guidance journey',
         observedAt: (journey.primarySignal?.lastObservedAt ?? journey.updatedAt).toISOString(),
         freshness: 'CURRENT',
         confidence,
@@ -688,7 +839,9 @@ export async function loadGuidanceActions(
       governance,
       primaryCta: {
         kind: 'REVIEW',
-        label: financialGrounding
+        label: weatherGrounding
+          ? `Review ${weatherGrounding.hazard.toLowerCase()} details`.slice(0, 120)
+          : financialGrounding
           ? `Review ${financialGrounding.subject} exposure`.slice(0, 120)
           : recommendationResponse.materialActionAllowed ? step?.label ?? 'Continue journey' : 'Review home information',
         href: recommendationResponse.materialActionAllowed
@@ -696,11 +849,11 @@ export async function loadGuidanceActions(
           : `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}${financialLaunchParams ? `&${financialLaunchParams.toString()}` : ''}`,
       },
       secondaryCtas: [
-        {
+        ...((isCoverageJourney || firstMissingContext) ? [{
           kind: 'CORRECT_FACT',
           label: correctionLabel,
           href: correctionHref,
-        },
+        } as const] : []),
         ...(governance.safetyTier === 'SAFETY_EMERGENCY'
           ? [{
               kind: 'ESCALATE' as const,
@@ -3241,8 +3394,20 @@ export async function getPromotedHomeActions(
     options.evaluatedAt,
     options.propertyLabel,
   );
+  const activeEnvironmentActionIds = new Set(environmentActions.map((action) => action.id.replace(/^environment:/, '')));
+  const activeEnvironmentWeatherFamilies = new Set((options.environmentInsights ?? [])
+    .filter((insight) => activeEnvironmentActionIds.has(insight.id))
+    .map((insight) => environmentWeatherFamily(insight.category))
+    .filter((family): family is string => Boolean(family)));
   const groups = await Promise.all([
-    loadGuidanceActions(propertyId, db, activeWeatherIncidentIds), Promise.resolve(incidentActions),
+    loadGuidanceActions(
+      propertyId,
+      db,
+      activeWeatherIncidentIds,
+      activeEnvironmentWeatherFamilies,
+      options.evaluatedAt ?? new Date(),
+      options.propertyLabel,
+    ), Promise.resolve(incidentActions),
     loadRecallActions(propertyId, db), loadCoverageActions(propertyId, db),
     loadProjectActions(propertyId, db), loadSeasonalChecklistActions(propertyId, db),
     loadInspectionFindingActions(propertyId, db),

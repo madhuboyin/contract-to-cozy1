@@ -318,6 +318,15 @@ async function bridgeIncidentToGuidance(incident: any) {
     typeof details.sourceRunId === 'string' && details.sourceRunId.trim().length > 0
       ? details.sourceRunId
       : null;
+  const weatherExpiryValue = [
+    details.expires,
+    details.effectiveTo,
+    details.eventEndAt,
+    details.endAt,
+  ].find((value) => typeof value === 'string' && !Number.isNaN(new Date(value).getTime()));
+  const weatherExpiry = mapped.issueDomain === 'WEATHER' && typeof weatherExpiryValue === 'string'
+    ? new Date(weatherExpiryValue)
+    : null;
 
   await guidanceJourneyService.ingestSignal({
     propertyId: incident.propertyId,
@@ -338,6 +347,8 @@ async function bridgeIncidentToGuidance(incident: any) {
     dedupeKey: `incident:${incident.id}`,
     payloadJson: {
       incidentId: incident.id,
+      title: incident.title,
+      summary: incident.summary ?? null,
       typeKey: incident.typeKey,
       status: incident.status,
       severity: incident.severity ?? null,
@@ -349,6 +360,12 @@ async function bridgeIncidentToGuidance(incident: any) {
       sourceRunId,
       providerEventId: details.providerEventId ?? null,
       providerRevision: details.providerRevision ?? null,
+      hazardFamily: details.hazardFamily ?? null,
+      instruction: details.instruction ?? null,
+      effectiveFrom: details.effectiveFrom ?? null,
+      effectiveTo: weatherExpiry?.toISOString() ?? null,
+      affectedSystems: details.affectedSystems ?? null,
+      senderName: details.senderName ?? null,
     },
     metadataJson: {
       incidentCategory: incident.category ?? null,
@@ -356,6 +373,7 @@ async function bridgeIncidentToGuidance(incident: any) {
       matcherVersion: details.matcherVersion ?? null,
       correlationId: details.correlationId ?? null,
     },
+    expiresAt: weatherExpiry,
   });
 }
 
