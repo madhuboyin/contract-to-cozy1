@@ -85,11 +85,17 @@ Implemented August 10, 2026:
 - Standardized **Open actions**, qualified zero coverage gaps as **Known coverage gaps** based on current records, and avoided presenting incomplete records as certainty.
 - Reduced contextual tool cards to one homeowner-focused value statement, removed repeated ready-state badges and prose, and retained readiness guidance when more context is required.
 - Added a deterministic projected-fact evidence-ID fallback so an incomplete legacy record cannot invalidate an otherwise grounded Home Action.
-- Added a dedicated weather-journey presentation with the named hazard, property, forecast window, severity, source freshness, preparation, and affected systems. Weather journeys without a recognized hazard and future expiry fail closed, while fresher same-hazard Incident or Environment actions suppress duplicates.
+- Added a dedicated weather-journey presentation with the named hazard, property, forecast window, severity, source freshness, preparation, and affected systems. Weather journeys without a recognized hazard and future expiry fail closed. The active source Incident owns presentation, while a current same-hazard Environment action suppresses the lower-value journey duplicate.
 - Preserved weather title, summary, instructions, affected systems, source, effective window, and expiry when Incidents bridge into Guidance. Generic correction CTAs are omitted unless a specific missing context field can be named.
 - Preserved property, action, entity, recommendation, context-version, journey, and return-path continuity. No database schema change or migration was required.
 
 Validation for this increment includes a successful backend TypeScript build, lint for the changed Home components, twenty-four promoted-source tests covering live, unbounded, and same-hazard duplicate weather journeys, nine focused Unified Home tests, six Home Digital Twin Home Action tests, seven presentation-registry tests, and a clean `git diff --check`. The repository-wide frontend type check continues to report two unrelated pre-existing Work Item test-fixture errors around optional `scheduleOverrideAt`.
+
+Recent delivery references:
+
+- `d924fd7` — Home presentation, homeowner-language, trust, density, empty-state, glance, and tool-card polish.
+- `16a2db9` — visible evidence disclosure and labeled **More** control.
+- `eeff5e2` — current, bounded weather Guidance presentation and weather-context preservation across Incident ingestion.
 
 ## Increment 3 — Source promotion and route-contract hardening
 

@@ -295,9 +295,15 @@ Delivered August 10, 2026:
 - Made missing-fact setup CTAs state the exact count.
 - Shortened **Tools for this home** cards to one homeowner-focused value statement. Ready-state badges and repeated readiness prose are omitted; missing-context guidance remains visible when the tool is not ready.
 - Added a stable evidence-ID fallback for projected Home Digital Twin facts so incomplete legacy or fixture records cannot invalidate an otherwise actionable Home card.
-- Replaced generic weather-journey copy with a dedicated presentation containing the named hazard, property, forecast window, severity, source freshness, preparation step, and affected systems when available. Weather journeys fail closed without a recognized hazard and future expiry, and a fresher same-hazard Environment or Incident action suppresses the journey duplicate.
+- Replaced generic weather-journey copy with a dedicated presentation containing the named hazard, property, forecast window, severity, source freshness, preparation step, and affected systems when available. Weather journeys fail closed without a recognized hazard and future expiry. The source Incident owns presentation when it remains active, and a current same-hazard Environment action suppresses the lower-value journey duplicate.
 - Preserved weather title, summary, instruction, affected systems, source, effective window, and expiry when an Incident is bridged into Guidance. Generic **Add home information** is no longer emitted when no specific missing context can be named.
 - No database schema change or migration is required for this presentation increment.
+
+### Recent delivery history
+
+- `d924fd7` — homeowner-language, density, trust, empty-state, glance, and contextual-tool polish.
+- `16a2db9` — visible supporting-evidence disclosure and a labeled **More** control replacing the icon-only ellipsis.
+- `eeff5e2` — bounded, hazard-specific weather Guidance presentation; stale and duplicate suppression; Incident-to-Guidance weather context preservation.
 
 ## 5. Recommended implementation order
 
@@ -371,6 +377,7 @@ Measure:
 | 1800 USD_PER_YEAR · default | $1,800/year · estimated | Uses familiar money and trust language |
 | 0.45 RATIO · inferred | Fair · 45% · estimated | Converts an implementation ratio into a readable condition |
 | Review Decluttering & staging: Needs some work | Review sale-prep item | Keeps the primary action short while the card carries the specific context |
+| Review weather risk details | Multi-day heat risk ahead | Names the actual hazard; the summary and first four facts provide impact, window, preparation, affected systems, and source freshness |
 
 ## 7. Acceptance criteria
 
@@ -391,15 +398,17 @@ Measure:
 
 ## 8. Implementation touchpoints
 
-| Area | Primary file | Required update |
+| Area | Primary file | Implemented responsibility |
 |---|---|---|
-| Guidance action projection | `apps/backend/src/services/homeActionSourcePromotion.service.ts` | Add grounded financial-exposure presentation and fail-closed eligibility |
-| Guidance context resolution | `apps/backend/src/services/homeActions.service.ts` | Reuse subject, amount, and coverage context for cards and active moments |
-| Sale preparation projection | `apps/backend/src/services/homeActionSourcePromotion.service.ts` | Add status filter, exact item presentation, stage-aware copy, and item deep link |
-| Guidance display titles | `apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts` | Keep generic titles as taxonomy labels, not sufficient Home headlines |
-| Home card renderer | `apps/frontend/src/components/home/UnifiedHomeSurface.tsx` | Render category presentation contracts consistently |
-| Contextual tool cards | `apps/frontend/src/components/home/UnifiedHomeToolsSection.tsx` | Use concise homeowner value copy and show readiness guidance only when context is missing |
-| Destination continuity | `apps/frontend/src/features/tools/toolDestinationContext.ts` | Preserve homeowner-facing origin and source entity |
+| Guidance action projection | `apps/backend/src/services/homeActionSourcePromotion.service.ts` | Grounds financial, sale, Home-fact, and weather presentations; applies fail-closed eligibility and weather-source precedence |
+| Incident-to-Guidance bridge | `apps/backend/src/services/incidents/incident.service.ts` | Preserves weather title, impact, instructions, systems, source, effective window, and expiry during Guidance ingestion |
+| Guidance context resolution | `apps/backend/src/services/homeActions.service.ts` | Reuses subject, amount, coverage, and continuity context for cards and active moments |
+| Sale preparation projection | `apps/backend/src/services/homeActionSourcePromotion.service.ts` | Filters terminal cases, presents the exact item with stage-aware copy, separates evidence sources, and deep-links the item |
+| Guidance display titles | `apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts` | Keeps generic titles as taxonomy labels rather than sufficient Home headlines |
+| Home card renderer | `apps/frontend/src/components/home/UnifiedHomeSurface.tsx` | Renders category contracts, four-fact collapsed summaries, visible evidence disclosure, and labeled secondary controls |
+| Contextual tool cards | `apps/frontend/src/components/home/UnifiedHomeToolsSection.tsx` | Uses concise homeowner value copy and shows readiness guidance only when context is missing |
+| Destination continuity | `apps/frontend/src/features/tools/toolDestinationContext.ts` | Preserves homeowner-facing origin and source entity |
+| Promoted-source verification | `apps/backend/tests/unit/phase2SourcePromotion.test.js` | Covers live bounded weather presentation, unbounded suppression, and current same-hazard Environment precedence |
 
 ## 9. Latest verification evidence
 
