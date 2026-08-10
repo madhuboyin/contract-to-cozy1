@@ -87,6 +87,7 @@ describe('server suggestion launch context', () => {
       radarMatchId: null,
       radarEventId: null,
       incidentId: null,
+      returnTo: null,
     });
   });
 

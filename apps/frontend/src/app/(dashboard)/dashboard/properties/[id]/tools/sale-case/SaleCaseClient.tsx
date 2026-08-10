@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -211,7 +211,9 @@ function structuralGapsWithoutEvidence(items: SaleReadinessItem[]): Array<{ key:
 
 export default function SaleCaseClient() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const propertyId = String(params.id);
+  const focusedItemId = searchParams.get('focusItemId');
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -332,6 +334,7 @@ export default function SaleCaseClient() {
           updateTransitionPending={updateTransitionMutation.isPending}
           onCompleteTransition={(transitionId, revokeShareIds) => completeTransitionMutation.mutate({ transitionId, revokeShareIds })}
           completeTransitionPending={completeTransitionMutation.isPending}
+          focusedItemId={focusedItemId}
         />
       )}
 
@@ -368,7 +371,7 @@ function ConfirmSaleIntentCard({
   return (
     <MobileCard variant="compact" className="space-y-3 text-center">
       <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>
-        Confirm you're preparing to sell
+        Confirm you&apos;re preparing to sell
       </p>
       <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
         Sale Readiness only opens once this property is marked for sale, so it never appears uninvited.
@@ -383,7 +386,7 @@ function ConfirmSaleIntentCard({
             </Button>
           </div>
           <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-            This sets "How you use this home" to For sale on your property record.
+            This sets &quot;How you use this home&quot; to For sale on your property record.
             {currentUseLabel ? ` It's currently set to "${currentUseLabel}".` : ''}
           </p>
           <Link href={editHref} className="mt-1 inline-block text-xs font-medium text-sky-700 hover:underline">
@@ -412,6 +415,7 @@ function SaleCaseBody({
   updateTransitionPending,
   onCompleteTransition,
   completeTransitionPending,
+  focusedItemId,
 }: {
   propertyId: string;
   overview: SaleCaseOverview & { saleCase: NonNullable<SaleCaseOverview['saleCase']> };
@@ -425,6 +429,7 @@ function SaleCaseBody({
   updateTransitionPending: boolean;
   onCompleteTransition: (transitionId: string, revokeShareIds: string[]) => void;
   completeTransitionPending: boolean;
+  focusedItemId: string | null;
 }) {
   const saleCase = overview.saleCase;
   // §12 Stage 3: PURSUING items must stay visible here — otherwise marking
@@ -438,11 +443,17 @@ function SaleCaseBody({
   const structuralGaps = structuralGapsWithoutEvidence(overview.readinessItems);
   const nextStep = NEXT_STATUS[saleCase.status];
 
+  React.useEffect(() => {
+    if (!focusedItemId) return;
+    const target = document.getElementById(`sale-readiness-item-${focusedItemId}`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusedItemId, overview.readinessItems]);
+
   return (
     <>
       {/* Primary content (§4.9/§4.9a): value-maximization section + question
           card, above the fold, ahead of the compliance-oriented groups. */}
-      <MaximizeReturnSection propertyId={propertyId} items={presentationItems} />
+      <MaximizeReturnSection propertyId={propertyId} items={presentationItems} focusedItemId={focusedItemId} />
 
       {groups.map((group) => {
         const GroupIcon = REQUIREMENT_CLASS_ICON[group.requirementClass];
@@ -454,43 +465,48 @@ function SaleCaseBody({
             {group.items.map((item) => {
               const sourceHref = sourceEntityHref(propertyId, item);
               return (
-              <MobileCard key={item.id} className="flex gap-3">
-                <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', iconStyle.bg)}>
-                  <GroupIcon className={cn('h-5 w-5', iconStyle.fg)} />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className={cn('mb-0.5 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
-                      {item.title}
-                    </p>
-                    <StatusChip tone={REQUIREMENT_CLASS_TONE[item.requirementClass]}>
-                      {CATEGORY_LABELS[item.category]}
-                    </StatusChip>
-                  </div>
-                  {item.detail ? (
-                    <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-                      {item.detail}
-                    </p>
-                  ) : null}
-                  {sourceHref ? (
-                    <Link href={sourceHref} className="mt-1 inline-block text-xs font-medium text-sky-700 hover:underline">
-                      View source →
-                    </Link>
-                  ) : null}
-                  {item.requirementClass === 'PROFESSIONAL_DECISION' ? (
-                    <div className="flex justify-end">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onDecision(item.id, 'WAIVE')}
-                        disabled={decisionPending}
-                      >
-                        Disclose and waive
-                      </Button>
+                <div key={item.id} id={`sale-readiness-item-${item.id}`} className="scroll-mt-24">
+                  <MobileCard className={cn(
+                    'flex gap-3 transition-shadow',
+                    focusedItemId === item.id && 'border-sky-400 bg-sky-50/60 ring-2 ring-sky-200',
+                  )}>
+                    <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', iconStyle.bg)}>
+                      <GroupIcon className={cn('h-5 w-5', iconStyle.fg)} />
                     </div>
-                  ) : null}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className={cn('mb-0.5 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+                          {item.title}
+                        </p>
+                        <StatusChip tone={REQUIREMENT_CLASS_TONE[item.requirementClass]}>
+                          {CATEGORY_LABELS[item.category]}
+                        </StatusChip>
+                      </div>
+                      {item.detail ? (
+                        <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                          {item.detail}
+                        </p>
+                      ) : null}
+                      {sourceHref ? (
+                        <Link href={sourceHref} className="mt-1 inline-block text-xs font-medium text-sky-700 hover:underline">
+                          View source →
+                        </Link>
+                      ) : null}
+                      {item.requirementClass === 'PROFESSIONAL_DECISION' ? (
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onDecision(item.id, 'WAIVE')}
+                            disabled={decisionPending}
+                          >
+                            Disclose and waive
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </MobileCard>
                 </div>
-              </MobileCard>
               );
             })}
           </div>
@@ -536,7 +552,7 @@ function SaleCaseBody({
                   </p>
                   {item.waivedReason ? (
                     <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-                      "{item.waivedReason}"
+                      &ldquo;{item.waivedReason}&rdquo;
                     </p>
                   ) : null}
                   <div className="flex justify-end">
@@ -660,7 +676,7 @@ function TransitionSection({
     return (
       <MobileCard className="space-y-2">
         <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
-          Capture how ownership actually transferred — retention decisions, the buyer's handoff package, and access cleanup.
+          Capture how ownership actually transferred — retention decisions, the buyer&apos;s handoff package, and access cleanup.
         </p>
         <div className="flex justify-end">
           <Button size="sm" onClick={onStart} disabled={startPending}>

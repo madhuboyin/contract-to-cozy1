@@ -221,9 +221,11 @@ function YourReturnSummary({ items }: { items: SaleReadinessItem[] }) {
 export function MaximizeReturnSection({
   propertyId,
   items,
+  focusedItemId,
 }: {
   propertyId: string;
   items: SaleReadinessItem[];
+  focusedItemId?: string | null;
 }) {
   const [wizardDismissed, setWizardDismissed] = React.useState(false);
 
@@ -290,7 +292,7 @@ export function MaximizeReturnSection({
   // rather than defaulting to showing it. Real, property-derived items
   // (findings, confirmed evidence, confirmed upgrades) are already true,
   // so they never wait on this.
-  const revealGeneric = wizardDismissed || (!loading && steps.length === 0);
+  const revealGeneric = wizardDismissed || (!loading && steps.length === 0) || genericItems.some((item) => item.id === focusedItemId);
   const showWizard = !loading && steps.length > 0 && !wizardDismissed;
   const visibleItems = revealGeneric ? items : realItems;
 
@@ -322,6 +324,7 @@ export function MaximizeReturnSection({
             <ItemCard
               key={item.id}
               item={item}
+              focused={item.id === focusedItemId}
               pursuePending={decisionMutation.isPending}
               onPursue={() => decisionMutation.mutate({ itemId: item.id, action: 'PURSUE' })}
               onUnpursue={() => decisionMutation.mutate({ itemId: item.id, action: 'UNPURSUE' })}
@@ -347,6 +350,7 @@ export function MaximizeReturnSection({
             <ItemCard
               key={item.id}
               item={item}
+              focused={item.id === focusedItemId}
               pursuePending={decisionMutation.isPending}
               onPursue={() => decisionMutation.mutate({ itemId: item.id, action: 'PURSUE' })}
               onUnpursue={() => decisionMutation.mutate({ itemId: item.id, action: 'UNPURSUE' })}
@@ -626,11 +630,13 @@ function UpgradesStep({
 
 function ItemCard({
   item,
+  focused,
   pursuePending,
   onPursue,
   onUnpursue,
 }: {
   item: SaleReadinessItem;
+  focused?: boolean;
   pursuePending: boolean;
   onPursue: () => void;
   onUnpursue: () => void;
@@ -646,10 +652,12 @@ function ItemCard({
   const canPursue = item.estimatedCostMinCents != null && (item.status === 'OPEN' || pursuing);
 
   return (
-    <MobileCard className={cn(
-      'flex gap-3',
-      pursuing ? 'border-violet-300 bg-violet-50/50' : confirmSignal && 'border-sky-200 bg-sky-50/40',
-    )}>
+    <div id={`sale-readiness-item-${item.id}`} className="scroll-mt-24">
+      <MobileCard className={cn(
+        'flex gap-3 transition-shadow',
+        pursuing ? 'border-violet-300 bg-violet-50/50' : confirmSignal && 'border-sky-200 bg-sky-50/40',
+        focused && 'border-sky-400 bg-sky-50/60 ring-2 ring-sky-200',
+      )}>
       <div className={cn(
         'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
         generic ? 'bg-amber-100' : confirmSignal ? 'bg-sky-100' : 'bg-emerald-100',
@@ -707,6 +715,7 @@ function ItemCard({
           </div>
         ) : null}
       </div>
-    </MobileCard>
+      </MobileCard>
+    </div>
   );
 }

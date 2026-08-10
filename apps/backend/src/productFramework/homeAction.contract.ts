@@ -127,6 +127,10 @@ const HomeActionPresentationSchema = z.object({
     'WEATHER_ALERT',
     'ENVIRONMENT_PREPARATION',
     'COVERAGE_REVIEW',
+    'FINANCIAL_EXPOSURE',
+    'SALE_PREPARATION',
+    'HOME_FACT_REVIEW',
+    'ACCEPTED_WORK',
     'GENERIC_ACTION',
   ]),
   eyebrow: z.string().trim().min(1).max(80).nullable(),
@@ -136,7 +140,7 @@ const HomeActionPresentationSchema = z.object({
   keyFacts: z.array(z.object({
     label: z.string().trim().min(1).max(80),
     value: z.string().trim().min(1).max(240),
-  })).max(4),
+  })).max(8),
   factGroups: z.array(z.object({
     label: z.string().trim().min(1).max(80),
     facts: z.array(z.object({
@@ -149,7 +153,7 @@ const HomeActionPresentationSchema = z.object({
     })).max(8),
   })).max(4),
   subject: z.object({
-    kind: z.enum(['INVENTORY_ITEM', 'CHECKLIST', 'PROPERTY', 'EVENT']),
+    kind: z.enum(['INVENTORY_ITEM', 'CHECKLIST', 'PROPERTY', 'EVENT', 'SALE_READINESS_ITEM', 'GUIDANCE_JOURNEY', 'WORK_ITEM']),
     id: z.string().trim().min(1).max(160),
     label: z.string().trim().min(1).max(180),
   }).nullable(),

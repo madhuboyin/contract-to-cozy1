@@ -56,6 +56,7 @@ export type ToolLaunchContext = {
   radarMatchId?: string | null;
   radarEventId?: string | null;
   incidentId?: string | null;
+  returnTo?: string | null;
 };
 
 export type ToolDiscoveryContext = {
@@ -262,6 +263,7 @@ function appendLaunchContext(href: string, context?: ToolLaunchContext): string 
   if (context.radarMatchId) params.set('radarMatchId', context.radarMatchId);
   if (context.radarEventId) params.set('radarEventId', context.radarEventId);
   if (context.incidentId) params.set('incidentId', context.incidentId);
+  if (context.returnTo) params.set('returnTo', context.returnTo);
   const suffix = params.toString();
   if (!suffix) return href;
   return `${href}${href.includes('?') ? '&' : '?'}${suffix}`;

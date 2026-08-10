@@ -68,5 +68,6 @@ export function parseToolLaunchContext(searchParams: LaunchSearchParams): ToolLa
     radarMatchId: searchParams.get('radarMatchId'),
     radarEventId: searchParams.get('radarEventId'),
     incidentId: searchParams.get('incidentId'),
+    returnTo: searchParams.get('returnTo'),
   };
 }

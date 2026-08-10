@@ -60,6 +60,9 @@ export type CtcEventName =
   | 'home_cards_viewed'
   | 'home_card_detail_opened'
   | 'home_card_correction_clicked'
+  | 'home_action_primary_clicked'
+  | 'home_action_feedback_submitted'
+  | 'home_action_return_clicked'
   | 'tool_discovery_impression'
   | 'tool_discovery_clicked'
   | 'tool_discovery_catalog_searched'
@@ -242,6 +245,26 @@ export interface CtcEventProperties {
     propertyId: string;
     actionId: string;
     sourceKind: string;
+  };
+  home_action_primary_clicked: {
+    propertyId: string;
+    actionId: string;
+    sourceKind: string;
+    presentationVariant?: string | null;
+    continuityComplete: boolean;
+  };
+  home_action_feedback_submitted: {
+    propertyId: string;
+    actionId: string;
+    command: string;
+    sourceKind: string;
+    presentationVariant?: string | null;
+  };
+  home_action_return_clicked: {
+    propertyId: string;
+    sourceActionId?: string | null;
+    toolId: string;
+    completed: boolean;
   };
   data_quality_signal: {
     tool: CtcTool;

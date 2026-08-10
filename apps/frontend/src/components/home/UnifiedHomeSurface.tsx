@@ -122,6 +122,67 @@ export function isAssetLifecycleAction(action: RankedHomeActionDTO): boolean {
     action.presentation.subject?.kind === 'INVENTORY_ITEM';
 }
 
+export function homeActionProvenance(action: RankedHomeActionDTO): {
+  source: string;
+  observedLabel: string | null;
+  freshness: string;
+  stale: boolean;
+} | null {
+  const evidence = action.evidence.find((entry) => entry.freshness === 'STALE') ?? action.evidence[0];
+  if (!evidence) return null;
+  const observed = evidence.observedAt ? new Date(evidence.observedAt) : null;
+  const observedLabel = observed && !Number.isNaN(observed.getTime())
+    ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(observed)
+    : null;
+  const stale = evidence.freshness === 'STALE';
+  return {
+    source: evidence.source,
+    observedLabel,
+    freshness: stale ? 'May be outdated' : evidence.freshness === 'CURRENT' ? 'Current evidence' : 'Freshness unknown',
+    stale,
+  };
+}
+
+function recordHomeActionPrimaryClick(action: RankedHomeActionDTO, propertyId: string): void {
+  let continuityComplete = false;
+  if (action.primaryCta.href.startsWith('/')) {
+    const destination = new URL(action.primaryCta.href, 'https://contracttocozy.local');
+    continuityComplete = [
+      'launchSurface',
+      'propertyId',
+      'sourceActionId',
+      'sourceEntityType',
+      'sourceEntityId',
+      'recommendationReason',
+      'recommendationVersion',
+      'contextVersion',
+      'returnTo',
+    ].every((key) => Boolean(destination.searchParams.get(key)));
+  }
+  track('home_action_primary_clicked', {
+    propertyId,
+    actionId: action.id,
+    sourceKind: action.source.kind,
+    presentationVariant: action.presentation?.variant ?? null,
+    continuityComplete,
+  });
+  void api.recordHomeActionOpened(propertyId, action.id);
+}
+
+function recordHomeActionFeedback(
+  action: RankedHomeActionDTO,
+  propertyId: string,
+  command: HomeActionCommand,
+): void {
+  track('home_action_feedback_submitted', {
+    propertyId,
+    actionId: action.id,
+    command,
+    sourceKind: action.source.kind,
+    presentationVariant: action.presentation?.variant ?? null,
+  });
+}
+
 export type AttentionEntry =
   | { kind: 'ACTION'; action: RankedHomeActionDTO }
   | { kind: 'ASSET_LIFECYCLE'; action: RankedHomeActionDTO }
@@ -212,7 +273,7 @@ export function CriticalWeatherActionCard({
           )}
           <div className="mt-4">
             <Button asChild size="sm" className="rounded-full bg-rose-700 hover:bg-rose-800">
-              <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
+              <Link href={action.primaryCta.href} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>
                 Review weather alert<ArrowRight className="ml-1 h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -268,6 +329,7 @@ export function EnvironmentActionCard({
         consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(command),
       });
       if (!response.success) throw new Error(response.message || 'Unable to update this action.');
+      recordHomeActionFeedback(action, propertyId, command);
       toast({
         title: command === 'COMPLETE'
           ? 'Preparation marked complete'
@@ -306,7 +368,7 @@ export function EnvironmentActionCard({
           <p className="mt-2 text-xs text-slate-500">Source: {action.evidence[0]?.source}</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button asChild size="sm" className="rounded-full bg-amber-700 hover:bg-amber-800">
-              <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
+              <Link href={action.primaryCta.href} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>
                 {action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -411,7 +473,7 @@ export function SeasonalChecklistActionCard({
       )}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button asChild size="sm" className="rounded-full">
-          <Link href={action.primaryCta.href} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>
+          <Link href={action.primaryCta.href} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>
             {action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" />
           </Link>
         </Button>
@@ -485,7 +547,7 @@ export function CoverageCorrectionGroupCard({
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button asChild size="sm" variant="outline" className="rounded-full">
-                  <Link href={action.primaryCta.href}>Review item</Link>
+                  <Link href={action.primaryCta.href} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>Review item</Link>
                 </Button>
                 {action.workItem && (
                   <Button size="sm" variant="ghost" className="rounded-full text-slate-500" onClick={() => setManageWorkItemId(action.workItem!.id)}>
@@ -569,6 +631,7 @@ export function ActionCard({
         consequenceAcknowledged: ['DEFER', 'DISMISS', 'NOT_RELEVANT', 'NO_MORTGAGE'].includes(command),
       });
       if (!response.success) throw new Error(response.message || 'Unable to update this action.');
+      recordHomeActionFeedback(action, propertyId, command);
       toast({
         title: command === 'COMPLETE'
           ? 'Action completed'
@@ -595,6 +658,7 @@ export function ActionCard({
     (action.feedbackControls.includes('DEFER') || action.feedbackControls.includes('SNOOZE'));
   const presentation = action.presentation;
   const assetLifecycle = isAssetLifecycleAction(action);
+  const provenance = homeActionProvenance(action);
   const headline = presentation?.headline ?? action.recommendedAction;
   const summary = assetLifecycle
     ? presentation?.whyNow ?? presentation?.summary ?? action.expectedOutcome
@@ -626,6 +690,13 @@ export function ActionCard({
           </div>
           <h3 className="mt-3 text-lg font-semibold tracking-tight text-slate-950">{headline}</h3>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{summary}</p>
+          {provenance && (
+            <p className={`mt-2 text-xs ${provenance.stale ? 'font-medium text-amber-700' : 'text-slate-500'}`}>
+              Based on {provenance.source}
+              {provenance.observedLabel ? ` · Observed ${provenance.observedLabel}` : ''}
+              {` · ${provenance.freshness}`}
+            </p>
+          )}
           {presentation && presentation.keyFacts.length > 0 && (
             <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {presentation.keyFacts.map((fact) => (
@@ -662,7 +733,13 @@ export function ActionCard({
               {action.evidence.map((evidence) => (
                 <li key={evidence.id} className="text-sm text-slate-700">
                   <span className="font-medium">{evidence.label}</span>
-                  <span className="text-slate-500"> · {evidence.source} · {evidence.freshness.toLowerCase()}</span>
+                  <span className="text-slate-500">
+                    {' · '}{evidence.source}
+                    {evidence.observedAt && !Number.isNaN(new Date(evidence.observedAt).getTime())
+                      ? ` · observed ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(evidence.observedAt))}`
+                      : ''}
+                    {` · ${evidence.freshness.toLowerCase()}`}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -677,7 +754,7 @@ export function ActionCard({
       )}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button asChild size="sm" className="rounded-full">
-          <Link href={primaryHref} onClick={() => { void api.recordHomeActionOpened(propertyId, action.id); }}>{action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+          <Link href={primaryHref} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>{action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
         </Button>
         {action.feedbackControls.includes('COMPLETE') && (
           <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => execute('COMPLETE')}>

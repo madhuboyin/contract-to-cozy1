@@ -245,6 +245,10 @@ export type ActivationHomeActionDTO = {
         | 'WEATHER_ALERT'
         | 'ENVIRONMENT_PREPARATION'
         | 'COVERAGE_REVIEW'
+        | 'FINANCIAL_EXPOSURE'
+        | 'SALE_PREPARATION'
+        | 'HOME_FACT_REVIEW'
+        | 'ACCEPTED_WORK'
         | 'GENERIC_ACTION';
       eyebrow: string | null;
       headline: string;
@@ -263,7 +267,7 @@ export type ActivationHomeActionDTO = {
         }>;
       }>;
       subject: {
-        kind: 'INVENTORY_ITEM' | 'CHECKLIST' | 'PROPERTY' | 'EVENT';
+        kind: 'INVENTORY_ITEM' | 'CHECKLIST' | 'PROPERTY' | 'EVENT' | 'SALE_READINESS_ITEM' | 'GUIDANCE_JOURNEY' | 'WORK_ITEM';
         id: string;
         label: string;
       } | null;
@@ -279,7 +283,7 @@ export type ActivationHomeActionDTO = {
       windowEnd: string | null;
       rationale: string;
     };
-    evidence: Array<{ id: string; label: string; source: string; freshness: string; confidence: number | null }>;
+    evidence: Array<{ id: string; label: string; source: string; observedAt?: string | null; freshness: string; confidence: number | null }>;
     assumptions: Array<{ key: string; label: string; value: string; editable: boolean }>;
     confidence: { score: number | null; label: 'LOW' | 'MEDIUM' | 'HIGH'; missing: string[] };
     primaryCta: { label: string; href: string };

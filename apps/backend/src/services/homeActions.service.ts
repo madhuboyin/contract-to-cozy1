@@ -675,6 +675,33 @@ async function appendAcceptedOperationalWork(
       whyItMatters: item.homeownerReason,
       recommendedAction: displayCopy.recommendedAction,
       expectedOutcome: displayCopy.expectedOutcome,
+      presentation: {
+        variant: 'ACCEPTED_WORK',
+        eyebrow: item.state === 'REPORTED_COMPLETE' ? 'Completion reported' : 'Accepted work',
+        headline: displayCopy.recommendedAction.slice(0, 180),
+        summary: item.homeownerReason.slice(0, 320),
+        whyNow: item.homeownerReason.slice(0, 500),
+        keyFacts: [
+          { label: 'Task', value: item.title.slice(0, 240) },
+          { label: 'Work state', value: String(item.state).toLowerCase().replace(/_/g, ' ') },
+          ...(item.dueAt ? [{
+            label: 'Due',
+            value: new Intl.DateTimeFormat('en-US', {
+              month: 'short', day: 'numeric', year: 'numeric',
+            }).format(item.dueAt),
+          }] : []),
+          {
+            label: 'Execution',
+            value: primaryExecution
+              ? `${String(primaryExecution.executionType).toLowerCase().replace(/_/g, ' ')} · ${primaryExecution.executionEntityId}`.slice(0, 240)
+              : 'Home Operations work record',
+          },
+        ],
+        factGroups: [],
+        subject: { kind: 'WORK_ITEM', id: item.id, label: item.title.slice(0, 180) },
+        detailLabel: 'Why this work?',
+        group: null,
+      },
       timing: {
         dueAt: item.dueAt?.toISOString() ?? null,
         windowStart: item.dueWindowStart?.toISOString() ?? null,
@@ -728,6 +755,54 @@ async function appendAcceptedOperationalWork(
     .map((action, index) => ({ ...action, ranking: { ...action.ranking, rank: index + 1 } }));
 }
 
+export function appendHomeActionLaunchContext(
+  href: string,
+  action: Pick<HomeAction, 'id' | 'propertyId' | 'source' | 'presentation' | 'relatedJourneyId'>,
+  contextVersion: string | null,
+): string {
+  // Do not decorate official/external resources. The continuity contract is
+  // for ContractToCozy destinations that can resolve the source Home action.
+  if (!href.startsWith('/')) return href;
+  const destination = new URL(href, 'https://contracttocozy.local');
+  const setIfMissing = (key: string, value: string | null | undefined) => {
+    if (value && !destination.searchParams.has(key)) destination.searchParams.set(key, value);
+  };
+  setIfMissing('launchSurface', 'unified_home');
+  setIfMissing('propertyId', action.propertyId);
+  setIfMissing('sourceActionId', action.id);
+  setIfMissing('sourceEntityType', action.source.kind);
+  setIfMissing('sourceEntityId', action.source.entityId);
+  setIfMissing('recommendationReason', action.presentation?.variant ?? `HOME_ACTION_${action.source.kind}`);
+  setIfMissing('recommendationVersion', action.source.version ?? 'phase2-v1');
+  setIfMissing('contextVersion', contextVersion ?? action.source.version ?? 'home-action-v1');
+  setIfMissing('journeyId', action.relatedJourneyId);
+  setIfMissing(
+    'itemId',
+    action.presentation?.subject?.kind === 'INVENTORY_ITEM'
+      ? action.presentation.subject.id
+      : null,
+  );
+  setIfMissing('returnTo', `/dashboard?propertyId=${encodeURIComponent(action.propertyId)}`);
+  return `${destination.pathname}${destination.search}${destination.hash}`;
+}
+
+export function addHomeActionLaunchContinuity(
+  actions: RankedHomeAction[],
+  contextVersion: string | null,
+): RankedHomeAction[] {
+  return actions.map((action) => ({
+    ...action,
+    primaryCta: {
+      ...action.primaryCta,
+      href: appendHomeActionLaunchContext(action.primaryCta.href, action, contextVersion),
+    },
+    secondaryCtas: action.secondaryCtas.map((cta) => ({
+      ...cta,
+      href: appendHomeActionLaunchContext(cta.href, action, contextVersion),
+    })),
+  }));
+}
+
 export async function getHomeActionFeed(propertyId: string, userId: string) {
   // Day-91 handoff is idempotent and runs at the standard Home-feed boundary,
   // so the property does not depend on a buyer dashboard or a separate cron.
@@ -752,6 +827,7 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   const promoted = await getPromotedHomeActions(propertyId, prisma, {
     includePersonalization: Boolean(personalization && !personalization.paused),
     environmentInsights: environmentReport?.insights ?? [],
+    userId,
   });
   const rawCandidates: HomeAction[] = [...orchestration.homeActions, ...promoted.actions];
   const entryContext = await getEntryContext(propertyId, userId);
@@ -773,7 +849,11 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   const coverageConflictSuppressedCount = governedCoverage.actions.length - candidates.length;
 
   const linkedActions = await linkWorkItemsAndReconcile(propertyId, rankAndDeduplicateHomeActions(candidates));
-  const actions = await appendAcceptedOperationalWork(propertyId, linkedActions);
+  const actionsWithAcceptedWork = await appendAcceptedOperationalWork(propertyId, linkedActions);
+  const actions = addHomeActionLaunchContinuity(
+    actionsWithAcceptedWork,
+    orchestration.aggregationContext?.contextVersion ?? null,
+  );
   emitHomeActionsSurfaced({ propertyId, userId, actions, source: 'phase2_home_actions' });
   for (const action of actions) {
     for (const supersededActionId of action.deduplication.mergedActionIds) {

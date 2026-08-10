@@ -48,6 +48,7 @@ require.cache[redisPath] = {
 const { goldenTestHomes } = require('../fixtures/productFramework/goldenTestHomes.js');
 const {
   HomeActionCommandSchema,
+  appendHomeActionLaunchContext,
   capabilityRecommendationsEnabled,
   getUnifiedHomeCapabilitySuggestions,
   rankAndDeduplicateHomeActions,
@@ -90,6 +91,32 @@ test('canonical feed ranks urgency and consequence with an explicit missing-cont
   assert.ok(urgentScore.score > plannedScore.score);
   assert.equal(plannedScore.components.missingContextPenalty, 6);
   assert.match(plannedScore.explanation, /missing context/i);
+});
+
+test('Home CTA continuity carries source, recommendation, context, journey, and return state', () => {
+  const action = actionFixture('guidance:journey-1', {
+    propertyId: 'property-1',
+    relatedJourneyId: 'journey-1',
+    presentation: {
+      variant: 'FINANCIAL_EXPOSURE',
+      subject: { kind: 'GUIDANCE_JOURNEY', id: 'journey-1', label: 'Furnace exposure' },
+    },
+  });
+  const href = appendHomeActionLaunchContext(
+    '/dashboard/properties/property-1/tools/guidance-overview?sourceEntityType=INCIDENT',
+    action,
+    'context-v7',
+  );
+  const params = new URL(href, 'https://contracttocozy.test').searchParams;
+  assert.equal(params.get('sourceActionId'), action.id);
+  assert.equal(params.get('sourceEntityType'), 'INCIDENT');
+  assert.equal(params.get('sourceEntityId'), action.source.entityId);
+  assert.equal(params.get('recommendationReason'), 'FINANCIAL_EXPOSURE');
+  assert.equal(params.get('recommendationVersion'), action.source.version);
+  assert.equal(params.get('contextVersion'), 'context-v7');
+  assert.equal(params.get('journeyId'), 'journey-1');
+  assert.equal(params.get('returnTo'), '/dashboard?propertyId=property-1');
+  assert.equal(appendHomeActionLaunchContext('https://example.com/remedy', action, 'context-v7'), 'https://example.com/remedy');
 });
 
 test('CAP-500 capability recommendation cutover flag defaults on and supports explicit disable', () => {

@@ -1,5 +1,6 @@
 import {
   adaptHomeActionSource,
+  evaluateHomeActionPresentationEligibility,
   normalizeHomeActionConfidenceScore,
   type HomeAction,
 } from '../productFramework';
@@ -16,6 +17,9 @@ import {
   resolveOwnershipCostCategoryAction,
 } from './ownershipCosts/ownershipCostDecision.service';
 import { buildRefinanceFreshness } from '../refinanceRadar/refinanceFreshness';
+import { guidanceFinancialContextService } from './guidanceEngine/guidanceFinancialContext.service';
+import { analyticsEmitter } from './analytics';
+import { ProductAnalyticsEventType } from '@prisma/client';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -249,6 +253,99 @@ function confidenceLabel(score: number | null): HomeAction['confidence']['label'
   return 'HIGH';
 }
 
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function firstUsefulText(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const normalized = value.trim().replace(/\s+/g, ' ');
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+function sentence(value: string): string {
+  return /[.!?]$/.test(value) ? value : `${value}.`;
+}
+
+function formatHomeActionCurrency(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function financialJourneyGrounding(journey: any, subjectLabel: string | null) {
+  const context = objectValue(journey.contextSnapshotJson);
+  const signalPayload = objectValue(journey.primarySignal?.payloadJson);
+  const signalMetadata = objectValue(journey.primarySignal?.metadataJson);
+  const sourceEntityType = String(journey.primarySignal?.sourceEntityType ?? '').toUpperCase();
+  const sourceFallback = sourceEntityType === 'RESERVE_FUND_LINE_ITEM'
+    ? 'home reserve shortfall'
+    : sourceEntityType === 'NEGOTIATION_SHIELD_CASE'
+      ? 'negotiation or claim decision'
+      : null;
+  const issueType = firstUsefulText(journey.issueType);
+  const subject = subjectLabel ?? firstUsefulText(
+    context.subject,
+    context.subjectLabel,
+    context.assetName,
+    context.userNote,
+    signalMetadata.incidentTitle,
+    signalMetadata.subject,
+    signalPayload.subject,
+    signalPayload.title,
+    issueType && !/financial exposure|financial issue/i.test(issueType) ? issueType : null,
+    sourceFallback,
+  );
+  const financial = guidanceFinancialContextService.evaluate({ journey, signal: journey.primarySignal });
+  const trigger = firstUsefulText(
+    context.trigger,
+    context.reason,
+    signalPayload.trigger,
+    signalPayload.reason,
+    signalMetadata.trigger,
+  );
+  const hasConsequence = financial.upcomingCost > 0 || financial.costOfDelay > 0 || Boolean(trigger);
+  if (!subject || !hasConsequence) return null;
+
+  const amount = financial.upcomingCost > 0 ? formatHomeActionCurrency(financial.upcomingCost) : null;
+  const coverage = financial.coverageImpact === 'COVERED'
+    ? 'Recorded as covered'
+    : financial.coverageImpact === 'PARTIAL'
+      ? 'Partially confirmed'
+      : financial.coverageImpact === 'NOT_COVERED'
+        ? 'Recorded as not covered'
+        : 'Not yet confirmed';
+  const observedAt = journey.primarySignal?.lastObservedAt ?? journey.updatedAt;
+  const observedLabel = observedAt instanceof Date
+    ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(observedAt)
+    : null;
+  const whyNowParts = [
+    trigger ? sentence(trigger) : null,
+    amount ? `${amount} is currently estimated to be at stake.` : null,
+    `Coverage is ${coverage.toLowerCase()}.`,
+  ].filter((value): value is string => Boolean(value));
+  const headline = amount
+    ? `Potential ${amount} exposure for ${subject}`
+    : `Potential financial exposure for ${subject}`;
+
+  return {
+    subject,
+    amount,
+    coverage,
+    observedAt,
+    observedLabel,
+    headline,
+    whyNow: whyNowParts.join(' ').slice(0, 500),
+  };
+}
+
 function environmentBoundary(value: string, endOfDay = false): Date | null {
   const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
     ? `${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`
@@ -396,6 +493,8 @@ export async function loadGuidanceActions(
           lastObservedAt: true,
           sourceEntityType: true,
           sourceEntityId: true,
+          payloadJson: true,
+          metadataJson: true,
         },
       },
       inventoryItem: {
@@ -450,12 +549,22 @@ export async function loadGuidanceActions(
     const subjectLabel = journey.inventoryItem
       ? getHomeAssetDisplayLabel(journey.inventoryItem)
       : null;
+    const isFinancialExposure = journey.journeyTypeKey === 'financial_exposure_resolution';
+    const financialGrounding = isFinancialExposure
+      ? financialJourneyGrounding(journey, subjectLabel)
+      : null;
+    // A material financial recommendation without an identifiable subject
+    // and a concrete trigger or amount is not eligible to compete on Home.
+    if (isFinancialExposure && !financialGrounding) return null;
     const title = subjectLabel
       ? `${journeyTitle} for ${subjectLabel}`
       : journeyTitle;
+    const firstMissingContext = missingContextKeys[0]?.trim();
     const correctionLabel = isCoverageJourney
       ? coverageUncertain ? 'Update coverage information' : 'Add coverage information'
-      : 'Add home information';
+      : firstMissingContext
+        ? `Add ${firstMissingContext.toLowerCase()}`
+        : 'Add home information';
     const actionId = `guidance:${journey.id}`;
     const correctionHref = isCoverageJourney && journey.inventoryItemId
       ? `/dashboard/properties/${propertyId}/inventory/items/${encodeURIComponent(journey.inventoryItemId)}/coverage?sourceActionId=${encodeURIComponent(actionId)}&returnTo=${encodeURIComponent('/dashboard')}`
@@ -473,6 +582,19 @@ export async function loadGuidanceActions(
       itemId: journey.inventoryItemId,
       routePath: step?.routePath ?? null,
     });
+    const financialLaunchParams = financialGrounding ? new URLSearchParams({
+      launchSurface: 'unified_home',
+      sourceActionId: actionId,
+      sourceEntityType: journey.primarySignal?.sourceEntityType ?? 'GUIDANCE_JOURNEY',
+      sourceEntityId: journey.primarySignal?.sourceEntityId ?? journey.id,
+      recommendationReason: 'FINANCIAL_EXPOSURE',
+      recommendationVersion: journey.templateVersion ?? 'phase2-v1',
+    }) : null;
+    const destinationHref = financialLaunchParams
+      ? `${href}${href.includes('?') ? '&' : '?'}${financialLaunchParams.toString()}`
+      : href;
+    const financialWhy = financialGrounding?.whyNow;
+    const financialHeadline = financialGrounding?.headline;
     return adaptHomeActionSource('GUIDANCE', {
       id: actionId,
       propertyId,
@@ -484,17 +606,48 @@ export async function loadGuidanceActions(
       state: step?.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
       priority: journey.primarySignal?.severity === 'CRITICAL' ? 'NOW'
         : journey.primarySignal?.severity === 'HIGH' || step?.status === 'BLOCKED' ? 'SOON' : 'PLAN',
-      signal: `${title}: ${step?.label ?? 'continue the active decision'}`,
-      whyItMatters: coverageUncertain && subjectLabel
+      signal: financialHeadline ?? `${title}: ${step?.label ?? 'continue the active decision'}`,
+      whyItMatters: financialWhy ?? (coverageUncertain && subjectLabel
         ? `You previously said you were not sure whether ${subjectLabel} is covered. Confirm the current information, or ask to be reminded later.`
-        : step?.description ?? 'This active journey preserves the evidence and decisions needed for the next home outcome.',
-      recommendedAction: recommendationResponse.materialActionAllowed
-        ? step?.label ?? 'Continue this home decision'
+        : step?.description ?? 'This active journey preserves the evidence and decisions needed for the next home outcome.'),
+      recommendedAction: financialGrounding
+        ? `Review ${financialGrounding.subject} exposure`
+        : recommendationResponse.materialActionAllowed
+          ? step?.label ?? 'Continue this home decision'
         : withheldRecommendedAction ?? recommendationResponse.safeNextAction,
       withheldRecommendedAction,
-      expectedOutcome: subjectLabel
-        ? `Keeps ${subjectLabel}'s property, evidence, and decision context intact while you continue.`
+      expectedOutcome: financialGrounding
+        ? `Clarify the amount, coverage, and next decision for ${financialGrounding.subject} before committing money.`
+        : subjectLabel
+          ? `Keeps ${subjectLabel}'s property, evidence, and decision context intact while you continue.`
         : `Keeps this property's evidence and decision context intact as you ${journeyTitle.charAt(0).toLowerCase()}${journeyTitle.slice(1)}.`,
+      ...(financialGrounding ? {
+        presentation: {
+          variant: 'FINANCIAL_EXPOSURE' as const,
+          eyebrow: 'Financial planning',
+          headline: financialGrounding.headline.slice(0, 180),
+          summary: financialGrounding.whyNow.slice(0, 320),
+          whyNow: financialGrounding.whyNow,
+          keyFacts: [
+            { label: 'Subject', value: financialGrounding.subject.slice(0, 240) },
+            ...(financialGrounding.amount ? [{ label: 'Exposure', value: financialGrounding.amount }] : []),
+            { label: 'Coverage', value: financialGrounding.coverage },
+            ...(financialGrounding.observedLabel ? [{ label: 'Observed', value: financialGrounding.observedLabel }] : []),
+            { label: 'Confidence', value: confidenceLabel(confidence).toLowerCase() },
+            ...(missingContextKeys.length > 0
+              ? [{ label: 'Still needed', value: missingContextKeys.slice(0, 2).join(' · ').slice(0, 240) }]
+              : []),
+          ],
+          factGroups: [],
+          subject: {
+            kind: journey.inventoryItemId ? 'INVENTORY_ITEM' as const : 'GUIDANCE_JOURNEY' as const,
+            id: journey.inventoryItemId ?? journey.id,
+            label: financialGrounding.subject.slice(0, 180),
+          },
+          detailLabel: 'See evidence',
+          group: null,
+        },
+      } : {}),
       timing: {
         dueAt: null,
         windowStart: journey.startedAt.toISOString(),
@@ -515,10 +668,12 @@ export async function loadGuidanceActions(
       governance,
       primaryCta: {
         kind: 'REVIEW',
-        label: recommendationResponse.materialActionAllowed ? step?.label ?? 'Continue journey' : 'Review home information',
+        label: financialGrounding
+          ? `Review ${financialGrounding.subject} exposure`.slice(0, 120)
+          : recommendationResponse.materialActionAllowed ? step?.label ?? 'Continue journey' : 'Review home information',
         href: recommendationResponse.materialActionAllowed
-          ? href
-          : `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`,
+          ? destinationHref
+          : `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}${financialLaunchParams ? `&${financialLaunchParams.toString()}` : ''}`,
       },
       secondaryCtas: [
         {
@@ -539,7 +694,7 @@ export async function loadGuidanceActions(
       createdAt: journey.createdAt.toISOString(),
       lastEvaluatedAt: journey.updatedAt.toISOString(),
     });
-  });
+  }).filter((action): action is HomeAction => action !== null);
 }
 
 async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
@@ -916,6 +1071,12 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
     take: 10,
     include: {
       property: { select: { state: true } },
+      policyTerm: {
+        select: {
+          termEnd: true,
+          insurancePolicy: { select: { carrierName: true, coverageType: true } },
+        },
+      },
       questions: {
         where: {
           isPrimary: true,
@@ -934,8 +1095,33 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
     const evidenceRows = Array.isArray(question.evidenceJson)
       ? question.evidenceJson
       : [];
+    const missingEvidenceRows = Array.isArray(question.missingEvidenceJson)
+      ? question.missingEvidenceJson
+      : [];
+    const evidenceRecords = evidenceRows.map(objectValue);
+    const missingRecords = missingEvidenceRows.map(objectValue);
+    const subject = firstUsefulText(
+      ...evidenceRecords.flatMap((entry) => [entry.subject, entry.subjectLabel, entry.label, entry.factLabel]),
+      humanizeFactKey(question.category),
+    ) ?? 'policy protection';
+    const evidenceStatus = evidenceRows.length > 0
+      ? `${evidenceRows.length} confirmed policy fact${evidenceRows.length === 1 ? '' : 's'}`
+      : 'No supporting policy fact recorded';
+    const exactGap = firstUsefulText(
+      ...missingRecords.flatMap((entry) => [entry.label, entry.factLabel, entry.factKey, entry.description, entry.reason]),
+      question.plainLanguageQuestion,
+    )!;
+    const carrierName = review.policyTerm?.insurancePolicy.carrierName?.trim() || null;
+    const coverageType = review.policyTerm?.insurancePolicy.coverageType?.trim() || null;
+    const renewalLabel = review.policyTerm?.termEnd
+      ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(review.policyTerm.termEnd)
+      : review.expiresAt
+        ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(review.expiresAt)
+        : null;
+    const headline = question.plainLanguageQuestion.replace(/\s+/g, ' ').trim();
+    const actionId = `coverage-review:${review.id}`;
     return adaptHomeActionSource('COVERAGE', {
-      id: `coverage-review:${review.id}`,
+      id: actionId,
       propertyId,
       lineageId: `coverage-review:${question.questionKey}`,
       sourceEntityId: review.id,
@@ -946,6 +1132,25 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
       whyItMatters: question.whyItMatters,
       recommendedAction: 'Review the confirmed policy fact and decide whether to ask your carrier',
       expectedOutcome: 'Resolve the material question using the controlling policy or licensed help.',
+      presentation: {
+        variant: 'COVERAGE_REVIEW',
+        eyebrow: 'Coverage review',
+        headline: headline.slice(0, 180),
+        summary: question.whyItMatters.slice(0, 320),
+        whyNow: question.whyItMatters.slice(0, 500),
+        keyFacts: [
+          { label: 'Subject', value: subject.slice(0, 240) },
+          { label: 'Evidence', value: evidenceStatus },
+          ...(carrierName ? [{ label: 'Provider', value: carrierName.slice(0, 240) }] : []),
+          ...(coverageType ? [{ label: 'Policy', value: coverageType.slice(0, 240) }] : []),
+          ...(renewalLabel ? [{ label: 'Renewal / expiry', value: renewalLabel }] : []),
+          { label: 'Gap', value: exactGap.slice(0, 240) },
+        ],
+        factGroups: [],
+        subject: { kind: 'PROPERTY', id: propertyId, label: subject.slice(0, 180) },
+        detailLabel: 'See policy evidence',
+        group: null,
+      },
       timing: {
         dueAt: review.expiresAt?.toISOString() ?? null,
         windowStart: review.generatedAt.toISOString(),
@@ -1196,8 +1401,12 @@ const SALE_PREP_PROMOTABLE_SOURCE_TYPES = ['SALE_PREP_SELF_REPORT', 'SALE_PREP_G
 
 async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
   if (!db.propertySaleCase || !db.saleReadinessItem) return [];
-  const saleCase = await db.propertySaleCase.findUnique({ where: { propertyId }, select: { id: true } });
+  const saleCase = await db.propertySaleCase.findUnique({
+    where: { propertyId },
+    select: { id: true, status: true, targetListDate: true, targetCloseDate: true },
+  });
   if (!saleCase) return [];
+  if (saleCase.status === 'CLOSED' || saleCase.status === 'CANCELLED') return [];
 
   const items = await db.saleReadinessItem.findMany({
     where: {
@@ -1205,15 +1414,72 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
       status: 'OPEN',
       sourceEntityType: { in: Array.from(SALE_PREP_PROMOTABLE_SOURCE_TYPES) as any },
     },
-    select: { id: true, sourceEntityType: true, title: true, detail: true, updatedAt: true, createdAt: true },
+    select: {
+      id: true,
+      sourceEntityType: true,
+      title: true,
+      detail: true,
+      category: true,
+      status: true,
+      dueAt: true,
+      estimatedCostMinCents: true,
+      estimatedCostMaxCents: true,
+      updatedAt: true,
+      createdAt: true,
+    },
   });
 
   const governance = lowConsequenceGovernance('sale-prep-v1');
   return items.map((item) => {
     const isSelfReported = item.sourceEntityType === 'SALE_PREP_SELF_REPORT';
     const confidence = isSelfReported ? 1 : 0.4;
+    const stage = saleCase.status === 'PREPARING'
+      ? {
+          eyebrow: 'Selling this home',
+          headlinePrefix: 'Before listing',
+          reason: 'This property has an active sale plan',
+          outcome: 'buyer confidence, disclosure readiness, or the target price',
+          timing: 'Best completed before this home is listed for sale',
+        }
+      : saleCase.status === 'LISTED'
+        ? {
+            eyebrow: 'Home is listed',
+            headlinePrefix: 'Address during listing',
+            reason: 'This property is currently listed',
+            outcome: 'buyer confidence, negotiations, or disclosure readiness',
+            timing: 'Address while the listing is active and before an offer advances',
+          }
+        : {
+            eyebrow: 'Home is under contract',
+            headlinePrefix: 'Resolve before handoff or close',
+            reason: 'This property is under contract',
+            outcome: 'the buyer handoff, closing readiness, or final negotiations',
+            timing: 'Resolve or document this before handoff or closing',
+          };
+    const targetDate = saleCase.status === 'PREPARING'
+      ? saleCase.targetListDate
+      : saleCase.targetCloseDate;
+    const dateLabel = targetDate
+      ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(targetDate)
+      : null;
+    const category = String(item.category).toLowerCase().replace(/_/g, ' ');
+    const whyNow = `${stage.reason}. ${sentence(item.detail ?? `This ${category} item may affect ${stage.outcome}`)}`;
+    const actionId = `sale-prep:${item.id}`;
+    const focusParams = new URLSearchParams({
+      focusItemId: item.id,
+      sourceActionId: actionId,
+      sourceEntityType: 'SALE_READINESS_ITEM',
+      sourceEntityId: item.id,
+      recommendationReason: `SALE_PREP_${saleCase.status}`,
+      recommendationVersion: 'sale-prep-v2',
+    });
+    const costRange = item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null
+      ? item.estimatedCostMinCents === item.estimatedCostMaxCents
+        ? formatHomeActionCurrency(item.estimatedCostMinCents / 100)
+        : `${formatHomeActionCurrency(item.estimatedCostMinCents / 100)}–${formatHomeActionCurrency(item.estimatedCostMaxCents / 100)}`
+      : null;
     return adaptHomeActionSource('SALE_PREP', {
-      id: `sale-prep:${item.id}`,
+      id: actionId,
       propertyId,
       lineageId: `sale-prep:${item.id}`,
       sourceEntityId: item.id,
@@ -1222,14 +1488,34 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
       state: 'OPEN',
       priority: 'CONSIDER',
       signal: item.title,
-      whyItMatters: item.detail ?? 'Part of your pre-sale value-maximization checklist.',
-      recommendedAction: 'Review and address before listing',
-      expectedOutcome: 'A stronger buyer impression and support for your target sale price.',
+      whyItMatters: whyNow,
+      recommendedAction: `${stage.headlinePrefix}: ${item.title}`,
+      expectedOutcome: `A documented decision that protects ${stage.outcome}.`,
+      presentation: {
+        variant: 'SALE_PREPARATION',
+        eyebrow: stage.eyebrow,
+        headline: `${stage.headlinePrefix}: ${item.title}`.slice(0, 180),
+        summary: whyNow.slice(0, 320),
+        whyNow: whyNow.slice(0, 500),
+        keyFacts: [
+          { label: 'Sale stage', value: String(saleCase.status).toLowerCase().replace(/_/g, ' ') },
+          ...(dateLabel ? [{ label: saleCase.status === 'PREPARING' ? 'Target list date' : 'Target close date', value: dateLabel }] : []),
+          { label: 'Item', value: item.title.slice(0, 240) },
+          { label: 'Source', value: isSelfReported ? 'Your Sale Readiness answers' : 'General sale-prep guidance' },
+          { label: 'Category', value: category },
+          ...(item.dueAt ? [{ label: 'Due', value: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(item.dueAt) }] : []),
+          ...(costRange ? [{ label: 'Estimated cost', value: costRange }] : []),
+        ],
+        factGroups: [],
+        subject: { kind: 'SALE_READINESS_ITEM', id: item.id, label: item.title.slice(0, 180) },
+        detailLabel: 'Why this item?',
+        group: null,
+      },
       timing: {
-        dueAt: null,
+        dueAt: item.dueAt?.toISOString() ?? targetDate?.toISOString() ?? null,
         windowStart: null,
-        windowEnd: null,
-        rationale: 'Best completed before listing your home for sale.',
+        windowEnd: targetDate?.toISOString() ?? null,
+        rationale: stage.timing,
       },
       evidence: [{
         id: item.id,
@@ -1249,8 +1535,8 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
       governance,
       primaryCta: {
         kind: 'REVIEW',
-        label: 'Open sale checklist',
-        href: `/dashboard/properties/${propertyId}/tools/sale-case`,
+        label: `Review ${item.title}`.slice(0, 120),
+        href: `/dashboard/properties/${propertyId}/tools/sale-case?${focusParams.toString()}`,
       },
       secondaryCtas: [],
       feedbackControls: RECOMMENDATION_FEEDBACK,
@@ -1827,6 +2113,34 @@ export async function loadOwnershipCostChangeActions(
 // capital timeline already computed — neither recomputes anything here.
 // ---------------------------------------------------------------------------
 
+function humanizeFactKey(value: unknown): string {
+  return String(value ?? '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function affectedDecisionForFact(fieldName: string): string {
+  if (/install|age|life|condition|failure/i.test(fieldName)) return 'replacement timing forecast';
+  if (/cost|price|value/i.test(fieldName)) return 'capital budget forecast';
+  if (/warranty|insurance|coverage/i.test(fieldName)) return 'coverage decision';
+  if (/energy|operating|maintenance/i.test(fieldName)) return 'ownership-cost forecast';
+  return 'Home planning forecast';
+}
+
+function projectedFactValue(fact: {
+  valueText: string | null;
+  valueNumeric: number | null;
+  unit: string | null;
+  factState: string;
+}): string {
+  if (fact.valueText?.trim()) return fact.valueText.trim();
+  if (fact.valueNumeric != null) return `${fact.valueNumeric}${fact.unit ? ` ${fact.unit}` : ''}`;
+  return fact.factState === 'CONFLICTED' ? 'Conflicting records' : 'Needs confirmation';
+}
+
 async function loadHomeDigitalTwinFactReviewActions(
   propertyId: string,
   db: HomeActionSourceDb,
@@ -1842,18 +2156,48 @@ async function loadHomeDigitalTwinFactReviewActions(
   const components = await db.homeTwinComponent.findMany({
     where: { digitalTwinId: twin.id, lifecycleState: 'ACTIVE' },
     select: {
+      id: true,
+      label: true,
+      componentType: true,
       projectedFacts: {
         where: { factState: { in: ['INFERRED', 'CONFLICTED', 'DEFAULT', 'UNKNOWN'] } },
-        select: { factState: true, correctionDestination: true },
+        select: {
+          id: true,
+          fieldName: true,
+          valueText: true,
+          valueNumeric: true,
+          unit: true,
+          factState: true,
+          sourceType: true,
+          sourceRecordType: true,
+          observedAt: true,
+          confidenceScore: true,
+          correctionDestination: true,
+        },
       },
     },
   });
 
-  const needsAttention = components.flatMap((c) => c.projectedFacts);
+  const needsAttention = components.flatMap((component) => component.projectedFacts.map((fact) => ({
+    ...fact,
+    componentId: component.id,
+    componentLabel: component.label ?? String(component.componentType).toLowerCase().replace(/_/g, ' '),
+  })));
   if (needsAttention.length === 0) return [];
 
-  const conflictCount = needsAttention.filter((f) => f.factState === 'CONFLICTED').length;
-  const singleDestination = needsAttention.length === 1 ? needsAttention[0].correctionDestination : null;
+  // Home only promotes facts that have a real field-level correction route.
+  // Facts without one remain visible inside the Digital Twin rather than
+  // sending the homeowner to a generic property page that cannot fix them.
+  const correctableFacts = needsAttention.filter((fact) => Boolean(fact.correctionDestination?.trim()));
+  if (correctableFacts.length === 0) return [];
+
+  const conflictCount = correctableFacts.filter((f) => f.factState === 'CONFLICTED').length;
+  const displayedFacts = correctableFacts.slice(0, 4);
+  const namedFacts = displayedFacts.map((fact) => `${fact.componentLabel} ${humanizeFactKey(fact.fieldName)}`);
+  const headlineFacts = namedFacts.slice(0, 2).join(' and ');
+  const affectedDecisions = [...new Set(displayedFacts.map((fact) => affectedDecisionForFact(fact.fieldName)))];
+  const reason = `These details are ${conflictCount > 0 ? 'conflicted or inferred' : 'currently inferred'} and affect ${affectedDecisions.join(' and ')}.`;
+  const correctionHref = displayedFacts[0].correctionDestination!;
 
   return [adaptHomeActionSource('SYSTEM', {
     id: `home-digital-twin-fact-review:${propertyId}`,
@@ -1866,26 +2210,42 @@ async function loadHomeDigitalTwinFactReviewActions(
     priority: conflictCount > 0 ? 'SOON' : 'CONSIDER',
     signal: conflictCount > 0
       ? `${conflictCount} home fact${conflictCount === 1 ? '' : 's'} have conflicting records on file.`
-      : `${needsAttention.length} home fact${needsAttention.length === 1 ? '' : 's'} should be added or verified at its source.`,
-    whyItMatters:
-      'Your planning tools use these Home Record facts for timing and cost estimates — correcting the owning record keeps projections trustworthy.',
-    recommendedAction: 'Review the flagged home facts',
-    expectedOutcome: 'Canonical Home Record facts replace inferred or default projection values.',
+      : `${correctableFacts.length} home fact${correctableFacts.length === 1 ? '' : 's'} should be added or verified at its source.`,
+    whyItMatters: reason,
+    recommendedAction: `Confirm ${headlineFacts}`,
+    expectedOutcome: `Recorded facts can replace inferred values and improve the ${affectedDecisions.join(' and ')}.`,
+    presentation: {
+      variant: 'HOME_FACT_REVIEW',
+      eyebrow: 'Home facts',
+      headline: `Confirm ${headlineFacts}`.slice(0, 180),
+      summary: reason.slice(0, 320),
+      whyNow: reason.slice(0, 500),
+      keyFacts: displayedFacts.map((fact) => ({
+        label: `${fact.componentLabel} · ${humanizeFactKey(fact.fieldName)}`.slice(0, 80),
+        value: `${projectedFactValue(fact)} · ${String(fact.factState).toLowerCase()}`.slice(0, 240),
+      })),
+      factGroups: [],
+      subject: { kind: 'PROPERTY', id: propertyId, label: headlineFacts.slice(0, 180) },
+      detailLabel: 'How this affects plans',
+      group: correctableFacts.length > 1
+        ? { kind: 'RELATED_ACTIONS', itemCount: Math.min(correctableFacts.length, 50) }
+        : null,
+    },
     timing: {
       dueAt: null,
       windowStart: null,
       windowEnd: null,
       rationale: 'Low urgency — review whenever convenient.',
     },
-    evidence: [{
-      id: twin.id,
+    evidence: displayedFacts.map((fact) => ({
+      id: fact.id,
       type: 'SYSTEM_DERIVATION',
-      label: 'Home Digital Twin projection',
-      source: 'Home Record',
-      observedAt: twin.updatedAt.toISOString(),
+      label: `${fact.componentLabel} ${humanizeFactKey(fact.fieldName)}`,
+      source: fact.sourceRecordType ?? String(fact.sourceType).toLowerCase().replace(/_/g, ' '),
+      observedAt: fact.observedAt?.toISOString() ?? twin.updatedAt.toISOString(),
       freshness: 'CURRENT',
-      confidence: 1,
-    }],
+      confidence: normalizeHomeActionConfidenceScore(fact.confidenceScore),
+    })),
     assumptions: [],
     options: [],
     tradeoffs: [],
@@ -1893,10 +2253,14 @@ async function loadHomeDigitalTwinFactReviewActions(
     governance: lowConsequenceGovernance('home-digital-twin-fact-review-v1'),
     primaryCta: {
       kind: 'CORRECT_FACT',
-      label: 'Review home facts',
-      href: singleDestination ?? `/dashboard/properties/${propertyId}`,
+      label: `Review ${headlineFacts}`.slice(0, 120),
+      href: correctionHref,
     },
-    secondaryCtas: [],
+    secondaryCtas: displayedFacts.slice(1).map((fact) => ({
+      kind: 'CORRECT_FACT' as const,
+      label: `Review ${fact.componentLabel} ${humanizeFactKey(fact.fieldName)}`.slice(0, 120),
+      href: fact.correctionDestination!,
+    })),
     feedbackControls: ['DISMISS', 'SNOOZE', 'NOT_RELEVANT', 'CORRECT_FACT'],
     relatedJourneyId: null,
     createdAt: twin.updatedAt.toISOString(),
@@ -2639,6 +3003,49 @@ async function loadSavingsBenefitsActions(propertyId: string, db: HomeActionSour
   return [...resumableActions, ...matchActions];
 }
 
+const UNGROUNDED_HOME_COPY = [
+  /^review a financial exposure$/i,
+  /^review and address before listing$/i,
+  /^review the flagged home facts$/i,
+  /^continue (this|the) (home )?(decision|journey)$/i,
+  /^add home information$/i,
+  /^view details$/i,
+  /^open tool$/i,
+];
+
+function isGenericHomeCopy(value: string): boolean {
+  const normalized = value.trim();
+  return normalized.length === 0 || UNGROUNDED_HOME_COPY.some((pattern) => pattern.test(normalized));
+}
+
+/**
+ * Home eligibility gate: promoted recommendations must carry a real subject
+ * and a homeowner-facing reason. Presentation subjects are authoritative;
+ * legacy adapters may use a specific signal/evidence label while they migrate.
+ */
+export function isGroundedHomeAction(action: HomeAction): boolean {
+  return homeActionGroundingReasons(action).length === 0;
+}
+
+export function homeActionGroundingReasons(action: HomeAction): string[] {
+  const reasons: string[] = [];
+  const headline = action.presentation?.headline ?? action.recommendedAction;
+  const explicitSubject = action.presentation?.subject?.label?.trim();
+  const evidenceSubject = action.evidence.find((entry) => !isGenericHomeCopy(entry.label))?.label.trim();
+  const signalSubject = !isGenericHomeCopy(action.signal) ? action.signal.trim() : null;
+  const subject = explicitSubject || evidenceSubject || signalSubject;
+  const reason = action.presentation?.whyNow?.trim() || action.whyItMatters.trim();
+
+  if (!subject) reasons.push('MISSING_SUBJECT');
+  if (!reason) reasons.push('MISSING_REASON');
+  if (isGenericHomeCopy(headline) && !explicitSubject) reasons.push('GENERIC_HEADLINE');
+  if (action.primaryCta.label.trim().length === 0 || isGenericHomeCopy(action.primaryCta.label)) {
+    reasons.push('GENERIC_OR_MISSING_CTA');
+  }
+  reasons.push(...evaluateHomeActionPresentationEligibility(action).reasons);
+  return [...new Set(reasons)];
+}
+
 export async function getPromotedHomeActions(
   propertyId: string,
   db: HomeActionSourceDb = prisma,
@@ -2646,6 +3053,7 @@ export async function getPromotedHomeActions(
     includePersonalization?: boolean;
     environmentInsights?: readonly EnvironmentInsight[];
     evaluatedAt?: Date;
+    userId?: string | null;
   } = {},
 ): Promise<{
   actions: HomeAction[];
@@ -2677,9 +3085,46 @@ export async function getPromotedHomeActions(
     loadOwnershipCostChangeActions(propertyId, db),
     Promise.resolve(environmentActions),
   ]);
-  const candidates = groups.flat();
+  const rawCandidates = groups.flat();
+  const groundingEvaluations = rawCandidates.map((action) => ({
+    action,
+    reasons: homeActionGroundingReasons(action),
+  }));
+  const candidates = groundingEvaluations
+    .filter((evaluation) => evaluation.reasons.length === 0)
+    .map((evaluation) => evaluation.action);
+  const groundingSuppressedCount = rawCandidates.length - candidates.length;
+  if (options.userId) {
+    analyticsEmitter.trackBatch(groundingEvaluations
+      .filter((evaluation) => evaluation.reasons.length > 0)
+      .map(({ action, reasons }) => ({
+        eventType: ProductAnalyticsEventType.HOME_ACTION_IDENTIFIED,
+        eventName: 'home_action_quality_suppressed',
+        userId: options.userId,
+        propertyId,
+        moduleKey: 'dashboard',
+        featureKey: 'unified_home_action_quality',
+        screenKey: 'unified_home',
+        source: 'home_action_grounding_gate',
+        valueNumeric: 1,
+        valueText: reasons[0],
+        metadataJson: {
+          actionId: action.id,
+          sourceKind: action.source.kind,
+          presentationVariant: action.presentation?.variant ?? null,
+          reasons,
+        },
+      })));
+  }
   if (candidates.length === 0) {
-    return { actions: [], diagnostics: { candidateCount: 0, suppressedCount: 0, snoozedCount: 0 } };
+    return {
+      actions: [],
+      diagnostics: {
+        candidateCount: rawCandidates.length,
+        suppressedCount: groundingSuppressedCount,
+        snoozedCount: 0,
+      },
+    };
   }
 
   const actionKeys = candidates.map((action) => action.id);
@@ -2697,8 +3142,8 @@ export async function getPromotedHomeActions(
   return {
     actions: candidates.filter((action) => !suppressed.has(action.id)),
     diagnostics: {
-      candidateCount: candidates.length,
-      suppressedCount: new Set(terminalEvents.map((item) => item.actionKey)).size,
+      candidateCount: rawCandidates.length,
+      suppressedCount: new Set(terminalEvents.map((item) => item.actionKey)).size + groundingSuppressedCount,
       snoozedCount: new Set(activeSnoozes.map((item) => item.actionKey)).size,
     },
   };

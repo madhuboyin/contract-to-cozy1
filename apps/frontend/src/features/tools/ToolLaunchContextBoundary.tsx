@@ -14,6 +14,7 @@ import {
 } from './toolDiscoveryRegistry';
 import { parseToolLaunchContext } from './capabilitySuggestionLaunchContext';
 import { hasRecentToolCompletion, persistToolLifecycleEvent } from './toolLifecycleTelemetry';
+import { track } from '@/lib/analytics/events';
 import {
   resolveToolDestinationContext,
   type ResolvedToolDestinationContext,
@@ -155,6 +156,11 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
     value.context.contextVersion ||
     value.context.recommendationReason
   ));
+  const returnHref = value?.context.returnTo &&
+    value.context.returnTo.startsWith('/') &&
+    !value.context.returnTo.startsWith('//')
+      ? value.context.returnTo
+      : null;
 
   return (
     <Context.Provider value={value}>
@@ -195,6 +201,20 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              {returnHref ? (
+                <Link
+                  href={returnHref}
+                  onClick={() => track('home_action_return_clicked', {
+                    propertyId: value.propertyId,
+                    sourceActionId: value.context.sourceActionId,
+                    toolId: value.toolId,
+                    completed: hasRecentToolCompletion(value.propertyId, value.toolId),
+                  })}
+                  className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-white px-3 py-2 font-semibold text-teal-800 hover:text-teal-950"
+                >
+                  Back to Home <ArrowRight className="h-3.5 w-3.5 rotate-180" />
+                </Link>
+              ) : null}
               {value.resolved.actionPlanHref ? (
                 <Link href={value.resolved.actionPlanHref} className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-white px-3 py-2 font-semibold text-teal-800 hover:text-teal-950">
                   View source action <ArrowRight className="h-3.5 w-3.5" />
