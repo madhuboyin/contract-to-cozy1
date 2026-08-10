@@ -199,6 +199,14 @@ export const createPropertySchema = z.object({
   city: z.string().min(1, 'City is required'),
   state: z.string().length(2, 'State must be 2 characters'),
   zipCode: z.string().regex(/^\d{5}$/, 'ZIP code must be 5 digits'),
+  timezone: z.string().trim().min(1).max(100).refine((value) => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'Timezone must be a valid IANA timezone').nullable().optional(),
   isPrimary: z.boolean().optional(),
 
   // Layer 1 - Basic/Migrated Fields

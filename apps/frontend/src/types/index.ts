@@ -1713,6 +1713,7 @@ export interface Property {
   city: string;
   state: string;
   zipCode: string;
+  timezone: string | null;
   isPrimary: boolean;
   householdRole?: HouseholdRole | null; // Present when user is a household member (not the owner)
   

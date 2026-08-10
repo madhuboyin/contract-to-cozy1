@@ -68,6 +68,7 @@ interface CreatePropertyData {
   city: string;
   state: string;
   zipCode: string;
+  timezone?: string | null;
   isPrimary?: boolean;
 
   // Layer 1 - Basic/Migrated Fields
@@ -203,7 +204,7 @@ function capturedFactKeys(data: CreatePropertyData | UpdatePropertyData): string
     ['isPrimary', 'core.isPrimary'], ['yearBuilt', 'core.yearBuilt'],
     ['propertySize', 'core.propertySizeSqFt'], ['bedrooms', 'core.bedrooms'],
     ['bathrooms', 'core.bathrooms'], ['city', 'location.city'], ['state', 'location.state'],
-    ['zipCode', 'location.zipCode'], ['roofType', 'structure.roofType'],
+    ['zipCode', 'location.zipCode'], ['timezone', 'location.timezone'], ['roofType', 'structure.roofType'],
     ['roofReplacementYear', 'structure.roofReplacementYear'], ['foundationType', 'structure.foundationType'],
     ['sidingType', 'structure.sidingType'], ['electricalPanelAge', 'structure.electricalPanelAgeYears'],
     ['heatingType', 'systems.heatingType'], ['coolingType', 'systems.coolingType'],
@@ -567,6 +568,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       sidingType: data.sidingType || null,
       electricalPanelAge: data.electricalPanelAge || null,
       lotSize: data.lotSize || null,
+      timezone: data.timezone?.trim() || null,
       hasIrrigation: data.hasIrrigation,
       hasDrainageIssues: data.hasDrainageIssues,
       hasSmokeDetectors: data.hasSmokeDetectors,
@@ -930,6 +932,7 @@ export async function updateProperty(
     city?: string;
     state?: string;
     zipCode?: string;
+    timezone?: string | null;
     isPrimary?: boolean;
   } = {};
 
@@ -939,6 +942,7 @@ export async function updateProperty(
   if (data.city !== undefined) updatePayload.city = data.city;
   if (data.state !== undefined) updatePayload.state = data.state.toUpperCase();
   if (data.zipCode !== undefined) updatePayload.zipCode = normalizeUsZip(data.zipCode);
+  if (data.timezone !== undefined) updatePayload.timezone = data.timezone?.trim() || null;
   if (data.isPrimary !== undefined) updatePayload.isPrimary = data.isPrimary;
   
   // PHASE 2 ADDITIONS - Dynamically set new fields for update

@@ -334,7 +334,9 @@ Contextual CTAs appear inside their owning sections:
 
 The primary CTA may change with record quality, but must never become a Home
 attention item or today's generalized Next Best Action. When no obvious gap
-exists, use `Review property record`.
+exists, use `Add to record`. Only explicitly curated, directly actionable gaps
+may replace this fallback; internal Property Context facts must not generate
+header labels automatically.
 
 ### 7.4 Record overview modules
 
@@ -1220,8 +1222,28 @@ issues. They are now reflected in the canonical specification and implemented:
 4. The repeated Ownership & Protection card was removed because ownership,
    household count, and verified-document count already have canonical homes.
    Protection remains available through Related Workspaces.
-5. The header primary CTA identifies the actual next record improvement rather
-   than using the ambiguous `Add to record` label.
+5. The header primary CTA identifies a curated next record improvement when one
+   exists, then falls back to `Add to record`. It never derives user-facing copy
+   directly from operational or internal Property Context fact keys.
+
+### 16.6 Contextual CTA correction: property timezone
+
+Post-deployment review exposed `Review timezone` as a generated header CTA. The
+underlying `location.timezone` fact was writable in the context registry, but
+the Property editor and update contract did not expose it, making the CTA a
+dead end. The correction is implemented as follows:
+
+- the header action resolver uses a curated record-gap hierarchy and no longer
+  promotes the first unknown context fact;
+- the complete-state fallback is the stable `Add to record` action;
+- Property Details now exposes a clearly labeled timezone selector alongside
+  the address, with copy explaining its effect on reminders, schedules, and
+  local dates;
+- the frontend Property contract and update client carry `timezone`;
+- the backend validates IANA timezone identifiers, persists the field on
+  create/update, and records `location.timezone` evidence; and
+- an existing valid timezone outside the common US choices remains visible and
+  preservable in the editor.
 
 Release evidence still required outside application implementation:
 

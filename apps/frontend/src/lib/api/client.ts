@@ -1567,6 +1567,7 @@ class APIClient {
       city?: string;
       state?: string;
       zipCode?: string;
+      timezone?: string | null;
       isPrimary?: boolean;
       
       // Layer 1 - Basic/Migrated Fields

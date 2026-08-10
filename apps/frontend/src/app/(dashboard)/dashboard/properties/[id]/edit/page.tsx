@@ -104,6 +104,27 @@ const RESPONSIBILITY_PRESETS = [
   { value: 'SHARED', label: 'Responsibilities are shared', description: 'Use this when maintenance is usually coordinated together.', icon: UsersRound },
 ] as const;
 
+const PROPERTY_TIMEZONE_OPTIONS = [
+  { value: 'America/New_York', label: 'Eastern Time' },
+  { value: 'America/Chicago', label: 'Central Time' },
+  { value: 'America/Denver', label: 'Mountain Time' },
+  { value: 'America/Phoenix', label: 'Arizona Time' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time' },
+  { value: 'America/Anchorage', label: 'Alaska Time' },
+  { value: 'America/Adak', label: 'Hawaii–Aleutian Time' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time' },
+  { value: 'America/Puerto_Rico', label: 'Atlantic Time' },
+] as const;
+
+function isValidIanaTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 type ResponsibilityScope = (typeof RESPONSIBILITY_SCOPES)[number];
 type ResponsibleParty = (typeof RESPONSIBLE_PARTY_OPTIONS)[number];
 
@@ -270,6 +291,7 @@ const propertySchema = z.object({
   city: z.string().min(1, { message: "City is required." }),
   state: z.string().min(2, { message: "State must be 2 characters." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
+  timezone: z.string().refine(isValidIanaTimezone, { message: 'Select a valid property timezone.' }).nullable(),
   
   dwellingType: z.enum(DWELLING_TYPE_OPTIONS),
   ownershipForm: z.enum(OWNERSHIP_FORM_OPTIONS),
@@ -375,6 +397,7 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         city: property.city,
         state: property.state,
         zipCode: property.zipCode,
+        timezone: property.timezone ?? null,
         
         dwellingType: property.dwellingType || "UNKNOWN",
         ownershipForm: property.ownershipForm || "UNKNOWN",
@@ -700,7 +723,7 @@ export default function EditPropertyPage() {
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
     defaultValues: {
-      name: "", isPrimary: false, address: "", city: "", state: "", zipCode: "",
+      name: "", isPrimary: false, address: "", city: "", state: "", zipCode: "", timezone: null,
       dwellingType: "UNKNOWN", ownershipForm: "UNKNOWN", propertyUse: "UNKNOWN",
       occupancyStatus: "UNKNOWN", responsibilities: defaultResponsibilityParties('UNKNOWN'),
       propertySize: null, yearBuilt: null, bedrooms: null, bathrooms: null,
@@ -775,6 +798,7 @@ export default function EditPropertyPage() {
         city: data.city,
         state: data.state.toUpperCase(), 
         zipCode: data.zipCode,
+        timezone: data.timezone,
         isPrimary: data.isPrimary,
         
         dwellingType: data.dwellingType,
@@ -1490,7 +1514,7 @@ export default function EditPropertyPage() {
                     </FormItem>
                   )}
                 />
-                <div className="basics-address-row-2 lg:col-span-12 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(120px,240px)_80px_110px] sm:items-end">
+                <div className="basics-address-row-2 lg:col-span-12 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(120px,240px)_80px_110px_minmax(170px,220px)] sm:items-end">
                   <FormField
                     control={form.control}
                     name="city"
@@ -1520,6 +1544,36 @@ export default function EditPropertyPage() {
                       <FormItem className="field-zip w-full sm:w-[100px]">
                         <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Zip</FormLabel>
                         <FormControl><Input id="field-zipCode" className="h-9 text-sm tracking-normal focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="08540" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="timezone"
+                    render={({ field }) => (
+                      <FormItem className="min-w-0 w-full">
+                        <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Property timezone</FormLabel>
+                        <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger id="field-timezone" className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40">
+                              <SelectValue placeholder="Select timezone" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {field.value && !PROPERTY_TIMEZONE_OPTIONS.some((option) => option.value === field.value) ? (
+                              <SelectItem value={field.value}>{field.value.replaceAll('_', ' ')}</SelectItem>
+                            ) : null}
+                            {PROPERTY_TIMEZONE_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="mt-1 text-[11px] leading-4 text-gray-500 dark:text-slate-400">
+                          Used for this property&apos;s reminders, schedules, and local dates.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}

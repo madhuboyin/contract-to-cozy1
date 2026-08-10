@@ -68,12 +68,11 @@ function resolvePrimaryRecordAction(
   if ((recordOverview.sections.documents.data?.totalCount ?? 0) === 0) {
     return { label: 'Upload first document', href: `/dashboard/documents?propertyId=${encodeURIComponent(property.id)}` };
   }
-  const nextFact = Object.values(recordOverview.context.snapshot?.facts ?? {})
-    .find((fact) => fact.state !== 'KNOWN' && fact.correctionPath?.startsWith('/dashboard/'));
-  return {
-    label: nextFact ? `Review ${nextFact.key.split('.').pop()?.replace(/([A-Z])/g, ' $1').toLowerCase() ?? 'details'}` : 'Review property record',
-    href: nextFact?.correctionPath?.replaceAll(':propertyId', encodeURIComponent(property.id)) ?? editHref,
-  };
+  // The header CTA is deliberately curated. Property Context also contains
+  // operational and derived facts (for example timezone and geocoding) that
+  // should never surface as an unexplained primary action merely because they
+  // are the first unknown fact in an object.
+  return { label: 'Add to record', href: editHref };
 }
 
 function appendQueryParam(href: string, key: string, value: string): string {
