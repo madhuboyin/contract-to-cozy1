@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { adaptHomeActionSource, type HomeAction } from '../productFramework';
+import {
+  adaptHomeActionSource,
+  ensureHomeActionPresentation,
+  homeActionLaunchEligibilityReasons,
+  type HomeAction,
+} from '../productFramework';
 import { prisma } from '../lib/prisma';
 import { emitHomeActionsSurfaced, emitNorthStarLineageEvent } from './analytics';
 import {
@@ -11,7 +16,7 @@ import {
 import { getOrchestrationSummary } from './orchestration.service';
 import { recordOrchestrationEvent } from './orchestrationEvent.service';
 import { publishOrchestrationSnoozeSignal, snoozeAction } from './orchestrationSnooze.service';
-import { getPromotedHomeActions } from './homeActionSourcePromotion.service';
+import { filterGroundedHomeActions, getPromotedHomeActions } from './homeActionSourcePromotion.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { NewHomeSetupService } from './newHomeSetup.service';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
@@ -325,6 +330,13 @@ export function reconcileCoverageHomeActions(
 ): HomeAction[] {
   return actions.filter((action) => {
     const isLiveCoverageReview = action.source.kind === 'COVERAGE';
+    const isPolicyLevelReview = isLiveCoverageReview &&
+      action.presentation?.variant === 'COVERAGE_REVIEW' &&
+      action.presentation.subject?.kind === 'PROPERTY';
+    // Policy-term reviews are already scoped to a verified current term and
+    // an open evidence-backed gap. Inventory responsibility reconciliation
+    // applies only to item-level coverage recommendations.
+    if (isPolicyLevelReview) return true;
     const isCoverageGuidance = action.source.kind === 'GUIDANCE' &&
       action.governance.safetyTier === 'REGULATED_COVERAGE' &&
       coverageByInventoryItemId.has(action.source.entityId);
@@ -684,12 +696,12 @@ async function appendAcceptedOperationalWork(
         keyFacts: [
           { label: 'Task', value: item.title.slice(0, 240) },
           { label: 'Work state', value: String(item.state).toLowerCase().replace(/_/g, ' ') },
-          ...(item.dueAt ? [{
+          {
             label: 'Due',
-            value: new Intl.DateTimeFormat('en-US', {
+            value: item.dueAt ? new Intl.DateTimeFormat('en-US', {
               month: 'short', day: 'numeric', year: 'numeric',
-            }).format(item.dueAt),
-          }] : []),
+            }).format(item.dueAt) : 'Not scheduled',
+          },
           {
             label: 'Execution',
             value: primaryExecution
@@ -827,6 +839,11 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
   const promoted = await getPromotedHomeActions(propertyId, prisma, {
     includePersonalization: Boolean(personalization && !personalization.paused),
     environmentInsights: environmentReport?.insights ?? [],
+    propertyLabel: environmentReport
+      ? environmentReport.property.name?.trim() ||
+        [environmentReport.property.address, environmentReport.property.city, environmentReport.property.state]
+          .filter(Boolean).join(', ')
+      : 'This property',
     userId,
   });
   const rawCandidates: HomeAction[] = [...orchestration.homeActions, ...promoted.actions];
@@ -838,8 +855,14 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     for (const bucket of Object.values(activation.plan)) rawCandidates.push(...bucket);
   }
 
+  const presentedCandidates = rawCandidates.map(ensureHomeActionPresentation);
+  const initiallyGrounded = filterGroundedHomeActions(presentedCandidates, {
+    propertyId,
+    userId,
+    source: 'home_action_feed_grounding_gate',
+  });
   const runtimePolicy = coverageActionRuntimePolicy(userId);
-  const governedCoverage = applyCoverageActionLifecyclePolicy(rawCandidates, {
+  const governedCoverage = applyCoverageActionLifecyclePolicy(initiallyGrounded.actions, {
     rolloutEnabled: runtimePolicy.rollout.enabled,
     killSwitchEnabled: runtimePolicy.killSwitchEnabled,
     ruleSourceStatus: runtimePolicy.ruleSourceStatus,
@@ -850,10 +873,20 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
 
   const linkedActions = await linkWorkItemsAndReconcile(propertyId, rankAndDeduplicateHomeActions(candidates));
   const actionsWithAcceptedWork = await appendAcceptedOperationalWork(propertyId, linkedActions);
-  const actions = addHomeActionLaunchContinuity(
+  const actionsWithContinuity = addHomeActionLaunchContinuity(
     actionsWithAcceptedWork,
     orchestration.aggregationContext?.contextVersion ?? null,
   );
+  const finalEligibility = filterGroundedHomeActions(actionsWithContinuity, {
+    propertyId,
+    userId,
+    source: 'home_action_final_eligibility_gate',
+    additionalReasons: homeActionLaunchEligibilityReasons,
+  });
+  const actions = (finalEligibility.actions as RankedHomeAction[]).map((action, index) => ({
+    ...action,
+    ranking: { ...action.ranking, rank: index + 1 },
+  }));
   emitHomeActionsSurfaced({ propertyId, userId, actions, source: 'phase2_home_actions' });
   for (const action of actions) {
     for (const supersededActionId of action.deduplication.mergedActionIds) {

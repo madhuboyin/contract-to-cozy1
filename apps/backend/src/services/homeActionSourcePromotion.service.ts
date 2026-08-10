@@ -338,6 +338,7 @@ function financialJourneyGrounding(journey: any, subjectLabel: string | null) {
   return {
     subject,
     amount,
+    trigger,
     coverage,
     observedAt,
     observedLabel,
@@ -371,6 +372,7 @@ export function adaptEnvironmentInsightsToHomeActions(
   insights: readonly EnvironmentInsight[],
   incidentActions: readonly HomeAction[],
   evaluatedAt = new Date(),
+  propertyLabel = 'This property',
 ): HomeAction[] {
   const activeIncidentIds = new Set(
     incidentActions
@@ -418,6 +420,25 @@ export function adaptEnvironmentInsightsToHomeActions(
         whyItMatters: `${insight.summary} ${insight.homeImplication}`.trim(),
         recommendedAction: insight.recommendedActions[0] ?? primary?.label ?? 'Review the environment outlook',
         expectedOutcome: `Prepare the home for ${insight.timeframe.toLowerCase()} and reduce avoidable exposure.`,
+        presentation: {
+          variant: 'ENVIRONMENT_PREPARATION',
+          eyebrow: 'Local environment',
+          headline: insight.title.slice(0, 180),
+          summary: `${insight.summary} ${insight.homeImplication}`.trim().slice(0, 320),
+          whyNow: `${insight.timeframe}: ${insight.homeImplication}`.slice(0, 500),
+          keyFacts: [
+            { label: 'Hazard', value: humanizeFactKey(insight.category) },
+            { label: 'Location', value: propertyLabel.slice(0, 240) },
+            { label: 'Forecast window', value: insight.timeframe.slice(0, 240) },
+            { label: 'Severity', value: 'Action recommended' },
+            { label: 'Source freshness', value: `Current as of ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(evaluatedAt)}` },
+            { label: 'Preparation', value: (insight.recommendedActions[0] ?? primary?.label ?? 'Review the environment outlook').slice(0, 240) },
+          ],
+          factGroups: [],
+          subject: { kind: 'EVENT', id: insight.id, label: `${insight.title} at ${propertyLabel}`.slice(0, 180) },
+          detailLabel: 'Why prepare now?',
+          group: null,
+        },
         timing: {
           dueAt: windowStart?.toISOString() ?? null,
           windowStart: windowStart?.toISOString() ?? null,
@@ -630,13 +651,12 @@ export async function loadGuidanceActions(
           whyNow: financialGrounding.whyNow,
           keyFacts: [
             { label: 'Subject', value: financialGrounding.subject.slice(0, 240) },
-            ...(financialGrounding.amount ? [{ label: 'Exposure', value: financialGrounding.amount }] : []),
+            { label: 'Exposure', value: financialGrounding.amount ?? 'Not yet estimated' },
+            { label: 'Trigger', value: financialGrounding.trigger?.slice(0, 240) ?? 'The recorded exposure amount requires review' },
             { label: 'Coverage', value: financialGrounding.coverage },
-            ...(financialGrounding.observedLabel ? [{ label: 'Observed', value: financialGrounding.observedLabel }] : []),
+            { label: 'Observation date', value: financialGrounding.observedLabel ?? 'Not recorded' },
             { label: 'Confidence', value: confidenceLabel(confidence).toLowerCase() },
-            ...(missingContextKeys.length > 0
-              ? [{ label: 'Still needed', value: missingContextKeys.slice(0, 2).join(' · ').slice(0, 240) }]
-              : []),
+            { label: 'Missing facts', value: missingContextKeys.length > 0 ? missingContextKeys.slice(0, 2).join(' · ').slice(0, 240) : 'None identified' },
           ],
           factGroups: [],
           subject: {
@@ -697,7 +717,11 @@ export async function loadGuidanceActions(
   }).filter((action): action is HomeAction => action !== null);
 }
 
-async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): Promise<HomeAction[]> {
+async function loadIncidentActions(
+  propertyId: string,
+  db: HomeActionSourceDb,
+  propertyLabel = 'This property',
+): Promise<HomeAction[]> {
   const incidents = await db.incident.findMany({
     where: {
       propertyId,
@@ -753,6 +777,29 @@ async function loadIncidentActions(propertyId: string, db: HomeActionSourceDb): 
         ? `Review ${incident.title} safety guidance`
         : proposed?.ctaLabel ?? (critical ? 'Review safety response now' : 'Review incident'),
       expectedOutcome: weatherInstruction ?? 'Confirm the incident response and preserve the evidence needed for follow-up.',
+      ...(isWeather ? {
+        presentation: {
+          variant: 'WEATHER_ALERT' as const,
+          eyebrow: 'Official weather alert',
+          headline: incident.title.slice(0, 180),
+          summary: (incident.summary ?? 'An official weather alert is active for this property.').slice(0, 320),
+          whyNow: (weatherExpiry
+            ? `This alert is active until ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(weatherExpiry))}.`
+            : 'This alert remains active until the official source clears it.').slice(0, 500),
+          keyFacts: [
+            { label: 'Hazard', value: incident.title.slice(0, 240) },
+            { label: 'Location', value: propertyLabel.slice(0, 240) },
+            { label: 'Forecast window', value: weatherExpiry ? `Through ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(weatherExpiry))}` : 'Until the alert is cleared' },
+            { label: 'Severity', value: String(incident.severity).toLowerCase() },
+            { label: 'Source freshness', value: `Observed ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(incident.openedAt)}` },
+            { label: 'Preparation', value: (weatherInstruction ?? `Review ${incident.title} safety guidance`).slice(0, 240) },
+          ],
+          factGroups: [],
+          subject: { kind: 'EVENT' as const, id: incident.id, label: `${incident.title} at ${propertyLabel}`.slice(0, 180) },
+          detailLabel: 'Official guidance',
+          group: null,
+        },
+      } : {}),
       timing: {
         dueAt: isWeather ? weatherExpiry : null,
         windowStart: incident.openedAt.toISOString(),
@@ -862,11 +909,11 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
         summary: seasonalSummary,
         whyNow: `${timingSummary}${criticalCount > 0 ? ` ${criticalCount} critical task${criticalCount === 1 ? '' : 's'} remain.` : ''}`,
         keyFacts: [
+          { label: 'Season', value: displaySeason },
           { label: 'Progress', value: progress },
-          { label: active ? 'Time left' : 'Starts in', value: active ? `${daysRemaining} days` : `${daysUntilStart} days` },
-          ...(priorityTasks.length > 0
-            ? [{ label: 'Start here', value: priorityTasks.slice(0, 2).map((item) => item.title).join(' · ').slice(0, 240).trim() }]
-            : []),
+          { label: 'Time remaining', value: active ? `${daysRemaining} days` : `Starts in ${daysUntilStart} days` },
+          { label: 'Critical tasks', value: criticalCount > 0 ? priorityTasks.slice(0, 2).map((item) => item.title).join(' · ').slice(0, 240) : 'None currently' },
+          { label: 'Next task', value: pendingItems[0].title.slice(0, 240) },
         ],
         factGroups: [],
         subject: { kind: 'CHECKLIST', id: checklist.id, label: `${displaySeason} checklist` },
@@ -901,7 +948,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
         href: `/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`,
       },
       secondaryCtas: [],
-      feedbackControls: ['CORRECT_FACT'],
+      feedbackControls: ['SNOOZE', 'NOT_RELEVANT'],
       relatedJourneyId: null,
       createdAt: checklist.createdAt.toISOString(),
       lastEvaluatedAt: checklist.updatedAt.toISOString(),
@@ -1055,6 +1102,7 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
     where: {
       propertyId,
       status: 'READY',
+      scopeStatus: { in: ['SUPPORTED', 'PARTIAL'] },
       overallState: 'QUESTIONS',
       generatedAt: { gte: freshnessCutoff },
       policyTerm: { verificationStatus: 'VERIFIED' },
@@ -1095,6 +1143,7 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
     const evidenceRows = Array.isArray(question.evidenceJson)
       ? question.evidenceJson
       : [];
+    if (evidenceRows.length === 0) return [];
     const missingEvidenceRows = Array.isArray(question.missingEvidenceJson)
       ? question.missingEvidenceJson
       : [];
@@ -1141,9 +1190,9 @@ async function loadCoverageActions(propertyId: string, db: HomeActionSourceDb): 
         keyFacts: [
           { label: 'Subject', value: subject.slice(0, 240) },
           { label: 'Evidence', value: evidenceStatus },
-          ...(carrierName ? [{ label: 'Provider', value: carrierName.slice(0, 240) }] : []),
-          ...(coverageType ? [{ label: 'Policy', value: coverageType.slice(0, 240) }] : []),
-          ...(renewalLabel ? [{ label: 'Renewal / expiry', value: renewalLabel }] : []),
+          { label: 'Provider', value: carrierName?.slice(0, 240) ?? 'Not recorded' },
+          { label: 'Policy', value: coverageType?.slice(0, 240) ?? 'Not recorded' },
+          { label: 'Renewal / expiry', value: renewalLabel ?? 'Not recorded' },
           { label: 'Gap', value: exactGap.slice(0, 240) },
         ],
         factGroups: [],
@@ -1503,6 +1552,7 @@ async function loadSalePrepActions(propertyId: string, db: HomeActionSourceDb): 
           { label: 'Item', value: item.title.slice(0, 240) },
           { label: 'Source', value: isSelfReported ? 'Your Sale Readiness answers' : 'General sale-prep guidance' },
           { label: 'Category', value: category },
+          { label: 'Impact', value: stage.outcome.slice(0, 240) },
           ...(item.dueAt ? [{ label: 'Due', value: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(item.dueAt) }] : []),
           ...(costRange ? [{ label: 'Estimated cost', value: costRange }] : []),
         ],
@@ -3046,6 +3096,50 @@ export function homeActionGroundingReasons(action: HomeAction): string[] {
   return [...new Set(reasons)];
 }
 
+export function filterGroundedHomeActions(
+  actions: HomeAction[],
+  options: {
+    propertyId: string;
+    userId?: string | null;
+    source: string;
+    additionalReasons?: (action: HomeAction) => string[];
+  },
+): { actions: HomeAction[]; suppressedCount: number } {
+  const evaluations = actions.map((action) => ({
+    action,
+    reasons: [...new Set([
+      ...homeActionGroundingReasons(action),
+      ...(options.additionalReasons?.(action) ?? []),
+    ])],
+  }));
+  if (options.userId) {
+    analyticsEmitter.trackBatch(evaluations
+      .filter((evaluation) => evaluation.reasons.length > 0)
+      .map(({ action, reasons }) => ({
+        eventType: ProductAnalyticsEventType.HOME_ACTION_IDENTIFIED,
+        eventName: 'home_action_quality_suppressed',
+        userId: options.userId!,
+        propertyId: options.propertyId,
+        moduleKey: 'dashboard',
+        featureKey: 'unified_home_action_quality',
+        screenKey: 'unified_home',
+        source: options.source,
+        valueNumeric: 1,
+        valueText: reasons[0],
+        metadataJson: {
+          actionId: action.id,
+          sourceKind: action.source.kind,
+          presentationVariant: action.presentation?.variant ?? null,
+          reasons,
+        },
+      })));
+  }
+  return {
+    actions: evaluations.filter((evaluation) => evaluation.reasons.length === 0).map(({ action }) => action),
+    suppressedCount: evaluations.filter((evaluation) => evaluation.reasons.length > 0).length,
+  };
+}
+
 export async function getPromotedHomeActions(
   propertyId: string,
   db: HomeActionSourceDb = prisma,
@@ -3054,12 +3148,13 @@ export async function getPromotedHomeActions(
     environmentInsights?: readonly EnvironmentInsight[];
     evaluatedAt?: Date;
     userId?: string | null;
+    propertyLabel?: string;
   } = {},
 ): Promise<{
   actions: HomeAction[];
   diagnostics: { candidateCount: number; suppressedCount: number; snoozedCount: number };
 }> {
-  const incidentActions = await loadIncidentActions(propertyId, db);
+  const incidentActions = await loadIncidentActions(propertyId, db, options.propertyLabel);
   const activeWeatherIncidentIds = new Set(incidentActions
     .filter((action) => action.evidence.some((evidence) => evidence.source.includes('National Weather Service')))
     .map((action) => action.source.entityId));
@@ -3068,6 +3163,7 @@ export async function getPromotedHomeActions(
     options.environmentInsights ?? [],
     incidentActions,
     options.evaluatedAt,
+    options.propertyLabel,
   );
   const groups = await Promise.all([
     loadGuidanceActions(propertyId, db, activeWeatherIncidentIds), Promise.resolve(incidentActions),
@@ -3086,36 +3182,13 @@ export async function getPromotedHomeActions(
     Promise.resolve(environmentActions),
   ]);
   const rawCandidates = groups.flat();
-  const groundingEvaluations = rawCandidates.map((action) => ({
-    action,
-    reasons: homeActionGroundingReasons(action),
-  }));
-  const candidates = groundingEvaluations
-    .filter((evaluation) => evaluation.reasons.length === 0)
-    .map((evaluation) => evaluation.action);
-  const groundingSuppressedCount = rawCandidates.length - candidates.length;
-  if (options.userId) {
-    analyticsEmitter.trackBatch(groundingEvaluations
-      .filter((evaluation) => evaluation.reasons.length > 0)
-      .map(({ action, reasons }) => ({
-        eventType: ProductAnalyticsEventType.HOME_ACTION_IDENTIFIED,
-        eventName: 'home_action_quality_suppressed',
-        userId: options.userId,
-        propertyId,
-        moduleKey: 'dashboard',
-        featureKey: 'unified_home_action_quality',
-        screenKey: 'unified_home',
-        source: 'home_action_grounding_gate',
-        valueNumeric: 1,
-        valueText: reasons[0],
-        metadataJson: {
-          actionId: action.id,
-          sourceKind: action.source.kind,
-          presentationVariant: action.presentation?.variant ?? null,
-          reasons,
-        },
-      })));
-  }
+  const grounded = filterGroundedHomeActions(rawCandidates, {
+    propertyId,
+    userId: options.userId,
+    source: 'home_action_source_grounding_gate',
+  });
+  const candidates = grounded.actions;
+  const groundingSuppressedCount = grounded.suppressedCount;
   if (candidates.length === 0) {
     return {
       actions: [],

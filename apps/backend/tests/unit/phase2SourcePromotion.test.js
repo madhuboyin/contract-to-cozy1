@@ -221,7 +221,7 @@ test('promotes guidance, incident, recall, coverage, project, and seasonal recor
   const seasonal = actions.find((action) => action.id === 'seasonal-checklist:seasonal-1');
   assert.equal(seasonal.primaryCta.label, 'See 1 priority task');
   assert.equal(seasonal.presentation.headline, '1 summer task needs attention');
-  assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Start here').value, 'Test the sump pump');
+  assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Next task').value, 'Test the sump pump');
   assert.equal(actions.find((action) => action.source.kind === 'COVERAGE').governance.jurisdictionCheck.status, 'UNKNOWN');
 });
 

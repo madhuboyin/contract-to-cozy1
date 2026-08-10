@@ -4,6 +4,8 @@ require('ts-node/register');
 
 const {
   evaluateHomeActionPresentationEligibility,
+  ensureHomeActionPresentation,
+  homeActionLaunchEligibilityReasons,
   requiredHomeActionLaunchParams,
 } = require('../../src/productFramework/homeActionPresentationRegistry.ts');
 
@@ -18,8 +20,11 @@ function action(overrides = {}) {
       keyFacts: [
         { label: 'Subject', value: 'Furnace replacement' },
         { label: 'Exposure', value: '$8,400' },
+        { label: 'Trigger', value: 'Replacement window opened' },
         { label: 'Coverage', value: 'Not yet confirmed' },
+        { label: 'Observation date', value: 'Aug 9, 2026' },
         { label: 'Confidence', value: 'medium' },
+        { label: 'Missing facts', value: 'Warranty status' },
       ],
       factGroups: [],
       detailLabel: 'See evidence',
@@ -66,6 +71,7 @@ test('sale presentations suppress terminal cases', () => {
         { label: 'Item', value: 'Repair cabinet' },
         { label: 'Source', value: 'Your Sale Readiness answers' },
         { label: 'Category', value: 'presentation' },
+        { label: 'Impact', value: 'buyer confidence' },
       ],
     },
   });
@@ -86,7 +92,7 @@ test('Home fact presentations require a correction destination', () => {
   });
   assert.deepEqual(
     evaluateHomeActionPresentationEligibility(factReview).reasons,
-    ['MISSING_CORRECTION_DESTINATION'],
+    ['MISSING_CORRECTION_DESTINATION', 'INVALID_PRIMARY_CTA:REVIEW'],
   );
 });
 
@@ -99,6 +105,7 @@ test('accepted work requires a real work item and non-terminal state', () => {
       keyFacts: [
         { label: 'Task', value: 'Service the furnace' },
         { label: 'Work state', value: 'in progress' },
+        { label: 'Due', value: 'Not scheduled' },
         { label: 'Execution', value: 'maintenance · plan-1' },
       ],
     },
@@ -121,4 +128,27 @@ test('registry declares category-specific destination continuity requirements', 
   assert.ok(requiredHomeActionLaunchParams('FINANCIAL_EXPOSURE').includes('journeyId'));
   assert.ok(requiredHomeActionLaunchParams('SALE_PREPARATION').includes('focusItemId'));
   assert.ok(requiredHomeActionLaunchParams('COVERAGE_REVIEW').includes('returnTo'));
+});
+
+test('production launch eligibility identifies an incomplete internal destination', () => {
+  const href = '/guidance?launchSurface=unified_home&propertyId=property-1&sourceActionId=action-1&sourceEntityType=GUIDANCE&sourceEntityId=journey-1&recommendationReason=FINANCIAL_EXPOSURE&recommendationVersion=v1&contextVersion=context-v1&journeyId=journey-1&returnTo=%2Fdashboard';
+  assert.deepEqual(homeActionLaunchEligibilityReasons(action({ primaryCta: { kind: 'REVIEW', label: 'Review furnace exposure', href } })), []);
+  assert.deepEqual(
+    homeActionLaunchEligibilityReasons(action()),
+    requiredHomeActionLaunchParams('FINANCIAL_EXPOSURE').map((parameter) => `MISSING_LAUNCH_PARAM:PRIMARY:${parameter}`),
+  );
+});
+
+test('legacy generic workflow headlines are replaced by the grounded source signal', () => {
+  const presented = ensureHomeActionPresentation({
+    ...action(),
+    presentation: undefined,
+    signal: 'Furnace replacement window is open',
+    recommendedAction: 'Review a financial exposure',
+    whyItMatters: 'The recorded replacement estimate may affect this year’s reserve plan.',
+    source: { kind: 'GUIDANCE', entityId: 'journey-1', version: 'v1' },
+    confidence: { score: 0.8, label: 'HIGH', missing: [] },
+  });
+  assert.equal(presented.presentation.headline, 'Furnace replacement window is open');
+  assert.equal(presented.presentation.subject.label, 'Furnace replacement window is open');
 });

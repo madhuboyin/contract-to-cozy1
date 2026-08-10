@@ -166,6 +166,13 @@ function recordHomeActionPrimaryClick(action: RankedHomeActionDTO, propertyId: s
     presentationVariant: action.presentation?.variant ?? null,
     continuityComplete,
   });
+  if (action.primaryCta.kind === 'CORRECT_FACT') {
+    track('home_card_correction_clicked', {
+      propertyId,
+      actionId: action.id,
+      sourceKind: action.source.kind,
+    });
+  }
   void api.recordHomeActionOpened(propertyId, action.id);
 }
 
@@ -245,13 +252,40 @@ function formattedAlertExpiry(value: string | null): string | null {
 export function CriticalWeatherActionCard({
   action,
   propertyId,
+  onChanged,
   showSupportingDetails = false,
 }: {
   action: RankedHomeActionDTO;
   propertyId: string;
+  onChanged: () => Promise<unknown>;
   showSupportingDetails?: boolean;
 }) {
+  const { toast } = useToast();
+  const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
+  const [detailsOpen, setDetailsOpen] = React.useState(showSupportingDetails);
   const expiry = formattedAlertExpiry(action.timing.windowEnd ?? action.timing.dueAt);
+  const correctionCta = action.secondaryCtas.find((cta) => cta.kind === 'CORRECT_FACT');
+  const acknowledge = async () => {
+    setPending('ACKNOWLEDGE');
+    try {
+      const response = await api.executeHomeActionCommand(propertyId, action.id, {
+        command: 'ACKNOWLEDGE', nextTriggerAt: null, consequenceAcknowledged: false,
+      });
+      if (!response.success) throw new Error(response.message || 'Unable to acknowledge this alert.');
+      recordHomeActionFeedback(action, propertyId, 'ACKNOWLEDGE');
+      toast({ title: 'Weather alert acknowledged' });
+      await onChanged();
+    } catch (error) {
+      toast({ title: 'Unable to update weather alert', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' });
+    } finally {
+      setPending(null);
+    }
+  };
+  const toggleDetails = () => {
+    const nextOpen = !detailsOpen;
+    setDetailsOpen(nextOpen);
+    if (nextOpen) track('home_card_detail_opened', { propertyId, actionId: action.id, priority: action.priority, sourceKind: action.source.kind });
+  };
   return (
     <article className="rounded-2xl border-2 border-rose-300 bg-gradient-to-br from-rose-50 to-amber-50 p-4 shadow-sm" role="alert">
       <div className="flex items-start gap-3">
@@ -264,19 +298,37 @@ export function CriticalWeatherActionCard({
           </div>
           <h3 className="mt-3 text-lg font-semibold text-slate-950">{action.signal}</h3>
           <p className="mt-1 text-sm leading-6 text-slate-700">{action.whyItMatters}</p>
-          {showSupportingDetails && (
+          {(detailsOpen || showSupportingDetails) && (
             <div className="mt-3 rounded-xl border border-rose-200 bg-white/80 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-rose-800">Official guidance</p>
               <p className="mt-1 text-sm leading-6 text-slate-700">{action.expectedOutcome}</p>
               <p className="mt-2 text-xs text-slate-500">Source: {action.evidence[0]?.source ?? 'Official weather alert'}</p>
             </div>
           )}
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Button asChild size="sm" className="rounded-full bg-rose-700 hover:bg-rose-800">
               <Link href={action.primaryCta.href} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>
                 Review weather alert<ArrowRight className="ml-1 h-3.5 w-3.5" />
               </Link>
             </Button>
+            {action.feedbackControls.includes('ACKNOWLEDGE') && (
+              <Button size="sm" variant="outline" className="rounded-full bg-white" disabled={Boolean(pending)} onClick={acknowledge}>
+                <Check className="mr-1 h-3.5 w-3.5" />Acknowledge
+              </Button>
+            )}
+            {correctionCta && (
+              <Button asChild size="sm" variant="ghost" className="rounded-full text-rose-700">
+                <Link href={correctionCta.href} onClick={() => track('home_card_correction_clicked', { propertyId, actionId: action.id, sourceKind: action.source.kind })}>
+                  <PencilLine className="mr-1 h-3.5 w-3.5" />{correctionCta.label}
+                </Link>
+              </Button>
+            )}
+            {!showSupportingDetails && (
+              <Button size="sm" variant="ghost" className="rounded-full text-rose-700" aria-expanded={detailsOpen} onClick={toggleDetails}>
+                {action.presentation?.detailLabel ?? 'Official guidance'}
+                <ChevronDown className={`ml-1 h-3.5 w-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -306,6 +358,7 @@ export function EnvironmentActionCard({
 }) {
   const { toast } = useToast();
   const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
   const windowLabel = formattedEnvironmentWindow(action);
   const canComplete = action.feedbackControls.includes('COMPLETE');
   const canAcknowledge = !canComplete && action.feedbackControls.includes('ACKNOWLEDGE');
@@ -366,6 +419,12 @@ export function EnvironmentActionCard({
             <p className="mt-1 text-sm font-medium leading-6 text-slate-800">{action.recommendedAction}</p>
           </div>
           <p className="mt-2 text-xs text-slate-500">Source: {action.evidence[0]?.source}</p>
+          {detailsOpen && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 p-3 text-sm text-slate-700">
+              <p>{action.expectedOutcome}</p>
+              <p className="mt-2 text-xs text-slate-500">{action.timing.rationale}</p>
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             <Button asChild size="sm" className="rounded-full bg-amber-700 hover:bg-amber-800">
               <Link href={action.primaryCta.href} onClick={() => recordHomeActionPrimaryClick(action, propertyId)}>
@@ -392,6 +451,20 @@ export function EnvironmentActionCard({
                 Not relevant
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="rounded-full text-amber-800"
+              aria-expanded={detailsOpen}
+              onClick={() => {
+                const nextOpen = !detailsOpen;
+                setDetailsOpen(nextOpen);
+                if (nextOpen) track('home_card_detail_opened', { propertyId, actionId: action.id, priority: action.priority, sourceKind: action.source.kind });
+              }}
+            >
+              {action.presentation?.detailLabel ?? 'Why this?'}
+              <ChevronDown className={`ml-1 h-3.5 w-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+            </Button>
           </div>
         </div>
       </div>
@@ -432,14 +505,36 @@ function HomeFirstValueInsightCard({ insight }: { insight: HomeFirstValueInsight
 export function SeasonalChecklistActionCard({
   action,
   propertyId,
+  onChanged,
   showSupportingDetails = false,
 }: {
   action: RankedHomeActionDTO;
   propertyId: string;
+  onChanged: () => Promise<unknown>;
   showSupportingDetails?: boolean;
 }) {
   const [detailsOpen, setDetailsOpen] = React.useState(showSupportingDetails);
+  const [pending, setPending] = React.useState<HomeActionCommand | null>(null);
+  const { toast } = useToast();
   const presentation = action.presentation;
+  const execute = async (command: 'SNOOZE' | 'NOT_RELEVANT') => {
+    setPending(command);
+    try {
+      const response = await api.executeHomeActionCommand(propertyId, action.id, {
+        command,
+        nextTriggerAt: command === 'SNOOZE' ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
+        consequenceAcknowledged: command === 'NOT_RELEVANT',
+      });
+      if (!response.success) throw new Error(response.message || 'Unable to update this checklist.');
+      recordHomeActionFeedback(action, propertyId, command);
+      toast({ title: command === 'SNOOZE' ? 'Reminder scheduled' : 'Checklist removed from Home' });
+      await onChanged();
+    } catch (error) {
+      toast({ title: 'Unable to update checklist', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' });
+    } finally {
+      setPending(null);
+    }
+  };
   return (
     <article className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -477,6 +572,16 @@ export function SeasonalChecklistActionCard({
             {action.primaryCta.label}<ArrowRight className="ml-1 h-3.5 w-3.5" />
           </Link>
         </Button>
+        {action.feedbackControls.includes('SNOOZE') && (
+          <Button size="sm" variant="outline" className="rounded-full bg-white" disabled={Boolean(pending)} onClick={() => execute('SNOOZE')}>
+            <Clock3 className="mr-1 h-3.5 w-3.5" />Remind in 7 days
+          </Button>
+        )}
+        {action.feedbackControls.includes('NOT_RELEVANT') && (
+          <Button size="sm" variant="ghost" className="rounded-full text-slate-500" disabled={Boolean(pending)} onClick={() => execute('NOT_RELEVANT')}>
+            This doesn&apos;t apply
+          </Button>
+        )}
         {presentation && !showSupportingDetails && (
           <Button
             size="sm"
@@ -519,8 +624,51 @@ export function CoverageCorrectionGroupCard({
   onChanged?: () => Promise<unknown>;
 }) {
   const first = actions[0];
-  const href = `/dashboard/properties/${propertyId}/inventory?tab=coverage&focus=incomplete`;
+  const destination = new URL(
+    `/dashboard/properties/${propertyId}/inventory?tab=coverage&focus=incomplete`,
+    'https://contracttocozy.local',
+  );
+  const sourceDestination = new URL(first.primaryCta.href, 'https://contracttocozy.local');
+  [
+    'launchSurface', 'propertyId', 'sourceActionId', 'sourceEntityType', 'sourceEntityId',
+    'recommendationReason', 'recommendationVersion', 'contextVersion', 'journeyId', 'itemId', 'returnTo',
+  ].forEach((key) => {
+    const value = sourceDestination.searchParams.get(key);
+    if (value) destination.searchParams.set(key, value);
+  });
+  destination.searchParams.set('groupActionIds', actions.map((action) => action.id).join(','));
+  const href = `${destination.pathname}${destination.search}`;
   const [manageWorkItemId, setManageWorkItemId] = React.useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = React.useState(showSupportingDetails);
+  const [pending, setPending] = React.useState<'SNOOZE' | 'NOT_RELEVANT' | null>(null);
+  const { toast } = useToast();
+  const executeGroup = async (command: 'SNOOZE' | 'NOT_RELEVANT') => {
+    const targets = actions.filter((action) => action.feedbackControls.includes(command));
+    if (targets.length === 0) return;
+    setPending(command);
+    try {
+      const results = await Promise.all(targets.map(async (action) => ({
+        action,
+        response: await api.executeHomeActionCommand(propertyId, action.id, {
+          command,
+          nextTriggerAt: command === 'SNOOZE' ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
+          consequenceAcknowledged: command === 'NOT_RELEVANT',
+        }),
+      })));
+      const successful = results.filter(({ response }) => response.success);
+      successful.forEach(({ action }) => recordHomeActionFeedback(action, propertyId, command));
+      if (successful.length === 0) throw new Error(results[0]?.response.message || 'Unable to update these actions.');
+      toast({
+        title: command === 'SNOOZE' ? 'Coverage reminder scheduled' : 'Coverage actions removed from Home',
+        description: successful.length < targets.length ? `${successful.length} of ${targets.length} items were updated.` : undefined,
+      });
+      await onChanged?.();
+    } catch (error) {
+      toast({ title: 'Unable to update coverage actions', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' });
+    } finally {
+      setPending(null);
+    }
+  };
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -537,7 +685,7 @@ export function CoverageCorrectionGroupCard({
       <div className="mt-3 flex flex-wrap gap-2">
         {subjects.map((subject) => <Badge key={subject} variant="secondary" className="rounded-full">{subject}</Badge>)}
       </div>
-      {showSupportingDetails && (
+      {(detailsOpen || showSupportingDetails) && (
         <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
           {actions.map((action) => (
             <div key={action.id} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -559,10 +707,46 @@ export function CoverageCorrectionGroupCard({
           ))}
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap gap-2">
         <Button asChild size="sm" className="rounded-full">
-          <Link href={href}>Review coverage information<ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+          <Link
+            href={href}
+            onClick={() => {
+              recordHomeActionPrimaryClick(first, propertyId);
+              if (first.primaryCta.kind !== 'CORRECT_FACT') {
+                track('home_card_correction_clicked', { propertyId, actionId: first.id, sourceKind: first.source.kind });
+              }
+            }}
+          >
+            Review coverage information<ArrowRight className="ml-1 h-3.5 w-3.5" />
+          </Link>
         </Button>
+        {actions.some((action) => action.feedbackControls.includes('SNOOZE')) && (
+          <Button size="sm" variant="outline" className="rounded-full" disabled={Boolean(pending)} onClick={() => executeGroup('SNOOZE')}>
+            <Clock3 className="mr-1 h-3.5 w-3.5" />Remind in 7 days
+          </Button>
+        )}
+        {actions.some((action) => action.feedbackControls.includes('NOT_RELEVANT')) && (
+          <Button size="sm" variant="ghost" className="rounded-full text-slate-500" disabled={Boolean(pending)} onClick={() => executeGroup('NOT_RELEVANT')}>
+            This doesn&apos;t apply
+          </Button>
+        )}
+        {!showSupportingDetails && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="rounded-full text-slate-500"
+            aria-expanded={detailsOpen}
+            onClick={() => {
+              const nextOpen = !detailsOpen;
+              setDetailsOpen(nextOpen);
+              if (nextOpen) track('home_card_detail_opened', { propertyId, actionId: first.id, priority: first.priority, sourceKind: first.source.kind });
+            }}
+          >
+            Review included items
+            <ChevronDown className={`ml-1 h-3.5 w-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+          </Button>
+        )}
       </div>
       {manageWorkItemId && (
         <WorkItemManageDrawer
@@ -856,13 +1040,13 @@ function AttentionEntryCard({
     return <ActionCard action={entry.action} propertyId={propertyId} onChanged={onChanged} />;
   }
   if (entry.kind === 'CRITICAL_WEATHER') {
-    return <CriticalWeatherActionCard action={entry.action} propertyId={propertyId} />;
+    return <CriticalWeatherActionCard action={entry.action} propertyId={propertyId} onChanged={onChanged} />;
   }
   if (entry.kind === 'ENVIRONMENT') {
     return <EnvironmentActionCard action={entry.action} propertyId={propertyId} onChanged={onChanged} />;
   }
   if (entry.kind === 'SEASONAL_CHECKLIST') {
-    return <SeasonalChecklistActionCard action={entry.action} propertyId={propertyId} />;
+    return <SeasonalChecklistActionCard action={entry.action} propertyId={propertyId} onChanged={onChanged} />;
   }
   return (
     <CoverageCorrectionGroupCard

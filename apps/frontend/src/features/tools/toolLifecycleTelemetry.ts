@@ -34,8 +34,17 @@ export function getToolLifecycleSessionKey(): string | null {
   }
 }
 
-function startedAtKey(propertyId: string, toolId: string): string {
-  return `${STARTED_AT_PREFIX}${propertyId}:${toolId}`;
+function startedAtKey(propertyId: string, toolId: string, sourceActionId?: string | null): string {
+  return `${STARTED_AT_PREFIX}${propertyId}:${toolId}:${sourceActionId ?? 'unattributed'}`;
+}
+
+function recentEventKey(
+  propertyId: string,
+  toolId: string,
+  stage: ToolLifecycleEventDTO['stage'],
+  sourceActionId?: string | null,
+): string {
+  return `${RECENT_EVENT_PREFIX}${propertyId}:${toolId}:${stage}:${sourceActionId ?? 'unattributed'}`;
 }
 
 function enrichEvent(propertyId: string, event: ToolLifecycleEventDTO): ToolLifecycleEventDTO {
@@ -43,7 +52,7 @@ function enrichEvent(propertyId: string, event: ToolLifecycleEventDTO): ToolLife
   if (typeof window === 'undefined') return enriched;
 
   try {
-    const key = startedAtKey(propertyId, event.toolId);
+    const key = startedAtKey(propertyId, event.toolId, event.sourceActionId);
     if (event.stage === 'STARTED') {
       window.sessionStorage.setItem(key, String(Date.now()));
     } else if (event.stage === 'COMPLETED' && enriched.durationSeconds == null) {
@@ -63,7 +72,7 @@ function shouldSendEvent(propertyId: string, event: ToolLifecycleEventDTO): bool
   if (typeof window === 'undefined') return true;
   if (event.stage !== 'STARTED' && event.stage !== 'OUTPUT_GENERATED' && event.stage !== 'COMPLETED') return true;
   try {
-    const key = `${RECENT_EVENT_PREFIX}${propertyId}:${event.toolId}:${event.stage}`;
+    const key = recentEventKey(propertyId, event.toolId, event.stage, event.sourceActionId);
     const last = Number(window.sessionStorage.getItem(key));
     const now = Date.now();
     if (Number.isFinite(last) && now - last < 5_000) return false;
@@ -74,10 +83,14 @@ function shouldSendEvent(propertyId: string, event: ToolLifecycleEventDTO): bool
   return true;
 }
 
-export function hasRecentToolCompletion(propertyId: string, toolId: string): boolean {
+export function hasRecentToolCompletion(
+  propertyId: string,
+  toolId: string,
+  sourceActionId?: string | null,
+): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    const key = `${RECENT_EVENT_PREFIX}${propertyId}:${toolId}:COMPLETED`;
+    const key = recentEventKey(propertyId, toolId, 'COMPLETED', sourceActionId);
     const completedAt = Number(window.sessionStorage.getItem(key));
     return Number.isFinite(completedAt) && Date.now() - completedAt < 30 * 60_000;
   } catch {

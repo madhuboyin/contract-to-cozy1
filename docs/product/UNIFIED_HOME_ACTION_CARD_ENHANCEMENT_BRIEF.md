@@ -4,9 +4,11 @@
 
 **Scope:** Plan Ahead cards, category-specific evidence, source context, copy, lifecycle behavior, and destination continuity.
 
-**Status:** Living product review covering delivered improvements and recommended next implementation.
+**Status:** Implemented. Retained as the product contract and acceptance reference.
 
-**Updated:** August 9, 2026
+**Updated:** August 10, 2026
+
+> **Implementation note:** Section 1 records the experience that triggered this brief. The generic financial-exposure, Sale Case, and Home Record behaviors described there have now been replaced by the grounded category presentations defined below.
 
 ## Executive recommendation
 
@@ -275,6 +277,8 @@ Destination banners reuse the homeowner-facing source headline and reason instea
 - `VERIFIED` and `CLOSED` work stays off Home.
 
 ## 5. Recommended implementation order
+
+**Implementation status:** Complete as of August 10, 2026. The feed applies grounding before reconciliation and again after accepted-work projection; category presentation and destination requirements are enforced before surfacing; telemetry covers suppression, expansion, correction, feedback, launch continuity, destination completion, and source-attributed return behavior.
 
 ### P0 — Add a Home grounding gate
 

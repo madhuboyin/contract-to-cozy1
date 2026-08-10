@@ -155,13 +155,13 @@ function EntryCard({
     return <ActionCard action={entry.action} propertyId={propertyId} showSupportingDetails onChanged={onChanged} />;
   }
   if (entry.kind === 'CRITICAL_WEATHER') {
-    return <CriticalWeatherActionCard action={entry.action} propertyId={propertyId} showSupportingDetails />;
+    return <CriticalWeatherActionCard action={entry.action} propertyId={propertyId} showSupportingDetails onChanged={onChanged} />;
   }
   if (entry.kind === 'ENVIRONMENT') {
     return <EnvironmentActionCard action={entry.action} propertyId={propertyId} onChanged={onChanged} />;
   }
   if (entry.kind === 'SEASONAL_CHECKLIST') {
-    return <SeasonalChecklistActionCard action={entry.action} propertyId={propertyId} showSupportingDetails />;
+    return <SeasonalChecklistActionCard action={entry.action} propertyId={propertyId} showSupportingDetails onChanged={onChanged} />;
   }
   return <CoverageCorrectionGroupCard actions={entry.actions} subjects={entry.subjects} propertyId={propertyId} showSupportingDetails onChanged={onChanged} />;
 }

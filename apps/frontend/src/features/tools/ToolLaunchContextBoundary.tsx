@@ -132,7 +132,7 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
     });
     return () => {
       const durationSeconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
-      if (durationSeconds < 5 || hasRecentToolCompletion(lifecycle.propertyId, lifecycle.toolId)) return;
+      if (durationSeconds < 5 || hasRecentToolCompletion(lifecycle.propertyId, lifecycle.toolId, lifecycle.sourceActionId)) return;
       persistToolLifecycleEvent(lifecycle.propertyId, {
         toolId: lifecycle.toolId,
         stage: 'ABANDONED',
@@ -208,7 +208,7 @@ export function ToolLaunchContextBoundary({ children }: { children: ReactNode })
                     propertyId: value.propertyId,
                     sourceActionId: value.context.sourceActionId,
                     toolId: value.toolId,
-                    completed: hasRecentToolCompletion(value.propertyId, value.toolId),
+                    completed: hasRecentToolCompletion(value.propertyId, value.toolId, value.context.sourceActionId),
                   })}
                   className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-white px-3 py-2 font-semibold text-teal-800 hover:text-teal-950"
                 >

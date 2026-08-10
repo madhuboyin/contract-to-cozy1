@@ -41,6 +41,17 @@ export function resolveHomeActionPrimaryHref(
     from: 'home-action',
     actionKey: action.lineageId,
   });
+  if (action.primaryCta.href.startsWith('/')) {
+    const sourceDestination = new URL(action.primaryCta.href, 'https://contracttocozy.local');
+    [
+      'launchSurface', 'sourceActionId', 'sourceEntityType', 'sourceEntityId',
+      'recommendationReason', 'recommendationVersion', 'contextVersion', 'journeyId',
+      'itemId', 'returnTo',
+    ].forEach((key) => {
+      const value = sourceDestination.searchParams.get(key);
+      if (value) params.set(key, value);
+    });
+  }
   const workCategory = getProviderWorkCategory(serviceLabel);
   if (workCategory) params.set('workCategory', workCategory);
 

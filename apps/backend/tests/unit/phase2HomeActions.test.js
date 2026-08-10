@@ -594,7 +594,7 @@ test('unified Home uses one five-section responsive surface and five homeowner d
   assert.match(homeSurface, /CRITICAL_WEATHER/);
   assert.match(homeSurface, /SEASONAL_CHECKLIST/);
   assert.match(homeSurface, /Critical weather/);
-  assert.match(homeSurface, /View seasonal checklist/);
+  assert.match(homeSurface, /Remind in 7 days/);
   assert.match(homeSurface, /Review coverage information/);
   assert.match(homeSurface, /tab=coverage&focus=incomplete/);
   assert.doesNotMatch(homeSurface, /These items are missing coverage details/);
