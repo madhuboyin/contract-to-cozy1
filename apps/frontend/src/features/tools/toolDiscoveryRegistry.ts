@@ -263,7 +263,12 @@ function appendLaunchContext(href: string, context?: ToolLaunchContext): string 
   if (context.radarMatchId) params.set('radarMatchId', context.radarMatchId);
   if (context.radarEventId) params.set('radarEventId', context.radarEventId);
   if (context.incidentId) params.set('incidentId', context.incidentId);
-  if (context.returnTo) params.set('returnTo', context.returnTo);
+  if (context.returnTo) {
+    // backTo is the canonical dashboard return contract. returnTo remains as
+    // a compatibility alias for older tool workspaces during the transition.
+    params.set('backTo', context.returnTo);
+    params.set('returnTo', context.returnTo);
+  }
   const suffix = params.toString();
   if (!suffix) return href;
   return `${href}${href.includes('?') ? '&' : '?'}${suffix}`;

@@ -2,8 +2,11 @@
 
 import { useMemo } from 'react';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { Breadcrumb } from '@/components/navigation/Breadcrumb';
 import { ADMIN_NAV } from '@/lib/navigation/adminNavigation';
+import { api } from '@/lib/api/client';
+import type { PropertyDashboardBootstrap } from '@/types';
 
 type Crumb = {
   label: string;
@@ -91,6 +94,23 @@ function segmentToLabel(segment: string, parentSegment?: string): string {
 
 export default function DashboardBreadcrumbs() {
   const pathname = usePathname();
+  const propertyId = useMemo(() => {
+    const segments = pathname?.split('/').filter(Boolean) ?? [];
+    const propertyIndex = segments.indexOf('properties');
+    const candidate = propertyIndex >= 0 ? segments[propertyIndex + 1] : null;
+    return candidate && isLikelyIdSegment(candidate) ? candidate : null;
+  }, [pathname]);
+  const propertyQuery = useQuery({
+    queryKey: ['property-bootstrap', propertyId],
+    queryFn: async () => {
+      const response = await api.getPropertyDashboardBootstrap(propertyId!);
+      if (!response.success || !response.data) throw new Error('Property unavailable');
+      return response.data as PropertyDashboardBootstrap;
+    },
+    enabled: Boolean(propertyId),
+    staleTime: 60 * 1000,
+  });
+  const propertyLabel = propertyQuery.data?.property.address || propertyQuery.data?.property.name || null;
 
   const items = useMemo<Crumb[]>(() => {
     if (!pathname || !pathname.startsWith('/dashboard')) return [];
@@ -119,7 +139,9 @@ export default function DashboardBreadcrumbs() {
       const segment = segments[index];
       partial = `${partial}/${segment}`;
       const parentSegment = index > 1 ? segments[index - 1] : undefined;
-      const label = segmentToLabel(segment, parentSegment);
+      const label = propertyId === segment && propertyLabel
+        ? propertyLabel
+        : segmentToLabel(segment, parentSegment);
 
       crumbs.push({
         label,
@@ -128,7 +150,7 @@ export default function DashboardBreadcrumbs() {
     }
 
     return crumbs;
-  }, [pathname]);
+  }, [pathname, propertyId, propertyLabel]);
 
   if (items.length === 0) return null;
 

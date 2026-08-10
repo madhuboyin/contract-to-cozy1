@@ -1916,6 +1916,49 @@ export interface PropertyDashboardBootstrap {
   property: ScoredProperty;
   onboarding: PropertyOnboardingNarrativeState;
   narrativeRun: PropertyNarrativeRun | null;
+  recordOverview: PropertyRecordOverviewDTO;
+}
+
+export type PropertyRecordLoadState<T> =
+  | { status: 'AVAILABLE'; data: T }
+  | { status: 'UNAVAILABLE'; data: null };
+
+export interface PropertyRecordOverviewDTO {
+  contractVersion: 'property-record-overview-v1';
+  registryVersion: string;
+  accessRole: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER';
+  context: {
+    status: 'AVAILABLE' | 'UNAVAILABLE';
+    snapshot: PropertyContextSnapshot | null;
+    completeness: PropertyContextCompleteness | null;
+    knownFactCount: number;
+  };
+  sections: {
+    rooms: PropertyRecordLoadState<{ count: number; items: Array<{ id: string; name: string; type: string | null; updatedAt: string }> }>;
+    inventory: PropertyRecordLoadState<{ totalCount: number; majorSystemCount: number; verifiedCount: number; withDocumentCount: number }>;
+    documents: PropertyRecordLoadState<{
+      totalCount: number;
+      verifiedCount: number;
+      needsReviewCount: number;
+      linkedCount: number;
+      byType: Array<{ type: string; count: number }>;
+      latest: { id: string; name: string; type: string; verificationStatus: string; createdAt: string } | null;
+    }>;
+    household: PropertyRecordLoadState<{ totalCount: number; roles: Array<{ role: string; count: number }> }>;
+  };
+  tools: {
+    eligibility: Record<string, { state: 'ELIGIBLE' | 'NEEDS_CONTEXT'; reasons: string[]; releaseStage: 'ACTIVE' | 'BETA'; rolloutKey: string }>;
+    capitalTimeline: PropertyRecordLoadState<{ id: string; itemCount: number; status: string; confidence: string; computedAt: string } | null>;
+    continuityPlan: PropertyRecordLoadState<{ id: string; status: string; readiness: string; completionPercent: number; updatedAt: string } | null>;
+    plantAdvisor: PropertyRecordLoadState<{ profileCount: number; savedCount: number }>;
+    propertyBrief: PropertyRecordLoadState<{ id: string; status: string; asOf: string; createdAt: string; isStale: boolean } | null>;
+    homeTimeline: PropertyRecordLoadState<{
+      confirmedCount: number;
+      recent: Array<{ id: string; title: string; occurredAt: string; updatedAt: string; sourceBadge: string; verificationStatus: string; sourceAsOf: string | null; type: string }>;
+    }>;
+    statusBoard: PropertyRecordLoadState<{ representedSystemCount: number; updatedAt: string | null }>;
+  };
+  generatedAt: string;
 }
 
 /**

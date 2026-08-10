@@ -1172,6 +1172,35 @@ Parallelization opportunities:
 - Home cleanup should merge only after replacement Property navigation is
   available, avoiding dead ends.
 
+### 16.4 Implementation reconciliation (August 10, 2026)
+
+The repository implementation now covers all engineering-owned scope in this
+plan. Operational validation remains a release gate and is intentionally not
+represented as completed without production or moderated-user evidence.
+
+| Planned capability | Implemented evidence |
+| --- | --- |
+| Authoritative overview contract | The property dashboard bootstrap composes Property Context, rooms, inventory, documents, household, verified record events, and safe related-tool aggregates through `property-record-overview-v1`. Optional adapters are isolated and return explicit `AVAILABLE` or `UNAVAILABLE` states. |
+| Record-owned information hierarchy | The overview presents profile, ownership/protection, category completeness, systems/inventory, rooms/household, documents, and verified record history. Home attention, daily changes, refinance, environment alerts, seller promotion, and generic Next Best Action are not rendered. |
+| Trust and provenance | Important profile facts distinguish verified, inferred, stale, conflicted, and missing state and expose their source/correction destination. Recent updates use homeowner-confirmed or evidence-verified Home Events, not Home attention signals. |
+| Documents truthfulness | Document summaries use linked and verified coverage, type distribution, and review counts. Adapter failure renders unavailable state instead of a false zero. |
+| Governed related tools | Tool identity and metadata come from the canonical capability registry; Property policy adds grouping and record affinity. Availability honors release stage metadata, rollout state, disabled/broken/release-gated tools, minimum room/system context, and Continuity Plan role restrictions. |
+| Navigation continuity | Launch URLs carry canonical `backTo` plus the legacy `returnTo` alias. Capital Timeline, Plant Advisor, Home Continuity Plan, Timeline, and Status Board restore the Property origin, including section anchors. Explicit Home Tools property links take precedence over global selection. |
+| Home coordination | Home Record completeness links to the exact next record-improvement control rather than duplicating Property detail. |
+| Analytics | Views include completeness band, viewport, context, and registry version. Tool events include group/state/origin/registry metadata. Source views, record additions, reports, section navigation, workspaces, and isolated adapter failures are instrumented without sensitive content. |
+| Accessibility and responsive behavior | The page has one wrapping H1, semantic navigation/sections, busy loading semantics, reduced-motion fallbacks, 44 px mobile controls, textual statuses, and mobile-first completeness ordering. |
+| Rollback control | `NEXT_PUBLIC_FEATURE_PROPERTY_RECORD_EXPERIENCE=false` switches the enhanced overview to a safe compact record fallback; connected tools remain independently controllable. |
+
+Release evidence still required outside application implementation:
+
+- p75 LCP, CLS, and INP from the production telemetry window;
+- automated accessibility and visual-regression runs against authenticated
+  sparse, medium, and mature property fixtures;
+- moderated fact-finding, correction, and tool-discovery sessions; and
+- progressive-cohort guardrail review before removing the rollback path.
+
+These are launch-validation activities, not missing application behavior.
+
 ## 17. Testing strategy
 
 ### 17.1 Unit tests

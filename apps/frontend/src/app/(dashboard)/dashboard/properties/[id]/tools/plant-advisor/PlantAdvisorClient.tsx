@@ -32,6 +32,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { resolveToolReturnHref } from '@/lib/navigation/backNavigation';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -413,6 +414,7 @@ export default function PlantAdvisorClient() {
   const sourceInsightId = searchParams.get('insightId');
   const isEnvironmentReportLaunch = launchSurface === 'environment-report' && weatherContext !== null;
   const returnTo = environmentReportReturnPath(searchParams.get('returnTo'), propertyId);
+  const propertyReturnHref = resolveToolReturnHref(searchParams, `/dashboard/properties/${propertyId}`);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const roomSelectionSourceRef = React.useRef<'auto_default' | 'prefill' | 'picker' | 'auto_fallback'>(
@@ -778,7 +780,7 @@ export default function PlantAdvisorClient() {
       <MobileSection className="lg:hidden">
         <div className="flex items-center gap-3">
           <Link
-            href={`/dashboard/properties/${propertyId}`}
+            href={propertyReturnHref}
             className="no-brand-style inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))]"
           >
             <ArrowLeft className="h-4 w-4 text-[hsl(var(--mobile-text-primary))]" />
@@ -794,7 +796,7 @@ export default function PlantAdvisorClient() {
 
       <MobileSection className="hidden lg:block">
         <Link
-          href={`/dashboard/properties/${propertyId}`}
+          href={propertyReturnHref}
           className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
         >
           <ArrowLeft className="h-4 w-4" /> Back to property

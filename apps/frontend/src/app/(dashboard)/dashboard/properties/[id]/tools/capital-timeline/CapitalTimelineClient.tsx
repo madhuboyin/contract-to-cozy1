@@ -47,6 +47,7 @@ import { InventoryItem, InventoryRoom } from '@/types';
 import { track } from '@/lib/analytics/events';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
+import { resolveToolReturnHref } from '@/lib/navigation/backNavigation';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -989,7 +990,7 @@ export default function CapitalTimelineClient() {
   const toolLaunchContext = useToolLaunchContext();
   const requestedAssumptionSetId = searchParams.get('assumptionSetId');
   const focusedInventoryItemId = toolLaunchContext?.resolved.prefill.itemId ?? null;
-  const backHref = `/dashboard/properties/${propertyId}`;
+  const backHref = resolveToolReturnHref(searchParams, `/dashboard/properties/${propertyId}`);
 
   const [horizonYears, setHorizonYears] = useState<5 | 10>(10);
   const [loading, setLoading] = useState(false);

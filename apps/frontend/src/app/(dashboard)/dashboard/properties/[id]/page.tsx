@@ -14,28 +14,12 @@ import { FEATURE_FLAGS } from '@/lib/featureFlags';
 import { track } from '@/lib/analytics/events';
 import { api } from '@/lib/api/client';
 import type {
-  PropertyContextCompleteness,
-  PropertyContextScope,
-  PropertyContextSnapshot,
   PropertyDashboardBootstrap,
 } from '@/types';
 import PropertyRecordOverview, {
   calculatePropertyRecordCompleteness,
 } from './components/PropertyRecordOverview';
 import PropertyRecordTemplate from './components/PropertyRecordTemplate';
-
-const PROPERTY_RECORD_CONTEXT_SCOPES: PropertyContextScope[] = [
-  'CORE',
-  'LOCATION',
-  'STRUCTURE',
-  'EXTERIOR',
-  'RESPONSIBILITY',
-  'SYSTEMS',
-  'SAFETY',
-  'ROOMS',
-  'INVENTORY',
-  'OPTIONAL_HOUSEHOLD',
-];
 
 function formatEnum(value: string | null | undefined, fallback = 'Home'): string {
   if (!value) return fallback;
@@ -64,6 +48,12 @@ function propertyDisplayName(name: string | null, address: string): string {
   return name!.trim();
 }
 
+function appendQueryParam(href: string, key: string, value: string): string {
+  const [pathAndQuery, hash] = href.split('#', 2);
+  const separator = pathAndQuery.includes('?') ? '&' : '?';
+  return `${pathAndQuery}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}${hash ? `#${hash}` : ''}`;
+}
+
 export default function PropertyDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -88,37 +78,17 @@ export default function PropertyDetailPage() {
   const property = bootstrapQuery.data?.property ?? null;
   const onboarding = bootstrapQuery.data?.onboarding ?? null;
   const narrativeRun = bootstrapQuery.data?.narrativeRun ?? null;
-
-  const recordContextQuery = useQuery({
-    queryKey: ['property-record-context', propertyId, PROPERTY_RECORD_CONTEXT_SCOPES.join(',')],
-    queryFn: async (): Promise<{
-      completeness: PropertyContextCompleteness;
-      snapshot: PropertyContextSnapshot;
-    } | null> => {
-      const [completenessResponse, snapshotResponse] = await Promise.all([
-        api.getPropertyContextCompleteness(propertyId, PROPERTY_RECORD_CONTEXT_SCOPES),
-        api.getPropertyContext(propertyId, PROPERTY_RECORD_CONTEXT_SCOPES),
-      ]);
-      if (!completenessResponse.success || !snapshotResponse.success) return null;
-      return {
-        completeness: completenessResponse.data,
-        snapshot: snapshotResponse.data,
-      };
-    },
-    enabled: Boolean(propertyId),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
+  const recordOverview = bootstrapQuery.data?.recordOverview ?? null;
 
   const recordCompleteness = useMemo(
-    () => recordContextQuery.data?.completeness.completenessPercent
+    () => recordOverview?.context.completeness?.completenessPercent
       ?? (property ? calculatePropertyRecordCompleteness(property, onboarding) : 0),
-    [onboarding, property, recordContextQuery.data?.completeness.completenessPercent],
+    [onboarding, property, recordOverview?.context.completeness?.completenessPercent],
   );
 
   useEffect(() => {
     if (!property) return;
-    const contextVersion = recordContextQuery.data?.completeness.contextVersion ?? null;
+    const contextVersion = recordOverview?.context.completeness?.contextVersion ?? null;
     const viewKey = `${property.id}:${contextVersion ?? 'fallback'}`;
     if (trackedViewKey.current === viewKey) return;
     trackedViewKey.current = viewKey;
@@ -127,13 +97,17 @@ export default function PropertyDetailPage() {
       completenessPercent: recordCompleteness,
       contextVersion,
       completenessSource: contextVersion ? 'PROPERTY_CONTEXT' : 'PROFILE_FALLBACK',
+      completenessBand: recordCompleteness >= 85 ? 'HIGH' : recordCompleteness >= 50 ? 'MEDIUM' : 'LOW',
+      viewport: window.innerWidth < 768 ? 'MOBILE' : window.innerWidth < 1200 ? 'TABLET' : 'DESKTOP',
+      registryVersion: recordOverview?.registryVersion ?? null,
     });
-  }, [property, recordCompleteness, recordContextQuery.data?.completeness.contextVersion]);
+  }, [property, recordCompleteness, recordOverview?.context.completeness?.contextVersion, recordOverview?.registryVersion]);
 
   if (bootstrapQuery.isLoading) {
     return (
-      <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 sm:px-6 lg:px-8">
-        <div className="h-64 animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />
+      <div aria-busy="true" aria-label="Loading property record" role="status" className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 sm:px-6 lg:px-8">
+        <span className="sr-only">Loading property record</span>
+        <div className="h-64 animate-pulse rounded-2xl border border-slate-200 bg-slate-100 motion-reduce:animate-none" />
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
           <div className="h-80 animate-pulse rounded-2xl bg-slate-100" />
           <div className="h-72 animate-pulse rounded-2xl bg-slate-100" />
@@ -198,6 +172,9 @@ export default function PropertyDetailPage() {
     { label: 'Documents', href: `/dashboard/documents?propertyId=${encodeURIComponent(property.id)}&backTo=${backTo}` },
     { label: 'History', href: `/dashboard/properties/${property.id}/timeline?backTo=${backTo}` },
   ];
+  const firstImprovementHref = Object.values(recordOverview?.context.snapshot?.facts ?? {})
+    .find((fact) => fact.state !== 'KNOWN' && fact.correctionPath?.startsWith('/dashboard/'))
+    ?.correctionPath?.replaceAll(':propertyId', encodeURIComponent(property.id));
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
@@ -225,16 +202,24 @@ export default function PropertyDetailPage() {
         completeness={recordCompleteness}
         lastUpdated={formatUpdatedAt(property.updatedAt)}
         editHref={`/dashboard/properties/${property.id}/edit`}
-        addHref={`/dashboard/properties/${property.id}/edit?focus=missing`}
+        addHref={appendQueryParam(firstImprovementHref ?? `/dashboard/properties/${property.id}/edit`, 'recordAction', 'add')}
         navigation={navigation}
       >
-        <PropertyRecordOverview
-          property={property}
-          contextCompleteness={recordContextQuery.data?.completeness ?? null}
-          contextSnapshot={recordContextQuery.data?.snapshot ?? null}
-          contextVersion={recordContextQuery.data?.snapshot.contextVersion ?? null}
-          enableConnectedTools={FEATURE_FLAGS.PROPERTY_RECORD_CONNECTED_TOOLS}
-        />
+        {FEATURE_FLAGS.PROPERTY_RECORD_EXPERIENCE && recordOverview ? (
+          <PropertyRecordOverview
+            property={property}
+            overview={recordOverview}
+            enableConnectedTools={FEATURE_FLAGS.PROPERTY_RECORD_CONNECTED_TOOLS}
+          />
+        ) : (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-0 text-lg font-semibold text-slate-950">Property details</h2>
+            <p className="mt-2 mb-0 text-sm text-slate-600">
+              The enhanced Property Record is temporarily unavailable. Your saved details remain accessible.
+            </p>
+            <Button asChild className="mt-4"><Link href={`/dashboard/properties/${property.id}/edit`}>View and edit details</Link></Button>
+          </section>
+        )}
       </PropertyRecordTemplate>
     </div>
   );

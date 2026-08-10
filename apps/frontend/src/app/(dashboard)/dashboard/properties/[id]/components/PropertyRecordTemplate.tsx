@@ -58,7 +58,7 @@ export default function PropertyRecordTemplate({
                 <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
                   Property Record
                 </p>
-                <h1 className="mb-0 truncate text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+                <h1 className="mb-0 break-words text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
                   {title}
                 </h1>
                 <p className="mt-1 mb-0 text-sm text-slate-600">{address}</p>
@@ -123,7 +123,7 @@ export default function PropertyRecordTemplate({
                 aria-current={item.active ? 'page' : undefined}
                 onClick={() => track('property_record_section_opened', { propertyId, section: item.label })}
                 className={cn(
-                  'no-brand-style inline-flex min-h-[40px] shrink-0 items-center rounded-lg px-3 text-sm font-medium transition-colors',
+                  'no-brand-style inline-flex min-h-[40px] shrink-0 items-center rounded-lg px-3 text-sm font-medium transition-colors motion-reduce:transition-none',
                   item.active
                     ? 'bg-emerald-50 text-emerald-800'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950',
@@ -137,7 +137,7 @@ export default function PropertyRecordTemplate({
           <details className="group md:hidden">
             <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between rounded-xl bg-slate-50 px-3 text-sm font-semibold text-slate-800 [&::-webkit-details-marker]:hidden">
               <span>{navigation.find((item) => item.active)?.label ?? 'Overview'}</span>
-              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+              <ChevronDown className="h-4 w-4 transition-transform motion-reduce:transition-none group-open:rotate-180" aria-hidden="true" />
             </summary>
             <div className="mt-2 grid gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
               {navigation.map((item) => (

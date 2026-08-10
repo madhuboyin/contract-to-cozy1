@@ -17,6 +17,17 @@ export function resolveDashboardBackHref(
   return normalized;
 }
 
+/** Reads the canonical backTo parameter and the legacy returnTo alias. */
+export function resolveToolReturnHref(
+  searchParams: Pick<URLSearchParams, 'get'>,
+  fallbackHref: string,
+): string {
+  return resolveDashboardBackHref(
+    searchParams.get('backTo') ?? searchParams.get('returnTo'),
+    fallbackHref,
+  );
+}
+
 type RouterLike = {
   back: () => void;
   push: (href: string) => void;

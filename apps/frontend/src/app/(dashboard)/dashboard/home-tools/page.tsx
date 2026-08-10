@@ -31,7 +31,8 @@ export default function HomeToolsPage() {
     return raw ? [...new Set(raw.split(',').map((value) => value.trim()).filter(Boolean))] : undefined;
   }, [searchParams]);
   const isPropertyToolSet = Boolean(allowedToolIds?.length);
-  const resolvedPropertyId = selectedPropertyId || propertyIdFromQuery;
+  // An explicit deep link must not silently switch to the globally selected home.
+  const resolvedPropertyId = propertyIdFromQuery || selectedPropertyId;
   const propertyFallbackBackHref = '/dashboard';
   const backHref = resolveDashboardBackHref(searchParams.get('backTo'), propertyFallbackBackHref);
   const backLabel = backHref === '/dashboard' ? 'Back to Home' : 'Back to previous page';

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, type ElementType } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
   CheckCircle2,
@@ -17,22 +16,17 @@ import {
 } from 'lucide-react';
 
 import { getPropertyToolPresentations } from '@/features/tools/propertyToolPresentationPolicy';
-import { api } from '@/lib/api/client';
 import { track } from '@/lib/analytics/events';
 import type {
   Property,
   PropertyContextCompleteness,
+  PropertyContextFact,
   PropertyContextScope,
   PropertyContextSnapshot,
   PropertyOnboardingNarrativeState,
+  PropertyRecordOverviewDTO,
 } from '@/types';
 import { cn } from '@/lib/utils';
-import { listInventoryItems, listInventoryRooms } from '../../../inventory/inventoryApi';
-import { getLatestTimeline } from '../tools/capital-timeline/capitalTimelineApi';
-import { getDigitalWill } from '../tools/home-digital-will/homeDigitalWillApi';
-import { listEligiblePlantAdvisorRooms } from '../tools/plant-advisor/plantAdvisorApi';
-import { listPropertyBriefs } from '../property-brief/propertyBriefApi';
-import { listHomeEvents } from '../timeline/homeEventsApi';
 
 type RecordCategoryTone = 'complete' | 'progress' | 'missing';
 
@@ -246,12 +240,53 @@ function RecordPanel({
   );
 }
 
-function FactRow({ label, value, missing = false }: { label: string; value: string; missing?: boolean }) {
+function FactRow({
+  label,
+  value,
+  missing = false,
+  fact,
+  propertyId,
+}: {
+  label: string;
+  value: string;
+  missing?: boolean;
+  fact?: PropertyContextFact;
+  propertyId?: string;
+}) {
+  const provenance = fact
+    ? fact.state === 'CONFLICTED' ? 'Conflicted'
+      : fact.state === 'STALE' ? 'Stale'
+        : fact.state === 'UNKNOWN' ? 'Missing'
+          : fact.verified ? 'Verified'
+            : fact.source === 'SYSTEM_DERIVED' ? 'Inferred'
+              : fact.source ? formatEnum(fact.source) : 'Recorded'
+    : null;
+  const correctionHref = propertyId && fact?.correctionPath
+    ? resolveCorrectionHref(propertyId, fact.correctionPath, `/dashboard/properties/${propertyId}/edit`)
+    : null;
   return (
-    <div className="flex min-h-[38px] items-center justify-between gap-4 border-t border-slate-100 py-2 first:border-t-0 first:pt-0">
+    <div className="flex min-h-[44px] items-start justify-between gap-4 border-t border-slate-100 py-2 first:border-t-0 first:pt-0">
       <dt className="text-xs font-medium text-slate-500">{label}</dt>
       <dd className={cn('mb-0 text-right text-sm font-semibold', missing ? 'text-amber-700' : 'text-slate-900')}>
-        {value}
+        <span className="block">{value}</span>
+        {provenance && fact && propertyId ? (
+          <details className="group/provenance mt-0.5 text-[10px] font-medium text-slate-500">
+            <summary
+              onClick={() => track('property_record_source_viewed', { propertyId, factKey: fact.key, source: fact.source ?? 'UNKNOWN', state: fact.state })}
+              className="cursor-pointer list-none hover:text-emerald-700 [&::-webkit-details-marker]:hidden"
+            >
+              {provenance} · source details
+            </summary>
+            <span className="mt-1 block max-w-[220px] rounded-lg bg-slate-50 p-2 text-left font-normal leading-4 text-slate-600">
+              Source: {fact.source ? formatEnum(fact.source) : 'Not recorded'}
+              {fact.observedAt ? ` · observed ${formatDate(fact.observedAt)}` : ''}
+              {fact.confidence != null ? ` · ${Math.round(fact.confidence * 100)}% confidence` : ''}
+              {correctionHref ? (
+                <Link href={correctionHref} className="no-brand-style mt-1 block font-semibold text-emerald-700">Review or correct</Link>
+              ) : null}
+            </span>
+          </details>
+        ) : provenance ? <span className="mt-0.5 block text-[10px] font-medium text-slate-500">{provenance}</span> : null}
       </dd>
     </div>
   );
@@ -259,6 +294,7 @@ function FactRow({ label, value, missing = false }: { label: string; value: stri
 
 function RecordCompleteness({ propertyId, categories }: { propertyId: string; categories: RecordCategory[] }) {
   const nextCategory = [...categories].sort((a, b) => a.percent - b.percent)[0];
+  const nextImprovement = nextCategory?.issues[0];
 
   return (
     <section id="record-quality" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -373,10 +409,11 @@ function RecordCompleteness({ propertyId, categories }: { propertyId: string; ca
 
       {nextCategory ? (
         <Link
-          href={nextCategory.href}
+          id="record-quality-next"
+          href={nextImprovement?.href ?? nextCategory.href}
           className="no-brand-style mt-4 flex min-h-[44px] items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber-900"
         >
-          <span>Improve {nextCategory.label.toLowerCase()}</span>
+          <span>{nextImprovement ? `${nextImprovement.state === 'MISSING' ? 'Add' : 'Review'} ${nextImprovement.label.toLowerCase()}` : `Improve ${nextCategory.label.toLowerCase()}`}</span>
           <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       ) : null}
@@ -394,6 +431,7 @@ interface RelatedTool {
   icon: ElementType;
   statusTone: 'saved' | 'setup' | 'loading' | 'unavailable';
   fallbackRank: number;
+  group: string;
 }
 
 function RelatedPropertyTools({
@@ -401,11 +439,13 @@ function RelatedPropertyTools({
   contextVersion,
   tools,
   allToolsHref,
+  registryVersion,
 }: {
   propertyId: string;
   contextVersion?: string | null;
   tools: RelatedTool[];
   allToolsHref: string;
+  registryVersion: string;
 }) {
   const trackedImpression = useRef<string | null>(null);
   const visible = tools.slice(0, 4);
@@ -424,8 +464,11 @@ function RelatedPropertyTools({
       originSection: 'OVERVIEW',
       sourceEntityType: 'PROPERTY_RECORD',
       sourceEntityId: propertyId,
+      registryVersion,
+      toolGroups: tools.map((tool) => tool.group),
+      toolStates: tools.map((tool) => tool.statusTone),
     });
-  }, [contextVersion, impressionKey, propertyId, toolIds, tools.length]);
+  }, [contextVersion, impressionKey, propertyId, registryVersion, toolIds, tools]);
 
   const renderTool = (tool: RelatedTool, position: number) => {
     const ToolIcon = tool.icon;
@@ -443,6 +486,9 @@ function RelatedPropertyTools({
           sourceEntityType: 'PROPERTY_RECORD',
           sourceEntityId: propertyId,
           readiness: tool.statusTone === 'unavailable' ? 'UNKNOWN' : tool.statusTone === 'loading' ? 'NEEDS_CONTEXT' : 'READY',
+          registryVersion,
+          toolGroup: tool.group,
+          toolState: tool.statusTone,
         })}
         className="no-brand-style group flex min-h-[132px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md"
       >
@@ -571,105 +617,64 @@ function RelatedWorkspaces({ propertyId, backTo }: { propertyId: string; backTo:
 
 export default function PropertyRecordOverview({
   property,
-  contextCompleteness,
-  contextSnapshot,
-  contextVersion,
+  overview,
   enableConnectedTools = true,
 }: {
   property: Property;
-  contextCompleteness?: PropertyContextCompleteness | null;
-  contextSnapshot?: PropertyContextSnapshot | null;
-  contextVersion?: string | null;
+  overview: PropertyRecordOverviewDTO;
   enableConnectedTools?: boolean;
 }) {
   const propertyId = property.id;
+  const contextCompleteness = overview.context.completeness;
+  const contextSnapshot = overview.context.snapshot;
+  const contextVersion = contextSnapshot?.contextVersion ?? null;
   const propertyPath = `/dashboard/properties/${propertyId}`;
   const withBackTo = (href: string) => `${href}${href.includes('?') ? '&' : '?'}backTo=${encodeURIComponent(propertyPath)}`;
   const documentsHref = withBackTo(`/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`);
 
-  const roomsQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'rooms'],
-    queryFn: () => listInventoryRooms(propertyId),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-  const inventoryQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'inventory'],
-    queryFn: () => listInventoryItems(propertyId, {}),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-  const documentsQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'documents'],
-    queryFn: async () => {
-      const response = await api.listDocuments(propertyId);
-      return response.success ? response.data.documents : [];
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-  const householdQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'household'],
-    queryFn: () => api.listHouseholdMembers(propertyId),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-  const capitalTimelineQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'capital-timeline'],
-    queryFn: () => getLatestTimeline(propertyId),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-    enabled: enableConnectedTools,
-  });
-  const continuityQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'continuity-plan'],
-    queryFn: () => getDigitalWill(propertyId),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-    enabled: enableConnectedTools,
-  });
-  const plantAdvisorQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'plant-advisor-rooms'],
-    queryFn: () => listEligiblePlantAdvisorRooms(propertyId),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-    enabled: enableConnectedTools,
-  });
-  const propertyBriefQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'property-briefs'],
-    queryFn: () => listPropertyBriefs(propertyId),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-    enabled: enableConnectedTools,
-  });
-  const homeTimelineQuery = useQuery({
-    queryKey: ['property-record', propertyId, 'home-timeline-summary'],
-    queryFn: async () => {
-      const response = await listHomeEvents(propertyId, { limit: 100 });
-      const payload = response.data.data;
-      return payload.timelineEntries?.length ?? payload.events.length;
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-    enabled: enableConnectedTools,
-  });
-
-  const rooms = roomsQuery.data ?? [];
-  const inventory = inventoryQuery.data ?? [];
-  const documents = documentsQuery.data ?? [];
-  const household = householdQuery.data ?? [];
-  const timeline = capitalTimelineQuery.data?.analysis ?? null;
-  const continuityPlan = continuityQuery.data?.will ?? null;
-  const plantRooms = plantAdvisorQuery.data ?? [];
-  const propertyBriefs = propertyBriefQuery.data ?? [];
-  const homeTimelineEventCount = homeTimelineQuery.data ?? 0;
-  const configuredPlantRooms = plantRooms.filter((room) => room.hasProfile).length;
-  const savedPlants = plantRooms.reduce((sum, room) => sum + room.recommendationCounts.saved, 0);
+  const loadState = (status: 'AVAILABLE' | 'UNAVAILABLE') => ({ isLoading: false, isError: status === 'UNAVAILABLE' });
+  const roomsQuery = loadState(overview.sections.rooms.status);
+  const inventoryQuery = loadState(overview.sections.inventory.status);
+  const documentsQuery = loadState(overview.sections.documents.status);
+  const householdQuery = loadState(overview.sections.household.status);
+  const capitalTimelineQuery = loadState(overview.tools.capitalTimeline.status);
+  const continuityQuery = loadState(overview.tools.continuityPlan.status);
+  const plantAdvisorQuery = loadState(overview.tools.plantAdvisor.status);
+  const propertyBriefQuery = loadState(overview.tools.propertyBrief.status);
+  const homeTimelineQuery = loadState(overview.tools.homeTimeline.status);
+  const unavailableAdapters = [
+    ['rooms', overview.sections.rooms.status],
+    ['inventory', overview.sections.inventory.status],
+    ['documents', overview.sections.documents.status],
+    ['household', overview.sections.household.status],
+    ['capital-timeline', overview.tools.capitalTimeline.status],
+    ['continuity-plan', overview.tools.continuityPlan.status],
+    ['plant-advisor', overview.tools.plantAdvisor.status],
+    ['property-brief', overview.tools.propertyBrief.status],
+    ['home-timeline', overview.tools.homeTimeline.status],
+  ].filter(([, status]) => status === 'UNAVAILABLE').map(([name]) => name);
+  const adapterFailureKey = unavailableAdapters.join(',');
+  useEffect(() => {
+    if (!adapterFailureKey) return;
+    track('api_error_encountered', {
+      endpoint: 'property-record-overview/adapters',
+      statusCode: 206,
+      message: `Unavailable property record adapters: ${adapterFailureKey}`,
+    });
+  }, [adapterFailureKey]);
+  const rooms = overview.sections.rooms.data?.items ?? [];
+  const inventoryCount = overview.sections.inventory.data?.totalCount ?? 0;
+  const documentsCount = overview.sections.documents.data?.totalCount ?? 0;
+  const householdCount = overview.sections.household.data?.totalCount ?? 0;
+  const timeline = overview.tools.capitalTimeline.data;
+  const continuityPlan = overview.tools.continuityPlan.data;
+  const latestBrief = overview.tools.propertyBrief.data;
+  const homeTimelineEventCount = overview.tools.homeTimeline.data?.confirmedCount ?? 0;
+  const configuredPlantRooms = overview.tools.plantAdvisor.data?.profileCount ?? 0;
+  const savedPlants = overview.tools.plantAdvisor.data?.savedCount ?? 0;
   const plantHasState = configuredPlantRooms > 0 || savedPlants > 0;
-  const systemItems = inventory.filter((item) =>
-    ['HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'STRUCTURAL', 'SAFETY'].includes(item.category),
-  );
-  const inventoryWithDocuments = inventory.filter((item) => item.documents && item.documents.length > 0).length;
+  const systemItemCount = overview.sections.inventory.data?.majorSystemCount ?? 0;
+  const inventoryWithDocuments = overview.sections.inventory.data?.withDocumentCount ?? 0;
 
   const profileFallbackPercent = percent([
     property.address,
@@ -701,9 +706,12 @@ export default function PropertyRecordOverview({
     property.bathrooms,
     property.occupantsCount,
     rooms.length > 0 ? rooms.length : null,
-    household.length > 0 ? household.length : null,
+    householdCount > 0 ? householdCount : null,
   ]);
-  const documentsPercent = Math.min(100, documents.length * 20);
+  const documentData = overview.sections.documents.data;
+  const documentsPercent = documentData
+    ? Math.round(((documentData.linkedCount + documentData.verifiedCount) / Math.max(2, documentData.totalCount * 2)) * 100)
+    : 0;
 
   const propertyDetailScopes: PropertyContextScope[] = ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY'];
   const systemsScopes: PropertyContextScope[] = ['SYSTEMS', 'SAFETY', 'INVENTORY'];
@@ -763,8 +771,8 @@ export default function PropertyRecordOverview({
         ? 'Inventory status is temporarily unavailable'
         : inventoryQuery.isLoading
           ? 'Loading systems and equipment'
-          : systemItems.length > 0
-            ? `${systemItems.length} major systems tracked`
+          : systemItemCount > 0
+            ? `${systemItemCount} major systems tracked`
             : 'Add major systems and equipment',
       percent: systemsPercent,
       href: systemsHref,
@@ -777,7 +785,7 @@ export default function PropertyRecordOverview({
         ? 'Some room or household data is unavailable'
         : roomsQuery.isLoading || householdQuery.isLoading
           ? 'Loading rooms and household'
-          : `${rooms.length} rooms · ${household.length} household members`,
+          : `${rooms.length} rooms · ${householdCount} household members`,
       percent: spacesPercent,
       href: roomsHref,
       tone: categoryTone(spacesPercent),
@@ -789,8 +797,8 @@ export default function PropertyRecordOverview({
         ? 'Document status is temporarily unavailable'
         : documentsQuery.isLoading
           ? 'Loading attached records'
-          : documents.length > 0
-            ? `${documents.length} records attached`
+          : documentsCount > 0
+            ? `${documentsCount} records · ${documentData?.needsReviewCount ?? 0} to review`
             : 'Add inspections, warranties, and receipts',
       percent: documentsPercent,
       href: documentsHref,
@@ -800,15 +808,19 @@ export default function PropertyRecordOverview({
   ];
 
   const tools: RelatedTool[] = (() => {
-    const timelineCount = timeline?.items.length ?? 0;
-    const latestBrief = [...propertyBriefs].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    )[0];
+    const timelineCount = timeline?.itemCount ?? 0;
     return getPropertyToolPresentations({
       propertyId,
       returnTo: propertyPath,
       contextVersion,
-    }).map((presentation): RelatedTool => {
+    }).filter((presentation) => {
+      const reasons = overview.tools.eligibility[presentation.toolId]?.reasons ?? [];
+      return !reasons.some((reason) => [
+        'CONTRIBUTOR_ROLE_REQUIRED', 'DISCOVERY_DISABLED', 'TOOL_DISABLED',
+        'ROUTE_UNAVAILABLE', 'RELEASE_GATE_BLOCKED', 'ROLLOUT_DISABLED', 'WORKFLOW_ONLY',
+      ].includes(reason));
+    })
+      .map((presentation): RelatedTool => {
       let state = 'Ready to use';
       let action = 'Open tool';
       let statusTone: RelatedTool['statusTone'] = 'setup';
@@ -819,8 +831,8 @@ export default function PropertyRecordOverview({
           : capitalTimelineQuery.isError
             ? 'Status unavailable'
             : timelineCount > 0
-              ? `${timelineCount} events modeled`
-              : `${systemItems.length} systems available`;
+              ? `${timelineCount} modeled · ${formatDate(timeline?.computedAt)}`
+              : `${systemItemCount} systems available`;
         action = timelineCount > 0 ? 'Review timeline' : 'Build timeline';
         statusTone = capitalTimelineQuery.isError ? 'unavailable' : capitalTimelineQuery.isLoading ? 'loading' : timelineCount > 0 ? 'saved' : 'setup';
       } else if (presentation.toolId === 'home-digital-will') {
@@ -829,7 +841,7 @@ export default function PropertyRecordOverview({
           : continuityQuery.isError
             ? 'Status unavailable'
             : continuityPlan
-              ? `${continuityPlan.completionPercent}% complete`
+              ? `${continuityPlan.completionPercent}% · ${formatDate(continuityPlan.updatedAt)}`
               : 'Not started';
         action = continuityPlan ? 'Review plan' : 'Set up plan';
         statusTone = continuityQuery.isError ? 'unavailable' : continuityQuery.isLoading ? 'loading' : continuityPlan ? 'saved' : 'setup';
@@ -852,7 +864,7 @@ export default function PropertyRecordOverview({
               ? 'Source records changed'
               : latestBrief
                 ? `${formatEnum(latestBrief.status)} · ${formatDate(latestBrief.createdAt)}`
-                : `${documents.length} documents available`;
+                : `${documentsCount} documents available`;
         action = latestBrief ? 'Review brief' : 'Create brief';
         statusTone = propertyBriefQuery.isError ? 'unavailable' : propertyBriefQuery.isLoading ? 'loading' : latestBrief ? 'saved' : 'setup';
       } else if (presentation.toolId === 'home-timeline') {
@@ -870,9 +882,11 @@ export default function PropertyRecordOverview({
           ? 'Loading status'
           : inventoryQuery.isError
             ? 'Status unavailable'
-            : `${systemItems.length} systems represented`;
+            : systemItemCount > 0
+              ? `${systemItemCount} systems · ${formatDate(overview.tools.statusBoard.data?.updatedAt)}`
+              : 'No systems represented yet';
         action = 'Open status board';
-        statusTone = inventoryQuery.isError ? 'unavailable' : inventoryQuery.isLoading ? 'loading' : systemItems.length > 0 ? 'saved' : 'setup';
+        statusTone = inventoryQuery.isError ? 'unavailable' : inventoryQuery.isLoading ? 'loading' : systemItemCount > 0 ? 'saved' : 'setup';
       }
 
       return {
@@ -885,6 +899,7 @@ export default function PropertyRecordOverview({
         icon: presentation.icon,
         statusTone,
         fallbackRank: presentation.fallbackRank,
+        group: presentation.group,
       };
     }).sort((a, b) => {
       const aSaved = a.statusTone === 'saved' ? 0 : 1;
@@ -922,17 +937,18 @@ export default function PropertyRecordOverview({
         : tool?.statusTone === 'loading'
           ? 'NEEDS_CONTEXT'
           : 'READY',
+      registryVersion: overview.registryVersion,
+      toolGroup: tool?.group,
+      toolState: tool?.statusTone,
     });
   };
 
-  const latestDocument = [...documents].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  )[0];
+  const latestDocument = overview.sections.documents.data?.latest ?? null;
 
   return (
     <div className="space-y-5">
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
-        <div className="space-y-4">
+        <div className="order-2 space-y-4 lg:order-1 lg:row-span-2">
           <RecordPanel
             id="property-details"
             title="Property profile"
@@ -942,12 +958,12 @@ export default function PropertyRecordOverview({
             icon={<Home className="h-4 w-4" aria-hidden="true" />}
           >
             <dl className="grid gap-x-6 sm:grid-cols-2">
-              <FactRow label="Property type" value={formatEnum(property.dwellingType)} />
-              <FactRow label="Ownership" value={formatEnum(property.ownershipForm)} />
-              <FactRow label="Built" value={property.yearBuilt ? String(property.yearBuilt) : 'Add year'} missing={!property.yearBuilt} />
-              <FactRow label="Living area" value={property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : 'Add size'} missing={!property.propertySize} />
+              <FactRow label="Property type" value={formatEnum(property.dwellingType)} fact={contextSnapshot?.facts['core.dwellingType']} propertyId={propertyId} />
+              <FactRow label="Ownership" value={formatEnum(property.ownershipForm)} fact={contextSnapshot?.facts['responsibility.ownershipForm']} propertyId={propertyId} />
+              <FactRow label="Built" value={property.yearBuilt ? String(property.yearBuilt) : 'Add year'} missing={!property.yearBuilt} fact={contextSnapshot?.facts['structure.yearBuilt']} propertyId={propertyId} />
+              <FactRow label="Living area" value={property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : 'Add size'} missing={!property.propertySize} fact={contextSnapshot?.facts['core.propertySizeSqFt']} propertyId={propertyId} />
               <FactRow label="Layout" value={property.bedrooms != null || property.bathrooms != null ? `${property.bedrooms ?? '—'} bd · ${property.bathrooms ?? '—'} ba` : 'Add layout'} missing={property.bedrooms == null && property.bathrooms == null} />
-              <FactRow label="Occupancy" value={formatEnum(property.occupancyStatus)} />
+              <FactRow label="Occupancy" value={formatEnum(property.occupancyStatus)} fact={contextSnapshot?.facts['core.occupancyStatus']} propertyId={propertyId} />
             </dl>
           </RecordPanel>
 
@@ -957,12 +973,12 @@ export default function PropertyRecordOverview({
               title="Systems & inventory"
               description="Major systems, appliances, equipment, warranties, and supporting records."
               href={withBackTo(`/dashboard/properties/${propertyId}/inventory`)}
-              actionLabel="View inventory"
+              actionLabel={inventoryQuery.isError ? 'Retry in inventory' : inventoryCount > 0 ? 'View inventory' : 'Add first system'}
               icon={<PackageSearch className="h-4 w-4" aria-hidden="true" />}
             >
               <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(inventoryQuery.isLoading, inventoryQuery.isError, systemItems.length)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Major systems</p></div>
-                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(inventoryQuery.isLoading, inventoryQuery.isError, inventory.length)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Total items</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(inventoryQuery.isLoading, inventoryQuery.isError, systemItemCount)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Major systems</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(inventoryQuery.isLoading, inventoryQuery.isError, inventoryCount)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Total items</p></div>
                 <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(inventoryQuery.isLoading, inventoryQuery.isError, inventoryWithDocuments)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">With records</p></div>
               </div>
               {enableConnectedTools ? (
@@ -982,12 +998,12 @@ export default function PropertyRecordOverview({
               title="Rooms & household"
               description="Spaces, room context, occupants, and household access."
               href={withBackTo(`/dashboard/properties/${propertyId}/rooms`)}
-              actionLabel="View rooms"
+              actionLabel={roomsQuery.isError ? 'Retry in rooms' : rooms.length > 0 ? 'View rooms' : 'Add first room'}
               icon={<Users className="h-4 w-4" aria-hidden="true" />}
             >
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(roomsQuery.isLoading, roomsQuery.isError, rooms.length)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Rooms recorded</p></div>
-                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(householdQuery.isLoading, householdQuery.isError, household.length)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Household members</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{queryCount(householdQuery.isLoading, householdQuery.isError, householdCount)}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Household members</p></div>
               </div>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
                 <Link href={withBackTo(`/dashboard/properties/${propertyId}/household`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
@@ -1014,13 +1030,22 @@ export default function PropertyRecordOverview({
           >
             <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="mb-0 text-2xl font-semibold text-slate-950">{queryCount(documentsQuery.isLoading, documentsQuery.isError, documents.length)}</p>
+                <p className="mb-0 text-2xl font-semibold text-slate-950">{queryCount(documentsQuery.isLoading, documentsQuery.isError, documentsCount)}</p>
                 <p className="mt-0.5 mb-0 text-xs text-slate-500">Documents attached to this property</p>
               </div>
               <Link href={documentsHref} className="no-brand-style inline-flex min-h-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
                 Upload document
               </Link>
             </div>
+            {documentData && documentData.totalCount > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">{documentData.verifiedCount} verified</span>
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">{documentData.needsReviewCount} need review</span>
+                {documentData.byType.slice(0, 3).map((entry) => (
+                  <span key={entry.type} className="rounded-full bg-white px-2.5 py-1">{formatEnum(entry.type)} {entry.count}</span>
+                ))}
+              </div>
+            ) : null}
             {enableConnectedTools ? (
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
                 <Link href={connectedToolHref('property-brief', withBackTo(`/dashboard/properties/${propertyId}/property-brief`), 'DOCUMENTS')} onClick={() => trackContextualToolOpen('property-brief', 'DOCUMENTS')} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
@@ -1034,12 +1059,30 @@ export default function PropertyRecordOverview({
               </div>
             ) : null}
           </RecordPanel>
+
+          <RecordPanel
+            id="property-ownership-protection"
+            title="Ownership & protection"
+            description="Responsibility, household access, and the records that help protect this home."
+            href={`/dashboard/protect?propertyId=${encodeURIComponent(propertyId)}&backTo=${encodeURIComponent(propertyPath)}`}
+            actionLabel="Review protection"
+            icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}
+          >
+            <dl className="grid gap-x-6 sm:grid-cols-2">
+              <FactRow label="Ownership" value={formatEnum(property.ownershipForm)} fact={contextSnapshot?.facts['responsibility.ownershipForm']} propertyId={propertyId} />
+              <FactRow label="Your access" value={formatEnum(overview.accessRole)} />
+              <FactRow label="Household members" value={householdQuery.isError ? 'Unavailable' : String(householdCount)} missing={householdQuery.isError} />
+              <FactRow label="Verified documents" value={documentsQuery.isError ? 'Unavailable' : String(documentData?.verifiedCount ?? 0)} missing={documentsQuery.isError} />
+            </dl>
+          </RecordPanel>
         </div>
 
-        <div className="space-y-4">
-          <RecordCompleteness propertyId={propertyId} categories={categories} />
+        <div className="contents">
+          <div className="order-1 lg:order-2">
+            <RecordCompleteness propertyId={propertyId} categories={categories} />
+          </div>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <section className="order-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:order-2">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Record history</p>
@@ -1048,17 +1091,25 @@ export default function PropertyRecordOverview({
               <Link href={withBackTo(`/dashboard/properties/${propertyId}/timeline`)} className="no-brand-style text-xs font-semibold text-emerald-700">View history</Link>
             </div>
             <div className="mt-3 space-y-2">
-              <div className="flex gap-3 rounded-xl bg-slate-50 p-3">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
-                <div><p className="mb-0 text-sm font-medium text-slate-900">Property profile updated</p><p className="mt-0.5 mb-0 text-xs text-slate-500">{formatDate(property.updatedAt)}</p></div>
-              </div>
-              {latestDocument ? (
+              {overview.tools.homeTimeline.status === 'UNAVAILABLE' ? (
+                <p role="status" className="mb-0 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Verified record history is temporarily unavailable.</p>
+              ) : overview.tools.homeTimeline.data?.recent.length ? (
+                overview.tools.homeTimeline.data.recent.slice(0, 3).map((event) => (
+                  <div key={event.id} className="flex gap-3 rounded-xl bg-slate-50 p-3">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="mb-0 truncate text-sm font-medium text-slate-900">{event.title}</p>
+                      <p className="mt-0.5 mb-0 text-xs text-slate-500">{formatDate(event.occurredAt)} · {formatEnum(event.sourceBadge)} · {event.verificationStatus === 'EVIDENCE_VERIFIED' ? 'Evidence verified' : 'Homeowner confirmed'}</p>
+                    </div>
+                  </div>
+                ))
+              ) : latestDocument ? (
                 <div className="flex gap-3 rounded-xl bg-slate-50 p-3">
                   <FileText className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" aria-hidden="true" />
-                  <div className="min-w-0"><p className="mb-0 truncate text-sm font-medium text-slate-900">{latestDocument.name}</p><p className="mt-0.5 mb-0 text-xs text-slate-500">Document added {formatDate(latestDocument.createdAt)}</p></div>
+                  <div className="min-w-0"><p className="mb-0 truncate text-sm font-medium text-slate-900">{latestDocument.name}</p><p className="mt-0.5 mb-0 text-xs text-slate-500">Latest document · {formatDate(latestDocument.createdAt)}</p></div>
                 </div>
               ) : (
-                <p className="mb-0 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">Document and system updates will appear here as the record grows.</p>
+                <p className="mb-0 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">Confirmed milestones and evidence-backed updates will appear here.</p>
               )}
             </div>
           </section>
@@ -1071,6 +1122,7 @@ export default function PropertyRecordOverview({
           contextVersion={contextVersion}
           tools={tools}
           allToolsHref={`/dashboard/home-tools?propertyId=${encodeURIComponent(propertyId)}&toolIds=${encodeURIComponent(tools.map((tool) => tool.id).join(','))}&backTo=${encodeURIComponent(propertyPath)}`}
+          registryVersion={overview.registryVersion}
         />
       ) : null}
       <RelatedWorkspaces propertyId={propertyId} backTo={propertyPath} />

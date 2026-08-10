@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -67,6 +67,7 @@ import {
 import { MOBILE_CARD_RADIUS, MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
+import { resolveToolReturnHref } from '@/lib/navigation/backNavigation';
 import {
   createEntry,
   createTrustedContact,
@@ -299,10 +300,12 @@ function WillSkeleton() {
 
 function WillEmptyState({
   propertyId,
+  backHref,
   onInit,
   isLoading,
 }: {
   propertyId: string;
+  backHref: string;
   onInit: () => void;
   isLoading: boolean;
 }) {
@@ -310,7 +313,7 @@ function WillEmptyState({
     <MobilePageContainer className="space-y-5 py-4 lg:max-w-7xl lg:px-8 lg:pb-10">
       <MobileSection>
         <Button variant="ghost" className="min-h-[44px] w-fit gap-1.5 px-0 text-sm text-muted-foreground" asChild>
-          <Link href={`/dashboard/properties/${propertyId}`}>
+          <Link href={backHref}>
             <ArrowLeft className="h-4 w-4" />
             Back to property
           </Link>
@@ -2364,6 +2367,8 @@ function ContactEditorSheet({
 
 export default function HomeDigitalWillClient() {
   const { id: propertyId } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const backHref = resolveToolReturnHref(searchParams, `/dashboard/properties/${propertyId}`);
   const toolLaunchContext = useToolLaunchContext();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -2666,6 +2671,7 @@ export default function HomeDigitalWillClient() {
     return (
       <WillEmptyState
         propertyId={propertyId}
+        backHref={backHref}
         onInit={() => initWillMutation.mutate()}
         isLoading={initWillMutation.isPending}
       />
@@ -2698,7 +2704,7 @@ export default function HomeDigitalWillClient() {
           (selectedSectionId && !showContactsPanel) || showContactsPanel ? 'hidden lg:block' : '',
         )}>
           <Button variant="ghost" className="min-h-[44px] w-fit gap-1.5 px-0 text-sm text-muted-foreground" asChild>
-            <Link href={`/dashboard/properties/${propertyId}`}>
+            <Link href={backHref}>
               <ArrowLeft className="h-4 w-4" />
               Back to property
             </Link>

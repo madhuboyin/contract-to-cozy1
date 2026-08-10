@@ -1168,7 +1168,7 @@ export function UnifiedHomeSurface({
           : home.propertyContext.missingFactCount > 0
             ? `Add ${home.propertyContext.missingFactCount} missing home fact${home.propertyContext.missingFactCount === 1 ? '' : 's'}`
             : 'Review your verified Home Record',
-      href: `${home.glance.recordHref}#record-quality`,
+      href: `${home.glance.recordHref}#record-quality-next`,
     },
     {
       label: 'Systems tracked',

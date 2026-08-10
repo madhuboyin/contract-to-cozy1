@@ -11,6 +11,7 @@ import { getResolutionCenter } from '../services/resolutionCenter.service';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { getPropertyRecordOverview } from '../services/propertyRecordOverview.service';
 import {
   isAddressAutocompleteConfigured,
   resolveAddress,
@@ -165,9 +166,10 @@ export const getPropertyDashboardBootstrap = async (req: AuthRequest, res: Respo
       });
     }
 
-    const [onboarding, narrativeRun] = await Promise.all([
+    const [onboarding, narrativeRun, recordOverview] = await Promise.all([
       computeSetupStatus(id, userId),
       getOrCreateActiveNarrativeRun({ propertyId: id, userId }),
+      getPropertyRecordOverview(id, userId),
     ]);
 
     res.json({
@@ -176,6 +178,7 @@ export const getPropertyDashboardBootstrap = async (req: AuthRequest, res: Respo
         property,
         onboarding,
         narrativeRun,
+        recordOverview,
       },
     });
   } catch (error) {

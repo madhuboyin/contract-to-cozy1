@@ -27,6 +27,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../components/route-templates/DetailTemplate';
 import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
+import { track } from '@/lib/analytics/events';
 
 function fmt(dt?: string | null) {
   if (!dt) return '—';
@@ -104,7 +105,12 @@ export default function ReportsClient() {
     setCreating(true);
     setError(null);
     try {
-      await createHomeReportExport(propertyId, { type: 'HOME_REPORT_PACK' });
+      const created = await createHomeReportExport(propertyId, { type: 'HOME_REPORT_PACK' });
+      track('property_record_report_generated', {
+        propertyId,
+        reportType: 'HOME_REPORT_PACK',
+        reportId: created?.exportId ?? null,
+      });
       await refresh();
     } catch (e: any) {
       setError(e?.message || 'Failed to create export');

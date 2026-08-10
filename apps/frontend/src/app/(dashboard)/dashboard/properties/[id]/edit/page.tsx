@@ -48,6 +48,7 @@ import {
   normalizeOutdoorSpaceTypes,
 } from "@/lib/property/propertyContextForm";
 import { api } from "@/lib/api/client";
+import { track } from "@/lib/analytics/events";
 import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -584,6 +585,7 @@ export default function EditPropertyPage() {
   const queryClient = useQueryClient();
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
+  const isPropertyRecordAdd = searchParams.get('recordAction') === 'add';
   
   const hasResetForm = React.useRef(false);
   const propertyPhotoInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -834,6 +836,13 @@ export default function EditPropertyPage() {
     },
     onSuccess: (response) => {
       if (response.success) {
+        if (isPropertyRecordAdd) {
+          track('property_record_item_added', {
+            propertyId,
+            itemType: 'PROPERTY_FACT',
+            source: 'PROPERTY_RECORD',
+          });
+        }
         queryClient.invalidateQueries({ queryKey: ["property", propertyId] });
         queryClient.invalidateQueries({ queryKey: ["properties"] });
         toast({
