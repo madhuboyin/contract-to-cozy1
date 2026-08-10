@@ -22,7 +22,13 @@ import {
 } from 'lucide-react';
 
 import { api } from '@/lib/api/client';
-import type { Property, PropertyOnboardingNarrativeState } from '@/types';
+import type {
+  Property,
+  PropertyContextCompleteness,
+  PropertyContextScope,
+  PropertyContextSnapshot,
+  PropertyOnboardingNarrativeState,
+} from '@/types';
 import { cn } from '@/lib/utils';
 import { listInventoryItems, listInventoryRooms } from '../../../inventory/inventoryApi';
 import { getLatestTimeline } from '../tools/capital-timeline/capitalTimelineApi';
@@ -37,6 +43,14 @@ interface RecordCategory {
   percent: number;
   href: string;
   tone: RecordCategoryTone;
+  issues: RecordQualityIssue[];
+}
+
+interface RecordQualityIssue {
+  key: string;
+  label: string;
+  state: 'MISSING' | 'CONFLICTED' | 'STALE';
+  href: string;
 }
 
 function present(value: unknown): boolean {
@@ -72,6 +86,83 @@ function categoryTone(value: number): RecordCategoryTone {
   if (value >= 85) return 'complete';
   if (value >= 40) return 'progress';
   return 'missing';
+}
+
+const FACT_LABEL_OVERRIDES: Record<string, string> = {
+  'core.dwellingType': 'Property type',
+  'core.propertySizeSqFt': 'Living area',
+  'core.isPrimary': 'Primary-home status',
+  'location.zipCode': 'ZIP code',
+  'location.geocoded': 'Map location',
+  'structure.roofAgeYears': 'Roof age',
+  'structure.electricalPanelAgeYears': 'Electrical panel age',
+  'systems.hvacInstallYear': 'HVAC installation year',
+  'systems.waterHeaterInstallYear': 'Water-heater installation year',
+  'systems.installedItemTypes': 'Tracked systems and equipment',
+  'safety.hasCoDetectors': 'Carbon-monoxide detectors',
+  'rooms.list': 'Rooms',
+  'inventory.items': 'Inventory items',
+};
+
+function humanizeFactKey(key: string): string {
+  if (FACT_LABEL_OVERRIDES[key]) return FACT_LABEL_OVERRIDES[key];
+  const raw = key.split('.').pop() ?? key;
+  const spaced = raw.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function resolveCorrectionHref(
+  propertyId: string,
+  correctionPath: string | null | undefined,
+  fallbackHref: string,
+): string {
+  if (!correctionPath || !correctionPath.startsWith('/dashboard/')) return fallbackHref;
+  return correctionPath.replaceAll(':propertyId', encodeURIComponent(propertyId));
+}
+
+function aggregateScopeCompleteness(
+  completeness: PropertyContextCompleteness | null | undefined,
+  scopes: PropertyContextScope[],
+  fallbackPercent: number,
+): number {
+  const included = completeness?.scopes.filter((entry) => scopes.includes(entry.scope)) ?? [];
+  const totalFacts = included.reduce((sum, entry) => sum + entry.totalFacts, 0);
+  const knownFacts = included.reduce((sum, entry) => sum + entry.knownFacts, 0);
+  return totalFacts > 0 ? Math.round((knownFacts / totalFacts) * 100) : fallbackPercent;
+}
+
+function collectRecordIssues({
+  propertyId,
+  completeness,
+  snapshot,
+  scopes,
+  fallbackHref,
+}: {
+  propertyId: string;
+  completeness: PropertyContextCompleteness | null | undefined;
+  snapshot: PropertyContextSnapshot | null | undefined;
+  scopes: PropertyContextScope[];
+  fallbackHref: string;
+}): RecordQualityIssue[] {
+  const entries = completeness?.scopes.filter((entry) => scopes.includes(entry.scope)) ?? [];
+  const issues: RecordQualityIssue[] = [];
+  const seen = new Set<string>();
+  const add = (key: string, state: RecordQualityIssue['state']) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    issues.push({
+      key,
+      label: humanizeFactKey(key),
+      state,
+      href: resolveCorrectionHref(propertyId, snapshot?.facts[key]?.correctionPath, fallbackHref),
+    });
+  };
+  entries.forEach((entry) => {
+    entry.conflictedFactKeys.forEach((key) => add(key, 'CONFLICTED'));
+    entry.staleFactKeys.forEach((key) => add(key, 'STALE'));
+    entry.missingFactKeys.forEach((key) => add(key, 'MISSING'));
+  });
+  return issues;
 }
 
 export function calculatePropertyRecordCompleteness(
@@ -173,45 +264,98 @@ function RecordCompleteness({ categories }: { categories: RecordCategory[] }) {
       </div>
 
       <div className="mt-4 space-y-3">
-        {categories.map((category) => (
-          <Link
-            key={category.label}
-            href={category.href}
-            className="no-brand-style group block rounded-xl border border-slate-100 bg-slate-50/70 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/30"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="mb-0 truncate text-sm font-semibold text-slate-900">{category.label}</p>
-                <p className="mt-0.5 mb-0 truncate text-xs text-slate-500">{category.detail}</p>
-              </div>
-              <span
-                className={cn(
-                  'shrink-0 text-xs font-semibold',
-                  category.tone === 'complete'
-                    ? 'text-emerald-700'
-                    : category.tone === 'progress'
-                      ? 'text-amber-700'
-                      : 'text-slate-500',
-                )}
+        {categories.map((category) => {
+          const conflictedCount = category.issues.filter((issue) => issue.state === 'CONFLICTED').length;
+          const staleCount = category.issues.filter((issue) => issue.state === 'STALE').length;
+          const missingCount = category.issues.filter((issue) => issue.state === 'MISSING').length;
+          return (
+            <div key={category.label} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+              <Link
+                href={category.href}
+                className="no-brand-style group block transition hover:text-emerald-800"
               >
-                {category.percent}%
-              </span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="mb-0 truncate text-sm font-semibold text-slate-900">{category.label}</p>
+                    <p className="mt-0.5 mb-0 truncate text-xs text-slate-500">{category.detail}</p>
+                  </div>
+                  <span
+                    className={cn(
+                      'shrink-0 text-xs font-semibold',
+                      category.tone === 'complete'
+                        ? 'text-emerald-700'
+                        : category.tone === 'progress'
+                          ? 'text-amber-700'
+                          : 'text-slate-500',
+                    )}
+                  >
+                    {category.percent}%
+                  </span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white" aria-hidden="true">
+                  <div
+                    className={cn(
+                      'h-full rounded-full',
+                      category.tone === 'complete'
+                        ? 'bg-emerald-600'
+                        : category.tone === 'progress'
+                          ? 'bg-amber-500'
+                          : 'bg-slate-300',
+                    )}
+                    style={{ width: `${category.percent}%` }}
+                  />
+                </div>
+              </Link>
+
+              {category.issues.length > 0 ? (
+                <details className="group/issues mt-2 border-t border-slate-200/70 pt-2">
+                  <summary className="flex min-h-[32px] cursor-pointer list-none items-center justify-between text-[11px] font-semibold text-slate-600 [&::-webkit-details-marker]:hidden">
+                    <span>
+                      Review {category.issues.length} field{category.issues.length === 1 ? '' : 's'}
+                      {conflictedCount > 0 ? ` · ${conflictedCount} conflicted` : ''}
+                      {staleCount > 0 ? ` · ${staleCount} stale` : ''}
+                      {missingCount > 0 && conflictedCount === 0 && staleCount === 0 ? ` · ${missingCount} missing` : ''}
+                    </span>
+                    <span className="text-slate-400 group-open/issues:rotate-90" aria-hidden="true">›</span>
+                  </summary>
+                  <div className="mt-1 space-y-1">
+                    {category.issues.slice(0, 5).map((issue) => (
+                      <Link
+                        key={issue.key}
+                        href={issue.href}
+                        className="no-brand-style flex min-h-[36px] items-center justify-between gap-3 rounded-lg bg-white px-2.5 text-xs text-slate-700 hover:text-emerald-800"
+                      >
+                        <span className="truncate">{issue.label}</span>
+                        <span
+                          className={cn(
+                            'shrink-0 text-[10px] font-semibold',
+                            issue.state === 'CONFLICTED'
+                              ? 'text-rose-700'
+                              : issue.state === 'STALE'
+                                ? 'text-amber-700'
+                                : 'text-slate-500',
+                          )}
+                        >
+                          {issue.state === 'CONFLICTED' ? 'Resolve' : issue.state === 'STALE' ? 'Refresh' : 'Add'}
+                        </span>
+                      </Link>
+                    ))}
+                    {category.issues.length > 5 ? (
+                      <Link href={category.href} className="no-brand-style inline-flex min-h-[32px] items-center px-2 text-[11px] font-semibold text-emerald-700">
+                        Review {category.issues.length - 5} more
+                      </Link>
+                    ) : null}
+                  </div>
+                </details>
+              ) : (
+                <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200/70 pt-2 text-[11px] font-medium text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  No missing, stale, or conflicted facts in this category
+                </div>
+              )}
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white" aria-hidden="true">
-              <div
-                className={cn(
-                  'h-full rounded-full',
-                  category.tone === 'complete'
-                    ? 'bg-emerald-600'
-                    : category.tone === 'progress'
-                      ? 'bg-amber-500'
-                      : 'bg-slate-300',
-                )}
-                style={{ width: `${category.percent}%` }}
-              />
-            </div>
-          </Link>
-        ))}
+          );
+        })}
       </div>
 
       {nextCategory ? (
@@ -357,10 +501,12 @@ function RelatedWorkspaces({ propertyId, backTo }: { propertyId: string; backTo:
 
 export default function PropertyRecordOverview({
   property,
-  onboarding,
+  contextCompleteness,
+  contextSnapshot,
 }: {
   property: Property;
-  onboarding?: PropertyOnboardingNarrativeState | null;
+  contextCompleteness?: PropertyContextCompleteness | null;
+  contextSnapshot?: PropertyContextSnapshot | null;
 }) {
   const propertyId = property.id;
   const propertyPath = `/dashboard/properties/${propertyId}`;
@@ -428,7 +574,7 @@ export default function PropertyRecordOverview({
   );
   const inventoryWithDocuments = inventory.filter((item) => item.documents && item.documents.length > 0).length;
 
-  const profilePercent = percent([
+  const profileFallbackPercent = percent([
     property.address,
     property.city,
     property.state,
@@ -442,7 +588,7 @@ export default function PropertyRecordOverview({
     property.bedrooms,
     property.bathrooms,
   ]);
-  const systemsPercent = percent([
+  const systemsFallbackPercent = percent([
     property.heatingType,
     property.coolingType,
     property.waterHeaterType,
@@ -453,7 +599,7 @@ export default function PropertyRecordOverview({
     property.foundationType,
     property.sidingType,
   ]);
-  const spacesPercent = percent([
+  const spacesFallbackPercent = percent([
     property.bedrooms,
     property.bathrooms,
     property.occupantsCount,
@@ -462,27 +608,73 @@ export default function PropertyRecordOverview({
   ]);
   const documentsPercent = Math.min(100, documents.length * 20);
 
+  const propertyDetailScopes: PropertyContextScope[] = ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY'];
+  const systemsScopes: PropertyContextScope[] = ['SYSTEMS', 'SAFETY', 'INVENTORY'];
+  const roomsScopes: PropertyContextScope[] = ['ROOMS', 'OPTIONAL_HOUSEHOLD'];
+  const profilePercent = aggregateScopeCompleteness(
+    contextCompleteness,
+    propertyDetailScopes,
+    profileFallbackPercent,
+  );
+  const systemsPercent = aggregateScopeCompleteness(
+    contextCompleteness,
+    systemsScopes,
+    systemsFallbackPercent,
+  );
+  const spacesPercent = aggregateScopeCompleteness(
+    contextCompleteness,
+    roomsScopes,
+    spacesFallbackPercent,
+  );
+  const detailsHref = `/dashboard/properties/${propertyId}/edit`;
+  const systemsHref = withBackTo(`/dashboard/properties/${propertyId}/inventory`);
+  const roomsHref = withBackTo(`/dashboard/properties/${propertyId}/rooms`);
+  const propertyDetailIssues = collectRecordIssues({
+    propertyId,
+    completeness: contextCompleteness,
+    snapshot: contextSnapshot,
+    scopes: propertyDetailScopes,
+    fallbackHref: detailsHref,
+  });
+  const systemsIssues = collectRecordIssues({
+    propertyId,
+    completeness: contextCompleteness,
+    snapshot: contextSnapshot,
+    scopes: systemsScopes,
+    fallbackHref: systemsHref,
+  });
+  const roomsIssues = collectRecordIssues({
+    propertyId,
+    completeness: contextCompleteness,
+    snapshot: contextSnapshot,
+    scopes: roomsScopes,
+    fallbackHref: roomsHref,
+  });
+
   const categories: RecordCategory[] = [
     {
       label: 'Property details',
       detail: profilePercent >= 85 ? 'Core identity is well documented' : 'Add structure and ownership details',
       percent: profilePercent,
-      href: `/dashboard/properties/${propertyId}/edit`,
+      href: detailsHref,
       tone: categoryTone(profilePercent),
+      issues: propertyDetailIssues,
     },
     {
       label: 'Systems & inventory',
       detail: systemItems.length > 0 ? `${systemItems.length} major systems tracked` : 'Add major systems and equipment',
       percent: systemsPercent,
-      href: withBackTo(`/dashboard/properties/${propertyId}/inventory`),
+      href: systemsHref,
       tone: categoryTone(systemsPercent),
+      issues: systemsIssues,
     },
     {
       label: 'Rooms & household',
       detail: `${rooms.length} rooms · ${household.length} household members`,
       percent: spacesPercent,
-      href: withBackTo(`/dashboard/properties/${propertyId}/rooms`),
+      href: roomsHref,
       tone: categoryTone(spacesPercent),
+      issues: roomsIssues,
     },
     {
       label: 'Documents',
@@ -490,6 +682,7 @@ export default function PropertyRecordOverview({
       percent: documentsPercent,
       href: documentsHref,
       tone: categoryTone(documentsPercent),
+      issues: [],
     },
   ];
 
@@ -598,6 +791,13 @@ export default function PropertyRecordOverview({
                 <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{inventory.length}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Total items</p></div>
                 <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{inventoryWithDocuments}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">With records</p></div>
               </div>
+              <Link
+                href={withBackTo(`/dashboard/properties/${propertyId}/tools/capital-timeline`)}
+                className="no-brand-style mt-3 inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700"
+              >
+                Plan system lifecycle
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
             </RecordPanel>
 
             <RecordPanel
@@ -611,10 +811,16 @@ export default function PropertyRecordOverview({
                 <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{rooms.length}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Rooms recorded</p></div>
                 <div className="rounded-xl bg-slate-50 p-3"><p className="mb-0 text-xl font-semibold text-slate-950">{household.length}</p><p className="mt-1 mb-0 text-[11px] text-slate-500">Household members</p></div>
               </div>
-              <Link href={withBackTo(`/dashboard/properties/${propertyId}/household`)} className="no-brand-style mt-3 inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
-                Manage household
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </Link>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                <Link href={withBackTo(`/dashboard/properties/${propertyId}/household`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
+                  Manage household
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+                <Link href={withBackTo(`/dashboard/properties/${propertyId}/tools/plant-advisor`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
+                  Open Plant Advisor
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              </div>
             </RecordPanel>
           </div>
 
@@ -632,6 +838,16 @@ export default function PropertyRecordOverview({
               </div>
               <Link href={documentsHref} className="no-brand-style inline-flex min-h-[40px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
                 Upload document
+              </Link>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+              <Link href={withBackTo(`/dashboard/properties/${propertyId}/property-brief`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
+                Create Property Brief
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+              <Link href={withBackTo(`/dashboard/properties/${propertyId}/tools/home-digital-will`)} className="no-brand-style inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-emerald-700">
+                Prepare Continuity Plan
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
             </div>
           </RecordPanel>

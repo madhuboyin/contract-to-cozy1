@@ -12,11 +12,29 @@ import { Button } from '@/components/ui/button';
 import NarrativeRevealOverlay from '@/components/narrative/NarrativeRevealOverlay';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
 import { api } from '@/lib/api/client';
-import type { PropertyDashboardBootstrap } from '@/types';
+import type {
+  PropertyContextCompleteness,
+  PropertyContextScope,
+  PropertyContextSnapshot,
+  PropertyDashboardBootstrap,
+} from '@/types';
 import PropertyRecordOverview, {
   calculatePropertyRecordCompleteness,
 } from './components/PropertyRecordOverview';
 import PropertyRecordTemplate from './components/PropertyRecordTemplate';
+
+const PROPERTY_RECORD_CONTEXT_SCOPES: PropertyContextScope[] = [
+  'CORE',
+  'LOCATION',
+  'STRUCTURE',
+  'EXTERIOR',
+  'RESPONSIBILITY',
+  'SYSTEMS',
+  'SAFETY',
+  'ROOMS',
+  'INVENTORY',
+  'OPTIONAL_HOUSEHOLD',
+];
 
 function formatEnum(value: string | null | undefined, fallback = 'Home'): string {
   if (!value) return fallback;
@@ -69,9 +87,31 @@ export default function PropertyDetailPage() {
   const onboarding = bootstrapQuery.data?.onboarding ?? null;
   const narrativeRun = bootstrapQuery.data?.narrativeRun ?? null;
 
+  const recordContextQuery = useQuery({
+    queryKey: ['property-record-context', propertyId, PROPERTY_RECORD_CONTEXT_SCOPES.join(',')],
+    queryFn: async (): Promise<{
+      completeness: PropertyContextCompleteness;
+      snapshot: PropertyContextSnapshot;
+    } | null> => {
+      const [completenessResponse, snapshotResponse] = await Promise.all([
+        api.getPropertyContextCompleteness(propertyId, PROPERTY_RECORD_CONTEXT_SCOPES),
+        api.getPropertyContext(propertyId, PROPERTY_RECORD_CONTEXT_SCOPES),
+      ]);
+      if (!completenessResponse.success || !snapshotResponse.success) return null;
+      return {
+        completeness: completenessResponse.data,
+        snapshot: snapshotResponse.data,
+      };
+    },
+    enabled: Boolean(propertyId),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
   const recordCompleteness = useMemo(
-    () => (property ? calculatePropertyRecordCompleteness(property, onboarding) : 0),
-    [onboarding, property],
+    () => recordContextQuery.data?.completeness.completenessPercent
+      ?? (property ? calculatePropertyRecordCompleteness(property, onboarding) : 0),
+    [onboarding, property, recordContextQuery.data?.completeness.completenessPercent],
   );
 
   if (bootstrapQuery.isLoading) {
@@ -171,7 +211,11 @@ export default function PropertyDetailPage() {
         addHref={`/dashboard/properties/${property.id}/edit?focus=missing`}
         navigation={navigation}
       >
-        <PropertyRecordOverview property={property} onboarding={onboarding} />
+        <PropertyRecordOverview
+          property={property}
+          contextCompleteness={recordContextQuery.data?.completeness ?? null}
+          contextSnapshot={recordContextQuery.data?.snapshot ?? null}
+        />
       </PropertyRecordTemplate>
     </div>
   );
