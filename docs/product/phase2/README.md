@@ -1,6 +1,6 @@
 # Product Framework Phase 2 — Unified Home and Action System
 
-Status: Increments 1–3 and post-cutover Home experience hardening implemented
+Status: Increments 1–3, post-cutover hardening, and August 10 Unified Home production polish implemented
 
 Contract version: `phase2-v1`
 
@@ -70,6 +70,25 @@ Implemented July 20, 2026:
 - Kept notifications as the delivery and awareness channel while making unresolved seasonal and critical-weather work persistently discoverable on Home.
 - Aligned the Home-at-a-glance prioritized-action count with the same canonical ranked feed opened by its link.
 
+## Unified Home production presentation polish
+
+Implemented August 10, 2026:
+
+- Replaced generic property display names with the meaningful nickname or street address and reduced excess header height.
+- Renamed the returning-user outlook to **Your home outlook**, clarified the open-actions navigation, and included the exact missing-fact count in setup CTAs.
+- Humanized Home Digital Twin headlines, field labels, currency, ratios, condition bands, confidence bands, estimate state, and provenance before they reach the Home renderer.
+- Made Home-fact reasons explain the homeowner decision affected, such as replacement timing or how much to set aside.
+- Reworked Sale Readiness cards so the collapsed summary reflects the homeowner’s answer, industry benchmarks identify their own source in supporting evidence, cost ranges are explicitly rough estimates, and the primary CTA remains short.
+- Limited collapsed generic action cards to four at-a-glance facts and moved acknowledgement, detail, correction, applicability, and management controls into an accessible overflow menu. The primary action and reminder or completion control remain visible.
+- Replaced **Good to know** with **Worth reviewing** for `CONSIDER` actions.
+- Combined empty Decisions and Active Major Moment cards into one compact status row; populated states retain their complete presentations.
+- Standardized **Open actions**, qualified zero coverage gaps as **Known coverage gaps** based on current records, and avoided presenting incomplete records as certainty.
+- Reduced contextual tool cards to one homeowner-focused value statement, removed repeated ready-state badges and prose, and retained readiness guidance when more context is required.
+- Added a deterministic projected-fact evidence-ID fallback so an incomplete legacy record cannot invalidate an otherwise grounded Home Action.
+- Preserved property, action, entity, recommendation, context-version, journey, and return-path continuity. No database schema change or migration was required.
+
+Validation for this increment includes a successful backend TypeScript build, lint for the changed Home components, nine focused Unified Home tests, six Home Digital Twin Home Action tests, seven presentation-registry tests, and a clean `git diff --check`. The repository-wide frontend type check continues to report two unrelated pre-existing Work Item test-fixture errors around optional `scheduleOverrideAt`.
+
 ## Increment 3 — Source promotion and route-contract hardening
 
 Implemented:
@@ -130,7 +149,7 @@ Implemented July 20, 2026:
 
 - Added a bounded **Tools for this home** section to the default Unified Home experience.
 - Selected recommendations deterministically from the canonical ranked Home actions, Home-at-a-glance summary, and Property Context health; no Gemini request is used.
-- Added homeowner-facing reason, outcome, readiness guidance, and property-aware deep links to each recommendation.
+- Added property-aware deep links and homeowner-facing recommendation context. On Unified Home, each ready recommendation now uses one concise value statement; readiness guidance appears when additional context is required. Richer reason and outcome metadata remains available in the canonical suggestion contract and destination context.
 - Suppressed tool recommendations when an existing ranked action already launches that tool.
 - Introduced one shared discovery registry that combines the previously separate Home Tools and AI Tools inventories, deduplicates overlapping entries, excludes workflow-only utilities from general discovery, and classifies tools by homeowner outcome.
 - Reworked `/dashboard/home-tools` into a searchable **Explore tools** library organized around decide, protect, maintain, plan, save, and understand outcomes.
@@ -140,7 +159,7 @@ Implemented July 20, 2026:
 Acceptance criteria:
 
 - Unified Home shows no more than three tool recommendations and retains ranked actions as the primary hierarchy.
-- Every recommendation explains why it applies now, the expected homeowner outcome, and what context improves the result.
+- Every recommendation provides a clear homeowner outcome and property-aware destination. Missing-context guidance appears when readiness is incomplete; canonical reason and outcome metadata remains available to destination context and analytics.
 - A tool already used as a ranked-action CTA is not repeated in the recommendation section.
 - Explore tools retains the selected property, supports search, and excludes workflow-only tools.
 - Legacy AI Tools links resolve to Explore tools without losing query parameters.

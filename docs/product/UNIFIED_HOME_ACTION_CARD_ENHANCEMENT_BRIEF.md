@@ -181,7 +181,9 @@ Name the trigger, change, deadline, lifecycle window, active incident, or major 
 
 ### Known facts
 
-Show the most decision-relevant facts, including known numbers, dates, condition, coverage, history, and provenance.
+Show the most decision-relevant facts, including known numbers, dates, condition, coverage, history, and provenance. The collapsed card shows at most four facts; the complete evidence remains available through supporting details.
+
+Labels and values must be homeowner-readable. Raw storage units and field names such as `USD_PER_YEAR`, `RATIO`, `usefulLifeYears`, and `conditionScore` must be converted to familiar currency, percentages, lifespan, and condition language before display.
 
 ### Uncertainty
 
@@ -210,7 +212,7 @@ Carry the following into the destination:
 
 ### User control
 
-Retain correction, reminder, acknowledgement, and “doesn’t apply” controls without implying that the underlying work is complete.
+Retain correction, reminder, acknowledgement, and “doesn’t apply” controls without implying that the underlying work is complete. Keep the primary action and reminder or completion control visible; place acknowledgement, supporting detail, correction, applicability, and work-management controls in a clearly labeled overflow menu when showing them inline would create a toolbar of competing actions.
 
 > **Home eligibility gate:** If the subject and reason cannot be stated specifically, the recommendation should not compete for attention on Home. Route it to setup, request named missing facts, or fail closed.
 
@@ -225,7 +227,7 @@ A universal card template is insufficient. Each category needs its own minimum c
 | Weather/environment | Hazard, location, forecast window, severity, source freshness, preparation step | Current or upcoming local exposure | Expired/stale alert or duplicate active incident |
 | Financial exposure | Subject, amount/range, trigger, coverage, observation date, confidence, missing facts | Specific exposure and why it changed | No subject plus no trigger or amount |
 | Sale preparation | Actual item, Sale Case stage, target date, source, category, impact | Stage-aware sale reason | Closed/cancelled case or duplicate canonical work |
-| Home facts/context | Exact fact keys, current states, downstream decisions affected | Why confirmation improves a real decision | No correction destination or affected decision |
+| Home facts/context | Exact homeowner-facing fact labels, estimated/recorded state, downstream decisions affected | Why confirmation improves a real decision | No correction destination or affected decision |
 | Accepted work | Actual task title, reason, work state, due date, execution link | Continue or verify the real task | `VERIFIED` or `CLOSED` |
 | Coverage review | Covered subject, evidence status, provider/policy, renewal/expiry, exact gap | Specific protection decision | Inapplicable subject/responsibility or resolved gap |
 
@@ -275,6 +277,25 @@ Destination banners reuse the homeowner-facing source headline and reason instea
 - Legacy “The task is completed and recorded” outcomes are normalized immediately without a data migration.
 - `REPORTED_COMPLETE` work asks for completion verification.
 - `VERIFIED` and `CLOSED` work stays off Home.
+
+### Production presentation polish
+
+Delivered August 10, 2026:
+
+- Replaced generic property names such as **Main** with the property nickname when meaningful and the street address otherwise.
+- Renamed **Your first home outlook** to **Your home outlook**, shortened passive-weather navigation, and made the open-action destination a visually attached, explicit action.
+- Humanized Home Digital Twin facts at the source: **expected lifespan**, condition bands with percentages, formatted annual currency, confidence bands, and **Home Record estimate** provenance replace raw field names, enum units, ratios, and system-derived terminology.
+- Rewrote Home-fact headlines and reasons around the homeowner decision, for example **Confirm your HVAC system’s expected lifespan and condition** and the effect on replacement timing or how much to set aside.
+- Separated Sale Readiness self-report evidence from named industry guidance. The collapsed summary uses the homeowner’s answer; benchmark evidence and its source remain available in supporting details.
+- Shortened sale-prep and Home-fact primary CTAs, labeled cost ranges as rough estimates, and limited collapsed cards to four at-a-glance facts.
+- Kept one dominant primary action, a visible reminder or completion action where applicable, and a compact overflow menu for acknowledgement, evidence, correction, applicability, and management controls.
+- Replaced **Good to know** with **Worth reviewing** for `CONSIDER` actions.
+- Combined empty Decisions and Active Major Moment cards into one compact status row while preserving the full cards when either area contains work.
+- Standardized **Open actions**, changed a zero count to **Known coverage gaps**, and qualified it with **Based on current records** so incomplete records do not imply certainty.
+- Made missing-fact setup CTAs state the exact count.
+- Shortened **Tools for this home** cards to one homeowner-focused value statement. Ready-state badges and repeated readiness prose are omitted; missing-context guidance remains visible when the tool is not ready.
+- Added a stable evidence-ID fallback for projected Home Digital Twin facts so incomplete legacy or fixture records cannot invalidate an otherwise actionable Home card.
+- No database schema change or migration is required for this presentation increment.
 
 ## 5. Recommended implementation order
 
@@ -344,6 +365,10 @@ Measure:
 | Review and address before listing | Before listing: repair the damaged kitchen cabinet | Uses the actual readiness item and sale stage |
 | A stronger buyer impression and support for your target sale price | You are preparing this home for sale. Resolving this item may improve buyer confidence and support your target price | Connects the item to a canonical major moment |
 | Review the flagged home facts | Confirm roof age and installation date | Names the facts and affected forecast |
+| Confirm HVAC System useful life years and HVAC System condition score | Confirm your HVAC system’s expected lifespan and condition | Removes raw field names and repeated system labels |
+| 1800 USD_PER_YEAR · default | $1,800/year · estimated | Uses familiar money and trust language |
+| 0.45 RATIO · inferred | Fair · 45% · estimated | Converts an implementation ratio into a readable condition |
+| Review Decluttering & staging: Needs some work | Review sale-prep item | Keeps the primary action short while the card carries the specific context |
 
 ## 7. Acceptance criteria
 
@@ -353,6 +378,10 @@ Measure:
 - Known facts and numbers are displayed when available.
 - Missing data is named instead of replaced by generic prose.
 - Expanded detail adds evidence and reasoning; it is not required to discover the card’s identity.
+- A collapsed generic action card shows no more than four at-a-glance facts.
+- Raw field names, enum units, ratios, and system-derived source labels are not exposed as homeowner copy.
+- Self-reported Sale Readiness evidence and third-party benchmark evidence identify their respective sources separately.
+- Secondary controls remain available from an accessible overflow menu without competing with the primary action.
 - The CTA opens the exact entity or missing field and preserves launch context.
 - Closed, cancelled, verified, expired, stale, inapplicable, and superseded sources do not resurface.
 - Category tests prove that asset fields do not leak into seasonal or weather cards, and vice versa.
@@ -366,9 +395,23 @@ Measure:
 | Sale preparation projection | `apps/backend/src/services/homeActionSourcePromotion.service.ts` | Add status filter, exact item presentation, stage-aware copy, and item deep link |
 | Guidance display titles | `apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts` | Keep generic titles as taxonomy labels, not sufficient Home headlines |
 | Home card renderer | `apps/frontend/src/components/home/UnifiedHomeSurface.tsx` | Render category presentation contracts consistently |
+| Contextual tool cards | `apps/frontend/src/components/home/UnifiedHomeToolsSection.tsx` | Use concise homeowner value copy and show readiness guidance only when context is missing |
 | Destination continuity | `apps/frontend/src/features/tools/toolDestinationContext.ts` | Preserve homeowner-facing origin and source entity |
 
-## 9. Product decision
+## 9. Latest verification evidence
+
+The August 10 production-polish increment was verified with:
+
+- backend TypeScript build;
+- frontend lint for the changed Home components;
+- nine focused Unified Home surface tests;
+- six Home Digital Twin Home Action tests;
+- seven Home Action presentation-registry tests; and
+- `git diff --check`.
+
+The repository-wide frontend `tsc --noEmit` check still reports two pre-existing Work Item test-fixture assignability errors involving optional `scheduleOverrideAt`; neither error is in the Unified Home implementation changed by this increment.
+
+## 10. Product decision
 
 Adopt memory-resilient context as a Home Action eligibility requirement.
 
