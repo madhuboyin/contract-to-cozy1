@@ -238,8 +238,10 @@ Recommended header hierarchy:
 4. Compact metadata: property type, year, size, ownership/occupancy
 5. Record status: completeness percentage and last updated
 
-Avoid using generic values such as `Rental` as the primary H1 when the address
-is the stronger identifier.
+Avoid using generic values such as `Main`, `Primary`, `Rental`, `Home`, or
+`Primary Home` as the primary H1 when the address is the stronger identifier.
+The deployed implementation treats those values as labels rather than
+meaningful property names and promotes the street address to H1.
 
 ### 6.2 Primary navigation
 
@@ -277,11 +279,13 @@ It must not reproduce individual tasks, incidents, claims, or actions.
 
 Use a two-column responsive composition rather than an equal-height card grid:
 
-- Main column: approximately 65–70%
-- Supporting rail: approximately 30–35%
+- Main column: the fluid remainder of the record canvas
+- Supporting rail: approximately 340 px at compact desktop and 380 px at wide desktop
 - Independent vertical stacks so one tall card does not stretch adjacent cards
-- Maximum readable content width around 1,200–1,280 px, subject to the shared
-  dashboard shell
+- Maximum Property Record canvas width: 1,520 px inside the shared dashboard
+  shell. Other dashboard routes retain their narrower reading width.
+- One shell-level horizontal padding treatment; the Property page must not add
+  a second nested container that recreates large gutters.
 
 Recommended reading order:
 
@@ -312,9 +316,10 @@ Home page already provides that capability.
 
 ### 7.3 Header actions
 
-Stable CTA hierarchy:
+Record-quality CTA hierarchy:
 
-- **Primary:** `Add to record`
+- **Primary:** the most specific next record improvement, such as `Add layout`,
+  `Add year built`, `Add first system`, or `Upload first document`
 - **Secondary:** `Edit property`
 - **Utility menu:** Generate report, share Property Brief, archive/remove
   property when authorized
@@ -327,8 +332,9 @@ Contextual CTAs appear inside their owning sections:
 - `Review missing details`
 - `View source`
 
-Do not dynamically replace the Property header CTA with today's next best
-action.
+The primary CTA may change with record quality, but must never become a Home
+attention item or today's generalized Next Best Action. When no obvious gap
+exists, use `Review property record`.
 
 ### 7.4 Record overview modules
 
@@ -357,7 +363,13 @@ Show category-level completeness rather than a flat setup checklist:
 | Systems & inventory | 65% complete | Systems & Inventory |
 | Rooms & household | 80% complete | Rooms & Household |
 | Documents | 40% complete | Documents |
-| Ownership & protection | 75% complete | Details or Protection owner |
+
+The header percentage is the equal-weight average of these four visible
+categories. It must reconcile with the values presented in the rail rather
+than using a separate setup score. Documents are complete according to
+property linkage and verification coverage. A property with no documents is
+`0%` and presents `Upload first document`; it must not display a green
+no-missing-data message.
 
 Display one next record-improvement opportunity, selected by relevance and data
 dependency, such as `Add roof installation year`. This is a data-quality CTA,
@@ -665,6 +677,7 @@ Avoid generic empty cards such as `No recommendations` or large blank panels.
 | Complete setup | Complete your property record |
 | Setup in progress | 80% record complete |
 | Documents & Edit | Documents / Edit property as separate actions |
+| Add to record | A specific record-quality action such as `Add layout` or `Upload first document` |
 | Digital Will | Home Continuity Plan, while preserving capability ID and route |
 | Open | Action-specific labels such as `Review plan` or `View timeline` |
 | More Sections | Related workspaces or More |
@@ -1181,15 +1194,34 @@ represented as completed without production or moderated-user evidence.
 | Planned capability | Implemented evidence |
 | --- | --- |
 | Authoritative overview contract | The property dashboard bootstrap composes Property Context, rooms, inventory, documents, household, verified record events, and safe related-tool aggregates through `property-record-overview-v1`. Optional adapters are isolated and return explicit `AVAILABLE` or `UNAVAILABLE` states. |
-| Record-owned information hierarchy | The overview presents profile, ownership/protection, category completeness, systems/inventory, rooms/household, documents, and verified record history. Home attention, daily changes, refinance, environment alerts, seller promotion, and generic Next Best Action are not rendered. |
+| Record-owned information hierarchy | The overview presents profile, four-category completeness, systems/inventory, rooms/household, documents, and verified record history. The duplicative Ownership & Protection summary was removed; Protection remains a related workspace. Home attention, daily changes, refinance, environment alerts, seller promotion, and generic Next Best Action are not rendered. |
 | Trust and provenance | Important profile facts distinguish verified, inferred, stale, conflicted, and missing state and expose their source/correction destination. Recent updates use homeowner-confirmed or evidence-verified Home Events, not Home attention signals. |
-| Documents truthfulness | Document summaries use linked and verified coverage, type distribution, and review counts. Adapter failure renders unavailable state instead of a false zero. |
+| Documents truthfulness | Document summaries use property or inventory linkage plus verified coverage, type distribution, and review counts. A zero-document property displays an explicit upload action and never a contradictory green completeness message. Adapter failure renders unavailable state instead of a false zero. |
 | Governed related tools | Tool identity and metadata come from the canonical capability registry; Property policy adds grouping and record affinity. Availability honors release stage metadata, rollout state, disabled/broken/release-gated tools, minimum room/system context, and Continuity Plan role restrictions. |
 | Navigation continuity | Launch URLs carry canonical `backTo` plus the legacy `returnTo` alias. Capital Timeline, Plant Advisor, Home Continuity Plan, Timeline, and Status Board restore the Property origin, including section anchors. Explicit Home Tools property links take precedence over global selection. |
 | Home coordination | Home Record completeness links to the exact next record-improvement control rather than duplicating Property detail. |
 | Analytics | Views include completeness band, viewport, context, and registry version. Tool events include group/state/origin/registry metadata. Source views, record additions, reports, section navigation, workspaces, and isolated adapter failures are instrumented without sensitive content. |
-| Accessibility and responsive behavior | The page has one wrapping H1, semantic navigation/sections, busy loading semantics, reduced-motion fallbacks, 44 px mobile controls, textual statuses, and mobile-first completeness ordering. |
+| Accessibility and responsive behavior | The page has one wrapping, address-first H1 when the saved name is generic; semantic navigation/sections; busy loading semantics; reduced-motion fallbacks; 44 px mobile controls; textual statuses; and mobile-first completeness ordering. |
 | Rollback control | `NEXT_PUBLIC_FEATURE_PROPERTY_RECORD_EXPERIENCE=false` switches the enhanced overview to a safe compact record fallback; connected tools remain independently controllable. |
+
+### 16.5 Post-deployment visual refinement
+
+Screenshot review of the first production deployment identified five final UI
+issues. They are now reflected in the canonical specification and implemented:
+
+1. The Property route opts into a 1,520 px dashboard canvas with a fluid main
+   column and 340–380 px quality rail, eliminating the inherited 1,180 px
+   constraint and double page padding.
+2. Generic saved names including `Main` no longer displace the street address
+   as the property identifier.
+3. Header completeness is calculated from the same four category percentages
+   visible in the quality rail. Document coverage recognizes both direct
+   property links and inventory-item links.
+4. The repeated Ownership & Protection card was removed because ownership,
+   household count, and verified-document count already have canonical homes.
+   Protection remains available through Related Workspaces.
+5. The header primary CTA identifies the actual next record improvement rather
+   than using the ambiguous `Add to record` label.
 
 Release evidence still required outside application implementation:
 
