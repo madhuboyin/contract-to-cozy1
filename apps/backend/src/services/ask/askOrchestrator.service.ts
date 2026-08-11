@@ -13,7 +13,7 @@ import {
 } from '../../productFramework/ask/ask.contract';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
-import { detectCoverageGaps } from '../coverageGap.service';
+import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
 import { answerGroundedAsk } from '../groundedAsk.service';
 import {
   buildCapabilityCatalog,
@@ -295,50 +295,141 @@ async function maintenanceResult(userId: string, propertyId: string, message: st
   };
 }
 
-async function coverageResult(propertyId: string): Promise<AskOperationResult> {
-  const gaps = await detectCoverageGaps(propertyId);
-  const grouped = new Map<string, typeof gaps>();
-  for (const gap of gaps) grouped.set(gap.gapType, [...(grouped.get(gap.gapType) ?? []), gap]);
-  const labels: Record<string, string> = {
-    NO_COVERAGE: 'No coverage recorded',
-    WARRANTY_ONLY: 'Warranty only',
-    INSURANCE_ONLY: 'Insurance only',
-    EXPIRED_WARRANTY: 'Expired warranty',
-    EXPIRED_INSURANCE: 'Expired insurance',
-  };
-  const sections = [...grouped.entries()].map(([gapType, records]) => ({
-    id: gapType.toLowerCase(),
-    title: labels[gapType] ?? gapType,
-    count: records.length,
-    items: records.slice(0, MAX_RESULT_ITEMS).map((gap) => ({
-      id: gap.inventoryItemId,
-      title: gap.itemName,
-      description: gap.reasons.join(' '),
-      status: gap.gapType,
-      meta: [
-        gap.roomName ?? '',
-        gap.itemCategory ? gap.itemCategory.toLowerCase().replace(/_/g, ' ') : '',
-        gap.exposureCents > 0 ? `${new Intl.NumberFormat('en-US', { style: 'currency', currency: gap.currency, maximumFractionDigits: 0 }).format(gap.exposureCents / 100)} estimated exposure` : '',
-      ].filter(Boolean),
-      href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&smart=gaps`,
-    })),
-  }));
+const COVERAGE_GROUP_LABELS: Record<CoverageReviewGroup, string> = {
+  NO_COVERAGE: 'No coverage confirmed',
+  COVERAGE_UNCLEAR: 'Coverage unclear',
+  EXPIRED: 'Expired coverage',
+  EXPIRING_SOON: 'Expiring within 90 days',
+  EVIDENCE_MISSING: 'Evidence missing',
+};
 
+function coverageContextLabel(value: string): string {
+  const labels: Record<string, string> = {
+    ITEM_CONFIRMATION: 'item confirmation', RESPONSIBILITY: 'responsibility', INSTALLATION_YEAR: 'installation year',
+    CONDITION: 'condition', REPLACEMENT_VALUE: 'replacement value', COVERAGE_EVIDENCE: 'coverage evidence',
+  };
+  return labels[value] ?? value.toLowerCase().replace(/_/g, ' ');
+}
+
+async function coverageResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const reviewHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&smart=gaps`;
+  const allItems = await getCoverageReviewItems(propertyId);
+  const expiryFocus = /\b(?:expire|expiring|expiry|renewal)\b/i.test(message);
+  const evidenceFocus = /\b(?:evidence|document|proof)\b/i.test(message);
+  const largestFocus = /\b(?:largest|highest|biggest|most exposure|expensive|high[ -]?value)\b/i.test(message);
+  const focused = (expiryFocus
+    ? allItems.filter((item) => item.group === 'EXPIRED' || item.group === 'EXPIRING_SOON')
+    : evidenceFocus
+      ? allItems.filter((item) => item.group === 'EVIDENCE_MISSING' || item.group === 'COVERAGE_UNCLEAR')
+      : allItems)
+    .sort((a, b) => largestFocus
+      ? (b.exposureCents ?? -1) - (a.exposureCents ?? -1)
+      : (a.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER));
+
+  const captureCandidate = focused.find((item) => item.group === 'COVERAGE_UNCLEAR');
+  const evaluation = captureCandidate
+    ? await evaluateFeatureContext(propertyId, userId, {
+      featureKey: 'COVERAGE_INTELLIGENCE', operationKey: 'ASSESS_ITEM_COVERAGE',
+      operationInput: {
+        inventoryItemId: captureCandidate.inventoryItemId,
+        responsibilityScope: captureCandidate.responsibilityScope,
+        hasDisclosedEstimate: captureCandidate.replacementValueSource === 'ESTIMATED',
+      },
+    })
+    : null;
+  const activeRequirement = evaluation?.requirements[0];
+  const canCapture = access.role !== HouseholdRole.VIEWER
+    && activeRequirement
+    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED';
+  const captureRequests: AskCaptureRequest[] = canCapture ? [{
+    requirementId: activeRequirement.requirementId,
+    captureKey: activeRequirement.capture.captureKey,
+    classification: activeRequirement.classification,
+    state: activeRequirement.state,
+    title: activeRequirement.capture.title,
+    question: activeRequirement.capture.question,
+    helpText: activeRequirement.capture.helpText ?? null,
+    inputSchema: activeRequirement.capture.inputSchema,
+    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
+    allowNotSure: activeRequirement.capture.allowNotSure,
+    sensitivity: activeRequirement.capture.sensitivity,
+    destinationLabel: 'Saved to this item’s Home Inventory coverage record',
+    confirmationText: 'Save this coverage information and rerun the review.',
+    expectedContextVersion: evaluation.contextVersion,
+  }] : [];
+
+  const grouped = new Map<CoverageReviewGroup, typeof focused>();
+  for (const item of focused) grouped.set(item.group, [...(grouped.get(item.group) ?? []), item]);
+  const groupOrder: CoverageReviewGroup[] = ['NO_COVERAGE', 'COVERAGE_UNCLEAR', 'EXPIRED', 'EXPIRING_SOON', 'EVIDENCE_MISSING'];
+  const sections = groupOrder.flatMap((group) => {
+    const records = grouped.get(group) ?? [];
+    if (!records.length) return [];
+    return [{
+      id: group.toLowerCase(), title: COVERAGE_GROUP_LABELS[group], count: records.length,
+      items: records.slice(0, MAX_RESULT_ITEMS).map((item) => ({
+        id: item.inventoryItemId, title: item.itemName, description: item.detail, status: group,
+        meta: [
+          item.roomName ?? item.itemCategory?.toLowerCase().replace(/_/g, ' ') ?? 'Home inventory',
+          item.exposureCents == null
+            ? 'Replacement value not recorded'
+            : `${new Intl.NumberFormat('en-US', { style: 'currency', currency: item.currency, maximumFractionDigits: 0 }).format(item.exposureCents / 100)} ${item.replacementValueSource === 'ESTIMATED' ? 'estimated' : 'recorded'} exposure`,
+          item.expiryDate ? `${group === 'EXPIRED' ? 'Expired' : 'Expires'} ${humanDate(item.expiryDate)}` : null,
+          item.coverageSources.length ? item.coverageSources.join(' + ') : 'No linked policy or warranty',
+          item.missingContext.length ? `Needs: ${item.missingContext.map(coverageContextLabel).join(', ')}` : null,
+        ].filter((value): value is string => Boolean(value)),
+        href: `${reviewHref}&openItemId=${encodeURIComponent(item.inventoryItemId)}`,
+      })),
+    }];
+  });
+
+  const unclearCount = allItems.filter((item) => item.group === 'COVERAGE_UNCLEAR').length;
+  const focusedUnclearCount = focused.filter((item) => item.group === 'COVERAGE_UNCLEAR').length;
+  const confirmedGapCount = allItems.filter((item) => item.group === 'NO_COVERAGE' || item.group === 'EXPIRED').length;
   const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY',
-    id: 'coverage-summary',
-    title: gaps.length ? `${gaps.length} item${gaps.length === 1 ? '' : 's'} need coverage review` : 'No actionable coverage gaps found',
-    body: gaps.length
-      ? 'These are record-based coverage gaps or expirations. Unknown coverage is not treated as confirmed protection.'
-      : 'No currently actionable item-level gap was found in the recorded policies, warranties, and inventory values.',
-    tone: gaps.length ? 'CAUTION' : 'POSITIVE',
-    actions: [{ id: 'open-coverage', label: 'Review coverage', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&smart=gaps`, style: 'PRIMARY' }],
+    type: 'SUMMARY', id: 'coverage-summary',
+    title: focused.length ? `${focused.length} item${focused.length === 1 ? '' : 's'} match this coverage review` : 'No matching coverage issue was found',
+    body: allItems.length
+      ? `${confirmedGapCount} confirmed missing or expired, ${unclearCount} unclear, and ${allItems.filter((item) => item.group === 'EVIDENCE_MISSING').length} missing supporting evidence. Unknown records remain separate from confirmed gaps.`
+      : 'No material item-level issue is surfaced from the recorded inventory, policies, warranties, responsibilities, and evidence. This is a record review—not a guarantee that every loss is covered.',
+    tone: confirmedGapCount || unclearCount ? 'CAUTION' : focused.length ? 'DEFAULT' : 'POSITIVE',
+    actions: [{ id: 'open-coverage', label: 'Review or correct coverage', href: reviewHref, style: 'PRIMARY' }],
   }];
-  if (sections.length) blocks.push({ type: 'GROUPED_LIST', id: 'coverage-groups', title: 'Items to review', description: null, sections, actions: [] });
+  if (sections.length) blocks.push({
+    type: 'GROUPED_LIST', id: 'coverage-groups', title: 'Coverage review',
+    description: `${expiryFocus ? 'Showing expired and soon-to-expire records. ' : evidenceFocus ? 'Showing unclear records and missing evidence. ' : ''}Managed-elsewhere and coverage-not-required items are excluded.`,
+    sections, actions: [],
+  });
+  if (focused.length) blocks.push({
+    type: 'EVIDENCE', id: 'coverage-evidence', title: 'Sources and freshness',
+    items: focused.slice(0, 30).map((item) => ({
+      label: item.itemName,
+      source: item.coverageSources.length ? `Home Inventory + ${item.coverageSources.join(' + ')}` : 'Home Inventory coverage record',
+      observedAt: item.updatedAt.toISOString(),
+    })),
+  });
+  blocks.push({
+    type: 'BOUNDARY', id: 'coverage-boundary', title: 'Record review—not a coverage determination',
+    body: 'A linked policy or warranty does not prove a particular loss is covered. Review current terms, exclusions, limits, deductibles, and authoritative documents with the provider before relying on protection.',
+    severity: 'INFO', suggestions: [],
+  });
+
   return {
-    status: 'ANSWERED',
+    status: captureRequests.length || focusedUnclearCount ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: captureRequests.length
+      ? 'COVERAGE_CONTEXT_OPTIONAL'
+      : access.role === HouseholdRole.VIEWER && focusedUnclearCount
+        ? 'COVERAGE_CONTEXT_WRITE_PERMISSION_REQUIRED'
+        : focusedUnclearCount ? 'COVERAGE_STATUS_UNCLEAR' : undefined,
+    contextVersion: evaluation?.contextVersion ?? createHash('sha256').update(JSON.stringify(allItems.map((item) => ({ id: item.inventoryItemId, group: item.group, updatedAt: item.updatedAt })))).digest('hex'),
+    parameters: captureCandidate ? {
+      inventoryItemId: captureCandidate.inventoryItemId,
+      responsibilityScope: captureCandidate.responsibilityScope,
+      hasDisclosedEstimate: captureCandidate.replacementValueSource === 'ESTIMATED',
+    } : undefined,
+    captureRequests,
     blocks,
-    suggestions: ['Which gaps have the largest exposure?', 'Show warranties expiring soon', 'Open Coverage & Premium Review'],
+    suggestions: ['Which gaps have the largest exposure?', 'Show warranties expiring soon', 'Which items are missing coverage evidence?'],
   };
 }
 
@@ -1768,7 +1859,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'EMERGENCY_BOUNDARY': return emergencyResult();
     case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
     case 'MAINTENANCE_STATUS': return maintenanceResult(input.userId, input.propertyId!, input.message);
-    case 'COVERAGE_GAPS': return coverageResult(input.propertyId!);
+    case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
@@ -1891,7 +1982,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -2010,6 +2101,37 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyContext';
+  } else if (execution.operationId === 'COVERAGE_GAPS') {
+    const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    if (typeof parameters.inventoryItemId !== 'string') {
+      const error = new Error('The inventory item for this coverage capture is no longer available.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: 'COVERAGE_INTELLIGENCE',
+      operationKey: 'ASSESS_ITEM_COVERAGE',
+      operationInput: {
+        inventoryItemId: parameters.inventoryItemId,
+        responsibilityScope: parameters.responsibilityScope,
+        hasDisclosedEstimate: parameters.hasDisclosedEstimate,
+      },
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'InventoryItem';
   } else if (execution.operationId === 'SELL_HOLD_RENT_ANALYSIS') {
     const capture = await captureFeatureContext(execution.propertyId, userId, {
       ...input,

@@ -24,6 +24,12 @@ export interface RelationalCaptureSelection {
 const compact = (value: string) => value.trim().replace(/\s+/g, ' ');
 const normalized = (value: string) => compact(value).toLocaleLowerCase();
 
+function maskedReference(value: string | null | undefined): string | null {
+  const compacted = value?.replace(/\s+/g, '');
+  if (!compacted) return null;
+  return `••••${compacted.slice(-4)}`;
+}
+
 const INVENTORY_ITEM_UPDATE_COPY: Partial<Record<RelationalAdapterKey, (itemName: string) => { title: string; question: string }>> = {
   INVENTORY_ITEM_CONFIRMATION: (itemName) => ({
     title: `Confirm ${itemName}`,
@@ -135,11 +141,11 @@ export async function resolveRelationalCaptureSchema(
             ...field.inputSchema,
             options: [
               ...policies.map((policy) => ({
-                label: `Use insurance: ${policy.carrierName} · ${policy.policyNumber}`,
+                label: `Use insurance: ${policy.carrierName}${maskedReference(policy.policyNumber) ? ` · ${maskedReference(policy.policyNumber)}` : ''}`,
                 value: `INSURANCE:${policy.id}`,
               })),
               ...warranties.map((warranty) => ({
-                label: `Use warranty: ${warranty.providerName}${warranty.policyNumber ? ` · ${warranty.policyNumber}` : ''}`,
+                label: `Use warranty: ${warranty.providerName}${maskedReference(warranty.policyNumber) ? ` · ${maskedReference(warranty.policyNumber)}` : ''}`,
                 value: `WARRANTY:${warranty.id}`,
               })),
               ...field.inputSchema.options,
@@ -194,7 +200,7 @@ export async function resolveRelationalCaptureSchema(
       orderBy: [{ expiryDate: 'desc' }, { createdAt: 'asc' }],
     })).map((policy) => ({
       id: policy.id,
-      label: `${policy.carrierName} · ${policy.policyNumber}`,
+      label: `${policy.carrierName}${maskedReference(policy.policyNumber) ? ` · ${maskedReference(policy.policyNumber)}` : ''}`,
       description: policy.coverageType ?? 'Property policy',
     }));
   } else {
@@ -204,7 +210,7 @@ export async function resolveRelationalCaptureSchema(
       orderBy: [{ expiryDate: 'desc' }, { createdAt: 'asc' }],
     })).map((warranty) => ({
       id: warranty.id,
-      label: warranty.policyNumber ? `${warranty.providerName} · ${warranty.policyNumber}` : warranty.providerName,
+      label: maskedReference(warranty.policyNumber) ? `${warranty.providerName} · ${maskedReference(warranty.policyNumber)}` : warranty.providerName,
       description: warranty.category,
     }));
   }

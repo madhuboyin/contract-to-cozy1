@@ -26,7 +26,7 @@ function available<T>(data: T): LoadState<T> {
   return { status: 'AVAILABLE', data };
 }
 
-function unavailable<T>(): LoadState<T> {
+function unavailable<T = never>(): LoadState<T> {
   return { status: 'UNAVAILABLE', data: null };
 }
 
