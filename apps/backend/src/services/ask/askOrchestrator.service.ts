@@ -42,6 +42,7 @@ import { SellHoldRentService } from '../sellHoldRent.service';
 import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../ownershipCosts/ownershipCostReadModel.service';
 import { InventoryService } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
+import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
@@ -1217,6 +1218,154 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   };
 }
 
+function homeActionEmptyCopy(reason: HomeActionEmptyStateReason | null): { title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' } {
+  switch (reason) {
+    case 'DATA_UNAVAILABLE': return { title: 'Home Actions could not confirm what needs attention', body: 'One or more governed action sources are unavailable. An empty feed is not treated as an all-clear.', tone: 'CAUTION' };
+    case 'RECOMMENDATIONS_PAUSED': return { title: 'Personalized Home Actions are paused', body: 'No eligible action is currently surfaced while personalization is paused. Existing home records remain available in their domain workspaces.', tone: 'DEFAULT' };
+    case 'SOURCE_EVALUATION_PENDING': return { title: 'Home Action sources are still being evaluated', body: 'No eligible action is ready yet. Ask will not turn pending source evaluation into a recommendation.', tone: 'DEFAULT' };
+    case 'MISSING_FACTS': return { title: 'The home record needs more context before actions can be prioritized', body: 'Foundational property facts are incomplete. Add the next detail below and Ask will reevaluate the governed feed.', tone: 'CAUTION' };
+    case 'NO_ACCEPTED_WORK': return { title: 'No action is currently ready to surface', body: 'No eligible action or previously accepted operational work is available. This does not guarantee that the home needs nothing.', tone: 'DEFAULT' };
+    case 'ALL_CAUGHT_UP': return { title: 'No active Home Action is currently surfaced', body: 'The governed feed found no eligible active action. This is a feed state, not a guarantee that every possible home issue has been ruled out.', tone: 'POSITIVE' };
+    default: return { title: 'No Home Action is currently surfaced', body: 'The governed feed is empty. Ask will not interpret system silence as proof that the home needs nothing.', tone: 'DEFAULT' };
+  }
+}
+
+async function homeActionsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
+  const [access, evaluation] = await Promise.all([
+    ensurePropertyAccess(userId, propertyId),
+    evaluateFeatureContext(propertyId, userId, { featureKey: 'HOME_ACTIONS', operationKey: 'VIEW_FEED' }),
+  ]);
+  const activeRequirement = evaluation.requirements[0];
+  const canImproveContext = access.role !== HouseholdRole.VIEWER;
+  const captureSupported = activeRequirement
+    && canImproveContext
+    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
+    && activeRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
+  const captureRequests: AskCaptureRequest[] = captureSupported ? [{
+    requirementId: activeRequirement.requirementId,
+    captureKey: activeRequirement.capture.captureKey,
+    classification: activeRequirement.classification,
+    state: activeRequirement.state,
+    title: activeRequirement.capture.title,
+    question: activeRequirement.capture.question,
+    helpText: activeRequirement.capture.helpText ?? null,
+    inputSchema: activeRequirement.capture.inputSchema,
+    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
+    allowNotSure: activeRequirement.capture.allowNotSure,
+    sensitivity: activeRequirement.capture.sensitivity,
+    destinationLabel: 'Saved to this home’s Property Context',
+    confirmationText: null,
+    expectedContextVersion: evaluation.contextVersion,
+  }] : [];
+
+  let feed: Awaited<ReturnType<typeof getHomeActionFeed>>;
+  try {
+    feed = await getHomeActionFeed(propertyId, userId);
+  } catch {
+    return {
+      status: 'UNAVAILABLE', reasonCode: 'HOME_ACTION_FEED_UNAVAILABLE', contextVersion: evaluation.contextVersion,
+      captureRequests,
+      blocks: [{
+        type: 'SUMMARY', id: 'home-actions-unavailable', title: 'Home Actions are temporarily unavailable',
+        body: 'Ask could not load the final governed action feed. It will not substitute raw signals, model memory, or an unfiltered recommendation.',
+        tone: 'CAUTION', actions: [{ id: 'open-home', label: 'Open Home', href: homeHref, style: 'PRIMARY' }],
+      }],
+      suggestions: ['Summarize my home record', 'What maintenance is pending?'],
+    };
+  }
+
+  const urgentFocus = /\b(?:urgent|right now|immediately|priority now)\b/i.test(message);
+  const soonFocus = /\bsoon\b/i.test(message);
+  const planFocus = /\b(?:should i plan|planning|plan for|later)\b/i.test(message);
+  const waitFocus = /\b(?:can wait|consider)\b/i.test(message);
+  const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);
+  const priorityFilter = urgentFocus ? ['NOW'] : soonFocus ? ['SOON'] : planFocus ? ['PLAN'] : waitFocus ? ['PLAN', 'CONSIDER'] : null;
+  const selectedActions = (priorityFilter
+    ? feed.actions.filter((action) => priorityFilter.includes(action.priority))
+    : feed.actions).slice(0, topFocus ? 5 : MAX_RESULT_ITEMS);
+  const empty = feed.actions.length === 0 ? homeActionEmptyCopy(feed.diagnostics.emptyStateReason) : null;
+  const filteredEmpty = feed.actions.length > 0 && selectedActions.length === 0;
+  const lowConfidence = selectedActions.some((action) => action.confidence.label === 'LOW');
+  const permissionLimited = Boolean(activeRequirement && !canImproveContext);
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'home-actions-summary',
+    title: empty?.title
+      ?? (filteredEmpty
+        ? `No ${priorityFilter?.map((value) => value.toLowerCase()).join(' or ')} Home Action is currently surfaced`
+        : selectedActions.length === 1
+          ? selectedActions[0].presentation?.headline ?? selectedActions[0].recommendedAction
+          : `${selectedActions.length} governed Home Actions are ready to review`),
+    body: empty?.body
+      ?? (filteredEmpty
+        ? `The full governed feed contains ${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'}, but none match this timing filter.`
+        : `These are the final grounded, deduplicated, lifecycle-eligible actions from Unified Home. ${feed.buckets.NOW.length} need attention now, ${feed.buckets.SOON.length} are due soon, ${feed.buckets.PLAN.length} are for planning, and ${feed.buckets.CONSIDER.length} are optional considerations.`),
+    tone: empty?.tone ?? (selectedActions.some((action) => action.priority === 'NOW') ? 'CAUTION' : 'DEFAULT'),
+    actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: homeHref, style: 'PRIMARY' }],
+  }];
+
+  if (selectedActions.length) {
+    const priorities = ['NOW', 'SOON', 'PLAN', 'CONSIDER'] as const;
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'home-actions-list', title: 'Prioritized actions',
+      description: 'Priority and order come from the canonical Home Action feed. Ask does not independently rerank them.',
+      sections: priorities.map((priority) => {
+        const actions = selectedActions.filter((action) => action.priority === priority);
+        return {
+          id: priority.toLowerCase(), title: priority === 'NOW' ? 'Now' : priority === 'SOON' ? 'Soon' : priority === 'PLAN' ? 'Plan' : 'Consider', count: actions.length,
+          items: actions.map((action) => ({
+            id: action.id,
+            title: action.presentation?.headline ?? action.recommendedAction,
+            description: action.presentation?.summary ?? action.whyItMatters,
+            meta: [
+              action.presentation?.eyebrow,
+              action.timing.dueAt ? `Due ${humanDate(new Date(action.timing.dueAt))}` : action.timing.rationale,
+              `${action.confidence.label.toLowerCase()} confidence`,
+              action.source.kind.toLowerCase().replace(/_/g, ' '),
+              action.workItem ? `Work ${action.workItem.state.toLowerCase().replace(/_/g, ' ')}` : null,
+              action.ranking.explanation,
+            ].filter((value): value is string => Boolean(value)),
+            status: action.state,
+            href: action.primaryCta.href,
+          })),
+        };
+      }).filter((section) => section.count > 0),
+      actions: [],
+    });
+
+    const evidenceById = new Map<string, { label: string; source: string | null; observedAt: string | null }>();
+    for (const action of selectedActions) {
+      for (const evidence of action.evidence) {
+        if (!evidenceById.has(evidence.id)) evidenceById.set(evidence.id, { label: evidence.label, source: evidence.source, observedAt: evidence.observedAt });
+        if (evidenceById.size >= 30) break;
+      }
+      if (evidenceById.size >= 30) break;
+    }
+    blocks.push({ type: 'EVIDENCE', id: 'home-actions-evidence', title: 'Evidence used by these actions', items: [...evidenceById.values()] });
+    blocks.push({
+      type: 'BOUNDARY', id: 'home-actions-boundary', title: 'Review before acting',
+      body: 'Ask is showing governed recommendations, not performing the underlying work. Financial, coverage, provider, purchase, scheduling, and other material actions continue in their dedicated workflows with their required review and confirmation controls.',
+      severity: 'INFO', suggestions: [],
+    });
+  }
+
+  const limited = captureRequests.length > 0 || permissionLimited || lowConfidence || feed.diagnostics.emptyStateReason === 'DATA_UNAVAILABLE' || feed.diagnostics.emptyStateReason === 'MISSING_FACTS';
+  return {
+    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: captureRequests.length
+      ? 'HOME_ACTION_CONTEXT_OPTIONAL'
+      : permissionLimited
+        ? 'HOME_ACTION_CONTEXT_WRITE_PERMISSION_REQUIRED'
+        : lowConfidence
+          ? 'HOME_ACTION_LOW_CONFIDENCE'
+          : feed.diagnostics.emptyStateReason ? `HOME_ACTION_${feed.diagnostics.emptyStateReason}` : undefined,
+    contextVersion: evaluation.contextVersion,
+    captureRequests,
+    blocks,
+    suggestions: ['Anything urgent?', 'What should I plan?', 'What can wait?'],
+  };
+}
+
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis] = await Promise.all([
@@ -1624,6 +1773,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
     case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
+    case 'HOME_ACTIONS': return homeActionsResult(input.userId, input.propertyId!, input.message);
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
@@ -1741,7 +1891,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -1829,6 +1979,24 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       ...input,
       featureKey: 'PROPERTY_RECORD_SUMMARY',
       operationKey: 'VIEW_SUMMARY',
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'PropertyContext';
+  } else if (execution.operationId === 'HOME_ACTIONS') {
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: 'HOME_ACTIONS',
+      operationKey: 'VIEW_FEED',
     });
     if (!capture || typeof capture !== 'object' || Array.isArray(capture)
       || !('captureId' in capture) || typeof capture.captureId !== 'string'
