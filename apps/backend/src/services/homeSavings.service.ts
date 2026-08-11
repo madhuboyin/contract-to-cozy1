@@ -35,6 +35,7 @@ import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
 import { getFinancialContextDecisions } from './financialContext/context';
 import { requestPropertySavingsBenefitsReevaluation } from './savingsBenefitsReevaluation.service';
+import { resolvePropertyAccess } from './propertyAccess.service';
 
 export type HomeSavingsCategoryStatus = 'NOT_SET_UP' | 'CONNECTED' | 'FOUND_SAVINGS';
 
@@ -320,11 +321,14 @@ export function classifyHomeSavingsResultKind(
     : HomeSavingsResultKind.OBSERVATION;
 }
 
-async function assertPropertyForUser(propertyId: string, userId: string) {
+async function assertPropertyForUser(propertyId: string, userId: string, allowHouseholdRead = false) {
+  if (allowHouseholdRead && !await resolvePropertyAccess(userId, propertyId)) {
+    throw new Error('Property not found or access denied.');
+  }
   const property = await prisma.property.findFirst({
     where: {
       id: propertyId,
-      homeownerProfile: { userId },
+      ...(allowHouseholdRead ? {} : { homeownerProfile: { userId } }),
     },
     select: {
       id: true,
@@ -495,7 +499,7 @@ export class HomeSavingsService {
   }
 
   async getSummary(propertyId: string, userId: string): Promise<HomeSavingsSummaryDTO> {
-    const property = await assertPropertyForUser(propertyId, userId);
+    const property = await assertPropertyForUser(propertyId, userId, true);
     const categories = await getEnabledCategories();
     const opportunitiesByCategory = await getPotentialOpportunitiesByCategory(
       property.homeownerProfileId,

@@ -21,6 +21,7 @@ import { propertyTaxAppealCaseService } from './propertyTax/propertyTaxAppealCas
 import { detectCoverageGaps } from './coverageGap.service';
 import { logger } from '../lib/logger';
 import { isProgramActionableNow } from './hiddenAssets/sourceFreshness';
+import { resolvePropertyAccess } from './propertyAccess.service';
 
 export type SavingsBenefitsFamily = 'BENEFIT' | 'RECURRING_COST';
 export type SavingsBenefitsLifecycle = 'IN_PROGRESS' | 'REALIZED';
@@ -123,8 +124,11 @@ export function valueBasisForBenefitPeriod(benefitPeriod: string): SavingsBenefi
 }
 
 async function assertPropertyForUser(propertyId: string, userId: string) {
+  if (!await resolvePropertyAccess(userId, propertyId)) {
+    throw new Error('Property not found or access denied.');
+  }
   const property = await prisma.property.findFirst({
-    where: { id: propertyId, homeownerProfile: { userId } },
+    where: { id: propertyId },
     select: { id: true, homeownerProfileId: true },
   });
   if (!property?.homeownerProfileId) {

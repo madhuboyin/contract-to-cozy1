@@ -31,6 +31,7 @@ import {
 } from './hiddenAssets/types';
 import { logger } from '../lib/logger';
 import { getFinancialContextDecisions } from './financialContext/context';
+import { resolvePropertyAccess } from './propertyAccess.service';
 import {
   isProgramActionableNow,
   isReviewedProgramCurrent,
@@ -210,9 +211,13 @@ function buildSummary(
 async function assertPropertyForUser(
   propertyId: string,
   userId: string,
+  allowHouseholdRead = false,
 ) {
+  if (allowHouseholdRead && !await resolvePropertyAccess(userId, propertyId)) {
+    throw new Error('Property not found or access denied.');
+  }
   const property = await prisma.property.findFirst({
-    where: { id: propertyId, homeownerProfile: { userId } },
+    where: { id: propertyId, ...(allowHouseholdRead ? {} : { homeownerProfile: { userId } }) },
     select: {
       id: true,
       homeownerProfileId: true,
@@ -719,8 +724,9 @@ export class HiddenAssetService {
     propertyId: string,
     userId: string,
     filters: HiddenAssetMatchFilters = {},
+    options: { trackView?: boolean } = {},
   ): Promise<HiddenAssetMatchListDTO> {
-    await assertPropertyForUser(propertyId, userId);
+    await assertPropertyForUser(propertyId, userId, true);
 
     const rows = await fetchMatchesForProperty(propertyId, filters);
     const lastScan = await getLastCompletedScan(propertyId);
@@ -728,14 +734,16 @@ export class HiddenAssetService {
     const matches = rows.map((m) => serializeMatch(m, exclusions.get(m.id) ?? []));
 
     // Analytics: hidden assets feature viewed
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.HIDDEN_ASSET_VIEWED,
-      userId,
-      propertyId,
-      moduleKey: AnalyticsModule.HIDDEN_ASSETS,
-      featureKey: AnalyticsFeature.HIDDEN_ASSET,
-      metadataJson: { matchCount: matches.length },
-    });
+    if (options.trackView !== false) {
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.HIDDEN_ASSET_VIEWED,
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.HIDDEN_ASSETS,
+        featureKey: AnalyticsFeature.HIDDEN_ASSET,
+        metadataJson: { matchCount: matches.length },
+      });
+    }
 
     return {
       propertyId,
@@ -792,7 +800,7 @@ export class HiddenAssetService {
    * "what did you check?" instead of an opaque program count.
    */
   async getCoverageForProperty(propertyId: string, userId: string): Promise<CoverageDTO> {
-    const property = await assertPropertyForUser(propertyId, userId);
+    const property = await assertPropertyForUser(propertyId, userId, true);
     const regionPairs = deriveRegionPairs(property);
     const now = new Date();
 

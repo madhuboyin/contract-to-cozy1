@@ -35,12 +35,17 @@ import { MortgageRateService } from '../../refinanceRadar/engine/mortgageRate.se
 import { getRefinanceAlertPreference } from '../../refinanceRadar/refinanceAlertPreference.service';
 import { createOrUpdateRefinanceRateMonitor } from '../../refinanceRadar/refinanceRateMonitor.service';
 import { HouseholdService } from '../household.service';
+import { HomeSavingsService } from '../homeSavings.service';
+import { HiddenAssetService } from '../hiddenAssets.service';
+import { savingsBenefitsUnifiedService } from '../savingsBenefitsUnified.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
 const mortgageRateService = new MortgageRateService();
 const householdService = new HouseholdService();
+const homeSavingsService = new HomeSavingsService();
+const hiddenAssetService = new HiddenAssetService();
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -432,6 +437,215 @@ function money(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
 }
 
+function savingsValue(value: number | null, currency: string, basis: string): string | null {
+  if (value == null) return null;
+  const amount = currency === 'USD'
+    ? money(value)
+    : `${currency} ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value)}`;
+  const suffix = basis === 'MONTHLY' ? '/month' : basis === 'ANNUAL' ? '/year' : basis === 'ONE_TIME' ? ' one-time' : '';
+  return `${amount}${suffix}`;
+}
+
+async function savingsOpportunitiesResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/savings-benefits`;
+  const realizedFocus = /\b(realized|received|already saved)\b/i.test(message);
+  const paybackFocus = /\b(?:fastest|shortest|best) payback\b/i.test(message);
+  const [access, homeSavings, benefits, unified, context] = await Promise.all([
+    ensurePropertyAccess(userId, propertyId),
+    homeSavingsService.getSummary(propertyId, userId),
+    hiddenAssetService.getMatchesForProperty(propertyId, userId, {}, { trackView: false }),
+    savingsBenefitsUnifiedService.getUnified(propertyId, userId),
+    evaluateFeatureContext(propertyId, userId, { featureKey: 'HOME_SAVINGS', operationKey: 'RUN_ANALYSIS' }),
+  ]);
+
+  const activeRequirement = context.requirements[0];
+  const canImproveContext = access.role !== HouseholdRole.VIEWER;
+  const captureSupported = activeRequirement
+    && canImproveContext
+    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
+    && activeRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
+  const captureRequests: AskCaptureRequest[] = captureSupported ? [{
+    requirementId: activeRequirement.requirementId,
+    captureKey: activeRequirement.capture.captureKey,
+    classification: activeRequirement.classification,
+    state: activeRequirement.state,
+    title: activeRequirement.capture.title,
+    question: activeRequirement.capture.question,
+    helpText: activeRequirement.capture.helpText ?? null,
+    inputSchema: activeRequirement.capture.inputSchema,
+    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
+    allowNotSure: activeRequirement.capture.allowNotSure,
+    sensitivity: activeRequirement.capture.sensitivity,
+    destinationLabel: 'Saved to this home’s Property Context',
+    confirmationText: null,
+    expectedContextVersion: context.contextVersion,
+  }] : [];
+
+  const recurring = homeSavings.categories
+    .filter((category) => category.topOpportunity && category.status === 'FOUND_SAVINGS')
+    .map(({ category, topOpportunity }) => {
+      const opportunity = topOpportunity!;
+      const annual = opportunity.netAnnualSavings ?? opportunity.estimatedAnnualSavings;
+      return {
+        id: `recurring-${opportunity.id}`,
+        title: opportunity.headline,
+        description: opportunity.detail,
+        meta: [
+          category.label,
+          annual == null ? null : `Estimated ${money(annual)}/year after modeled switching cost`,
+          opportunity.confidence === 'HIGH' ? 'High confidence' : `${opportunity.confidence.toLowerCase()} confidence`,
+          opportunity.offerSourceKind === 'ADDRESS_QUALIFIED' ? 'Address-qualified source' : 'Benchmark estimate',
+          opportunity.estimatedPaybackMonths == null ? null : `Estimated payback ${opportunity.estimatedPaybackMonths} months`,
+        ].filter((value): value is string => Boolean(value)),
+        status: opportunity.status,
+        href: `${workspaceHref}?family=RECURRING_COST&opportunityId=${encodeURIComponent(opportunity.id)}`,
+        paybackMonths: opportunity.estimatedPaybackMonths,
+      };
+    })
+    .sort((left, right) => (left.paybackMonths ?? Number.POSITIVE_INFINITY) - (right.paybackMonths ?? Number.POSITIVE_INFINITY))
+    .slice(0, 8)
+    .map(({ paybackMonths: _paybackMonths, ...item }) => item);
+
+  const reviewedBenefits = benefits.matches.slice(0, 8).map((match) => {
+    const value = match.estimatedValue != null
+      ? savingsValue(match.estimatedValue, match.currency, match.benefitPeriod)
+      : match.estimatedValueMin != null || match.estimatedValueMax != null
+        ? `${match.currency} ${match.estimatedValueMin ?? 0}–${match.estimatedValueMax ?? 'unknown'}`
+        : null;
+    return {
+      id: `benefit-${match.id}`,
+      title: match.programName,
+      description: match.description,
+      meta: [value ? `Estimated ${value}` : 'Value not quantified', match.eligibilityLabel, match.sourceLabel, match.freshnessNote].filter((value): value is string => Boolean(value)),
+      status: match.status,
+      href: `${workspaceHref}?family=BENEFIT&opportunityId=${encodeURIComponent(match.id)}`,
+    };
+  });
+
+  const inProgress = unified.inProgress.slice(0, 8).map((item) => ({
+    id: `progress-${item.family}-${item.id}`,
+    title: item.title,
+    description: item.explanation,
+    meta: [
+      item.family === 'BENEFIT' ? 'Benefit or rebate' : 'Recurring-cost savings',
+      savingsValue(item.estimatedValue, item.currency, item.estimatedValueBasis),
+      item.deadline ? `Deadline ${humanDate(new Date(item.deadline))}` : null,
+    ].filter((value): value is string => Boolean(value)),
+    status: item.statusLabel,
+    href: item.detailHref,
+  }));
+
+  const realized = unified.realized.slice(0, 8).map((item) => ({
+    id: `realized-${item.family}-${item.id}`,
+    title: item.title,
+    description: item.explanation,
+    meta: [
+      savingsValue(item.realizedValue, item.currency, item.estimatedValueBasis) ?? 'Recorded value not quantified',
+      item.verificationState ? `${item.verificationState.toLowerCase()} outcome` : 'Homeowner-recorded outcome',
+    ],
+    status: 'REALIZED',
+    href: item.detailHref,
+  }));
+
+  const related = unified.relatedOpportunities.slice(0, 5).map((item) => ({
+    id: `related-${item.domain}`,
+    title: item.domain === 'PROPERTY_TAX' ? 'Property tax opportunity' : item.domain === 'COVERAGE' ? 'Coverage and premium review' : 'Mortgage refinance review',
+    description: item.summary,
+    meta: ['Owned by its dedicated ContractToCozy analysis'],
+    status: 'RELATED',
+    href: item.detailHref,
+  }));
+
+  const availableCount = recurring.length + reviewedBenefits.length;
+  const hasAnyResult = availableCount + inProgress.length + realized.length + related.length > 0;
+  const neverAnalyzed = !homeSavings.propertyContextVersion && benefits.summary.lastScanAt === null;
+  const realizedTotal = unified.totals.realizedValueTotal;
+  const realizedCurrency = unified.totals.realizedValueCurrency;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'savings-summary',
+    title: realizedFocus
+      ? unified.totals.realizedCount === 0
+        ? 'No realized savings outcome is recorded yet'
+        : realizedTotal != null && realizedCurrency
+          ? `${unified.totals.realizedCount} realized outcome${unified.totals.realizedCount === 1 ? '' : 's'} totaling ${savingsValue(realizedTotal, realizedCurrency, 'UNKNOWN')}`
+          : `${unified.totals.realizedCount} realized savings outcome${unified.totals.realizedCount === 1 ? ' is' : 's are'} recorded across one or more currencies`
+      : paybackFocus && recurring[0]
+        ? `${recurring[0].title} has the shortest recorded payback estimate`
+      : homeSavings.potentialAnnualSavings > 0
+      ? `The strongest recorded recurring-cost opportunity is about ${money(homeSavings.potentialAnnualSavings)} per year`
+      : availableCount > 0
+        ? `${availableCount} savings ${availableCount === 1 ? 'opportunity is' : 'opportunities are'} ready to review`
+        : neverAnalyzed
+          ? 'Savings analysis has not been completed for this home yet'
+          : hasAnyResult
+            ? 'Here is the current savings picture for this home'
+            : 'No current savings opportunity is recorded—not the same as zero savings',
+    body: realizedFocus
+      ? unified.totals.realizedCount === 0
+        ? 'Realized value is counted only from a recorded RECEIVED outcome; estimates and actions in progress are kept separate.'
+        : 'These are recorded RECEIVED outcomes. Verification labels remain visible so homeowner-reported and independently verified values are not conflated.'
+      : paybackFocus && recurring[0]
+        ? `Its ${recurring[0].meta.find((item) => item.startsWith('Estimated payback'))?.toLowerCase() ?? 'payback estimate is available in Savings and Benefits'}. Payback uses modeled switching friction and is not a provider guarantee.`
+      : homeSavings.potentialAnnualSavings > 0
+      ? `This is the highest single net annual estimate, not a sum across categories. Ask also found ${reviewedBenefits.length} reviewed benefit or rebate match${reviewedBenefits.length === 1 ? '' : 'es'}, ${inProgress.length} item${inProgress.length === 1 ? '' : 's'} in progress, and ${realized.length} recorded realized outcome${realized.length === 1 ? '' : 's'}. Estimates are not provider quotes or eligibility guarantees.`
+      : neverAnalyzed
+        ? 'Open Savings and Benefits to run the governed analysis. Ask will not infer that no savings exist from an empty record.'
+        : 'The sections below separate available estimates, actions already in progress, verified or homeowner-recorded outcomes, and opportunities owned by other domain tools.',
+    tone: homeSavings.potentialAnnualSavings > 0 || availableCount > 0 ? 'POSITIVE' : 'DEFAULT',
+    actions: [{ id: 'open-savings', label: neverAnalyzed ? 'Run Savings and Benefits' : 'Open Savings and Benefits', href: workspaceHref, style: 'PRIMARY' }],
+  }];
+
+  if (hasAnyResult) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'savings-opportunity-groups', title: 'Savings and benefits',
+      description: 'Available estimates are planning signals. Realized value appears only from recorded RECEIVED outcomes.',
+      sections: [
+        { id: 'recurring', title: 'Recurring-cost opportunities', count: recurring.length, items: recurring },
+        { id: 'benefits', title: 'Benefits and rebates to review', count: reviewedBenefits.length, items: reviewedBenefits },
+        { id: 'in-progress', title: 'Already in progress', count: unified.totals.inProgressCount, items: inProgress },
+        { id: 'realized', title: 'Recorded realized savings', count: unified.totals.realizedCount, items: realized },
+        { id: 'related', title: 'Related savings decisions', count: related.length, items: related },
+      ].filter((section) => section.count > 0),
+      actions: [{ id: 'review-all-savings', label: 'Review all opportunities', href: workspaceHref, style: 'PRIMARY' }],
+    });
+  }
+
+  const evidenceItems = [
+    ...reviewedBenefits.slice(0, 5).map((item, index) => ({
+      label: item.title,
+      source: benefits.matches[index]?.sourceLabel ?? 'Reviewed Savings and Benefits registry',
+      observedAt: benefits.matches[index]?.lastVerifiedAt ?? benefits.matches[index]?.lastEvaluatedAt ?? null,
+    })),
+    ...(homeSavings.propertyContextVersion ? [{ label: 'Recurring-cost comparison', source: 'Home Savings analysis', observedAt: homeSavings.updatedAt }] : []),
+  ];
+  if (evidenceItems.length) blocks.push({ type: 'EVIDENCE', id: 'savings-evidence', title: 'Sources and freshness', items: evidenceItems });
+
+  const unsupportedInventoryCapture = canImproveContext && activeRequirement?.capture.inputSchema.type === 'RELATIONAL_SELECT_CREATE';
+  const permissionLimited = Boolean(activeRequirement && !canImproveContext);
+  return {
+    status: captureRequests.length || unsupportedInventoryCapture || permissionLimited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: captureRequests.length
+      ? 'SAVINGS_CONTEXT_OPTIONAL'
+      : unsupportedInventoryCapture
+        ? 'SAVINGS_INVENTORY_SETUP_AVAILABLE'
+        : permissionLimited
+          ? 'SAVINGS_CONTEXT_WRITE_PERMISSION_REQUIRED'
+          : undefined,
+    contextVersion: context.contextVersion,
+    captureRequests,
+    blocks,
+    suggestions: permissionLimited
+      ? ['Ask a household owner or contributor to improve the savings context', 'Which opportunity has the fastest payback?']
+      : unsupportedInventoryCapture
+      ? ['Open Savings and Benefits to add installed systems', 'Which opportunity has the fastest payback?']
+      : realizedFocus
+        ? ['Which opportunity has the fastest payback?', 'Where else could I save money?']
+        : paybackFocus
+          ? ['What savings have I already realized?', 'Where else could I save money?']
+          : ['Which opportunity has the fastest payback?', 'What savings have I already realized?'],
+  };
+}
+
 async function refinanceAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const [profile, financialContext, marketSnapshot] = await Promise.all([
     getProfile(propertyId),
@@ -700,6 +914,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
     case 'MAINTENANCE_STATUS': return maintenanceResult(input.userId, input.propertyId!, input.message);
     case 'COVERAGE_GAPS': return coverageResult(input.propertyId!);
+    case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
@@ -816,7 +1031,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -835,7 +1050,25 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
   let capturedContextVersion: string;
   let result: AskOperationResult;
   let canonicalOwner: string;
-  if (execution.operationId === 'HOUSEHOLD_INVITATION') {
+  if (execution.operationId === 'SAVINGS_OPPORTUNITIES') {
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: 'HOME_SAVINGS',
+      operationKey: 'RUN_ANALYSIS',
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'PropertyContext';
+  } else if (execution.operationId === 'HOUSEHOLD_INVITATION') {
     if (input.captureKey !== 'HOUSEHOLD_INVITATION_INPUTS') {
       const error = new Error('This household invitation capture is no longer active.');
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';

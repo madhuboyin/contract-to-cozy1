@@ -12,6 +12,7 @@ export type AskIntentFamily =
 export type AskOperationId =
   | 'MAINTENANCE_STATUS'
   | 'COVERAGE_GAPS'
+  | 'SAVINGS_OPPORTUNITIES'
   | 'CAPABILITY_DISCOVERY'
   | 'REPLACEMENT_GUIDANCE'
   | 'REFINANCE_ANALYSIS'
@@ -44,6 +45,7 @@ const emergencyPattern = /\b(smell(?:ing)? gas|gas leak|carbon monoxide|\bco ala
 const outOfScopePattern = /\b(python|javascript|typescript|coding interview|write (?:me )?(?:a )?program|never[- ]ending loop|system prompt|celebrity news|school essay)\b/i;
 const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|completed work|pending work|service history)\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage))\b/i;
+const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b/i;
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
 const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;
 const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
@@ -59,6 +61,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (coveragePattern.test(message)) {
     return { operationId: 'COVERAGE_GAPS', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.96, requiresProperty: true };
+  }
+  if (savingsOpportunitiesPattern.test(message)) {
+    return { operationId: 'SAVINGS_OPPORTUNITIES', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.97, requiresProperty: true };
   }
   if (maintenancePattern.test(message)) {
     return { operationId: 'MAINTENANCE_STATUS', version: '1.0', family: 'RECORD_QUERY', confidence: 0.94, requiresProperty: true };
