@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Proposed"
-version: "1.0"
+version: "1.1"
 date: "August 10, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.0 |
+| Version | 1.1 |
 | Date | August 10, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -126,6 +126,8 @@ Ask is an orchestrator over existing product capabilities. It must not create pa
 ### 2.3 UX decision
 
 The default Ask experience is outcome-first. It should answer immediately when it safely can, ask the minimum necessary follow-up when it cannot, and never force the homeowner to understand internal fact keys, routes, modules, or database structure.
+
+Ask requires an adaptive workspace redesign. The current floating chat launcher may remain as a global entry point, but the existing narrow text-bubble popover is not the target product surface. Simple interactions will use an expanded quick panel; rich decisions, tables, comparisons, document review, and multi-step workflows will use a full Ask workspace. Mobile Ask will use a full-screen experience rather than a floating desktop-style popover.
 
 ## 3. Background and current-state audit
 
@@ -384,6 +386,11 @@ The following IDs are stable within version 1.x of this FRD. Detailed behavior a
 | `ASK-FR-033` | Make approximate and unknown values explicit rather than fabricating exact or negative facts. | Must | 13, 14 |
 | `ASK-FR-034` | Link notification-triggered follow-up to the signal change, evidence, and recommended next action. | Should | 17 |
 | `ASK-FR-035` | Provide correction and feedback controls without bypassing canonical domain governance. | Must | 14, 23, 30 |
+| `ASK-FR-036` | Provide adaptive quick-panel, full-workspace, and mobile full-screen Ask surfaces backed by the same execution state. | Must | 27, 28 |
+| `ASK-FR-037` | Make `/dashboard/ask` a real persistent Ask workspace rather than a page that only opens the floating launcher. | Must | 27 |
+| `ASK-FR-038` | Replace browser prompt/confirm interactions with accessible typed clarification, capture, selection, and confirmation cards. | Must | 13, 16, 27 |
+| `ASK-FR-039` | Preserve one execution and draft when the user expands, minimizes, or moves between compatible Ask surfaces. | Must | 24, 27, 29 |
+| `ASK-FR-040` | Render only operation-relevant primary and secondary actions instead of a universal action menu on every answer. | Must | 14, 16, 27 |
 
 ## 10. Experience model
 
@@ -1264,7 +1271,78 @@ Every answer using property facts must offer a source-aware correction path. Cor
 
 ## 27. Frontend and interaction requirements
 
-### 27.1 Conversation layout
+### 27.1 Committed surface model
+
+Ask will use one shared execution model across three adaptive surfaces:
+
+| Surface | Intended use | Required behavior |
+| --- | --- | --- |
+| Global launcher | Persistent entry from eligible homeowner pages | Opens Ask with current property and contextual launch metadata |
+| Quick Ask panel | Short questions, summaries, clarification, small capture forms, and simple confirmations | Desktop right-side panel approximately 480–560 pixels wide; expandable without restarting the execution |
+| Full Ask workspace | Tables, comparisons, timelines, documents, detailed evidence, decision analysis, and multi-step workflows | Dedicated `/dashboard/ask` route with persistent history and sufficient horizontal space for structured results |
+| Mobile Ask | All mobile Ask interactions | Full-screen sheet or route with safe-area, keyboard, and back/minimize behavior; not a small floating popover |
+
+The same execution ID, pending requirement, confirmation state, draft, and rendered blocks must survive movement between these surfaces. Expanding a quick result into the workspace must not submit a second request or lose conversation context.
+
+### 27.2 Current UI reuse and replacement boundary
+
+The existing AI Chat implementation is a transitional shell. The redesign may retain:
+
+- the global `Ask Cozy` launcher concept;
+- selected-property integration;
+- contextual open events, upgraded to a typed launch-context contract;
+- optimistic display of the homeowner question;
+- auto-scroll behavior where it does not disrupt reading;
+- Cozy visual identity and grounded/confidence badge concepts;
+- safe-area and mobile-keyboard detection concepts; and
+- proposal/artifact audit lineage.
+
+The redesign must replace:
+
+- text-only message and response types;
+- the 350–400 pixel popover as the only working surface;
+- browser `window.prompt` and `window.confirm` flows;
+- internal fact-key entry;
+- generic action menus attached to every grounded answer;
+- index-keyed, in-memory-only message history;
+- undifferentiated assistant-text errors;
+- the current `/dashboard/ask` page that only launches the popover; and
+- any duplicate legacy chat component or parallel implementation path.
+
+### 27.3 Component architecture
+
+The frontend should converge on the following conceptual structure:
+
+```text
+AskLauncher
+└── AskWorkspace
+    ├── AskHeader
+    │   ├── PropertyScopeSelector
+    │   ├── SessionHistoryControl
+    │   └── Minimize / Expand / Close
+    ├── AskConversation
+    │   ├── UserTurn
+    │   └── AskExecutionTurn
+    │       └── AskBlockRenderer
+    │           ├── SummaryBlock
+    │           ├── MetricsBlock
+    │           ├── TableBlock / GroupedListBlock
+    │           ├── ComparisonBlock / TimelineBlock
+    │           ├── EvidenceAndAssumptionsBlock
+    │           ├── PropertyOrEntityClarificationCard
+    │           ├── ContextCaptureCard
+    │           ├── CapabilityCard
+    │           ├── ConfirmationCard
+    │           ├── MonitorCard
+    │           ├── WorkflowProgressBlock
+    │           ├── BoundaryNotice
+    │           └── ErrorRetryBlock
+    └── AskComposer
+```
+
+The backend response schema determines which blocks and actions are rendered. The frontend must not infer a capture form, command, or tool destination from generated prose.
+
+### 27.4 Conversation layout
 
 - User message, typed system result, and action controls are visually distinct.
 - Structured blocks are not embedded as unstructured Markdown generated by a model.
@@ -1272,16 +1350,32 @@ Every answer using property facts must offer a source-aware correction path. Cor
 - Only one material pending action is primary at a time.
 - A visible property context selector is available without dominating the conversation.
 - Multi-property answers label every row/card with property identity.
+- The header always communicates current property scope and whether the answer is property-grounded or general.
+- Rich blocks may use the available workspace width rather than being constrained to an 80%-width speech bubble.
+- Pending clarification, capture, or confirmation remains visibly associated with its originating execution.
+- Only actions returned for the resolved operation are shown; irrelevant generic actions are omitted.
 
-### 27.2 Composer
+### 27.5 Composer
 
 - Multiline input with clear send/cancel behavior.
 - Suggested prompts based on current surface and available capabilities.
 - Attachments only for registered document-assisted operations.
 - Character and attachment limits communicated accessibly.
 - Disabled state explains why input cannot be submitted.
+- `Enter` submits and `Shift+Enter` adds a newline, with an accessible alternative send control.
+- The composer draft survives minimize/expand, compatible navigation, retryable failure, and soft refresh while the execution remains active.
+- Registered attachment operations may show upload, review, removal, progress, and failure states; attachments are not accepted as an untyped general prompt payload.
 
-### 27.3 Result interactions
+### 27.6 Typed block renderer
+
+- Every block is schema validated before rendering.
+- Unknown block versions fail safely with a retry/open-workspace fallback rather than a blank conversation.
+- Tables, comparisons, metrics, and timelines have accessible text/card equivalents.
+- Capture, clarification, confirmation, monitor, and workflow blocks own their local drafts while the backend owns authoritative execution state.
+- Result values and actions come from typed fields, not parsing Markdown or model prose.
+- Blocks support progressive disclosure without hiding the direct answer or primary action.
+
+### 27.7 Result interactions
 
 - Sort/filter controls for tables where useful.
 - Expand/collapse for evidence and assumptions.
@@ -1289,21 +1383,39 @@ Every answer using property facts must offer a source-aware correction path. Cor
 - Primary CTA and at most two secondary CTAs by default.
 - Feedback: Helpful, Not helpful, Incorrect data, Missing option.
 - Correction flows reopen the appropriate canonical capture.
+- Complex results offer `Expand` or `Open workspace` while preserving the same execution.
+- Long results use bounded pagination or `View all`; the conversation does not become an unbounded record dump.
+- Confirmation controls show property, entity, values, recipient/channel, and exact effect before execution.
 
-### 27.4 Loading and streaming
+### 27.8 Loading and streaming
 
 - Return deterministic routing/readiness state before optional synthesis.
 - Structured results may render before narrative synthesis.
 - Do not stream unvalidated action parameters or unsupported claims.
 - Preserve already rendered authoritative blocks if optional synthesis fails.
+- Loading state identifies whether Ask is checking records, evaluating a tool, running an analysis, saving details, or completing an action.
+- Long-running registered operations may expose cancel where cancellation is meaningful and safe.
+- The composer must not be globally disabled for longer than necessary; pending material actions remain explicit.
 
-### 27.5 Empty and degraded states
+### 27.9 Empty and degraded states
 
 - No property selected: offer property selection or general guidance.
 - No matching records: state the exact filter and offer the relevant create/import action.
 - Model unavailable: continue deterministic operations.
 - Domain dependency unavailable: show retry and destination link without inventing an answer.
 - Permission missing: explain which role is required without revealing protected data.
+- Retryable errors render as typed error blocks with preserved draft and execution context, not ordinary assistant prose.
+- Out-of-scope, emergency, safety, and professional-boundary responses use visually distinct boundary blocks and suppress irrelevant promotional actions.
+
+### 27.10 Dialog, focus, and announcement behavior
+
+- Quick-panel and mobile-sheet implementations use correct dialog/sheet semantics with an accessible name.
+- Opening moves focus to the first meaningful control; closing restores focus to the launcher or invoking control.
+- Escape closes only when no irreversible or unsaved confirmation would be lost; otherwise Ask warns or preserves the draft.
+- Keyboard focus is contained appropriately while modal presentation is active.
+- The send icon, expand, minimize, close, retry, feedback, and block actions all have accessible names.
+- New authoritative results and validation errors are announced through restrained live regions; streaming tokens and decorative loading dots are not repeatedly announced.
+- Auto-scroll occurs only when the user is already near the latest turn. Reading older content must not be interrupted.
 
 ## 28. Accessibility, responsive design, and internationalization
 
@@ -1321,10 +1433,16 @@ Every answer using property facts must offer a source-aware correction path. Cor
 
 ### 28.2 Responsive behavior
 
+- Desktop uses the quick panel for short interactions and the full workspace for rich or wide results.
+- The quick panel provides an explicit expand-to-workspace action and retains the same execution.
+- Mobile Ask is a full-screen sheet or dedicated route, not the desktop floating popover scaled down.
 - Mobile-first capture and confirmation cards.
 - Tables convert to accessible grouped cards where horizontal space is insufficient.
 - Composer remains available without obscuring active confirmation controls.
 - Long evidence is collapsed by default on mobile.
+- The mobile header remains visible with property scope, back/minimize, and pending-state indication.
+- On-screen keyboard changes must not close Ask, discard capture drafts, or obscure validation and submit controls.
+- Safe-area insets are honored for the header, results, composer, and action bars.
 
 ### 28.3 Internationalization
 
@@ -1497,7 +1615,11 @@ Deliverables:
 - scope, property, timeframe, and entity resolution framework;
 - deterministic boundary classifier;
 - operation registry and executor allowlist;
-- typed presentation renderer;
+- shared Ask workspace shell with global launcher, adaptive quick panel, full `/dashboard/ask` workspace, and mobile full-screen mode;
+- typed presentation renderer and schema-version fallback;
+- migration from text-only message bubbles to execution turns and presentation blocks;
+- removal of browser prompt/confirm interactions from migrated operations;
+- dialog, focus, live-region, and draft-preservation foundation;
 - launch operations for maintenance status, coverage gaps, home actions, savings opportunities, inventory lookup, and property summary;
 - feedback and correction entry points;
 - no-generation degraded mode; and
@@ -1508,7 +1630,9 @@ Exit criteria:
 - certified record queries meet accuracy and latency targets;
 - restart/horizontal-scale continuity passes;
 - at least 70% of phase traffic requires no remote generation;
-- no internal fact keys appear in homeowner UI.
+- no internal fact keys appear in homeowner UI;
+- quick-panel-to-workspace expansion preserves the same execution; and
+- the legacy `/dashboard/ask` launcher-only page is retired.
 
 ### Phase 2 — Inline capture and automatic resume
 
@@ -1788,6 +1912,14 @@ Include cross-property access, hidden prompt extraction, document injection, mod
 - Mobile flows require no horizontal scrolling for core capture/confirmation.
 - Keyboard-only and screen-reader journeys pass.
 - Retry never creates duplicate artifacts.
+- The global launcher opens Ask with the current property and typed launch context.
+- Short results work in the desktop quick panel; tables, comparisons, timelines, and document review can expand into the full workspace without restarting.
+- `/dashboard/ask` renders the persistent full Ask workspace rather than a card that opens a floating popover.
+- Mobile Ask uses a full-screen experience and retains active drafts when the on-screen keyboard opens or closes.
+- No migrated journey uses `window.prompt`, `window.confirm`, internal fact-key input, or a universal action menu.
+- Quick panel, full workspace, and mobile surface render the same execution status and authoritative blocks.
+- Closing/minimizing and reopening a non-expired execution restores its conversation, pending requirement, and draft.
+- Focus enters and exits the panel predictably, Escape behavior is safe, send/close/expand controls are labeled, and result/error announcements are not noisy.
 
 ## 36. Risks and mitigations
 
