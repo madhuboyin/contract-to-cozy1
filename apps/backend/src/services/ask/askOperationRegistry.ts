@@ -13,6 +13,7 @@ export type AskOperationId =
   | 'MAINTENANCE_STATUS'
   | 'COVERAGE_GAPS'
   | 'SAVINGS_OPPORTUNITIES'
+  | 'OWNERSHIP_COSTS'
   | 'CAPABILITY_DISCOVERY'
   | 'REPLACEMENT_GUIDANCE'
   | 'REFINANCE_ANALYSIS'
@@ -47,6 +48,7 @@ const outOfScopePattern = /\b(python|javascript|typescript|coding interview|writ
 const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|completed work|pending work|service history)\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage))\b/i;
 const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b/i;
+const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|break down)\b.{0,45}\b(?:home|house|housing|property|ownership)\b.{0,45}\b(?:cost|costs|expense|expenses|outflow)\b|\b(?:how much am i|what am i)\b.{0,45}\b(?:paying|spending)\b.{0,45}\b(?:home|house|housing|property)\b|\b(?:monthly|annual|yearly|total|true|ownership|operating|cash)\s+(?:home |house |housing |property )?(?:cost|costs|expenses?|outflow)\b|\bcost of owning\b|\b(?:largest|biggest|highest|most expensive)\b.{0,35}\b(?:home |ownership )?(?:cost|expense|category)\b|\bwhich (?:cost |expense )?categor(?:y|ies)\b.{0,35}\b(?:most|highest|largest)\b/i;
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
 const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;
 const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
@@ -67,6 +69,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (savingsOpportunitiesPattern.test(message)) {
     return { operationId: 'SAVINGS_OPPORTUNITIES', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.97, requiresProperty: true };
+  }
+  if (ownershipCostsPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return { operationId: 'OWNERSHIP_COSTS', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.97, requiresProperty: true };
   }
   if (maintenancePattern.test(message)) {
     return { operationId: 'MAINTENANCE_STATUS', version: '1.0', family: 'RECORD_QUERY', confidence: 0.94, requiresProperty: true };

@@ -39,6 +39,7 @@ import { HomeSavingsService } from '../homeSavings.service';
 import { HiddenAssetService } from '../hiddenAssets.service';
 import { savingsBenefitsUnifiedService } from '../savingsBenefitsUnified.service';
 import { SellHoldRentService } from '../sellHoldRent.service';
+import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../ownershipCosts/ownershipCostReadModel.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
@@ -648,6 +649,156 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   };
 }
 
+function ownershipCostLens(message: string): OwnershipCostCurrentLens {
+  return /\b(?:cash outflow|out[ -]of[ -]pocket|including (?:the )?mortgage principal|total (?:cash|paid|payment)|monthly payment)\b/i.test(message)
+    ? 'CASH_OUTFLOW'
+    : 'OPERATING_EXPENSE';
+}
+
+async function ownershipCostsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const lens = ownershipCostLens(message);
+  const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/ownership-costs?view=current&lens=${lens}`;
+  const [access, context] = await Promise.all([
+    ensurePropertyAccess(userId, propertyId),
+    evaluateFeatureContext(propertyId, userId, { featureKey: 'OWNERSHIP_COSTS', operationKey: 'VIEW_ANALYSIS' }),
+  ]);
+  const activeRequirement = context.requirements[0];
+  const canImproveContext = access.role !== HouseholdRole.VIEWER;
+  const captureSupported = activeRequirement
+    && canImproveContext
+    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
+    && activeRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
+  const captureRequests: AskCaptureRequest[] = captureSupported ? [{
+    requirementId: activeRequirement.requirementId,
+    captureKey: activeRequirement.capture.captureKey,
+    classification: activeRequirement.classification,
+    state: activeRequirement.state,
+    title: activeRequirement.capture.title,
+    question: activeRequirement.capture.question,
+    helpText: activeRequirement.capture.helpText ?? null,
+    inputSchema: activeRequirement.capture.inputSchema,
+    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
+    allowNotSure: activeRequirement.capture.allowNotSure,
+    sensitivity: activeRequirement.capture.sensitivity,
+    destinationLabel: 'Saved to this home’s Property Context',
+    confirmationText: null,
+    expectedContextVersion: context.contextVersion,
+  }] : [];
+
+  let costs: Awaited<ReturnType<typeof ownershipCostReadModelService.getCurrent>>;
+  try {
+    costs = await ownershipCostReadModelService.getCurrent(propertyId, userId, lens, { refresh: true });
+  } catch {
+    return {
+      status: captureRequests.length ? 'NEEDS_CONTEXT' : 'UNAVAILABLE',
+      reasonCode: captureRequests.length ? 'OWNERSHIP_COST_CONTEXT_REQUIRED' : 'OWNERSHIP_COST_SNAPSHOT_UNAVAILABLE',
+      contextVersion: context.contextVersion,
+      captureRequests,
+      blocks: [{
+        type: 'SUMMARY', id: 'ownership-costs-unavailable', title: 'A current ownership-cost total is not ready yet',
+        body: 'Ask could not load a canonical ownership-cost snapshot. Missing categories are not treated as zero. Improve the home context below or open Ownership Costs to review and refresh its source records.',
+        tone: 'CAUTION',
+        actions: [{ id: 'open-ownership-costs', label: 'Open Ownership Costs', href: workspaceHref, style: 'PRIMARY' }],
+      }],
+      suggestions: captureRequests.length ? ['Add this detail and retry automatically'] : ['Open Ownership Costs'],
+    };
+  }
+
+  const included = costs.categories
+    .filter((category) => category.includedInSelectedLens && category.amountCents != null)
+    .sort((left, right) => (right.amountCents ?? 0) - (left.amountCents ?? 0));
+  const missing = costs.categories.filter((category) =>
+    category.includedInSelectedLens
+    && category.applicability !== 'NOT_APPLICABLE'
+    && category.amountCents == null);
+  const categoryFocus = /\b(?:largest|biggest|highest|most expensive|which (?:cost |expense )?categor(?:y|ies))\b/i.test(message);
+  const largestCategory = included[0];
+  const lensLabel = lens === 'CASH_OUTFLOW' ? 'cash outflow' : 'operating expense';
+  const monthly = money(costs.snapshot.monthlyTotalCents / 100);
+  const annual = money(costs.snapshot.annualTotalCents / 100);
+  const coverageLimited = costs.snapshot.coverageStatus !== 'CREDIBLE'
+    || costs.snapshot.lastKnownGood
+    || costs.stale.isStale
+    || missing.length > 0;
+  const permissionLimited = Boolean(activeRequirement && !canImproveContext);
+
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'ownership-costs-summary',
+    title: categoryFocus && largestCategory?.monthlyAmountCents != null
+      ? `${largestCategory.label} is the largest recorded category at about ${money(largestCategory.monthlyAmountCents / 100)} per month`
+      : `This home’s recorded ${lensLabel} is about ${monthly} per month`,
+    body: `${annual} per year is included in the ${lensLabel} lens.${categoryFocus && largestCategory ? ` ${largestCategory.label} represents ${costs.snapshot.annualTotalCents > 0 ? Math.round(((largestCategory.amountCents ?? 0) / costs.snapshot.annualTotalCents) * 100) : 0}% of that recorded total.` : ''} ${money(costs.evidenceSummary.confirmedAnnualCents / 100)} is supported by confirmed or observed records and ${money(costs.evidenceSummary.estimatedAnnualCents / 100)} is estimated. ${missing.length ? `${missing.length} included categor${missing.length === 1 ? 'y is' : 'ies are'} still missing and not counted as zero.` : 'No included category is currently marked missing.'}`,
+    tone: coverageLimited ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-ownership-costs', label: 'Review Ownership Costs', href: workspaceHref, style: 'PRIMARY' }],
+  }, {
+    type: 'TABLE', id: 'ownership-cost-categories', title: 'Cost by category',
+    description: `Categories included in the ${lensLabel} lens, ordered by annual amount.`,
+    columns: [{ key: 'category', label: 'Category' }, { key: 'monthly', label: 'Monthly' }, { key: 'annual', label: 'Annual' }, { key: 'evidence', label: 'Evidence' }],
+    rows: included.map((category) => ({
+      id: category.category,
+      values: {
+        category: category.label,
+        monthly: category.monthlyAmountCents == null ? 'Unknown' : money(category.monthlyAmountCents / 100),
+        annual: category.amountCents == null ? 'Unknown' : money(category.amountCents / 100),
+        evidence: `${category.amountKind.toLowerCase().replace(/_/g, ' ')}${category.freshnessStatus === 'CURRENT' ? '' : ` · ${category.freshnessStatus.toLowerCase()}`}`,
+      },
+    })),
+    actions: [],
+  }];
+
+  if (missing.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'ownership-cost-missing', title: 'Information that could improve this total',
+      description: 'These categories are applicable or unresolved, but no amount is currently included.',
+      sections: [{
+        id: 'missing', title: 'Missing from the selected lens', count: missing.length,
+        items: missing.map((category) => ({
+          id: category.category,
+          title: category.label,
+          description: category.missingDependencies.length ? category.missingDependencies.join(' · ') : 'No usable current amount is recorded.',
+          meta: [category.correction.label],
+          status: 'MISSING',
+          href: category.correction.href,
+        })),
+      }],
+      actions: [],
+    });
+  }
+
+  const evidence = included.slice(0, 10).map((category) => ({
+    label: category.label,
+    source: category.sourceDomain
+      ? `${category.sourceDomain.toLowerCase().replace(/_/g, ' ')} · ${category.evidenceStatus?.toLowerCase().replace(/_/g, ' ') ?? 'evidence status unknown'}`
+      : 'Ownership Cost Intelligence',
+    observedAt: category.periodEnd ?? costs.snapshot.calculatedAt,
+  }));
+  if (evidence.length) blocks.push({ type: 'EVIDENCE', id: 'ownership-cost-evidence', title: 'Sources and periods', items: evidence });
+  blocks.push({
+    type: 'BOUNDARY', id: 'ownership-cost-lens-boundary', title: `${lens === 'CASH_OUTFLOW' ? 'Cash outflow' : 'Operating expense'} lens`,
+    body: lens === 'CASH_OUTFLOW'
+      ? 'Cash outflow includes recorded mortgage principal, repairs, projects, and reserve contributions when available. Principal builds equity and should not be interpreted as an economic expense.'
+      : 'Operating expense excludes mortgage principal, known repairs, capital projects, and reserve contributions. Switch to cash outflow to see those recorded payments when available.',
+    severity: 'INFO', suggestions: [],
+  });
+
+  return {
+    status: captureRequests.length || coverageLimited || permissionLimited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: captureRequests.length
+      ? 'OWNERSHIP_COST_CONTEXT_OPTIONAL'
+      : permissionLimited
+        ? 'OWNERSHIP_COST_CONTEXT_WRITE_PERMISSION_REQUIRED'
+        : coverageLimited
+          ? 'OWNERSHIP_COST_COVERAGE_LIMITED'
+          : undefined,
+    contextVersion: context.contextVersion,
+    captureRequests,
+    blocks,
+    suggestions: lens === 'CASH_OUTFLOW'
+      ? ['Show operating expenses only', 'Which category costs the most?', 'Where could I save money?']
+      : ['Show cash outflow including mortgage principal', 'Which category costs the most?', 'Where could I save money?'],
+  };
+}
+
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis] = await Promise.all([
@@ -1052,6 +1203,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'MAINTENANCE_STATUS': return maintenanceResult(input.userId, input.propertyId!, input.message);
     case 'COVERAGE_GAPS': return coverageResult(input.propertyId!);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
+    case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
@@ -1169,7 +1321,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -1193,6 +1345,24 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       ...input,
       featureKey: 'HOME_SAVINGS',
       operationKey: 'RUN_ANALYSIS',
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'PropertyContext';
+  } else if (execution.operationId === 'OWNERSHIP_COSTS') {
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: 'OWNERSHIP_COSTS',
+      operationKey: 'VIEW_ANALYSIS',
     });
     if (!capture || typeof capture !== 'object' || Array.isArray(capture)
       || !('captureId' in capture) || typeof capture.captureId !== 'string'
