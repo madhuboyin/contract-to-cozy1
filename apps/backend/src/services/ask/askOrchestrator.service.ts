@@ -223,6 +223,23 @@ function askFailureStatus(error: unknown): Extract<AskExecutionStatus, 'FAILED_R
   return 'FAILED_RETRYABLE';
 }
 
+// A typed ERROR_STATE block for an execution-phase failure, so the caller
+// gets a durably persisted, renderable response instead of a bare thrown
+// error the homeowner-visible conversation has no record of. Without a
+// stored result, mapPersistedExecution falls back to blocks: [] and a
+// later reload (or the failed attempt never being added to the frontend's
+// conversation state at all, since the request itself failed) renders as
+// an empty card with no way to retry.
+function askFailureBlocks(error: unknown, retryable: boolean): AskPresentationBlock[] {
+  const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+  const { title, body } = code === 'AI_TIMEOUT'
+    ? { title: 'Ask timed out', body: 'Ask timed out while contacting its guidance provider. Record-based operations remain available.' }
+    : code === 'AI_CIRCUIT_OPEN' || code === 'AI_UPSTREAM_ERROR' || code === 'AI_EMPTY_RESPONSE'
+      ? { title: 'Guidance temporarily unavailable', body: 'Generated guidance is temporarily unavailable. Record-based Ask operations remain available.' }
+      : { title: 'Ask could not complete this request', body: 'No changes were made. Your question is preserved below — you can try again.' };
+  return [{ type: 'ERROR_STATE', id: 'execution-failed', title, body, retryable, actions: [] }];
+}
+
 function askContextFingerprint(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 24);
 }
@@ -3476,11 +3493,25 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
-    await prisma.askExecution.update({ where: { id: execution.id }, data: { status: failureStatus, errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED', completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null } });
+    const retryable = failureStatus === 'FAILED_RETRYABLE';
+    const saved = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: failureStatus,
+        errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED',
+        completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null,
+        resultJson: asInputJson({
+          schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+          blocks: askFailureBlocks(caught, retryable),
+          captureRequests: [], confirmation: null, clarification: null,
+          suggestions: retryable ? ['Ask this question again'] : [],
+        }),
+      },
+    });
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: failureStatus, metadataJson: asInputJson({ operationId: operation.operationId }) } });
     askExecutionsTotal.inc({ operation: operation.operationId, status: failureStatus, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
-    throw caught;
+    return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   }
 }
 
@@ -3599,9 +3630,23 @@ export async function submitAskClarification(userId: string, executionId: string
     return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
-    await prisma.askExecution.update({ where: { id: execution.id }, data: { status: failureStatus, errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED', completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null } });
+    const retryable = failureStatus === 'FAILED_RETRYABLE';
+    const saved = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: failureStatus,
+        errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED',
+        completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null,
+        resultJson: asInputJson({
+          schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+          blocks: askFailureBlocks(caught, retryable),
+          captureRequests: [], confirmation: null, clarification: null,
+          suggestions: retryable ? ['Ask this question again'] : [],
+        }),
+      },
+    });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: failureStatus, metadataJson: asInputJson({ stage: 'CLARIFICATION_RESUME' }) } });
-    throw caught;
+    return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
   }
 }
 
@@ -3663,9 +3708,23 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
-    await prisma.askExecution.update({ where: { id: execution.id }, data: { status: failureStatus, errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED', completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null } });
+    const retryable = failureStatus === 'FAILED_RETRYABLE';
+    const saved = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: failureStatus,
+        errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED',
+        completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null,
+        resultJson: asInputJson({
+          schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+          blocks: askFailureBlocks(caught, retryable),
+          captureRequests: [], confirmation: null, clarification: null,
+          suggestions: retryable ? ['Ask this question again'] : [],
+        }),
+      },
+    });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: failureStatus, metadataJson: asInputJson({ stage: 'PROPERTY_RESUME' }) } });
-    throw caught;
+    return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   }
 }
 

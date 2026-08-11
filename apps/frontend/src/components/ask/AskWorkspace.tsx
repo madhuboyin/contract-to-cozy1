@@ -448,12 +448,87 @@ function InlineCaptureCard({
     window.localStorage.setItem(captureDraftStorageKey(executionId, request.requirementId), JSON.stringify(values));
   }, [executionId, request.requirementId, values]);
   if (dismissed) return null;
-  if (schema.type === 'RELATIONAL_SELECT_CREATE') return <section className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4">
-    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">More information needed</p>
-    <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
-    <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
-    {request.fallbackHref ? <Link href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Open full form <ExternalLink className="h-4 w-4" /></Link> : null}
-  </section>;
+  if (schema.type === 'RELATIONAL_SELECT_CREATE') {
+    const activeCreateFields = schema.createFields.filter((field) => {
+      if (!field.when) return true;
+      const actual = values[field.when.fieldKey];
+      return field.when.operator === 'EQUALS' ? actual === field.when.value : actual !== field.when.value;
+    });
+    const missingCreateRequired = activeCreateFields.some((field) => {
+      if (!field.required) return false;
+      const value = values[field.key];
+      if (value === undefined || value === '' || (value === null && !request.allowNotSure)) return true;
+      if (field.inputSchema.type !== 'APPROXIMATE_DATE' || value === null) return false;
+      if (typeof value !== 'object' || Array.isArray(value)) return true;
+      const date = value as { precision?: string; value?: string; rangeEnd?: string };
+      if (date.precision === 'UNKNOWN') return !request.allowNotSure;
+      return !date.value || (date.precision === 'RANGE' && !date.rangeEnd);
+    });
+
+    const submitRelational = async (answer: Record<string, unknown>) => {
+      if (saving) return;
+      setSaving(true);
+      setError(null);
+      try {
+        const response = await api.submitAskCapture(executionId, {
+          requirementId: request.requirementId,
+          captureKey: request.captureKey,
+          expectedContextVersion: request.expectedContextVersion,
+          idempotencyKey,
+          answer,
+          sensitiveDataConfirmed: request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY' ? sensitiveDataConfirmed : undefined,
+        });
+        if (!response.success || !response.data) throw new Error(response.message || 'Could not save this home detail.');
+        window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId));
+        onCompleted(response.data);
+        if (!['WORKFLOW_INPUT', 'SCENARIO_INPUT', 'PREFERENCE_INPUT'].includes(request.classification)) {
+          window.dispatchEvent(new CustomEvent('property-context:updated', { detail: { contextVersion: response.data.contextVersion } }));
+        }
+      } catch (caught) {
+        const refreshed = caught && typeof caught === 'object' && 'payload' in caught
+          ? (caught as { payload?: { data?: AskExecutionResponse } }).payload?.data
+          : undefined;
+        if (refreshed?.executionId === executionId) {
+          onCompleted(refreshed);
+          setError('The home record changed while this form was open. Review the refreshed values and continue.');
+        } else {
+          setError(caught instanceof Error ? caught.message : 'Could not save this home detail.');
+        }
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <section className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4" aria-busy={saving}>
+        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">More information needed</p>
+        <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
+        <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
+        {schema.options.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-slate-600">{schema.selectLabel}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {schema.options.map((option) => (
+                <button key={option.id} type="button" disabled={saving} onClick={() => void submitRelational({ mode: 'SELECT', entityId: option.id })} className="min-h-11 rounded-xl border border-sky-300 bg-white px-3 py-2 text-left text-sm font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-50">
+                  {option.label}
+                  {option.description && <span className="block text-xs font-normal text-slate-500">{option.description}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="mt-5 border-t border-sky-100 pt-4">
+          <p className="text-xs font-semibold text-slate-600">{schema.createLabel}</p>
+          <div className="mt-3 space-y-4">
+            {activeCreateFields.map((field) => <CaptureFieldControl key={field.key} field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />)}
+          </div>
+          <button type="button" disabled={saving || missingCreateRequired} onClick={() => void submitRelational({ mode: 'CREATE', values })} className="mt-4 min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : schema.createLabel}</button>
+        </div>
+        {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
+        {request.fallbackHref && <Link href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-teal-800 hover:underline">Open full form instead <ExternalLink className="h-4 w-4" /></Link>}
+      </section>
+    );
+  }
 
   const fields = schema.type === 'RELATIONAL_UPDATE' || schema.type === 'GROUP'
     ? schema.fields
@@ -765,6 +840,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   <div className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</div>
                   {execution.blocks.map((block) => <BlockView key={block.id} block={block} />)}
                   {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} />}
+                  {execution.status === 'FAILED_RETRYABLE' && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again</button></div>}
                   {execution.captureRequests.map((request) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} />)}
                   {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} />}
                   {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} />}
