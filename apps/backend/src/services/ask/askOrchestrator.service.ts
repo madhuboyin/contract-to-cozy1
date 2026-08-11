@@ -1,4 +1,4 @@
-import { AskExecutionStatus, HouseholdRole, MaintenanceTaskStatus, NotificationCadence, Prisma, RefinanceRateMonitorProduct } from '@prisma/client';
+import { AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RecurrenceFrequency, RefinanceRateMonitorProduct } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -66,6 +66,28 @@ const HouseholdInvitationInputSchema = z.object({
   role: z.enum([HouseholdRole.CONTRIBUTOR, HouseholdRole.VIEWER]),
 }).strict();
 type InvitableHouseholdRole = z.infer<typeof HouseholdInvitationInputSchema>['role'];
+
+const MaintenanceTaskWorkflowInputSchema = z.object({
+  title: z.string().trim().min(3).max(160),
+  description: z.string().trim().max(1000).optional(),
+  priority: z.nativeEnum(MaintenanceTaskPriority).default(MaintenanceTaskPriority.MEDIUM),
+  nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  estimatedCostUsd: z.number().min(0).max(10_000_000).optional(),
+  isRecurring: z.boolean().default(false),
+  frequency: z.nativeEnum(RecurrenceFrequency).optional(),
+}).strict().superRefine((value, context) => {
+  if (value.isRecurring && !value.frequency) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['frequency'], message: 'Choose how often this task repeats.' });
+  }
+  if (value.nextDueDate) {
+    const due = new Date(`${value.nextDueDate}T00:00:00.000Z`);
+    if (Number.isNaN(due.getTime()) || due.toISOString().slice(0, 10) !== value.nextDueDate) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['nextDueDate'], message: 'Enter a valid due date.' });
+    }
+  }
+});
+
+type MaintenanceTaskWorkflowInput = z.infer<typeof MaintenanceTaskWorkflowInputSchema>;
 
 function asInputJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -351,6 +373,188 @@ function maintenanceTaskText(task: Awaited<ReturnType<typeof PropertyMaintenance
 function maintenanceMoney(value: { toString(): string } | number | null | undefined): string | null {
   if (value == null) return null;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value));
+}
+
+async function maintenanceWorkflowVersion(propertyId: string): Promise<string> {
+  const tasks = await prisma.propertyMaintenanceTask.findMany({
+    where: { propertyId }, orderBy: { id: 'asc' },
+    select: { id: true, status: true, updatedAt: true },
+  });
+  return createHash('sha256').update(JSON.stringify({ propertyId, tasks })).digest('hex');
+}
+
+function shiftedDateOnly(now: Date, timeZone: string, input: { days?: number; weeks?: number; months?: number }): string {
+  const current = dateParts(now, timeZone);
+  const date = new Date(Date.UTC(current.year, current.month - 1, current.day));
+  if (input.days) date.setUTCDate(date.getUTCDate() + input.days);
+  if (input.weeks) date.setUTCDate(date.getUTCDate() + input.weeks * 7);
+  if (input.months) {
+    const originalDay = date.getUTCDate();
+    date.setUTCDate(1);
+    date.setUTCMonth(date.getUTCMonth() + input.months);
+    const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+    date.setUTCDate(Math.min(originalDay, lastDay));
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function extractMaintenanceDueDate(message: string, now: Date, timeZone: string): string | undefined {
+  const explicit = message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+  if (explicit) return explicit;
+  if (/\btoday\b/i.test(message)) return shiftedDateOnly(now, timeZone, {});
+  if (/\btomorrow\b/i.test(message)) return shiftedDateOnly(now, timeZone, { days: 1 });
+  if (/\bnext week\b/i.test(message)) return shiftedDateOnly(now, timeZone, { weeks: 1 });
+  if (/\bnext month\b/i.test(message)) return shiftedDateOnly(now, timeZone, { months: 1 });
+  const relative = message.match(/\bin\s+(\d{1,3})\s+(days?|weeks?|months?)\b/i);
+  if (!relative) return undefined;
+  const amount = Number(relative[1]);
+  const unit = relative[2].toLowerCase();
+  return shiftedDateOnly(now, timeZone, unit.startsWith('day') ? { days: amount } : unit.startsWith('week') ? { weeks: amount } : { months: amount });
+}
+
+function extractMaintenanceFrequency(message: string): RecurrenceFrequency | undefined {
+  if (/\b(?:every day|daily)\b/i.test(message)) return RecurrenceFrequency.DAILY;
+  if (/\b(?:every week|weekly)\b/i.test(message)) return RecurrenceFrequency.WEEKLY;
+  if (/\b(?:every (?:three|3) months|quarterly)\b/i.test(message)) return RecurrenceFrequency.QUARTERLY;
+  if (/\b(?:twice a year|twice yearly|semi[ -]?annually)\b/i.test(message)) return RecurrenceFrequency.SEMI_ANNUALLY;
+  if (/\b(?:every year|yearly|annually|annual)\b/i.test(message)) return RecurrenceFrequency.ANNUALLY;
+  if (/\b(?:every month|monthly)\b/i.test(message)) return RecurrenceFrequency.MONTHLY;
+  return undefined;
+}
+
+function extractMaintenanceTitle(message: string): string | undefined {
+  let title = message.trim()
+    .replace(/^(?:please\s+)?(?:create|add|schedule|set up)\s+(?:(?:a|the)\s+)?(?:(?:maintenance\s+)?task\s+(?:to|for)\s+|maintenance\s+(?:to\s+)?)/i, '')
+    .replace(/^(?:please\s+)?(?:create|add|schedule|set up)\s+(?:(?:a|the)\s+)?/i, '')
+    .replace(/^(?:please\s+)?(?:remind me to|put on my maintenance list)\s+/i, '')
+    .replace(/\s+(?:to|on)\s+my maintenance list\s*$/i, '');
+  title = title.split(/\b(?:today|tomorrow|next week|next month|in \d{1,3} (?:days?|weeks?|months?)|on \d{4}-\d{2}-\d{2}|by \d{4}-\d{2}-\d{2}|daily|weekly|monthly|quarterly|annually|annual|every (?:day|week|month|year|three months|3 months)|twice a year|semi[ -]?annually|urgent|high priority|low priority|estimated cost|for \$)\b/i)[0]
+    .replace(/[.,;:!?\s]+$/g, '')
+    .trim();
+  if (!title || /^(?:maintenance|task|(?:another )?maintenance task)$/i.test(title)) return undefined;
+  return `${title.charAt(0).toUpperCase()}${title.slice(1)}`.slice(0, 160);
+}
+
+function extractMaintenanceTaskInput(message: string, now: Date, timeZone: string): Partial<MaintenanceTaskWorkflowInput> {
+  const frequency = extractMaintenanceFrequency(message);
+  const cost = message.match(/(?:estimated cost(?:s| is| of)?|budget(?: of)?|for)\s*\$\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1];
+  return {
+    title: extractMaintenanceTitle(message),
+    priority: /\b(?:urgent|critical)\b/i.test(message)
+      ? MaintenanceTaskPriority.URGENT
+      : /\bhigh priority\b/i.test(message) ? MaintenanceTaskPriority.HIGH
+        : /\blow priority\b/i.test(message) ? MaintenanceTaskPriority.LOW : MaintenanceTaskPriority.MEDIUM,
+    nextDueDate: extractMaintenanceDueDate(message, now, timeZone),
+    estimatedCostUsd: cost ? Number(cost.replace(/,/g, '')) : undefined,
+    isRecurring: Boolean(frequency),
+    frequency,
+  };
+}
+
+async function maintenanceTaskCreateResult(
+  userId: string,
+  propertyId: string,
+  message: string,
+  suppliedInput?: MaintenanceTaskWorkflowInput,
+): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{
+        type: 'SUMMARY', id: 'maintenance-create-permission', title: 'A contributor or owner needs to create this task',
+        body: 'Creating a maintenance task changes the shared home record. Viewers can review tasks but cannot add or modify them.',
+        tone: 'CAUTION', actions: [{ id: 'open-maintenance', label: 'Review maintenance', href: maintenanceHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['What maintenance is pending?'],
+    };
+  }
+
+  const [property, workflowVersion] = await Promise.all([
+    prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }),
+    maintenanceWorkflowVersion(propertyId),
+  ]);
+  const candidate = suppliedInput ?? extractMaintenanceTaskInput(message, new Date(), safeTimezone(property?.timezone));
+  const parsed = MaintenanceTaskWorkflowInputSchema.safeParse(candidate);
+  if (!parsed.success) {
+    const currentAnswer = Object.fromEntries(Object.entries(candidate).filter(([, value]) => value !== undefined));
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'MAINTENANCE_TASK_INPUT_REQUIRED', contextVersion: workflowVersion,
+      parameters: { maintenanceWorkflowVersion: workflowVersion },
+      blocks: [{
+        type: 'SUMMARY', id: 'maintenance-create-input', title: 'Add the task details',
+        body: 'Nothing has been created yet. Add the minimum useful details, then review the task before it is saved.',
+        tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open Maintenance instead', href: maintenanceHref, style: 'SECONDARY' }],
+      }],
+      captureRequests: [{
+        requirementId: `maintenance-task-${workflowVersion.slice(0, 20)}`,
+        captureKey: 'MAINTENANCE_TASK_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+        title: 'Maintenance task details', question: 'What task should be added, and when should it be due?',
+        helpText: 'A due date, estimate, and recurrence are optional. You will review everything before the task is created.',
+        inputSchema: { type: 'GROUP', fields: [
+          { key: 'title', label: 'Task', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+          { key: 'description', label: 'Notes', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 1000 } },
+          { key: 'priority', label: 'Priority', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+            { label: 'Low', value: MaintenanceTaskPriority.LOW }, { label: 'Medium', value: MaintenanceTaskPriority.MEDIUM },
+            { label: 'High', value: MaintenanceTaskPriority.HIGH }, { label: 'Urgent', value: MaintenanceTaskPriority.URGENT },
+          ] } },
+          { key: 'nextDueDate', label: 'Due date', helpText: 'Optional', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+          { key: 'estimatedCostUsd', label: 'Estimated cost', helpText: 'Optional', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
+          { key: 'isRecurring', label: 'Does this repeat?', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Recurring', falseLabel: 'One-time' } },
+          { key: 'frequency', label: 'Repeat', required: true, when: { fieldKey: 'isRecurring', operator: 'EQUALS', value: true }, inputSchema: { type: 'SINGLE_SELECT', options: [
+            { label: 'Daily', value: RecurrenceFrequency.DAILY }, { label: 'Weekly', value: RecurrenceFrequency.WEEKLY },
+            { label: 'Monthly', value: RecurrenceFrequency.MONTHLY }, { label: 'Quarterly', value: RecurrenceFrequency.QUARTERLY },
+            { label: 'Twice a year', value: RecurrenceFrequency.SEMI_ANNUALLY }, { label: 'Annually', value: RecurrenceFrequency.ANNUALLY },
+          ] } },
+        ] },
+        currentAnswer, allowNotSure: false, sensitivity: 'STANDARD',
+        destinationLabel: 'Used to prepare this task; nothing is saved until you confirm', confirmationText: null,
+        expectedContextVersion: workflowVersion,
+      }],
+      suggestions: ['Open Maintenance instead'],
+    };
+  }
+
+  const confirmationVersion = 1;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'MAINTENANCE_TASK_CONFIRMATION_REQUIRED', contextVersion: workflowVersion,
+    parameters: {
+      maintenanceTitle: parsed.data.title,
+      maintenanceDescription: parsed.data.description ?? null,
+      maintenancePriority: parsed.data.priority,
+      maintenanceNextDueDate: parsed.data.nextDueDate ?? null,
+      maintenanceEstimatedCostUsd: parsed.data.estimatedCostUsd ?? null,
+      maintenanceIsRecurring: parsed.data.isRecurring,
+      maintenanceFrequency: parsed.data.frequency ?? null,
+      maintenanceWorkflowVersion: workflowVersion,
+      confirmationVersion,
+      confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{
+      type: 'SUMMARY', id: 'maintenance-create-review', title: 'Review this maintenance task',
+      body: 'No task has been created yet. Confirm the shared-home record below or cancel without saving.',
+      tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'SECONDARY' }],
+    }],
+    confirmation: {
+      confirmationId: `maintenance-task-${propertyId}-${confirmationVersion}`,
+      version: confirmationVersion,
+      title: 'Create this maintenance task?',
+      description: 'This adds one pending task to the selected home’s canonical Maintenance record.',
+      fields: [
+        { label: 'Task', value: parsed.data.title },
+        { label: 'Priority', value: parsed.data.priority.toLowerCase().replace(/_/g, ' ') },
+        { label: 'Due', value: parsed.data.nextDueDate ?? 'Not scheduled' },
+        { label: 'Estimated cost', value: parsed.data.estimatedCostUsd == null ? 'Not recorded' : maintenanceMoney(parsed.data.estimatedCostUsd) ?? 'Not recorded' },
+        { label: 'Recurrence', value: parsed.data.isRecurring && parsed.data.frequency ? parsed.data.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
+      ],
+      confirmLabel: 'Create task',
+      consentText: 'I confirm these task details are correct and authorize adding them to this home’s shared Maintenance record.',
+      expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
 }
 
 async function maintenanceResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
@@ -2051,6 +2255,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
   switch (input.operation.operationId) {
     case 'EMERGENCY_BOUNDARY': return emergencyResult();
     case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
+    case 'MAINTENANCE_TASK_CREATE': return maintenanceTaskCreateResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_STATUS': return maintenanceResult(input.userId, input.propertyId!, input.message);
     case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
@@ -2175,7 +2380,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -2343,6 +2548,34 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyContext';
+  } else if (execution.operationId === 'MAINTENANCE_TASK_CREATE') {
+    if (input.captureKey !== 'MAINTENANCE_TASK_INPUTS') {
+      const error = new Error('This maintenance task capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to create maintenance tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const currentVersion = await maintenanceWorkflowVersion(execution.propertyId);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('Maintenance tasks changed while this form was open. Review the refreshed record and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const candidate = MaintenanceTaskWorkflowInputSchema.safeParse(input.answer);
+    if (!candidate.success) {
+      const error = new Error('Enter a task name and valid priority, schedule, recurrence, and estimate.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    result = await maintenanceTaskCreateResult(userId, execution.propertyId, execution.message, candidate.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'PropertyMaintenanceTaskWorkflow';
   } else if (execution.operationId === 'HOUSEHOLD_INVITATION') {
     if (input.captureKey !== 'HOUSEHOLD_INVITATION_INPUTS') {
       const error = new Error('This household invitation capture is no longer active.');
@@ -2496,7 +2729,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
   const access = await ensurePropertyAccess(userId, execution.propertyId);
-  if (!['REFINANCE_RATE_MONITOR', 'HOUSEHOLD_INVITATION'].includes(execution.operationId ?? '') || execution.status !== 'NEEDS_CONFIRMATION') {
+  if (!['REFINANCE_RATE_MONITOR', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE'].includes(execution.operationId ?? '') || execution.status !== 'NEEDS_CONFIRMATION') {
     const error = new Error('This confirmation is no longer active.');
     (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
     throw error;
@@ -2514,7 +2747,77 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   let result: AskOperationResult;
   let artifactType: string;
   let artifactId: string;
-  if (execution.operationId === 'HOUSEHOLD_INVITATION') {
+  if (execution.operationId === 'MAINTENANCE_TASK_CREATE') {
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to create maintenance tasks.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const expectedMaintenanceVersion = parameters.maintenanceWorkflowVersion;
+    const currentMaintenanceVersion = await maintenanceWorkflowVersion(execution.propertyId);
+    const candidate = MaintenanceTaskWorkflowInputSchema.safeParse({
+      title: parameters.maintenanceTitle,
+      description: parameters.maintenanceDescription ?? undefined,
+      priority: parameters.maintenancePriority,
+      nextDueDate: parameters.maintenanceNextDueDate ?? undefined,
+      estimatedCostUsd: parameters.maintenanceEstimatedCostUsd ?? undefined,
+      isRecurring: parameters.maintenanceIsRecurring,
+      frequency: parameters.maintenanceFrequency ?? undefined,
+    });
+    if (!candidate.success || expectedMaintenanceVersion !== currentMaintenanceVersion) {
+      const error = new Error(expectedMaintenanceVersion !== currentMaintenanceVersion
+        ? 'Maintenance tasks changed while this confirmation was open. Review the current record and try again.'
+        : 'The maintenance task details are invalid.');
+      (error as Error & { code?: string }).code = expectedMaintenanceVersion !== currentMaintenanceVersion
+        ? 'ASK_CONTEXT_VERSION_CONFLICT'
+        : 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const actionKey = `ask:${execution.id}:maintenance-task`;
+    let task = await prisma.propertyMaintenanceTask.findUnique({
+      where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
+    });
+    if (!task) {
+      try {
+        task = await PropertyMaintenanceTaskService.createUserTask(userId, execution.propertyId, {
+          title: candidate.data.title,
+          description: candidate.data.description,
+          priority: candidate.data.priority,
+          estimatedCost: candidate.data.estimatedCostUsd,
+          isRecurring: candidate.data.isRecurring,
+          frequency: candidate.data.isRecurring ? candidate.data.frequency : undefined,
+          nextDueDate: candidate.data.nextDueDate,
+          actionKey,
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+        task = await prisma.propertyMaintenanceTask.findUnique({
+          where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
+        });
+        if (!task) throw error;
+      }
+    }
+    const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_CREATED', contextVersion: await maintenanceWorkflowVersion(execution.propertyId),
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `maintenance-task-${task.id}`, title: 'Maintenance task created', status: 'COMPLETED',
+        description: 'The task is now part of this home’s canonical Maintenance record.',
+        details: [
+          { label: 'Task', value: task.title },
+          { label: 'Status', value: 'Pending' },
+          { label: 'Priority', value: task.priority.toLowerCase().replace(/_/g, ' ') },
+          { label: 'Due', value: task.nextDueDate ? humanDate(task.nextDueDate) ?? task.nextDueDate.toISOString() : 'Not scheduled' },
+          { label: 'Recurrence', value: task.isRecurring && task.frequency ? task.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
+        ],
+        actions: [{ id: 'open-task', label: 'Open task', href: maintenanceHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['What maintenance is still pending?', 'Create a maintenance task'],
+    };
+    artifactType = 'PROPERTY_MAINTENANCE_TASK';
+    artifactId = task.id;
+  } else if (execution.operationId === 'HOUSEHOLD_INVITATION') {
     if (access.role !== HouseholdRole.OWNER) {
       const error = new Error('Only a household owner can send this invitation.');
       (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
@@ -2602,7 +2905,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.update({
         where: { id: execution.id },
-        data: { status: result.status, reasonCode: result.reasonCode, resultJson: asInputJson({ blocks: result.blocks, captureRequests: [], confirmation: null, suggestions: result.suggestions }), completedAt: new Date() },
+        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ blocks: result.blocks, captureRequests: [], confirmation: null, suggestions: result.suggestions }), completedAt: new Date() },
       });
       await tx.askConfirmationReceipt.create({
         data: { executionId, idempotencyKey: input.idempotencyKey, confirmationVersion: input.confirmationVersion, artifactType, artifactId, inputHash },
@@ -2632,11 +2935,14 @@ export async function cancelAskExecution(userId: string, executionId: string): P
   }
   if (execution.status !== 'NEEDS_CONFIRMATION') return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   const householdInvitation = execution.operationId === 'HOUSEHOLD_INVITATION';
+  const maintenanceTask = execution.operationId === 'MAINTENANCE_TASK_CREATE';
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'confirmation-cancelled',
-    title: householdInvitation ? 'Invitation not created' : 'Monitor not created',
+    title: householdInvitation ? 'Invitation not created' : maintenanceTask ? 'Maintenance task not created' : 'Monitor not created',
     body: householdInvitation
       ? 'The household invitation was cancelled. No invitation or household access was created.'
+      : maintenanceTask
+        ? 'The pending maintenance task was cancelled. No task or shared home record was changed.'
       : 'The pending mortgage-rate monitor was cancelled. No notification preference or threshold was changed.',
     tone: 'DEFAULT', actions: [],
   }];
@@ -2644,7 +2950,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     where: { id: execution.id },
     data: {
       status: 'CANCELLED', reasonCode: 'USER_CANCELLED',
-      resultJson: asInputJson({ blocks, captureRequests: [], confirmation: null, suggestions: [householdInvitation ? 'Review household access' : 'Set a different rate threshold'] }),
+      resultJson: asInputJson({ blocks, captureRequests: [], confirmation: null, suggestions: [householdInvitation ? 'Review household access' : maintenanceTask ? 'What maintenance is pending?' : 'Set a different rate threshold'] }),
       completedAt: new Date(),
     },
   });

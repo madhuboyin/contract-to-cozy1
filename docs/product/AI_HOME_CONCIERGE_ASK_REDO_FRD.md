@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.2"
+version: "1.3"
 date: "August 11, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.2 |
+| Version | 1.3 |
 | Date | August 11, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -47,7 +47,8 @@ This FRD is the living product and implementation contract for Ask. The reposito
 
 | Operation | Status | Implemented behavior | Current boundary or remaining work |
 | --- | --- | --- | --- |
-| Maintenance status | Implemented | Completed, pending, overdue, due-soon, upcoming, cancelled, priority, seasonal, system/category, room, rolling-window, calendar-window, explicit-date, and since-purchase queries; dates, costs, recurrence, source, evidence, task links, and permission-aware task-creation handoff | Ask does not directly create or mutate a task in this slice; material writes remain in Maintenance until the generic confirmed-command adapter is completed |
+| Maintenance status | Implemented | Completed, pending, overdue, due-soon, upcoming, cancelled, priority, seasonal, system/category, room, rolling-window, calendar-window, explicit-date, and since-purchase queries; dates, costs, recurrence, source, evidence, and task links | Read-only status remains bounded by recorded tasks and is not an inspection or all-clear |
+| Maintenance task creation | Implemented | Resolves explicit create/add/schedule/reminder intent separately from status queries; extracts safe task details when present; collects missing title, priority, schedule, recurrence, notes, and estimate inline; requires contributor/owner role and explicit confirmation; creates through the canonical Maintenance service; returns the task; and uses a stable execution action key plus confirmation receipt for retry safety | Task updates, bulk creation, assignment, completion, archive, and maintenance monitors remain future confirmed-command adapters |
 | Coverage review | Implemented | Separates confirmed no coverage, unclear coverage, expired, expiring within 90 days, and missing evidence; supports exposure/evidence filters, freshness, masked references, viewer safety, and one-at-a-time canonical relational capture/resume | A linked record is not represented as a coverage determination; document upload remains in the canonical coverage/inventory workflow |
 | Home Actions | Implemented | Reads only the final governed Home Actions feed; supports top-focus, urgent, soon, plan, and wait views with ranking explanation, evidence, confidence, canonical CTAs, honest empty states, and optional Property Context capture | Ask does not bypass the confirmation or workflow requirements of the underlying material action |
 | Savings opportunities | Implemented | Aggregates canonical savings, hidden-asset, and benefit sources; separates verified, estimated, and discoverable opportunities; supports deterministic ranking and optional context improvement | Availability and value remain bounded by registered source coverage and confidence |
@@ -71,7 +72,7 @@ This FRD is the living product and implementation contract for Ask. The reposito
 | Phase 1 — Deterministic record queries | All six named launch operations implemented | Full golden accuracy/latency certification, telemetry dashboard completion, restart/scale evidence, and desktop/mobile E2E launch sign-off |
 | Phase 2 — Inline capture | Partially implemented across refrigerator, refinance, savings, ownership costs, sell/hold/rent, inventory, property summary, Home Actions, and coverage | Complete conflict/stale/not-sure E2E matrices, approximate-date UX certification, and repeated-prompt measurement |
 | Phase 3 — Capability discovery | Backend slice implemented | Semantic breadth, top-1 ranking certification, related-capability continuity, and unavailable-tool E2E coverage |
-| Phase 4 — Confirmed actions and monitors | Partially implemented for refinance monitoring and household invitations | Generic command lifecycle, Ask-native maintenance mutations, additional monitors, edit/pause/stop/reverse paths, and complete role matrices |
+| Phase 4 — Confirmed actions and monitors | Partially implemented for maintenance task creation, refinance monitoring, and household invitations | Generic adapter extraction, maintenance update/completion commands, additional monitors, edit/pause/stop/reverse paths, and complete role matrices |
 | Phase 5 — Decision intelligence | Partially implemented for sell/hold/rent, ownership costs, refrigerator replacement, and coverage review | Remaining priority analyses and category expansion |
 | Phase 6 — Model optimization | Not started | Benchmark before adopting a local classifier; deterministic routing remains the production baseline |
 | Phase 7 — Proactive continuity and scale | Not started | Portfolio queries, notification-to-Ask continuity, document-assisted reviewed capture, and scaled personalization |
@@ -533,7 +534,9 @@ Requirements:
 - Offer “Create a task,” “Show overdue only,” and “Open maintenance.”
 - Do not call an LLM to retrieve or format the list.
 
-**Implementation status — August 11, 2026: Implemented.** `MAINTENANCE_STATUS` now queries canonical property maintenance tasks and deterministically supports completed/open combinations; overdue, due-soon, upcoming, cancelled, and priority views; today, week, month, year, last-year, rolling 30/90-day, explicit ISO-date range, and since-purchase filters; and common system/seasonal scopes. Results include recorded completion/due dates, item or room, actual or estimated cost, priority, recurrence, source, evidence freshness, exact counts, task deep links, and the default cancelled-record exclusion. Mixed queries bind a completion timeframe only to completion history, so “completed this year and everything still pending” does not hide older open tasks. Missing purchase date is disclosed with a correction route. Task creation remains a permission-aware handoff to the canonical Maintenance workflow; Ask does not silently create a task.
+**Implementation status — August 11, 2026: Implemented.** `MAINTENANCE_STATUS` now queries canonical property maintenance tasks and deterministically supports completed/open combinations; overdue, due-soon, upcoming, cancelled, and priority views; today, week, month, year, last-year, rolling 30/90-day, explicit ISO-date range, and since-purchase filters; and common system, room, and seasonal scopes. Results include recorded completion/due dates, item or room, actual or estimated cost, priority, recurrence, source, evidence freshness, exact counts, task deep links, and the default cancelled-record exclusion. Mixed queries bind a completion timeframe only to completion history, so “completed this year and everything still pending” does not hide older open tasks. Missing purchase date is disclosed with a correction route.
+
+`MAINTENANCE_TASK_CREATE` now owns explicit create/add/schedule/reminder requests. It can deterministically prefill a task title, due date, priority, recurrence, and estimated cost from supported phrasing, then uses a structured workflow-input card for any missing or editable details. Nothing is written before a time-limited confirmation card is accepted. Confirmation rechecks contributor-or-owner authorization and maintenance-record freshness, then calls `PropertyMaintenanceTaskService.createUserTask`. The task receives a stable Ask-execution action key, preventing duplicate artifacts under retry or concurrent confirmation. Cancellation creates no task. Viewers receive a read-only boundary.
 
 ### 12.2 Missing coverage
 
@@ -825,6 +828,8 @@ A capability card must show:
 ### 16.3 Workflow continuity
 
 Ask may initiate a registered journey and continue to answer questions within it, but the domain workflow remains the source of truth for milestones, dependencies, completion, and outcome recording.
+
+**Implementation status — August 11, 2026:** The shared capture → review → confirm → artifact response lifecycle is implemented for maintenance task creation, household invitations, and refinance-rate monitors. Each operation rechecks authorization and a domain-specific freshness version at confirmation. Maintenance creation additionally uses a stable canonical action key to close the side-effect/receipt retry gap. The next command slice should extract this repeated lifecycle into a generic registered-command adapter without weakening operation-specific validation.
 
 ## 17. Monitoring, notifications, and follow-up
 

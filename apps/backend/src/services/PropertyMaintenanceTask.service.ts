@@ -161,6 +161,8 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         nextDueDate?: string;
         templateId?: string;
         canonicalWorkItemId?: string;
+        /** Stable caller-owned key used to make workflow creation idempotent. */
+        actionKey?: string;
       }
     ): Promise<PropertyMaintenanceTask> {
       // Verify property access (CONTRIBUTOR+ required to create tasks)
@@ -176,7 +178,9 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       }) : null;
       if (data.templateId && !template) throw new Error('Maintenance template not found.');
 
-      const actionKey = template ? maintenanceTemplateActionKey(template.id) : null;
+      const actionKey = template
+        ? maintenanceTemplateActionKey(template.id)
+        : data.actionKey?.trim() || null;
       if (template) {
         const templateEvaluation = await evaluateFeatureContext(propertyId, userId, {
           featureKey: 'MAINTENANCE',
