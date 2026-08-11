@@ -86,7 +86,9 @@ const CapabilityListBlockSchema = z.object({
     description: z.string(),
     expectedOutput: z.string(),
     href: z.string(),
-    readiness: z.enum(['READY', 'NEEDS_PROPERTY', 'AVAILABLE']),
+    readiness: z.enum(['READY', 'NEEDS_PROPERTY', 'NEEDS_CONTEXT', 'UNAVAILABLE', 'AVAILABLE']),
+    readinessLabel: z.string().max(240).nullable().default(null),
+    readinessReasons: z.array(z.string().max(600)).max(5).default([]),
     releaseStage: z.enum(['ACTIVE', 'BETA']),
   })).min(1).max(3),
 });

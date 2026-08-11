@@ -5,6 +5,7 @@ export * from './capabilityCatalog.service';
 export * from './capabilityCopyReview';
 export * from './capabilityGoldenFixtures';
 export * from './capabilityGoldenRanking';
+export * from './capabilityGoalMatcher';
 export * from './capabilityGovernancePolicy';
 export * from './capabilityGovernanceDefinition';
 export * from './capabilitySmokeCheck';

@@ -23,9 +23,11 @@ import { answerGroundedAsk } from '../groundedAsk.service';
 import {
   buildCapabilityCatalog,
   canonicalCapabilityRegistry,
+  matchCapabilityGoal,
   type CapabilityCatalogItem,
 } from '../../productFramework/capabilities';
 import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../toolDiscoveryAvailability.service';
+import { getCapabilityDiscoveryReadiness, getRelatedCapabilities } from '../capabilityRelated.service';
 import {
   getAskOperationDefinition,
   resolveAskOperation,
@@ -2325,65 +2327,151 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
   };
 }
 
-function tokenize(value: string): Set<string> {
-  return new Set(value.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2));
-}
-
-function capabilityScore(message: string, capability: CapabilityCatalogItem): number {
-  const query = tokenize(message);
-  const text = tokenize([capability.label, capability.shortDescription, ...capability.intentAliases].join(' '));
-  let score = 0;
-  for (const token of query) if (text.has(token)) score += token.length > 7 ? 3 : 1;
-  if (/refinanc/i.test(message) && capability.id === 'mortgage-refinance-radar') score += 20;
-  if (/sell.*rent|rent.*sell/i.test(message) && capability.id === 'sell-hold-rent') score += 20;
-  if (/quote/i.test(message) && capability.id === 'quote-comparison') score += 20;
-  if (/saving|rebate|benefit/i.test(message) && capability.id === 'savings-benefits') score += 15;
-  return score;
-}
-
 async function capabilityResult(userId: string, propertyId: string | null | undefined, message: string): Promise<AskOperationResult> {
+  const exploreToolsHref = propertyId
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools`
+    : '/dashboard/home-tools';
+  const availability = createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry);
   const catalog = buildCapabilityCatalog({
     registry: canonicalCapabilityRegistry,
-    availability: createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry),
+    availability,
     userId,
     propertyId: propertyId ?? undefined,
     includeWorkflowContext: false,
   });
-  const ranked = catalog.capabilities
-    .map((capability) => ({ capability, score: capabilityScore(message, capability) }))
-    .filter((candidate) => candidate.score > 0)
-    .sort((left, right) => right.score - left.score || left.capability.label.localeCompare(right.capability.label))
-    .slice(0, 3);
-  if (!ranked.length) {
+  const catalogById = new Map(catalog.capabilities.map((capability) => [capability.id, capability]));
+  const availableDefinitions = availability.listAvailable({ userId, includeWorkflowOnly: false });
+  const allMatches = matchCapabilityGoal({ registry: canonicalCapabilityRegistry, goal: message, limit: 5 });
+  const availableMatches = matchCapabilityGoal({
+    registry: canonicalCapabilityRegistry,
+    goal: message,
+    capabilities: availableDefinitions,
+    limit: 5,
+  });
+  const strongest = allMatches.matches[0];
+  const strongestAvailable = availableMatches.matches[0];
+  const requestedUnavailable = strongest
+    && !catalogById.has(strongest.capabilityId)
+    && (!strongestAvailable || strongest.score - strongestAvailable.score >= 8);
+
+  if (requestedUnavailable) {
+    const capability = canonicalCapabilityRegistry.getById(strongest.capabilityId)!;
+    const decision = availability.resolve(capability.id, userId);
+    const workflowOnly = capability.destination.workflowOnly;
+    return {
+      status: 'UNAVAILABLE',
+      reasonCode: workflowOnly ? 'CAPABILITY_REQUIRES_WORKFLOW_CONTEXT' : decision.reason ?? 'CAPABILITY_UNAVAILABLE',
+      contextVersion: catalog.registryVersion,
+      blocks: [{
+        type: 'SUMMARY',
+        id: 'requested-capability-unavailable',
+        title: `${capability.presentation.label} is not available here`,
+        body: workflowOnly
+          ? 'This capability is offered only from an eligible home workflow where the required source context is present. I will not provide a stale or non-launchable shortcut.'
+          : 'This capability is currently disabled, outside your rollout, or has failed a launch-readiness check. I will not recommend a tool that cannot be opened safely.',
+        tone: 'CAUTION',
+        actions: [{ id: 'explore-available-tools', label: 'Explore available tools', href: exploreToolsHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['Show me another available option', 'What can help with this goal instead?'],
+    };
+  }
+
+  if (!availableMatches.matches.length) {
     return {
       status: 'ANSWERED',
       blocks: [{
         type: 'SUMMARY', id: 'no-capability-match', title: 'Tell me what outcome you want',
         body: 'I could not identify one specific tool yet. Describe the decision, task, risk, savings goal, or major home moment you want help with.',
-        tone: 'DEFAULT', actions: [{ id: 'explore-tools', label: 'Explore home tools', href: '/dashboard/tools', style: 'SECONDARY' }],
+        tone: 'DEFAULT', actions: [{ id: 'explore-tools', label: 'Explore home tools', href: exploreToolsHref, style: 'SECONDARY' }],
       }],
       suggestions: ['Help me compare contractor quotes', 'I want to plan future replacements', 'Can you monitor refinance rates?'],
     };
   }
+
+  const readiness = propertyId
+    ? await getCapabilityDiscoveryReadiness({ propertyId, userId })
+    : null;
+  const ranked = availableMatches.matches
+    .slice(0, availableMatches.ambiguous ? 3 : 2)
+    .flatMap((match) => {
+      const capability = catalogById.get(match.capabilityId);
+      return capability ? [{ capability, match }] : [];
+    });
+  const card = (capability: CapabilityCatalogItem) => {
+    const requiresProperty = capability.readinessRequirements.some((requirement) => requirement.kind === 'PROPERTY');
+    const policyReadiness = readiness?.readinessByCapabilityId[capability.id];
+    const state = !propertyId && requiresProperty
+      ? 'NEEDS_PROPERTY' as const
+      : policyReadiness ?? 'READY' as const;
+    const reasons = state === 'NEEDS_PROPERTY'
+      ? ['Select a home so the capability can use the correct property context.']
+      : readiness?.reasonsByCapabilityId[capability.id] ?? [];
+    const readinessLabel = state === 'READY'
+      ? 'Ready for this home'
+      : state === 'NEEDS_PROPERTY'
+        ? 'Home selection required'
+        : state === 'NEEDS_CONTEXT'
+          ? 'More home details will improve the result'
+          : 'Not ready for the current context';
+    return {
+      id: capability.id,
+      label: capability.label,
+      description: capability.shortDescription,
+      expectedOutput: capability.expectedOutput,
+      href: capability.href,
+      readiness: state,
+      readinessLabel,
+      readinessReasons: reasons.slice(0, 5),
+      releaseStage: capability.releaseStage,
+    };
+  };
+  const blocks: AskPresentationBlock[] = [{
+    type: 'CAPABILITY_LIST',
+    id: 'capability-matches',
+    title: availableMatches.ambiguous ? 'A few tools could fit—choose the closest goal' : 'Best match for your goal',
+    description: availableMatches.ambiguous
+      ? 'These are close matches from the live capability registry. Nothing was chosen on your behalf.'
+      : 'Ranked from reviewed homeowner language, current availability, and canonical readiness policy.',
+    capabilities: ranked.map(({ capability }) => card(capability)),
+  }];
+
+  if (propertyId && ranked[0]) {
+    try {
+      const related = await getRelatedCapabilities({
+        propertyId,
+        userId,
+        currentCapabilityId: ranked[0].capability.id,
+        limit: 3,
+      });
+      const selectedIds = new Set(ranked.map(({ capability }) => capability.id));
+      const relatedCards = related.suggestions
+        .filter((suggestion) => !selectedIds.has(suggestion.capabilityId))
+        .slice(0, 3)
+        .flatMap((suggestion) => {
+          const capability = catalogById.get(suggestion.capabilityId);
+          return capability ? [card(capability)] : [];
+        });
+      if (relatedCards.length) {
+        blocks.push({
+          type: 'CAPABILITY_LIST',
+          id: 'related-capabilities',
+          title: 'Related tools for what comes next',
+          description: 'Related through the canonical capability lifecycle and filtered for this home.',
+          capabilities: relatedCards,
+        });
+      }
+    } catch {
+      // Discovery remains useful if optional continuity context is temporarily unavailable.
+    }
+  }
+
   return {
     status: 'ANSWERED',
-    contextVersion: catalog.registryVersion,
-    blocks: [{
-      type: 'CAPABILITY_LIST',
-      id: 'capability-matches',
-      title: ranked.length === 1 ? 'This tool matches your goal' : 'Tools that match your goal',
-      description: 'Availability comes from the current ContractToCozy capability registry.',
-      capabilities: ranked.map(({ capability }) => ({
-        id: capability.id,
-        label: capability.label,
-        description: capability.shortDescription,
-        expectedOutput: capability.expectedOutput,
-        href: capability.href,
-        readiness: propertyId || !capability.routeTemplate.includes('[id]') ? 'READY' : 'NEEDS_PROPERTY',
-        releaseStage: capability.releaseStage,
-      })),
-    }],
-    suggestions: ['What information does this tool need?', 'What result will I get?', 'Show another option'],
+    contextVersion: readiness?.contextVersion ?? catalog.registryVersion,
+    blocks,
+    suggestions: availableMatches.ambiguous
+      ? ['Help me narrow these options', 'Show only tools ready for this home']
+      : ['What information does this tool need?', 'What result will I get?', 'Show another option'],
   };
 }
 
@@ -2455,7 +2543,7 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   return { status: 'ANSWERED', blocks, suggestions: [answer.nextAction].filter(Boolean) };
 }
 
-async function executeOperation(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
+async function executeOperationCore(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
   if (!controls.askEnabled) return operationalUnavailableResult('ASK_DISABLED');
@@ -2500,6 +2588,83 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
   }
+}
+
+const ASK_OPERATION_CAPABILITY: Partial<Record<AskOperationResolution['operationId'], string>> = {
+  MAINTENANCE_STATUS: 'maintenance',
+  MAINTENANCE_TASK_CREATE: 'maintenance',
+  MAINTENANCE_TASK_COMPLETE: 'maintenance',
+  COVERAGE_GAPS: 'coverage-intelligence',
+  SAVINGS_OPPORTUNITIES: 'savings-benefits',
+  OWNERSHIP_COSTS: 'ownership-costs',
+  INVENTORY_LOOKUP: 'home-records',
+  PROPERTY_SUMMARY: 'property-brief',
+  HOME_ACTIONS: 'home-operations',
+  REPLACEMENT_GUIDANCE: 'replace-repair',
+  REFINANCE_ANALYSIS: 'mortgage-refinance-radar',
+  REFINANCE_RATE_MONITOR: 'mortgage-refinance-radar',
+  SELL_HOLD_RENT_ANALYSIS: 'sell-hold-rent',
+};
+
+async function executeOperation(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
+  const result = await executeOperationCore(input);
+  const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operation.operationId];
+  if (
+    !input.propertyId
+    || !currentCapabilityId
+    || !['ANSWERED', 'COMPLETED'].includes(result.status)
+    || (result.captureRequests?.length ?? 0) > 0
+    || result.confirmation
+    || result.blocks.some((block) => block.type === 'CAPABILITY_LIST')
+  ) return result;
+
+  try {
+    const [related, catalog] = await Promise.all([
+      getRelatedCapabilities({
+        propertyId: input.propertyId,
+        userId: input.userId,
+        currentCapabilityId,
+        limit: 3,
+      }),
+      Promise.resolve(buildCapabilityCatalog({
+        registry: canonicalCapabilityRegistry,
+        availability: createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry),
+        userId: input.userId,
+        propertyId: input.propertyId,
+        includeWorkflowContext: false,
+      })),
+    ]);
+    const catalogById = new Map(catalog.capabilities.map((capability) => [capability.id, capability]));
+    const capabilities = related.suggestions.slice(0, 3).flatMap((suggestion) => {
+      const capability = catalogById.get(suggestion.capabilityId);
+      if (!capability) return [];
+      return [{
+        id: capability.id,
+        label: capability.label,
+        description: capability.shortDescription,
+        expectedOutput: capability.expectedOutput,
+        href: capability.href,
+        readiness: suggestion.readiness,
+        readinessLabel: suggestion.readiness === 'READY'
+          ? 'Ready for this home'
+          : 'More home details will improve the result',
+        readinessReasons: [],
+        releaseStage: capability.releaseStage,
+      }];
+    });
+    if (capabilities.length) {
+      result.blocks.push({
+        type: 'CAPABILITY_LIST',
+        id: 'related-capabilities',
+        title: 'Related tools for what comes next',
+        description: 'Suggested from the completed answer and filtered through the live capability registry.',
+        capabilities,
+      });
+    }
+  } catch {
+    // Optional continuity must never turn a successful primary answer into a failure.
+  }
+  return result;
 }
 
 function captureFallbackHref(operationId: string | null, propertyId: string | null): string | null {

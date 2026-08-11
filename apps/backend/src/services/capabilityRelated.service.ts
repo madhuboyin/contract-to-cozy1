@@ -53,7 +53,7 @@ export const RelatedCapabilitiesResponseSchema = z.object({
 export type RelatedCapabilitiesResponse =
   z.infer<typeof RelatedCapabilitiesResponseSchema>;
 
-type ReadinessMetrics = {
+export type CapabilityReadinessMetrics = {
   trackedSystemCount: number | null;
   coverageGapCount: number | null;
   jurisdictionStatus: 'KNOWN' | 'UNKNOWN' | 'UNSUPPORTED';
@@ -68,7 +68,7 @@ export interface CapabilityRelatedDependencies {
   loadReadinessMetrics: (
     propertyId: string,
     snapshot: PropertyContextSnapshot,
-  ) => Promise<ReadinessMetrics>;
+  ) => Promise<CapabilityReadinessMetrics>;
   availableCapabilityIds: (userId: string) => string[];
   loadRecentlyCompletedCapabilityIds: (
     propertyId: string,
@@ -85,7 +85,7 @@ function knownFactCount(snapshot: PropertyContextSnapshot): number {
 function readinessFor(
   capability: ToolCapabilityDefinition,
   snapshot: PropertyContextSnapshot,
-  metrics: ReadinessMetrics,
+  metrics: CapabilityReadinessMetrics,
   contextTypes: ReadonlySet<string>,
 ): CapabilityReadinessState {
   let unavailable = !capability.destination.acceptedContext
@@ -203,6 +203,56 @@ function defaultDependencies(): CapabilityRelatedDependencies {
       });
       return events.flatMap((event) => event.featureKey ? [event.featureKey] : []);
     },
+  };
+}
+
+/**
+ * Produces the same availability/readiness decision used by related capability
+ * recommendations for an explicit Ask discovery request.
+ */
+export async function getCapabilityDiscoveryReadiness(
+  input: {
+    propertyId: string;
+    userId: string;
+    contextTypes?: readonly typeof CAPABILITY_CONTEXT_TYPES[number][];
+  },
+  dependencies: CapabilityRelatedDependencies = defaultDependencies(),
+): Promise<{
+  contextVersion: string;
+  availableCapabilityIds: string[];
+  readinessByCapabilityId: Record<string, CapabilityReadinessState>;
+  reasonsByCapabilityId: Record<string, string[]>;
+}> {
+  const snapshot = await dependencies.loadPropertyContext(input.propertyId, input.userId);
+  const metrics = await dependencies.loadReadinessMetrics(input.propertyId, snapshot);
+  const contextTypes = new Set<string>(['PROPERTY', ...(input.contextTypes ?? [])]);
+  const availableCapabilityIds = dependencies.availableCapabilityIds(input.userId);
+  const available = new Set(availableCapabilityIds);
+  const readinessByCapabilityId: Record<string, CapabilityReadinessState> = {};
+  const reasonsByCapabilityId: Record<string, string[]> = {};
+
+  for (const capability of dependencies.registry.capabilities) {
+    readinessByCapabilityId[capability.id] = available.has(capability.id)
+      ? readinessFor(capability, snapshot, metrics, contextTypes)
+      : 'UNAVAILABLE';
+    reasonsByCapabilityId[capability.id] = capability.recommendation.readinessRequirements
+      .filter((requirement) => {
+        if (requirement.kind === 'PROPERTY') return false;
+        if (requirement.kind === 'KNOWN_FACTS') return knownFactCount(snapshot) < (requirement.minimum ?? 0);
+        if (requirement.kind === 'TRACKED_SYSTEMS') return metrics.trackedSystemCount == null || metrics.trackedSystemCount < (requirement.minimum ?? 0);
+        if (requirement.kind === 'COVERAGE_GAPS') return metrics.coverageGapCount == null || metrics.coverageGapCount < (requirement.minimum ?? 0);
+        if (requirement.kind === 'SOURCE_CONTEXT') return !contextTypes.has(requirement.contextType ?? '');
+        if (requirement.kind === 'JURISDICTION') return metrics.jurisdictionStatus !== 'KNOWN';
+        return false;
+      })
+      .map((requirement) => requirement.reason);
+  }
+
+  return {
+    contextVersion: snapshot.contextVersion,
+    availableCapabilityIds,
+    readinessByCapabilityId,
+    reasonsByCapabilityId,
   };
 }
 

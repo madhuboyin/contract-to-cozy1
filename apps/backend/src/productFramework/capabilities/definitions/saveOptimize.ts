@@ -97,6 +97,17 @@ export const SAVE_OPTIMIZE_CAPABILITIES = buildCapabilityDefinitions(([
     completionSignal: 'refinance_decision_recorded',
     outputEntityTypes: ['REFINANCE_DECISION'] as const,
   } : {}),
+  ...(id === 'sell-hold-rent' ? {
+    intentAliases: [
+      'should I sell hold or rent my home',
+      'keep this property as a rental',
+      'become a landlord or sell',
+      'compare selling with renting out my house',
+      'is now a good time to sell my house',
+      'sell my property and rent instead',
+      'move out and keep the property',
+    ],
+  } : {}),
   ...(id === 'ownership-costs' ? {
     version: 2,
     iconName: 'receipt' as const,

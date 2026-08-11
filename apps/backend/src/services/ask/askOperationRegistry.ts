@@ -61,6 +61,13 @@ export interface AskOperationResult {
   parameters?: Record<string, unknown>;
 }
 
+const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
+  'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
+  'COVERAGE_GAPS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP',
+  'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
+  'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
+]);
+
 const definition = (
   operationId: AskOperationId,
   family: AskIntentFamily,
@@ -80,7 +87,9 @@ const definition = (
   safetyClass,
   propertyRoleFloor,
   adapterKey,
-  allowedBlockTypes,
+  allowedBlockTypes: CAPABILITY_CONTINUITY_OPERATIONS.has(operationId)
+    ? [...new Set([...allowedBlockTypes, 'CAPABILITY_LIST' as const])]
+    : allowedBlockTypes,
   evalSuite: `ask-${operationId.toLowerCase().replace(/_/g, '-')}-golden`,
 });
 
@@ -141,7 +150,7 @@ const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).
 const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b/i;
 const householdInvitationPattern = /\b(?:invite|add|share (?:my|the) home with)\b.{0,50}\b(?:wife|husband|spouse|partner|family member|household member|someone|person)\b|\bhousehold\b.{0,40}\b(?:invite|invitation|add (?:a )?member)\b/i;
 const explicitCapabilityPattern = /\b(?:tool|something (?:available|to help)|anything (?:available|to help)|what can help|do you have|feature available)\b/i;
-const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.*quote|savings?|rebates?|monitor)\b/i;
+const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.{0,40}(?:quotes?|bids?|proposals?|estimates?)|organize.{0,40}(?:records?|documents?|paperwork)|track.{0,40}(?:permits?|projects?)|plan.{0,40}(?:renovation|remodel|replacement)|savings?|rebates?|monitor)\b/i;
 
 export function resolveAskOperation(message: string): AskOperationResolution {
   const resolved = (operationId: AskOperationId, confidence: number): AskOperationResolution => ({

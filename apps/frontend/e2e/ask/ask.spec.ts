@@ -58,3 +58,25 @@ test('permission denial keeps a safe full-form recovery path', async ({ page }) 
   await expect(page.getByText(/contributor or owner/)).toBeVisible();
   await expect(page.getByRole('link', { name: /Open full form/ })).toBeVisible();
 });
+
+test('capability discovery shows readiness and related-tool continuity', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Is there a tool to help with refinancing?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.getByRole('heading', { name: 'Best match for your goal' })).toBeVisible();
+  await expect(page.getByText('More home details will improve the result')).toBeVisible();
+  await expect(page.getByText('Add current mortgage facts before running a comparison.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Related tools for what comes next' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Break-Even/ })).toHaveAttribute('href', new RegExp(`/properties/${propertyId}/tools/break-even$`));
+});
+
+test('unavailable capability fails honestly without a launch link', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show the disabled refinance tool');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.getByLabel('Mortgage Refinance Radar unavailable')).toBeVisible();
+  await expect(page.getByText('This tool is disabled by the current rollout policy.')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Mortgage Refinance Radar/ })).toHaveCount(0);
+});
