@@ -90,7 +90,7 @@ This FRD is the living product and implementation contract for Ask. The reposito
 | Phase 4 — Confirmed actions and monitors | Repository closure implemented | Apply the user-managed `GuidanceJourney.sourceAskExecutionId` schema change, retain database-backed retry/concurrency and desktop/mobile acceptance evidence, and complete domain-owner/notification-policy launch sign-off |
 | Phase 5 — Decision intelligence | Repository closure implemented across all nine priority operation families | Retain database-backed golden decision evidence, desktop/mobile E2E, latency/accuracy measurements, and domain-owner/professional-boundary launch approval on production-like property records |
 | Phase 6 — Model optimization | Requested repository slice implemented | Confidence-gated local lexical routing, prompt minimization, and optional result-only synthesis are implemented; the offline benchmark, model-serving proof of concept, shadow evaluation, TCO comparison, and production threshold approval remain open |
-| Phase 7 — Proactive continuity and scale | Not started | Portfolio queries, notification-to-Ask continuity, document-assisted reviewed capture, and scaled personalization |
+| Phase 7 — Proactive continuity and scale | First repository slice implemented | Server-owned, single-property pending-work discovery and cross-device continuation are implemented. Notification-to-Ask continuity, document-assisted reviewed capture, consented preference reuse, broader grounding, and outcome-calibrated suggestions remain. Multi-property portfolio scope is deliberately deferred; Ask must target exactly one selected property for now. |
 
 ### Documentation maintenance rule
 
@@ -1850,6 +1850,8 @@ Deliverables:
 - document-assisted reviewed capture;
 - broader knowledge grounding; and
 - calibrated follow-up suggestions based on verified outcomes.
+
+**Implementation status — August 11, 2026:** Phase 7 is partially implemented. The first ordered slice adds an authenticated, server-owned pending-work inbox for one selected property at a time. It discovers durable executions awaiting entity selection, clarification, Property Context capture, or confirmation across prior browser sessions and devices; excludes expired retention records; transitions expired interactive prompts to `EXPIRED`; rechecks current property access; resumes the original session and execution rather than creating a duplicate request; records `CONTINUATION_OPENED`; refreshes session activity; and renders an accessible continuation card in both the panel and full workspace. Question and inline-capture drafts remain device-local convenience state, while actionable execution state is server-owned. Multi-property portfolio resolution and aggregation are explicitly deferred by product decision: Ask must continue to target exactly one selected property, or general guidance with no property, until a later approved phase. The remaining Phase 7 deliverables are notification-to-Ask continuation, document-assisted reviewed capture, generalized consented preference reuse, broader governed knowledge grounding, and verified-outcome-calibrated follow-up suggestions.
 
 ### 32.2 Workstreams
 

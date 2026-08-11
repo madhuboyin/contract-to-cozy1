@@ -1,4 +1,4 @@
-import { AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory } from '@prisma/client';
+import { AskExecution, AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -7,8 +7,10 @@ import {
   AskExecutionResponseSchema,
   type AskCaptureRequest,
   type AskExecutionResponse,
+  type AskPendingWorkItem,
   type AskPresentationBlock,
   type CreateAskExecutionRequest,
+  type ContinueAskExecution,
   type RecordAskCaptureEvent,
   type RequestAskCorrection,
   type SubmitAskCaptureRequest,
@@ -4594,6 +4596,100 @@ export async function getAskExecution(userId: string, executionId: string): Prom
     throw error;
   }
   return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+}
+
+const CONTINUABLE_ASK_STATUSES: AskExecutionStatus[] = ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'];
+
+function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKind'] {
+  if (status === 'NEEDS_ENTITY') return 'ENTITY_SELECTION';
+  if (status === 'NEEDS_CONTEXT') return 'CONTEXT_CAPTURE';
+  if (status === 'NEEDS_CONFIRMATION') return 'CONFIRMATION';
+  return 'CLARIFICATION';
+}
+
+function pendingActionLabel(status: AskExecutionStatus): string {
+  if (status === 'NEEDS_ENTITY') return 'Choose a record';
+  if (status === 'NEEDS_CONTEXT') return 'Add the missing detail';
+  if (status === 'NEEDS_CONFIRMATION') return 'Review and confirm';
+  return 'Answer one question';
+}
+
+function pendingInteractionExpiresAt(execution: { resultJson: Prisma.JsonValue | null }): Date | null {
+  if (!execution.resultJson || typeof execution.resultJson !== 'object' || Array.isArray(execution.resultJson)) return null;
+  const result = execution.resultJson as { clarification?: unknown; confirmation?: unknown };
+  const interaction = result.clarification && typeof result.clarification === 'object' && !Array.isArray(result.clarification)
+    ? result.clarification as Record<string, unknown>
+    : result.confirmation && typeof result.confirmation === 'object' && !Array.isArray(result.confirmation)
+      ? result.confirmation as Record<string, unknown>
+      : null;
+  const value = interaction?.expiresAt;
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+async function expirePendingInteraction(execution: AskExecution): Promise<AskExecution> {
+  const interactionExpiresAt = pendingInteractionExpiresAt(execution);
+  if (!interactionExpiresAt || interactionExpiresAt > new Date()) return execution;
+  const updated = await prisma.askExecution.updateMany({
+    where: { id: execution.id, userId: execution.userId, status: execution.status },
+    data: {
+      status: 'EXPIRED', reasonCode: 'ASK_EXECUTION_EXPIRED', completedAt: new Date(),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+        blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'pending-work-expired', title: 'This pending request expired', status: 'EXPIRED', description: 'No action was performed. Ask the question again to use current home records and settings.', details: [], actions: [] }],
+        captureRequests: [], clarification: null, confirmation: null, suggestions: ['Ask this question again'],
+      }),
+    },
+  });
+  if (updated.count === 1) {
+    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'EXPIRED', metadataJson: asInputJson({ reason: 'PENDING_INTERACTION_EXPIRED' }) } });
+  }
+  return prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+}
+
+export async function getAskPendingWork(userId: string, propertyId: string | null): Promise<AskPendingWorkItem[]> {
+  if (propertyId) await ensurePropertyAccess(userId, propertyId);
+  const rows = await prisma.askExecution.findMany({
+    where: {
+      userId,
+      propertyId,
+      status: { in: CONTINUABLE_ASK_STATUSES },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 20,
+  });
+  const property = await propertySummary(propertyId);
+  const items: AskPendingWorkItem[] = [];
+  for (const row of rows) {
+    const current = await expirePendingInteraction(row);
+    if (!CONTINUABLE_ASK_STATUSES.includes(current.status)) continue;
+    items.push({
+      pendingKind: pendingKind(current.status),
+      actionLabel: pendingActionLabel(current.status),
+      execution: mapPersistedExecution(current, property),
+    });
+  }
+  return items;
+}
+
+export async function continueAskExecution(userId: string, executionId: string, input: ContinueAskExecution): Promise<AskExecutionResponse> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
+  const current = CONTINUABLE_ASK_STATUSES.includes(execution.status) ? await expirePendingInteraction(execution) : execution;
+  if (CONTINUABLE_ASK_STATUSES.includes(current.status)) {
+    await prisma.askExecutionEvent.create({
+      data: { executionId, eventType: 'CONTINUATION_OPENED', metadataJson: asInputJson({ surface: input.surface, status: current.status }) },
+    });
+    await prisma.askSession.update({ where: { id: current.sessionId }, data: { lastActiveAt: new Date() } });
+  }
+  return mapPersistedExecution(current, await propertySummary(current.propertyId));
 }
 
 export async function requestAskCorrection(userId: string, executionId: string, input: RequestAskCorrection): Promise<{ executionId: string; href: string }> {

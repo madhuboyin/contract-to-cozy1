@@ -209,6 +209,10 @@ export const RequestAskCorrectionSchema = z.object({
   kind: z.enum(['HOME_RECORD', 'RETRY_RESPONSE']),
 }).strict();
 
+export const ContinueAskExecutionSchema = z.object({
+  surface: z.enum(['ASK_PAGE', 'GLOBAL_LAUNCHER']),
+}).strict();
+
 export const AskClarificationSchema = z.object({
   version: z.number().int().positive(),
   question: z.string().trim().min(1).max(500),
@@ -304,6 +308,12 @@ export const AskExecutionResponseSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+export const AskPendingWorkItemSchema = z.object({
+  pendingKind: z.enum(['CLARIFICATION', 'ENTITY_SELECTION', 'CONTEXT_CAPTURE', 'CONFIRMATION']),
+  actionLabel: z.string().trim().min(1).max(120),
+  execution: AskExecutionResponseSchema,
+});
+
 export type AskExecutionStatus = z.infer<typeof AskExecutionStatusSchema>;
 export type AskPresentationBlock = z.infer<typeof AskPresentationBlockSchema>;
 export type AskCaptureRequest = z.infer<typeof AskCaptureRequestSchema>;
@@ -315,5 +325,7 @@ export type RecordAskCaptureEvent = z.infer<typeof RecordAskCaptureEventSchema>;
 export type SubmitAskConfirmation = z.infer<typeof SubmitAskConfirmationSchema>;
 export type SubmitAskFeedback = z.infer<typeof SubmitAskFeedbackSchema>;
 export type RequestAskCorrection = z.infer<typeof RequestAskCorrectionSchema>;
+export type ContinueAskExecution = z.infer<typeof ContinueAskExecutionSchema>;
+export type AskPendingWorkItem = z.infer<typeof AskPendingWorkItemSchema>;
 export type SubmitAskClarification = z.infer<typeof SubmitAskClarificationSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;

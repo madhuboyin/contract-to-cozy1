@@ -48,6 +48,12 @@ export interface AskExecutionResponse {
   updatedAt: string;
 }
 
+export interface AskPendingWorkItem {
+  pendingKind: 'CLARIFICATION' | 'ENTITY_SELECTION' | 'CONTEXT_CAPTURE' | 'CONFIRMATION';
+  actionLabel: string;
+  execution: AskExecutionResponse;
+}
+
 export interface AskClarification {
   version: number;
   question: string;

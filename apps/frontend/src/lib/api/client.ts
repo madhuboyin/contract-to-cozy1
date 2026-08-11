@@ -1006,6 +1006,13 @@ class APIClient {
   async getAskExecution(executionId: string): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}`);
   }
+  async getAskPendingWork(propertyId?: string): Promise<APIResponse<{ items: import('@/features/ask/types').AskPendingWorkItem[] }>> {
+    const query = propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : '';
+    return this.request(`/api/ask/pending${query}`);
+  }
+  async continueAskExecution(executionId: string, surface: 'ASK_PAGE' | 'GLOBAL_LAUNCHER'): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/continue`, { method: 'POST', body: { surface } });
+  }
   async requestAskCorrection(executionId: string, kind: 'HOME_RECORD' | 'RETRY_RESPONSE'): Promise<APIResponse<{ executionId: string; href: string }>> {
     return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/corrections`, { method: 'POST', body: { kind } });
   }

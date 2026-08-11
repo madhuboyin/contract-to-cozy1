@@ -17,6 +17,7 @@ const { readAskOperationalControls } = require('../../src/config/askOperationalC
 const {
   ASK_RESPONSE_SCHEMA_VERSION,
   AskExecutionResponseSchema,
+  AskPendingWorkItemSchema,
 } = require('../../src/productFramework/ask/ask.contract.ts');
 
 test('every Ask operation has a complete governed definition', () => {
@@ -143,4 +144,6 @@ test('Ask durable response contract accepts clarification and every planned pres
     { type: 'ERROR_STATE', id: 'x', title: 'Unavailable', body: 'Try again', retryable: true, actions: [] },
   ];
   assert.equal(AskExecutionResponseSchema.safeParse({ ...base, blocks }).success, true);
+  const execution = AskExecutionResponseSchema.parse({ ...base, blocks: [], status: 'NEEDS_CLARIFICATION' });
+  assert.equal(AskPendingWorkItemSchema.safeParse({ pendingKind: 'CLARIFICATION', actionLabel: 'Answer one question', execution }).success, true);
 });
