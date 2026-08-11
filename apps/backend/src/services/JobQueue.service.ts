@@ -68,6 +68,9 @@ export interface EmailNotificationJobPayload {
   shareUrl?: string;
   expiresAt?: string;
   changedSections?: string[];
+  householdInviteUrl?: string;
+  inviterName?: string;
+  householdRole?: 'CONTRIBUTOR' | 'VIEWER';
 }
 
 export const getEmailNotificationQueue = createLazyQueue<EmailNotificationJobPayload>(

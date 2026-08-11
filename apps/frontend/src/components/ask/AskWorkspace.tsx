@@ -171,6 +171,19 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
     return <MonitorView block={block} />;
   }
 
+  if (block.type === 'WORKFLOW_PROGRESS') {
+    return (
+      <section className="rounded-2xl border border-teal-200 bg-teal-50/70 p-4">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-700 text-white"><CheckCircle2 className="h-5 w-5" /></span>
+          <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{block.title}</h3><span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-800">{block.status}</span></div><p className="mt-1 text-sm leading-5 text-slate-700">{block.description}</p></div>
+        </div>
+        <dl className="mt-4 divide-y divide-teal-100 rounded-xl border border-teal-100 bg-white px-3">{block.details.map((detail) => <div key={detail.label} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{detail.label}</dt><dd className="font-medium text-slate-800">{detail.value}</dd></div>)}</dl>
+        {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+      </section>
+    );
+  }
+
   return (
     <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
@@ -191,9 +204,9 @@ function ConfirmationCard({ executionId, confirmation, onCompleted }: { executio
     setSaving(true); setError(null);
     try {
       const response = await api.confirmAskExecution(executionId, { confirmationVersion: confirmation.version, idempotencyKey, consentConfirmed: true });
-      if (!response.success || !response.data) throw new Error(response.message || 'Could not start this monitor.');
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not complete this action.');
       onCompleted(response.data);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not start this monitor.'); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not complete this action.'); }
     finally { setSaving(false); }
   };
   const cancel = async () => {
@@ -272,9 +285,11 @@ function InlineCaptureCard({
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not save this home detail.');
       onCompleted(response.data);
-      window.dispatchEvent(new CustomEvent('property-context:updated', {
-        detail: { contextVersion: response.data.contextVersion },
-      }));
+      if (!['WORKFLOW_INPUT', 'SCENARIO_INPUT', 'PREFERENCE_INPUT'].includes(request.classification)) {
+        window.dispatchEvent(new CustomEvent('property-context:updated', {
+          detail: { contextVersion: response.data.contextVersion },
+        }));
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not save this home detail.');
     } finally {
@@ -284,11 +299,11 @@ function InlineCaptureCard({
 
   return (
     <form onSubmit={save} className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4" aria-busy={saving}>
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">Improve this answer</p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">{request.classification === 'WORKFLOW_INPUT' ? 'Complete this workflow' : 'Improve this answer'}</p>
       <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
       <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
       {request.helpText && <p className="mt-1 text-xs leading-5 text-slate-500">{request.helpText}</p>}
-      <p className="mt-2 text-xs font-medium text-sky-900">{request.sensitivity === 'FINANCIAL' ? 'Saved to this home’s Financing Profile' : 'Saved to this item’s Home Record'} after you select “Save and update answer.”</p>
+      {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel} after you continue.</p>}
       <div className="mt-4 space-y-4">
         {activeFields.map((field) => (
           <fieldset key={field.key}>
@@ -302,7 +317,8 @@ function InlineCaptureCard({
               ))}
               {field.inputSchema.type === 'SHORT_TEXT' && (
                 <input
-                  type={/date|installedOn|purchasedOn/i.test(field.key) ? 'date' : 'text'}
+                  type={/date|installedOn|purchasedOn/i.test(field.key) ? 'date' : /email/i.test(field.key) ? 'email' : 'text'}
+                  autoComplete={/email/i.test(field.key) ? 'email' : undefined}
                   maxLength={field.inputSchema.maxLength}
                   value={typeof values[field.key] === 'string' ? values[field.key] as string : ''}
                   onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value || undefined }))}
@@ -327,7 +343,7 @@ function InlineCaptureCard({
         </label>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving and updating…' : 'Save and update answer'}</button>
+        <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => setDismissed(true)} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
       </div>
     </form>

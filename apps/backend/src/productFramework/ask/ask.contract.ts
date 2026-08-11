@@ -124,6 +124,16 @@ const MonitorBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3),
 });
 
+const WorkflowProgressBlockSchema = z.object({
+  type: z.literal('WORKFLOW_PROGRESS'),
+  id: z.string(),
+  title: z.string(),
+  status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED', 'EXPIRED']),
+  description: z.string(),
+  details: z.array(z.object({ label: z.string(), value: z.string() })).max(12),
+  actions: z.array(AskActionSchema).max(3),
+});
+
 export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   SummaryBlockSchema,
   GroupedListBlockSchema,
@@ -132,6 +142,7 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   EvidenceBlockSchema,
   BoundaryBlockSchema,
   MonitorBlockSchema,
+  WorkflowProgressBlockSchema,
 ]);
 
 export const AskConfirmationSchema = z.object({
@@ -154,7 +165,15 @@ export const SubmitAskConfirmationSchema = z.object({
 export const AskCaptureRequestSchema = z.object({
   requirementId: z.string(),
   captureKey: z.string(),
-  classification: z.enum(['REQUIRED_APPLICABILITY', 'REQUIRED_SAFETY', 'REQUIRED_CALCULATION', 'ENHANCEMENT_ACCURACY']),
+  classification: z.enum([
+    'REQUIRED_APPLICABILITY',
+    'REQUIRED_SAFETY',
+    'REQUIRED_CALCULATION',
+    'ENHANCEMENT_ACCURACY',
+    'SCENARIO_INPUT',
+    'PREFERENCE_INPUT',
+    'WORKFLOW_INPUT',
+  ]),
   state: z.enum(['KNOWN', 'UNKNOWN', 'CONFLICTED', 'STALE']),
   title: z.string(),
   question: z.string(),
@@ -163,6 +182,7 @@ export const AskCaptureRequestSchema = z.object({
   currentAnswer: z.unknown().optional(),
   allowNotSure: z.boolean(),
   sensitivity: z.enum(['STANDARD', 'FINANCIAL', 'SECURITY']),
+  destinationLabel: z.string().nullable().default(null),
   confirmationText: z.string().nullable().default(null),
   expectedContextVersion: z.string(),
 });

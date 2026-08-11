@@ -19,7 +19,8 @@ export type AskPresentationBlock =
   | { type: 'CAPABILITY_LIST'; id: string; title: string; description?: string | null; capabilities: Array<{ id: string; label: string; description: string; expectedOutput: string; href: string; readiness: 'READY' | 'NEEDS_PROPERTY' | 'AVAILABLE'; releaseStage: 'ACTIVE' | 'BETA' }> }
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null }> }
   | { type: 'BOUNDARY'; id: string; title: string; body: string; severity: 'INFO' | 'CAUTION' | 'EMERGENCY'; suggestions: string[] }
-  | { type: 'MONITOR'; id: string; monitorId: string; title: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED'; threshold: string; product: string; channel: string; cadence: string; quietHours: string | null; sourceBoundary: string; actions: AskAction[] };
+  | { type: 'MONITOR'; id: string; monitorId: string; title: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED'; threshold: string; product: string; channel: string; cadence: string; quietHours: string | null; sourceBoundary: string; actions: AskAction[] }
+  | { type: 'WORKFLOW_PROGRESS'; id: string; title: string; status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED'; description: string; details: Array<{ label: string; value: string }>; actions: AskAction[] };
 
 export interface AskExecutionResponse {
   executionId: string;
@@ -51,7 +52,7 @@ export interface AskConfirmation {
 export interface AskCaptureRequest {
   requirementId: string;
   captureKey: string;
-  classification: 'REQUIRED_APPLICABILITY' | 'REQUIRED_SAFETY' | 'REQUIRED_CALCULATION' | 'ENHANCEMENT_ACCURACY';
+  classification: 'REQUIRED_APPLICABILITY' | 'REQUIRED_SAFETY' | 'REQUIRED_CALCULATION' | 'ENHANCEMENT_ACCURACY' | 'SCENARIO_INPUT' | 'PREFERENCE_INPUT' | 'WORKFLOW_INPUT';
   state: 'KNOWN' | 'UNKNOWN' | 'CONFLICTED' | 'STALE';
   title: string;
   question: string;
@@ -60,6 +61,7 @@ export interface AskCaptureRequest {
   currentAnswer?: unknown;
   allowNotSure: boolean;
   sensitivity: 'STANDARD' | 'FINANCIAL' | 'SECURITY';
+  destinationLabel: string | null;
   confirmationText: string | null;
   expectedContextVersion: string;
 }

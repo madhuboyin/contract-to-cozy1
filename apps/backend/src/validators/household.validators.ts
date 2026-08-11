@@ -5,7 +5,7 @@ const roleSchema = z.nativeEnum(HouseholdRole);
 
 export const SendInviteSchema = z.object({
   email: z.string().email(),
-  role: roleSchema,
+  role: z.enum([HouseholdRole.CONTRIBUTOR, HouseholdRole.VIEWER]),
 });
 
 export const UpdateMemberRoleSchema = z.object({

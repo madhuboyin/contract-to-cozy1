@@ -1,4 +1,4 @@
-import { AskExecutionStatus, MaintenanceTaskStatus, NotificationCadence, Prisma, RefinanceRateMonitorProduct } from '@prisma/client';
+import { AskExecutionStatus, HouseholdRole, MaintenanceTaskStatus, NotificationCadence, Prisma, RefinanceRateMonitorProduct } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -34,11 +34,13 @@ import { RefinanceRadarService } from '../../refinanceRadar/refinanceRadar.servi
 import { MortgageRateService } from '../../refinanceRadar/engine/mortgageRate.service';
 import { getRefinanceAlertPreference } from '../../refinanceRadar/refinanceAlertPreference.service';
 import { createOrUpdateRefinanceRateMonitor } from '../../refinanceRadar/refinanceRateMonitor.service';
+import { HouseholdService } from '../household.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
 const mortgageRateService = new MortgageRateService();
+const householdService = new HouseholdService();
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -46,6 +48,12 @@ const RefinanceProfileCaptureSchema = z.object({
   remainingTermYears: z.number().positive().max(50),
   monthlyPaymentUsd: z.number().positive().max(1_000_000).optional(),
 }).strict();
+
+const HouseholdInvitationInputSchema = z.object({
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+  role: z.enum([HouseholdRole.CONTRIBUTOR, HouseholdRole.VIEWER]),
+}).strict();
+type InvitableHouseholdRole = z.infer<typeof HouseholdInvitationInputSchema>['role'];
 
 function asInputJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -81,6 +89,132 @@ async function propertySummary(propertyId: string | null | undefined) {
     select: { id: true, name: true, address: true, city: true, state: true },
   });
   return property ? { id: property.id, label: propertyLabel(property) } : null;
+}
+
+async function householdWorkflowVersion(propertyId: string): Promise<string> {
+  const [members, invites] = await Promise.all([
+    prisma.householdMember.findMany({
+      where: { propertyId }, orderBy: { id: 'asc' },
+      select: { id: true, role: true, isPrimaryOwner: true, updatedAt: true },
+    }),
+    prisma.householdInvite.findMany({
+      where: { propertyId }, orderBy: { id: 'asc' },
+      select: { id: true, role: true, status: true, createdAt: true, acceptedAt: true, revokedAt: true, expiresAt: true },
+    }),
+  ]);
+  return createHash('sha256').update(JSON.stringify({
+    propertyId,
+    members,
+    invites,
+  })).digest('hex');
+}
+
+function invitationRoleCopy(role: InvitableHouseholdRole): string {
+  return role === HouseholdRole.CONTRIBUTOR
+    ? 'Contributor — can view records, complete tasks, log events, and add inventory'
+    : 'Viewer — read-only access; cannot create or modify home records';
+}
+
+function extractHouseholdInvitationInput(message: string): Partial<z.input<typeof HouseholdInvitationInputSchema>> {
+  const email = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+  const role = /\b(viewer|read[ -]?only)\b/i.test(message)
+    ? HouseholdRole.VIEWER
+    : /\b(contributor|edit(?:or)?|help (?:manage|maintain)|complete tasks?)\b/i.test(message)
+      ? HouseholdRole.CONTRIBUTOR
+      : undefined;
+  return { ...(email ? { email } : {}), ...(role ? { role } : {}) };
+}
+
+async function householdInvitationResult(
+  userId: string,
+  propertyId: string,
+  message: string,
+  suppliedInput?: z.infer<typeof HouseholdInvitationInputSchema>,
+): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const householdHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/household`;
+  if (access.role !== HouseholdRole.OWNER) {
+    return {
+      status: 'BLOCKED',
+      reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{
+        type: 'SUMMARY', id: 'household-invite-owner-required', title: 'A household owner needs to send this invitation',
+        body: 'Inviting someone changes access to this home’s records. Contributors and viewers can review their current access, but only an owner can choose a role and send an invitation.',
+        tone: 'CAUTION', actions: [{ id: 'open-household', label: 'Review household access', href: householdHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['What can my current household role do?'],
+    };
+  }
+
+  const contextVersion = await householdWorkflowVersion(propertyId);
+  const extracted = suppliedInput ?? extractHouseholdInvitationInput(message);
+  const parsed = HouseholdInvitationInputSchema.safeParse(extracted);
+  if (!parsed.success) {
+    const currentAnswer = {
+      ...(typeof extracted.email === 'string' ? { email: extracted.email } : {}),
+      ...(extracted.role ? { role: extracted.role } : {}),
+    };
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'HOUSEHOLD_INVITATION_INPUT_REQUIRED', contextVersion,
+      parameters: { householdContextVersion: contextVersion },
+      blocks: [{
+        type: 'SUMMARY', id: 'household-invite-input', title: 'Choose who to invite and what they can do',
+        body: 'Use Contributor for someone who helps maintain the home record. Use Viewer for read-only access. An invitation does not establish a legal ownership interest or imply a family relationship.',
+        tone: 'DEFAULT', actions: [],
+      }],
+      captureRequests: [{
+        requirementId: `household-invite-${contextVersion.slice(0, 20)}`,
+        captureKey: 'HOUSEHOLD_INVITATION_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+        title: 'Household invitation details', question: 'Who should receive access, and which role should they have?',
+        helpText: 'The email and role are used only for this invitation workflow. They are not saved as inferred household facts.',
+        inputSchema: { type: 'GROUP', fields: [
+          { key: 'email', label: 'Email address', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 254 } },
+          { key: 'role', label: 'Access role', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+            { label: 'Contributor — can help manage the home', value: HouseholdRole.CONTRIBUTOR },
+            { label: 'Viewer — read-only access', value: HouseholdRole.VIEWER },
+          ] } },
+        ] },
+        currentAnswer, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used for this household invitation',
+        confirmationText: null, expectedContextVersion: contextVersion,
+      }],
+      suggestions: ['Open household settings instead'],
+    };
+  }
+
+  const property = await propertySummary(propertyId);
+  const confirmationVersion = 1;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOUSEHOLD_INVITATION_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      inviteEmail: parsed.data.email,
+      inviteRole: parsed.data.role,
+      householdContextVersion: contextVersion,
+      confirmationVersion,
+      confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{
+      type: 'SUMMARY', id: 'household-invite-review', title: 'Review the household invitation',
+      body: 'No invitation has been created yet. Confirm the recipient and role below. The recipient must accept before access becomes active.',
+      tone: 'DEFAULT', actions: [{ id: 'manage-household', label: 'Open household settings', href: householdHref, style: 'SECONDARY' }],
+    }],
+    confirmation: {
+      confirmationId: `household-invite-${propertyId}-${confirmationVersion}`,
+      version: confirmationVersion,
+      title: 'Send this household invitation?',
+      description: 'This creates a seven-day invitation for the selected home. Access begins only after the recipient accepts it.',
+      fields: [
+        { label: 'Home', value: property?.label ?? 'Selected home' },
+        { label: 'Recipient', value: parsed.data.email },
+        { label: 'Role', value: invitationRoleCopy(parsed.data.role) },
+        { label: 'Legal ownership', value: 'Not changed by this invitation' },
+      ],
+      confirmLabel: 'Send invitation',
+      consentText: 'I confirm this recipient and access role are correct and authorize ContractToCozy to create the invitation.',
+      expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
 }
 
 function needsPropertyResult(): AskOperationResult {
@@ -262,6 +396,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string): Pr
     ...(requirement.currentAnswer === undefined ? {} : { currentAnswer: requirement.currentAnswer }),
     allowNotSure: requirement.capture.allowNotSure,
     sensitivity: requirement.capture.sensitivity,
+    destinationLabel: 'Saved to this item’s Home Record',
     confirmationText: null,
     expectedContextVersion: evaluation.contextVersion,
   }));
@@ -340,6 +475,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string): Prom
         helpText: 'These values are stored in this home’s Financing Profile and are not sent to an LLM.',
         inputSchema: { type: 'GROUP', fields },
         currentAnswer: {}, allowNotSure: false, sensitivity: 'FINANCIAL',
+        destinationLabel: 'Saved to this home’s Financing Profile',
         confirmationText: 'I confirm these mortgage details are accurate enough to save to this home’s Financing Profile.',
         expectedContextVersion: financialContext.contextVersion,
       }],
@@ -567,6 +703,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
+    case 'HOUSEHOLD_INVITATION': return householdInvitationResult(input.userId, input.propertyId!, input.message);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
   }
@@ -679,7 +816,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -696,7 +833,37 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
 
   let captureId: string;
   let capturedContextVersion: string;
-  if (execution.operationId === 'REPLACEMENT_GUIDANCE') {
+  let result: AskOperationResult;
+  let canonicalOwner: string;
+  if (execution.operationId === 'HOUSEHOLD_INVITATION') {
+    if (input.captureKey !== 'HOUSEHOLD_INVITATION_INPUTS') {
+      const error = new Error('This household invitation capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role !== HouseholdRole.OWNER) {
+      const error = new Error('Only a household owner can prepare an invitation.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const currentVersion = await householdWorkflowVersion(execution.propertyId);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('Household access changed while this invitation was open. Review the current household and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const candidate = HouseholdInvitationInputSchema.safeParse(input.answer);
+    if (!candidate.success) {
+      const error = new Error('Enter a valid email address and choose Contributor or Viewer.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    result = await householdInvitationResult(userId, execution.propertyId, execution.message, candidate.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'HouseholdInviteWorkflow';
+  } else if (execution.operationId === 'REPLACEMENT_GUIDANCE') {
     const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
       ? execution.parametersJson as Record<string, unknown>
       : {};
@@ -719,6 +886,11 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     captureId = capture.captureId;
     capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'InventoryItem';
   } else {
     if (input.captureKey !== 'FINANCING_PROFILE_REFINANCE_INPUTS') {
       const error = new Error('This financing capture is no longer active.');
@@ -760,12 +932,12 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     const nextContext = await getFinancialContextDecisions(execution.propertyId, userId, 'REFINANCE_RADAR');
     captureId = input.idempotencyKey;
     capturedContextVersion = nextContext.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'PropertyFinancingProfile';
   }
-  const operation = resolveAskOperation(execution.message);
-  const result = await executeOperation({
-    userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
-  });
-  const canonicalOwner = execution.operationId === 'REFINANCE_ANALYSIS' ? 'PropertyFinancingProfile' : 'InventoryItem';
   const saved = await prisma.$transaction(async (tx) => {
     const updated = await tx.askExecution.update({
       where: { id: execution.id },
@@ -803,12 +975,6 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
-  await ensurePropertyAccess(userId, execution.propertyId);
-  if (execution.operationId !== 'REFINANCE_RATE_MONITOR' || execution.status !== 'NEEDS_CONFIRMATION') {
-    const error = new Error('This confirmation is no longer active.');
-    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-    throw error;
-  }
   const inputHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
   const previous = await prisma.askConfirmationReceipt.findUnique({
     where: { executionId_idempotencyKey: { executionId, idempotencyKey: input.idempotencyKey } },
@@ -821,61 +987,131 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
+  const access = await ensurePropertyAccess(userId, execution.propertyId);
+  if (!['REFINANCE_RATE_MONITOR', 'HOUSEHOLD_INVITATION'].includes(execution.operationId ?? '') || execution.status !== 'NEEDS_CONFIRMATION') {
+    const error = new Error('This confirmation is no longer active.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
   const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
     ? execution.parametersJson as Record<string, unknown>
     : {};
   const expectedVersion = parameters.confirmationVersion;
   const expiresAt = typeof parameters.confirmationExpiresAt === 'string' ? new Date(parameters.confirmationExpiresAt) : null;
   if (expectedVersion !== input.confirmationVersion || !expiresAt || expiresAt <= new Date()) {
-    const error = new Error('This confirmation expired. Ask again to review current monitor settings.');
+    const error = new Error('This confirmation expired. Ask again to review the current settings.');
     (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_EXPIRED';
     throw error;
   }
-  const thresholdPct = parameters.thresholdPct;
-  const product = parameters.product;
-  if (typeof thresholdPct !== 'number' || (product !== 'FIXED_30_YEAR' && product !== 'FIXED_15_YEAR')) {
-    const error = new Error('The monitor settings are invalid.');
-    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
-    throw error;
+  let result: AskOperationResult;
+  let artifactType: string;
+  let artifactId: string;
+  if (execution.operationId === 'HOUSEHOLD_INVITATION') {
+    if (access.role !== HouseholdRole.OWNER) {
+      const error = new Error('Only a household owner can send this invitation.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const inviteEmail = parameters.inviteEmail;
+    const inviteRole = parameters.inviteRole;
+    const expectedHouseholdVersion = parameters.householdContextVersion;
+    const currentHouseholdVersion = await householdWorkflowVersion(execution.propertyId);
+    const candidate = HouseholdInvitationInputSchema.safeParse({ email: inviteEmail, role: inviteRole });
+    if (!candidate.success || expectedHouseholdVersion !== currentHouseholdVersion) {
+      const error = new Error(expectedHouseholdVersion !== currentHouseholdVersion
+        ? 'Household access changed while this confirmation was open. Review the current household and try again.'
+        : 'The household invitation settings are invalid.');
+      (error as Error & { code?: string }).code = expectedHouseholdVersion !== currentHouseholdVersion
+        ? 'ASK_CONTEXT_VERSION_CONFLICT'
+        : 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const invite = await householdService.sendInvite(
+      execution.propertyId,
+      userId,
+      candidate.data,
+      { sourceAskExecutionId: execution.id },
+    );
+    const householdHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/household`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'HOUSEHOLD_INVITATION_PENDING',
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `household-invite-${invite.id}`, title: 'Household invitation is pending', status: 'PENDING',
+        description: 'The invitation record is ready. Access is not active until the recipient accepts it.',
+        details: [
+          { label: 'Recipient', value: invite.inviteeEmail },
+          { label: 'Role', value: invitationRoleCopy(invite.role as InvitableHouseholdRole) },
+          { label: 'Expires', value: humanDate(invite.expiresAt) ?? invite.expiresAt.toISOString() },
+          { label: 'Access status', value: 'Pending acceptance' },
+        ],
+        actions: [{ id: 'manage-invitation', label: 'Manage invitation', href: householdHref, style: 'PRIMARY' }],
+      }],
+      confirmation: null,
+      suggestions: ['Who currently has access to this home?'],
+    };
+    artifactType = 'HOUSEHOLD_INVITE';
+    artifactId = invite.id;
+  } else {
+    const thresholdPct = parameters.thresholdPct;
+    const product = parameters.product;
+    if (typeof thresholdPct !== 'number' || (product !== 'FIXED_30_YEAR' && product !== 'FIXED_15_YEAR')) {
+      const error = new Error('The monitor settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const monitor = await createOrUpdateRefinanceRateMonitor({
+      userId, propertyId: execution.propertyId, thresholdPct,
+      product: product as RefinanceRateMonitorProduct,
+      cadence: NotificationCadence.IMMEDIATE,
+      quietStart: typeof parameters.quietStart === 'string' ? parameters.quietStart : null,
+      quietEnd: typeof parameters.quietEnd === 'string' ? parameters.quietEnd : null,
+      timezone: typeof parameters.timezone === 'string' ? parameters.timezone : 'UTC',
+    });
+    const radarHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/mortgage-refinance-radar?section=alerts`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'RATE_MONITOR_ACTIVE',
+      blocks: [{
+        type: 'MONITOR', id: `rate-monitor-${monitor.id}`, monitorId: monitor.id,
+        title: 'Mortgage-rate monitor is active', status: monitor.status,
+        threshold: `${monitor.thresholdPct.toFixed(3)}% or lower`,
+        product: monitor.product === 'FIXED_15_YEAR' ? '15-year fixed national benchmark' : '30-year fixed national benchmark',
+        channel: 'Email plus in-app', cadence: monitor.cadence,
+        quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
+        sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
+        actions: [
+          { id: 'edit-monitor', label: 'Edit settings', href: radarHref, style: 'PRIMARY' },
+          { id: 'pause-monitor', label: 'Pause', href: `${radarHref}&monitorAction=pause`, style: 'SECONDARY' },
+          { id: 'stop-monitor', label: 'Stop', href: `${radarHref}&monitorAction=stop`, style: 'QUIET' },
+        ],
+      }],
+      confirmation: null, suggestions: ['Is refinancing worth reviewing now?'],
+    };
+    artifactType = 'REFINANCE_RATE_MONITOR';
+    artifactId = monitor.id;
   }
-  const monitor = await createOrUpdateRefinanceRateMonitor({
-    userId, propertyId: execution.propertyId, thresholdPct,
-    product: product as RefinanceRateMonitorProduct,
-    cadence: NotificationCadence.IMMEDIATE,
-    quietStart: typeof parameters.quietStart === 'string' ? parameters.quietStart : null,
-    quietEnd: typeof parameters.quietEnd === 'string' ? parameters.quietEnd : null,
-    timezone: typeof parameters.timezone === 'string' ? parameters.timezone : 'UTC',
-  });
-  const radarHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/mortgage-refinance-radar?section=alerts`;
-  const result: AskOperationResult = {
-    status: 'COMPLETED', reasonCode: 'RATE_MONITOR_ACTIVE',
-    blocks: [{
-      type: 'MONITOR', id: `rate-monitor-${monitor.id}`, monitorId: monitor.id,
-      title: 'Mortgage-rate monitor is active', status: monitor.status,
-      threshold: `${monitor.thresholdPct.toFixed(3)}% or lower`,
-      product: monitor.product === 'FIXED_15_YEAR' ? '15-year fixed national benchmark' : '30-year fixed national benchmark',
-      channel: 'Email plus in-app', cadence: monitor.cadence,
-      quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
-      sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
-      actions: [
-        { id: 'edit-monitor', label: 'Edit settings', href: radarHref, style: 'PRIMARY' },
-        { id: 'pause-monitor', label: 'Pause', href: `${radarHref}&monitorAction=pause`, style: 'SECONDARY' },
-        { id: 'stop-monitor', label: 'Stop', href: `${radarHref}&monitorAction=stop`, style: 'QUIET' },
-      ],
-    }],
-    confirmation: null, suggestions: ['Is refinancing worth reviewing now?'],
-  };
-  const saved = await prisma.$transaction(async (tx) => {
-    const updated = await tx.askExecution.update({
-      where: { id: execution.id },
-      data: { status: result.status, reasonCode: result.reasonCode, resultJson: asInputJson({ blocks: result.blocks, captureRequests: [], confirmation: null, suggestions: result.suggestions }), completedAt: new Date() },
+  let saved: typeof execution;
+  try {
+    saved = await prisma.$transaction(async (tx) => {
+      const updated = await tx.askExecution.update({
+        where: { id: execution.id },
+        data: { status: result.status, reasonCode: result.reasonCode, resultJson: asInputJson({ blocks: result.blocks, captureRequests: [], confirmation: null, suggestions: result.suggestions }), completedAt: new Date() },
+      });
+      await tx.askConfirmationReceipt.create({
+        data: { executionId, idempotencyKey: input.idempotencyKey, confirmationVersion: input.confirmationVersion, artifactType, artifactId, inputHash },
+      });
+      await tx.askExecutionEvent.create({ data: { executionId, eventType: 'CONFIRMED', metadataJson: asInputJson({ artifactType, artifactId }) } });
+      return updated;
     });
-    await tx.askConfirmationReceipt.create({
-      data: { executionId, idempotencyKey: input.idempotencyKey, confirmationVersion: input.confirmationVersion, artifactType: 'REFINANCE_RATE_MONITOR', artifactId: monitor.id, inputHash },
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+    const duplicate = await prisma.askConfirmationReceipt.findUnique({
+      where: { executionId_idempotencyKey: { executionId, idempotencyKey: input.idempotencyKey } },
     });
-    await tx.askExecutionEvent.create({ data: { executionId, eventType: 'CONFIRMED', metadataJson: asInputJson({ artifactType: 'REFINANCE_RATE_MONITOR', artifactId: monitor.id }) } });
-    return updated;
-  });
+    if (!duplicate || duplicate.inputHash !== inputHash) throw error;
+    const completed = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+    if (!completed) throw error;
+    saved = completed;
+  }
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 
@@ -887,10 +1123,22 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     throw error;
   }
   if (execution.status !== 'NEEDS_CONFIRMATION') return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
-  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'confirmation-cancelled', title: 'Monitor not created', body: 'The pending mortgage-rate monitor was cancelled. No notification preference or threshold was changed.', tone: 'DEFAULT', actions: [] }];
+  const householdInvitation = execution.operationId === 'HOUSEHOLD_INVITATION';
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'confirmation-cancelled',
+    title: householdInvitation ? 'Invitation not created' : 'Monitor not created',
+    body: householdInvitation
+      ? 'The household invitation was cancelled. No invitation or household access was created.'
+      : 'The pending mortgage-rate monitor was cancelled. No notification preference or threshold was changed.',
+    tone: 'DEFAULT', actions: [],
+  }];
   const saved = await prisma.askExecution.update({
     where: { id: execution.id },
-    data: { status: 'CANCELLED', reasonCode: 'USER_CANCELLED', resultJson: asInputJson({ blocks, captureRequests: [], confirmation: null, suggestions: ['Set a different rate threshold'] }), completedAt: new Date() },
+    data: {
+      status: 'CANCELLED', reasonCode: 'USER_CANCELLED',
+      resultJson: asInputJson({ blocks, captureRequests: [], confirmation: null, suggestions: [householdInvitation ? 'Review household access' : 'Set a different rate threshold'] }),
+      completedAt: new Date(),
+    },
   });
   await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CANCELLED' } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));

@@ -16867,6 +16867,10 @@ model HouseholdInvite {
   id         String @id @default(cuid())
   propertyId String
 
+  // Optional command idempotency link used by governed Ask workflows. The
+  // household service remains the canonical writer and owns invite state.
+  sourceAskExecutionId String? @unique
+
   invitedByUserId String
   inviteeEmail    String
   inviteeUserId   String?

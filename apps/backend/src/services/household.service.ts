@@ -1,7 +1,9 @@
 import crypto from 'crypto';
-import { HouseholdActivityType, HouseholdRole } from '@prisma/client';
+import { HouseholdActivityType, HouseholdRole, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
+import { getEmailNotificationQueue } from './JobQueue.service';
 
 const INVITE_TTL_DAYS = 7;
 
@@ -129,13 +131,25 @@ export class HouseholdService {
   async sendInvite(
     propertyId: string,
     actorUserId: string,
-    payload: { email: string; role: HouseholdRole }
+    payload: { email: string; role: HouseholdRole },
+    options?: { sourceAskExecutionId?: string },
   ) {
     await this.assertOwner(propertyId, actorUserId);
+    if (payload.role !== HouseholdRole.CONTRIBUTOR && payload.role !== HouseholdRole.VIEWER) {
+      throw new APIError('Invitations may grant Contributor or Viewer access. Owner access must be managed separately.', 400, 'INVALID_INVITE_ROLE');
+    }
+    const inviteeEmail = payload.email.trim().toLowerCase();
+
+    if (options?.sourceAskExecutionId) {
+      const existingCommandInvite = await prisma.householdInvite.findUnique({
+        where: { sourceAskExecutionId: options.sourceAskExecutionId },
+      });
+      if (existingCommandInvite) return existingCommandInvite;
+    }
 
     // Check invitee is not already a member
     const existingMember = await prisma.householdMember.findFirst({
-      where: { propertyId, user: { email: payload.email } },
+      where: { propertyId, user: { email: inviteeEmail } },
     });
     if (existingMember) {
       throw new APIError('This user is already a member of the household.', 409, 'ALREADY_MEMBER');
@@ -143,35 +157,66 @@ export class HouseholdService {
 
     // Revoke any existing pending invite for this email on this property
     await prisma.householdInvite.updateMany({
-      where: { propertyId, inviteeEmail: payload.email, status: 'PENDING' },
+      where: { propertyId, inviteeEmail, status: 'PENDING' },
       data: { status: 'REVOKED', revokedAt: new Date() },
     });
 
     const inviteeUser = await prisma.user.findUnique({
-      where: { email: payload.email },
+      where: { email: inviteeEmail },
       select: { id: true },
     });
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-    const invite = await prisma.householdInvite.create({
-      data: {
-        propertyId,
-        invitedByUserId: actorUserId,
-        inviteeEmail: payload.email,
-        inviteeUserId: inviteeUser?.id,
-        role: payload.role,
-        token,
-        expiresAt,
-      },
+    let invite;
+    try {
+      invite = await prisma.householdInvite.create({
+        data: {
+          propertyId,
+          invitedByUserId: actorUserId,
+          inviteeEmail,
+          inviteeUserId: inviteeUser?.id,
+          role: payload.role,
+          token,
+          expiresAt,
+          sourceAskExecutionId: options?.sourceAskExecutionId,
+        },
+      });
+    } catch (error) {
+      if (options?.sourceAskExecutionId && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const duplicate = await prisma.householdInvite.findUnique({ where: { sourceAskExecutionId: options.sourceAskExecutionId } });
+        if (duplicate) return duplicate;
+      }
+      throw error;
+    }
+
+    const [actor, property] = await Promise.all([
+      prisma.user.findUnique({ where: { id: actorUserId }, select: { firstName: true, lastName: true } }),
+      prisma.property.findUnique({ where: { id: propertyId }, select: { address: true, city: true, state: true } }),
+    ]);
+    await this.logActivity(propertyId, actorUserId, 'MEMBER_INVITED', {
+      summaryText: `${actor?.firstName} invited ${inviteeEmail} as ${payload.role}`,
+      metaJson: { inviteeEmail, role: payload.role },
     });
 
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, select: { firstName: true, lastName: true } });
-    await this.logActivity(propertyId, actorUserId, 'MEMBER_INVITED', {
-      summaryText: `${actor?.firstName} invited ${payload.email} as ${payload.role}`,
-      metaJson: { inviteeEmail: payload.email, role: payload.role },
-    });
+    const frontendOrigin = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+    if (frontendOrigin && property) {
+      getEmailNotificationQueue().add(
+        'SEND_HOUSEHOLD_INVITATION',
+        {
+          to: inviteeEmail,
+          inviterName: [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'A household owner',
+          propertyAddress: `${property.address}, ${property.city}, ${property.state}`,
+          householdRole: payload.role,
+          householdInviteUrl: `${frontendOrigin}/invite/${encodeURIComponent(invite.token)}`,
+          expiresAt: invite.expiresAt.toISOString(),
+        },
+        { removeOnComplete: true, removeOnFail: true, attempts: 2 },
+      ).catch((error) => logger.error({ err: error, inviteId: invite.id }, '[HouseholdService] failed to enqueue invitation email'));
+    } else if (!frontendOrigin) {
+      logger.warn({ inviteId: invite.id }, '[HouseholdService] FRONTEND_URL is missing; household invitation email was not enqueued');
+    }
 
     return invite;
   }

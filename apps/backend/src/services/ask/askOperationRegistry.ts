@@ -4,6 +4,7 @@ export type AskIntentFamily =
   | 'RECORD_QUERY'
   | 'STATUS_SUMMARY'
   | 'CAPABILITY_DISCOVERY'
+  | 'WORKFLOW_GUIDANCE'
   | 'GENERAL_HOME_GUIDANCE'
   | 'OUT_OF_SCOPE'
   | 'UNSAFE_OR_RESTRICTED';
@@ -15,6 +16,7 @@ export type AskOperationId =
   | 'REPLACEMENT_GUIDANCE'
   | 'REFINANCE_ANALYSIS'
   | 'REFINANCE_RATE_MONITOR'
+  | 'HOUSEHOLD_INVITATION'
   | 'EMERGENCY_BOUNDARY'
   | 'OUT_OF_SCOPE_BOUNDARY'
   | 'GROUNDED_GUIDANCE';
@@ -45,6 +47,7 @@ const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty c
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
 const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;
 const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
+const householdInvitationPattern = /\b(?:invite|add|share (?:my|the) home with)\b.{0,50}\b(?:wife|husband|spouse|partner|family member|household member|someone|person)\b|\bhousehold\b.{0,40}\b(?:invite|invitation|add (?:a )?member)\b/i;
 const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.*quote|savings?|rebates?|monitor)\b/i;
 
 export function resolveAskOperation(message: string): AskOperationResolution {
@@ -68,6 +71,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (refinanceAnalysisPattern.test(message)) {
     return { operationId: 'REFINANCE_ANALYSIS', version: '1.0', family: 'GENERAL_HOME_GUIDANCE', confidence: 0.97, requiresProperty: true };
+  }
+  if (householdInvitationPattern.test(message)) {
+    return { operationId: 'HOUSEHOLD_INVITATION', version: '1.0', family: 'WORKFLOW_GUIDANCE', confidence: 0.98, requiresProperty: true };
   }
   if (capabilityPattern.test(message)) {
     return { operationId: 'CAPABILITY_DISCOVERY', version: '1.0', family: 'CAPABILITY_DISCOVERY', confidence: 0.88, requiresProperty: false };
