@@ -40,6 +40,7 @@ import { HiddenAssetService } from '../hiddenAssets.service';
 import { savingsBenefitsUnifiedService } from '../savingsBenefitsUnified.service';
 import { SellHoldRentService } from '../sellHoldRent.service';
 import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../ownershipCosts/ownershipCostReadModel.service';
+import { InventoryService } from '../inventory.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
@@ -49,6 +50,7 @@ const householdService = new HouseholdService();
 const homeSavingsService = new HomeSavingsService();
 const hiddenAssetService = new HiddenAssetService();
 const sellHoldRentService = new SellHoldRentService();
+const inventoryService = new InventoryService();
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -799,6 +801,249 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
   };
 }
 
+const INVENTORY_QUERY_STOP_WORDS = new Set([
+  'about', 'appliance', 'appliances', 'details', 'equipment', 'find', 'have', 'home', 'house',
+  'information', 'inventory', 'item', 'items', 'know', 'list', 'property', 'record', 'records',
+  'show', 'system', 'systems', 'tell', 'that', 'the', 'this', 'what', 'which', 'with', 'your', 'my',
+]);
+
+function inventorySearchTokens(message: string): string[] {
+  return [...new Set(message.toLowerCase().match(/[a-z0-9]+/g) ?? [])]
+    .filter((token) => token.length > 2 && !INVENTORY_QUERY_STOP_WORDS.has(token));
+}
+
+function inventoryItemSearchText(item: Awaited<ReturnType<InventoryService['listItems']>>[number]): string {
+  return [
+    item.name, item.category, item.assetType, item.brand, item.model, item.manufacturer, item.modelNumber,
+    item.room?.name, ...(item.tags ?? []),
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function inventoryMissingFacts(item: Awaited<ReturnType<InventoryService['listItems']>>[number]): string[] {
+  return [
+    item.brand || item.manufacturer ? null : 'Brand or manufacturer',
+    item.model || item.modelNumber ? null : 'Model',
+    item.serialNo || item.serialNumber ? null : 'Serial number',
+    item.installedOn || item.purchasedOn ? null : 'Install or purchase date',
+    item.documents.length ? null : 'Documents',
+    item.warrantyId || item.insurancePolicyId || item.coverageEvidenceStatus !== 'UNKNOWN' ? null : 'Coverage evidence',
+  ].filter((value): value is string => Boolean(value));
+}
+
+function inventoryItemHref(propertyId: string, itemId: string): string {
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&openItemId=${encodeURIComponent(itemId)}`;
+}
+
+async function inventoryLookupResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
+  const allItems = await inventoryService.listItems(propertyId, {});
+  const recordVersion = createHash('sha256').update(JSON.stringify(allItems.map((item) => ({ id: item.id, updatedAt: item.updatedAt })))).digest('hex');
+  if (!allItems.length) {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'INVENTORY_NOT_RECORDED', contextVersion: recordVersion,
+      blocks: [{
+        type: 'SUMMARY', id: 'inventory-empty', title: 'No inventory items are recorded for this home yet',
+        body: 'An empty Living Home Record does not mean the home has no appliances or systems. Add or scan items before Ask can provide item-specific details or history.',
+        tone: 'CAUTION',
+        actions: [{ id: 'add-inventory', label: 'Add inventory items', href: `${inventoryHref}&action=add-item&source=ask`, style: 'PRIMARY' }],
+      }],
+      suggestions: ['Open home inventory'],
+    };
+  }
+
+  const historyFocus = /\b(?:history|timeline|what happened|repairs?|service(?:d| history)?|maintenance history)\b/i.test(message);
+  const incompleteFocus = /\b(?:incomplete|missing (?:details|information|records?)|needs? (?:details|information|completion))\b/i.test(message);
+  const lifecycleFocus = /\b(?:end of life|nearing (?:replacement|expiry)|expir(?:e|y|ing)|oldest systems?)\b/i.test(message);
+  const categoryFilter = /\bhvac|furnace|air conditioner|heat pump|boiler\b/i.test(message)
+    ? 'HVAC'
+    : /\bappliances?\b/i.test(message)
+      ? 'APPLIANCE'
+      : /\broof\b/i.test(message)
+        ? 'ROOF_EXTERIOR'
+        : null;
+  const specificAliases: Array<{ test: RegExp; terms: string[] }> = [
+    { test: /\b(?:refrigerator|fridge)\b/i, terms: ['refrigerator', 'fridge'] },
+    { test: /\bwater heater\b/i, terms: ['water heater'] },
+    { test: /\bwasher\b/i, terms: ['washer', 'washing machine'] },
+    { test: /\bdryer\b/i, terms: ['dryer'] },
+    { test: /\bdishwasher\b/i, terms: ['dishwasher'] },
+  ];
+  const specific = specificAliases.find((candidate) => candidate.test.test(message));
+  const genericList = /\b(?:inventory|systems?|equipment|appliances?)\b/i.test(message) && !specific && !categoryFilter;
+  const tokens = inventorySearchTokens(message);
+
+  let matches = allItems;
+  if (categoryFilter === 'HVAC') {
+    matches = allItems.filter((item) => item.category === 'HVAC' || /\b(?:hvac|furnace|air conditioner|heat pump|boiler)\b/i.test(inventoryItemSearchText(item)));
+  } else if (categoryFilter) {
+    matches = allItems.filter((item) => item.category === categoryFilter);
+  } else if (specific) {
+    matches = allItems.filter((item) => specific.terms.some((term) => inventoryItemSearchText(item).includes(term)));
+  } else if (!genericList && tokens.length) {
+    const scored = allItems.map((item) => ({
+      item,
+      score: tokens.reduce((score, token) => score + (inventoryItemSearchText(item).includes(token) ? 1 : 0), 0),
+    })).filter((candidate) => candidate.score > 0).sort((left, right) => right.score - left.score || right.item.updatedAt.getTime() - left.item.updatedAt.getTime());
+    const topScore = scored[0]?.score ?? 0;
+    matches = scored.filter((candidate) => candidate.score === topScore).map((candidate) => candidate.item);
+  }
+
+  if (incompleteFocus) {
+    matches = matches.filter((item) => inventoryMissingFacts(item).length > 0)
+      .sort((left, right) => inventoryMissingFacts(right).length - inventoryMissingFacts(left).length);
+  } else if (lifecycleFocus) {
+    const horizon = new Date();
+    horizon.setUTCFullYear(horizon.getUTCFullYear() + 3);
+    matches = matches.filter((item) => item.expectedExpiryDate && item.expectedExpiryDate <= horizon)
+      .sort((left, right) => (left.expectedExpiryDate?.getTime() ?? Number.POSITIVE_INFINITY) - (right.expectedExpiryDate?.getTime() ?? Number.POSITIVE_INFINITY));
+  }
+
+  if (!matches.length) {
+    const focus = incompleteFocus ? 'incomplete inventory records' : lifecycleFocus ? 'items with a recorded end-of-life date in the next three years' : 'a matching inventory record';
+    return {
+      status: 'ANSWERED', reasonCode: 'INVENTORY_MATCH_NOT_FOUND', contextVersion: recordVersion,
+      blocks: [{
+        type: 'SUMMARY', id: 'inventory-no-match', title: `I could not find ${focus}`,
+        body: `This home has ${allItems.length} visible inventory item${allItems.length === 1 ? '' : 's'}, but none match this request. Ask will not infer an unrecorded appliance or system from general property data.`,
+        tone: 'DEFAULT',
+        actions: [{ id: 'search-inventory', label: 'Search home inventory', href: inventoryHref, style: 'PRIMARY' }],
+      }],
+      suggestions: ['List all inventory items', 'Show incomplete inventory records'],
+    };
+  }
+
+  const needsEntity = matches.length > 1 && (historyFocus || Boolean(specific));
+  if (needsEntity) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'MULTIPLE_INVENTORY_MATCHES', contextVersion: recordVersion,
+      blocks: [{
+        type: 'GROUPED_LIST', id: 'inventory-entity-selection', title: 'Which inventory item do you mean?',
+        description: 'More than one Living Home Record matches this question. Open the intended item, or ask again using its room, brand, or model.',
+        sections: [{
+          id: 'matches', title: 'Matching records', count: matches.length,
+          items: matches.slice(0, MAX_RESULT_ITEMS).map((item) => ({
+            id: item.id, title: item.name, description: [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ') || null,
+            meta: [item.room?.name, item.category.toLowerCase().replace(/_/g, ' '), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`].filter((value): value is string => Boolean(value)),
+            status: item.condition, href: inventoryItemHref(propertyId, item.id),
+          })),
+        }],
+        actions: [],
+      }],
+      suggestions: ['Open home inventory'],
+    };
+  }
+
+  const selectedItem = matches.length === 1 ? matches[0] : null;
+  const lifecycleEvaluation = selectedItem
+    ? await evaluateFeatureContext(propertyId, userId, {
+      featureKey: 'REPAIR_REPLACE', operationKey: 'RUN_ANALYSIS', operationInput: { inventoryItemId: selectedItem.id },
+    })
+    : null;
+  const activeRequirement = lifecycleEvaluation?.requirements[0];
+  const captureSupported = activeRequirement
+    && access.role !== HouseholdRole.VIEWER
+    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
+    && activeRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
+  const captureRequests: AskCaptureRequest[] = captureSupported && lifecycleEvaluation ? [{
+    requirementId: activeRequirement.requirementId,
+    captureKey: activeRequirement.capture.captureKey,
+    classification: activeRequirement.classification,
+    state: activeRequirement.state,
+    title: activeRequirement.capture.title,
+    question: activeRequirement.capture.question,
+    helpText: activeRequirement.capture.helpText ?? null,
+    inputSchema: activeRequirement.capture.inputSchema,
+    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
+    allowNotSure: activeRequirement.capture.allowNotSure,
+    sensitivity: activeRequirement.capture.sensitivity,
+    destinationLabel: 'Saved to this item’s Home Record',
+    confirmationText: null,
+    expectedContextVersion: lifecycleEvaluation.contextVersion,
+  }] : [];
+
+  const shown = matches.slice(0, MAX_RESULT_ITEMS);
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'inventory-summary',
+    title: selectedItem ? `Here is what the Home Record contains for ${selectedItem.name}` : `${matches.length} inventory records match this request`,
+    body: selectedItem
+      ? `${inventoryMissingFacts(selectedItem).length ? `${inventoryMissingFacts(selectedItem).length} important detail${inventoryMissingFacts(selectedItem).length === 1 ? ' is' : 's are'} still missing.` : 'The core identity, lifecycle, document, and coverage fields checked by Ask are present.'} Unknown fields remain unknown and are not inferred by a model.`
+      : `${shown.length === matches.length ? 'All matching records are shown.' : `Showing the first ${shown.length}.`} Each row reflects the canonical inventory record.`,
+    tone: selectedItem && inventoryMissingFacts(selectedItem).length ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'PRIMARY' }],
+  }, {
+    type: 'GROUPED_LIST', id: 'inventory-results', title: incompleteFocus ? 'Incomplete inventory records' : lifecycleFocus ? 'Recorded lifecycle dates approaching' : 'Inventory details',
+    description: lifecycleFocus ? 'Only items with a recorded expected-expiry date within the next three years are included.' : null,
+    sections: [{
+      id: 'items', title: 'Living Home Record', count: matches.length,
+      items: shown.map((item) => {
+        const missingFacts = inventoryMissingFacts(item);
+        const identity = [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ');
+        const lifecycleDate = item.installedOn ?? item.purchasedOn;
+        return {
+          id: item.id, title: item.name,
+          description: incompleteFocus && missingFacts.length ? `Missing: ${missingFacts.join(', ')}` : item.notes,
+          meta: [
+            item.room?.name ?? item.category.toLowerCase().replace(/_/g, ' '),
+            identity || 'Brand/model not recorded',
+            lifecycleDate ? `${item.installedOn ? 'Installed' : 'Purchased'} ${humanDate(lifecycleDate)}` : 'Install/purchase date not recorded',
+            item.expectedExpiryDate ? `Expected lifecycle date ${humanDate(item.expectedExpiryDate)}` : null,
+            `${item.documents.length} document${item.documents.length === 1 ? '' : 's'}`,
+            item.isVerified ? 'Verified record' : 'Not verified',
+          ].filter((value): value is string => Boolean(value)),
+          status: item.condition, href: inventoryItemHref(propertyId, item.id),
+        };
+      }),
+    }],
+    actions: [],
+  }];
+
+  if (historyFocus && selectedItem) {
+    const events = await prisma.homeEvent.findMany({
+      where: {
+        propertyId, inventoryItemId: selectedItem.id, isCurrent: true, deletedAt: null,
+        OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }],
+      },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: MAX_RESULT_ITEMS,
+      select: { id: true, type: true, title: true, summary: true, occurredAt: true, datePrecision: true, verificationStatus: true, sourceBadge: true },
+    });
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'inventory-history', title: `${selectedItem.name} history`,
+      description: events.length ? 'Current, non-deleted Home Timeline events visible to you.' : 'No visible Home Timeline events are linked to this item yet.',
+      sections: [{
+        id: 'events', title: 'Timeline', count: events.length,
+        items: events.map((event) => ({
+          id: event.id, title: event.title, description: event.summary,
+          meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
+          status: event.datePrecision, href: inventoryItemHref(propertyId, selectedItem.id),
+        })),
+      }],
+      actions: [],
+    });
+  }
+
+  blocks.push({
+    type: 'EVIDENCE', id: 'inventory-evidence', title: 'Record freshness',
+    items: shown.slice(0, 15).map((item) => ({
+      label: item.name,
+      source: `Home Inventory · ${item.sourceType.toLowerCase().replace(/_/g, ' ')}${item.verificationSource ? ` · ${item.verificationSource.toLowerCase().replace(/_/g, ' ')}` : ''}`,
+      observedAt: item.updatedAt.toISOString(),
+    })),
+  });
+
+  return {
+    status: captureRequests.length || (selectedItem ? inventoryMissingFacts(selectedItem).length > 0 : false) ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: captureRequests.length ? 'INVENTORY_LIFECYCLE_CONTEXT_OPTIONAL' : selectedItem && inventoryMissingFacts(selectedItem).length ? 'INVENTORY_RECORD_INCOMPLETE' : undefined,
+    contextVersion: lifecycleEvaluation?.contextVersion ?? recordVersion,
+    parameters: selectedItem ? { inventoryItemId: selectedItem.id } : undefined,
+    captureRequests,
+    blocks,
+    suggestions: selectedItem
+      ? ['Show missing inventory details', 'Which systems are nearing end of life?', 'List all appliances']
+      : ['Show incomplete inventory records', 'Which systems are nearing end of life?', 'List all appliances'],
+  };
+}
+
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis] = await Promise.all([
@@ -1204,6 +1449,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'COVERAGE_GAPS': return coverageResult(input.propertyId!);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
+    case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
@@ -1321,7 +1567,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -1376,6 +1622,34 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'PropertyContext';
+  } else if (execution.operationId === 'INVENTORY_LOOKUP') {
+    const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const inventoryItemId = parameters.inventoryItemId;
+    if (typeof inventoryItemId !== 'string') {
+      const error = new Error('The inventory item for this capture is no longer available.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: 'REPAIR_REPLACE',
+      operationKey: 'RUN_ANALYSIS',
+      operationInput: { inventoryItemId },
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'InventoryItem';
   } else if (execution.operationId === 'SELL_HOLD_RENT_ANALYSIS') {
     const capture = await captureFeatureContext(execution.propertyId, userId, {
       ...input,
