@@ -1,4 +1,4 @@
-import type { AskCaptureRequest, AskConfirmation, AskExecutionStatus, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
+import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 
 export type AskIntentFamily =
   | 'RECORD_QUERY'
@@ -35,6 +35,7 @@ export type AskOperationId =
   | 'RENOVATION_PERMIT_READINESS'
   | 'MAJOR_EVENT_ENTRY'
   | 'EMERGENCY_BOUNDARY'
+  | 'UNSAFE_RESTRICTED_BOUNDARY'
   | 'OUT_OF_SCOPE_BOUNDARY'
   | 'GROUNDED_GUIDANCE';
 
@@ -47,7 +48,7 @@ export interface AskOperationResolution {
 }
 
 export type AskExecutionMode = 'DETERMINISTIC' | 'REMOTE_GENERATION';
-export type AskSafetyClass = 'STANDARD' | 'MATERIAL_DECISION' | 'EMERGENCY_BOUNDARY' | 'OUT_OF_SCOPE_BOUNDARY';
+export type AskSafetyClass = 'STANDARD' | 'MATERIAL_DECISION' | 'EMERGENCY_BOUNDARY' | 'UNSAFE_RESTRICTED_BOUNDARY' | 'OUT_OF_SCOPE_BOUNDARY';
 export type AskPropertyRoleFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
 
 export interface AskOperationDefinition extends AskOperationResolution {
@@ -65,6 +66,7 @@ export interface AskOperationResult {
   contextVersion?: string | null;
   blocks: AskPresentationBlock[];
   captureRequests?: AskCaptureRequest[];
+  clarification?: AskClarification | null;
   confirmation?: AskConfirmation | null;
   suggestions: string[];
   parameters?: Record<string, unknown>;
@@ -130,6 +132,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   RENOVATION_PERMIT_READINESS: definition('RENOVATION_PERMIT_READINESS', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'renovation-permit.readiness', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
   MAJOR_EVENT_ENTRY: definition('MAJOR_EVENT_ENTRY', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'major-event.entry', ['SUMMARY', 'CAPABILITY_LIST', 'BOUNDARY']),
   EMERGENCY_BOUNDARY: definition('EMERGENCY_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'EMERGENCY_BOUNDARY', null, 'boundary.emergency', ['BOUNDARY']),
+  UNSAFE_RESTRICTED_BOUNDARY: definition('UNSAFE_RESTRICTED_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'UNSAFE_RESTRICTED_BOUNDARY', null, 'boundary.unsafe-restricted', ['BOUNDARY']),
   OUT_OF_SCOPE_BOUNDARY: definition('OUT_OF_SCOPE_BOUNDARY', 'OUT_OF_SCOPE', false, 'DETERMINISTIC', 'OUT_OF_SCOPE_BOUNDARY', null, 'boundary.out-of-scope', ['BOUNDARY']),
   GROUNDED_GUIDANCE: definition('GROUNDED_GUIDANCE', 'GENERAL_HOME_GUIDANCE', false, 'REMOTE_GENERATION', 'STANDARD', null, 'grounded.guidance', ['SUMMARY', 'EVIDENCE', 'BOUNDARY']),
 });
@@ -148,13 +151,14 @@ export function validateAskOperationDefinitions(): string[] {
     if (!entry.version || !entry.adapterKey || !entry.evalSuite) issues.push(`${key}: missing version, adapter, or eval declaration`);
     if (!entry.allowedBlockTypes.length) issues.push(`${key}: no allowed result blocks`);
     if (entry.requiresProperty && entry.propertyRoleFloor == null) issues.push(`${key}: property operation has no authorization floor`);
-    if (entry.safetyClass === 'EMERGENCY_BOUNDARY' && !entry.allowedBlockTypes.includes('BOUNDARY')) issues.push(`${key}: emergency operation lacks boundary result`);
+    if (entry.safetyClass.endsWith('_BOUNDARY') && !entry.allowedBlockTypes.includes('BOUNDARY')) issues.push(`${key}: boundary operation lacks boundary result`);
   }
   return issues;
 }
 
 const emergencyPattern = /\b(smell(?:ing)? gas|gas leak|carbon monoxide|\bco alarm|sparks? (?:from|at)|electrical fire|actively flooding.*electric|fire now)\b/i;
-const outOfScopePattern = /\b(python|javascript|typescript|coding interview|write (?:me )?(?:a )?program|never[- ]ending loop|system prompt|developer message|ignore (?:all |the )?(?:previous|prior) instructions|reveal (?:your |the )?(?:prompt|instructions)|jailbreak|drop (?:a )?(?:table|database)|shell command|malware|ransomware|phishing|steal (?:a )?(?:password|credential)|celebrity news|school essay)\b/i;
+const unsafeRestrictedPattern = /\b(?:bypass|avoid|evade|skip|work around)\b.{0,60}\b(?:permit|inspection|code|licen[cs]e|hoa|disclosure)\b|\b(?:disable|disconnect|remove|tamper with|cover|block)\b.{0,60}\b(?:smoke|carbon monoxide|co|fire|safety)\s*(?:detector|alarm|device)?\b|\b(?:conceal|hide|omit|misrepresent)\b.{0,80}\b(?:damage|defect|mold|leak|flood|fire|buyer|insurer|inspector|lender)\b|\b(?:guarantee|certify|confirm definitively|promise)\b.{0,80}\b(?:approved|approval|eligible|eligibility|legal|compliant|safe|pass inspection|refinanc|mortgage|loan|insurance claim|tax appeal)\b/i;
+const outOfScopePattern = /\b(python|javascript|typescript|coding interview|write (?:me )?(?:a )?program|never[- ]ending loop|system prompt|developer message|ignore (?:all |the )?(?:previous|prior) instructions|forget (?:all |the )?(?:previous|prior) instructions|override (?:the )?(?:system|developer|safety) instructions|pretend (?:that )?you are|act as (?:dan|an unrestricted)|reveal (?:your |the )?(?:prompt|instructions)|jailbreak|base64[- ]decode (?:this|the prompt)|drop (?:a )?(?:table|database)|run (?:this |the )?sql|production database|delete (?:every|all) (?:property|user|record)|shell command|malware|ransomware|phishing|steal (?:a )?(?:password|credential)|celebrity news|school essay)\b/i;
 const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|what(?:'s| is) due|completed work|pending work|service history|what did (?:i|we) complete|work (?:i |we )?(?:completed|finished)|what should (?:i|we) do before (?:winter|spring|summer|fall|autumn))\b/i;
 const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:maintenance(?: task)?|tasks?|gutter (?:cleaning|inspection)|clean(?:ing)? (?:the )?gutters?|filter change|(?:hvac|furnace|boiler|roof|water heater) (?:service|inspection|cleaning|repair|replacement))\b|\b(?:remind me to|put on my maintenance list)\b/i;
 const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:complete|completed|done)|(?:complete|finish)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair))\b|\b(?:i|we) (?:completed|finished)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b/i;
@@ -188,6 +192,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   });
   if (emergencyPattern.test(message)) {
     return resolved('EMERGENCY_BOUNDARY', 1);
+  }
+  if (unsafeRestrictedPattern.test(message)) {
+    return resolved('UNSAFE_RESTRICTED_BOUNDARY', 0.99);
   }
   if (outOfScopePattern.test(message)) {
     return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99);

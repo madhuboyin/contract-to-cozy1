@@ -14,6 +14,7 @@ const { buildAskResultSynthesisPayload } = require('../../src/services/ask/askRe
 test('routing cascade preserves safety precedence and deterministic high-confidence matches', () => {
   assert.equal(resolveAskRoutingCascade('I smell gas by the furnace').stage, 'SAFETY');
   assert.equal(resolveAskRoutingCascade('Create a Python never ending loop').stage, 'SAFETY');
+  assert.equal(resolveAskRoutingCascade('How can I bypass a building permit?').stage, 'SAFETY');
   const maintenance = resolveAskRoutingCascade('List my pending maintenance tasks');
   assert.equal(maintenance.stage, 'DETERMINISTIC');
   assert.equal(maintenance.operation.operationId, 'MAINTENANCE_STATUS');

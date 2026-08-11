@@ -10,7 +10,9 @@ import {
   type AskPresentationBlock,
   type CreateAskExecutionRequest,
   type RecordAskCaptureEvent,
+  type RequestAskCorrection,
   type SubmitAskCaptureRequest,
+  type SubmitAskClarification,
   type SubmitAskConfirmation,
   type SubmitAskFeedback,
 } from '../../productFramework/ask/ask.contract';
@@ -31,6 +33,7 @@ import { getCapabilityDiscoveryReadiness, getRelatedCapabilities } from '../capa
 import {
   getAskOperationDefinition,
   resolveAskOperation,
+  type AskOperationId,
   type AskOperationResolution,
   type AskOperationResult,
 } from './askOperationRegistry';
@@ -206,7 +209,45 @@ function propertyLabel(property: { name: string | null; address: string; city: s
 }
 
 function terminalStatus(status: AskOperationResult['status']): boolean {
-  return ['ANSWERED', 'COMPLETED', 'NOT_APPLICABLE', 'UNAVAILABLE', 'OUT_OF_SCOPE', 'BLOCKED', 'FAILED_TERMINAL'].includes(status);
+  return ['ANSWERED', 'COMPLETED', 'NOT_APPLICABLE', 'UNAVAILABLE', 'OUT_OF_SCOPE', 'BLOCKED', 'FAILED_TERMINAL', 'CANCELLED', 'EXPIRED'].includes(status);
+}
+
+function askFailureStatus(error: unknown): Extract<AskExecutionStatus, 'FAILED_RETRYABLE' | 'FAILED_TERMINAL'> {
+  const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+  if (error instanceof z.ZodError || code === 'ASK_PERMISSION_REQUIRED' || code === 'ASK_PROPERTY_NOT_FOUND'
+    || (error instanceof Error && /undeclared block type|invalid configuration|invariant/i.test(error.message))) return 'FAILED_TERMINAL';
+  return 'FAILED_RETRYABLE';
+}
+
+function askContextFingerprint(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 24);
+}
+
+function durableFreeTextClarification(operationId: AskOperationId, question: string): Pick<AskOperationResult, 'clarification' | 'parameters'> {
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  return {
+    clarification: { version: 1, question, options: [], allowFreeText: true, expiresAt },
+    parameters: { clarification: { version: 1, candidateOperationIds: [operationId], expiresAt } },
+  };
+}
+
+async function quoteWorkspaceContextVersion(propertyId: string): Promise<string> {
+  const workspaces = await prisma.quoteComparisonWorkspace.findMany({ where: { propertyId }, select: { id: true, status: true, updatedAt: true }, orderBy: { id: 'asc' } });
+  return askContextFingerprint(workspaces.map((workspace) => [workspace.id, workspace.status, workspace.updatedAt.toISOString()]));
+}
+
+async function guidanceJourneyContextVersion(propertyId: string, input: z.infer<typeof GuidanceJourneyCommandInputSchema>): Promise<string> {
+  if (input.inventoryItemId) {
+    const item = await prisma.inventoryItem.findFirst({ where: { id: input.inventoryItemId, propertyId }, select: { id: true, updatedAt: true } });
+    return askContextFingerprint(item ? [item.id, item.updatedAt.toISOString()] : ['missing', input.inventoryItemId]);
+  }
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, updatedAt: true } });
+  return askContextFingerprint([property?.id ?? propertyId, property?.updatedAt?.toISOString() ?? 'missing', input.serviceKey]);
+}
+
+async function refinanceMonitorContextVersion(userId: string, propertyId: string): Promise<string> {
+  const [preference, snapshot] = await Promise.all([getRefinanceAlertPreference(userId, propertyId), mortgageRateService.getLatestSnapshot()]);
+  return askContextFingerprint({ preference, snapshotId: snapshot?.id ?? null, snapshotDate: snapshot?.date ?? null });
 }
 
 async function ensurePropertyAccess(userId: string, propertyId: string) {
@@ -855,6 +896,7 @@ async function maintenanceTaskUpdateResult(userId: string, propertyId: string, m
   if (!match) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_TASK_SELECTION_REQUIRED',
+      ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', 'Which maintenance task should Ask update? Use its exact title.'),
       blocks: [{
         type: 'GROUPED_LIST', id: 'maintenance-update-options', title: 'Choose the task to change',
         description: 'Ask found more than one possible task. Use its exact title in your next message; nothing has changed.',
@@ -879,6 +921,7 @@ async function maintenanceTaskUpdateResult(userId: string, propertyId: string, m
   if ((action === 'RESCHEDULE' && !dueDate) || (action === 'ASSIGN' && !assignee) || (action === 'EDIT' && !priority)) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'MAINTENANCE_UPDATE_VALUE_REQUIRED',
+      ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', `What should change for ${match.title}?`),
       blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'RESCHEDULE'
         ? 'Include a date such as 2026-10-15.'
         : action === 'ASSIGN' ? 'Name an active household member or use their email address.' : 'Specify the new priority: low, medium, high, or urgent.', tone: 'CAUTION', actions: [] }],
@@ -933,13 +976,15 @@ async function quoteComparisonCreateResult(propertyId: string, message: string):
   const serviceCategory = serviceCategoryFromMessage(message);
   if (!serviceCategory) return {
     status: 'NEEDS_CLARIFICATION', reasonCode: 'QUOTE_COMPARISON_SCOPE_REQUIRED',
+    ...durableFreeTextClarification('QUOTE_COMPARISON_CREATE', 'What service are the quotes for?'),
     blocks: [{ type: 'SUMMARY', id: 'quote-workspace-scope', title: 'What service are the quotes for?', body: 'Name the service—such as roofing, plumbing, HVAC, electrical, cleaning, or painting—before creating the comparison workspace.', tone: 'CAUTION', actions: [] }],
     suggestions: ['Create a quote comparison for roofing', 'Create a quote comparison for plumbing'],
   };
   const input = QuoteWorkspaceCommandInputSchema.parse({ serviceCategory, scopeSummary: message.slice(0, 1000) });
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const contextVersion = await quoteWorkspaceContextVersion(propertyId);
   return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_COMPARISON_CONFIRMATION_REQUIRED', parameters: { quoteWorkspace: input, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_COMPARISON_CONFIRMATION_REQUIRED', contextVersion, parameters: { quoteWorkspace: input, quoteWorkspaceContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'quote-workspace-review', title: 'Review this comparison workspace', body: 'No workspace or quote has been created yet.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: `quote-workspace-${propertyId}-1`, version: 1, title: 'Create this quote comparison?', description: 'This creates one canonical draft workspace; it does not select a provider or accept a quote.', fields: [{ label: 'Service', value: serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Scope', value: input.scopeSummary }], confirmLabel: 'Create workspace', consentText: 'I authorize creating this draft comparison workspace for the selected home.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
@@ -991,12 +1036,14 @@ async function guidanceJourneyCreateResult(userId: string, propertyId: string, m
   else if (/inspect/i.test(message)) input = GuidanceJourneyCommandInputSchema.parse({ scopeCategory: 'SERVICE', scopeId: 'general_inspection', issueType: 'schedule_inspection', inventoryItemId: null, serviceKey: 'general_inspection', label: 'Home inspection' });
   if (!input) return {
     status: 'NEEDS_ENTITY', reasonCode: 'GUIDANCE_JOURNEY_SCOPE_REQUIRED',
+    ...durableFreeTextClarification('GUIDANCE_JOURNEY_CREATE', 'What recorded item or approved home service should the guided plan cover?'),
     blocks: [{ type: 'SUMMARY', id: 'journey-scope', title: 'What should the guided plan cover?', body: 'Name a recorded appliance/system, warranty, insurance decision, inspection, or cleaning need. Ask will not start an ungrounded workflow.', tone: 'CAUTION', actions: [] }],
     suggestions: inventory.slice(0, 3).map((candidate) => `Start a guided plan for ${candidate.name}`),
   };
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const contextVersion = await guidanceJourneyContextVersion(propertyId, input);
   return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_JOURNEY_CONFIRMATION_REQUIRED', parameters: { guidanceJourney: input, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_JOURNEY_CONFIRMATION_REQUIRED', contextVersion, parameters: { guidanceJourney: input, guidanceJourneyContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'journey-review', title: 'Review this guided plan', body: 'No journey has been started yet.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: `guidance-journey-${propertyId}-1`, version: 1, title: `Start a guided plan for ${input.label}?`, description: 'This creates a canonical, resumable guidance journey for the selected home.', fields: [{ label: 'Scope', value: input.label }, { label: 'Plan type', value: input.issueType.replace(/_/g, ' ') }], confirmLabel: 'Start guided plan', consentText: 'I authorize creating this guided plan in the shared home record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
@@ -1026,6 +1073,7 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
     }
     if (!selected) return {
       status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_MONITOR_TASK_REQUIRED',
+      ...durableFreeTextClarification('HOME_DEADLINE_MONITOR', 'Which dated maintenance task should Ask monitor?'),
       blocks: [{ type: 'GROUPED_LIST', id: 'maintenance-monitor-options', title: 'Choose a dated maintenance task', description: tasks.length ? 'Use the exact task title in your next message. No notification preference has changed.' : 'No open maintenance task with a due date is recorded yet. Add or schedule the task first.', sections: [{ id: 'tasks', title: 'Dated maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({ id: task.id, title: task.title, description: `Due ${humanDate(task.nextDueDate)}`, meta: [task.priority], status: task.status, href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}` })) }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'PRIMARY' }] }],
       suggestions: tasks.slice(0, 3).map((task) => `Remind me when ${task.title} is due`),
     };
@@ -1391,6 +1439,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     return {
       status: 'NEEDS_ENTITY',
       reasonCode: 'MULTIPLE_REPAIR_REPLACE_ITEMS',
+      ...durableFreeTextClarification('REPLACEMENT_GUIDANCE', 'Which recorded appliance or home system should Ask analyze?'),
       blocks: [{
         type: 'GROUPED_LIST', id: 'repair-replace-selection', title: 'Which item should I analyze?',
         description: 'Use the item’s exact name, room, brand, or model. Ask will not combine separate systems into one verdict.',
@@ -2037,6 +2086,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
   if (needsEntity) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'MULTIPLE_INVENTORY_MATCHES', contextVersion: recordVersion,
+      ...durableFreeTextClarification('INVENTORY_LOOKUP', 'Which inventory item do you mean? Add its room, brand, model, or exact name.'),
       blocks: [{
         type: 'GROUPED_LIST', id: 'inventory-entity-selection', title: 'Which inventory item do you mean?',
         description: 'More than one Living Home Record matches this question. Open the intended item, or ask again using its room, brand, or model.',
@@ -2730,6 +2780,7 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
   if (thresholdPct === null) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'RATE_THRESHOLD_REQUIRED',
+      ...durableFreeTextClarification('REFINANCE_RATE_MONITOR', 'What mortgage-rate threshold and term should trigger the alert?'),
       blocks: [{ type: 'SUMMARY', id: 'rate-monitor-threshold-needed', title: 'What rate should trigger the alert?', body: 'Enter a mortgage benchmark threshold such as “Notify me when 30-year rates reach 5.5%.”', tone: 'CAUTION', actions: [] }],
       suggestions: ['Notify me when 30-year rates reach 5.5%', 'Notify me when 15-year rates reach 4.75%'],
     };
@@ -2747,11 +2798,12 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   const quietStart = preference.quietStart ?? '21:00';
   const quietEnd = preference.quietEnd ?? '07:00';
+  const contextVersion = await refinanceMonitorContextVersion(userId, propertyId);
   return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'MONITOR_CONFIRMATION_REQUIRED',
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'MONITOR_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
       thresholdPct, product, channel: 'EMAIL', cadence: 'IMMEDIATE', quietStart, quietEnd,
-      timezone: preference.timezone || 'UTC', confirmationVersion, confirmationExpiresAt: expiresAt.toISOString(),
+      timezone: preference.timezone || 'UTC', refinanceMonitorContextVersion: contextVersion, confirmationVersion, confirmationExpiresAt: expiresAt.toISOString(),
     },
     blocks: [{ type: 'SUMMARY', id: 'rate-monitor-review', title: 'Review this mortgage-rate monitor', body: 'No monitor has been created yet. Confirm the settings below to activate governed benchmark monitoring and email delivery.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
@@ -2949,8 +3001,23 @@ function outOfScopeResult(): AskOperationResult {
   };
 }
 
+function unsafeRestrictedResult(): AskOperationResult {
+  return {
+    status: 'BLOCKED',
+    reasonCode: 'ASK_SAFETY_BLOCKED',
+    blocks: [{
+      type: 'BOUNDARY', id: 'unsafe-restricted-boundary', title: 'I can’t help bypass safety, legal, or professional controls', severity: 'CAUTION',
+      body: 'I can help you understand the safe, documented path, prepare questions and records, or find the appropriate Contract to Cozy tool. I cannot help evade permits, disable safety equipment, conceal material facts, or guarantee a regulated approval or professional determination.',
+      suggestions: ['Review the safe permit or inspection path.', 'Open the relevant records and identify what is still unknown.', 'Consult the appropriate authority or qualified professional for a controlling determination.'],
+    }],
+    suggestions: ['What is required before my renovation can start?', 'Which home records should I verify?'],
+  };
+}
+
 function routingClarificationResult(decision: AskRoutingDecision): AskOperationResult {
-  const choices = decision.candidates.slice(0, 3).map((candidate) => candidate.operationId.toLowerCase().replace(/_/g, ' '));
+  const candidates = decision.candidates.slice(0, 3);
+  const choices = candidates.map((candidate) => candidate.operationId.toLowerCase().replace(/_/g, ' '));
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return {
     status: 'NEEDS_CLARIFICATION',
     reasonCode: 'ASK_ROUTING_AMBIGUOUS',
@@ -2964,6 +3031,23 @@ function routingClarificationResult(decision: AskRoutingDecision): AskOperationR
       tone: 'DEFAULT',
       actions: [],
     }],
+    clarification: {
+      version: 1,
+      question: 'Which home request would you like Ask to handle?',
+      options: candidates.map((candidate) => ({
+        operationId: candidate.operationId,
+        label: candidate.operationId.toLowerCase().replace(/_/g, ' '),
+      })),
+      allowFreeText: true,
+      expiresAt,
+    },
+    parameters: {
+      clarification: {
+        version: 1,
+        candidateOperationIds: candidates.map((candidate) => candidate.operationId),
+        expiresAt,
+      },
+    },
     suggestions: choices.map((choice) => `Help me with ${choice}`).slice(0, 3),
   };
 }
@@ -3019,6 +3103,7 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
   if (answer.evidence.length) {
     blocks.push({ type: 'EVIDENCE', id: 'grounded-evidence', title: 'Sources used', items: answer.evidence.map((item) => ({ label: item.label, source: item.source, observedAt: item.observedAt })) });
   }
+  blocks.push({ type: 'BOUNDARY', id: 'grounded-professional-boundary', title: 'Educational guidance—not a controlling determination', body: answer.safetyBoundary, severity: 'INFO', suggestions: [] });
   return { status: 'ANSWERED', blocks, suggestions: [answer.nextAction].filter(Boolean) };
 }
 
@@ -3049,6 +3134,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
   }
   switch (input.operation.operationId) {
     case 'EMERGENCY_BOUNDARY': return emergencyResult();
+    case 'UNSAFE_RESTRICTED_BOUNDARY': return unsafeRestrictedResult();
     case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
     case 'MAINTENANCE_TASK_COMPLETE': return maintenanceTaskCompleteResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_TASK_CREATE': return maintenanceTaskCreateResult(input.userId, input.propertyId!, input.message);
@@ -3194,7 +3280,7 @@ function mapPersistedExecution(execution: {
   createdAt: Date; updatedAt: Date;
 }, property: { id: string; label: string } | null): AskExecutionResponse {
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; suggestions?: unknown }
+    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown }
     : {};
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
   const candidate = {
@@ -3218,6 +3304,7 @@ function mapPersistedExecution(execution: {
         : request)
       : [],
     confirmation: stored.confirmation ?? null,
+    clarification: stored.clarification ?? null,
     suggestions: stored.suggestions ?? [],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
@@ -3240,6 +3327,7 @@ function mapPersistedExecution(execution: {
     }],
     captureRequests: [],
     confirmation: null,
+    clarification: null,
     suggestions: ['Ask this question again'],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
@@ -3335,7 +3423,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
         completedAt,
       },
     });
@@ -3345,10 +3433,132 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   } catch (caught) {
-    await prisma.askExecution.update({ where: { id: execution.id }, data: { status: 'FAILED_RETRYABLE', errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED' } });
-    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'FAILED_RETRYABLE', metadataJson: asInputJson({ operationId: operation.operationId }) } });
-    askExecutionsTotal.inc({ operation: operation.operationId, status: 'FAILED_RETRYABLE', generation_mode: generationMode });
+    const failureStatus = askFailureStatus(caught);
+    await prisma.askExecution.update({ where: { id: execution.id }, data: { status: failureStatus, errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED', completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null } });
+    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: failureStatus, metadataJson: asInputJson({ operationId: operation.operationId }) } });
+    askExecutionsTotal.inc({ operation: operation.operationId, status: failureStatus, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
+    throw caught;
+  }
+}
+
+export async function submitAskClarification(userId: string, executionId: string, input: SubmitAskClarification): Promise<AskExecutionResponse> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+    ? execution.parametersJson as Record<string, unknown>
+    : {};
+  const priorReceipt = parameters.clarificationReceipt;
+  if (priorReceipt && typeof priorReceipt === 'object' && !Array.isArray(priorReceipt)
+    && (priorReceipt as Record<string, unknown>).idempotencyKey === input.idempotencyKey) {
+    return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+  }
+  const clarification = parameters.clarification;
+  if (!['NEEDS_CLARIFICATION', 'NEEDS_ENTITY'].includes(execution.status) || !clarification || typeof clarification !== 'object' || Array.isArray(clarification)) {
+    const error = new Error('This clarification is no longer active.');
+    (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_NOT_ACTIVE';
+    throw error;
+  }
+  const savedClarification = clarification as Record<string, unknown>;
+  const expiresAt = typeof savedClarification.expiresAt === 'string' ? new Date(savedClarification.expiresAt) : null;
+  if (savedClarification.version !== input.clarificationVersion || !expiresAt || expiresAt <= new Date()) {
+    const expired = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: 'EXPIRED',
+        reasonCode: 'ASK_CLARIFICATION_EXPIRED',
+        completedAt: new Date(),
+        resultJson: asInputJson({
+          schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+          blocks: [{ type: 'SUMMARY', id: 'clarification-expired', title: 'This clarification expired', body: 'Ask the question again so the answer uses current home records and routing rules.', tone: 'CAUTION', actions: [] }],
+          captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+        }),
+      },
+    });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'EXPIRED', metadataJson: asInputJson({ reason: 'CLARIFICATION_EXPIRED' }) } });
+    return mapPersistedExecution(expired, await propertySummary(execution.propertyId));
+  }
+  const candidateOperationIds = Array.isArray(savedClarification.candidateOperationIds)
+    ? savedClarification.candidateOperationIds.filter((value): value is string => typeof value === 'string')
+    : [];
+  if (input.operationId && !candidateOperationIds.includes(input.operationId)) {
+    const error = new Error('The selected clarification option is invalid.');
+    (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_INVALID_OPTION';
+    throw error;
+  }
+  if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
+  const controls = readAskOperationalControls();
+  const clarifiedMessage = input.answer ? `${execution.message}\nClarification: ${input.answer}` : execution.message;
+  const safetyDecision = resolveAskRoutingCascade(clarifiedMessage, {
+    localRoutingEnabled: controls.localRoutingEnabled,
+    localMinimumConfidence: controls.localRoutingMinimumConfidence,
+    ambiguityMargin: controls.routingAmbiguityMargin,
+  });
+  let operation: AskOperationResolution;
+  if (safetyDecision.stage === 'SAFETY') {
+    operation = safetyDecision.operation;
+  } else if (input.operationId) {
+    operation = { ...getAskOperationDefinition(input.operationId as AskOperationId), confidence: 1 };
+  } else if (candidateOperationIds.length === 1) {
+    operation = { ...getAskOperationDefinition(candidateOperationIds[0] as AskOperationId), confidence: 1 };
+  } else {
+    if (safetyDecision.requiresClarification) {
+      const error = new Error('Add one more specific detail so Ask can choose the correct home workflow.');
+      (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_UNRESOLVED';
+      throw error;
+    }
+    operation = safetyDecision.operation;
+  }
+  const operationDefinition = getAskOperationDefinition(operation.operationId);
+  const claimed = await prisma.askExecution.updateMany({
+    where: { id: execution.id, userId, status: { in: ['NEEDS_CLARIFICATION', 'NEEDS_ENTITY'] } },
+    data: {
+      operationId: operation.operationId, operationVersion: operation.version, intentFamily: operation.family, intentConfidence: operation.confidence, status: 'RUNNING',
+      parametersJson: asInputJson({ ...parameters, clarificationReceipt: { idempotencyKey: input.idempotencyKey, clarificationVersion: input.clarificationVersion } }),
+    },
+  });
+  if (claimed.count !== 1) {
+    const latest = await prisma.askExecution.findFirst({ where: { id: execution.id, userId } });
+    if (latest) return mapPersistedExecution(latest, await propertySummary(latest.propertyId));
+    const error = new Error('This clarification is no longer active.');
+    (error as Error & { code?: string }).code = 'ASK_CLARIFICATION_NOT_ACTIVE';
+    throw error;
+  }
+  try {
+    const rawResult = await withAskTimeout(
+      executeOperation({ userId, sessionId: execution.sessionId, message: clarifiedMessage, propertyId: execution.propertyId, operation }),
+      controls.executionTimeoutMs,
+    );
+    const result = operationDefinition.executionMode === 'DETERMINISTIC'
+      ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
+      : rawResult;
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !operationDefinition.allowedBlockTypes.includes(block.type));
+    if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
+    const nextParameters = {
+      ...(result.parameters ?? {}),
+      clarificationReceipt: { idempotencyKey: input.idempotencyKey, clarificationVersion: input.clarificationVersion },
+    };
+    const saved = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: result.status,
+        reasonCode: result.reasonCode,
+        contextVersion: result.contextVersion,
+        parametersJson: asInputJson(nextParameters),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
+        completedAt: terminalStatus(result.status) ? new Date() : null,
+      },
+    });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CLARIFICATION_SUBMITTED', metadataJson: asInputJson({ operationId: operation.operationId }) } });
+    return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+  } catch (caught) {
+    const failureStatus = askFailureStatus(caught);
+    await prisma.askExecution.update({ where: { id: execution.id }, data: { status: failureStatus, errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED', completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null } });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: failureStatus, metadataJson: asInputJson({ stage: 'CLARIFICATION_RESUME' }) } });
     throw caught;
   }
 }
@@ -3380,7 +3590,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: replayed.reasonCode,
         contextVersion: replayed.contextVersion ?? previousCapture.contextVersion,
         parametersJson: replayed.parameters ? asInputJson(replayed.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, suggestions: replayed.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions }),
         completedAt: terminalStatus(replayed.status) ? new Date() : null,
       },
     });
@@ -3820,7 +4030,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion ?? capturedContextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -3889,7 +4099,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
       reasonCode: result.reasonCode,
       contextVersion: result.contextVersion,
       parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
+      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
       completedAt: terminalStatus(result.status) ? new Date() : null,
     },
   });
@@ -3935,9 +4145,20 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     : {};
   const expectedVersion = parameters.confirmationVersion;
   const expiresAt = typeof parameters.confirmationExpiresAt === 'string' ? new Date(parameters.confirmationExpiresAt) : null;
-  if (expectedVersion !== input.confirmationVersion || !expiresAt || expiresAt <= new Date()) {
-    const error = new Error('This confirmation expired. Ask again to review the current settings.');
-    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_EXPIRED';
+  if (!expiresAt || expiresAt <= new Date()) {
+    const expired = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: 'EXPIRED', reasonCode: 'ASK_CONFIRMATION_EXPIRED', completedAt: new Date(),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-expired', title: 'Confirmation expired', status: 'EXPIRED', description: 'No action was performed. Ask again to review current home records and settings.', details: [], actions: [] }], captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'] }),
+      },
+    });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'EXPIRED', metadataJson: asInputJson({ reason: 'CONFIRMATION_EXPIRED' }) } });
+    return mapPersistedExecution(expired, await propertySummary(execution.propertyId));
+  }
+  if (expectedVersion !== input.confirmationVersion) {
+    const error = new Error('This confirmation version is no longer active.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
     throw error;
   }
   let result: AskOperationResult;
@@ -4131,6 +4352,11 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
       throw error;
     }
+    if (parameters.guidanceJourneyContextVersion !== await guidanceJourneyContextVersion(execution.propertyId, candidate.data)) {
+      const error = new Error('The guided-plan scope changed while confirmation was open. Review the current home record and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
     const journey = await guidanceJourneyService.createUserInitiatedJourney(execution.propertyId, {
       scopeCategory: candidate.data.scopeCategory,
       scopeId: candidate.data.scopeId,
@@ -4149,6 +4375,11 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     if (!candidate.success) {
       const error = new Error('The comparison workspace settings are invalid.');
       (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.quoteWorkspaceContextVersion !== await quoteWorkspaceContextVersion(execution.propertyId)) {
+      const error = new Error('Quote workspaces changed while confirmation was open. Review the current comparison and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
     const created = await getOrCreateQuoteComparisonWorkspace(execution.propertyId, userId, candidate.data);
@@ -4245,6 +4476,11 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
       throw error;
     }
+    if (parameters.refinanceMonitorContextVersion !== await refinanceMonitorContextVersion(userId, execution.propertyId)) {
+      const error = new Error('Mortgage-rate data or notification settings changed while confirmation was open. Review the current settings and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
     const monitor = await createOrUpdateRefinanceRateMonitor({
       userId, propertyId: execution.propertyId, thresholdPct,
       product: product as RefinanceRateMonitorProduct,
@@ -4280,7 +4516,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.update({
         where: { id: execution.id },
-        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, suggestions: result.suggestions }), completedAt: new Date() },
+        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions }), completedAt: new Date() },
       });
       await tx.askConfirmationReceipt.create({
         data: { executionId, idempotencyKey: input.idempotencyKey, confirmationVersion: input.confirmationVersion, artifactType, artifactId, inputHash },
@@ -4330,6 +4566,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
         blocks,
         captureRequests: [],
         confirmation: null,
+        clarification: null,
         suggestions: [command.cancellation.suggestion],
       }),
       completedAt: new Date(),
@@ -4347,6 +4584,31 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   const properties = await prisma.property.findMany({ where: { id: { in: propertyIds } }, select: { id: true, name: true, address: true, city: true, state: true } });
   const labels = new Map(properties.map((property) => [property.id, { id: property.id, label: propertyLabel(property) }]));
   return executions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
+}
+
+export async function getAskExecution(userId: string, executionId: string): Promise<AskExecutionResponse> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+}
+
+export async function requestAskCorrection(userId: string, executionId: string, input: RequestAskCorrection): Promise<{ executionId: string; href: string }> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
+  const href = input.kind === 'RETRY_RESPONSE'
+    ? `/dashboard/ask?retryExecutionId=${encodeURIComponent(execution.id)}`
+    : captureFallbackHref(execution.operationId, execution.propertyId) ?? '/dashboard/ask';
+  await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CORRECTION_REQUESTED', metadataJson: asInputJson({ kind: input.kind }) } });
+  return { executionId, href };
 }
 
 export async function submitAskExecutionFeedback(userId: string, executionId: string, input: SubmitAskFeedback): Promise<{ id: string; rating: 'UP' | 'DOWN' }> {

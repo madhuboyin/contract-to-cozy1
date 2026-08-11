@@ -1,8 +1,8 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { CreateAskExecutionRequestSchema, RecordAskCaptureEventSchema, SubmitAskCaptureRequestSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema } from '../productFramework/ask/ask.contract';
-import { cancelAskExecution, confirmAskExecution, createAskExecution, getAskSession, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, submitAskCapture, submitAskExecutionFeedback } from '../services/ask/askOrchestrator.service';
+import { CreateAskExecutionRequestSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema } from '../productFramework/ask/ask.contract';
+import { cancelAskExecution, confirmAskExecution, createAskExecution, getAskExecution, getAskSession, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, submitAskCapture, submitAskClarification, submitAskExecutionFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import {
   PropertyContextCaptureValidationError,
@@ -11,6 +11,13 @@ import {
 } from '../modules/propertyContext/application/captureFeatureContext';
 import { getRefinanceRateMonitor, updateRefinanceRateMonitorStatus } from '../refinanceRadar/refinanceRateMonitor.service';
 import { RefinanceRateMonitorStatus } from '@prisma/client';
+
+function sendAskDependencyError(res: Response, error: unknown): Response | null {
+  const sourceCode = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+  if (sourceCode === 'AI_TIMEOUT') return res.status(503).json({ success: false, error: { code: 'ASK_DEPENDENCY_UNAVAILABLE', message: 'Ask timed out while contacting its guidance provider. Record-based operations remain available.' } });
+  if (sourceCode === 'AI_CIRCUIT_OPEN' || sourceCode === 'AI_UPSTREAM_ERROR' || sourceCode === 'AI_EMPTY_RESPONSE') return res.status(503).json({ success: false, error: { code: 'ASK_MODEL_UNAVAILABLE', message: 'Generated guidance is temporarily unavailable. Record-based Ask operations remain available.' } });
+  return null;
+}
 
 export async function postAskExecution(req: AuthRequest, res: Response, next: NextFunction) {
   try {
@@ -25,6 +32,8 @@ export async function postAskExecution(req: AuthRequest, res: Response, next: Ne
     if (code === 'ASK_PROPERTY_NOT_FOUND' || code === 'ASK_SESSION_NOT_FOUND') {
       return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask context was not found.' } });
     }
+    const dependencyResponse = sendAskDependencyError(res, error);
+    if (dependencyResponse) return dependencyResponse;
     return next(error);
   }
 }
@@ -42,6 +51,24 @@ export async function postAskConfirmation(req: AuthRequest, res: Response, next:
     if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Your household role cannot perform this action.' } });
     if (code === 'ASK_CONTEXT_VERSION_CONFLICT') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'The workflow context changed.' } });
     if (code === 'ASK_CONFIRMATION_EXPIRED' || code === 'ASK_CONFIRMATION_NOT_ACTIVE' || code === 'ASK_CONFIRMATION_IDEMPOTENCY_CONFLICT') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Confirmation is unavailable.' } });
+    return next(error);
+  }
+}
+
+export async function postAskClarification(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = SubmitAskClarificationSchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_CLARIFICATION', message: 'The clarification is invalid.', details: input.error.flatten() } });
+    return res.json({ success: true, data: await submitAskClarification(userId, req.params.executionId, input.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
+    if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Your household role cannot access this home.' } });
+    if (code?.startsWith('ASK_CLARIFICATION_')) return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Clarification is unavailable.' } });
+    const dependencyResponse = sendAskDependencyError(res, error);
+    if (dependencyResponse) return dependencyResponse;
     return next(error);
   }
 }
@@ -115,6 +142,8 @@ export async function postAskCapture(req: AuthRequest, res: Response, next: Next
       return res.status(400).json({ success: false, error: { code: error.name, message: error.message } });
     }
     await recordAskCaptureFailure(req.params.executionId, 'RESUME_FAILED');
+    const dependencyResponse = sendAskDependencyError(res, error);
+    if (dependencyResponse) return dependencyResponse;
     return next(error);
   }
 }
@@ -141,6 +170,32 @@ export async function getAskSessionExecutions(req: AuthRequest, res: Response, n
     const executions = await getAskSession(userId, sessionId.data);
     return res.status(200).json({ success: true, data: { executions } });
   } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getAskExecutionById(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    return res.status(200).json({ success: true, data: await getAskExecution(userId, req.params.executionId) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
+    return next(error);
+  }
+}
+
+export async function postAskCorrection(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = RequestAskCorrectionSchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_CORRECTION', message: 'The correction request is invalid.' } });
+    return res.status(200).json({ success: true, data: await requestAskCorrection(userId, req.params.executionId, input.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
     return next(error);
   }
 }

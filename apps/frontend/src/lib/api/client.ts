@@ -1003,8 +1003,17 @@ class APIClient {
   async getAskSession(sessionId: string): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
     return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`);
   }
+  async getAskExecution(executionId: string): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}`);
+  }
+  async requestAskCorrection(executionId: string, kind: 'HOME_RECORD' | 'RETRY_RESPONSE'): Promise<APIResponse<{ executionId: string; href: string }>> {
+    return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/corrections`, { method: 'POST', body: { kind } });
+  }
   async submitAskCapture(executionId: string, payload: SubmitAskCapturePayload): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/captures`, { method: 'POST', body: payload });
+  }
+  async submitAskClarification(executionId: string, payload: import('@/features/ask/types').SubmitAskClarificationPayload): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/clarifications`, { method: 'POST', body: payload });
   }
   async recordAskCaptureEvent(executionId: string, payload: { requirementId: string; captureKey: string; event: 'DISMISSED' | 'FULL_FORM_OPENED' }): Promise<APIResponse<void>> {
     return this.request<void>(`/api/ask/executions/${encodeURIComponent(executionId)}/captures/events`, { method: 'POST', body: payload });

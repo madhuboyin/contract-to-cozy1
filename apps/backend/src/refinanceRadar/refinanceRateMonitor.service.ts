@@ -121,11 +121,11 @@ export async function evaluateRefinanceRateMonitors(snapshot: {
         deduplicationKey: `refinance-rate-monitor:${monitor.id}:${snapshot.id}`,
         type: 'REFINANCE_RATE_THRESHOLD_REACHED',
         title: 'Your mortgage-rate threshold was reached',
-        message: `The governed ${monitor.product === RefinanceRateMonitorProduct.FIXED_15_YEAR ? '15-year' : '30-year'} benchmark is ${observedRate.toFixed(3)}%, at or below your ${thresholdPct.toFixed(3)}% threshold.`,
-        actionUrl: `/dashboard/properties/${monitor.propertyId}/tools/mortgage-refinance-radar`,
+        message: `The governed ${monitor.product === RefinanceRateMonitorProduct.FIXED_15_YEAR ? '15-year' : '30-year'} benchmark is ${observedRate.toFixed(3)}%, ${(thresholdPct - observedRate).toFixed(3)} percentage points below your ${thresholdPct.toFixed(3)}% threshold. This threshold crossing is why you were notified; open Mortgage Refinance Radar to rerun the personalized break-even review before contacting lenders.`,
+        actionUrl: `/dashboard/properties/${monitor.propertyId}/tools/mortgage-refinance-radar?from=notification&monitorId=${encodeURIComponent(monitor.id)}&snapshotId=${encodeURIComponent(snapshot.id)}`,
         entityType: 'REFINANCE_RATE_MONITOR', entityId: monitor.id,
         category: 'REFINANCE', urgency: 'MATERIAL',
-        metadata: { propertyId: monitor.propertyId, monitorId: monitor.id, snapshotId: snapshot.id, benchmarkRatePct: observedRate, thresholdPct, source: snapshot.source, sourceRef: snapshot.sourceRef, observedAt: snapshot.date },
+        metadata: { propertyId: monitor.propertyId, monitorId: monitor.id, snapshotId: snapshot.id, benchmarkRatePct: observedRate, thresholdPct, source: snapshot.source, sourceRef: snapshot.sourceRef, observedAt: snapshot.date, why: 'GOVERNED_BENCHMARK_AT_OR_BELOW_USER_THRESHOLD', nextAction: 'RERUN_PERSONALIZED_REFINANCE_REVIEW', askQuestion: 'Is refinancing worth reviewing now based on my current mortgage and this rate snapshot?' },
       });
       triggered += 1;
     }

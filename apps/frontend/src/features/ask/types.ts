@@ -20,7 +20,15 @@ export type AskPresentationBlock =
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null }> }
   | { type: 'BOUNDARY'; id: string; title: string; body: string; severity: 'INFO' | 'CAUTION' | 'EMERGENCY'; suggestions: string[] }
   | { type: 'MONITOR'; id: string; monitorId: string; title: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED'; threshold: string; product: string; channel: string; cadence: string; quietHours: string | null; sourceBoundary: string; actions: AskAction[] }
-  | { type: 'WORKFLOW_PROGRESS'; id: string; title: string; status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED'; description: string; details: Array<{ label: string; value: string }>; actions: AskAction[] };
+  | { type: 'WORKFLOW_PROGRESS'; id: string; title: string; status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED'; description: string; details: Array<{ label: string; value: string }>; actions: AskAction[] }
+  | { type: 'METRIC_ROW'; id: string; title: string; description?: string | null; metrics: Array<{ label: string; value: string; detail?: string | null; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL' }> }
+  | { type: 'TIMELINE'; id: string; title: string; description?: string | null; items: Array<{ id: string; label: string; date?: string | null; description?: string | null; status?: string | null; href?: string | null }> }
+  | { type: 'COMPARISON'; id: string; title: string; description?: string | null; options: Array<{ id: string; label: string; summary?: string | null; attributes: Array<{ label: string; value: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL' }> }>; actions: AskAction[] }
+  | { type: 'DECISION_TRACE'; id: string; title: string; steps: Array<{ label: string; detail: string; outcome?: string | null }> }
+  | { type: 'ASSUMPTIONS'; id: string; title: string; items: string[] }
+  | { type: 'LIMITATION'; id: string; title: string; body: string; severity: 'INFO' | 'CAUTION' }
+  | { type: 'EMPTY_STATE'; id: string; title: string; body: string; actions: AskAction[] }
+  | { type: 'ERROR_STATE'; id: string; title: string; body: string; retryable: boolean; actions: AskAction[] };
 
 export interface AskExecutionResponse {
   schemaVersion: '1.0';
@@ -34,9 +42,25 @@ export interface AskExecutionResponse {
   blocks: AskPresentationBlock[];
   captureRequests: AskCaptureRequest[];
   confirmation: AskConfirmation | null;
+  clarification: AskClarification | null;
   suggestions: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AskClarification {
+  version: number;
+  question: string;
+  options: Array<{ operationId: string; label: string }>;
+  allowFreeText: boolean;
+  expiresAt: string;
+}
+
+export interface SubmitAskClarificationPayload {
+  clarificationVersion: number;
+  idempotencyKey: string;
+  operationId?: string;
+  answer?: string;
 }
 
 export interface AskFeedbackResponse {

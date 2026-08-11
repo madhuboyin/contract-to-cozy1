@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, ExternalLink, Home, 
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import type { AskAction, AskCaptureRequest, AskConfirmation, AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
+import type { AskAction, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 
 const starterQuestions = [
@@ -26,6 +26,10 @@ function sessionStorageKey(propertyId?: string): string {
 
 function draftStorageKey(propertyId?: string): string {
   return `ctc:ask-draft:v1:${propertyId ?? 'general'}`;
+}
+
+function captureDraftStorageKey(executionId: string, requirementId: string): string {
+  return `ctc:ask-capture-draft:v1:${executionId}:${requirementId}`;
 }
 
 function ActionLink({ action }: { action: AskAction }) {
@@ -222,10 +226,65 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
     );
   }
 
-  return (
+  if (block.type === 'METRIC_ROW') return <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}<dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{block.metrics.map((metric) => <div key={metric.label} className={cn('rounded-xl border p-3', metric.tone === 'POSITIVE' ? 'border-emerald-200 bg-emerald-50' : metric.tone === 'CAUTION' ? 'border-amber-200 bg-amber-50' : metric.tone === 'CRITICAL' ? 'border-red-200 bg-red-50' : 'border-slate-100 bg-slate-50')}><dt className="text-xs text-slate-500">{metric.label}</dt><dd className="mt-1 text-lg font-semibold text-slate-950">{metric.value}</dd>{metric.detail && <p className="mt-1 text-xs text-slate-600">{metric.detail}</p>}</div>)}</dl></section>;
+
+  if (block.type === 'TIMELINE') return <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}<ol className="mt-4 border-l-2 border-teal-200 pl-4">{block.items.map((item) => <li key={item.id} className="relative pb-4 before:absolute before:-left-[1.34rem] before:top-1 before:h-2.5 before:w-2.5 before:rounded-full before:bg-teal-700"><div className="flex flex-wrap items-center gap-2">{item.href ? <Link href={item.href} className="font-semibold text-slate-900 hover:text-teal-700">{item.label}</Link> : <span className="font-semibold text-slate-900">{item.label}</span>}{item.date && <span className="text-xs text-slate-500">{item.date}</span>}{item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{item.status}</span>}</div>{item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}</li>)}</ol></section>;
+
+  if (block.type === 'COMPARISON') return <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}<div className="mt-4 grid gap-3 sm:grid-cols-2">{block.options.map((option) => <div key={option.id} className="rounded-xl border border-slate-200 p-3"><h4 className="font-semibold text-slate-900">{option.label}</h4>{option.summary && <p className="mt-1 text-sm text-slate-600">{option.summary}</p>}<dl className="mt-3 space-y-2">{option.attributes.map((attribute) => <div key={attribute.label} className="flex justify-between gap-3 text-sm"><dt className="text-slate-500">{attribute.label}</dt><dd className="text-right font-medium text-slate-800">{attribute.value}</dd></div>)}</dl></div>)}</div>{block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}</section>;
+
+  if (block.type === 'DECISION_TRACE') return <details className="rounded-2xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer font-semibold text-slate-900">{block.title}</summary><ol className="mt-3 space-y-3">{block.steps.map((step, index) => <li key={`${step.label}-${index}`} className="text-sm"><p className="font-medium text-slate-800">{index + 1}. {step.label}</p><p className="mt-1 text-slate-600">{step.detail}</p>{step.outcome && <p className="mt-1 text-xs font-semibold text-teal-700">{step.outcome}</p>}</li>)}</ol></details>;
+
+  if (block.type === 'ASSUMPTIONS') return <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title}</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">{block.items.map((item) => <li key={item}>{item}</li>)}</ul></details>;
+
+  if (block.type === 'LIMITATION' || block.type === 'EMPTY_STATE' || block.type === 'ERROR_STATE') {
+    const actions = 'actions' in block ? block.actions : [];
+    return <section className={cn('rounded-2xl border p-4', block.type === 'ERROR_STATE' ? 'border-red-200 bg-red-50' : block.type === 'LIMITATION' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')}><h3 className="font-semibold text-slate-950">{block.title}</h3><p className="mt-2 text-sm leading-6 text-slate-700">{block.body}</p>{actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}</section>;
+  }
+
+  if (block.type === 'TABLE') return (
     <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       <table className="mt-3 min-w-full text-left text-sm"><thead><tr>{block.columns.map((column) => <th key={column.key} className="border-b px-2 py-2 text-xs text-slate-500">{column.label}</th>)}</tr></thead><tbody>{block.rows.map((row) => <tr key={row.id}>{block.columns.map((column) => <td key={column.key} className="border-b border-slate-100 px-2 py-2 text-slate-700">{row.values[column.key]}</td>)}</tr>)}</tbody></table>
+    </section>
+  );
+
+  const unsupported = block as { type?: string; title?: string };
+  return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4" role="status"><h3 className="font-semibold text-slate-950">{unsupported.title ?? 'Response unavailable'}</h3><p className="mt-2 text-sm text-slate-700">This response section uses an unsupported format ({unsupported.type ?? 'unknown'}). Refresh Ask or ask the question again.</p></section>;
+}
+
+function ClarificationCard({ executionId, clarification, onCompleted }: { executionId: string; clarification: AskClarification; onCompleted: (execution: AskExecutionResponse) => void }) {
+  const [answer, setAnswer] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [idempotencyKey] = useState(newId);
+  const expired = new Date(clarification.expiresAt) <= new Date();
+
+  const submitClarification = async (operationId?: string) => {
+    if (saving || expired || (!operationId && !answer.trim())) return;
+    setSaving(true); setError(null);
+    try {
+      const response = await api.submitAskClarification(executionId, {
+        clarificationVersion: clarification.version,
+        idempotencyKey,
+        ...(operationId ? { operationId } : { answer: answer.trim() }),
+      });
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not apply that clarification.');
+      onCompleted(response.data);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not apply that clarification.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4" aria-busy={saving}>
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-800">One detail needed</p>
+      <h3 className="mt-1 font-semibold text-slate-950">{clarification.question}</h3>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {clarification.options.map((option) => <button key={option.operationId} type="button" disabled={saving || expired} onClick={() => void submitClarification(option.operationId)} className="min-h-11 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold capitalize text-slate-800 hover:border-indigo-400 disabled:opacity-50">{option.label}</button>)}
+      </div>
+      {clarification.allowFreeText && <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void submitClarification(); }}><input value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={500} disabled={saving || expired} placeholder="Or add a specific detail…" aria-label="Clarification detail" className="min-h-11 flex-1 rounded-xl border border-indigo-200 bg-white px-3 text-sm text-slate-900" /><button type="submit" disabled={saving || expired || !answer.trim()} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Continuing…' : 'Continue'}</button></form>}
+      {expired && <p className="mt-3 text-sm text-amber-700">This clarification expired. Ask the question again to use current records.</p>}
+      {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
     </section>
   );
 }
@@ -280,20 +339,27 @@ function InlineCaptureCard({
 }) {
   const schema = request.inputSchema;
   const scalarCapture = schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' && schema.type !== 'GROUP';
-  const [values, setValues] = useState<Record<string, unknown>>(
-    schema.type === 'RELATIONAL_UPDATE'
+  const [values, setValues] = useState<Record<string, unknown>>(() => {
+    const canonical = schema.type === 'RELATIONAL_UPDATE'
       ? schema.currentValues
       : request.currentAnswer && typeof request.currentAnswer === 'object' && !Array.isArray(request.currentAnswer)
         ? scalarCapture && (request.currentAnswer as Record<string, unknown>).value === null
           ? {}
           : request.currentAnswer as Record<string, unknown>
-        : {},
-  );
+        : {};
+    try {
+      const stored = window.localStorage.getItem(captureDraftStorageKey(executionId, request.requirementId));
+      return stored ? { ...canonical, ...JSON.parse(stored) as Record<string, unknown> } : canonical;
+    } catch { return canonical; }
+  });
   const [saving, setSaving] = useState(false);
   const [idempotencyKey] = useState(newId);
   const [dismissed, setDismissed] = useState(false);
   const [sensitiveDataConfirmed, setSensitiveDataConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    window.localStorage.setItem(captureDraftStorageKey(executionId, request.requirementId), JSON.stringify(values));
+  }, [executionId, request.requirementId, values]);
   if (dismissed) return null;
   if (schema.type === 'RELATIONAL_SELECT_CREATE') return <section className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4">
     <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">More information needed</p>
@@ -337,6 +403,7 @@ function InlineCaptureCard({
         sensitiveDataConfirmed: request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY' ? sensitiveDataConfirmed : undefined,
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not save this home detail.');
+      window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId));
       onCompleted(response.data);
       if (!['WORKFLOW_INPUT', 'SCENARIO_INPUT', 'PREFERENCE_INPUT'].includes(request.classification)) {
         window.dispatchEvent(new CustomEvent('property-context:updated', {
@@ -377,7 +444,7 @@ function InlineCaptureCard({
       )}
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>
-        {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
+        {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
         {request.fallbackHref && <Link href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></Link>}
       </div>
     </form>
@@ -390,6 +457,7 @@ function ExecutionFeedback({ executionId, propertyId }: { executionId: string; p
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState(false);
 
   const submit = async (nextRating: 'UP' | 'DOWN', nextComment?: string) => {
     setSaving(true); setError(null);
@@ -401,6 +469,17 @@ function ExecutionFeedback({ executionId, propertyId }: { executionId: string; p
       setError(caught instanceof Error ? caught.message : 'Could not save feedback.');
     } finally { setSaving(false); }
   };
+  const correctHomeRecord = async () => {
+    setCorrecting(true); setError(null);
+    try {
+      const response = await api.requestAskCorrection(executionId, 'HOME_RECORD');
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not open the correction workflow.');
+      window.location.assign(response.data.href);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not open the correction workflow.');
+      setCorrecting(false);
+    }
+  };
 
   return (
     <div className="border-t border-slate-100 pt-3 text-xs text-slate-500">
@@ -408,7 +487,7 @@ function ExecutionFeedback({ executionId, propertyId }: { executionId: string; p
         <span>{saved ? 'Thanks—your feedback was saved.' : 'Was this helpful?'}</span>
         <button type="button" disabled={saving} aria-label="Helpful response" aria-pressed={rating === 'UP'} onClick={() => void submit('UP')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'UP' && 'bg-teal-50 text-teal-700')}><ThumbsUp className="h-4 w-4" /></button>
         <button type="button" disabled={saving} aria-label="Not helpful response" aria-pressed={rating === 'DOWN'} onClick={() => { setRating('DOWN'); setSaved(false); }} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'DOWN' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-4 w-4" /></button>
-        {propertyId && <Link href={`/dashboard/properties/${encodeURIComponent(propertyId)}/edit?from=ask&executionId=${encodeURIComponent(executionId)}`} className="ml-auto font-semibold text-teal-700 hover:text-teal-800">Correct home information</Link>}
+        {propertyId && <button type="button" disabled={correcting} onClick={() => void correctHomeRecord()} className="ml-auto font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'Correct home information'}</button>}
       </div>
       {rating === 'DOWN' && !saved && (
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -421,7 +500,7 @@ function ExecutionFeedback({ executionId, propertyId }: { executionId: string; p
   );
 }
 
-export function AskWorkspace({ mode = 'page', onClose, initialQuestion = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; initialQuestion?: string }) {
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string }) {
   const { selectedPropertyId } = usePropertyContext();
   const [sessionId, setSessionId] = useState('');
   const [executions, setExecutions] = useState<AskExecutionResponse[]>([]);
@@ -432,6 +511,9 @@ export function AskWorkspace({ mode = 'page', onClose, initialQuestion = '' }: {
   const [confirmClear, setConfirmClear] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
+
+  useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
 
   useEffect(() => {
     const key = sessionStorageKey(selectedPropertyId);
@@ -516,7 +598,8 @@ export function AskWorkspace({ mode = 'page', onClose, initialQuestion = '' }: {
 
       {confirmClear && <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span className="flex-1">Clear this Ask conversation and its feedback? Home records and artifacts created through Ask will remain unchanged.</span><button type="button" disabled={loading} onClick={() => void clearHistory()} className="min-h-10 rounded-xl bg-red-700 px-3 font-semibold text-white">Clear conversation</button><button type="button" disabled={loading} onClick={() => setConfirmClear(false)} className="min-h-10 rounded-xl px-3 font-semibold">Keep it</button></div>}
 
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5" aria-live="polite">
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
+      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : executions.length === 0 ? (
           <div className="mx-auto max-w-xl py-8 text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-teal-100 text-teal-800"><Home className="h-6 w-6" /></div>
@@ -533,6 +616,7 @@ export function AskWorkspace({ mode = 'page', onClose, initialQuestion = '' }: {
                   <div className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</div>
                   {execution.blocks.map((block) => <BlockView key={block.id} block={block} />)}
                   {execution.captureRequests.map((request) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={(updated) => setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item))} />)}
+                  {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={(updated) => setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item))} />}
                   {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={(updated) => setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item))} />}
                   {execution.suggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{execution.suggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
                   <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} />

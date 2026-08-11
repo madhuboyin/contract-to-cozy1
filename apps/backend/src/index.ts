@@ -183,7 +183,14 @@ import { register } from './lib/metrics';
 import { metricsMiddleware } from './middleware/metrics.middleware';
 import { requestIdMiddleware } from './middleware/requestId.middleware';
 import { APP_CONFIG_KEYS, isEmailVerificationDisabled } from './config/appConfig';
+import { validateAskOperationDefinitions } from './services/ask/askOperationRegistry';
+import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
 dotenv.config();
+
+const askRegistryIssues = [...validateAskOperationDefinitions(), ...validateAskDomainCommandRegistry()];
+if (askRegistryIssues.length) {
+  throw new Error(`FATAL: Ask registry validation failed: ${askRegistryIssues.join('; ')}`);
+}
 
 const app = express();
 

@@ -138,6 +138,32 @@ const WorkflowProgressBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3),
 });
 
+const MetricRowBlockSchema = z.object({
+  type: z.literal('METRIC_ROW'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  metrics: z.array(z.object({ label: z.string(), value: z.string(), detail: z.string().nullable().optional(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT') })).min(1).max(6),
+});
+
+const TimelineBlockSchema = z.object({
+  type: z.literal('TIMELINE'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  items: z.array(z.object({ id: z.string(), label: z.string(), date: z.string().nullable().optional(), description: z.string().nullable().optional(), status: z.string().nullable().optional(), href: z.string().nullable().optional() })).max(50),
+});
+
+const ComparisonBlockSchema = z.object({
+  type: z.literal('COMPARISON'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  options: z.array(z.object({ id: z.string(), label: z.string(), summary: z.string().nullable().optional(), attributes: z.array(z.object({ label: z.string(), value: z.string(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT') })).max(12) })).min(2).max(4),
+  actions: z.array(AskActionSchema).max(3).default([]),
+});
+
+const DecisionTraceBlockSchema = z.object({
+  type: z.literal('DECISION_TRACE'), id: z.string(), title: z.string(),
+  steps: z.array(z.object({ label: z.string(), detail: z.string(), outcome: z.string().nullable().optional() })).min(1).max(12),
+});
+
+const AssumptionsBlockSchema = z.object({ type: z.literal('ASSUMPTIONS'), id: z.string(), title: z.string(), items: z.array(z.string()).min(1).max(20) });
+const LimitationBlockSchema = z.object({ type: z.literal('LIMITATION'), id: z.string(), title: z.string(), body: z.string(), severity: z.enum(['INFO', 'CAUTION']) });
+const EmptyStateBlockSchema = z.object({ type: z.literal('EMPTY_STATE'), id: z.string(), title: z.string(), body: z.string(), actions: z.array(AskActionSchema).max(3).default([]) });
+const ErrorStateBlockSchema = z.object({ type: z.literal('ERROR_STATE'), id: z.string(), title: z.string(), body: z.string(), retryable: z.boolean(), actions: z.array(AskActionSchema).max(3).default([]) });
+
 export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   SummaryBlockSchema,
   GroupedListBlockSchema,
@@ -147,6 +173,14 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   BoundaryBlockSchema,
   MonitorBlockSchema,
   WorkflowProgressBlockSchema,
+  MetricRowBlockSchema,
+  TimelineBlockSchema,
+  ComparisonBlockSchema,
+  DecisionTraceBlockSchema,
+  AssumptionsBlockSchema,
+  LimitationBlockSchema,
+  EmptyStateBlockSchema,
+  ErrorStateBlockSchema,
 ]);
 
 export const AskConfirmationSchema = z.object({
@@ -170,6 +204,30 @@ export const SubmitAskFeedbackSchema = z.object({
   rating: z.enum(['UP', 'DOWN']),
   comment: z.string().trim().max(1000).optional(),
 }).strict();
+
+export const RequestAskCorrectionSchema = z.object({
+  kind: z.enum(['HOME_RECORD', 'RETRY_RESPONSE']),
+}).strict();
+
+export const AskClarificationSchema = z.object({
+  version: z.number().int().positive(),
+  question: z.string().trim().min(1).max(500),
+  options: z.array(z.object({
+    operationId: z.string().trim().min(1).max(120),
+    label: z.string().trim().min(1).max(160),
+  })).max(3),
+  allowFreeText: z.boolean(),
+  expiresAt: z.string().datetime(),
+});
+
+export const SubmitAskClarificationSchema = z.object({
+  clarificationVersion: z.number().int().positive(),
+  idempotencyKey: z.string().trim().min(8).max(128),
+  operationId: z.string().trim().min(1).max(120).optional(),
+  answer: z.string().trim().min(1).max(1000).optional(),
+}).strict().refine((value) => Boolean(value.operationId || value.answer), {
+  message: 'Choose an option or add a clarification.',
+});
 
 export const AskCaptureRequestSchema = z.object({
   requirementId: z.string(),
@@ -239,6 +297,7 @@ export const AskExecutionResponseSchema = z.object({
   contextVersion: z.string().nullable(),
   blocks: z.array(AskPresentationBlockSchema),
   captureRequests: z.array(AskCaptureRequestSchema).max(3).default([]),
+  clarification: AskClarificationSchema.nullable().default(null),
   confirmation: AskConfirmationSchema.nullable().default(null),
   suggestions: z.array(z.string()).max(5),
   createdAt: z.string().datetime(),
@@ -249,9 +308,12 @@ export type AskExecutionStatus = z.infer<typeof AskExecutionStatusSchema>;
 export type AskPresentationBlock = z.infer<typeof AskPresentationBlockSchema>;
 export type AskCaptureRequest = z.infer<typeof AskCaptureRequestSchema>;
 export type AskConfirmation = z.infer<typeof AskConfirmationSchema>;
+export type AskClarification = z.infer<typeof AskClarificationSchema>;
 export type CreateAskExecutionRequest = z.infer<typeof CreateAskExecutionRequestSchema>;
 export type SubmitAskCaptureRequest = z.infer<typeof SubmitAskCaptureRequestSchema>;
 export type RecordAskCaptureEvent = z.infer<typeof RecordAskCaptureEventSchema>;
 export type SubmitAskConfirmation = z.infer<typeof SubmitAskConfirmationSchema>;
 export type SubmitAskFeedback = z.infer<typeof SubmitAskFeedbackSchema>;
+export type RequestAskCorrection = z.infer<typeof RequestAskCorrectionSchema>;
+export type SubmitAskClarification = z.infer<typeof SubmitAskClarificationSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;

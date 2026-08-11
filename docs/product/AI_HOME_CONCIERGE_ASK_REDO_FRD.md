@@ -38,12 +38,15 @@ This FRD is the living product and implementation contract for Ask. The reposito
 
 - Durable `AskSession`, `AskExecution`, execution-event, capture-receipt, and confirmation state is persisted through the Ask API.
 - A versioned deterministic operation registry resolves supported homeowner intents before any language-model call.
-- Typed execution responses render summary, grouped-list, table, evidence, boundary, capability, monitor, and workflow-progress blocks alongside structured capture requests and confirmations in the shared Ask workspace.
+- Typed execution responses render summary, grouped-list, table, metric-row, timeline, comparison, decision-trace, assumptions, limitation, empty-state, error-state, evidence, boundary, capability, monitor, and workflow-progress blocks alongside structured capture requests, clarifications, and confirmations in the shared Ask workspace. Unsupported future blocks fail visibly and safely instead of being interpreted as tables.
 - Property selection, property authorization, owner/contributor/viewer policy, execution continuity, inline capture/resume, confirmation idempotency, and negative-prompt boundaries are backend-owned.
 - Every operation now has a governed definition declaring version, family, execution mode, safety class, authorization floor, canonical adapter, allowed result blocks, and evaluation suite. CI rejects incomplete definitions and representative golden/negative routing regressions.
 - Deterministic operations query canonical domain services and format results without an LLM. The current implementation does not require a local or remote model for the operations listed below.
 - Global, remote-generation, and per-operation kill switches, execution timeout, response-schema fallback, bounded Ask metrics, Prometheus alerts, a Grafana dashboard, daily retention cleanup, and immediate homeowner conversation deletion are implemented.
-- The adaptive Ask workspace and global entry point include panel-to-workspace continuity, draft preservation, focus trapping/restoration, answer feedback, correction links, and inline history deletion. Continued responsive and end-to-end certification remains part of launch hardening.
+- The adaptive Ask workspace and global entry point include panel-to-workspace continuity, question and inline-capture draft preservation, pending-work close protection (including Escape), scoped live-region announcements, focus trapping/restoration, answer feedback, correction links, and inline history deletion. Continued responsive and end-to-end certification remains part of launch hardening.
+- Ambiguous routing and every current operation/entity clarification path now create a durable, versioned, expiring clarification on the original execution. This includes maintenance-task selection/update details, guided-plan scope, quote service scope, maintenance-monitor task selection, repair/replace and inventory item selection, and refinance thresholds. Option and free-text replies are validated, safety routing is re-applied, concurrent resumes are claimed once, and the same execution continues without creating a second conversation turn.
+- Ask exposes execution-by-id and correction-request APIs, distinguishes terminal from retryable execution failures, and persists explicit `EXPIRED` results for expired clarification or confirmation workflows.
+- Confirmation freshness is rechecked for guided-plan scope, quote-comparison workspace state, and refinance monitor data/preferences in addition to the existing household and maintenance versions. Stale confirmation attempts fail closed before canonical mutation.
 
 ### As-built operation catalog
 
@@ -69,11 +72,11 @@ This FRD is the living product and implementation contract for Ask. The reposito
 | Household invitation | Implemented | Owner-only inline recipient/role collection, explicit confirmation, idempotent canonical invitation creation, durable workflow result, and invitation delivery handoff | Invitation grants application access only and does not change legal ownership |
 | Repair/replace analysis | Implemented | Resolves a named appliance or system across the canonical inventory, fails closed on ambiguity, runs the canonical Repair vs Replace engine, captures lifecycle context inline, and presents verdict, confidence, modeled costs, repair risk, decision trace, evidence, and professional boundaries | A technician’s diagnosis and actual provider/retailer quotes remain authoritative |
 | Capital timeline and reserve planning | Implemented | Uses the canonical Capital Timeline and Reserve Fund services, materializes a timeline when inventory permits, presents upcoming windows, cost ranges, active allocations, monthly contribution and shortfall, and captures missing inventory/lifecycle context | Forecast windows and costs are planning ranges; operational certification still requires production-like portfolios |
-| Property-tax appeal readiness | Implemented | Selects assessed-value, tax-class, or exemption ground; uses reviewed jurisdiction rules and canonical tax records; presents facts, gaps, qualified evidence, sourced tax-at-stake range, effort, and professional boundaries; supports Property Context capture/resume | Readiness does not predict appeal success; official deadlines, forms, and authority decisions control |
+| Property-tax appeal readiness | Implemented for the reviewed pilot scope | Selects assessed-value, tax-class, or exemption ground; uses reviewed jurisdiction rules and canonical tax records; presents facts, gaps, qualified evidence, sourced tax-at-stake range, effort, and professional boundaries; supports Property Context capture/resume | Current reviewed rule coverage is explicitly limited to the Bronx/New York City Class 1 pilot path. Other jurisdictions must return an honest unavailable/limited state until their rules are reviewed and registered. Readiness does not predict appeal success; official deadlines, forms, and authority decisions control |
 | Renovation and permit readiness | Implemented | Reads canonical renovation cases, current-scope readiness items, blockers, permit summary, and unresolved flags; links to owning workspaces and distinguishes app readiness from legal approval | Starting/evaluating a renovation case and changing requirements remain governed project actions |
 | Major-event entry | Implemented | Classifies selling, renovation, moving, claim/damage, and aging-in-place moments and routes through the live capability registry with current availability/readiness; starts or shares nothing automatically | Professional, authority, transaction, accessibility, insurance, and disclosure obligations still require verification |
 | Capability discovery | Implemented backend slice | Queries the canonical capability registry, evaluates readiness/availability, and returns only registered launch destinations | Broader synonym evaluation, ranking certification, and catalog-wide launch hardening remain open |
-| Emergency, unsafe, and out-of-scope boundaries | Implemented foundation | Deterministically intercepts representative emergencies, arbitrary coding requests, prompt-extraction attempts, and unsupported general requests before execution | The red-team and golden negative catalogs must continue expanding |
+| Emergency, unsafe, and out-of-scope boundaries | Implemented foundation | Deterministically intercepts representative emergencies, permit/code/license/HOA/disclosure evasion, safety-device tampering, concealed material defects, regulated guarantees, arbitrary coding/database requests, prompt-extraction attempts, and unsupported general requests before execution | The red-team and golden negative catalogs must continue expanding |
 | Grounded home guidance fallback | Implemented foundation | Uses the bounded grounded-answer service and evidence contract when no higher-confidence registered operation resolves | Must not become an unbounded general chatbot or author arbitrary commands |
 
 ### Delivery-phase status
@@ -1138,6 +1141,7 @@ interface AskExecutionResponse {
   contextVersion?: string | null;
   blocks: AskPresentationBlock[];
   captureRequests: AskCaptureRequest[];
+  clarification?: AskClarification | null;
   confirmation?: AskConfirmation | null;
   suggestions: AskSuggestion[];
   createdAt: string;
@@ -1166,6 +1170,8 @@ The endpoint must validate that the capture is active for the execution, invoke 
 `POST /api/ask/executions/:executionId/clarifications`
 
 The answer must conform to the active clarification schema. Free-text clarification is permitted only where explicitly registered.
+
+Clarification is durable state on the original execution. The request includes `clarificationVersion`, an idempotency key, and either one registered candidate operation or bounded free text. The server re-applies the safety router before honoring a selected candidate, atomically claims the pending execution, and returns the updated execution. Expired clarification is persisted as `EXPIRED` with a safe restart path.
 
 ### 23.4 Confirmation
 

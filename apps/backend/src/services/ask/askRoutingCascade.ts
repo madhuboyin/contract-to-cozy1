@@ -60,7 +60,7 @@ export function resolveAskRoutingCascade(message: string, options: {
   ambiguityMargin?: number;
 } = {}): AskRoutingDecision {
   const direct = resolveAskOperation(message);
-  if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {
+  if (direct.operationId === 'EMERGENCY_BOUNDARY' || direct.operationId === 'UNSAFE_RESTRICTED_BOUNDARY' || direct.operationId === 'OUT_OF_SCOPE_BOUNDARY') {
     return { operation: direct, stage: 'SAFETY', candidates: [{ operationId: direct.operationId, confidence: direct.confidence }], requiresClarification: false };
   }
   if (direct.operationId !== 'GROUNDED_GUIDANCE') {
