@@ -23,6 +23,7 @@ export type AskPresentationBlock =
   | { type: 'WORKFLOW_PROGRESS'; id: string; title: string; status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED'; description: string; details: Array<{ label: string; value: string }>; actions: AskAction[] };
 
 export interface AskExecutionResponse {
+  schemaVersion: '1.0';
   executionId: string;
   sessionId: string;
   question: string;
@@ -36,6 +37,11 @@ export interface AskExecutionResponse {
   suggestions: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AskFeedbackResponse {
+  id: string;
+  rating: 'UP' | 'DOWN';
 }
 
 export interface AskConfirmation {

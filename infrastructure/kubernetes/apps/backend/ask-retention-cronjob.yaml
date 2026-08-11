@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ask-retention-cleanup
+  namespace: production
+spec:
+  schedule: "35 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: ask-retention-cleanup
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: ask-retention-cleanup
+              image: ghcr.io/madhuboyin/contract-to-cozy/backend:latest
+              imagePullPolicy: Always
+              command: ["npm", "run", "retention:ask"]
+              envFrom:
+                - configMapRef:
+                    name: app-config
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: app-secrets
+                      key: DATABASE_URL
+              resources:
+                requests: { cpu: "50m", memory: "128Mi" }
+                limits: { cpu: "500m", memory: "512Mi" }

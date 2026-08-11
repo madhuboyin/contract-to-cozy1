@@ -1012,6 +1012,12 @@ class APIClient {
   async cancelAskExecution(executionId: string): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/cancel`, { method: 'POST' });
   }
+  async submitAskFeedback(executionId: string, payload: { rating: 'UP' | 'DOWN'; comment?: string }): Promise<APIResponse<import('@/features/ask/types').AskFeedbackResponse>> {
+    return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/feedback`, { method: 'POST', body: payload });
+  }
+  async deleteAskSession(sessionId: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+  }
   async updateAskMonitor(monitorId: string, action: 'PAUSE' | 'RESUME' | 'STOP'): Promise<APIResponse<{ id: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED' }>> {
     return this.request(`/api/ask/monitors/${encodeURIComponent(monitorId)}`, { method: 'PATCH', body: { action } });
   }

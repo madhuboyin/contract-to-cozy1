@@ -1,0 +1,36 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: production-ask-alert-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: contract-to-cozy-ask
+      rules:
+        - alert: AskExecutionFailureRatioHigh
+          expr: >-
+            sum(rate(ask_executions_total{status="FAILED_RETRYABLE"}[15m]))
+            / clamp_min(sum(rate(ask_executions_total[15m])), 0.001) > 0.05
+          for: 15m
+          labels: { severity: critical, team: platform, capability: ask }
+          annotations:
+            summary: Ask execution failure ratio is high
+            description: More than 5% of Ask executions have failed for fifteen minutes.
+        - alert: AskExecutionP95LatencyHigh
+          expr: histogram_quantile(0.95, sum by (le) (rate(ask_execution_duration_seconds_bucket[15m]))) > 5
+          for: 15m
+          labels: { severity: warning, team: platform, capability: ask }
+          annotations:
+            summary: Ask execution latency is high
+            description: Ask p95 execution latency has exceeded five seconds for fifteen minutes.
+        - alert: AskRemoteGenerationFailureRatioHigh
+          expr: >-
+            sum(rate(ask_remote_generation_total{outcome="failure"}[15m]))
+            / clamp_min(sum(rate(ask_remote_generation_total{outcome=~"success|failure"}[15m])), 0.001) > 0.20
+          for: 15m
+          labels: { severity: warning, team: ai-platform, capability: ask }
+          annotations:
+            summary: Ask remote generation failures are elevated
+            description: More than 20% of enabled remote guidance calls have failed for fifteen minutes; deterministic Ask remains available.

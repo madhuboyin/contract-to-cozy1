@@ -37,6 +37,19 @@ export interface AskOperationResolution {
   requiresProperty: boolean;
 }
 
+export type AskExecutionMode = 'DETERMINISTIC' | 'REMOTE_GENERATION';
+export type AskSafetyClass = 'STANDARD' | 'MATERIAL_DECISION' | 'EMERGENCY_BOUNDARY' | 'OUT_OF_SCOPE_BOUNDARY';
+export type AskPropertyRoleFloor = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
+
+export interface AskOperationDefinition extends AskOperationResolution {
+  executionMode: AskExecutionMode;
+  safetyClass: AskSafetyClass;
+  propertyRoleFloor: AskPropertyRoleFloor;
+  adapterKey: string;
+  allowedBlockTypes: AskPresentationBlock['type'][];
+  evalSuite: string;
+}
+
 export interface AskOperationResult {
   status: AskExecutionStatus;
   reasonCode?: string;
@@ -48,8 +61,71 @@ export interface AskOperationResult {
   parameters?: Record<string, unknown>;
 }
 
+const definition = (
+  operationId: AskOperationId,
+  family: AskIntentFamily,
+  requiresProperty: boolean,
+  executionMode: AskExecutionMode,
+  safetyClass: AskSafetyClass,
+  propertyRoleFloor: AskPropertyRoleFloor,
+  adapterKey: string,
+  allowedBlockTypes: AskPresentationBlock['type'][],
+): AskOperationDefinition => ({
+  operationId,
+  version: '1.0',
+  family,
+  confidence: 1,
+  requiresProperty,
+  executionMode,
+  safetyClass,
+  propertyRoleFloor,
+  adapterKey,
+  allowedBlockTypes,
+  evalSuite: `ask-${operationId.toLowerCase().replace(/_/g, '-')}-golden`,
+});
+
+export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOperationDefinition>> = Object.freeze({
+  MAINTENANCE_STATUS: definition('MAINTENANCE_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'maintenance.status', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
+  MAINTENANCE_TASK_CREATE: definition('MAINTENANCE_TASK_CREATE', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  MAINTENANCE_TASK_COMPLETE: definition('MAINTENANCE_TASK_COMPLETE', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.complete', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  COVERAGE_GAPS: definition('COVERAGE_GAPS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'coverage.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
+  SAVINGS_OPPORTUNITIES: definition('SAVINGS_OPPORTUNITIES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'savings.opportunities', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
+  OWNERSHIP_COSTS: definition('OWNERSHIP_COSTS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'ownership.costs', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
+  INVENTORY_LOOKUP: definition('INVENTORY_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inventory.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
+  PROPERTY_SUMMARY: definition('PROPERTY_SUMMARY', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property.summary', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
+  HOME_ACTIONS: definition('HOME_ACTIONS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'home-actions.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
+  CAPABILITY_DISCOVERY: definition('CAPABILITY_DISCOVERY', 'CAPABILITY_DISCOVERY', false, 'DETERMINISTIC', 'STANDARD', null, 'capability.discovery', ['SUMMARY', 'CAPABILITY_LIST']),
+  REPLACEMENT_GUIDANCE: definition('REPLACEMENT_GUIDANCE', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'inventory.replacement', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
+  REFINANCE_ANALYSIS: definition('REFINANCE_ANALYSIS', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'refinance.analysis', ['SUMMARY', 'TABLE', 'EVIDENCE']),
+  REFINANCE_RATE_MONITOR: definition('REFINANCE_RATE_MONITOR', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'refinance.monitor', ['SUMMARY', 'MONITOR', 'WORKFLOW_PROGRESS']),
+  SELL_HOLD_RENT_ANALYSIS: definition('SELL_HOLD_RENT_ANALYSIS', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'sale-case.analysis', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
+  HOUSEHOLD_INVITATION: definition('HOUSEHOLD_INVITATION', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'household.invitation', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  EMERGENCY_BOUNDARY: definition('EMERGENCY_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'EMERGENCY_BOUNDARY', null, 'boundary.emergency', ['BOUNDARY']),
+  OUT_OF_SCOPE_BOUNDARY: definition('OUT_OF_SCOPE_BOUNDARY', 'OUT_OF_SCOPE', false, 'DETERMINISTIC', 'OUT_OF_SCOPE_BOUNDARY', null, 'boundary.out-of-scope', ['BOUNDARY']),
+  GROUNDED_GUIDANCE: definition('GROUNDED_GUIDANCE', 'GENERAL_HOME_GUIDANCE', false, 'REMOTE_GENERATION', 'STANDARD', null, 'grounded.guidance', ['SUMMARY', 'EVIDENCE', 'BOUNDARY']),
+});
+
+export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
+  return ASK_OPERATION_DEFINITIONS[operationId];
+}
+
+export function validateAskOperationDefinitions(): string[] {
+  const ids = new Set<string>();
+  const issues: string[] = [];
+  for (const [key, entry] of Object.entries(ASK_OPERATION_DEFINITIONS)) {
+    if (key !== entry.operationId) issues.push(`${key}: operationId mismatch`);
+    if (ids.has(entry.operationId)) issues.push(`${key}: duplicate operationId`);
+    ids.add(entry.operationId);
+    if (!entry.version || !entry.adapterKey || !entry.evalSuite) issues.push(`${key}: missing version, adapter, or eval declaration`);
+    if (!entry.allowedBlockTypes.length) issues.push(`${key}: no allowed result blocks`);
+    if (entry.requiresProperty && entry.propertyRoleFloor == null) issues.push(`${key}: property operation has no authorization floor`);
+    if (entry.safetyClass === 'EMERGENCY_BOUNDARY' && !entry.allowedBlockTypes.includes('BOUNDARY')) issues.push(`${key}: emergency operation lacks boundary result`);
+  }
+  return issues;
+}
+
 const emergencyPattern = /\b(smell(?:ing)? gas|gas leak|carbon monoxide|\bco alarm|sparks? (?:from|at)|electrical fire|actively flooding.*electric|fire now)\b/i;
-const outOfScopePattern = /\b(python|javascript|typescript|coding interview|write (?:me )?(?:a )?program|never[- ]ending loop|system prompt|celebrity news|school essay)\b/i;
+const outOfScopePattern = /\b(python|javascript|typescript|coding interview|write (?:me )?(?:a )?program|never[- ]ending loop|system prompt|developer message|ignore (?:all |the )?(?:previous|prior) instructions|reveal (?:your |the )?(?:prompt|instructions)|jailbreak|drop (?:a )?(?:table|database)|shell command|malware|ransomware|phishing|steal (?:a )?(?:password|credential)|celebrity news|school essay)\b/i;
 const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|what(?:'s| is) due|completed work|pending work|service history|what did (?:i|we) complete|work (?:i |we )?(?:completed|finished)|what should (?:i|we) do before (?:winter|spring|summer|fall|autumn))\b/i;
 const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:maintenance(?: task)?|tasks?|gutter (?:cleaning|inspection)|clean(?:ing)? (?:the )?gutters?|filter change|(?:hvac|furnace|boiler|roof|water heater) (?:service|inspection|cleaning|repair|replacement))\b|\b(?:remind me to|put on my maintenance list)\b/i;
 const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:complete|completed|done)|(?:complete|finish)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair))\b|\b(?:i|we) (?:completed|finished)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b/i;
@@ -68,56 +144,60 @@ const explicitCapabilityPattern = /\b(?:tool|something (?:available|to help)|any
 const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.*quote|savings?|rebates?|monitor)\b/i;
 
 export function resolveAskOperation(message: string): AskOperationResolution {
+  const resolved = (operationId: AskOperationId, confidence: number): AskOperationResolution => ({
+    ...getAskOperationDefinition(operationId),
+    confidence,
+  });
   if (emergencyPattern.test(message)) {
-    return { operationId: 'EMERGENCY_BOUNDARY', version: '1.0', family: 'UNSAFE_OR_RESTRICTED', confidence: 1, requiresProperty: false };
+    return resolved('EMERGENCY_BOUNDARY', 1);
   }
   if (outOfScopePattern.test(message)) {
-    return { operationId: 'OUT_OF_SCOPE_BOUNDARY', version: '1.0', family: 'OUT_OF_SCOPE', confidence: 0.99, requiresProperty: false };
+    return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99);
   }
   if (maintenanceCompletePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return { operationId: 'MAINTENANCE_TASK_COMPLETE', version: '1.0', family: 'WORKFLOW_GUIDANCE', confidence: 0.97, requiresProperty: true };
+    return resolved('MAINTENANCE_TASK_COMPLETE', 0.97);
   }
   if (maintenanceCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return { operationId: 'MAINTENANCE_TASK_CREATE', version: '1.0', family: 'WORKFLOW_GUIDANCE', confidence: 0.97, requiresProperty: true };
+    return resolved('MAINTENANCE_TASK_CREATE', 0.97);
   }
   if (coveragePattern.test(message)) {
-    return { operationId: 'COVERAGE_GAPS', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.96, requiresProperty: true };
+    return resolved('COVERAGE_GAPS', 0.96);
   }
   if (savingsOpportunitiesPattern.test(message)) {
-    return { operationId: 'SAVINGS_OPPORTUNITIES', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.97, requiresProperty: true };
+    return resolved('SAVINGS_OPPORTUNITIES', 0.97);
   }
   if (ownershipCostsPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return { operationId: 'OWNERSHIP_COSTS', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.97, requiresProperty: true };
+    return resolved('OWNERSHIP_COSTS', 0.97);
   }
   if (inventoryLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return { operationId: 'INVENTORY_LOOKUP', version: '1.0', family: 'RECORD_QUERY', confidence: 0.96, requiresProperty: true };
+    return resolved('INVENTORY_LOOKUP', 0.96);
   }
   if (propertySummaryPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return { operationId: 'PROPERTY_SUMMARY', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.96, requiresProperty: true };
+    return resolved('PROPERTY_SUMMARY', 0.96);
   }
   if (homeActionsPattern.test(message) && !explicitCapabilityPattern.test(message) && !maintenancePattern.test(message)) {
-    return { operationId: 'HOME_ACTIONS', version: '1.0', family: 'STATUS_SUMMARY', confidence: 0.96, requiresProperty: true };
+    return resolved('HOME_ACTIONS', 0.96);
   }
   if (maintenancePattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return { operationId: 'MAINTENANCE_STATUS', version: '1.0', family: 'RECORD_QUERY', confidence: 0.94, requiresProperty: true };
+    return resolved('MAINTENANCE_STATUS', 0.94);
   }
   if (replacementPattern.test(message)) {
-    return { operationId: 'REPLACEMENT_GUIDANCE', version: '1.0', family: 'GENERAL_HOME_GUIDANCE', confidence: 0.96, requiresProperty: true };
+    return resolved('REPLACEMENT_GUIDANCE', 0.96);
   }
   if (refinanceMonitorPattern.test(message)) {
-    return { operationId: 'REFINANCE_RATE_MONITOR', version: '1.0', family: 'GENERAL_HOME_GUIDANCE', confidence: 0.98, requiresProperty: true };
+    return resolved('REFINANCE_RATE_MONITOR', 0.98);
   }
   if (refinanceAnalysisPattern.test(message)) {
-    return { operationId: 'REFINANCE_ANALYSIS', version: '1.0', family: 'GENERAL_HOME_GUIDANCE', confidence: 0.97, requiresProperty: true };
+    return resolved('REFINANCE_ANALYSIS', 0.97);
   }
   if (sellHoldRentAnalysisPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return { operationId: 'SELL_HOLD_RENT_ANALYSIS', version: '1.0', family: 'GENERAL_HOME_GUIDANCE', confidence: 0.96, requiresProperty: true };
+    return resolved('SELL_HOLD_RENT_ANALYSIS', 0.96);
   }
   if (householdInvitationPattern.test(message)) {
-    return { operationId: 'HOUSEHOLD_INVITATION', version: '1.0', family: 'WORKFLOW_GUIDANCE', confidence: 0.98, requiresProperty: true };
+    return resolved('HOUSEHOLD_INVITATION', 0.98);
   }
   if (explicitCapabilityPattern.test(message) || capabilityPattern.test(message)) {
-    return { operationId: 'CAPABILITY_DISCOVERY', version: '1.0', family: 'CAPABILITY_DISCOVERY', confidence: 0.88, requiresProperty: false };
+    return resolved('CAPABILITY_DISCOVERY', 0.88);
   }
-  return { operationId: 'GROUNDED_GUIDANCE', version: '1.0', family: 'GENERAL_HOME_GUIDANCE', confidence: 0.55, requiresProperty: false };
+  return resolved('GROUNDED_GUIDANCE', 0.55);
 }

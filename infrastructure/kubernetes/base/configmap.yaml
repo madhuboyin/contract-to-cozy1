@@ -28,6 +28,13 @@ data:
   # Gemini / AI
   GEMINI_CHAT_ENABLED: "true"
   GEMINI_MODEL: "gemini-2.0-flash"
+  # AI Home Concierge / Ask operational controls. Individual operations can
+  # be paused with ASK_OPERATION_<OPERATION_ID>_ENABLED=false.
+  ASK_ENABLED: "true"
+  ASK_REMOTE_GENERATION_ENABLED: "true"
+  ASK_EXECUTION_TIMEOUT_MS: "15000"
+  ASK_RAW_CONVERSATION_RETENTION_DAYS: "30"
+  ASK_FEEDBACK_RETENTION_DAYS: "365"
 
   # Room scan
   ROOM_SCAN_PROVIDER: "gemini"

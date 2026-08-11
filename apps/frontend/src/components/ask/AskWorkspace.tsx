@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, ExternalLink, Home, Loader2, Send, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, ExternalLink, Home, Loader2, Maximize2, Send, Sparkles, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,10 @@ function newId(): string {
 
 function sessionStorageKey(propertyId?: string): string {
   return `ctc:ask-session:v2:${propertyId ?? 'general'}`;
+}
+
+function draftStorageKey(propertyId?: string): string {
+  return `ctc:ask-draft:v1:${propertyId ?? 'general'}`;
 }
 
 function ActionLink({ action }: { action: AskAction }) {
@@ -374,7 +378,44 @@ function InlineCaptureCard({
   );
 }
 
-export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'panel'; onClose?: () => void }) {
+function ExecutionFeedback({ executionId, propertyId }: { executionId: string; propertyId?: string }) {
+  const [rating, setRating] = useState<'UP' | 'DOWN' | null>(null);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (nextRating: 'UP' | 'DOWN', nextComment?: string) => {
+    setSaving(true); setError(null);
+    try {
+      const response = await api.submitAskFeedback(executionId, { rating: nextRating, comment: nextComment?.trim() || undefined });
+      if (!response.success) throw new Error(response.message || 'Could not save feedback.');
+      setRating(nextRating); setSaved(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not save feedback.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="border-t border-slate-100 pt-3 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center gap-2">
+        <span>{saved ? 'Thanks—your feedback was saved.' : 'Was this helpful?'}</span>
+        <button type="button" disabled={saving} aria-label="Helpful response" aria-pressed={rating === 'UP'} onClick={() => void submit('UP')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'UP' && 'bg-teal-50 text-teal-700')}><ThumbsUp className="h-4 w-4" /></button>
+        <button type="button" disabled={saving} aria-label="Not helpful response" aria-pressed={rating === 'DOWN'} onClick={() => { setRating('DOWN'); setSaved(false); }} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'DOWN' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-4 w-4" /></button>
+        {propertyId && <Link href={`/dashboard/properties/${encodeURIComponent(propertyId)}/edit?from=ask&executionId=${encodeURIComponent(executionId)}`} className="ml-auto font-semibold text-teal-700 hover:text-teal-800">Correct home information</Link>}
+      </div>
+      {rating === 'DOWN' && !saved && (
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <input value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1000} placeholder="What should be improved? (optional)" aria-label="Ask feedback details" className="min-h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800" />
+          <button type="button" disabled={saving} onClick={() => void submit('DOWN', comment)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-700">Send feedback</button>
+        </div>
+      )}
+      {error && <p className="mt-2 text-red-700" role="alert">{error}</p>}
+    </div>
+  );
+}
+
+export function AskWorkspace({ mode = 'page', onClose, initialQuestion = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; initialQuestion?: string }) {
   const { selectedPropertyId } = usePropertyContext();
   const [sessionId, setSessionId] = useState('');
   const [executions, setExecutions] = useState<AskExecutionResponse[]>([]);
@@ -382,6 +423,7 @@ export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'pane
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -393,13 +435,20 @@ export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'pane
       window.localStorage.setItem(key, nextSession);
     }
     setSessionId(nextSession);
+    setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
     setExecutions([]);
     setHistoryLoading(true);
     api.getAskSession(nextSession)
       .then((response) => setExecutions('data' in response ? response.data?.executions ?? [] : []))
       .catch(() => setExecutions([]))
       .finally(() => setHistoryLoading(false));
-  }, [selectedPropertyId]);
+  }, [selectedPropertyId, initialQuestion]);
+
+  useEffect(() => {
+    if (!initialQuestion) return;
+    setInput(initialQuestion);
+    window.localStorage.setItem(draftStorageKey(selectedPropertyId), initialQuestion);
+  }, [initialQuestion, selectedPropertyId]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [executions, loading]);
   useEffect(() => { if (mode === 'panel') window.setTimeout(() => textareaRef.current?.focus(), 80); }, [mode]);
@@ -410,6 +459,7 @@ export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'pane
     const message = question.trim();
     if (!message || !sessionId || loading) return;
     setInput('');
+    window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
     setError(null);
     setLoading(true);
     try {
@@ -421,6 +471,7 @@ export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'pane
       setExecutions((current) => [...current, response.data!]);
     } catch (caught) {
       setInput(message);
+      window.localStorage.setItem(draftStorageKey(selectedPropertyId), message);
       setError(caught instanceof Error ? caught.message : 'Ask is temporarily unavailable.');
     } finally {
       setLoading(false);
@@ -432,12 +483,32 @@ export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'pane
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void ask(input); }
   };
 
+  const clearHistory = async () => {
+    if (!sessionId || loading) return;
+    setLoading(true); setError(null);
+    try {
+      const response = await api.deleteAskSession(sessionId);
+      if (!response.success) throw new Error(response.message || 'Could not clear Ask history.');
+      const nextSession = newId();
+      window.localStorage.setItem(sessionStorageKey(selectedPropertyId), nextSession);
+      setSessionId(nextSession); setExecutions([]); setConfirmClear(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not clear Ask history.');
+    } finally { setLoading(false); }
+  };
+
   return (
     <div className={cn('flex min-h-0 flex-col bg-slate-50', mode === 'page' ? 'min-h-[calc(100vh-11rem)] rounded-[28px] border border-slate-200 shadow-sm' : 'h-full')}>
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
         <div className="min-w-0"><div className="flex items-center gap-2"><span className="grid h-9 w-9 place-items-center rounded-xl bg-teal-700 text-white"><Sparkles className="h-4 w-4" /></span><div><h2 className="font-semibold text-slate-950">Ask Cozy</h2><p className="truncate text-xs text-slate-500">{scopeLabel}</p></div></div></div>
-        {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
+        <div className="flex items-center gap-1">
+          {mode === 'page' && executions.length > 0 && <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" />Clear history</button>}
+          {mode === 'panel' && <Link href="/dashboard/ask" onClick={onClose} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
+          {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
+        </div>
       </header>
+
+      {confirmClear && <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span className="flex-1">Clear this Ask conversation and its feedback? Home records and artifacts created through Ask will remain unchanged.</span><button type="button" disabled={loading} onClick={() => void clearHistory()} className="min-h-10 rounded-xl bg-red-700 px-3 font-semibold text-white">Clear conversation</button><button type="button" disabled={loading} onClick={() => setConfirmClear(false)} className="min-h-10 rounded-xl px-3 font-semibold">Keep it</button></div>}
 
       <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5" aria-live="polite">
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : executions.length === 0 ? (
@@ -457,7 +528,8 @@ export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'pane
                   {execution.blocks.map((block) => <BlockView key={block.id} block={block} />)}
                   {execution.captureRequests.map((request) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={(updated) => setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item))} />)}
                   {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={(updated) => setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item))} />}
-                  {execution.suggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{execution.suggestions.map((suggestion) => <button key={suggestion} onClick={() => setInput(suggestion)} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
+                  {execution.suggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{execution.suggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
+                  <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} />
                 </div>
               </article>
             ))}
@@ -471,7 +543,7 @@ export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'pane
         <form onSubmit={submit} className="mx-auto max-w-3xl">
           {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700"><AlertTriangle className="h-4 w-4" />{error}</div>}
           <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100">
-            <textarea ref={textareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={keyDown} rows={1} maxLength={4000} placeholder="Ask anything about your home…" className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400" />
+            <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); window.localStorage.setItem(draftStorageKey(selectedPropertyId), event.target.value); }} onKeyDown={keyDown} rows={1} maxLength={4000} placeholder="Ask anything about your home…" className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400" />
             <button type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40"><Send className="h-4 w-4" /></button>
           </div>
           <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>

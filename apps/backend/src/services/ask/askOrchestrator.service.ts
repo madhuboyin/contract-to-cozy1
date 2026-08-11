@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import {
+  ASK_RESPONSE_SCHEMA_VERSION,
   AskExecutionResponseSchema,
   type AskCaptureRequest,
   type AskExecutionResponse,
@@ -10,7 +11,10 @@ import {
   type CreateAskExecutionRequest,
   type SubmitAskCaptureRequest,
   type SubmitAskConfirmation,
+  type SubmitAskFeedback,
 } from '../../productFramework/ask/ask.contract';
+import { readAskOperationalControls } from '../../config/askOperationalControls';
+import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
@@ -22,6 +26,7 @@ import {
 } from '../../productFramework/capabilities';
 import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../toolDiscoveryAvailability.service';
 import {
+  getAskOperationDefinition,
   resolveAskOperation,
   type AskOperationResolution,
   type AskOperationResult,
@@ -44,7 +49,6 @@ import { InventoryService } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
 
-const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
 const mortgageRateService = new MortgageRateService();
@@ -2408,13 +2412,38 @@ function outOfScopeResult(): AskOperationResult {
   };
 }
 
+function operationalUnavailableResult(reason: 'ASK_DISABLED' | 'OPERATION_DISABLED' | 'REMOTE_GENERATION_DISABLED'): AskOperationResult {
+  const remoteOnly = reason === 'REMOTE_GENERATION_DISABLED';
+  return {
+    status: 'UNAVAILABLE',
+    reasonCode: reason,
+    blocks: [{
+      type: 'BOUNDARY', id: 'ask-operational-boundary', title: remoteOnly ? 'General guidance is temporarily limited' : 'This Ask capability is temporarily unavailable', severity: 'INFO',
+      body: remoteOnly
+        ? 'Record-based questions and registered home tools are still available, but open-ended generated guidance is currently turned off. Ask will not invent an answer while generation is unavailable.'
+        : 'This capability has been paused by an operational control. Your home record was not changed.',
+      suggestions: ['Ask about recorded maintenance, coverage, savings, inventory, home actions, or your property summary.'],
+    }],
+    suggestions: ['What maintenance is pending?', 'Summarize my home record', 'Which items are missing coverage?'],
+  };
+}
+
 async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null }): Promise<AskOperationResult> {
-  const answer = await answerGroundedAsk({
-    userId: input.userId,
-    sessionId: input.sessionId,
-    message: input.message,
-    propertyId: input.propertyId ?? undefined,
-  });
+  let answer: Awaited<ReturnType<typeof answerGroundedAsk>>;
+  try {
+    askRemoteGenerationCharactersTotal.inc({ direction: 'input' }, input.message.length);
+    answer = await answerGroundedAsk({
+      userId: input.userId,
+      sessionId: input.sessionId,
+      message: input.message,
+      propertyId: input.propertyId ?? undefined,
+    });
+    askRemoteGenerationCharactersTotal.inc({ direction: 'output' }, answer.text.length);
+    askRemoteGenerationTotal.inc({ outcome: 'success' });
+  } catch (error) {
+    askRemoteGenerationTotal.inc({ outcome: 'failure' });
+    throw error;
+  }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'grounded-guidance', title: answer.groundingMode === 'PROPERTY' ? 'Guidance for this home' : 'General home guidance',
     body: answer.text, tone: answer.confidence.label === 'LOW' ? 'CAUTION' : 'DEFAULT', actions: [],
@@ -2426,7 +2455,30 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
 }
 
 async function executeOperation(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
+  const controls = readAskOperationalControls();
+  const definition = getAskOperationDefinition(input.operation.operationId);
+  if (!controls.askEnabled) return operationalUnavailableResult('ASK_DISABLED');
+  if (!controls.operationEnabled(input.operation.operationId)) return operationalUnavailableResult('OPERATION_DISABLED');
+  if (definition.executionMode === 'REMOTE_GENERATION' && !controls.remoteGenerationEnabled) {
+    askRemoteGenerationTotal.inc({ outcome: 'disabled' });
+    return operationalUnavailableResult('REMOTE_GENERATION_DISABLED');
+  }
   if (input.operation.requiresProperty && !input.propertyId) return needsPropertyResult();
+  if (input.propertyId && definition.propertyRoleFloor) {
+    const access = await ensurePropertyAccess(input.userId, input.propertyId);
+    const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
+    if (rank[access.role] < rank[definition.propertyRoleFloor]) {
+      return {
+        status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+        blocks: [{
+          type: 'SUMMARY', id: 'ask-operation-permission', title: `${definition.propertyRoleFloor.toLowerCase()} access is required`,
+          body: 'This registered operation is unavailable for your current household role. No home record was changed.',
+          tone: 'CAUTION', actions: [],
+        }],
+        suggestions: ['Ask a read-only question about this home'],
+      };
+    }
+  }
   switch (input.operation.operationId) {
     case 'EMERGENCY_BOUNDARY': return emergencyResult();
     case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
@@ -2455,9 +2507,11 @@ function mapPersistedExecution(execution: {
   createdAt: Date; updatedAt: Date;
 }, property: { id: string; label: string } | null): AskExecutionResponse {
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; suggestions?: unknown }
+    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; suggestions?: unknown }
     : {};
-  return AskExecutionResponseSchema.parse({
+  const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
+  const candidate = {
+    schemaVersion: storedSchemaVersion,
     executionId: execution.id,
     sessionId: execution.sessionId,
     question: execution.message,
@@ -2471,7 +2525,47 @@ function mapPersistedExecution(execution: {
     suggestions: stored.suggestions ?? [],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
+  };
+  const parsed = AskExecutionResponseSchema.safeParse(candidate);
+  if (parsed.success) return parsed.data;
+  return AskExecutionResponseSchema.parse({
+    schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+    executionId: execution.id,
+    sessionId: execution.sessionId,
+    question: execution.message,
+    status: 'UNAVAILABLE',
+    property,
+    operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? 'unknown', family: execution.intentFamily ?? 'UNKNOWN' } : null,
+    contextVersion: execution.contextVersion,
+    blocks: [{
+      type: 'SUMMARY', id: 'ask-schema-fallback', title: 'This saved response needs to be refreshed',
+      body: 'The response was saved with an unsupported presentation version. Ask preserved the execution and hid incompatible details instead of showing a broken or misleading result.',
+      tone: 'CAUTION', actions: [],
+    }],
+    captureRequests: [],
+    confirmation: null,
+    suggestions: ['Ask this question again'],
+    createdAt: execution.createdAt.toISOString(),
+    updatedAt: execution.updatedAt.toISOString(),
   });
+}
+
+async function withAskTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => {
+          const error = new Error('Ask execution exceeded its operational timeout.');
+          error.name = 'AskExecutionTimeoutError';
+          reject(error);
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 export async function createAskExecution(userId: string, input: CreateAskExecutionRequest): Promise<AskExecutionResponse> {
@@ -2479,7 +2573,8 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   const duplicate = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } } });
   if (duplicate) return mapPersistedExecution(duplicate, await propertySummary(duplicate.propertyId));
 
-  const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+  const controls = readAskOperationalControls();
+  const expiresAt = new Date(Date.now() + controls.rawConversationRetentionDays * 24 * 60 * 60 * 1000);
   const existingSession = await prisma.askSession.findUnique({ where: { id: input.sessionId } });
   if (existingSession && existingSession.userId !== userId) {
     const error = new Error('Ask session not found.');
@@ -2509,12 +2604,20 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'RECEIVED', metadataJson: asInputJson({ surface: input.launchContext?.surface ?? 'unknown' }) } });
 
   const operation = resolveAskOperation(input.message);
+  const operationDefinition = getAskOperationDefinition(operation.operationId);
+  const generationMode = operationDefinition.executionMode === 'REMOTE_GENERATION' ? 'remote' : 'deterministic';
+  const startedAt = Date.now();
   await prisma.askExecution.update({
     where: { id: execution.id },
     data: { operationId: operation.operationId, operationVersion: operation.version, intentFamily: operation.family, intentConfidence: operation.confidence, status: 'RUNNING' },
   });
   try {
-    const result = await executeOperation({ userId, sessionId: session.id, message: input.message, propertyId: input.propertyId, operation });
+    const result = await withAskTimeout(
+      executeOperation({ userId, sessionId: session.id, message: input.message, propertyId: input.propertyId, operation }),
+      controls.executionTimeoutMs,
+    );
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !operationDefinition.allowedBlockTypes.includes(block.type));
+    if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
@@ -2523,15 +2626,19 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
-        resultJson: asInputJson({ blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
         completedAt,
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ operationId: operation.operationId, blockTypes: result.blocks.map((block) => block.type) }) } });
+    askExecutionsTotal.inc({ operation: operation.operationId, status: result.status, generation_mode: generationMode });
+    askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   } catch (caught) {
     await prisma.askExecution.update({ where: { id: execution.id }, data: { status: 'FAILED_RETRYABLE', errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED' } });
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'FAILED_RETRYABLE', metadataJson: asInputJson({ operationId: operation.operationId }) } });
+    askExecutionsTotal.inc({ operation: operation.operationId, status: 'FAILED_RETRYABLE', generation_mode: generationMode });
+    askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
     throw caught;
   }
 }
@@ -2891,7 +2998,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion ?? capturedContextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -3185,7 +3292,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.update({
         where: { id: execution.id },
-        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ blocks: result.blocks, captureRequests: [], confirmation: null, suggestions: result.suggestions }), completedAt: new Date() },
+        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, suggestions: result.suggestions }), completedAt: new Date() },
       });
       await tx.askConfirmationReceipt.create({
         data: { executionId, idempotencyKey: input.idempotencyKey, confirmationVersion: input.confirmationVersion, artifactType, artifactId, inputHash },
@@ -3240,6 +3347,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     data: {
       status: 'CANCELLED', reasonCode: 'USER_CANCELLED',
       resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
         blocks,
         captureRequests: [],
         confirmation: null,
@@ -3264,4 +3372,20 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   const properties = await prisma.property.findMany({ where: { id: { in: propertyIds } }, select: { id: true, name: true, address: true, city: true, state: true } });
   const labels = new Map(properties.map((property) => [property.id, { id: property.id, label: propertyLabel(property) }]));
   return executions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
+}
+
+export async function submitAskExecutionFeedback(userId: string, executionId: string, input: SubmitAskFeedback): Promise<{ id: string; rating: 'UP' | 'DOWN' }> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { id: true, propertyId: true } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  const page = `ask:execution:${execution.id}`;
+  const existing = await prisma.feedback.findFirst({ where: { userId, page }, orderBy: { createdAt: 'desc' } });
+  const saved = existing
+    ? await prisma.feedback.update({ where: { id: existing.id }, data: { rating: input.rating.toLowerCase(), comment: input.comment ?? null, propertyId: execution.propertyId } })
+    : await prisma.feedback.create({ data: { userId, propertyId: execution.propertyId, rating: input.rating.toLowerCase(), comment: input.comment ?? null, page } });
+  askFeedbackTotal.inc({ rating: input.rating.toLowerCase() });
+  return { id: saved.id, rating: input.rating };
 }

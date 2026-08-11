@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const ASK_RESPONSE_SCHEMA_VERSION = '1.0' as const;
+
 export const ASK_EXECUTION_STATUSES = [
   'RECEIVED',
   'ROUTING',
@@ -162,6 +164,11 @@ export const SubmitAskConfirmationSchema = z.object({
   consentConfirmed: z.literal(true),
 }).strict();
 
+export const SubmitAskFeedbackSchema = z.object({
+  rating: z.enum(['UP', 'DOWN']),
+  comment: z.string().trim().max(1000).optional(),
+}).strict();
+
 export const AskCaptureRequestSchema = z.object({
   requirementId: z.string(),
   captureKey: z.string(),
@@ -213,6 +220,7 @@ export const CreateAskExecutionRequestSchema = z.object({
 }).strict();
 
 export const AskExecutionResponseSchema = z.object({
+  schemaVersion: z.literal(ASK_RESPONSE_SCHEMA_VERSION),
   executionId: z.string(),
   sessionId: z.string(),
   question: z.string(),
@@ -235,4 +243,5 @@ export type AskConfirmation = z.infer<typeof AskConfirmationSchema>;
 export type CreateAskExecutionRequest = z.infer<typeof CreateAskExecutionRequestSchema>;
 export type SubmitAskCaptureRequest = z.infer<typeof SubmitAskCaptureRequestSchema>;
 export type SubmitAskConfirmation = z.infer<typeof SubmitAskConfirmationSchema>;
+export type SubmitAskFeedback = z.infer<typeof SubmitAskFeedbackSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;

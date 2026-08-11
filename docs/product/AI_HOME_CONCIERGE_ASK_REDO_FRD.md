@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.4"
+version: "1.5"
 date: "August 11, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.4 |
+| Version | 1.5 |
 | Date | August 11, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -40,8 +40,10 @@ This FRD is the living product and implementation contract for Ask. The reposito
 - A versioned deterministic operation registry resolves supported homeowner intents before any language-model call.
 - Typed execution responses render summary, grouped-list, table, evidence, boundary, capability, monitor, and workflow-progress blocks alongside structured capture requests and confirmations in the shared Ask workspace.
 - Property selection, property authorization, owner/contributor/viewer policy, execution continuity, inline capture/resume, confirmation idempotency, and negative-prompt boundaries are backend-owned.
+- Every operation now has a governed definition declaring version, family, execution mode, safety class, authorization floor, canonical adapter, allowed result blocks, and evaluation suite. CI rejects incomplete definitions and representative golden/negative routing regressions.
 - Deterministic operations query canonical domain services and format results without an LLM. The current implementation does not require a local or remote model for the operations listed below.
-- The adaptive Ask workspace and global entry point are implemented. Continued accessibility, responsive, and end-to-end certification remains part of launch hardening.
+- Global, remote-generation, and per-operation kill switches, execution timeout, response-schema fallback, bounded Ask metrics, Prometheus alerts, a Grafana dashboard, daily retention cleanup, and immediate homeowner conversation deletion are implemented.
+- The adaptive Ask workspace and global entry point include panel-to-workspace continuity, draft preservation, focus trapping/restoration, answer feedback, correction links, and inline history deletion. Continued responsive and end-to-end certification remains part of launch hardening.
 
 ### As-built operation catalog
 
@@ -69,8 +71,8 @@ This FRD is the living product and implementation contract for Ask. The reposito
 
 | Phase | Repository status as of August 11, 2026 | Remaining exit work |
 | --- | --- | --- |
-| Phase 0 — Foundation | Substantially implemented | Complete registry governance automation, certified negative CI pack, retention sign-off, and operational baselines |
-| Phase 1 — Deterministic record queries | All six named launch operations implemented | Full golden accuracy/latency certification, telemetry dashboard completion, restart/scale evidence, and desktop/mobile E2E launch sign-off |
+| Phase 0 — Foundation | Repository closure implemented | Formal privacy/domain-owner approval and production baseline sign-off remain launch governance gates; code now includes governed registration, negative CI, retention enforcement, controls, ownership, and cost/latency instrumentation |
+| Phase 1 — Deterministic record queries | Repository closure implemented for all six launch operations and shared UX | Full database-backed golden accuracy/latency certification, restart/horizontal-scale evidence, and desktop/mobile E2E launch sign-off remain operational certification gates |
 | Phase 2 — Inline capture | Partially implemented across refrigerator, refinance, savings, ownership costs, sell/hold/rent, inventory, property summary, Home Actions, and coverage | Complete conflict/stale/not-sure E2E matrices, approximate-date UX certification, and repeated-prompt measurement |
 | Phase 3 — Capability discovery | Backend slice implemented | Semantic breadth, top-1 ranking certification, related-capability continuity, and unavailable-tool E2E coverage |
 | Phase 4 — Confirmed actions and monitors | Partially implemented for maintenance task creation and completion, refinance monitoring, and household invitations | Generic adapter extraction, remaining maintenance update/reschedule/assignment/archive commands, additional monitors, edit/pause/stop/reverse paths, and complete role matrices |
@@ -1250,10 +1252,12 @@ Introduce durable execution records. Suggested conceptual models:
 
 ### 24.4 Retention
 
-- Define separate retention for raw user messages, execution metadata, domain artifacts, feedback, and aggregated analytics.
-- Permit user/session deletion consistent with legal and audit requirements.
+- Raw Ask sessions, messages, executions, events, and receipts expire after 30 days by default; Ask feedback expires after 365 days. Both are operator-configurable within bounded limits and enforced by the daily retention job.
+- Authenticated homeowners can delete a session and its Ask feedback immediately. Canonical domain artifacts created through Ask remain governed by their owning domain and are not deleted with conversation history.
 - Do not retain document contents or sensitive raw values in generic execution logs.
 - Redact or tokenize sensitive parameters when the canonical domain record already stores them.
+
+**Implementation status — August 11, 2026:** Implemented in the repository and production manifests. See [AI Home Concierge — Ask Operations and Governance](../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md). Formal privacy approval remains a launch sign-off rather than a code task.
 
 ## 25. Authorization, privacy, security, and audit
 
@@ -1669,6 +1673,8 @@ Exit criteria:
 - certified negative tests run in CI;
 - launch use-case list and owners assigned.
 
+**Implementation status — August 11, 2026:** Repository closure implemented. The governed definition catalog now makes version, safety, authorization, adapter, result, and eval declarations mandatory; the Ask-specific CI gate covers catalog integrity plus representative golden and negative routing; bounded operational controls and cost/latency metrics are registered; and raw conversation/feedback retention is enforced with homeowner deletion. Formal product, privacy, domain-owner, and production-baseline approvals remain recorded launch attestations.
+
 ### Phase 1 — Durable orchestrator and deterministic record queries
 
 **Objective:** Replace chatbot-first behavior with reliable Ask execution.
@@ -1697,6 +1703,8 @@ Exit criteria:
 - no internal fact keys appear in homeowner UI;
 - quick-panel-to-workspace expansion preserves the same execution; and
 - the legacy `/dashboard/ask` launcher-only page is retired.
+
+**Implementation status — August 11, 2026:** Repository closure implemented. Durable orchestration, the six launch queries, deterministic boundaries, typed/versioned rendering with safe fallback, global panel and full workspace, panel-to-workspace session continuity, draft preservation, feedback/correction, focus continuity, no-generation degraded behavior, bounded metrics, dashboard, alerts, and retention controls are present. The unused text-only legacy chat component has been removed. Full database-backed golden accuracy/latency certification, multi-replica restart evidence, and desktop/mobile launch E2E sign-off remain operational evidence gates and must not be inferred from repository implementation.
 
 ### Phase 2 — Inline capture and automatic resume
 
@@ -2020,15 +2028,14 @@ Include cross-property access, hidden prompt extraction, document injection, mod
 ### 37.2 Open decisions requiring approval
 
 1. Final customer-facing name: `Ask`, `Ask ContractToCozy`, or another concierge label.
-2. Raw conversation retention duration and deletion behavior.
-3. Whether Ask history is property-scoped, global, or both in initial launch.
-4. Initial GA operation catalog after the two vertical slices.
-5. Whether approximate date precision requires a schema addition or existing evidence metadata can represent it safely.
-6. Financial capture role floor: contributor or owner for specific fields/actions.
-7. Which monitors are approved for initial external delivery.
-8. Local-model hosting hardware and operational owner.
-9. Whether optional narrative synthesis is enabled by default for deterministic results.
-10. Domain reviewer and sign-off requirements for each material operation family.
+2. Whether Ask history is property-scoped, global, or both in initial launch.
+3. Initial GA operation catalog after the two vertical slices.
+4. Whether approximate date precision requires a schema addition or existing evidence metadata can represent it safely.
+5. Financial capture role floor: contributor or owner for specific fields/actions.
+6. Which monitors are approved for initial external delivery.
+7. Local-model hosting hardware and operational owner.
+8. Whether optional narrative synthesis is enabled by default for deterministic results.
+9. Domain reviewer and sign-off requirements for each material operation family.
 
 ## 38. Definition of done
 

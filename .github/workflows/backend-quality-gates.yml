@@ -74,6 +74,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Ask governance, golden routing, and negative boundaries
+        run: npm run test:ask
+
       - name: Integration smoke
         run: npm run test:integration
 

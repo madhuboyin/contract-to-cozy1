@@ -1,8 +1,9 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { CreateAskExecutionRequestSchema, SubmitAskCaptureRequestSchema, SubmitAskConfirmationSchema } from '../productFramework/ask/ask.contract';
-import { cancelAskExecution, confirmAskExecution, createAskExecution, getAskSession, submitAskCapture } from '../services/ask/askOrchestrator.service';
+import { CreateAskExecutionRequestSchema, SubmitAskCaptureRequestSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema } from '../productFramework/ask/ask.contract';
+import { cancelAskExecution, confirmAskExecution, createAskExecution, getAskSession, submitAskCapture, submitAskExecutionFeedback } from '../services/ask/askOrchestrator.service';
+import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import {
   PropertyContextCaptureValidationError,
   PropertyContextIdempotencyConflictError,
@@ -113,6 +114,33 @@ export async function getAskSessionExecutions(req: AuthRequest, res: Response, n
     if (!sessionId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Ask session.' } });
     const executions = await getAskSession(userId, sessionId.data);
     return res.status(200).json({ success: true, data: { executions } });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function postAskFeedback(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = SubmitAskFeedbackSchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_FEEDBACK', message: 'Choose helpful or not helpful.' } });
+    return res.status(200).json({ success: true, data: await submitAskExecutionFeedback(userId, req.params.executionId, input.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
+    return next(error);
+  }
+}
+
+export async function deleteAskSession(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const sessionId = z.string().trim().min(1).max(160).safeParse(req.params.sessionId);
+    if (!sessionId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Ask session.' } });
+    await deleteAskSessionForUser(userId, sessionId.data);
+    return res.status(204).send();
   } catch (error) {
     return next(error);
   }

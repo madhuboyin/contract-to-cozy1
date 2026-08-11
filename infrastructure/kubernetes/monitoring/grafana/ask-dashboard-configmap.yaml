@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-ask
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  ask-observability.json: |
+    {
+      "id": null,
+      "uid": "ctc-ask",
+      "title": "AI Home Concierge - Ask Operations",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "tags": ["ask", "ai-home-concierge", "operations"],
+      "time": {"from": "now-24h", "to": "now"},
+      "panels": [
+        {
+          "id": 1, "type": "timeseries", "title": "Executions by Operation, Status, and Mode",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [{"expr": "sum by (operation, status, generation_mode) (rate(ask_executions_total[15m]))", "legendFormat": "{{operation}} / {{status}} / {{generation_mode}}", "refId": "A"}]
+        },
+        {
+          "id": 2, "type": "timeseries", "title": "Execution Latency p95",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [{"expr": "histogram_quantile(0.95, sum by (operation, le) (rate(ask_execution_duration_seconds_bucket[15m])))", "legendFormat": "{{operation}}", "refId": "A"}]
+        },
+        {
+          "id": 3, "type": "stat", "title": "Deterministic Execution Share",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 7, "w": 8, "x": 0, "y": 8},
+          "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}},
+          "targets": [{"expr": "sum(rate(ask_executions_total{generation_mode=\"deterministic\"}[1h])) / clamp_min(sum(rate(ask_executions_total[1h])), 0.001)", "refId": "A"}]
+        },
+        {
+          "id": 4, "type": "timeseries", "title": "Remote Generation Cost Proxy",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 7, "w": 8, "x": 8, "y": 8},
+          "targets": [{"expr": "sum by (direction) (increase(ask_remote_generation_characters_total[1h]))", "legendFormat": "{{direction}} characters", "refId": "A"}]
+        },
+        {
+          "id": 5, "type": "timeseries", "title": "Homeowner Feedback",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 7, "w": 8, "x": 16, "y": 8},
+          "targets": [{"expr": "sum by (rating) (increase(ask_feedback_total[1h]))", "legendFormat": "{{rating}}", "refId": "A"}]
+        }
+      ]
+    }

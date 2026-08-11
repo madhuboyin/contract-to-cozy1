@@ -29,6 +29,53 @@ export const apiRateLimitRejectionsTotal = new Counter({
   registers: [register],
 });
 
+// ─── Ask / AI Home Concierge metrics ───────────────────────────────────────
+// Labels are bounded registry values. Never attach raw prompts, user IDs,
+// property IDs, session IDs, execution IDs, or captured values.
+
+export const askExecutionsTotal = new Counter({
+  name: 'ask_executions_total',
+  help: 'Ask executions by registered operation, terminal status, and generation mode',
+  labelNames: ['operation', 'status', 'generation_mode'] as const,
+  registers: [register],
+});
+
+export const askExecutionDurationSeconds = new Histogram({
+  name: 'ask_execution_duration_seconds',
+  help: 'Ask execution duration by registered operation and generation mode',
+  labelNames: ['operation', 'generation_mode'] as const,
+  buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 30],
+  registers: [register],
+});
+
+export const askRemoteGenerationTotal = new Counter({
+  name: 'ask_remote_generation_total',
+  help: 'Remote Ask generation attempts by bounded outcome',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
+export const askRemoteGenerationCharactersTotal = new Counter({
+  name: 'ask_remote_generation_characters_total',
+  help: 'Remote Ask generation character volume as a provider-neutral cost proxy',
+  labelNames: ['direction'] as const,
+  registers: [register],
+});
+
+export const askFeedbackTotal = new Counter({
+  name: 'ask_feedback_total',
+  help: 'Ask execution feedback by rating',
+  labelNames: ['rating'] as const,
+  registers: [register],
+});
+
+export const askRetentionDeletionsTotal = new Counter({
+  name: 'ask_retention_deletions_total',
+  help: 'Ask sessions deleted by retention or homeowner request',
+  labelNames: ['reason'] as const,
+  registers: [register],
+});
+
 // ─── Security metrics ────────────────────────────────────────────────────────
 
 export const securityTokenReuseTotal = new Counter({

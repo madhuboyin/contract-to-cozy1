@@ -1,38 +1,30 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { AIChat } from '@/components/AIChat';
-
-jest.mock('next/navigation', () => ({
-  usePathname: () => '/dashboard',
-}));
-
-jest.mock('@/lib/auth/AuthContext', () => ({
-  useAuth: () => ({
-    user: { id: 'user-1', firstName: 'Pilot', role: 'HOMEOWNER' },
-  }),
-}));
+import { api } from '@/lib/api/client';
 
 jest.mock('@/lib/property/PropertyContext', () => ({
   usePropertyContext: () => ({ selectedPropertyId: 'property-1' }),
 }));
 
 jest.mock('@/lib/api/client', () => ({
-  api: {
-    sendMessageToChat: jest.fn(),
-  },
+  api: { getAskSession: jest.fn().mockResolvedValue({ success: true, data: { executions: [] } }) },
 }));
 
-describe('AIChat dashboard open event', () => {
+const mockGetAskSession = api.getAskSession as jest.Mock;
+
+describe('Ask Cozy global workspace continuity', () => {
   beforeAll(() => {
     Element.prototype.scrollIntoView = jest.fn();
   });
 
   beforeEach(() => {
     window.localStorage.clear();
+    mockGetAskSession.mockClear();
   });
 
-  it('mounts the listener and opens with a suggested question', () => {
+  it('opens with a suggested question and exposes full-workspace expansion', async () => {
     render(<AIChat />);
 
     act(() => {
@@ -41,20 +33,19 @@ describe('AIChat dashboard open event', () => {
       }));
     });
 
-    expect(screen.getByText('AI Home Concierge')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Ask about maintenance, closing...')).toHaveValue(
-      'Which home items lack coverage?',
-    );
+    const composer = await screen.findByPlaceholderText('Ask anything about your home…');
+    expect(composer).toHaveValue('Which home items lack coverage?');
+    expect(screen.getByRole('link', { name: /full workspace/i })).toHaveAttribute('href', '/dashboard/ask');
   });
 
-  it('opens a blank composer for Ask another question', () => {
+  it('preserves an unfinished draft when the panel closes and reopens', async () => {
     render(<AIChat />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Ask Cozy' }));
+    const composer = await screen.findByPlaceholderText('Ask anything about your home…');
+    fireEvent.change(composer, { target: { value: 'Show overdue roof work' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Ask Cozy' }));
 
-    act(() => {
-      window.dispatchEvent(new CustomEvent('cozy-chat-open'));
-    });
-
-    expect(screen.getByText('AI Home Concierge')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Ask about maintenance, closing...')).toHaveValue('');
+    await waitFor(() => expect(screen.getByPlaceholderText('Ask anything about your home…')).toHaveValue('Show overdue roof work'));
   });
 });
