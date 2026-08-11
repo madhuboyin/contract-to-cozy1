@@ -21,6 +21,21 @@ Every operation must be present in `ASK_OPERATION_DEFINITIONS`. Registration req
 
 The orchestrator enforces the declared role floor before adapter execution and rejects undeclared non-boundary result blocks. Domain services remain authoritative and must independently enforce authorization for writes.
 
+Material writes must also be present in `ASK_DOMAIN_COMMAND_REGISTRY`. The command contract declares the same adapter key and role floor as the operation definition, plus artifact ownership, explicit-confirmation materiality, cancellation behavior, and supported correction modes. Confirmation and cancellation fail closed for undeclared operations. Current registered commands cover maintenance create/complete/update, household invitation, guided-plan creation, quote-comparison creation, refinance-rate monitoring, and home-deadline monitoring.
+
+## Phase 4 command and role matrix
+
+| Command | Viewer | Contributor | Owner | Canonical artifact and correction path |
+| --- | --- | --- | --- | --- |
+| Maintenance create/complete/update | Blocked | Confirm | Confirm | Maintenance task; edit, archive, or reopen in Maintenance or through a follow-up Ask command |
+| Household invitation | Blocked | Blocked | Confirm | Pending household invite; manage or revoke in Household |
+| Guided-plan creation | Blocked | Confirm | Confirm | Guidance journey; continue or dismiss in Guidance |
+| Quote-comparison creation | Blocked | Confirm | Confirm | Quote workspace; edit or close in Quote Comparison |
+| Refinance-rate monitor | Blocked | Confirm | Confirm | Refinance monitor; edit, pause, resume, or stop in Refinance Radar |
+| Home-deadline monitor | Blocked | Confirm | Confirm | Stable dated Maintenance task; edit, archive, or reopen in Maintenance or through Ask |
+
+All commands show a typed review card, require explicit consent, expire after 30 minutes, write a confirmation receipt, and return an artifact-linked completion. Creation paths use stable action keys, canonical get-or-create transactions, or the unique nullable `GuidanceJourney.sourceAskExecutionId` key to converge under retries and concurrency. The repository includes the Prisma schema change but intentionally includes no migration script; schema application is user-managed.
+
 ## Runtime controls
 
 | Environment variable | Default | Purpose |

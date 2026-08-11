@@ -5681,6 +5681,10 @@ model GuidanceSignal {
 model GuidanceJourney {
   id String @id @default(uuid())
 
+  // Stable Ask command key. Optional for non-Ask journeys; unique when present
+  // so confirmation retries/concurrency cannot create duplicate workflows.
+  sourceAskExecutionId String? @unique
+
   propertyId      String
   inventoryItemId String?
   primarySignalId String?

@@ -1,4 +1,4 @@
-import { AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RecurrenceFrequency, RefinanceRateMonitorProduct } from '@prisma/client';
+import { AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, RecurrenceFrequency, RefinanceRateMonitorProduct, ServiceCategory } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -51,6 +51,11 @@ import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '..
 import { InventoryService } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
+import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
+import { getOrCreateQuoteComparisonWorkspace } from '../quoteComparison.service';
+import { upsertNotificationPreference } from '../notificationPreference.service';
+import { updateInsurancePolicy } from '../home-management.service';
+import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -103,6 +108,57 @@ const MaintenanceCompletionWorkflowInputSchema = z.object({
 }).strict();
 
 type MaintenanceCompletionWorkflowInput = z.infer<typeof MaintenanceCompletionWorkflowInputSchema>;
+
+const MaintenanceTaskUpdateInputSchema = z.object({
+  taskId: z.string().trim().min(1).max(160),
+  action: z.enum(['EDIT', 'RESCHEDULE', 'ASSIGN', 'UNASSIGN', 'ARCHIVE', 'REOPEN']),
+  title: z.string().trim().min(3).max(160).optional(),
+  priority: z.nativeEnum(MaintenanceTaskPriority).optional(),
+  nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  assigneeUserId: z.string().trim().min(1).max(160).nullable().optional(),
+}).strict();
+
+const QuoteWorkspaceCommandInputSchema = z.object({
+  serviceCategory: z.nativeEnum(ServiceCategory),
+  scopeSummary: z.string().trim().min(3).max(1000),
+}).strict();
+
+const GuidanceJourneyCommandInputSchema = z.object({
+  scopeCategory: z.enum(['ITEM', 'SERVICE']),
+  scopeId: z.string().trim().min(1).max(160),
+  issueType: z.string().trim().min(1).max(160),
+  inventoryItemId: z.string().trim().min(1).max(160).nullable(),
+  serviceKey: z.string().trim().min(1).max(160).nullable(),
+  label: z.string().trim().min(1).max(240),
+}).strict();
+
+const HomeDeadlineMonitorInputSchema = z.object({
+  sourceType: z.enum(['WARRANTY', 'INSURANCE_POLICY', 'MAINTENANCE']),
+  sourceId: z.string().trim().min(1).max(160),
+  title: z.string().trim().min(3).max(160),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  leadDays: z.number().int().min(1).max(90),
+}).strict();
+
+const HomeDeadlineExpirationCaptureSchema = z.object({
+  policyId: z.string().trim().min(1).max(160),
+  expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+}).strict().superRefine((value, context) => {
+  const expiry = new Date(`${value.expiryDate}T00:00:00.000Z`);
+  if (Number.isNaN(expiry.getTime()) || expiry.toISOString().slice(0, 10) !== value.expiryDate || expiry <= new Date()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['expiryDate'], message: 'Enter a valid future expiration date.' });
+  }
+});
+
+const HomeDeadlineTaskDueCaptureSchema = z.object({
+  taskId: z.string().trim().min(1).max(160),
+  nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+}).strict().superRefine((value, context) => {
+  const due = new Date(`${value.nextDueDate}T00:00:00.000Z`);
+  if (Number.isNaN(due.getTime()) || due.toISOString().slice(0, 10) !== value.nextDueDate || due <= new Date()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['nextDueDate'], message: 'Enter a valid future due date.' });
+  }
+});
 
 function asInputJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -736,6 +792,225 @@ async function maintenanceTaskCompleteResult(
       expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
+  };
+}
+
+function maintenanceUpdateAction(message: string): z.infer<typeof MaintenanceTaskUpdateInputSchema>['action'] {
+  if (/\bunassign\b/i.test(message)) return 'UNASSIGN';
+  if (/\bassign\b/i.test(message)) return 'ASSIGN';
+  if (/\b(?:archive|cancel)\b/i.test(message)) return 'ARCHIVE';
+  if (/\b(?:reopen|restore)\b/i.test(message)) return 'REOPEN';
+  if (/\b(?:reschedule|due date|move .{0,30}(?:to|until))\b/i.test(message)) return 'RESCHEDULE';
+  return 'EDIT';
+}
+
+function maintenanceUpdateSubject(message: string): string {
+  return message.toLowerCase()
+    .replace(/\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore|maintenance|task|priority|due date)\b/g, ' ')
+    .replace(/\b(?:to|on|until|for|as)\s+\d{4}-\d{2}-\d{2}\b/g, ' ')
+    .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, ' ')
+    .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const [tasks, members] = await Promise.all([
+    PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true }),
+    prisma.householdMember.findMany({ where: { propertyId }, include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } }),
+  ]);
+  const subject = maintenanceUpdateSubject(message);
+  const match = maintenanceCompletionMatch(subject, tasks);
+  const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
+  if (!match) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_TASK_SELECTION_REQUIRED',
+      blocks: [{
+        type: 'GROUPED_LIST', id: 'maintenance-update-options', title: 'Choose the task to change',
+        description: 'Ask found more than one possible task. Use its exact title in your next message; nothing has changed.',
+        sections: [{ id: 'tasks', title: 'Maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({
+          id: task.id, title: task.title, description: task.nextDueDate ? `Due ${humanDate(task.nextDueDate)}` : 'No due date',
+          meta: [task.priority, task.status], status: task.status, href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}`,
+        })) }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'SECONDARY' }],
+      }], suggestions: tasks.slice(0, 3).map((task) => `Update ${task.title}`),
+    };
+  }
+  const action = maintenanceUpdateAction(message);
+  const dueDate = extractMaintenanceDueDate(message, new Date(), 'UTC');
+  const priority = /\burgent\b/i.test(message) ? MaintenanceTaskPriority.URGENT
+    : /\bhigh(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.HIGH
+      : /\blow(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.LOW
+        : /\bmedium(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.MEDIUM : undefined;
+  const assigneeText = message.match(/\bassign\b.{0,20}\bto\s+([^,.;]+)/i)?.[1]?.trim().toLowerCase();
+  const assignee = action === 'ASSIGN' && assigneeText
+    ? members.find((member) => [member.user.email, member.user.firstName, `${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim()]
+      .some((value) => value?.toLowerCase() === assigneeText || value?.toLowerCase().includes(assigneeText)))
+    : null;
+  if ((action === 'RESCHEDULE' && !dueDate) || (action === 'ASSIGN' && !assignee) || (action === 'EDIT' && !priority)) {
+    return {
+      status: 'NEEDS_CLARIFICATION', reasonCode: 'MAINTENANCE_UPDATE_VALUE_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'RESCHEDULE'
+        ? 'Include a date such as 2026-10-15.'
+        : action === 'ASSIGN' ? 'Name an active household member or use their email address.' : 'Specify the new priority: low, medium, high, or urgent.', tone: 'CAUTION', actions: [] }],
+      suggestions: action === 'ASSIGN' ? members.slice(0, 3).map((member) => `Assign ${match.title} to ${member.user.email}`) : [],
+    };
+  }
+  const parsed = MaintenanceTaskUpdateInputSchema.parse({
+    taskId: match.id, action,
+    ...(dueDate ? { nextDueDate: dueDate } : {}), ...(priority ? { priority } : {}),
+    ...(action === 'ASSIGN' ? { assigneeUserId: assignee!.userId } : {}),
+    ...(action === 'UNASSIGN' ? { assigneeUserId: null } : {}),
+  });
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const actionLabel = { EDIT: 'update', RESCHEDULE: 'reschedule', ASSIGN: 'assign', UNASSIGN: 'unassign', ARCHIVE: 'archive', REOPEN: 'reopen' }[action];
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'MAINTENANCE_UPDATE_CONFIRMATION_REQUIRED', contextVersion: maintenanceTaskVersion(match),
+    parameters: { maintenanceUpdate: parsed, maintenanceTaskVersion: maintenanceTaskVersion(match), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: `Review this ${actionLabel}`, body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${maintenanceHref}&taskId=${encodeURIComponent(match.id)}`, style: 'SECONDARY' }] }],
+    confirmation: {
+      confirmationId: `maintenance-update-${match.id}-1`, version: 1, title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${match.title}?`,
+      description: 'This command writes through the canonical Maintenance service and preserves downstream reconciliation.',
+      fields: [{ label: 'Task', value: match.title }, { label: 'Action', value: actionLabel },
+        ...(dueDate ? [{ label: 'New due date', value: dueDate }] : []), ...(priority ? [{ label: 'New priority', value: priority }] : []),
+        ...(assignee ? [{ label: 'Assignee', value: assignee.user.email }] : [])],
+      confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Maintenance record.`, expiresAt: expiresAt.toISOString(),
+    }, suggestions: [],
+  };
+}
+
+function serviceCategoryFromMessage(message: string): ServiceCategory | null {
+  const categories: Array<[RegExp, ServiceCategory]> = [
+    [/\b(?:roof|roofing)\b/i, ServiceCategory.ROOFING], [/\bplumb/i, ServiceCategory.PLUMBING],
+    [/\belectric/i, ServiceCategory.ELECTRICAL], [/\b(?:hvac|heating|cooling|furnace|air conditioner)\b/i, ServiceCategory.HVAC],
+    [/\b(?:clean|cleaning)\b/i, ServiceCategory.CLEANING], [/\b(?:paint|painting)\b/i, ServiceCategory.PAINTING],
+    [/\b(?:landscap|yard)\b/i, ServiceCategory.LANDSCAPING], [/\b(?:appliance)\b/i, ServiceCategory.APPLIANCE_REPAIR],
+    [/\b(?:inspect|inspection)\b/i, ServiceCategory.INSPECTION], [/\b(?:warranty)\b/i, ServiceCategory.WARRANTY],
+    [/\b(?:insurance|coverage)\b/i, ServiceCategory.INSURANCE],
+  ];
+  return categories.find(([pattern]) => pattern.test(message))?.[1] ?? null;
+}
+
+function maintenanceMonitorSubject(message: string): string {
+  return message.toLowerCase()
+    .replace(/\b(?:notify|alert|remind|monitor|tell)\s+(?:me|us)?\b/g, ' ')
+    .replace(/\b(?:when|before|about|for|my|our|the|is|are|comes?)\b/g, ' ')
+    .replace(/\b(?:maintenance|task|due|upcoming|deadline|reminder)\b/g, ' ')
+    .replace(/\b\d{1,2}\s*days?\s*(?:before|ahead)?\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+async function quoteComparisonCreateResult(propertyId: string, message: string): Promise<AskOperationResult> {
+  const serviceCategory = serviceCategoryFromMessage(message);
+  if (!serviceCategory) return {
+    status: 'NEEDS_CLARIFICATION', reasonCode: 'QUOTE_COMPARISON_SCOPE_REQUIRED',
+    blocks: [{ type: 'SUMMARY', id: 'quote-workspace-scope', title: 'What service are the quotes for?', body: 'Name the service—such as roofing, plumbing, HVAC, electrical, cleaning, or painting—before creating the comparison workspace.', tone: 'CAUTION', actions: [] }],
+    suggestions: ['Create a quote comparison for roofing', 'Create a quote comparison for plumbing'],
+  };
+  const input = QuoteWorkspaceCommandInputSchema.parse({ serviceCategory, scopeSummary: message.slice(0, 1000) });
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_COMPARISON_CONFIRMATION_REQUIRED', parameters: { quoteWorkspace: input, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'quote-workspace-review', title: 'Review this comparison workspace', body: 'No workspace or quote has been created yet.', tone: 'DEFAULT', actions: [] }],
+    confirmation: { confirmationId: `quote-workspace-${propertyId}-1`, version: 1, title: 'Create this quote comparison?', description: 'This creates one canonical draft workspace; it does not select a provider or accept a quote.', fields: [{ label: 'Service', value: serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Scope', value: input.scopeSummary }], confirmLabel: 'Create workspace', consentText: 'I authorize creating this draft comparison workspace for the selected home.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+  };
+}
+
+async function guidanceJourneyCreateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const inventory = await prisma.inventoryItem.findMany({ where: { propertyId }, select: { id: true, name: true }, take: 100 });
+  const lower = message.toLowerCase();
+  const item = inventory.find((candidate) => lower.includes(candidate.name.toLowerCase()));
+  let input: z.infer<typeof GuidanceJourneyCommandInputSchema> | null = null;
+  if (item) input = GuidanceJourneyCommandInputSchema.parse({ scopeCategory: 'ITEM', scopeId: item.id, issueType: /replace|end of life|aging/i.test(message) ? 'near_end_of_life' : /leak/i.test(message) ? 'leak' : 'maintenance_needed', inventoryItemId: item.id, serviceKey: null, label: item.name });
+  else if (/warranty/i.test(message)) input = GuidanceJourneyCommandInputSchema.parse({ scopeCategory: 'SERVICE', scopeId: 'warranty_purchase', issueType: /renew/i.test(message) ? 'warranty_renewal' : 'purchase_warranty', inventoryItemId: null, serviceKey: 'warranty_purchase', label: 'Home warranty' });
+  else if (/insurance|coverage/i.test(message)) input = GuidanceJourneyCommandInputSchema.parse({ scopeCategory: 'SERVICE', scopeId: 'insurance_purchase', issueType: /renew/i.test(message) ? 'policy_renewal' : /compare|quote/i.test(message) ? 'compare_rates' : 'purchase_insurance', inventoryItemId: null, serviceKey: 'insurance_purchase', label: 'Home insurance' });
+  else if (/clean/i.test(message)) input = GuidanceJourneyCommandInputSchema.parse({ scopeCategory: 'SERVICE', scopeId: 'cleaning_service', issueType: 'arrange_cleaning', inventoryItemId: null, serviceKey: 'cleaning_service', label: 'Cleaning service' });
+  else if (/inspect/i.test(message)) input = GuidanceJourneyCommandInputSchema.parse({ scopeCategory: 'SERVICE', scopeId: 'general_inspection', issueType: 'schedule_inspection', inventoryItemId: null, serviceKey: 'general_inspection', label: 'Home inspection' });
+  if (!input) return {
+    status: 'NEEDS_ENTITY', reasonCode: 'GUIDANCE_JOURNEY_SCOPE_REQUIRED',
+    blocks: [{ type: 'SUMMARY', id: 'journey-scope', title: 'What should the guided plan cover?', body: 'Name a recorded appliance/system, warranty, insurance decision, inspection, or cleaning need. Ask will not start an ungrounded workflow.', tone: 'CAUTION', actions: [] }],
+    suggestions: inventory.slice(0, 3).map((candidate) => `Start a guided plan for ${candidate.name}`),
+  };
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_JOURNEY_CONFIRMATION_REQUIRED', parameters: { guidanceJourney: input, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'journey-review', title: 'Review this guided plan', body: 'No journey has been started yet.', tone: 'DEFAULT', actions: [] }],
+    confirmation: { confirmationId: `guidance-journey-${propertyId}-1`, version: 1, title: `Start a guided plan for ${input.label}?`, description: 'This creates a canonical, resumable guidance journey for the selected home.', fields: [{ label: 'Scope', value: input.label }, { label: 'Plan type', value: input.issueType.replace(/_/g, ' ') }], confirmLabel: 'Start guided plan', consentText: 'I authorize creating this guided plan in the shared home record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+  };
+}
+
+async function homeDeadlineMonitorResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const leadDays = Math.min(90, Math.max(1, Number(message.match(/(\d{1,2})\s*days?\s*(?:before|ahead)/i)?.[1] ?? 30)));
+  const warrantyFocus = /warrant/i.test(message);
+  const insuranceFocus = /insurance|policy|coverage/i.test(message);
+  const maintenanceFocus = /maintenance|task/i.test(message) && !warrantyFocus && !insuranceFocus;
+  if (maintenanceFocus) {
+    const openTasks = (await PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: false }))
+      .filter((task) => task.status !== MaintenanceTaskStatus.CANCELLED);
+    const matchedTask = maintenanceCompletionMatch(maintenanceMonitorSubject(message), openTasks);
+    const tasks = openTasks.filter((task) => task.nextDueDate);
+    const selected = matchedTask?.nextDueDate ? matchedTask : null;
+    const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
+    if (matchedTask && !matchedTask.nextDueDate) {
+      const contextVersion = await maintenanceWorkflowVersion(propertyId);
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'MAINTENANCE_MONITOR_DUE_DATE_REQUIRED', contextVersion,
+        parameters: { maintenanceWorkflowVersion: contextVersion },
+        blocks: [{ type: 'SUMMARY', id: 'maintenance-monitor-date', title: `Add a due date for ${matchedTask.title}`, body: 'The task is recorded but cannot drive a real reminder until it has a future due date. Add it here and Ask will continue to reminder confirmation.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${maintenanceHref}&taskId=${encodeURIComponent(matchedTask.id)}`, style: 'SECONDARY' }] }],
+        captureRequests: [{ requirementId: `maintenance-monitor-date-${contextVersion.slice(0, 20)}`, captureKey: 'HOME_DEADLINE_MAINTENANCE_DUE_DATE', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: 'Maintenance due date', question: `When is ${matchedTask.title} due?`, helpText: 'The date is saved to the canonical Maintenance task and reused by Home Actions and reminder workflows.', inputSchema: { type: 'GROUP', fields: [{ key: 'taskId', label: 'Task', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: matchedTask.title, value: matchedTask.id }] } }, { key: 'nextDueDate', label: 'Due date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } }] }, currentAnswer: { taskId: matchedTask.id }, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Saved to the selected Maintenance task', confirmationText: null, expectedContextVersion: contextVersion }],
+        suggestions: [],
+      };
+    }
+    if (!selected) return {
+      status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_MONITOR_TASK_REQUIRED',
+      blocks: [{ type: 'GROUPED_LIST', id: 'maintenance-monitor-options', title: 'Choose a dated maintenance task', description: tasks.length ? 'Use the exact task title in your next message. No notification preference has changed.' : 'No open maintenance task with a due date is recorded yet. Add or schedule the task first.', sections: [{ id: 'tasks', title: 'Dated maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({ id: task.id, title: task.title, description: `Due ${humanDate(task.nextDueDate)}`, meta: [task.priority], status: task.status, href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}` })) }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'PRIMARY' }] }],
+      suggestions: tasks.slice(0, 3).map((task) => `Remind me when ${task.title} is due`),
+    };
+    const input = HomeDeadlineMonitorInputSchema.parse({ sourceType: 'MAINTENANCE', sourceId: selected.id, title: selected.title, dueDate: selected.nextDueDate!.toISOString().slice(0, 10), leadDays: 7 });
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'MAINTENANCE_MONITOR_CONFIRMATION_REQUIRED', contextVersion: maintenanceTaskVersion(selected),
+      parameters: { homeDeadlineMonitor: input, maintenanceTaskVersion: maintenanceTaskVersion(selected), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+      blocks: [{ type: 'SUMMARY', id: 'maintenance-monitor-review', title: 'Review maintenance reminders', body: 'The existing dated task already drives in-app reminders. Confirming enables scoped email delivery; it does not create a duplicate task.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${maintenanceHref}&taskId=${encodeURIComponent(selected.id)}`, style: 'SECONDARY' }] }],
+      confirmation: { confirmationId: `maintenance-monitor-${selected.id}-1`, version: 1, title: `Enable reminders for ${selected.title}?`, description: 'The governed reminder worker checks dated maintenance tasks inside its seven-day horizon.', fields: [{ label: 'Task', value: selected.title }, { label: 'Due', value: humanDate(selected.nextDueDate) ?? input.dueDate }, { label: 'Delivery', value: 'In-app plus email' }, { label: 'Reminder window', value: 'Within 7 days of the due date' }], confirmLabel: 'Enable reminders', consentText: 'I consent to receive maintenance deadline reminders by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    };
+  }
+  const [warranty, policy, policiesMissingExpiry] = await Promise.all([
+    warrantyFocus ? prisma.warranty.findFirst({ where: { propertyId, expiryDate: { gt: new Date() } }, orderBy: { expiryDate: 'asc' } }) : null,
+    insuranceFocus ? prisma.insurancePolicy.findFirst({ where: { propertyId, expiryDate: { gt: new Date() } }, orderBy: { expiryDate: 'asc' } }) : null,
+    insuranceFocus ? prisma.insurancePolicy.findMany({ where: { propertyId, expiryDate: null }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], select: { id: true, carrierName: true, coverageType: true, updatedAt: true } }) : [],
+  ]);
+  const source = warranty ?? policy;
+  if (!source) {
+    const contextVersion = createHash('sha256').update(JSON.stringify(policiesMissingExpiry)).digest('hex');
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'EXPIRATION_DATE_REQUIRED', contextVersion,
+      parameters: { homeDeadlineCaptureVersion: contextVersion },
+      blocks: [{ type: 'SUMMARY', id: 'deadline-source-missing', title: 'Add the expiration date first', body: policiesMissingExpiry.length
+        ? 'The policy is recorded, but its expiration date is missing. Add it here and Ask will immediately continue to the reminder review.'
+        : 'No future expiration or editable undated policy is recorded. Add the coverage record first, then return to activate a real reminder.', tone: 'CAUTION', actions: [{ id: 'open-coverage', label: 'Review coverage records', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'SECONDARY' }] }],
+      captureRequests: policiesMissingExpiry.length ? [{
+        requirementId: `home-deadline-expiry-${contextVersion.slice(0, 20)}`,
+        captureKey: 'HOME_DEADLINE_EXPIRATION_DATE', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+        title: 'Policy expiration date', question: 'Which policy should be monitored, and when does it expire?',
+        helpText: 'This date is saved to the canonical insurance policy, then reused by Coverage and reminder workflows.',
+        inputSchema: { type: 'GROUP', fields: [
+          { key: 'policyId', label: 'Policy', required: true, inputSchema: { type: 'SINGLE_SELECT', options: policiesMissingExpiry.map((candidate) => ({ label: `${candidate.carrierName}${candidate.coverageType ? ` — ${candidate.coverageType}` : ''}`, value: candidate.id })) } },
+          { key: 'expiryDate', label: 'Expiration date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        ] },
+        currentAnswer: policiesMissingExpiry.length === 1 ? { policyId: policiesMissingExpiry[0].id } : {},
+        allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Saved to the selected insurance policy', confirmationText: null,
+        expectedContextVersion: contextVersion,
+      }] : [], suggestions: [],
+    };
+  }
+  const expiry = source.expiryDate!;
+  const due = new Date(expiry.getTime() - leadDays * 86_400_000);
+  const sourceType = warranty ? 'WARRANTY' as const : 'INSURANCE_POLICY' as const;
+  const provider = warranty ? warranty.providerName : policy!.carrierName;
+  const input = HomeDeadlineMonitorInputSchema.parse({ sourceType, sourceId: source.id, title: `Review ${provider} ${warranty ? 'warranty' : 'insurance policy'} before expiration`, dueDate: due.toISOString().slice(0, 10), leadDays });
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_DEADLINE_MONITOR_CONFIRMATION_REQUIRED', parameters: { homeDeadlineMonitor: input, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'deadline-monitor-review', title: 'Review this expiration reminder', body: 'Ask will create a dated canonical Maintenance obligation so the existing governed reminder worker can notify you.', tone: 'DEFAULT', actions: [] }],
+    confirmation: { confirmationId: `home-deadline-${source.id}-1`, version: 1, title: `Monitor this ${warranty ? 'warranty' : 'policy'} expiration?`, description: 'This creates one deduplicated reminder task and enables maintenance deadline email preferences for this home.', fields: [{ label: 'Provider', value: provider }, { label: 'Expires', value: expiry.toISOString().slice(0, 10) }, { label: 'Reminder date', value: input.dueDate }, { label: 'Channel', value: 'In-app plus email' }], confirmLabel: 'Activate reminder', consentText: 'I consent to receive this home-deadline reminder by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -2573,6 +2848,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'OUT_OF_SCOPE_BOUNDARY': return outOfScopeResult();
     case 'MAINTENANCE_TASK_COMPLETE': return maintenanceTaskCompleteResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_TASK_CREATE': return maintenanceTaskCreateResult(input.userId, input.propertyId!, input.message);
+    case 'MAINTENANCE_TASK_UPDATE': return maintenanceTaskUpdateResult(input.userId, input.propertyId!, input.message);
     case 'MAINTENANCE_STATUS': return maintenanceResult(input.userId, input.propertyId!, input.message);
     case 'COVERAGE_GAPS': return coverageResult(input.userId, input.propertyId!, input.message);
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
@@ -2585,6 +2861,9 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
     case 'SELL_HOLD_RENT_ANALYSIS': return sellHoldRentAnalysisResult(input.userId, input.propertyId!);
     case 'HOUSEHOLD_INVITATION': return householdInvitationResult(input.userId, input.propertyId!, input.message);
+    case 'GUIDANCE_JOURNEY_CREATE': return guidanceJourneyCreateResult(input.userId, input.propertyId!, input.message);
+    case 'QUOTE_COMPARISON_CREATE': return quoteComparisonCreateResult(input.propertyId!, input.message);
+    case 'HOME_DEADLINE_MONITOR': return homeDeadlineMonitorResult(input.userId, input.propertyId!, input.message);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
   }
@@ -2594,6 +2873,7 @@ const ASK_OPERATION_CAPABILITY: Partial<Record<AskOperationResolution['operation
   MAINTENANCE_STATUS: 'maintenance',
   MAINTENANCE_TASK_CREATE: 'maintenance',
   MAINTENANCE_TASK_COMPLETE: 'maintenance',
+  MAINTENANCE_TASK_UPDATE: 'maintenance',
   COVERAGE_GAPS: 'coverage-intelligence',
   SAVINGS_OPPORTUNITIES: 'savings-benefits',
   OWNERSHIP_COSTS: 'ownership-costs',
@@ -2604,6 +2884,9 @@ const ASK_OPERATION_CAPABILITY: Partial<Record<AskOperationResolution['operation
   REFINANCE_ANALYSIS: 'mortgage-refinance-radar',
   REFINANCE_RATE_MONITOR: 'mortgage-refinance-radar',
   SELL_HOLD_RENT_ANALYSIS: 'sell-hold-rent',
+  GUIDANCE_JOURNEY_CREATE: 'guidance-overview',
+  QUOTE_COMPARISON_CREATE: 'quote-comparison',
+  HOME_DEADLINE_MONITOR: 'maintenance',
 };
 
 async function executeOperation(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
@@ -2875,7 +3158,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'HOME_DEADLINE_MONITOR', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -3128,6 +3411,66 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'HouseholdInviteWorkflow';
+  } else if (execution.operationId === 'HOME_DEADLINE_MONITOR') {
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to update reminder dates.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    if (input.captureKey === 'HOME_DEADLINE_MAINTENANCE_DUE_DATE') {
+      const currentVersion = await maintenanceWorkflowVersion(execution.propertyId);
+      if (currentVersion !== input.expectedContextVersion) {
+        const error = new Error('Maintenance tasks changed while this form was open. Review the refreshed task and try again.');
+        (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+        throw error;
+      }
+      const candidate = HomeDeadlineTaskDueCaptureSchema.safeParse(input.answer);
+      const task = candidate.success ? await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.taskId, propertyId: execution.propertyId, status: { not: MaintenanceTaskStatus.CANCELLED } } }) : null;
+      if (!candidate.success || !task) {
+        const error = new Error('Choose an open maintenance task and enter a valid future due date.');
+        (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+        throw error;
+      }
+      const updated = await PropertyMaintenanceTaskService.updateTask(userId, task.id, { nextDueDate: candidate.data.nextDueDate });
+      result = await homeDeadlineMonitorResult(userId, execution.propertyId, execution.message);
+      captureId = input.idempotencyKey;
+      capturedContextVersion = maintenanceTaskVersion(updated);
+      canonicalOwner = 'PropertyMaintenanceTask';
+    } else if (input.captureKey === 'HOME_DEADLINE_EXPIRATION_DATE') {
+      const policiesMissingExpiry = await prisma.insurancePolicy.findMany({
+        where: { propertyId: execution.propertyId, expiryDate: null },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+        select: { id: true, carrierName: true, coverageType: true, updatedAt: true },
+      });
+      const currentVersion = createHash('sha256').update(JSON.stringify(policiesMissingExpiry)).digest('hex');
+      if (currentVersion !== input.expectedContextVersion) {
+        const error = new Error('Coverage records changed while this form was open. Review the refreshed choices and try again.');
+        (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+        throw error;
+      }
+      const candidate = HomeDeadlineExpirationCaptureSchema.safeParse(input.answer);
+      if (!candidate.success || !policiesMissingExpiry.some((policy) => policy.id === candidate.data?.policyId)) {
+        const error = new Error('Choose an undated policy and enter a valid future expiration date.');
+        (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+        throw error;
+      }
+      const property = await prisma.property.findUnique({ where: { id: execution.propertyId }, select: { homeownerProfileId: true } });
+      if (!property) {
+        const error = new Error('The selected home is no longer available.');
+        (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+        throw error;
+      }
+      await updateInsurancePolicy(candidate.data.policyId, property.homeownerProfileId, { expiryDate: candidate.data.expiryDate });
+      result = await homeDeadlineMonitorResult(userId, execution.propertyId, execution.message);
+      captureId = input.idempotencyKey;
+      capturedContextVersion = result.contextVersion ?? createHash('sha256').update(`${candidate.data.policyId}:${candidate.data.expiryDate}`).digest('hex');
+      canonicalOwner = 'InsurancePolicy';
+    } else {
+      const error = new Error('This deadline capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
   } else if (execution.operationId === 'REPLACEMENT_GUIDANCE') {
     const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
       ? execution.parametersJson as Record<string, unknown>
@@ -3321,9 +3664,16 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
   const access = await ensurePropertyAccess(userId, execution.propertyId);
-  if (!['REFINANCE_RATE_MONITOR', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE'].includes(execution.operationId ?? '') || execution.status !== 'NEEDS_CONFIRMATION') {
+  const command = getAskDomainCommandByOperation(execution.operationId ?? '');
+  if (!command || execution.status !== 'NEEDS_CONFIRMATION') {
     const error = new Error('This confirmation is no longer active.');
     (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
+  const roleRank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
+  if (roleRank[access.role] < roleRank[command.roleFloor]) {
+    const error = new Error(`${command.roleFloor.toLowerCase()} access is required for this command.`);
+    (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
     throw error;
   }
   const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
@@ -3485,6 +3835,109 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK';
     artifactId = task.id;
+  } else if (execution.operationId === 'MAINTENANCE_TASK_UPDATE') {
+    const candidate = MaintenanceTaskUpdateInputSchema.safeParse(parameters.maintenanceUpdate);
+    if (!candidate.success) {
+      const error = new Error('The maintenance update is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const current = await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.taskId, propertyId: execution.propertyId } });
+    if (!current || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(current)) {
+      const error = new Error('This task changed while the confirmation was open. Review its current state and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    if (candidate.data.action === 'ASSIGN' || candidate.data.action === 'UNASSIGN') {
+      await householdService.assignTask(execution.propertyId, current.id, 'MAINTENANCE', candidate.data.assigneeUserId ?? null, userId);
+    } else if (candidate.data.action === 'ARCHIVE') {
+      await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.CANCELLED);
+    } else if (candidate.data.action === 'REOPEN') {
+      await PropertyMaintenanceTaskService.updateTaskStatus(userId, current.id, MaintenanceTaskStatus.PENDING);
+    } else {
+      await PropertyMaintenanceTaskService.updateTask(userId, current.id, {
+        ...(candidate.data.priority ? { priority: candidate.data.priority } : {}),
+        ...(candidate.data.nextDueDate !== undefined ? { nextDueDate: candidate.data.nextDueDate } : {}),
+        ...(candidate.data.title ? { title: candidate.data.title } : {}),
+      });
+    }
+    const updated = await prisma.propertyMaintenanceTask.findUniqueOrThrow({ where: { id: current.id }, include: { assignedTo: { select: { email: true } } } });
+    const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(updated.id)}&from=ask`;
+    result = {
+      status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_UPDATED', contextVersion: maintenanceTaskVersion(updated),
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `maintenance-update-${updated.id}`, title: 'Maintenance task updated', status: candidate.data.action === 'ARCHIVE' ? 'CANCELLED' : 'COMPLETED', description: 'The canonical Maintenance record and its downstream work state were updated.', details: [{ label: 'Task', value: updated.title }, { label: 'Action', value: candidate.data.action.toLowerCase() }, { label: 'Status', value: updated.status.toLowerCase().replace(/_/g, ' ') }, { label: 'Due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' }, { label: 'Assignee', value: updated.assignedTo?.email ?? 'Unassigned' }], actions: [{ id: 'open-task', label: 'Open task', href: maintenanceHref, style: 'PRIMARY' }] }],
+      confirmation: null, suggestions: candidate.data.action === 'ARCHIVE' ? [`Reopen ${updated.title}`] : ['What maintenance is pending?'],
+    };
+    artifactType = command.artifactType;
+    artifactId = updated.id;
+  } else if (execution.operationId === 'GUIDANCE_JOURNEY_CREATE') {
+    const candidate = GuidanceJourneyCommandInputSchema.safeParse(parameters.guidanceJourney);
+    if (!candidate.success) {
+      const error = new Error('The guided plan settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const journey = await guidanceJourneyService.createUserInitiatedJourney(execution.propertyId, {
+      scopeCategory: candidate.data.scopeCategory,
+      scopeId: candidate.data.scopeId,
+      issueType: candidate.data.issueType,
+      inventoryItemId: candidate.data.inventoryItemId,
+      serviceKey: candidate.data.serviceKey,
+      customIssueLabel: candidate.data.label,
+      sourceAskExecutionId: execution.id,
+    }, userId);
+    const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`;
+    result = { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-${journey.id}`, title: 'Guided plan started', status: 'COMPLETED', description: 'The resumable guidance journey is now linked to this home.', details: [{ label: 'Scope', value: candidate.data.label }, { label: 'Plan', value: candidate.data.issueType.replace(/_/g, ' ') }], actions: [{ id: 'open-journey', label: 'Open guided plan', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
+    artifactType = command.artifactType;
+    artifactId = journey.id;
+  } else if (execution.operationId === 'QUOTE_COMPARISON_CREATE') {
+    const candidate = QuoteWorkspaceCommandInputSchema.safeParse(parameters.quoteWorkspace);
+    if (!candidate.success) {
+      const error = new Error('The comparison workspace settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const created = await getOrCreateQuoteComparisonWorkspace(execution.propertyId, userId, candidate.data);
+    const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/quote-comparison?workspaceId=${encodeURIComponent(created.workspace.id)}`;
+    result = { status: 'COMPLETED', reasonCode: created.reused ? 'QUOTE_COMPARISON_REUSED' : 'QUOTE_COMPARISON_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `quote-workspace-${created.workspace.id}`, title: created.reused ? 'Existing comparison workspace opened' : 'Quote comparison workspace created', status: 'COMPLETED', description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.', details: [{ label: 'Service', value: candidate.data.serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Status', value: created.workspace.status.toLowerCase() }], actions: [{ id: 'open-workspace', label: 'Open comparison', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
+    artifactType = command.artifactType;
+    artifactId = created.workspace.id;
+  } else if (execution.operationId === 'HOME_DEADLINE_MONITOR') {
+    const candidate = HomeDeadlineMonitorInputSchema.safeParse(parameters.homeDeadlineMonitor);
+    if (!candidate.success) {
+      const error = new Error('The expiration reminder settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    let task;
+    if (candidate.data.sourceType === 'MAINTENANCE') {
+      task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.sourceId, propertyId: execution.propertyId } });
+      if (!task || task.status === MaintenanceTaskStatus.CANCELLED || !task.nextDueDate || parameters.maintenanceTaskVersion !== maintenanceTaskVersion(task)) {
+        const error = new Error('This maintenance task changed while confirmation was open. Review the current task and try again.');
+        (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+        throw error;
+      }
+    } else {
+      const actionKey = `ask-deadline:${candidate.data.sourceType}:${candidate.data.sourceId}`;
+      task = await prisma.propertyMaintenanceTask.findUnique({ where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } } });
+      if (!task) {
+        try {
+          task = await PropertyMaintenanceTaskService.createUserTask(userId, execution.propertyId, { title: candidate.data.title, priority: MaintenanceTaskPriority.HIGH, nextDueDate: candidate.data.dueDate, actionKey });
+        } catch (error) {
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+          task = await prisma.propertyMaintenanceTask.findUnique({ where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } } });
+          if (!task) throw error;
+        }
+      } else if (task.nextDueDate?.toISOString().slice(0, 10) !== candidate.data.dueDate || task.status === MaintenanceTaskStatus.CANCELLED) {
+        task = await PropertyMaintenanceTaskService.updateTask(userId, task.id, { nextDueDate: candidate.data.dueDate, status: MaintenanceTaskStatus.PENDING, priority: MaintenanceTaskPriority.HIGH });
+      }
+    }
+    await Promise.all(['MAINTENANCE', 'MATERIAL_DEADLINE'].map((category) => upsertNotificationPreference(userId, { propertyId: execution.propertyId!, category: category as 'MAINTENANCE' | 'MATERIAL_DEADLINE', channel: 'EMAIL', enabled: true, cadence: 'IMMEDIATE', timezone: 'UTC' })));
+    const href = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
+    const maintenanceSource = candidate.data.sourceType === 'MAINTENANCE';
+    result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [{ id: 'manage-reminder', label: 'Manage reminder', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [`Reschedule ${task.title}`, `Archive ${task.title}`] };
+    artifactType = command.artifactType;
+    artifactId = task.id;
   } else if (execution.operationId === 'HOUSEHOLD_INVITATION') {
     if (access.role !== HouseholdRole.OWNER) {
       const error = new Error('Only a household owner can send this invitation.');
@@ -3602,25 +4055,16 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     throw error;
   }
   if (execution.status !== 'NEEDS_CONFIRMATION') return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
-  const householdInvitation = execution.operationId === 'HOUSEHOLD_INVITATION';
-  const maintenanceTaskCreation = execution.operationId === 'MAINTENANCE_TASK_CREATE';
-  const maintenanceTaskCompletion = execution.operationId === 'MAINTENANCE_TASK_COMPLETE';
+  const command = getAskDomainCommandByOperation(execution.operationId ?? '');
+  if (!command || !command.supportsCancelBeforeExecution) {
+    const error = new Error('This execution does not have an active cancellable command.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'confirmation-cancelled',
-    title: householdInvitation
-      ? 'Invitation not created'
-      : maintenanceTaskCreation
-        ? 'Maintenance task not created'
-        : maintenanceTaskCompletion
-          ? 'Task not completed'
-          : 'Monitor not created',
-    body: householdInvitation
-      ? 'The household invitation was cancelled. No invitation or household access was created.'
-      : maintenanceTaskCreation
-        ? 'The pending maintenance task was cancelled. No task or shared home record was changed.'
-        : maintenanceTaskCompletion
-          ? 'The pending completion was cancelled. Task status, cost, recurring schedule, and downstream records were not changed.'
-          : 'The pending mortgage-rate monitor was cancelled. No notification preference or threshold was changed.',
+    title: command.cancellation.title,
+    body: command.cancellation.body,
     tone: 'DEFAULT', actions: [],
   }];
   const saved = await prisma.askExecution.update({
@@ -3632,11 +4076,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
         blocks,
         captureRequests: [],
         confirmation: null,
-        suggestions: [householdInvitation
-          ? 'Review household access'
-          : maintenanceTaskCreation || maintenanceTaskCompletion
-            ? 'What maintenance is pending?'
-            : 'Set a different rate threshold'],
+        suggestions: [command.cancellation.suggestion],
       }),
       completedAt: new Date(),
     },

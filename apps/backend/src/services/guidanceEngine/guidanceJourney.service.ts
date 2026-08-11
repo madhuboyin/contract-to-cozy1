@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { APIError } from '../../middleware/error.middleware';
 import { prisma } from '../../lib/prisma';
 import { getGuidanceTemplateBySignalFamily, getDefaultStepKey, getStepSkipPolicy, getTemplateByIssueType, getTemplateByJourneyTypeKey } from './guidanceTemplateRegistry';
@@ -1836,6 +1837,7 @@ export class GuidanceJourneyService {
     branchChoice?: string | null;
     sourceVerdict?: string | null;
     contextSnapshotPatch?: Record<string, unknown> | null;
+    sourceAskExecutionId?: string | null;
   }) {
     const { guidanceJourney, guidanceJourneyEvent } = getGuidanceModels();
     const template = getTemplateByJourneyTypeKey(args.templateKey);
@@ -1843,6 +1845,7 @@ export class GuidanceJourneyService {
 
     const journey = await guidanceJourney.create({
       data: {
+        sourceAskExecutionId: args.sourceAskExecutionId ?? null,
         propertyId: args.propertyId,
         inventoryItemId: args.inventoryItemId ?? null,
         parentJourneyId: args.parentJourneyId ?? null,
@@ -1935,17 +1938,33 @@ export class GuidanceJourneyService {
 
     const customIssueLabel = input.customIssueLabel?.trim();
 
-    let journey = await this.createJourneyFromTemplate({
-      propertyId,
-      actorUserId,
-      templateKey: template.journeyTypeKey,
-      issueType,
-      scopeCategory: input.scopeCategory,
-      scopeId,
-      inventoryItemId,
-      serviceKey,
-      contextSnapshotPatch: customIssueLabel ? { userNote: customIssueLabel } : null,
-    });
+    let journey;
+    const existing = input.sourceAskExecutionId
+      ? await prisma.guidanceJourney.findUnique({ where: { sourceAskExecutionId: input.sourceAskExecutionId } })
+      : null;
+    if (existing) {
+      journey = await guidanceStepResolverService.recomputeJourneyState({ propertyId, journeyId: existing.id, actorUserId, signalId: null });
+    } else {
+      try {
+        journey = await this.createJourneyFromTemplate({
+          propertyId,
+          actorUserId,
+          templateKey: template.journeyTypeKey,
+          issueType,
+          scopeCategory: input.scopeCategory,
+          scopeId,
+          inventoryItemId,
+          serviceKey,
+          contextSnapshotPatch: customIssueLabel ? { userNote: customIssueLabel } : null,
+          sourceAskExecutionId: input.sourceAskExecutionId ?? null,
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002' || !input.sourceAskExecutionId) throw error;
+        const concurrent = await prisma.guidanceJourney.findUnique({ where: { sourceAskExecutionId: input.sourceAskExecutionId } });
+        if (!concurrent) throw error;
+        journey = await guidanceStepResolverService.recomputeJourneyState({ propertyId, journeyId: concurrent.id, actorUserId, signalId: null });
+      }
+    }
 
     // When arriving from a coverage analysis REPLACE_SOON verdict, the replacement
     // decision is already confirmed — auto-skip step 1 (confirm_replacement_path)
