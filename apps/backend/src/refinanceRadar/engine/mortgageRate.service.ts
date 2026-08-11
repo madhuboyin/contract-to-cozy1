@@ -9,6 +9,7 @@ import {
   RATE_TREND_LOOKBACK_SNAPSHOTS,
 } from '../config/refinanceRadar.config';
 import { MortgageRateSnapshotDTO, RateTrendSummary } from '../types/refinanceRadar.types';
+import { evaluateRefinanceRateMonitors } from '../refinanceRateMonitor.service';
 
 // ─── DTO Mapper ───────────────────────────────────────────────────────────────
 
@@ -65,7 +66,9 @@ export class MortgageRateService {
     });
 
     if (existing) {
-      return { snapshot: toSnapshotDTO(existing), created: false };
+      const snapshot = toSnapshotDTO(existing);
+      await evaluateRefinanceRateMonitors(snapshot);
+      return { snapshot, created: false };
     }
 
     const created = await prisma.mortgageRateSnapshot.create({
@@ -79,7 +82,9 @@ export class MortgageRateService {
       },
     });
 
-    return { snapshot: toSnapshotDTO(created), created: true };
+    const snapshot = toSnapshotDTO(created);
+    await evaluateRefinanceRateMonitors(snapshot);
+    return { snapshot, created: true };
   }
 
   /**

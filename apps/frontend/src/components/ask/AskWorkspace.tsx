@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, CheckCircle2, ExternalLink, Home, Loader2, Send, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, ExternalLink, Home, Loader2, Send, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import type { AskAction, AskCaptureRequest, AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
+import type { AskAction, AskCaptureRequest, AskConfirmation, AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 
 const starterQuestions = [
   'What maintenance tasks are pending?',
@@ -35,6 +35,45 @@ function ActionLink({ action }: { action: AskAction }) {
     >
       {action.label}<ArrowRight className="h-4 w-4" />
     </Link>
+  );
+}
+
+function MonitorView({ block }: { block: Extract<AskPresentationBlock, { type: 'MONITOR' }> }) {
+  const [status, setStatus] = useState(block.status);
+  const [saving, setSaving] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    api.getAskMonitor(block.monitorId).then((response) => {
+      if (active && response.success && response.data) setStatus(response.data.status);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [block.monitorId]);
+  const update = async (action: 'PAUSE' | 'RESUME' | 'STOP') => {
+    setSaving(true); setError(null);
+    try {
+      const response = await api.updateAskMonitor(block.monitorId, action);
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not update this monitor.');
+      setStatus(response.data.status); setConfirmStop(false);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not update this monitor.'); }
+    finally { setSaving(false); }
+  };
+  const editAction = block.actions.find((action) => action.id === 'edit-monitor');
+  return (
+    <section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+      <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-700 text-white"><BellRing className="h-5 w-5" /></span><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-950">{block.title}</h3><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{status}</span></div><p className="mt-1 text-sm text-slate-700">{block.product} · {block.threshold}</p></div></div>
+      <dl className="mt-4 grid gap-2 rounded-xl bg-white/80 p-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-slate-500">Delivery</dt><dd className="font-medium text-slate-800">{block.channel} · {block.cadence.replace(/_/g, ' ').toLowerCase()}</dd></div><div><dt className="text-xs text-slate-500">Quiet hours</dt><dd className="font-medium text-slate-800">{block.quietHours ?? 'None'}</dd></div></dl>
+      <p className="mt-3 text-xs leading-5 text-slate-600">{block.sourceBoundary}</p>
+      {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {editAction && <ActionLink action={editAction} />}
+        {status === 'ACTIVE' && <button type="button" disabled={saving} onClick={() => void update('PAUSE')} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Pause</button>}
+        {status === 'PAUSED' && <button type="button" disabled={saving} onClick={() => void update('RESUME')} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Resume</button>}
+        {status !== 'STOPPED' && !confirmStop && <button type="button" disabled={saving} onClick={() => setConfirmStop(true)} className="min-h-10 rounded-xl px-3 py-2 text-sm font-semibold text-red-700">Stop</button>}
+      </div>
+      {confirmStop && <div className="mt-3 rounded-xl border border-red-200 bg-white p-3"><p className="text-sm text-slate-700">Stop this monitor? It will no longer evaluate new rate snapshots.</p><div className="mt-2 flex gap-2"><button type="button" disabled={saving} onClick={() => void update('STOP')} className="min-h-10 rounded-xl bg-red-700 px-3 py-2 text-sm font-semibold text-white">Confirm stop</button><button type="button" disabled={saving} onClick={() => setConfirmStop(false)} className="min-h-10 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600">Keep active</button></div></div>}
+    </section>
   );
 }
 
@@ -128,10 +167,53 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
     );
   }
 
+  if (block.type === 'MONITOR') {
+    return <MonitorView block={block} />;
+  }
+
   return (
     <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       <table className="mt-3 min-w-full text-left text-sm"><thead><tr>{block.columns.map((column) => <th key={column.key} className="border-b px-2 py-2 text-xs text-slate-500">{column.label}</th>)}</tr></thead><tbody>{block.rows.map((row) => <tr key={row.id}>{block.columns.map((column) => <td key={column.key} className="border-b border-slate-100 px-2 py-2 text-slate-700">{row.values[column.key]}</td>)}</tr>)}</tbody></table>
+    </section>
+  );
+}
+
+function ConfirmationCard({ executionId, confirmation, onCompleted }: { executionId: string; confirmation: AskConfirmation; onCompleted: (execution: AskExecutionResponse) => void }) {
+  const [consent, setConsent] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [idempotencyKey] = useState(newId);
+  const expired = new Date(confirmation.expiresAt) <= new Date();
+
+  const confirm = async () => {
+    if (!consent || saving || expired) return;
+    setSaving(true); setError(null);
+    try {
+      const response = await api.confirmAskExecution(executionId, { confirmationVersion: confirmation.version, idempotencyKey, consentConfirmed: true });
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not start this monitor.');
+      onCompleted(response.data);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not start this monitor.'); }
+    finally { setSaving(false); }
+  };
+  const cancel = async () => {
+    if (saving) return;
+    setSaving(true); setError(null);
+    try {
+      const response = await api.cancelAskExecution(executionId);
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not cancel this action.');
+      onCompleted(response.data);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not cancel this action.'); }
+    finally { setSaving(false); }
+  };
+  return (
+    <section className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">Confirmation required</p>
+      <h3 className="mt-1 font-semibold text-slate-950">{confirmation.title}</h3><p className="mt-1 text-sm leading-5 text-slate-700">{confirmation.description}</p>
+      <dl className="mt-4 divide-y divide-violet-100 rounded-xl border border-violet-100 bg-white px-3">{confirmation.fields.map((field) => <div key={field.label} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{field.label}</dt><dd className="font-medium text-slate-800">{field.value}</dd></div>)}</dl>
+      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-violet-200 bg-white p-3 text-sm text-slate-700"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4" /><span>{confirmation.consentText}</span></label>
+      {expired && <p className="mt-3 text-sm text-amber-700">This review expired. Ask again to use current settings.</p>}{error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
+      <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={!consent || saving || expired} onClick={() => void confirm()} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Working…' : confirmation.confirmLabel}</button><button type="button" disabled={saving} onClick={() => void cancel()} className="min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Cancel</button></div>
     </section>
   );
 }
@@ -334,6 +416,7 @@ export function AskWorkspace({ mode = 'page', onClose }: { mode?: 'page' | 'pane
                   <div className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</div>
                   {execution.blocks.map((block) => <BlockView key={block.id} block={block} />)}
                   {execution.captureRequests.map((request) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={(updated) => setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item))} />)}
+                  {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={(updated) => setExecutions((current) => current.map((item) => item.executionId === updated.executionId ? updated : item))} />}
                   {execution.suggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{execution.suggestions.map((suggestion) => <button key={suggestion} onClick={() => setInput(suggestion)} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
                 </div>
               </article>

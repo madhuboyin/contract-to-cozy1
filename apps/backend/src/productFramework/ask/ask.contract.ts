@@ -109,6 +109,21 @@ const BoundaryBlockSchema = z.object({
   suggestions: z.array(z.string()).max(5).default([]),
 });
 
+const MonitorBlockSchema = z.object({
+  type: z.literal('MONITOR'),
+  id: z.string(),
+  monitorId: z.string(),
+  title: z.string(),
+  status: z.enum(['ACTIVE', 'PAUSED', 'STOPPED']),
+  threshold: z.string(),
+  product: z.string(),
+  channel: z.string(),
+  cadence: z.string(),
+  quietHours: z.string().nullable(),
+  sourceBoundary: z.string(),
+  actions: z.array(AskActionSchema).max(3),
+});
+
 export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   SummaryBlockSchema,
   GroupedListBlockSchema,
@@ -116,7 +131,25 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   CapabilityListBlockSchema,
   EvidenceBlockSchema,
   BoundaryBlockSchema,
+  MonitorBlockSchema,
 ]);
+
+export const AskConfirmationSchema = z.object({
+  confirmationId: z.string(),
+  version: z.number().int().positive(),
+  title: z.string(),
+  description: z.string(),
+  fields: z.array(z.object({ label: z.string(), value: z.string() })).max(12),
+  confirmLabel: z.string(),
+  consentText: z.string(),
+  expiresAt: z.string().datetime(),
+});
+
+export const SubmitAskConfirmationSchema = z.object({
+  confirmationVersion: z.number().int().positive(),
+  idempotencyKey: z.string().trim().min(8).max(128),
+  consentConfirmed: z.literal(true),
+}).strict();
 
 export const AskCaptureRequestSchema = z.object({
   requirementId: z.string(),
@@ -169,6 +202,7 @@ export const AskExecutionResponseSchema = z.object({
   contextVersion: z.string().nullable(),
   blocks: z.array(AskPresentationBlockSchema),
   captureRequests: z.array(AskCaptureRequestSchema).max(3).default([]),
+  confirmation: AskConfirmationSchema.nullable().default(null),
   suggestions: z.array(z.string()).max(5),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -177,6 +211,8 @@ export const AskExecutionResponseSchema = z.object({
 export type AskExecutionStatus = z.infer<typeof AskExecutionStatusSchema>;
 export type AskPresentationBlock = z.infer<typeof AskPresentationBlockSchema>;
 export type AskCaptureRequest = z.infer<typeof AskCaptureRequestSchema>;
+export type AskConfirmation = z.infer<typeof AskConfirmationSchema>;
 export type CreateAskExecutionRequest = z.infer<typeof CreateAskExecutionRequestSchema>;
 export type SubmitAskCaptureRequest = z.infer<typeof SubmitAskCaptureRequestSchema>;
+export type SubmitAskConfirmation = z.infer<typeof SubmitAskConfirmationSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;

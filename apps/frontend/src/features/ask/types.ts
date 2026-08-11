@@ -18,7 +18,8 @@ export type AskPresentationBlock =
   | { type: 'TABLE'; id: string; title: string; description?: string | null; columns: Array<{ key: string; label: string }>; rows: Array<{ id: string; values: Record<string, string> }>; actions: AskAction[] }
   | { type: 'CAPABILITY_LIST'; id: string; title: string; description?: string | null; capabilities: Array<{ id: string; label: string; description: string; expectedOutput: string; href: string; readiness: 'READY' | 'NEEDS_PROPERTY' | 'AVAILABLE'; releaseStage: 'ACTIVE' | 'BETA' }> }
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null }> }
-  | { type: 'BOUNDARY'; id: string; title: string; body: string; severity: 'INFO' | 'CAUTION' | 'EMERGENCY'; suggestions: string[] };
+  | { type: 'BOUNDARY'; id: string; title: string; body: string; severity: 'INFO' | 'CAUTION' | 'EMERGENCY'; suggestions: string[] }
+  | { type: 'MONITOR'; id: string; monitorId: string; title: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED'; threshold: string; product: string; channel: string; cadence: string; quietHours: string | null; sourceBoundary: string; actions: AskAction[] };
 
 export interface AskExecutionResponse {
   executionId: string;
@@ -30,9 +31,21 @@ export interface AskExecutionResponse {
   contextVersion: string | null;
   blocks: AskPresentationBlock[];
   captureRequests: AskCaptureRequest[];
+  confirmation: AskConfirmation | null;
   suggestions: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AskConfirmation {
+  confirmationId: string;
+  version: number;
+  title: string;
+  description: string;
+  fields: Array<{ label: string; value: string }>;
+  confirmLabel: string;
+  consentText: string;
+  expiresAt: string;
 }
 
 export interface AskCaptureRequest {

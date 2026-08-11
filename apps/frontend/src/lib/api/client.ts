@@ -1006,6 +1006,18 @@ class APIClient {
   async submitAskCapture(executionId: string, payload: SubmitAskCapturePayload): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/captures`, { method: 'POST', body: payload });
   }
+  async confirmAskExecution(executionId: string, payload: { confirmationVersion: number; idempotencyKey: string; consentConfirmed: true }): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/confirm`, { method: 'POST', body: payload });
+  }
+  async cancelAskExecution(executionId: string): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/cancel`, { method: 'POST' });
+  }
+  async updateAskMonitor(monitorId: string, action: 'PAUSE' | 'RESUME' | 'STOP'): Promise<APIResponse<{ id: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED' }>> {
+    return this.request(`/api/ask/monitors/${encodeURIComponent(monitorId)}`, { method: 'PATCH', body: { action } });
+  }
+  async getAskMonitor(monitorId: string): Promise<APIResponse<{ id: string; status: 'ACTIVE' | 'PAUSED' | 'STOPPED' }>> {
+    return this.request(`/api/ask/monitors/${encodeURIComponent(monitorId)}`);
+  }
   async createGroundedAskProposal(payload: {
     sessionId: string; propertyId?: string | null; kind: string; summary: string;
     payload: Record<string, unknown>;

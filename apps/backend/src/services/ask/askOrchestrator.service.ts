@@ -1,4 +1,4 @@
-import { AskExecutionStatus, MaintenanceTaskStatus, Prisma } from '@prisma/client';
+import { AskExecutionStatus, MaintenanceTaskStatus, NotificationCadence, Prisma, RefinanceRateMonitorProduct } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
@@ -9,6 +9,7 @@ import {
   type AskPresentationBlock,
   type CreateAskExecutionRequest,
   type SubmitAskCaptureRequest,
+  type SubmitAskConfirmation,
 } from '../../productFramework/ask/ask.contract';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
@@ -31,6 +32,8 @@ import { getFinancialContextDecisions } from '../financialContext/context';
 import { getProfile, upsertProfile } from '../financing.service';
 import { RefinanceRadarService } from '../../refinanceRadar/refinanceRadar.service';
 import { MortgageRateService } from '../../refinanceRadar/engine/mortgageRate.service';
+import { getRefinanceAlertPreference } from '../../refinanceRadar/refinanceAlertPreference.service';
+import { createOrUpdateRefinanceRateMonitor } from '../../refinanceRadar/refinanceRateMonitor.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
@@ -391,6 +394,64 @@ async function refinanceAnalysisResult(userId: string, propertyId: string): Prom
   };
 }
 
+function parseRateThreshold(message: string): number | null {
+  const match = message.match(/(?:below|under|to|reaches?|hits?)\s*(\d{1,2}(?:\.\d{1,3})?)\s*%/i)
+    ?? message.match(/(\d{1,2}(?:\.\d{1,3})?)\s*%/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 && value <= 30 ? value : null;
+}
+
+async function refinanceRateMonitorResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const thresholdPct = parseRateThreshold(message);
+  if (thresholdPct === null) {
+    return {
+      status: 'NEEDS_CLARIFICATION', reasonCode: 'RATE_THRESHOLD_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'rate-monitor-threshold-needed', title: 'What rate should trigger the alert?', body: 'Enter a mortgage benchmark threshold such as “Notify me when 30-year rates reach 5.5%.”', tone: 'CAUTION', actions: [] }],
+      suggestions: ['Notify me when 30-year rates reach 5.5%', 'Notify me when 15-year rates reach 4.75%'],
+    };
+  }
+  const product = /\b15[ -]?year\b/i.test(message) ? RefinanceRateMonitorProduct.FIXED_15_YEAR : RefinanceRateMonitorProduct.FIXED_30_YEAR;
+  const preference = await getRefinanceAlertPreference(userId, propertyId);
+  if (!preference.recipientInRolloutCohort || !preference.externalDeliveryEnabled) {
+    return {
+      status: 'UNAVAILABLE', reasonCode: !preference.recipientInRolloutCohort ? 'REFINANCE_ALERT_ROLLOUT_UNAVAILABLE' : 'REFINANCE_ALERT_DELIVERY_UNAVAILABLE',
+      blocks: [{ type: 'SUMMARY', id: 'rate-monitor-unavailable', title: 'Email rate alerts are not available for this account yet', body: 'Mortgage Refinance Radar can still show the latest governed benchmark and personalized review threshold in the app. Ask will not claim an external notification is active until delivery eligibility is confirmed.', tone: 'CAUTION', actions: [{ id: 'open-radar', label: 'Open Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] }],
+      suggestions: ['Is refinancing worth reviewing now?'],
+    };
+  }
+  const confirmationVersion = 1;
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const quietStart = preference.quietStart ?? '21:00';
+  const quietEnd = preference.quietEnd ?? '07:00';
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'MONITOR_CONFIRMATION_REQUIRED',
+    parameters: {
+      thresholdPct, product, channel: 'EMAIL', cadence: 'IMMEDIATE', quietStart, quietEnd,
+      timezone: preference.timezone || 'UTC', confirmationVersion, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'rate-monitor-review', title: 'Review this mortgage-rate monitor', body: 'No monitor has been created yet. Confirm the settings below to activate governed benchmark monitoring and email delivery.', tone: 'DEFAULT', actions: [] }],
+    confirmation: {
+      confirmationId: `rate-monitor-${propertyId}-${confirmationVersion}`,
+      version: confirmationVersion,
+      title: 'Start mortgage-rate monitoring?',
+      description: 'ContractToCozy will evaluate newly ingested governed mortgage-rate snapshots and notify you when the selected benchmark is at or below your threshold.',
+      fields: [
+        { label: 'Benchmark', value: product === RefinanceRateMonitorProduct.FIXED_15_YEAR ? '15-year fixed national benchmark' : '30-year fixed national benchmark' },
+        { label: 'Threshold', value: `${thresholdPct.toFixed(3)}% or lower` },
+        { label: 'Channel', value: 'Email plus in-app notification' },
+        { label: 'Cadence', value: 'Immediate when a newly ingested snapshot qualifies' },
+        { label: 'Quiet hours', value: `${quietStart}–${quietEnd} (${preference.timezone || 'UTC'})` },
+        { label: 'Source boundary', value: 'Governed national benchmark—not a personalized lender quote' },
+      ],
+      confirmLabel: 'Start monitor',
+      consentText: 'I consent to receive refinance threshold notifications by email using these settings.',
+      expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
 function tokenize(value: string): Set<string> {
   return new Set(value.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2));
 }
@@ -505,6 +566,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'COVERAGE_GAPS': return coverageResult(input.propertyId!);
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
+    case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
   }
@@ -516,7 +578,7 @@ function mapPersistedExecution(execution: {
   createdAt: Date; updatedAt: Date;
 }, property: { id: string; label: string } | null): AskExecutionResponse {
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { blocks?: unknown; captureRequests?: unknown; suggestions?: unknown }
+    ? execution.resultJson as { blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; suggestions?: unknown }
     : {};
   return AskExecutionResponseSchema.parse({
     executionId: execution.id,
@@ -528,6 +590,7 @@ function mapPersistedExecution(execution: {
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
     captureRequests: stored.captureRequests ?? [],
+    confirmation: stored.confirmation ?? null,
     suggestions: stored.suggestions ?? [],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
@@ -583,7 +646,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
-        resultJson: asInputJson({ blocks: result.blocks, captureRequests: result.captureRequests ?? [], suggestions: result.suggestions }),
+        resultJson: asInputJson({ blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
         completedAt,
       },
     });
@@ -711,7 +774,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion ?? capturedContextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ blocks: result.blocks, captureRequests: result.captureRequests ?? [], suggestions: result.suggestions }),
+        resultJson: asInputJson({ blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -730,6 +793,106 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     });
     return updated;
   });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
+export async function confirmAskExecution(userId: string, executionId: string, input: SubmitAskConfirmation): Promise<AskExecutionResponse> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution || !execution.propertyId) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  await ensurePropertyAccess(userId, execution.propertyId);
+  if (execution.operationId !== 'REFINANCE_RATE_MONITOR' || execution.status !== 'NEEDS_CONFIRMATION') {
+    const error = new Error('This confirmation is no longer active.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
+  const inputHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+  const previous = await prisma.askConfirmationReceipt.findUnique({
+    where: { executionId_idempotencyKey: { executionId, idempotencyKey: input.idempotencyKey } },
+  });
+  if (previous) {
+    if (previous.inputHash !== inputHash) {
+      const error = new Error('The idempotency key was already used for a different confirmation.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_IDEMPOTENCY_CONFLICT';
+      throw error;
+    }
+    return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+  }
+  const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+    ? execution.parametersJson as Record<string, unknown>
+    : {};
+  const expectedVersion = parameters.confirmationVersion;
+  const expiresAt = typeof parameters.confirmationExpiresAt === 'string' ? new Date(parameters.confirmationExpiresAt) : null;
+  if (expectedVersion !== input.confirmationVersion || !expiresAt || expiresAt <= new Date()) {
+    const error = new Error('This confirmation expired. Ask again to review current monitor settings.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_EXPIRED';
+    throw error;
+  }
+  const thresholdPct = parameters.thresholdPct;
+  const product = parameters.product;
+  if (typeof thresholdPct !== 'number' || (product !== 'FIXED_30_YEAR' && product !== 'FIXED_15_YEAR')) {
+    const error = new Error('The monitor settings are invalid.');
+    (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+    throw error;
+  }
+  const monitor = await createOrUpdateRefinanceRateMonitor({
+    userId, propertyId: execution.propertyId, thresholdPct,
+    product: product as RefinanceRateMonitorProduct,
+    cadence: NotificationCadence.IMMEDIATE,
+    quietStart: typeof parameters.quietStart === 'string' ? parameters.quietStart : null,
+    quietEnd: typeof parameters.quietEnd === 'string' ? parameters.quietEnd : null,
+    timezone: typeof parameters.timezone === 'string' ? parameters.timezone : 'UTC',
+  });
+  const radarHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/mortgage-refinance-radar?section=alerts`;
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'RATE_MONITOR_ACTIVE',
+    blocks: [{
+      type: 'MONITOR', id: `rate-monitor-${monitor.id}`, monitorId: monitor.id,
+      title: 'Mortgage-rate monitor is active', status: monitor.status,
+      threshold: `${monitor.thresholdPct.toFixed(3)}% or lower`,
+      product: monitor.product === 'FIXED_15_YEAR' ? '15-year fixed national benchmark' : '30-year fixed national benchmark',
+      channel: 'Email plus in-app', cadence: monitor.cadence,
+      quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
+      sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
+      actions: [
+        { id: 'edit-monitor', label: 'Edit settings', href: radarHref, style: 'PRIMARY' },
+        { id: 'pause-monitor', label: 'Pause', href: `${radarHref}&monitorAction=pause`, style: 'SECONDARY' },
+        { id: 'stop-monitor', label: 'Stop', href: `${radarHref}&monitorAction=stop`, style: 'QUIET' },
+      ],
+    }],
+    confirmation: null, suggestions: ['Is refinancing worth reviewing now?'],
+  };
+  const saved = await prisma.$transaction(async (tx) => {
+    const updated = await tx.askExecution.update({
+      where: { id: execution.id },
+      data: { status: result.status, reasonCode: result.reasonCode, resultJson: asInputJson({ blocks: result.blocks, captureRequests: [], confirmation: null, suggestions: result.suggestions }), completedAt: new Date() },
+    });
+    await tx.askConfirmationReceipt.create({
+      data: { executionId, idempotencyKey: input.idempotencyKey, confirmationVersion: input.confirmationVersion, artifactType: 'REFINANCE_RATE_MONITOR', artifactId: monitor.id, inputHash },
+    });
+    await tx.askExecutionEvent.create({ data: { executionId, eventType: 'CONFIRMED', metadataJson: asInputJson({ artifactType: 'REFINANCE_RATE_MONITOR', artifactId: monitor.id }) } });
+    return updated;
+  });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
+export async function cancelAskExecution(userId: string, executionId: string): Promise<AskExecutionResponse> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  if (execution.status !== 'NEEDS_CONFIRMATION') return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'confirmation-cancelled', title: 'Monitor not created', body: 'The pending mortgage-rate monitor was cancelled. No notification preference or threshold was changed.', tone: 'DEFAULT', actions: [] }];
+  const saved = await prisma.askExecution.update({
+    where: { id: execution.id },
+    data: { status: 'CANCELLED', reasonCode: 'USER_CANCELLED', resultJson: asInputJson({ blocks, captureRequests: [], confirmation: null, suggestions: ['Set a different rate threshold'] }), completedAt: new Date() },
+  });
+  await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CANCELLED' } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 

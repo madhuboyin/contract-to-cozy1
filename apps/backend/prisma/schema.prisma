@@ -2079,6 +2079,7 @@ model User {
   groundedAskArtifacts            GroundedAskArtifact[]
   askSessions                     AskSession[]
   askExecutions                   AskExecution[]
+  refinanceRateMonitors           RefinanceRateMonitor[]
 
   // Household Collaboration
   householdMemberships           HouseholdMember[]
@@ -2982,6 +2983,7 @@ model Property {
   propertyContextCaptures PropertyContextCaptureReceipt[]
   askSessions              AskSession[]
   askExecutions            AskExecution[]
+  refinanceRateMonitors    RefinanceRateMonitor[]
 
   inventoryOcrSessions     InventoryOcrSession[]
   inventoryDraftItems      InventoryDraftItem[]
@@ -6813,7 +6815,8 @@ model AskExecution {
   user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   property Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   events   AskExecutionEvent[]
-  captures AskCaptureReceipt[]
+  captures      AskCaptureReceipt[]
+  confirmations AskConfirmationReceipt[]
 
   @@unique([userId, clientRequestId])
   @@index([sessionId, createdAt])
@@ -6849,6 +6852,23 @@ model AskCaptureReceipt {
   @@unique([executionId, idempotencyKey])
   @@index([executionId, createdAt])
   @@map("ask_capture_receipts")
+}
+
+model AskConfirmationReceipt {
+  id                  String   @id @default(uuid())
+  executionId         String
+  idempotencyKey      String
+  confirmationVersion Int
+  artifactType        String
+  artifactId          String?
+  inputHash           String
+  createdAt           DateTime @default(now())
+
+  execution AskExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, idempotencyKey])
+  @@index([executionId, createdAt])
+  @@map("ask_confirmation_receipts")
 }
 
 enum GroundedAskProposalKind {
@@ -15905,6 +15925,17 @@ enum RefinanceScenarioTerm {
   FIFTEEN_YEAR
 }
 
+enum RefinanceRateMonitorProduct {
+  FIXED_30_YEAR
+  FIXED_15_YEAR
+}
+
+enum RefinanceRateMonitorStatus {
+  ACTIVE
+  PAUSED
+  STOPPED
+}
+
 enum RefinanceDecisionStatus {
   EXPLORING
   DEFERRED
@@ -15943,6 +15974,35 @@ model MortgageRateSnapshot {
   @@index([source])
   @@index([source, date(sort: Desc)])
   @@map("mortgage_rate_snapshots")
+}
+
+model RefinanceRateMonitor {
+  id                      String                       @id @default(uuid())
+  userId                  String
+  propertyId              String
+  product                 RefinanceRateMonitorProduct @default(FIXED_30_YEAR)
+  thresholdBps            Int
+  channel                 NotificationChannel        @default(EMAIL)
+  cadence                 NotificationCadence        @default(IMMEDIATE)
+  quietStart              String?
+  quietEnd                String?
+  timezone                String                      @default("UTC")
+  status                  RefinanceRateMonitorStatus  @default(ACTIVE)
+  consentedAt             DateTime
+  confirmationVersion     Int                         @default(1)
+  lastEvaluatedSnapshotId String?
+  lastTriggeredSnapshotId String?
+  lastTriggeredAt         DateTime?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId, product])
+  @@index([status, product, thresholdBps])
+  @@index([propertyId, status])
+  @@map("refinance_rate_monitors")
 }
 
 // B. A refinance opportunity evaluation result for a specific property.

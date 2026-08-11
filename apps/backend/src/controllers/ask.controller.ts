@@ -1,13 +1,15 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { CreateAskExecutionRequestSchema, SubmitAskCaptureRequestSchema } from '../productFramework/ask/ask.contract';
-import { createAskExecution, getAskSession, submitAskCapture } from '../services/ask/askOrchestrator.service';
+import { CreateAskExecutionRequestSchema, SubmitAskCaptureRequestSchema, SubmitAskConfirmationSchema } from '../productFramework/ask/ask.contract';
+import { cancelAskExecution, confirmAskExecution, createAskExecution, getAskSession, submitAskCapture } from '../services/ask/askOrchestrator.service';
 import {
   PropertyContextCaptureValidationError,
   PropertyContextIdempotencyConflictError,
   PropertyContextVersionConflictError,
 } from '../modules/propertyContext/application/captureFeatureContext';
+import { getRefinanceRateMonitor, updateRefinanceRateMonitorStatus } from '../refinanceRadar/refinanceRateMonitor.service';
+import { RefinanceRateMonitorStatus } from '@prisma/client';
 
 export async function postAskExecution(req: AuthRequest, res: Response, next: NextFunction) {
   try {
@@ -22,6 +24,54 @@ export async function postAskExecution(req: AuthRequest, res: Response, next: Ne
     if (code === 'ASK_PROPERTY_NOT_FOUND' || code === 'ASK_SESSION_NOT_FOUND') {
       return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask context was not found.' } });
     }
+    return next(error);
+  }
+}
+
+export async function postAskConfirmation(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = SubmitAskConfirmationSchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_CONFIRMATION', message: 'The confirmation is invalid.' } });
+    return res.json({ success: true, data: await confirmAskExecution(userId, req.params.executionId, input.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask execution not found.' } });
+    if (code === 'ASK_CONFIRMATION_EXPIRED' || code === 'ASK_CONFIRMATION_NOT_ACTIVE' || code === 'ASK_CONFIRMATION_IDEMPOTENCY_CONFLICT') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Confirmation is unavailable.' } });
+    return next(error);
+  }
+}
+
+export async function postAskCancellation(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    return res.json({ success: true, data: await cancelAskExecution(userId, req.params.executionId) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function patchAskMonitor(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const action = z.enum(['PAUSE', 'RESUME', 'STOP']).safeParse(req.body?.action);
+    if (!action.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_MONITOR_ACTION', message: 'Invalid monitor action.' } });
+    const status = action.data === 'PAUSE' ? RefinanceRateMonitorStatus.PAUSED : action.data === 'RESUME' ? RefinanceRateMonitorStatus.ACTIVE : RefinanceRateMonitorStatus.STOPPED;
+    return res.json({ success: true, data: await updateRefinanceRateMonitorStatus(userId, req.params.monitorId, status) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getAskMonitor(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    return res.json({ success: true, data: await getRefinanceRateMonitor(userId, req.params.monitorId) });
+  } catch (error) {
     return next(error);
   }
 }
