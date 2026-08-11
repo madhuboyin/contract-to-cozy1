@@ -2077,6 +2077,8 @@ model User {
   capabilityGovernanceReviews     CapabilityGovernanceReview[]
   groundedAskProposals            GroundedAskProposal[]
   groundedAskArtifacts            GroundedAskArtifact[]
+  askSessions                     AskSession[]
+  askExecutions                   AskExecution[]
 
   // Household Collaboration
   householdMemberships           HouseholdMember[]
@@ -2978,6 +2980,8 @@ model Property {
   guidanceStepEvidences   GuidanceStepEvidence[]
   inventoryImportBatches  InventoryImportBatch[]
   propertyContextCaptures PropertyContextCaptureReceipt[]
+  askSessions              AskSession[]
+  askExecutions            AskExecution[]
 
   inventoryOcrSessions     InventoryOcrSession[]
   inventoryDraftItems      InventoryDraftItem[]
@@ -6739,6 +6743,94 @@ model NotificationOutcome {
   @@unique([notificationId, userId, type])
   @@index([userId, category, createdAt])
   @@map("notification_outcomes")
+}
+
+enum AskExecutionStatus {
+  RECEIVED
+  ROUTING
+  NEEDS_PROPERTY
+  NEEDS_ENTITY
+  NEEDS_CLARIFICATION
+  NEEDS_CONTEXT
+  READY_WITH_LIMITATIONS
+  NEEDS_CONFIRMATION
+  RUNNING
+  ANSWERED
+  COMPLETED
+  NOT_APPLICABLE
+  UNAVAILABLE
+  OUT_OF_SCOPE
+  BLOCKED
+  FAILED_RETRYABLE
+  FAILED_TERMINAL
+  CANCELLED
+  EXPIRED
+}
+
+model AskSession {
+  id           String   @id @default(uuid())
+  userId       String
+  propertyId   String?
+  title        String?
+  lastActiveAt DateTime @default(now())
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  executions AskExecution[]
+
+  @@index([userId, lastActiveAt])
+  @@index([propertyId, lastActiveAt])
+  @@map("ask_sessions")
+}
+
+model AskExecution {
+  id               String             @id @default(uuid())
+  sessionId        String
+  userId           String
+  propertyId       String?
+  clientRequestId  String
+  message          String
+  launchContextJson Json?
+  operationId      String?
+  operationVersion String?
+  intentFamily     String?
+  intentConfidence Float?
+  status           AskExecutionStatus @default(RECEIVED)
+  reasonCode       String?
+  parametersJson   Json?
+  contextVersion   String?
+  resultJson       Json?
+  errorCode        String?
+  completedAt      DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  session  AskSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  events   AskExecutionEvent[]
+
+  @@unique([userId, clientRequestId])
+  @@index([sessionId, createdAt])
+  @@index([propertyId, status, createdAt])
+  @@map("ask_executions")
+}
+
+model AskExecutionEvent {
+  id           String   @id @default(uuid())
+  executionId  String
+  eventType    String
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+
+  execution AskExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId, createdAt])
+  @@map("ask_execution_events")
 }
 
 enum GroundedAskProposalKind {

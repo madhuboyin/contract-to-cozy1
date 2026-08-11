@@ -148,6 +148,7 @@ import type {
   CapabilityContextType,
   RelatedCapabilitiesResponse,
 } from '@/features/tools/capabilityTypes';
+import type { AskExecutionResponse, CreateAskExecutionPayload, SubmitAskCapturePayload } from '@/features/ask/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
 
@@ -995,6 +996,15 @@ class APIClient {
       method: 'POST',
       body: payload,
     });
+  }
+  async createAskExecution(payload: CreateAskExecutionPayload): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>('/api/ask/executions', { method: 'POST', body: payload });
+  }
+  async getAskSession(sessionId: string): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
+    return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`);
+  }
+  async submitAskCapture(executionId: string, payload: SubmitAskCapturePayload): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/captures`, { method: 'POST', body: payload });
   }
   async createGroundedAskProposal(payload: {
     sessionId: string; propertyId?: string | null; kind: string; summary: string;
