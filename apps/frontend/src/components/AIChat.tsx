@@ -7,6 +7,8 @@ import { AskWorkspace } from '@/components/ask/AskWorkspace';
 export function AIChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [initialQuestion, setInitialQuestion] = useState('');
+  const [launchSurface, setLaunchSurface] = useState('');
+  const [launchCapabilityId, setLaunchCapabilityId] = useState('');
   const [hasPendingWork, setHasPendingWork] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -24,8 +26,13 @@ export function AIChat() {
 
   useEffect(() => {
     const open = (event: Event) => {
-      const question = event instanceof CustomEvent && typeof event.detail?.question === 'string' ? event.detail.question : '';
+      const detail = event instanceof CustomEvent ? event.detail : undefined;
+      const question = typeof detail?.question === 'string' ? detail.question : '';
+      const surface = typeof detail?.surface === 'string' ? detail.surface : '';
+      const capabilityId = typeof detail?.capabilityId === 'string' ? detail.capabilityId : '';
       setInitialQuestion(question);
+      setLaunchSurface(surface);
+      setLaunchCapabilityId(capabilityId);
       setIsOpen(true);
     };
     window.addEventListener('cozy-chat-open', open);
@@ -54,7 +61,7 @@ export function AIChat() {
         <button
           type="button"
           ref={triggerRef}
-          onClick={() => { setInitialQuestion(''); setIsOpen(true); }}
+          onClick={() => { setInitialQuestion(''); setLaunchSurface(''); setLaunchCapabilityId(''); setIsOpen(true); }}
           aria-label="Open Ask Cozy"
           className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-teal-700 px-5 font-semibold text-white shadow-[0_18px_45px_-15px_rgba(15,118,110,0.8)] transition hover:bg-teal-800 lg:bottom-6 lg:right-6"
         >
@@ -66,7 +73,7 @@ export function AIChat() {
           <button className="absolute inset-0 cursor-default" aria-label="Close Ask Cozy" onClick={requestClose} />
           <div ref={dialogRef} className="relative h-full w-full overflow-hidden bg-white shadow-2xl lg:h-[min(780px,calc(100vh-3rem))] lg:w-[560px] lg:rounded-[28px] lg:border lg:border-slate-200">
             <button onClick={requestClose} aria-label="Close Ask Cozy" className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl bg-white text-slate-500 shadow-sm hover:bg-slate-100"><X className="h-4 w-4" /></button>
-            <AskWorkspace mode="panel" onClose={requestClose} onPendingStateChange={setHasPendingWork} initialQuestion={initialQuestion} />
+            <AskWorkspace mode="panel" onClose={requestClose} onPendingStateChange={setHasPendingWork} initialQuestion={initialQuestion} launchSurface={launchSurface} launchCapabilityId={launchCapabilityId} />
             {confirmClose && <div className="absolute inset-x-4 top-16 z-30 rounded-2xl border border-amber-200 bg-white p-4 shadow-xl" role="alertdialog" aria-modal="true" aria-labelledby="ask-close-title"><h2 id="ask-close-title" className="font-semibold text-slate-950">Close Ask Cozy?</h2><p className="mt-1 text-sm text-slate-600">Your typed and inline-capture drafts are saved on this device. Any unconfirmed action will remain pending.</p><div className="mt-4 flex gap-2"><button type="button" onClick={close} className="min-h-10 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white">Close</button><button type="button" onClick={() => setConfirmClose(false)} className="min-h-10 rounded-xl px-4 text-sm font-semibold text-slate-700">Keep working</button></div></div>}
           </div>
         </div>

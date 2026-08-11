@@ -174,7 +174,7 @@ function getPolicyStatusMeta(policy: InsurancePolicy): {
 
 function openCozyChat() {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new Event('cozy-chat-open'));
+  window.dispatchEvent(new CustomEvent('cozy-chat-open', { detail: { surface: 'INSURANCE_PAGE', capabilityId: 'coverage-intelligence' } }));
 }
 
 // --- Document Type Constants for UI ---

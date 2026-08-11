@@ -830,7 +830,7 @@ function getWarrantyStatusMeta(warranty: Warranty): {
 
 function openCozyChat() {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new Event('cozy-chat-open'));
+  window.dispatchEvent(new CustomEvent('cozy-chat-open', { detail: { surface: 'WARRANTIES_PAGE', capabilityId: 'coverage-intelligence' } }));
 }
 
 // --- Main Page Component ---

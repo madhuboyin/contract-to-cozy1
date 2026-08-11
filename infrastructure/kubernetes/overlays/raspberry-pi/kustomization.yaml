@@ -11,6 +11,7 @@ resources:
   - ../../apps/frontend/deployment.yaml
   - ../../apps/backend/deployment.yaml
   - ../../apps/workers/deployment.yaml
+  - ../../apps/backend/ask-retention-cronjob.yaml
   - ../../ingress/cloudflare-tunnel/deployment.yaml
 
 patchesStrategicMerge:

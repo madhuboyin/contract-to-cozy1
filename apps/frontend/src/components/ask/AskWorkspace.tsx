@@ -187,6 +187,11 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
                   ))}
                 </ul>
               )}
+              {section.count > section.items.length && (
+                block.actions[0]?.href
+                  ? <Link href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{section.count - section.items.length} more · {block.actions[0].label}</Link>
+                  : <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more not shown here.</p>
+              )}
             </div>
           ))}
         </div>
@@ -256,9 +261,25 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
   }
 
   if (block.type === 'TABLE') return (
-    <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-4">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
-      <table className="mt-3 min-w-full text-left text-sm"><thead><tr>{block.columns.map((column) => <th key={column.key} className="border-b px-2 py-2 text-xs text-slate-500">{column.label}</th>)}</tr></thead><tbody>{block.rows.map((row) => <tr key={row.id}>{block.columns.map((column) => <td key={column.key} className="border-b border-slate-100 px-2 py-2 text-slate-700">{row.values[column.key]}</td>)}</tr>)}</tbody></table>
+      {/* Below sm, a horizontally-scrolling table is hard to read on a
+          phone-width viewport — stack each row as a labeled card instead. */}
+      <div className="mt-3 space-y-3 sm:hidden">
+        {block.rows.map((row) => (
+          <dl key={row.id} className="divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50 px-3">
+            {block.columns.map((column) => (
+              <div key={column.key} className="grid grid-cols-[7rem_1fr] gap-2 py-2 text-sm">
+                <dt className="text-slate-500">{column.label}</dt>
+                <dd className="text-slate-800">{row.values[column.key]}</dd>
+              </div>
+            ))}
+          </dl>
+        ))}
+      </div>
+      <div className="mt-3 hidden overflow-x-auto sm:block">
+        <table className="min-w-full text-left text-sm"><thead><tr>{block.columns.map((column) => <th key={column.key} className="border-b px-2 py-2 text-xs text-slate-500">{column.label}</th>)}</tr></thead><tbody>{block.rows.map((row) => <tr key={row.id}>{block.columns.map((column) => <td key={column.key} className="border-b border-slate-100 px-2 py-2 text-slate-700">{row.values[column.key]}</td>)}</tr>)}</tbody></table>
+      </div>
     </section>
   );
 
@@ -673,7 +694,7 @@ function PendingWorkInbox({ items, loadingId, onResume }: { items: AskPendingWor
   );
 }
 
-export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string }) {
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; launchSurface?: string; launchCapabilityId?: string }) {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   // A notification deep link (e.g. a monitor-fired reminder) carries the
   // property the answer is scoped to, but the globally-selected property
@@ -758,9 +779,17 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setError(null);
     setLoading(true);
     try {
+      // Launch surface/capability describe how Ask was *opened* (e.g. from
+      // the warranties page), so they only apply to the conversation's
+      // first message — a later follow-up isn't an entry-point event.
+      const isFirstMessage = executions.length === 0;
       const response = await api.createAskExecution({
         clientRequestId: newId(), sessionId, message, propertyId: selectedPropertyId ?? null,
-        launchContext: { surface: mode === 'page' ? 'ASK_PAGE' : 'GLOBAL_LAUNCHER', returnTo: window.location.pathname },
+        launchContext: {
+          surface: (isFirstMessage && launchSurface) || (mode === 'page' ? 'ASK_PAGE' : 'GLOBAL_LAUNCHER'),
+          capabilityId: isFirstMessage && launchCapabilityId ? launchCapabilityId : undefined,
+          returnTo: window.location.pathname,
+        },
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');
       setExecutions((current) => [...current, response.data!]);

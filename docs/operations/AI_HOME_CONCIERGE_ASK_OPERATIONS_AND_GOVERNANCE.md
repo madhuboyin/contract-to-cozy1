@@ -117,8 +117,8 @@ The product launch target remains p95 ≤ 1.5 seconds for deterministic queries.
 1. Run backend type checking and `npm run test:ask`.
 2. Run the targeted Ask workspace component test.
 3. Run `npm run test:ask:e2e` and retain desktop/mobile refrigerator, refinance, conflict, not-sure, permission, and full-form fallback evidence.
-4. Apply the Ask Prometheus rule and Grafana dashboard resources.
-5. Apply the retention CronJob and verify one dry run against a non-production database.
+4. Apply the Ask Prometheus rule and Grafana dashboard resources (`infrastructure/kubernetes/monitoring/prometheus/ask-alert-rules.yaml`, `.../grafana/ask-dashboard-configmap.yaml`) — these live in the `monitoring` namespace and are not part of the `raspberry-pi` app kustomization, so they still require a separate `kubectl apply -f`.
+5. The retention CronJob (`infrastructure/kubernetes/apps/backend/ask-retention-cronjob.yaml`) is included in the `raspberry-pi` overlay's kustomization as of this change, so it deploys automatically with `make deploy-pi`. Before that first rollout, verify one dry run against a non-production database.
 6. Verify deterministic containment, latency, capture resume success, and repeated-prompt rate in the dashboard.
 7. For an incident, disable the affected `ASK_OPERATION_<ID>_ENABLED` flag. Disable `ASK_REMOTE_GENERATION_ENABLED` for model/provider incidents. Use `ASK_ENABLED=false` only when the entire surface must be paused.
 8. For routing regressions, set `ASK_LOCAL_ROUTING_ENABLED=false`. For formatting regressions, set `ASK_RESULT_SYNTHESIS_ENABLED=false`; both controls preserve canonical deterministic answers.

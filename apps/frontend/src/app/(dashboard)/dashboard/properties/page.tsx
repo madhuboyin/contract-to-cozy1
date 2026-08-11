@@ -43,7 +43,7 @@ const HOME_TOOL_NAV_LABELS = Object.fromEntries(
 
 function openCozyChat() {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new Event('cozy-chat-open'));
+  window.dispatchEvent(new CustomEvent('cozy-chat-open', { detail: { surface: 'PROPERTIES_PAGE' } }));
 }
 
 function formatPropertyMetadata(property: Property): string {

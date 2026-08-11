@@ -98,7 +98,7 @@ const ALLOWED_PROPERTY_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', '
 
 function openCozyChat() {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new Event('cozy-chat-open'));
+  window.dispatchEvent(new CustomEvent('cozy-chat-open', { detail: { surface: 'PROPERTIES_NEW_PAGE' } }));
 }
 
 export default function NewPropertyPage() {

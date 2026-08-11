@@ -1154,7 +1154,7 @@ export function UnifiedHomeSurface({
         ? `Add ${home.propertyContext.missingFactCount} missing home fact${home.propertyContext.missingFactCount === 1 ? '' : 's'}`
         : 'Continue home setup';
   const openAsk = () => {
-    window.dispatchEvent(new CustomEvent('cozy-chat-open'));
+    window.dispatchEvent(new CustomEvent('cozy-chat-open', { detail: { surface: 'UNIFIED_HOME' } }));
   };
 
   const glanceItems = [

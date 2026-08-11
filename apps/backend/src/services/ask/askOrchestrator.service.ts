@@ -71,6 +71,7 @@ import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
+import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 
 const MAX_RESULT_ITEMS = 50;
@@ -185,7 +186,7 @@ function asInputJson(value: unknown): Prisma.InputJsonValue {
 
 function humanDate(value: Date | null | undefined): string | null {
   if (!value) return null;
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(value);
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: getAskPropertyTimezone() }).format(value);
 }
 
 function askCaptureRequest(requirement: any, contextVersion: string, destinationLabel: string, fallbackHref: string): AskCaptureRequest {
@@ -288,6 +289,13 @@ async function propertySummary(propertyId: string | null | undefined) {
     select: { id: true, name: true, address: true, city: true, state: true },
   });
   return property ? { id: property.id, label: propertyLabel(property) } : null;
+}
+
+// Sets the property timezone that humanDate() implicitly reads for the
+// remainder of this request, instead of always formatting in UTC.
+async function enterAskPropertyTimezoneContext(propertyId: string | null | undefined): Promise<void> {
+  const property = propertyId ? await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }) : null;
+  enterAskExecutionContext({ propertyTimezone: property?.timezone });
 }
 
 async function householdWorkflowVersion(propertyId: string): Promise<string> {
@@ -3210,6 +3218,23 @@ const ASK_OPERATION_CAPABILITY: Partial<Record<AskOperationResolution['operation
   MAJOR_EVENT_ENTRY: 'property-brief',
 };
 
+// Reverse of ASK_OPERATION_CAPABILITY, kept only where a capabilityId maps
+// to exactly one operation. Several capabilities (e.g. 'maintenance')
+// front multiple operations, and a launch context naming one of those
+// wouldn't tell us which — this only ever biases routing when the launch
+// surface unambiguously implies a single operation.
+export const ASK_CAPABILITY_UNIQUE_OPERATION: Partial<Record<string, AskOperationResolution['operationId']>> = (() => {
+  const counts = new Map<string, number>();
+  for (const capabilityId of Object.values(ASK_OPERATION_CAPABILITY)) {
+    if (capabilityId) counts.set(capabilityId, (counts.get(capabilityId) ?? 0) + 1);
+  }
+  const unique: Partial<Record<string, AskOperationResolution['operationId']>> = {};
+  for (const [operationId, capabilityId] of Object.entries(ASK_OPERATION_CAPABILITY)) {
+    if (capabilityId && counts.get(capabilityId) === 1) unique[capabilityId] = operationId as AskOperationResolution['operationId'];
+  }
+  return unique;
+})();
+
 async function executeOperation(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
   const coreResult = await executeOperationCore(input);
   const result: AskOperationResult = coreResult.status === 'NEEDS_ENTITY'
@@ -3388,6 +3413,7 @@ async function withAskTimeout<T>(promise: Promise<T>, timeoutMs: number): Promis
 
 export async function createAskExecution(userId: string, input: CreateAskExecutionRequest): Promise<AskExecutionResponse> {
   if (input.propertyId) await ensurePropertyAccess(userId, input.propertyId);
+  await enterAskPropertyTimezoneContext(input.propertyId);
   const duplicate = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } } });
   if (duplicate) return mapPersistedExecution(duplicate, await propertySummary(duplicate.propertyId));
 
@@ -3440,12 +3466,23 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   // to work with; only step in when it still found nothing confident
   // (REMOTE_FALLBACK) — a DETERMINISTIC/LOCAL_CLASSIFIER/CLARIFICATION
   // outcome, or SAFETY, is always a stronger signal than this nudge.
-  const shouldForceOperation = Boolean(followUp.forcedOperationId)
+  // The entry point that opened Ask (e.g. the warranties or insurance page)
+  // may carry a capabilityId identifying what the homeowner almost
+  // certainly means, even before they type anything operation-specific —
+  // this was previously captured in launchContextJson and never read back.
+  // Same conservative guard as the follow-up bias: only steps in when the
+  // cascade found nothing confident on its own, and only when the
+  // capability unambiguously names one operation.
+  const launchCapabilityOperationId = input.launchContext?.capabilityId
+    ? ASK_CAPABILITY_UNIQUE_OPERATION[input.launchContext.capabilityId]
+    : undefined;
+  const forcedOperationId = followUp.forcedOperationId ?? launchCapabilityOperationId ?? null;
+  const shouldForceOperation = Boolean(forcedOperationId)
     && routingDecision.stage === 'REMOTE_FALLBACK'
     && !routingDecision.requiresClarification
-    && routingDecision.operation.operationId !== followUp.forcedOperationId;
+    && routingDecision.operation.operationId !== forcedOperationId;
   const operation = shouldForceOperation
-    ? { ...getAskOperationDefinition(followUp.forcedOperationId as AskOperationId), confidence: 1 }
+    ? { ...getAskOperationDefinition(forcedOperationId as AskOperationId), confidence: 1 }
     : routingDecision.operation;
   const operationDefinition = getAskOperationDefinition(operation.operationId);
   const generationMode = routingDecision.requiresClarification
@@ -3458,9 +3495,16 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     });
   }
   const startedAt = Date.now();
+  // A clarification-in-progress execution hasn't actually resolved to
+  // `operation` yet — that's just the routing cascade's placeholder/best
+  // guess among ambiguous candidates. Recording its family here would
+  // mislabel a genuinely ambiguous turn as belonging to whatever family
+  // the placeholder happens to carry (typically GENERAL_HOME_GUIDANCE),
+  // undercounting true CLARIFICATION volume in analytics.
+  const storedIntentFamily = routingDecision.requiresClarification ? 'CLARIFICATION' : operation.family;
   await prisma.askExecution.update({
     where: { id: execution.id },
-    data: { operationId: operation.operationId, operationVersion: operation.version, intentFamily: operation.family, intentConfidence: operation.confidence, status: 'RUNNING' },
+    data: { operationId: operation.operationId, operationVersion: operation.version, intentFamily: storedIntentFamily, intentConfidence: operation.confidence, status: 'RUNNING' },
   });
   try {
     const rawResult = await withAskTimeout(
@@ -3522,6 +3566,7 @@ export async function submitAskClarification(userId: string, executionId: string
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  await enterAskPropertyTimezoneContext(execution.propertyId);
   const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
     ? execution.parametersJson as Record<string, unknown>
     : {};
@@ -3667,6 +3712,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
     throw error;
   }
   await ensurePropertyAccess(userId, input.propertyId);
+  await enterAskPropertyTimezoneContext(input.propertyId);
   const operationDefinition = getAskOperationDefinition(execution.operationId as AskOperationId);
   const operation: AskOperationResolution = { ...operationDefinition, confidence: execution.intentConfidence ?? 1 };
   const claimed = await prisma.askExecution.updateMany({
@@ -3736,6 +3782,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     throw error;
   }
   await ensurePropertyAccess(userId, execution.propertyId);
+  await enterAskPropertyTimezoneContext(execution.propertyId);
   const answerHash = createHash('sha256').update(JSON.stringify({ captureKey: input.captureKey, answer: input.answer, sensitiveDataConfirmed: input.sensitiveDataConfirmed ?? false })).digest('hex');
   const previousCapture = await prisma.askCaptureReceipt.findUnique({
     where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
@@ -4280,6 +4327,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  await enterAskPropertyTimezoneContext(execution.propertyId);
   const inputHash = createHash('sha256').update(JSON.stringify({
     confirmationVersion: input.confirmationVersion,
     consentConfirmed: input.consentConfirmed,
