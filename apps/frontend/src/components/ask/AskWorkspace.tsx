@@ -673,8 +673,19 @@ function PendingWorkInbox({ items, loadingId, onResume }: { items: AskPendingWor
   );
 }
 
-export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string }) {
-  const { selectedPropertyId } = usePropertyContext();
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string }) {
+  const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
+  // A notification deep link (e.g. a monitor-fired reminder) carries the
+  // property the answer is scoped to, but the globally-selected property
+  // (from a prior page/localStorage) may differ. Sync it in immediately so
+  // the effects below never run a pass against the wrong property — that
+  // stale pass would otherwise both waste a fetch and, for the session
+  // effect below, write this session id into the *previous* property's
+  // session-key slot in localStorage, cross-contaminating it.
+  const propertyMismatch = Boolean(initialPropertyId) && initialPropertyId !== selectedPropertyId;
+  useEffect(() => {
+    if (propertyMismatch) setSelectedPropertyId(initialPropertyId);
+  }, [propertyMismatch, initialPropertyId, setSelectedPropertyId]);
   const [sessionId, setSessionId] = useState('');
   const [executions, setExecutions] = useState<AskExecutionResponse[]>([]);
   const [input, setInput] = useState('');
@@ -692,6 +703,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
 
   useEffect(() => {
+    if (propertyMismatch) return;
     const controller = new AbortController();
     setPendingLoading(true);
     api.getAskPendingWork(selectedPropertyId, { signal: controller.signal })
@@ -699,9 +711,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       .catch((caught) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) setPendingWork([]); })
       .finally(() => { if (!controller.signal.aborted) setPendingLoading(false); });
     return () => controller.abort();
-  }, [selectedPropertyId]);
+  }, [selectedPropertyId, propertyMismatch]);
 
   useEffect(() => {
+    if (propertyMismatch) return;
     const controller = new AbortController();
     const key = sessionStorageKey(selectedPropertyId);
     let nextSession = initialSessionId.trim() || window.localStorage.getItem(key);
@@ -724,7 +737,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       .catch((caught) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) setExecutions([]); })
       .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
     return () => controller.abort();
-  }, [selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId]);
+  }, [selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch]);
 
   useEffect(() => {
     if (!initialQuestion) return;
