@@ -3713,7 +3713,9 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
         throw error;
       }
-      await updateInsurancePolicy(candidate.data.policyId, property.homeownerProfileId, { expiryDate: candidate.data.expiryDate });
+      await updateInsurancePolicy(candidate.data.policyId, property.homeownerProfileId, {
+        expiryDate: new Date(`${candidate.data.expiryDate}T00:00:00.000Z`),
+      });
       result = await homeDeadlineMonitorResult(userId, execution.propertyId, execution.message);
       captureId = input.idempotencyKey;
       capturedContextVersion = result.contextVersion ?? createHash('sha256').update(`${candidate.data.policyId}:${candidate.data.expiryDate}`).digest('hex');
