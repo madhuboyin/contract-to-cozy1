@@ -1,8 +1,8 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema } from '../productFramework/ask/ask.contract';
-import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, getAskExecution, getAskPendingWork, getAskSession, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, submitAskCapture, submitAskClarification, submitAskExecutionFeedback } from '../services/ask/askOrchestrator.service';
+import { ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema } from '../productFramework/ask/ask.contract';
+import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, getAskExecution, getAskPendingWork, getAskSession, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, submitAskCapture, submitAskClarification, submitAskExecutionFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import {
   PropertyContextCaptureValidationError,
@@ -67,6 +67,24 @@ export async function postAskClarification(req: AuthRequest, res: Response, next
     if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
     if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Your household role cannot access this home.' } });
     if (code?.startsWith('ASK_CLARIFICATION_')) return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Clarification is unavailable.' } });
+    const dependencyResponse = sendAskDependencyError(res, error);
+    if (dependencyResponse) return dependencyResponse;
+    return next(error);
+  }
+}
+
+export async function postAskExecutionProperty(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = ResolveAskExecutionPropertySchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Select a home to continue.', details: input.error.flatten() } });
+    return res.json({ success: true, data: await resolveAskExecutionProperty(userId, req.params.executionId, input.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(403).json({ success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'That home is not available for your account.' } });
+    if (code === 'ASK_PROPERTY_SELECTION_NOT_ACTIVE') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'This request no longer needs a home selection.' } });
     const dependencyResponse = sendAskDependencyError(res, error);
     if (dependencyResponse) return dependencyResponse;
     return next(error);

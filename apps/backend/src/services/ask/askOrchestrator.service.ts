@@ -13,6 +13,7 @@ import {
   type ContinueAskExecution,
   type RecordAskCaptureEvent,
   type RequestAskCorrection,
+  type ResolveAskExecutionProperty,
   type SubmitAskCaptureRequest,
   type SubmitAskClarification,
   type SubmitAskConfirmation,
@@ -69,6 +70,7 @@ import { getReadiness as getRenovationReadiness } from '../renovationReadiness.s
 import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
+import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 
 const MAX_RESULT_ITEMS = 50;
@@ -3402,17 +3404,42 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   });
   await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'RECEIVED', metadataJson: asInputJson({ surface: input.launchContext?.surface ?? 'unknown' }) } });
 
-  const routingDecision = resolveAskRoutingCascade(input.message, {
+  // Bounded, durable follow-up resolution: reads the most recent typed
+  // execution in this session (not raw chat history) and, only for a
+  // recognized bare-continuation phrasing ("Now complete it.", "Only show
+  // the urgent ones."), rewrites the effective message so the existing
+  // deterministic routing/entity-matching regexes see enough context to
+  // resolve correctly. The homeowner-visible/persisted question stays the
+  // original input.message.
+  const followUp = await resolveAskFollowUpMessage({ sessionId: session.id, propertyId: input.propertyId, message: input.message });
+  const routingMessage = followUp.effectiveMessage;
+
+  const routingDecision = resolveAskRoutingCascade(routingMessage, {
     localRoutingEnabled: controls.localRoutingEnabled,
     localMinimumConfidence: controls.localRoutingMinimumConfidence,
     ambiguityMargin: controls.routingAmbiguityMargin,
   });
-  const operation = routingDecision.operation;
+  // The local classifier already had the concatenated prior+current message
+  // to work with; only step in when it still found nothing confident
+  // (REMOTE_FALLBACK) — a DETERMINISTIC/LOCAL_CLASSIFIER/CLARIFICATION
+  // outcome, or SAFETY, is always a stronger signal than this nudge.
+  const shouldForceOperation = Boolean(followUp.forcedOperationId)
+    && routingDecision.stage === 'REMOTE_FALLBACK'
+    && !routingDecision.requiresClarification
+    && routingDecision.operation.operationId !== followUp.forcedOperationId;
+  const operation = shouldForceOperation
+    ? { ...getAskOperationDefinition(followUp.forcedOperationId as AskOperationId), confidence: 1 }
+    : routingDecision.operation;
   const operationDefinition = getAskOperationDefinition(operation.operationId);
   const generationMode = routingDecision.requiresClarification
     ? 'deterministic'
     : operationDefinition.executionMode === 'REMOTE_GENERATION' ? 'remote' : 'deterministic';
   askRoutingDecisionsTotal.inc({ stage: routingDecision.stage.toLowerCase(), outcome: routingDecision.requiresClarification ? 'clarification' : operation.operationId.toLowerCase() });
+  if (followUp.sourceExecutionId) {
+    await prisma.askExecutionEvent.create({
+      data: { executionId: execution.id, eventType: 'FOLLOW_UP_RESOLVED', metadataJson: asInputJson({ sourceExecutionId: followUp.sourceExecutionId, forcedOperation: shouldForceOperation }) },
+    });
+  }
   const startedAt = Date.now();
   await prisma.askExecution.update({
     where: { id: execution.id },
@@ -3422,7 +3449,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     const rawResult = await withAskTimeout(
       routingDecision.requiresClarification
         ? Promise.resolve(routingClarificationResult(routingDecision))
-        : executeOperation({ userId, sessionId: session.id, message: input.message, propertyId: input.propertyId, operation }),
+        : executeOperation({ userId, sessionId: session.id, message: routingMessage, propertyId: input.propertyId, operation }),
       controls.executionTimeoutMs,
     );
     const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
@@ -3574,6 +3601,70 @@ export async function submitAskClarification(userId: string, executionId: string
     const failureStatus = askFailureStatus(caught);
     await prisma.askExecution.update({ where: { id: execution.id }, data: { status: failureStatus, errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED', completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null } });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: failureStatus, metadataJson: asInputJson({ stage: 'CLARIFICATION_RESUME' }) } });
+    throw caught;
+  }
+}
+
+// A NEEDS_PROPERTY execution already resolved a registered operation before
+// discovering it requires a property; the only missing input is which home.
+// This resumes the SAME execution once a property is supplied, instead of
+// forcing the homeowner to restate the question as a brand-new execution.
+export async function resolveAskExecutionProperty(userId: string, executionId: string, input: ResolveAskExecutionProperty): Promise<AskExecutionResponse> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  if (execution.status !== 'NEEDS_PROPERTY' || !execution.operationId) {
+    const error = new Error('This request no longer needs a home selection.');
+    (error as Error & { code?: string }).code = 'ASK_PROPERTY_SELECTION_NOT_ACTIVE';
+    throw error;
+  }
+  await ensurePropertyAccess(userId, input.propertyId);
+  const operationDefinition = getAskOperationDefinition(execution.operationId as AskOperationId);
+  const operation: AskOperationResolution = { ...operationDefinition, confidence: execution.intentConfidence ?? 1 };
+  const claimed = await prisma.askExecution.updateMany({
+    where: { id: execution.id, userId, status: 'NEEDS_PROPERTY' },
+    data: { propertyId: input.propertyId, status: 'RUNNING' },
+  });
+  if (claimed.count !== 1) {
+    const latest = await prisma.askExecution.findFirst({ where: { id: execution.id, userId } });
+    if (latest) return mapPersistedExecution(latest, await propertySummary(latest.propertyId));
+    const error = new Error('This request no longer needs a home selection.');
+    (error as Error & { code?: string }).code = 'ASK_PROPERTY_SELECTION_NOT_ACTIVE';
+    throw error;
+  }
+  await prisma.askSession.update({ where: { id: execution.sessionId }, data: { propertyId: input.propertyId, lastActiveAt: new Date() } });
+  await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'PROPERTY_SELECTED', metadataJson: asInputJson({ propertyId: input.propertyId }) } });
+  const controls = readAskOperationalControls();
+  try {
+    const rawResult = await withAskTimeout(
+      executeOperation({ userId, sessionId: execution.sessionId, message: execution.message, propertyId: input.propertyId, operation }),
+      controls.executionTimeoutMs,
+    );
+    const result = operationDefinition.executionMode === 'DETERMINISTIC'
+      ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
+      : rawResult;
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !operationDefinition.allowedBlockTypes.includes(block.type));
+    if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
+    const saved = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: result.status,
+        reasonCode: result.reasonCode,
+        contextVersion: result.contextVersion,
+        parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions }),
+        completedAt: terminalStatus(result.status) ? new Date() : null,
+      },
+    });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: result.status, metadataJson: asInputJson({ operationId: operation.operationId, stage: 'PROPERTY_RESUME' }) } });
+    return mapPersistedExecution(saved, await propertySummary(input.propertyId));
+  } catch (caught) {
+    const failureStatus = askFailureStatus(caught);
+    await prisma.askExecution.update({ where: { id: execution.id }, data: { status: failureStatus, errorCode: caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED', completedAt: failureStatus === 'FAILED_TERMINAL' ? new Date() : null } });
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: failureStatus, metadataJson: asInputJson({ stage: 'PROPERTY_RESUME' }) } });
     throw caught;
   }
 }
@@ -4246,6 +4337,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   let result: AskOperationResult;
   let artifactType: string;
   let artifactId: string;
+  try {
   if (execution.operationId === 'MAINTENANCE_TASK_COMPLETE') {
     if (access.role === HouseholdRole.VIEWER) {
       const error = new Error('A contributor or owner is required to complete maintenance tasks.');
@@ -4593,6 +4685,44 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     artifactType = 'REFINANCE_RATE_MONITOR';
     artifactId = monitor.id;
   }
+  } catch (error) {
+    // The claim above (RUNNING + CLAIMED receipt) already committed before
+    // this per-operation validation ran. Without this, any freshness/
+    // validation failure here (e.g. ASK_CONTEXT_VERSION_CONFLICT) left the
+    // execution stuck at RUNNING forever: expirePendingInteraction() is a
+    // no-op for RUNNING, cancelAskExecution() only acts on
+    // NEEDS_CONFIRMATION, and a retry after the lease expires just re-reads
+    // the same stale parametersJson and fails identically, indefinitely.
+    // Release the claim and land on the same "ask again" terminal state
+    // already used for confirmation expiry, so the homeowner has an actual
+    // way forward instead of a permanently wedged execution.
+    const errorCode = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    const description = error instanceof Error && error.message
+      ? error.message
+      : 'This could not be completed because the underlying record changed. No action was performed.';
+    const reverted = await prisma.$transaction(async (tx) => {
+      const updated = await tx.askExecution.update({
+        where: { id: execution.id },
+        data: {
+          status: 'EXPIRED', reasonCode: errorCode ?? 'ASK_CONFIRMATION_CONFLICT', completedAt: new Date(),
+          resultJson: asInputJson({
+            schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+            blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-conflict', title: 'This changed before it could be confirmed', status: 'EXPIRED', description, details: [], actions: [] }],
+            captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+          }),
+        },
+      });
+      await tx.askConfirmationReceipt.updateMany({
+        where: { executionId, status: 'CLAIMED' },
+        data: { status: 'FAILED', lastErrorCode: errorCode ?? 'ASK_CONFIRMATION_CONFLICT' },
+      });
+      await tx.askExecutionEvent.create({
+        data: { executionId, eventType: 'CONFIRMATION_CONFLICT_RELEASED', metadataJson: asInputJson({ errorCode: errorCode ?? null }) },
+      });
+      return updated;
+    });
+    return mapPersistedExecution(reverted, await propertySummary(execution.propertyId));
+  }
   let saved: typeof execution;
   try {
     saved = await prisma.$transaction(async (tx) => {
@@ -4677,11 +4807,12 @@ export async function getAskExecution(userId: string, executionId: string): Prom
   return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
 }
 
-const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'];
+const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = ['NEEDS_PROPERTY', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'];
 const CONTINUABLE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_STATUSES, 'RUNNING'];
 
 function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKind'] {
   if (status === 'RUNNING') return 'COMMAND_RECOVERY';
+  if (status === 'NEEDS_PROPERTY') return 'PROPERTY_SELECTION';
   if (status === 'NEEDS_ENTITY') return 'ENTITY_SELECTION';
   if (status === 'NEEDS_CONTEXT') return 'CONTEXT_CAPTURE';
   if (status === 'NEEDS_CONFIRMATION') return 'CONFIRMATION';
@@ -4690,6 +4821,7 @@ function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKin
 
 function pendingActionLabel(status: AskExecutionStatus): string {
   if (status === 'RUNNING') return 'Check action status';
+  if (status === 'NEEDS_PROPERTY') return 'Select a home';
   if (status === 'NEEDS_ENTITY') return 'Choose a record';
   if (status === 'NEEDS_CONTEXT') return 'Add the missing detail';
   if (status === 'NEEDS_CONFIRMATION') return 'Review and confirm';

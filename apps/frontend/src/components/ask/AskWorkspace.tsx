@@ -266,6 +266,58 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
   return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4" role="status"><h3 className="font-semibold text-slate-950">{unsupported.title ?? 'Response unavailable'}</h3><p className="mt-2 text-sm text-slate-700">This response section uses an unsupported format ({unsupported.type ?? 'unknown'}). Refresh Ask or ask the question again.</p></section>;
 }
 
+function PropertySelectionCard({ executionId, onCompleted }: { executionId: string; onCompleted: (execution: AskExecutionResponse) => void }) {
+  const { setSelectedPropertyId } = usePropertyContext();
+  const [properties, setProperties] = useState<{ id: string; label: string }[] | null>(null);
+  const [selecting, setSelecting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api.getProperties()
+      .then((response) => {
+        if (!active) return;
+        const list = response.success && response.data ? response.data.properties : [];
+        setProperties(list.map((property) => ({ id: property.id, label: property.name?.trim() || `${property.address}, ${property.city}` })));
+      })
+      .catch(() => { if (active) setProperties([]); });
+    return () => { active = false; };
+  }, []);
+
+  const choose = async (propertyId: string) => {
+    if (selecting) return;
+    setSelecting(propertyId);
+    setError(null);
+    try {
+      const response = await api.resolveAskExecutionProperty(executionId, propertyId);
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not select that home.');
+      window.localStorage.setItem(sessionStorageKey(propertyId), response.data.sessionId);
+      onCompleted(response.data);
+      setSelectedPropertyId(propertyId);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not select that home.');
+      setSelecting(null);
+    }
+  };
+
+  if (properties === null) return <section className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4"><p className="text-sm text-slate-500">Loading your homes…</p></section>;
+  if (properties.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4" aria-busy={Boolean(selecting)}>
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800">Select a home</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {properties.map((property) => (
+          <button key={property.id} type="button" disabled={Boolean(selecting)} onClick={() => void choose(property.id)} className="min-h-11 rounded-xl border border-teal-300 bg-white px-3 py-2 text-sm font-medium text-teal-900 hover:bg-teal-100 disabled:opacity-50">
+            {selecting === property.id ? 'Selecting…' : property.label}
+          </button>
+        ))}
+      </div>
+      {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 function ClarificationCard({ executionId, clarification, onCompleted }: { executionId: string; clarification: AskClarification; onCompleted: (execution: AskExecutionResponse) => void }) {
   const [answer, setAnswer] = useState('');
   const [saving, setSaving] = useState(false);
@@ -712,6 +764,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                 <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
                   <div className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</div>
                   {execution.blocks.map((block) => <BlockView key={block.id} block={block} />)}
+                  {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} />}
                   {execution.captureRequests.map((request) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} />)}
                   {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} />}
                   {execution.confirmation && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} />}

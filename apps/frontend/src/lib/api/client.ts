@@ -1014,6 +1014,9 @@ class APIClient {
   async continueAskExecution(executionId: string, surface: 'ASK_PAGE' | 'GLOBAL_LAUNCHER'): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/continue`, { method: 'POST', body: { surface } });
   }
+  async resolveAskExecutionProperty(executionId: string, propertyId: string): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/property`, { method: 'POST', body: { propertyId } });
+  }
   async requestAskCorrection(executionId: string, kind: 'HOME_RECORD' | 'RETRY_RESPONSE'): Promise<APIResponse<{ executionId: string; href: string }>> {
     return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/corrections`, { method: 'POST', body: { kind } });
   }
