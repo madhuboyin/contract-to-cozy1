@@ -90,11 +90,13 @@ export async function getPropertyRecordOverview(propertyId: string, userId: stri
       prisma.homeEvent.count({ where: {
         propertyId, isCurrent: true, deletedAt: null,
         verificationStatus: { in: ['HOMEOWNER_CONFIRMED', 'EVIDENCE_VERIFIED'] },
+        OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }],
       } }),
       prisma.homeEvent.findMany({
         where: {
           propertyId, isCurrent: true, deletedAt: null,
           verificationStatus: { in: ['HOMEOWNER_CONFIRMED', 'EVIDENCE_VERIFIED'] },
+          OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }],
         },
         orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
         take: 8,

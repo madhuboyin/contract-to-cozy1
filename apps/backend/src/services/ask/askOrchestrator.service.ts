@@ -41,6 +41,7 @@ import { savingsBenefitsUnifiedService } from '../savingsBenefitsUnified.service
 import { SellHoldRentService } from '../sellHoldRent.service';
 import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../ownershipCosts/ownershipCostReadModel.service';
 import { InventoryService } from '../inventory.service';
+import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
@@ -1044,6 +1045,178 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
   };
 }
 
+function readablePropertyValue(value: unknown): string {
+  if (value === null || value === undefined || value === '' || value === 'UNKNOWN') return 'Not recorded';
+  if (typeof value === 'number') return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
+  return String(value).toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+const PROPERTY_SCOPE_LABELS: Record<string, string> = {
+  CORE: 'Core property details', LOCATION: 'Location', STRUCTURE: 'Structure', EXTERIOR: 'Exterior and utilities',
+  RESPONSIBILITY: 'Maintenance responsibility', SYSTEMS: 'Home systems', SAFETY: 'Safety', ROOMS: 'Rooms',
+  INVENTORY: 'Inventory', OPTIONAL_HOUSEHOLD: 'Optional household context',
+};
+
+async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const propertyHref = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
+  const completenessFocus = /\b(?:complete|completeness|missing from|profile quality)\b/i.test(message);
+  const [access, overview, evaluation, property] = await Promise.all([
+    ensurePropertyAccess(userId, propertyId),
+    getPropertyRecordOverview(propertyId, userId),
+    evaluateFeatureContext(propertyId, userId, { featureKey: 'PROPERTY_RECORD_SUMMARY', operationKey: 'VIEW_SUMMARY' }),
+    prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        id: true, name: true, address: true, city: true, state: true, zipCode: true, dwellingType: true,
+        propertyUse: true, occupancyStatus: true, propertySize: true, yearBuilt: true, bedrooms: true,
+        bathrooms: true, heatingType: true, coolingType: true, roofType: true, updatedAt: true,
+      },
+    }),
+  ]);
+  if (!property) throw new Error('Property not found.');
+
+  const activeRequirement = evaluation.requirements[0];
+  const canImproveContext = access.role !== HouseholdRole.VIEWER;
+  const captureSupported = activeRequirement
+    && canImproveContext
+    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
+    && activeRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
+  const captureRequests: AskCaptureRequest[] = captureSupported ? [{
+    requirementId: activeRequirement.requirementId,
+    captureKey: activeRequirement.capture.captureKey,
+    classification: activeRequirement.classification,
+    state: activeRequirement.state,
+    title: activeRequirement.capture.title,
+    question: activeRequirement.capture.question,
+    helpText: activeRequirement.capture.helpText ?? null,
+    inputSchema: activeRequirement.capture.inputSchema,
+    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
+    allowNotSure: activeRequirement.capture.allowNotSure,
+    sensitivity: activeRequirement.capture.sensitivity,
+    destinationLabel: 'Saved to this home’s Property Context',
+    confirmationText: null,
+    expectedContextVersion: evaluation.contextVersion,
+  }] : [];
+
+  const context = overview.context.status === 'AVAILABLE' ? overview.context : null;
+  const completeness = context?.completeness;
+  const percent = completeness?.completenessPercent ?? null;
+  const rooms = overview.sections.rooms.status === 'AVAILABLE' ? overview.sections.rooms.data : null;
+  const inventory = overview.sections.inventory.status === 'AVAILABLE' ? overview.sections.inventory.data : null;
+  const documents = overview.sections.documents.status === 'AVAILABLE' ? overview.sections.documents.data : null;
+  const household = overview.sections.household.status === 'AVAILABLE' ? overview.sections.household.data : null;
+  const timeline = overview.tools.homeTimeline.status === 'AVAILABLE' ? overview.tools.homeTimeline.data : null;
+  const incompleteScopes = (completeness?.scopes ?? [])
+    .filter((scope) => scope.completenessPercent < 100)
+    .sort((left, right) => left.completenessPercent - right.completenessPercent || left.scope.localeCompare(right.scope));
+  const degradedSections = [
+    rooms ? null : 'Rooms', inventory ? null : 'Inventory', documents ? null : 'Documents', household ? null : 'Household', context ? null : 'Property Context',
+  ].filter((value): value is string => Boolean(value));
+  const propertyName = property.name?.trim() || `${property.address}, ${property.city}`;
+
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'property-summary',
+    title: completenessFocus && percent != null
+      ? `${propertyName}’s Property Context is ${percent}% complete`
+      : `Here is the current Living Home Record for ${propertyName}`,
+    body: `${context ? `${context.knownFactCount} governed property facts are currently known.` : 'Property Context details are temporarily unavailable.'} The record contains ${rooms?.count ?? 'an unknown number of'} room${rooms?.count === 1 ? '' : 's'}, ${inventory?.totalCount ?? 'an unknown number of'} inventory item${inventory?.totalCount === 1 ? '' : 's'}, and ${documents?.totalCount ?? 'an unknown number of'} document${documents?.totalCount === 1 ? '' : 's'}. ${degradedSections.length ? `${degradedSections.join(', ')} could not be fully loaded, so this is a partial summary.` : 'All summary sections loaded successfully.'}`,
+    tone: degradedSections.length || (percent != null && percent < 100) ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-property-record', label: 'Open property record', href: propertyHref, style: 'PRIMARY' }],
+  }, {
+    type: 'TABLE', id: 'property-core-facts', title: 'Core property facts',
+    description: 'Values come from the canonical property record. “Not recorded” is not inferred from other fields.',
+    columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }],
+    rows: [
+      { id: 'address', values: { fact: 'Address', value: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` } },
+      { id: 'dwelling', values: { fact: 'Dwelling type', value: readablePropertyValue(property.dwellingType) } },
+      { id: 'use', values: { fact: 'Property use', value: readablePropertyValue(property.propertyUse) } },
+      { id: 'occupancy', values: { fact: 'Occupancy', value: readablePropertyValue(property.occupancyStatus) } },
+      { id: 'year-built', values: { fact: 'Year built', value: readablePropertyValue(property.yearBuilt) } },
+      { id: 'size', values: { fact: 'Living area', value: property.propertySize == null ? 'Not recorded' : `${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft` } },
+      { id: 'beds-baths', values: { fact: 'Bedrooms / bathrooms', value: `${property.bedrooms == null ? 'Not recorded' : property.bedrooms} / ${property.bathrooms == null ? 'Not recorded' : property.bathrooms}` } },
+      { id: 'heating-cooling', values: { fact: 'Heating / cooling', value: `${readablePropertyValue(property.heatingType)} / ${readablePropertyValue(property.coolingType)}` } },
+      { id: 'roof', values: { fact: 'Roof type', value: readablePropertyValue(property.roofType) } },
+    ],
+    actions: [],
+  }, {
+    type: 'GROUPED_LIST', id: 'property-record-sections', title: 'What the record contains',
+    description: 'Counts describe canonical records available to this household member.',
+    sections: [{
+      id: 'record-sections', title: 'Living Home Record', count: 4,
+      items: [
+        { id: 'rooms', title: 'Rooms', description: rooms ? `${rooms.count} room record${rooms.count === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: [], status: rooms ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/rooms` },
+        { id: 'inventory', title: 'Systems and inventory', description: inventory ? `${inventory.totalCount} items · ${inventory.majorSystemCount} major systems · ${inventory.verifiedCount} verified` : 'Temporarily unavailable', meta: inventory ? [`${inventory.withDocumentCount} with documents`] : [], status: inventory ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/inventory` },
+        { id: 'documents', title: 'Documents', description: documents ? `${documents.totalCount} documents · ${documents.verifiedCount} verified · ${documents.needsReviewCount} need review` : 'Temporarily unavailable', meta: documents ? [`${documents.linkedCount} linked to the home or an item`] : [], status: documents ? 'AVAILABLE' : 'UNAVAILABLE', href: `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}` },
+        { id: 'household', title: 'Household access', description: household ? `${household.totalCount} household member${household.totalCount === 1 ? '' : 's'}` : 'Temporarily unavailable', meta: household?.roles.map((role) => `${role.count} ${role.role.toLowerCase()}`) ?? [], status: household ? 'AVAILABLE' : 'UNAVAILABLE', href: `${propertyHref}/household` },
+      ],
+    }],
+    actions: [],
+  }];
+
+  if (incompleteScopes.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'property-completeness', title: 'Areas that can improve',
+      description: 'Internal fact keys are intentionally hidden. Open the property record or answer the inline prompt to add canonical information.',
+      sections: [{
+        id: 'incomplete-scopes', title: 'Property Context completeness', count: incompleteScopes.length,
+        items: incompleteScopes.map((scope) => ({
+          id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
+          description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
+          meta: [`${scope.missingFactKeys.length} missing`, `${scope.conflictedFactKeys.length} conflicted`, `${scope.staleFactKeys.length} stale`],
+          status: `${scope.completenessPercent}% COMPLETE`, href: propertyHref,
+        })),
+      }],
+      actions: [],
+    });
+  }
+
+  if (timeline?.recent.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'property-recent-events', title: 'Recent verified home activity',
+      description: `${timeline.confirmedCount} current confirmed or evidence-verified event${timeline.confirmedCount === 1 ? '' : 's'} are visible to you. Showing the most recent records.`,
+      sections: [{
+        id: 'recent-events', title: 'Home Timeline', count: timeline.recent.length,
+        items: timeline.recent.map((event) => ({
+          id: event.id, title: event.title, description: null,
+          meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
+          status: event.verificationStatus, href: `${propertyHref}/timeline`,
+        })),
+      }],
+      actions: [],
+    });
+  }
+
+  const freshness = [
+    { label: 'Core property record', source: 'Property', observedAt: property.updatedAt.toISOString() },
+    ...(documents?.latest ? [{ label: 'Latest document', source: `Documents · ${documents.latest.name}`, observedAt: documents.latest.createdAt.toISOString() }] : []),
+    ...(overview.tools.statusBoard.status === 'AVAILABLE' && overview.tools.statusBoard.data.updatedAt
+      ? [{ label: 'Systems and inventory', source: 'Home Inventory', observedAt: overview.tools.statusBoard.data.updatedAt.toISOString() }]
+      : []),
+  ];
+  blocks.push({ type: 'EVIDENCE', id: 'property-summary-evidence', title: 'Record freshness', items: freshness });
+
+  const permissionLimited = Boolean(activeRequirement && !canImproveContext);
+  const limited = captureRequests.length > 0 || degradedSections.length > 0 || permissionLimited || (percent != null && percent < 100);
+  return {
+    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: captureRequests.length
+      ? 'PROPERTY_SUMMARY_CONTEXT_OPTIONAL'
+      : permissionLimited
+        ? 'PROPERTY_SUMMARY_CONTEXT_WRITE_PERMISSION_REQUIRED'
+        : degradedSections.length
+          ? 'PROPERTY_SUMMARY_PARTIAL'
+          : percent != null && percent < 100
+            ? 'PROPERTY_SUMMARY_INCOMPLETE'
+            : undefined,
+    contextVersion: evaluation.contextVersion,
+    captureRequests,
+    blocks,
+    suggestions: completenessFocus
+      ? ['Summarize my home record', 'Show missing inventory details', 'List pending maintenance tasks']
+      : ['How complete is my property profile?', 'Show missing inventory details', 'What maintenance is pending?'],
+  };
+}
+
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis] = await Promise.all([
@@ -1450,6 +1623,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'SAVINGS_OPPORTUNITIES': return savingsOpportunitiesResult(input.userId, input.propertyId!, input.message);
     case 'OWNERSHIP_COSTS': return ownershipCostsResult(input.userId, input.propertyId!, input.message);
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
+    case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
@@ -1567,7 +1741,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -1650,6 +1824,24 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
     });
     canonicalOwner = 'InventoryItem';
+  } else if (execution.operationId === 'PROPERTY_SUMMARY') {
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: 'PROPERTY_RECORD_SUMMARY',
+      operationKey: 'VIEW_SUMMARY',
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'SELL_HOLD_RENT_ANALYSIS') {
     const capture = await captureFeatureContext(execution.propertyId, userId, {
       ...input,

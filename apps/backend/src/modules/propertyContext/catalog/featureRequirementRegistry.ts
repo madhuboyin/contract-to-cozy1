@@ -88,6 +88,8 @@ function financialAccuracyContract(
   featureKey: string,
   operationKey: string,
   facts: FinancialAccuracyFact[],
+  owner = 'Phase 5 financial tool',
+  executionDisposition: FeatureContextRequirementDefinition['adoption']['executionDisposition'] = 'DOMAIN_POLICY',
 ): FeatureContextRequirementDefinition {
   return {
     featureKey,
@@ -95,7 +97,7 @@ function financialAccuracyContract(
     policyVersion: '1.0',
     promptStrategy: 'MINIMUM_PATH',
     required: [],
-    adoption: adopted('Phase 5 financial tool', 'DOMAIN_POLICY'),
+    adoption: adopted(owner, executionDisposition),
     enhancements: facts.map((fact, index) => {
       const [factKey, captureKey] = FINANCIAL_ACCURACY_FACTS[fact];
       return {
@@ -112,6 +114,7 @@ function financialAccuracyContract(
 }
 
 export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDefinition[] = [
+  financialAccuracyContract('PROPERTY_RECORD_SUMMARY', 'VIEW_SUMMARY', ['propertyUse', 'occupancy', 'dwelling', 'yearBuilt', 'state', 'zip'], 'Property Record', 'SHARED_GATE'),
   financialAccuracyContract('DO_NOTHING', 'RUN_SIMULATION', ['propertyUse', 'occupancy', 'inventory']),
   financialAccuracyContract('HOME_SAVINGS', 'RUN_ANALYSIS', ['propertyUse', 'occupancy', 'state', 'zip', 'installedSystems']),
   financialAccuracyContract('BUDGET_PLANNER', 'VIEW_FORECAST', ['propertyUse', 'occupancy', 'dwelling', 'yearBuilt', 'state', 'zip', 'inventory']),
