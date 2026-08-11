@@ -13,6 +13,7 @@ export type AskOperationId =
   | 'COVERAGE_GAPS'
   | 'CAPABILITY_DISCOVERY'
   | 'REPLACEMENT_GUIDANCE'
+  | 'REFINANCE_ANALYSIS'
   | 'EMERGENCY_BOUNDARY'
   | 'OUT_OF_SCOPE_BOUNDARY'
   | 'GROUNDED_GUIDANCE';
@@ -40,6 +41,7 @@ const outOfScopePattern = /\b(python|javascript|typescript|coding interview|writ
 const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|completed work|pending work|service history)\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage))\b/i;
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
+const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;
 const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.*quote|savings?|rebates?|monitor)\b/i;
 
 export function resolveAskOperation(message: string): AskOperationResolution {
@@ -57,6 +59,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (replacementPattern.test(message)) {
     return { operationId: 'REPLACEMENT_GUIDANCE', version: '1.0', family: 'GENERAL_HOME_GUIDANCE', confidence: 0.96, requiresProperty: true };
+  }
+  if (refinanceAnalysisPattern.test(message)) {
+    return { operationId: 'REFINANCE_ANALYSIS', version: '1.0', family: 'GENERAL_HOME_GUIDANCE', confidence: 0.97, requiresProperty: true };
   }
   if (capabilityPattern.test(message)) {
     return { operationId: 'CAPABILITY_DISCOVERY', version: '1.0', family: 'CAPABILITY_DISCOVERY', confidence: 0.88, requiresProperty: false };

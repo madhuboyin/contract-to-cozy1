@@ -1,4 +1,6 @@
 import { AskExecutionStatus, MaintenanceTaskStatus, Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import {
   AskExecutionResponseSchema,
@@ -25,9 +27,22 @@ import {
 } from './askOperationRegistry';
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
 import { captureFeatureContext } from '../../modules/propertyContext/application/captureFeatureContext';
+import { getFinancialContextDecisions } from '../financialContext/context';
+import { getProfile, upsertProfile } from '../financing.service';
+import { RefinanceRadarService } from '../../refinanceRadar/refinanceRadar.service';
+import { MortgageRateService } from '../../refinanceRadar/engine/mortgageRate.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
+const refinanceRadarService = new RefinanceRadarService();
+const mortgageRateService = new MortgageRateService();
+
+const RefinanceProfileCaptureSchema = z.object({
+  currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
+  interestRatePct: z.number().positive().max(30),
+  remainingTermYears: z.number().positive().max(50),
+  monthlyPaymentUsd: z.number().positive().max(1_000_000).optional(),
+}).strict();
 
 function asInputJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -241,8 +256,10 @@ async function replacementGuidanceResult(userId: string, propertyId: string): Pr
     question: requirement.capture.question,
     helpText: requirement.capture.helpText ?? null,
     inputSchema: requirement.capture.inputSchema,
+    ...(requirement.currentAnswer === undefined ? {} : { currentAnswer: requirement.currentAnswer }),
     allowNotSure: requirement.capture.allowNotSure,
     sensitivity: requirement.capture.sensitivity,
+    confirmationText: null,
     expectedContextVersion: evaluation.contextVersion,
   }));
   const remainingYears = age === null ? null : Math.max(0, 12 - age);
@@ -270,6 +287,107 @@ async function replacementGuidanceResult(userId: string, propertyId: string): Pr
       actions: [{ id: 'open-repair-replace', label: 'Open Repair vs Replace', href: `/dashboard/replace-repair?propertyId=${encodeURIComponent(propertyId)}&inventoryItemId=${encodeURIComponent(item.id)}`, style: 'PRIMARY' }],
     }],
     suggestions: ['What replacement warning signs should I watch?', 'How much should I budget for replacement?'],
+  };
+}
+
+function money(value: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+}
+
+async function refinanceAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const [profile, financialContext, marketSnapshot] = await Promise.all([
+    getProfile(propertyId),
+    getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR'),
+    mortgageRateService.getLatestSnapshot(),
+  ]);
+  if (profile?.mortgageStatus === 'NO_MORTGAGE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'NO_MORTGAGE',
+      blocks: [{ type: 'SUMMARY', id: 'refinance-not-applicable', title: 'No mortgage is recorded for this home', body: 'A mortgage refinance analysis does not apply unless the financing profile is corrected to show an active mortgage.', tone: 'DEFAULT', actions: [{ id: 'review-financing', label: 'Review financing profile', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'SECONDARY' }] }],
+      suggestions: ['Show other home savings opportunities'],
+    };
+  }
+
+  const missing = [
+    profile?.currentMortgageBalanceCents == null ? 'currentMortgageBalanceUsd' : null,
+    profile?.interestRateBps == null ? 'interestRatePct' : null,
+    profile?.remainingTermMonths == null ? 'remainingTermYears' : null,
+  ].filter((value): value is string => Boolean(value));
+  if (missing.length) {
+    const fields = [
+      ...(missing.includes('currentMortgageBalanceUsd') ? [{ key: 'currentMortgageBalanceUsd', label: 'Current mortgage balance', helpText: 'An approximate current principal balance is acceptable.', required: true, inputSchema: { type: 'DECIMAL' as const, min: 1_000, max: 100_000_000, unit: 'USD' } }] : []),
+      ...(missing.includes('interestRatePct') ? [{ key: 'interestRatePct', label: 'Current interest rate', helpText: 'Enter the note rate on your existing mortgage, not a market quote.', required: true, inputSchema: { type: 'DECIMAL' as const, min: 0.01, max: 30, unit: '%' } }] : []),
+      ...(missing.includes('remainingTermYears') ? [{ key: 'remainingTermYears', label: 'Remaining loan term', helpText: 'An estimate in years is fine.', required: true, inputSchema: { type: 'DECIMAL' as const, min: 0.1, max: 50, unit: 'years' } }] : []),
+      ...(profile?.monthlyPaymentCents == null ? [{ key: 'monthlyPaymentUsd', label: 'Monthly principal and interest payment', helpText: 'Optional. Leave blank and the analysis will calculate an amortized estimate.', required: false, inputSchema: { type: 'DECIMAL' as const, min: 1, max: 1_000_000, unit: 'USD/month' } }] : []),
+    ];
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'MORTGAGE_PROFILE_INCOMPLETE', contextVersion: financialContext.contextVersion,
+      parameters: { captureOwner: 'PropertyFinancingProfile' },
+      blocks: [{
+        type: 'SUMMARY', id: 'refinance-needs-context', title: 'A few mortgage details are needed for a meaningful comparison',
+        body: marketSnapshot
+          ? `The latest governed 30-year benchmark is ${marketSnapshot.rate30yr.toFixed(3)}% as of ${marketSnapshot.date}. I won’t compare it with an assumed current loan rate or treat missing balances as zero.`
+          : 'Your mortgage profile is incomplete, and no governed market-rate snapshot is currently available. Save the loan details now and Ask can use them when a benchmark becomes available.',
+        tone: 'CAUTION', actions: [],
+      }],
+      captureRequests: [{
+        requirementId: `refinance-profile-${financialContext.contextVersion.slice(0, 20)}`,
+        captureKey: 'FINANCING_PROFILE_REFINANCE_INPUTS', classification: 'REQUIRED_CALCULATION', state: 'UNKNOWN',
+        title: 'Complete mortgage details', question: 'Add only the current-loan details needed to compare refinancing options.',
+        helpText: 'These values are stored in this home’s Financing Profile and are not sent to an LLM.',
+        inputSchema: { type: 'GROUP', fields },
+        currentAnswer: {}, allowNotSure: false, sensitivity: 'FINANCIAL',
+        confirmationText: 'I confirm these mortgage details are accurate enough to save to this home’s Financing Profile.',
+        expectedContextVersion: financialContext.contextVersion,
+      }],
+      suggestions: ['Use the full Financing Profile instead'],
+    };
+  }
+
+  if (!marketSnapshot) {
+    return {
+      status: 'UNAVAILABLE', reasonCode: 'MARKET_RATE_UNAVAILABLE', contextVersion: financialContext.contextVersion,
+      blocks: [{ type: 'SUMMARY', id: 'refinance-market-unavailable', title: 'A current governed mortgage-rate benchmark is unavailable', body: 'Your loan details are ready, but Ask will not use model knowledge or an undated rate as the market benchmark. Try again after the Mortgage Refinance Radar receives a dated source snapshot.', tone: 'CAUTION', actions: [{ id: 'open-radar', label: 'Open Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] }],
+      suggestions: ['What rate would make refinancing worth reviewing?'],
+    };
+  }
+
+  const result = await refinanceRadarService.evaluateProperty(propertyId, financialContext.contextVersion);
+  if (!result.available) {
+    return { status: 'UNAVAILABLE', reasonCode: result.reason, contextVersion: financialContext.contextVersion, blocks: [{ type: 'SUMMARY', id: 'refinance-analysis-unavailable', title: 'The refinance analysis is not ready', body: 'The Mortgage Refinance Radar could not complete a property-specific comparison. Review the financing profile and try again.', tone: 'CAUTION', actions: [{ id: 'open-profile', label: 'Review financing profile', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'PRIMARY' }] }], suggestions: [] };
+  }
+  const favorable = result.radarState === 'OPEN';
+  const rows = [
+    { id: 'current-rate', values: { metric: 'Your recorded mortgage rate', value: `${result.currentRatePct.toFixed(3)}%`, meaning: 'Existing loan note rate' } },
+    { id: 'market-rate', values: { metric: 'Market benchmark rate', value: `${result.marketRatePct.toFixed(3)}%`, meaning: `National 30-year benchmark as of ${marketSnapshot.date}` } },
+    { id: 'target-rate', values: { metric: 'Modeled target scenario rate', value: `${result.marketRatePct.toFixed(3)}%`, meaning: 'Illustrative target set to the latest benchmark—not a lender quote' } },
+    { id: 'rate-gap', values: { metric: 'Rate difference', value: `${result.rateGapPct.toFixed(3)} percentage points`, meaning: result.rateGapPct > 0 ? 'Existing rate is higher' : 'Existing rate is not higher' } },
+    ...(result.triggerRatePct == null ? [] : [{ id: 'trigger-rate', values: { metric: 'Radar review threshold', value: `${result.triggerRatePct.toFixed(3)}% or lower`, meaning: result.triggerRateExplanation } }]),
+    { id: 'monthly-savings', values: { metric: 'Modeled monthly savings', value: money(result.monthlySavings), meaning: 'Principal-and-interest estimate' } },
+    { id: 'lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(result.lifetimeSavings), meaning: 'Interest difference after modeled closing costs' } },
+    { id: 'closing-cost', values: { metric: 'Modeled closing costs', value: money(result.closingCostAssumptionUsd), meaning: 'Planning assumption' } },
+    { id: 'break-even', values: { metric: 'Estimated break-even', value: result.breakEvenMonths == null ? 'Not reached' : `${result.breakEvenMonths} months`, meaning: 'Time to recover modeled costs' } },
+    { id: 'confidence', values: { metric: 'Opportunity confidence', value: result.confidenceLevel ?? 'Not qualified', meaning: 'Based on modeled savings and break-even' } },
+  ];
+  return {
+    status: 'ANSWERED', contextVersion: financialContext.contextVersion,
+    blocks: [{
+      type: 'SUMMARY', id: 'refinance-analysis-summary', title: favorable ? 'Refinancing may be worth comparing now' : 'Current conditions do not meet the radar’s actionable threshold',
+      body: result.radarSummary, tone: favorable ? 'POSITIVE' : 'DEFAULT',
+      actions: [{ id: 'open-radar', label: 'Explore refinance scenarios', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }],
+    }, {
+      type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
+      description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',
+      columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }, { key: 'meaning', label: 'What it represents' }], rows, actions: [],
+    }, {
+      type: 'EVIDENCE', id: 'refinance-evidence', title: 'Sources used', items: [
+        { label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() },
+        { label: '30-year market benchmark', source: `${marketSnapshot.source}${marketSnapshot.sourceRef ? ` · ${marketSnapshot.sourceRef}` : ''}`, observedAt: `${marketSnapshot.date}T00:00:00.000Z` },
+      ],
+    }, {
+      type: 'BOUNDARY', id: 'refinance-boundary', title: 'Planning estimate—not a loan offer', body: 'Actual eligibility, APR, closing costs, taxes, insurance, points, credits, and available rates depend on lender underwriting and a formal Loan Estimate. Compare offers before making a financial commitment.', severity: 'INFO', suggestions: [],
+    }],
+    suggestions: ['What rate would open a stronger opportunity?', 'Show me the Mortgage Refinance Radar'],
   };
 }
 
@@ -386,6 +504,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'MAINTENANCE_STATUS': return maintenanceResult(input.userId, input.propertyId!, input.message);
     case 'COVERAGE_GAPS': return coverageResult(input.propertyId!);
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
+    case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
   }
@@ -485,17 +604,20 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     throw error;
   }
   await ensurePropertyAccess(userId, execution.propertyId);
-  if (execution.operationId !== 'REPLACEMENT_GUIDANCE') {
-    const error = new Error('This execution does not have an active inline capture.');
-    (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
-    throw error;
+  const answerHash = createHash('sha256').update(JSON.stringify({ captureKey: input.captureKey, answer: input.answer, sensitiveDataConfirmed: input.sensitiveDataConfirmed ?? false })).digest('hex');
+  const previousCapture = await prisma.askCaptureReceipt.findUnique({
+    where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
+  });
+  if (previousCapture) {
+    if (previousCapture.answerHash !== answerHash) {
+      const error = new Error('The idempotency key was already used for a different inline answer.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_IDEMPOTENCY_CONFLICT';
+      throw error;
+    }
+    return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
-    ? execution.parametersJson as Record<string, unknown>
-    : {};
-  const inventoryItemId = parameters.inventoryItemId;
-  if (typeof inventoryItemId !== 'string') {
-    const error = new Error('The inventory item for this capture is no longer available.');
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS'].includes(execution.operationId ?? '')) {
+    const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
   }
@@ -509,34 +631,104 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     throw error;
   }
 
-  const capture = await captureFeatureContext(execution.propertyId, userId, {
-    ...input,
-    featureKey: 'REPAIR_REPLACE',
-    operationKey: 'RUN_ANALYSIS',
-    operationInput: { inventoryItemId },
-  });
-  if (!capture || typeof capture !== 'object' || Array.isArray(capture)
-    || !('captureId' in capture) || typeof capture.captureId !== 'string'
-    || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
-    throw new Error('Property context capture did not return a valid receipt.');
+  let captureId: string;
+  let capturedContextVersion: string;
+  if (execution.operationId === 'REPLACEMENT_GUIDANCE') {
+    const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const inventoryItemId = parameters.inventoryItemId;
+    if (typeof inventoryItemId !== 'string') {
+      const error = new Error('The inventory item for this capture is no longer available.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: 'REPAIR_REPLACE',
+      operationKey: 'RUN_ANALYSIS',
+      operationInput: { inventoryItemId },
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+  } else {
+    if (input.captureKey !== 'FINANCING_PROFILE_REFINANCE_INPUTS') {
+      const error = new Error('This financing capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    if (input.sensitiveDataConfirmed !== true) {
+      const error = new Error('Confirm the mortgage details before saving them to the Financing Profile.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_CONFIRMATION_REQUIRED';
+      throw error;
+    }
+    const [currentContext, profile] = await Promise.all([
+      getFinancialContextDecisions(execution.propertyId, userId, 'REFINANCE_RADAR'),
+      getProfile(execution.propertyId),
+    ]);
+    if (currentContext.contextVersion !== input.expectedContextVersion) {
+      const error = new Error('The financing profile changed while this answer was open. Review the refreshed values and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const candidate = RefinanceProfileCaptureSchema.safeParse({
+      currentMortgageBalanceUsd: input.answer.currentMortgageBalanceUsd ?? (profile?.currentMortgageBalanceCents == null ? undefined : profile.currentMortgageBalanceCents / 100),
+      interestRatePct: input.answer.interestRatePct ?? (profile?.interestRateBps == null ? undefined : profile.interestRateBps / 100),
+      remainingTermYears: input.answer.remainingTermYears ?? (profile?.remainingTermMonths == null ? undefined : profile.remainingTermMonths / 12),
+      monthlyPaymentUsd: input.answer.monthlyPaymentUsd ?? (profile?.monthlyPaymentCents == null ? undefined : profile.monthlyPaymentCents / 100),
+    });
+    if (!candidate.success) {
+      const error = new Error('Enter a valid balance, current rate, and remaining term.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    await upsertProfile(execution.propertyId, {
+      currentMortgageBalanceCents: Math.round(candidate.data.currentMortgageBalanceUsd * 100),
+      mortgageBalanceAsOfDate: input.answer.currentMortgageBalanceUsd === undefined ? undefined : new Date().toISOString(),
+      interestRateBps: Math.round(candidate.data.interestRatePct * 100),
+      remainingTermMonths: Math.max(1, Math.round(candidate.data.remainingTermYears * 12)),
+      monthlyPaymentCents: candidate.data.monthlyPaymentUsd === undefined ? undefined : Math.round(candidate.data.monthlyPaymentUsd * 100),
+    });
+    const nextContext = await getFinancialContextDecisions(execution.propertyId, userId, 'REFINANCE_RADAR');
+    captureId = input.idempotencyKey;
+    capturedContextVersion = nextContext.contextVersion;
   }
   const operation = resolveAskOperation(execution.message);
   const result = await executeOperation({
     userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
   });
-  const saved = await prisma.askExecution.update({
-    where: { id: execution.id },
-    data: {
-      status: result.status,
-      reasonCode: result.reasonCode,
-      contextVersion: result.contextVersion ?? capture.contextVersion,
-      parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-      resultJson: asInputJson({ blocks: result.blocks, captureRequests: result.captureRequests ?? [], suggestions: result.suggestions }),
-      completedAt: terminalStatus(result.status) ? new Date() : null,
-    },
-  });
-  await prisma.askExecutionEvent.create({
-    data: { executionId: execution.id, eventType: 'CONTEXT_CAPTURED', metadataJson: asInputJson({ captureId: capture.captureId, captureKey: input.captureKey, resumedStatus: result.status }) },
+  const canonicalOwner = execution.operationId === 'REFINANCE_ANALYSIS' ? 'PropertyFinancingProfile' : 'InventoryItem';
+  const saved = await prisma.$transaction(async (tx) => {
+    const updated = await tx.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: result.status,
+        reasonCode: result.reasonCode,
+        contextVersion: result.contextVersion ?? capturedContextVersion,
+        parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
+        resultJson: asInputJson({ blocks: result.blocks, captureRequests: result.captureRequests ?? [], suggestions: result.suggestions }),
+        completedAt: terminalStatus(result.status) ? new Date() : null,
+      },
+    });
+    await tx.askCaptureReceipt.create({
+      data: {
+        executionId: execution.id,
+        idempotencyKey: input.idempotencyKey,
+        captureKey: input.captureKey,
+        canonicalOwner,
+        answerHash,
+        contextVersion: result.contextVersion ?? capturedContextVersion,
+      },
+    });
+    await tx.askExecutionEvent.create({
+      data: { executionId: execution.id, eventType: 'CONTEXT_CAPTURED', metadataJson: asInputJson({ captureId, captureKey: input.captureKey, canonicalOwner, resumedStatus: result.status }) },
+    });
+    return updated;
   });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }

@@ -127,8 +127,10 @@ export const AskCaptureRequestSchema = z.object({
   question: z.string(),
   helpText: z.string().nullable(),
   inputSchema: z.unknown(),
+  currentAnswer: z.unknown().optional(),
   allowNotSure: z.boolean(),
   sensitivity: z.enum(['STANDARD', 'FINANCIAL', 'SECURITY']),
+  confirmationText: z.string().nullable().default(null),
   expectedContextVersion: z.string(),
 });
 
@@ -138,6 +140,7 @@ export const SubmitAskCaptureRequestSchema = z.object({
   expectedContextVersion: z.string().trim().min(1).max(128),
   idempotencyKey: z.string().trim().min(8).max(128),
   answer: z.record(z.string(), z.unknown()),
+  sensitiveDataConfirmed: z.boolean().optional(),
 }).strict();
 
 export const CreateAskExecutionRequestSchema = z.object({

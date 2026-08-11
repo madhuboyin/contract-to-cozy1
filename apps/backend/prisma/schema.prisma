@@ -6813,6 +6813,7 @@ model AskExecution {
   user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   property Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   events   AskExecutionEvent[]
+  captures AskCaptureReceipt[]
 
   @@unique([userId, clientRequestId])
   @@index([sessionId, createdAt])
@@ -6831,6 +6832,23 @@ model AskExecutionEvent {
 
   @@index([executionId, createdAt])
   @@map("ask_execution_events")
+}
+
+model AskCaptureReceipt {
+  id             String   @id @default(uuid())
+  executionId    String
+  idempotencyKey String
+  captureKey     String
+  canonicalOwner String
+  answerHash     String
+  contextVersion String?
+  createdAt      DateTime @default(now())
+
+  execution AskExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, idempotencyKey])
+  @@index([executionId, createdAt])
+  @@map("ask_capture_receipts")
 }
 
 enum GroundedAskProposalKind {

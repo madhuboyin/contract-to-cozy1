@@ -44,8 +44,10 @@ export interface AskCaptureRequest {
   question: string;
   helpText: string | null;
   inputSchema: CaptureInputSchema;
+  currentAnswer?: unknown;
   allowNotSure: boolean;
   sensitivity: 'STANDARD' | 'FINANCIAL' | 'SECURITY';
+  confirmationText: string | null;
   expectedContextVersion: string;
 }
 
@@ -55,6 +57,7 @@ export interface SubmitAskCapturePayload {
   expectedContextVersion: string;
   idempotencyKey: string;
   answer: Record<string, unknown>;
+  sensitiveDataConfirmed?: boolean;
 }
 
 export interface CreateAskExecutionPayload {

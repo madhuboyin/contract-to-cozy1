@@ -147,15 +147,23 @@ function InlineCaptureCard({
 }) {
   const schema = request.inputSchema;
   const [values, setValues] = useState<Record<string, unknown>>(
-    schema.type === 'RELATIONAL_UPDATE' ? schema.currentValues : {},
+    schema.type === 'RELATIONAL_UPDATE'
+      ? schema.currentValues
+      : request.currentAnswer && typeof request.currentAnswer === 'object' && !Array.isArray(request.currentAnswer)
+        ? request.currentAnswer as Record<string, unknown>
+        : {},
   );
   const [saving, setSaving] = useState(false);
+  const [idempotencyKey] = useState(newId);
   const [dismissed, setDismissed] = useState(false);
+  const [sensitiveDataConfirmed, setSensitiveDataConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (dismissed) return null;
-  if (schema.type !== 'RELATIONAL_UPDATE') return null;
+  if (schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'GROUP') return null;
 
-  const activeFields = schema.fields.filter((field) => {
+  const fields = schema.fields;
+
+  const activeFields = fields.filter((field) => {
     if (!field.when) return true;
     const actual = values[field.when.fieldKey];
     return field.when.operator === 'EQUALS' ? actual === field.when.value : actual !== field.when.value;
@@ -176,8 +184,9 @@ function InlineCaptureCard({
         requirementId: request.requirementId,
         captureKey: request.captureKey,
         expectedContextVersion: request.expectedContextVersion,
-        idempotencyKey: newId(),
-        answer: { mode: 'UPDATE', entityId: schema.entityId, values },
+        idempotencyKey,
+        answer: schema.type === 'RELATIONAL_UPDATE' ? { mode: 'UPDATE', entityId: schema.entityId, values } : values,
+        sensitiveDataConfirmed: request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY' ? sensitiveDataConfirmed : undefined,
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not save this home detail.');
       onCompleted(response.data);
@@ -197,7 +206,7 @@ function InlineCaptureCard({
       <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
       <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
       {request.helpText && <p className="mt-1 text-xs leading-5 text-slate-500">{request.helpText}</p>}
-      <p className="mt-2 text-xs font-medium text-sky-900">Saved to this item’s Home Record after you select “Save and update answer.”</p>
+      <p className="mt-2 text-xs font-medium text-sky-900">{request.sensitivity === 'FINANCIAL' ? 'Saved to this home’s Financing Profile' : 'Saved to this item’s Home Record'} after you select “Save and update answer.”</p>
       <div className="mt-4 space-y-4">
         {activeFields.map((field) => (
           <fieldset key={field.key}>
@@ -219,15 +228,24 @@ function InlineCaptureCard({
                 />
               )}
               {(field.inputSchema.type === 'INTEGER' || field.inputSchema.type === 'DECIMAL') && (
-                <input type="number" min={field.inputSchema.min} max={field.inputSchema.max} step={field.inputSchema.type === 'INTEGER' ? 1 : 'any'} value={typeof values[field.key] === 'number' ? values[field.key] as number : ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value === '' ? undefined : Number(event.target.value) }))} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
+                <label className="flex items-center gap-2">
+                  <input type="number" min={field.inputSchema.min} max={field.inputSchema.max} step={field.inputSchema.type === 'INTEGER' ? 1 : 'any'} value={typeof values[field.key] === 'number' ? values[field.key] as number : ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value === '' ? undefined : Number(event.target.value) }))} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
+                  {field.inputSchema.unit && <span className="text-xs font-medium text-slate-500">{field.inputSchema.unit}</span>}
+                </label>
               )}
             </div>
           </fieldset>
         ))}
       </div>
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
+      {(request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && (
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-sky-200 bg-white p-3 text-sm text-slate-700">
+          <input type="checkbox" checked={sensitiveDataConfirmed} onChange={(event) => setSensitiveDataConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-700" />
+          <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
+        </label>
+      )}
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="submit" disabled={saving || missingRequired} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving and updating…' : 'Save and update answer'}</button>
+        <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving and updating…' : 'Save and update answer'}</button>
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => setDismissed(true)} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
       </div>
     </form>
