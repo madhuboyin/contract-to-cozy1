@@ -48,6 +48,26 @@ data:
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
           "gridPos": {"h": 7, "w": 8, "x": 16, "y": 8},
           "targets": [{"expr": "sum by (rating) (increase(ask_feedback_total[1h]))", "legendFormat": "{{rating}}", "refId": "A"}]
+        },
+        {
+          "id": 6, "type": "stat", "title": "Inline Capture Resume Success",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 7, "w": 8, "x": 0, "y": 15},
+          "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}},
+          "targets": [{"expr": "sum(increase(ask_inline_captures_total{outcome=\"RESUMED\"}[24h])) / clamp_min(sum(increase(ask_inline_captures_total{outcome=~\"RESUMED|RESUME_FAILED\"}[24h])), 1)", "refId": "A"}]
+        },
+        {
+          "id": 7, "type": "stat", "title": "Repeated Capture Prompt Rate",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 7, "w": 8, "x": 8, "y": 15},
+          "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}},
+          "targets": [{"expr": "sum(increase(ask_inline_captures_total{outcome=\"REPEATED_PROMPT\"}[24h])) / clamp_min(sum(increase(ask_inline_captures_total{outcome=\"RESUMED\"}[24h])), 1)", "refId": "A"}]
+        },
+        {
+          "id": 8, "type": "timeseries", "title": "Inline Capture Outcomes",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 7, "w": 8, "x": 16, "y": 15},
+          "targets": [{"expr": "sum by (operation, outcome) (increase(ask_inline_captures_total[1h]))", "legendFormat": "{{operation}} / {{outcome}}", "refId": "A"}]
         }
       ]
     }

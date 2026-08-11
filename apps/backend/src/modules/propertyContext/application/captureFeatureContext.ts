@@ -84,6 +84,15 @@ function validateInputValue(schema: ScalarCaptureInputSchema, value: unknown, al
   if (schema.type === 'SHORT_TEXT' && (typeof value !== 'string' || !value.trim() || value.length > schema.maxLength)) {
     throw new Error('Expected a valid short text answer.');
   }
+  if (schema.type === 'APPROXIMATE_DATE') {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected a date with precision.');
+    const candidate = value as { precision?: string; value?: string; rangeEnd?: string };
+    const allowed = schema.allowedPrecisions ?? ['EXACT_DATE', 'MONTH', 'YEAR', 'RANGE', 'UNKNOWN'];
+    if (!candidate.precision || !allowed.includes(candidate.precision as typeof allowed[number])) throw new Error('Selected date precision is not registered.');
+    if (candidate.precision === 'UNKNOWN' && allowNotSure) return;
+    if (!candidate.value) throw new Error('Expected a date value.');
+    if (candidate.precision === 'RANGE' && !candidate.rangeEnd) throw new Error('Expected a date range end.');
+  }
 }
 
 export function normalizeAnswers(

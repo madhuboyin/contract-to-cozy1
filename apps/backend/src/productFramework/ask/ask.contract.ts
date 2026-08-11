@@ -190,6 +190,7 @@ export const AskCaptureRequestSchema = z.object({
   allowNotSure: z.boolean(),
   sensitivity: z.enum(['STANDARD', 'FINANCIAL', 'SECURITY']),
   destinationLabel: z.string().nullable().default(null),
+  fallbackHref: z.string().startsWith('/').nullable().optional(),
   confirmationText: z.string().nullable().default(null),
   expectedContextVersion: z.string(),
 });
@@ -201,6 +202,12 @@ export const SubmitAskCaptureRequestSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(128),
   answer: z.record(z.string(), z.unknown()),
   sensitiveDataConfirmed: z.boolean().optional(),
+}).strict();
+
+export const RecordAskCaptureEventSchema = z.object({
+  requirementId: z.string().trim().min(1).max(100),
+  captureKey: z.string().trim().min(1).max(100),
+  event: z.enum(['DISMISSED', 'FULL_FORM_OPENED']),
 }).strict();
 
 export const CreateAskExecutionRequestSchema = z.object({
@@ -242,6 +249,7 @@ export type AskCaptureRequest = z.infer<typeof AskCaptureRequestSchema>;
 export type AskConfirmation = z.infer<typeof AskConfirmationSchema>;
 export type CreateAskExecutionRequest = z.infer<typeof CreateAskExecutionRequestSchema>;
 export type SubmitAskCaptureRequest = z.infer<typeof SubmitAskCaptureRequestSchema>;
+export type RecordAskCaptureEvent = z.infer<typeof RecordAskCaptureEventSchema>;
 export type SubmitAskConfirmation = z.infer<typeof SubmitAskConfirmationSchema>;
 export type SubmitAskFeedback = z.infer<typeof SubmitAskFeedbackSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;

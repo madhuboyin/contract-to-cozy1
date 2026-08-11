@@ -1006,6 +1006,9 @@ class APIClient {
   async submitAskCapture(executionId: string, payload: SubmitAskCapturePayload): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/captures`, { method: 'POST', body: payload });
   }
+  async recordAskCaptureEvent(executionId: string, payload: { requirementId: string; captureKey: string; event: 'DISMISSED' | 'FULL_FORM_OPENED' }): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/ask/executions/${encodeURIComponent(executionId)}/captures/events`, { method: 'POST', body: payload });
+  }
   async confirmAskExecution(executionId: string, payload: { confirmationVersion: number; idempotencyKey: string; consentConfirmed: true }): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/confirm`, { method: 'POST', body: payload });
   }

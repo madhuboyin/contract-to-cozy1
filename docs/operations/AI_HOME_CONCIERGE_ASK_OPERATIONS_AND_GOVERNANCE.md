@@ -55,14 +55,17 @@ Operational metrics:
 - `ask_remote_generation_characters_total{direction}` as the provider-neutral cost proxy
 - `ask_feedback_total{rating}`
 - `ask_retention_deletions_total{reason}`
+- `ask_inline_captures_total{operation,outcome}` for prompted, submitted, resumed, resume-failed, conflict, permission-denied, dismissed, full-form-opened, and repeated-prompt outcomes
 
-The Grafana dashboard reports operation health, p95 latency, deterministic containment, generation volume, and feedback. Provider invoices or token-usage exports remain the financial system of record; character volume is intentionally a stable comparison proxy, not a claimed dollar amount.
+The Grafana dashboard reports operation health, p95 latency, deterministic containment, generation volume, feedback, inline-capture resume success, and repeated-prompt rate. Provider invoices or token-usage exports remain the financial system of record; character volume is intentionally a stable comparison proxy, not a claimed dollar amount.
 
 Initial alert thresholds:
 
 - execution failure ratio above 5% for 15 minutes: critical;
 - p95 execution latency above 5 seconds for 15 minutes: warning;
 - enabled remote-generation failure ratio above 20% for 15 minutes: warning.
+- inline capture resume success below 99% with at least 20 attempts: warning;
+- repeated capture prompt rate above 1% with at least 20 resumed captures: warning.
 
 The product launch target remains p95 ≤ 1.5 seconds for deterministic queries. The 5-second operational alert is a service-degradation threshold, not the product-quality target.
 
@@ -70,9 +73,10 @@ The product launch target remains p95 ≤ 1.5 seconds for deterministic queries.
 
 1. Run backend type checking and `npm run test:ask`.
 2. Run the targeted Ask workspace component test.
-3. Apply the Ask Prometheus rule and Grafana dashboard resources.
-4. Apply the retention CronJob and verify one dry run against a non-production database.
-5. Verify deterministic containment and latency in the dashboard.
-6. For an incident, disable the affected `ASK_OPERATION_<ID>_ENABLED` flag. Disable `ASK_REMOTE_GENERATION_ENABLED` for model/provider incidents. Use `ASK_ENABLED=false` only when the entire surface must be paused.
+3. Run `npm run test:ask:e2e` and retain desktop/mobile refrigerator, refinance, conflict, not-sure, permission, and full-form fallback evidence.
+4. Apply the Ask Prometheus rule and Grafana dashboard resources.
+5. Apply the retention CronJob and verify one dry run against a non-production database.
+6. Verify deterministic containment, latency, capture resume success, and repeated-prompt rate in the dashboard.
+7. For an incident, disable the affected `ASK_OPERATION_<ID>_ENABLED` flag. Disable `ASK_REMOTE_GENERATION_ENABLED` for model/provider incidents. Use `ASK_ENABLED=false` only when the entire surface must be paused.
 
 Production launch still requires recorded desktop/mobile E2E, accuracy/latency, restart, horizontal-scale, privacy, and domain-owner sign-off evidence. Repository implementation alone does not manufacture those attestations.

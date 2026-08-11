@@ -28,6 +28,9 @@ test('lifecycle capture is backend-owned and scoped to the explicit operation it
   assert.equal(capture.relationalEntityInputKey, 'inventoryItemId');
   assert.equal(capture.inputSchema.type, 'RELATIONAL_UPDATE');
   assert.deepEqual(capture.inputSchema.fields.map((field) => field.key), ['condition', 'installedOn', 'purchasedOn']);
+  assert.equal(capture.inputSchema.fields.find((field) => field.key === 'installedOn').inputSchema.type, 'APPROXIMATE_DATE');
+  assert.equal(capture.inputSchema.fields.find((field) => field.key === 'purchasedOn').inputSchema.type, 'APPROXIMATE_DATE');
+  assert.equal(capture.allowNotSure, true);
 });
 
 test('relational update verifies property and operation identity before canonical persistence', () => {
@@ -35,8 +38,10 @@ test('relational update verifies property and operation identity before canonica
   assert.match(adapters, /answer\.entityId !== scopedEntityId/);
   assert.match(adapters, /findFirst\(\{ where: \{ id: entityId, propertyId \}/);
   assert.match(adapters, /tx\.inventoryItem\.update/);
-  assert.match(adapters, /installedOn: parseOptionalDateOnly/);
-  assert.match(adapters, /purchasedOn: parseOptionalDateOnly/);
+  assert.match(adapters, /installedOn: installed\.date/);
+  assert.match(adapters, /installedOnPrecision: installed\.precision/);
+  assert.match(adapters, /purchasedOn: purchased\.date/);
+  assert.match(adapters, /purchasedOnPrecision: purchased\.precision/);
 });
 
 test('Repair vs Replace captures in place without replacing calculator overrides', () => {

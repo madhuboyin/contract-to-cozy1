@@ -863,9 +863,13 @@ model InventoryItem {
   modelNumberNorm  String?
 
   // Dates
-  installedOn    DateTime?
-  purchasedOn    DateTime?
-  lastServicedOn DateTime?
+  installedOn             DateTime?
+  installedOnPrecision    HomeEventDatePrecision?
+  installedOnRangeEnd     DateTime?
+  purchasedOn             DateTime?
+  purchasedOnPrecision    HomeEventDatePrecision?
+  purchasedOnRangeEnd     DateTime?
+  lastServicedOn          DateTime?
 
   // NEW: Operational Core & Intelligence (For Nudge Logic)
   // This is the "Master Switch" for the Dashboard Nudge

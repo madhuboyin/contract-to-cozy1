@@ -68,6 +68,7 @@ export interface AskCaptureRequest {
   allowNotSure: boolean;
   sensitivity: 'STANDARD' | 'FINANCIAL' | 'SECURITY';
   destinationLabel: string | null;
+  fallbackHref?: string | null;
   confirmationText: string | null;
   expectedContextVersion: string;
 }

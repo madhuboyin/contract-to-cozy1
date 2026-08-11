@@ -7,6 +7,7 @@ import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import type { AskAction, AskCaptureRequest, AskConfirmation, AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
+import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 
 const starterQuestions = [
   'What maintenance tasks are pending?',
@@ -261,7 +262,12 @@ function InlineCaptureCard({
   const [sensitiveDataConfirmed, setSensitiveDataConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (dismissed) return null;
-  if (schema.type === 'RELATIONAL_SELECT_CREATE') return null;
+  if (schema.type === 'RELATIONAL_SELECT_CREATE') return <section className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4">
+    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">More information needed</p>
+    <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
+    <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
+    {request.fallbackHref ? <Link href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Open full form <ExternalLink className="h-4 w-4" /></Link> : null}
+  </section>;
 
   const fields = schema.type === 'RELATIONAL_UPDATE' || schema.type === 'GROUP'
     ? schema.fields
@@ -275,7 +281,12 @@ function InlineCaptureCard({
   const missingRequired = activeFields.some((field) => {
     if (!field.required) return false;
     const value = values[field.key];
-    return value === undefined || value === '' || (value === null && !request.allowNotSure);
+    if (value === undefined || value === '' || (value === null && !request.allowNotSure)) return true;
+    if (field.inputSchema.type !== 'APPROXIMATE_DATE' || value === null) return false;
+    if (typeof value !== 'object' || Array.isArray(value)) return true;
+    const date = value as { precision?: string; value?: string; rangeEnd?: string };
+    if (date.precision === 'UNKNOWN') return !request.allowNotSure;
+    return !date.value || (date.precision === 'RANGE' && !date.rangeEnd);
   });
 
   const save = async (event: FormEvent) => {
@@ -300,7 +311,15 @@ function InlineCaptureCard({
         }));
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not save this home detail.');
+      const refreshed = caught && typeof caught === 'object' && 'payload' in caught
+        ? (caught as { payload?: { data?: AskExecutionResponse } }).payload?.data
+        : undefined;
+      if (refreshed?.executionId === executionId) {
+        onCompleted(refreshed);
+        setError('The home record changed while this form was open. Review the refreshed values and continue.');
+      } else {
+        setError(caught instanceof Error ? caught.message : 'Could not save this home detail.');
+      }
     } finally {
       setSaving(false);
     }
@@ -314,54 +333,7 @@ function InlineCaptureCard({
       {request.helpText && <p className="mt-1 text-xs leading-5 text-slate-500">{request.helpText}</p>}
       {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel} after you continue.</p>}
       <div className="mt-4 space-y-4">
-        {activeFields.map((field) => (
-          <fieldset key={field.key}>
-            <legend className="text-sm font-semibold text-slate-800">{field.label}{field.required ? ' *' : ''}</legend>
-            {field.helpText && <p className="mt-0.5 text-xs text-slate-500">{field.helpText}</p>}
-            <div className="mt-2 flex flex-wrap gap-2">
-              {field.inputSchema.type === 'SINGLE_SELECT' && field.inputSchema.options.map((option) => (
-                <button key={option.value} type="button" aria-pressed={values[field.key] === option.value} onClick={() => setValues((current) => ({ ...current, [field.key]: option.value }))} className={cn('min-h-10 rounded-xl border px-3 py-2 text-sm font-medium', values[field.key] === option.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700')}>
-                  {option.label}
-                </button>
-              ))}
-              {field.inputSchema.type === 'BOOLEAN' && [
-                { label: field.inputSchema.trueLabel, value: true },
-                { label: field.inputSchema.falseLabel, value: false },
-              ].map((option) => (
-                <button key={String(option.value)} type="button" aria-pressed={values[field.key] === option.value} onClick={() => setValues((current) => ({ ...current, [field.key]: option.value }))} className={cn('min-h-10 rounded-xl border px-3 py-2 text-sm font-medium', values[field.key] === option.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700')}>
-                  {option.label}
-                </button>
-              ))}
-              {field.inputSchema.type === 'MULTI_SELECT' && field.inputSchema.options.map((option) => {
-                const selected = Array.isArray(values[field.key]) && (values[field.key] as unknown[]).includes(option.value);
-                return <button key={option.value} type="button" aria-pressed={selected} onClick={() => setValues((current) => {
-                  const existing = Array.isArray(current[field.key]) ? current[field.key] as string[] : [];
-                  const next = selected ? existing.filter((value) => value !== option.value) : [...existing, option.value];
-                  return { ...current, [field.key]: next };
-                })} className={cn('min-h-10 rounded-xl border px-3 py-2 text-sm font-medium', selected ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700')}>{option.label}</button>;
-              })}
-              {field.inputSchema.type === 'SHORT_TEXT' && (
-                <input
-                  type={/date|installedOn|purchasedOn/i.test(field.key) ? 'date' : /email/i.test(field.key) ? 'email' : 'text'}
-                  autoComplete={/email/i.test(field.key) ? 'email' : undefined}
-                  maxLength={field.inputSchema.maxLength}
-                  value={typeof values[field.key] === 'string' ? values[field.key] as string : ''}
-                  onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value || undefined }))}
-                  className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 sm:max-w-xs"
-                />
-              )}
-              {scalarCapture && request.allowNotSure && (
-                <button type="button" aria-pressed={values.value === null} onClick={() => setValues({ value: null })} className={cn('min-h-10 rounded-xl border px-3 py-2 text-sm font-medium', values.value === null ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700')}>I’m not sure</button>
-              )}
-              {(field.inputSchema.type === 'INTEGER' || field.inputSchema.type === 'DECIMAL') && (
-                <label className="flex items-center gap-2">
-                  <input type="number" min={field.inputSchema.min} max={field.inputSchema.max} step={field.inputSchema.type === 'INTEGER' ? 1 : 'any'} value={typeof values[field.key] === 'number' ? values[field.key] as number : ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value === '' ? undefined : Number(event.target.value) }))} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" />
-                  {field.inputSchema.unit && <span className="text-xs font-medium text-slate-500">{field.inputSchema.unit}</span>}
-                </label>
-              )}
-            </div>
-          </fieldset>
-        ))}
+        {activeFields.map((field) => <CaptureFieldControl key={field.key} field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />)}
       </div>
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
       {(request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && (
@@ -372,7 +344,8 @@ function InlineCaptureCard({
       )}
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>
-        {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => setDismissed(true)} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
+        {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
+        {request.fallbackHref && <Link href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></Link>}
       </div>
     </form>
   );

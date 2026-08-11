@@ -97,13 +97,16 @@ export type ContextRequirementClassification =
   | 'REQUIRED_CALCULATION'
   | 'ENHANCEMENT_ACCURACY';
 
+export type CaptureDatePrecision = 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';
+
 export type ScalarCaptureInputSchema =
   | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string }
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
   | { type: 'INTEGER'; min?: number; max?: number; unit?: string }
   | { type: 'DECIMAL'; min?: number; max?: number; unit?: string }
-  | { type: 'SHORT_TEXT'; maxLength: number };
+  | { type: 'SHORT_TEXT'; maxLength: number }
+  | { type: 'APPROXIMATE_DATE'; allowedPrecisions?: CaptureDatePrecision[]; allowFuture?: boolean };
 
 export interface CaptureFieldCondition {
   fieldKey: string;

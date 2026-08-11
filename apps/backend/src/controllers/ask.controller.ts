@@ -1,8 +1,8 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { CreateAskExecutionRequestSchema, SubmitAskCaptureRequestSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema } from '../productFramework/ask/ask.contract';
-import { cancelAskExecution, confirmAskExecution, createAskExecution, getAskSession, submitAskCapture, submitAskExecutionFeedback } from '../services/ask/askOrchestrator.service';
+import { CreateAskExecutionRequestSchema, RecordAskCaptureEventSchema, SubmitAskCaptureRequestSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema } from '../productFramework/ask/ask.contract';
+import { cancelAskExecution, confirmAskExecution, createAskExecution, getAskSession, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, submitAskCapture, submitAskExecutionFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import {
   PropertyContextCaptureValidationError,
@@ -80,9 +80,9 @@ export async function getAskMonitor(req: AuthRequest, res: Response, next: NextF
 }
 
 export async function postAskCapture(req: AuthRequest, res: Response, next: NextFunction) {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
   try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
     const executionId = z.string().trim().min(1).max(160).safeParse(req.params.executionId);
     const input = SubmitAskCaptureRequestSchema.safeParse(req.body);
     if (!executionId.success || !input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_CAPTURE', message: 'The inline answer is invalid.' } });
@@ -91,17 +91,43 @@ export async function postAskCapture(req: AuthRequest, res: Response, next: Next
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Ask execution not found.' } });
-    if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Your household role cannot perform this action.' } });
+    if (code === 'ASK_PERMISSION_REQUIRED') {
+      await recordAskCaptureFailure(req.params.executionId, 'PERMISSION_DENIED');
+      return res.status(403).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Your household role cannot perform this action.' } });
+    }
     if (code === 'ASK_CAPTURE_NOT_ACTIVE') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'Inline capture is no longer active.' } });
-    if (code === 'ASK_CONTEXT_VERSION_CONFLICT') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'The home record changed.' } });
+    if (code === 'ASK_CONTEXT_VERSION_CONFLICT') {
+      await recordAskCaptureFailure(req.params.executionId, 'CONFLICT');
+      const data = await refreshAskExecutionAfterConflict(userId, req.params.executionId);
+      return res.status(409).json({ success: false, data, error: { code, message: error instanceof Error ? error.message : 'The home record changed.' } });
+    }
     if (code === 'ASK_CAPTURE_IDEMPOTENCY_CONFLICT') return res.status(409).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'The inline answer was already submitted.' } });
     if (code === 'ASK_CAPTURE_CONFIRMATION_REQUIRED' || code === 'ASK_CAPTURE_VALIDATION_ERROR') return res.status(400).json({ success: false, error: { code, message: error instanceof Error ? error.message : 'The inline answer is invalid.' } });
-    if (error instanceof PropertyContextVersionConflictError || error instanceof PropertyContextIdempotencyConflictError) {
+    if (error instanceof PropertyContextVersionConflictError) {
+      await recordAskCaptureFailure(req.params.executionId, 'CONFLICT');
+      const data = await refreshAskExecutionAfterConflict(userId, req.params.executionId);
+      return res.status(409).json({ success: false, data, error: { code: error.name, message: error.message } });
+    }
+    if (error instanceof PropertyContextIdempotencyConflictError) {
       return res.status(409).json({ success: false, error: { code: error.name, message: error.message } });
     }
     if (error instanceof PropertyContextCaptureValidationError) {
       return res.status(400).json({ success: false, error: { code: error.name, message: error.message } });
     }
+    await recordAskCaptureFailure(req.params.executionId, 'RESUME_FAILED');
+    return next(error);
+  }
+}
+
+export async function postAskCaptureEvent(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = RecordAskCaptureEventSchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_CAPTURE_EVENT', message: 'The capture event is invalid.' } });
+    await recordAskCaptureEvent(userId, req.params.executionId, input.data);
+    return res.status(204).send();
+  } catch (error) {
     return next(error);
   }
 }

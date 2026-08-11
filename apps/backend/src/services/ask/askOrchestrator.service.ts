@@ -9,12 +9,13 @@ import {
   type AskExecutionResponse,
   type AskPresentationBlock,
   type CreateAskExecutionRequest,
+  type RecordAskCaptureEvent,
   type SubmitAskCaptureRequest,
   type SubmitAskConfirmation,
   type SubmitAskFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../lib/metrics';
+import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
@@ -2501,6 +2502,25 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
   }
 }
 
+function captureFallbackHref(operationId: string | null, propertyId: string | null): string | null {
+  if (!propertyId) return null;
+  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
+  switch (operationId) {
+    case 'REPLACEMENT_GUIDANCE':
+    case 'INVENTORY_LOOKUP':
+    case 'COVERAGE_GAPS': return `${base}/inventory`;
+    case 'REFINANCE_ANALYSIS': return `${base}/tools/financing/profile`;
+    case 'SAVINGS_OPPORTUNITIES': return `${base}/tools/home-savings`;
+    case 'OWNERSHIP_COSTS': return `${base}/ownership-costs`;
+    case 'SELL_HOLD_RENT_ANALYSIS': return `${base}/seller-prep`;
+    case 'HOME_ACTIONS': return `${base}/home-operations`;
+    case 'HOUSEHOLD_INVITATION': return `${base}/household`;
+    case 'MAINTENANCE_TASK_CREATE':
+    case 'MAINTENANCE_TASK_COMPLETE': return `${base}/maintenance`;
+    default: return `${base}/edit`;
+  }
+}
+
 function mapPersistedExecution(execution: {
   id: string; sessionId: string; message: string; status: AskExecutionStatus; propertyId: string | null; operationId: string | null;
   operationVersion: string | null; intentFamily: string | null; contextVersion: string | null; resultJson: Prisma.JsonValue | null;
@@ -2520,7 +2540,16 @@ function mapPersistedExecution(execution: {
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? '1.0', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     contextVersion: execution.contextVersion,
     blocks: stored.blocks ?? [],
-    captureRequests: stored.captureRequests ?? [],
+    captureRequests: Array.isArray(stored.captureRequests)
+      ? stored.captureRequests.map((request) => request && typeof request === 'object' && !Array.isArray(request)
+        ? {
+          ...request,
+          fallbackHref: typeof (request as { fallbackHref?: unknown }).fallbackHref === 'string'
+            ? (request as { fallbackHref: string }).fallbackHref
+            : captureFallbackHref(execution.operationId, execution.propertyId),
+        }
+        : request)
+      : [],
     confirmation: stored.confirmation ?? null,
     suggestions: stored.suggestions ?? [],
     createdAt: execution.createdAt.toISOString(),
@@ -2630,6 +2659,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         completedAt,
       },
     });
+    if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ operationId: operation.operationId, blockTypes: result.blocks.map((block) => block.type) }) } });
     askExecutionsTotal.inc({ operation: operation.operationId, status: result.status, generation_mode: generationMode });
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
@@ -2661,7 +2691,24 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_IDEMPOTENCY_CONFLICT';
       throw error;
     }
-    return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+    const operation = resolveAskOperation(execution.message);
+    const replayed = await executeOperation({ userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation });
+    const resumed = await prisma.askExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: replayed.status,
+        reasonCode: replayed.reasonCode,
+        contextVersion: replayed.contextVersion ?? previousCapture.contextVersion,
+        parametersJson: replayed.parameters ? asInputJson(replayed.parameters) : execution.parametersJson ?? undefined,
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, suggestions: replayed.suggestions }),
+        completedAt: terminalStatus(replayed.status) ? new Date() : null,
+      },
+    });
+    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'CAPTURE_RESUME_RETRIED', metadataJson: asInputJson({ captureKey: input.captureKey, resumedStatus: replayed.status }) } });
+    askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'RESUMED' });
+    if (replayed.captureRequests?.some((request) => request.captureKey === input.captureKey)) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'REPEATED_PROMPT' });
+    if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
+    return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
   if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
@@ -2677,6 +2724,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
   }
+  askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'SUBMITTED' });
 
   let captureId: string;
   let capturedContextVersion: string;
@@ -2984,6 +3032,18 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     const nextContext = await getFinancialContextDecisions(execution.propertyId, userId, 'REFINANCE_RADAR');
     captureId = input.idempotencyKey;
     capturedContextVersion = nextContext.contextVersion;
+    await prisma.askCaptureReceipt.upsert({
+      where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
+      create: {
+        executionId: execution.id,
+        idempotencyKey: input.idempotencyKey,
+        captureKey: input.captureKey,
+        canonicalOwner: 'PropertyFinancingProfile',
+        answerHash,
+        contextVersion: capturedContextVersion,
+      },
+      update: {},
+    });
     const operation = resolveAskOperation(execution.message);
     result = await executeOperation({
       userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
@@ -3002,8 +3062,9 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
-    await tx.askCaptureReceipt.create({
-      data: {
+    await tx.askCaptureReceipt.upsert({
+      where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } },
+      create: {
         executionId: execution.id,
         idempotencyKey: input.idempotencyKey,
         captureKey: input.captureKey,
@@ -3011,12 +3072,67 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         answerHash,
         contextVersion: result.contextVersion ?? capturedContextVersion,
       },
+      update: { contextVersion: result.contextVersion ?? capturedContextVersion },
     });
     await tx.askExecutionEvent.create({
       data: { executionId: execution.id, eventType: 'CONTEXT_CAPTURED', metadataJson: asInputJson({ captureId, captureKey: input.captureKey, canonicalOwner, resumedStatus: result.status }) },
     });
     return updated;
   });
+  askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'RESUMED' });
+  if (result.captureRequests?.some((request) => request.captureKey === input.captureKey)) {
+    askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'REPEATED_PROMPT' });
+  }
+  if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, result.captureRequests.length);
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
+export async function recordAskCaptureEvent(userId: string, executionId: string, input: RecordAskCaptureEvent): Promise<void> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId }, select: { id: true, operationId: true, resultJson: true } });
+  if (!execution) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
+    ? execution.resultJson as { captureRequests?: Array<{ requirementId?: unknown; captureKey?: unknown }> }
+    : {};
+  const active = stored.captureRequests?.some((request) => request.requirementId === input.requirementId && request.captureKey === input.captureKey);
+  if (!active) return;
+  await prisma.askExecutionEvent.create({
+    data: { executionId, eventType: `CAPTURE_${input.event}`, metadataJson: asInputJson({ requirementId: input.requirementId, captureKey: input.captureKey }) },
+  });
+  askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: input.event });
+}
+
+export async function recordAskCaptureFailure(executionId: string, outcome: 'CONFLICT' | 'PERMISSION_DENIED' | 'RESUME_FAILED'): Promise<void> {
+  const execution = await prisma.askExecution.findUnique({ where: { id: executionId }, select: { operationId: true } });
+  if (execution) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome });
+}
+
+export async function refreshAskExecutionAfterConflict(userId: string, executionId: string): Promise<AskExecutionResponse> {
+  const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
+  if (!execution || !execution.propertyId) {
+    const error = new Error('Ask execution not found.');
+    (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
+    throw error;
+  }
+  await ensurePropertyAccess(userId, execution.propertyId);
+  const operation = resolveAskOperation(execution.message);
+  const result = await executeOperation({ userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation });
+  const saved = await prisma.askExecution.update({
+    where: { id: execution.id },
+    data: {
+      status: result.status,
+      reasonCode: result.reasonCode,
+      contextVersion: result.contextVersion,
+      parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
+      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, suggestions: result.suggestions }),
+      completedAt: terminalStatus(result.status) ? new Date() : null,
+    },
+  });
+  await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CONTEXT_CONFLICT_REFRESHED', metadataJson: asInputJson({ contextVersion: result.contextVersion }) } });
+  if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 

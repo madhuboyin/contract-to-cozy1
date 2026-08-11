@@ -34,3 +34,23 @@ spec:
           annotations:
             summary: Ask remote generation failures are elevated
             description: More than 20% of enabled remote guidance calls have failed for fifteen minutes; deterministic Ask remains available.
+        - alert: AskInlineCaptureResumeSuccessLow
+          expr: >-
+            sum(increase(ask_inline_captures_total{outcome="RESUMED"}[1h]))
+            / clamp_min(sum(increase(ask_inline_captures_total{outcome=~"RESUMED|RESUME_FAILED"}[1h])), 1) < 0.99
+            and sum(increase(ask_inline_captures_total{outcome=~"RESUMED|RESUME_FAILED"}[1h])) >= 20
+          for: 30m
+          labels: { severity: warning, team: platform, capability: ask }
+          annotations:
+            summary: Ask inline capture resume success is below target
+            description: Fewer than 99% of inline captures resumed their original Ask execution during a material sample window.
+        - alert: AskRepeatedCapturePromptRateHigh
+          expr: >-
+            sum(increase(ask_inline_captures_total{outcome="REPEATED_PROMPT"}[1h]))
+            / clamp_min(sum(increase(ask_inline_captures_total{outcome="RESUMED"}[1h])), 1) > 0.01
+            and sum(increase(ask_inline_captures_total{outcome="RESUMED"}[1h])) >= 20
+          for: 30m
+          labels: { severity: warning, team: product-platform, capability: ask }
+          annotations:
+            summary: Ask repeated capture prompts are elevated
+            description: More than 1% of resumed inline captures immediately asked for the same detail again.

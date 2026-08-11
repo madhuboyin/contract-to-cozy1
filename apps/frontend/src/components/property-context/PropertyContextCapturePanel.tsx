@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
-import type { FeatureContextCaptureResult, FeatureContextEvaluation, ScalarCaptureInputSchema } from './featureContextTypes';
+import type { FeatureContextCaptureResult, FeatureContextEvaluation } from './featureContextTypes';
+import { CaptureFieldControl } from './CaptureFieldControl';
 import { useFeatureContextCapture } from './useFeatureContextCapture';
 
 export function PropertyContextCapturePanel({
@@ -109,7 +110,17 @@ export function PropertyContextCapturePanel({
   const fieldIsMissing = (field: { key: string; required: boolean }) => {
     if (!field.required) return false;
     const value = groupDraft[field.key];
-    return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+    if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) return true;
+    const schemaField = (schema.type === 'GROUP' || schema.type === 'RELATIONAL_UPDATE')
+      ? schema.fields.find((candidate) => candidate.key === field.key)
+      : schema.type === 'RELATIONAL_SELECT_CREATE'
+        ? schema.createFields.find((candidate) => candidate.key === field.key)
+        : undefined;
+    if (schemaField?.inputSchema.type !== 'APPROXIMATE_DATE') return false;
+    if (typeof value !== 'object' || Array.isArray(value)) return true;
+    const date = value as { precision?: string; value?: string; rangeEnd?: string };
+    if (date.precision === 'UNKNOWN') return !requirement.capture.allowNotSure;
+    return !date.value || (date.precision === 'RANGE' && !date.rangeEnd);
   };
 
   const notSureGroupAnswer = () => schema.type === 'GROUP'
@@ -154,11 +165,12 @@ export function PropertyContextCapturePanel({
             <button type="submit" disabled={saving || !draft.trim()} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Save and continue</button>
           </form> : null}
           {schema.type === 'GROUP' ? <form className="w-full space-y-4" onSubmit={(event) => { event.preventDefault(); void capture(groupDraft); }}>
-            {schema.fields.filter(fieldIsActive).map((field) => <StructuredFieldControl
+            {schema.fields.filter(fieldIsActive).map((field) => <CaptureFieldControl
               key={field.key}
               field={field}
               value={groupDraft[field.key]}
               disabled={saving}
+              allowNotSure={requirement.capture.allowNotSure}
               onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))}
             />)}
             <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{stale || conflicted ? 'Confirm and continue' : 'Save and continue'}</button>
@@ -176,7 +188,7 @@ export function PropertyContextCapturePanel({
               <button type="submit" disabled={saving || !selectedEntityId} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Use selected record</button>
             </form> : null}
             {relationalMode === 'CREATE' ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void capture({ mode: 'CREATE', values: groupDraft }); }}>
-              {schema.createFields.map((field) => <StructuredFieldControl key={field.key} field={field} value={groupDraft[field.key]} disabled={saving} onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))} />)}
+              {schema.createFields.map((field) => <CaptureFieldControl key={field.key} field={field} value={groupDraft[field.key]} disabled={saving} allowNotSure={requirement.capture.allowNotSure} onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))} />)}
               <button type="submit" disabled={saving || schema.createFields.some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Add and continue</button>
             </form> : null}
           </div> : null}
@@ -184,16 +196,17 @@ export function PropertyContextCapturePanel({
             event.preventDefault();
             void capture({ mode: 'UPDATE', entityId: schema.entityId, values: groupDraft });
           }}>
-            {schema.fields.filter(fieldIsActive).map((field) => <StructuredFieldControl
+            {schema.fields.filter(fieldIsActive).map((field) => <CaptureFieldControl
               key={field.key}
               field={field}
               value={groupDraft[field.key]}
               disabled={saving}
+              allowNotSure={requirement.capture.allowNotSure}
               onChange={(value) => setGroupDraft((current) => ({ ...current, [field.key]: value }))}
             />)}
             <button type="submit" disabled={saving || schema.fields.filter(fieldIsActive).some(fieldIsMissing)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">{schema.updateLabel}</button>
           </form> : null}
-          {requirement.capture.allowNotSure ? <button type="button" disabled={saving} onClick={() => void capture(schema.type === 'GROUP' ? notSureGroupAnswer() : null)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Not sure</button> : null}
+          {requirement.capture.allowNotSure && schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' ? <button type="button" disabled={saving} onClick={() => void capture(schema.type === 'GROUP' ? notSureGroupAnswer() : null)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Not sure</button> : null}
           {enhancement ? <button type="button" disabled={saving} onClick={() => setDismissedVersion(evaluation.contextVersion)} className="rounded-lg px-3 py-2 text-sm font-medium underline">Skip for now</button> : null}
           {onDefer ? <button type="button" disabled={saving || deferring} onClick={() => void defer()} className="rounded-lg px-3 py-2 text-sm font-medium underline">
             {deferring ? 'Setting reminder…' : deferLabel}
@@ -205,35 +218,4 @@ export function PropertyContextCapturePanel({
       {deferError ? <p className="mt-2 text-xs text-red-700" role="alert">{deferError}</p> : null}
     </section>
   );
-}
-
-function StructuredFieldControl({
-  field,
-  value,
-  disabled,
-  onChange,
-}: {
-  field: { key: string; label: string; helpText?: string; required: boolean; inputSchema: ScalarCaptureInputSchema };
-  value: unknown;
-  disabled: boolean;
-  onChange: (value: unknown) => void;
-}) {
-  const schema = field.inputSchema;
-  return <fieldset className="rounded-xl border border-slate-200 bg-white/80 p-3">
-    <legend className="px-1 text-sm font-medium text-slate-900">{field.label}{field.required ? ' *' : ''}</legend>
-    {field.helpText ? <p className="mb-2 text-xs text-slate-600">{field.helpText}</p> : null}
-    <div className="flex flex-wrap gap-2">
-      {schema.type === 'BOOLEAN' ? [[schema.trueLabel, true], [schema.falseLabel, false]].map(([label, optionValue]) => <button key={String(optionValue)} type="button" aria-pressed={value === optionValue} disabled={disabled} onClick={() => onChange(optionValue)} className={`rounded-lg border px-3 py-2 text-sm font-medium ${value === optionValue ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{String(label)}</button>) : null}
-      {schema.type === 'SINGLE_SELECT' ? schema.options.map((option) => <button key={option.value} type="button" aria-pressed={value === option.value} disabled={disabled} onClick={() => onChange(option.value)} className={`rounded-lg border px-3 py-2 text-sm font-medium ${value === option.value ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{option.label}</button>) : null}
-      {schema.type === 'MULTI_SELECT' ? schema.options.map((option) => {
-        const selected = Array.isArray(value) && value.includes(option.value);
-        return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled} onClick={() => {
-          const current = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-          onChange(selected ? current.filter((item) => item !== option.value) : [...current, option.value].slice(0, schema.maxItems));
-        }} className={`rounded-lg border px-3 py-2 text-sm font-medium ${selected ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}>{option.label}</button>;
-      }) : null}
-      {schema.type === 'INTEGER' || schema.type === 'DECIMAL' ? <input aria-label={field.label} type="number" step={schema.type === 'INTEGER' ? 1 : 'any'} min={schema.min} max={schema.max} value={typeof value === 'number' ? value : ''} disabled={disabled} onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))} className="rounded-lg border bg-white px-3 py-2 text-sm" /> : null}
-      {schema.type === 'SHORT_TEXT' ? <input aria-label={field.label} value={typeof value === 'string' ? value : ''} maxLength={schema.maxLength} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="rounded-lg border bg-white px-3 py-2 text-sm" /> : null}
-    </div>
-  </fieldset>;
 }

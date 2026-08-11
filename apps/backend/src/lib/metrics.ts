@@ -76,6 +76,13 @@ export const askRetentionDeletionsTotal = new Counter({
   registers: [register],
 });
 
+export const askInlineCapturesTotal = new Counter({
+  name: 'ask_inline_captures_total',
+  help: 'Ask inline capture lifecycle outcomes by registered operation',
+  labelNames: ['operation', 'outcome'] as const,
+  registers: [register],
+});
+
 // ─── Security metrics ────────────────────────────────────────────────────────
 
 export const securityTokenReuseTotal = new Counter({

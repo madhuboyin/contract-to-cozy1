@@ -1,5 +1,6 @@
 import {
   InventoryCoverageEvidenceStatus,
+  HomeEventDatePrecision,
   InventoryItemCategory,
   InventoryItemCondition,
   Prisma,
@@ -74,6 +75,71 @@ function parseDateOnly(values: Record<string, unknown>, key: string): Date {
   return date;
 }
 
+type ApproximateDateValue = {
+  precision: HomeEventDatePrecision;
+  value?: string;
+  rangeEnd?: string;
+};
+
+function parseIsoDate(value: string, key: string): Date {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error(`${key} is not a valid date.`);
+  const today = new Date();
+  today.setUTCHours(23, 59, 59, 999);
+  if (date > today) throw new Error(`${key} cannot be in the future.`);
+  return date;
+}
+
+export function parseApproximateDate(
+  values: Record<string, unknown>,
+  key: string,
+  required = false,
+): { date: Date | null; precision: HomeEventDatePrecision | null; rangeEnd: Date | null } {
+  const raw = values[key];
+  if (raw === undefined || raw === null || raw === '') {
+    if (required) throw new Error(`${key} is required.`);
+    return { date: null, precision: null, rangeEnd: null };
+  }
+  if (typeof raw === 'string') return { date: parseIsoDate(raw, key), precision: HomeEventDatePrecision.EXACT_DATE, rangeEnd: null };
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`${key} must include a date and precision.`);
+  const candidate = raw as Partial<ApproximateDateValue>;
+  if (!candidate.precision || !Object.values(HomeEventDatePrecision).includes(candidate.precision)) throw new Error(`${key} has an invalid precision.`);
+  if (candidate.precision === HomeEventDatePrecision.UNKNOWN) return { date: null, precision: HomeEventDatePrecision.UNKNOWN, rangeEnd: null };
+  if (typeof candidate.value !== 'string') throw new Error(`${key} requires a date value.`);
+  let normalized = candidate.value;
+  if (candidate.precision === HomeEventDatePrecision.YEAR) {
+    if (!/^\d{4}$/.test(normalized)) throw new Error(`${key} year must use YYYY.`);
+    normalized = `${normalized}-01-01`;
+  } else if (candidate.precision === HomeEventDatePrecision.MONTH) {
+    if (!/^\d{4}-\d{2}$/.test(normalized)) throw new Error(`${key} month must use YYYY-MM.`);
+    normalized = `${normalized}-01`;
+  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw new Error(`${key} date must use YYYY-MM-DD.`);
+  }
+  const date = parseIsoDate(normalized, key);
+  if (candidate.precision !== HomeEventDatePrecision.RANGE) return { date, precision: candidate.precision, rangeEnd: null };
+  if (typeof candidate.rangeEnd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(candidate.rangeEnd)) throw new Error(`${key} range needs an end date.`);
+  const rangeEnd = parseIsoDate(candidate.rangeEnd, `${key} range end`);
+  if (rangeEnd < date) throw new Error(`${key} range end cannot be before its start.`);
+  return { date, precision: candidate.precision, rangeEnd };
+}
+
+function approximateDateCurrentValue(
+  value: Date | null,
+  precision: HomeEventDatePrecision | null,
+  rangeEnd: Date | null,
+): ApproximateDateValue | undefined {
+  if (!value && precision !== HomeEventDatePrecision.UNKNOWN) return undefined;
+  const resolvedPrecision = precision ?? HomeEventDatePrecision.EXACT_DATE;
+  if (resolvedPrecision === HomeEventDatePrecision.UNKNOWN) return { precision: resolvedPrecision };
+  const iso = value!.toISOString().slice(0, 10);
+  return {
+    precision: resolvedPrecision,
+    value: resolvedPrecision === HomeEventDatePrecision.YEAR ? iso.slice(0, 4) : resolvedPrecision === HomeEventDatePrecision.MONTH ? iso.slice(0, 7) : iso,
+    ...(resolvedPrecision === HomeEventDatePrecision.RANGE && rangeEnd ? { rangeEnd: rangeEnd.toISOString().slice(0, 10) } : {}),
+  };
+}
+
 export interface RelationalCaptureResolution {
   inputSchema: RelationalCaptureInputSchema;
   title: string;
@@ -101,7 +167,11 @@ export async function resolveRelationalCaptureSchema(
         name: true,
         condition: true,
         installedOn: true,
+        installedOnPrecision: true,
+        installedOnRangeEnd: true,
         purchasedOn: true,
+        purchasedOnPrecision: true,
+        purchasedOnRangeEnd: true,
         replacementCostCents: true,
         coverageEvidenceStatus: true,
         insurancePolicyId: true,
@@ -161,8 +231,8 @@ export async function resolveRelationalCaptureSchema(
         fields,
         currentValues: {
           condition: item.condition,
-          installedOn: item.installedOn?.toISOString().slice(0, 10) ?? '',
-          purchasedOn: item.purchasedOn?.toISOString().slice(0, 10) ?? '',
+          installedOn: approximateDateCurrentValue(item.installedOn, item.installedOnPrecision, item.installedOnRangeEnd),
+          purchasedOn: approximateDateCurrentValue(item.purchasedOn, item.purchasedOnPrecision, item.purchasedOnRangeEnd),
           replacementValueUsd: item.replacementCostCents ? item.replacementCostCents / 100 : undefined,
           coverageChoice,
         },
@@ -246,12 +316,18 @@ async function updateInventoryItemLifecycle(
   }
   const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
   if (!item) throw new Error('The selected inventory item does not belong to this property.');
+  const installed = parseApproximateDate(values, 'installedOn');
+  const purchased = parseApproximateDate(values, 'purchasedOn');
   await tx.inventoryItem.update({
     where: { id: item.id },
     data: {
       condition: condition as InventoryItemCondition,
-      installedOn: parseOptionalDateOnly(values, 'installedOn'),
-      purchasedOn: parseOptionalDateOnly(values, 'purchasedOn'),
+      installedOn: installed.date,
+      installedOnPrecision: installed.precision,
+      installedOnRangeEnd: installed.rangeEnd,
+      purchasedOn: purchased.date,
+      purchasedOnPrecision: purchased.precision,
+      purchasedOnRangeEnd: purchased.rangeEnd,
       sourceType: 'MANUAL',
       verificationSource: 'PROPERTY_CONTEXT_INLINE',
     },
@@ -301,9 +377,15 @@ async function updateInventoryItemCoverageLifecycle(
   }
   const item = await tx.inventoryItem.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
   if (!item) throw new Error('The selected inventory item does not belong to this property.');
+  const installed = parseApproximateDate(values, 'installedOn', true);
   await tx.inventoryItem.update({
     where: { id: item.id },
-    data: { condition: condition as InventoryItemCondition, installedOn: parseDateOnly(values, 'installedOn') },
+    data: {
+      condition: condition as InventoryItemCondition,
+      installedOn: installed.date,
+      installedOnPrecision: installed.precision,
+      installedOnRangeEnd: installed.rangeEnd,
+    },
   });
   return { entityType: 'INVENTORY_ITEM', entityId: item.id, created: false };
 }

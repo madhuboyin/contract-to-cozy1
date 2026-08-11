@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.5"
+version: "1.6"
 date: "August 11, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.5 |
+| Version | 1.6 |
 | Date | August 11, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -73,7 +73,7 @@ This FRD is the living product and implementation contract for Ask. The reposito
 | --- | --- | --- |
 | Phase 0 — Foundation | Repository closure implemented | Formal privacy/domain-owner approval and production baseline sign-off remain launch governance gates; code now includes governed registration, negative CI, retention enforcement, controls, ownership, and cost/latency instrumentation |
 | Phase 1 — Deterministic record queries | Repository closure implemented for all six launch operations and shared UX | Full database-backed golden accuracy/latency certification, restart/horizontal-scale evidence, and desktop/mobile E2E launch sign-off remain operational certification gates |
-| Phase 2 — Inline capture | Partially implemented across refrigerator, refinance, savings, ownership costs, sell/hold/rent, inventory, property summary, Home Actions, and coverage | Complete conflict/stale/not-sure E2E matrices, approximate-date UX certification, and repeated-prompt measurement |
+| Phase 2 — Inline capture | Repository closure implemented across refrigerator, refinance, savings, ownership costs, sell/hold/rent, inventory, property summary, Home Actions, and coverage | Apply the user-managed inventory date-precision schema change, retain desktop/mobile acceptance evidence, and certify ≥99% resume success plus ≤1% repeated-prompt rate on a material production-like sample |
 | Phase 3 — Capability discovery | Backend slice implemented | Semantic breadth, top-1 ranking certification, related-capability continuity, and unavailable-tool E2E coverage |
 | Phase 4 — Confirmed actions and monitors | Partially implemented for maintenance task creation and completion, refinance monitoring, and household invitations | Generic adapter extraction, remaining maintenance update/reschedule/assignment/archive commands, additional monitors, edit/pause/stop/reverse paths, and complete role matrices |
 | Phase 5 — Decision intelligence | Partially implemented for sell/hold/rent, ownership costs, refrigerator replacement, and coverage review | Remaining priority analyses and category expansion |
@@ -1729,6 +1729,8 @@ Exit criteria:
 - captured values write only through canonical owners;
 - successful capture resumes automatically in ≥ 99% of tests;
 - repeated prompt rate stays below gate.
+
+**Implementation status — August 11, 2026:** Repository closure implemented. Ask and Property Context now share the same typed field renderer; inventory lifecycle capture preserves exact-day, month, year, range, or unknown precision instead of manufacturing January 1 dates; refrigerator and refinance captures write through their canonical owners and automatically resume; refinance retries recover after a post-write resume failure; context-version conflicts refresh the execution and retain the homeowner draft; field-level not-sure, permission boundaries, capture receipts, execution lineage, durable full-form fallbacks, and capture lifecycle telemetry are wired. Desktop/mobile Ask acceptance fixtures cover refrigerator, refinance, conflict refresh, not-sure, permission denial, and fallback behavior. Production rollout still requires the user-managed schema application and recorded operational evidence that resume success remains at least 99% and repeated same-detail prompts remain at or below 1% over a material sample.
 
 ### Phase 3 — Capability discovery and guided navigation
 

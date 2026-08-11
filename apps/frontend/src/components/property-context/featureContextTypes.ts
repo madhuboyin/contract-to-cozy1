@@ -11,7 +11,16 @@ export type ScalarCaptureInputSchema =
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
   | { type: 'INTEGER' | 'DECIMAL'; min?: number; max?: number; unit?: string }
-  | { type: 'SHORT_TEXT'; maxLength: number };
+  | { type: 'SHORT_TEXT'; maxLength: number }
+  | { type: 'APPROXIMATE_DATE'; allowedPrecisions?: CaptureDatePrecision[]; allowFuture?: boolean };
+
+export type CaptureDatePrecision = 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';
+
+export type ApproximateDateCaptureValue = {
+  precision: CaptureDatePrecision;
+  value?: string;
+  rangeEnd?: string;
+};
 
 export type StructuredCaptureField = {
   key: string;

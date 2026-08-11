@@ -296,7 +296,7 @@ const relationalDefinitions: ContextCaptureDefinition[] = [
     inputSchema: {
       type: 'RELATIONAL_UPDATE', entityType: 'INVENTORY_ITEM', entityId: '', updateLabel: 'Save and continue', currentValues: {},
       fields: [
-        { key: 'installedOn', label: 'Approximate installation date', helpText: 'Use YYYY-MM-DD. January 1 is fine when only the year is known.', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        { key: 'installedOn', label: 'Approximate installation date', helpText: 'An exact day, month, year, or date range is enough.', required: true, inputSchema: { type: 'APPROXIMATE_DATE' } },
         { key: 'condition', label: 'Current condition', required: true, inputSchema: enumSchema(['NEW', 'GOOD', 'FAIR', 'POOR']) },
       ],
     },
@@ -375,11 +375,11 @@ const relationalDefinitions: ContextCaptureDefinition[] = [
       currentValues: {},
       fields: [
         { key: 'condition', label: 'Current condition', required: true, inputSchema: enumSchema(['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN']) },
-        { key: 'installedOn', label: 'Installed date', helpText: 'Optional. Use YYYY-MM-DD.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
-        { key: 'purchasedOn', label: 'Purchase date', helpText: 'Optional. Use YYYY-MM-DD.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+        { key: 'installedOn', label: 'Installed date', helpText: 'Optional. An exact day, month, year, or date range is enough.', required: false, inputSchema: { type: 'APPROXIMATE_DATE' } },
+        { key: 'purchasedOn', label: 'Purchase date', helpText: 'Optional. An exact day, month, year, or date range is enough.', required: false, inputSchema: { type: 'APPROXIMATE_DATE' } },
       ],
     },
-    allowNotSure: false,
+    allowNotSure: true,
     canonicalOwner: 'InventoryItem',
     actionKey: 'UPDATE_INVENTORY_ITEM_LIFECYCLE',
     sensitivity: 'STANDARD',
