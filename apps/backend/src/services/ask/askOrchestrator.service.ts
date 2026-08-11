@@ -38,6 +38,7 @@ import { HouseholdService } from '../household.service';
 import { HomeSavingsService } from '../homeSavings.service';
 import { HiddenAssetService } from '../hiddenAssets.service';
 import { savingsBenefitsUnifiedService } from '../savingsBenefitsUnified.service';
+import { SellHoldRentService } from '../sellHoldRent.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_RESULT_ITEMS = 50;
@@ -46,6 +47,7 @@ const mortgageRateService = new MortgageRateService();
 const householdService = new HouseholdService();
 const homeSavingsService = new HomeSavingsService();
 const hiddenAssetService = new HiddenAssetService();
+const sellHoldRentService = new SellHoldRentService();
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -646,6 +648,141 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   };
 }
 
+async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
+  const [access, context, analysis] = await Promise.all([
+    ensurePropertyAccess(userId, propertyId),
+    evaluateFeatureContext(propertyId, userId, { featureKey: 'SELL_HOLD_RENT', operationKey: 'VIEW_ANALYSIS' }),
+    sellHoldRentService.estimate(propertyId, { years: 5 }, userId),
+  ]);
+
+  const activeRequirement = context.requirements[0];
+  const canImproveContext = access.role !== HouseholdRole.VIEWER;
+  const captureSupported = activeRequirement
+    && canImproveContext
+    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
+    && activeRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
+  const captureRequests: AskCaptureRequest[] = captureSupported ? [{
+    requirementId: activeRequirement.requirementId,
+    captureKey: activeRequirement.capture.captureKey,
+    classification: activeRequirement.classification,
+    state: activeRequirement.state,
+    title: activeRequirement.capture.title,
+    question: activeRequirement.capture.question,
+    helpText: activeRequirement.capture.helpText ?? null,
+    inputSchema: activeRequirement.capture.inputSchema,
+    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
+    allowNotSure: activeRequirement.capture.allowNotSure,
+    sensitivity: activeRequirement.capture.sensitivity,
+    destinationLabel: 'Saved to this home’s Property Context',
+    confirmationText: null,
+    expectedContextVersion: context.contextVersion,
+  }] : [];
+
+  const years = analysis.input.years;
+  const winnerLabel = analysis.recommendation.winner === 'SELL'
+    ? 'selling'
+    : analysis.recommendation.winner === 'HOLD'
+      ? 'holding'
+      : 'renting the home out';
+  const debtKnown = analysis.current.mortgageBalanceNow != null
+    && analysis.current.mortgageAnnualRate != null
+    && analysis.current.remainingTermMonths != null;
+  const lowConfidence = analysis.recommendation.confidence !== 'HIGH';
+  const permissionLimited = Boolean(activeRequirement && !canImproveContext);
+  const contextLimited = captureRequests.length > 0 || permissionLimited;
+
+  const rows = [{
+    id: 'sell',
+    values: {
+      path: 'Sell at the end of the horizon',
+      primary: `${money(analysis.scenarios.sell.netProceeds)} modeled net proceeds`,
+      details: `${money(analysis.scenarios.sell.projectedSalePrice)} projected price · ${money(analysis.scenarios.sell.sellingCosts)} selling costs`,
+    },
+  }, {
+    id: 'hold',
+    values: {
+      path: 'Continue holding',
+      primary: `${money(analysis.scenarios.hold.net)} modeled net change`,
+      details: `${money(analysis.scenarios.hold.appreciationGain)} appreciation · ${money(analysis.scenarios.hold.totalOwnershipCosts)} ownership and modeled interest costs`,
+    },
+  }, {
+    id: 'rent',
+    values: {
+      path: 'Rent the home out',
+      primary: `${money(analysis.scenarios.rent.net)} modeled net change`,
+      details: `${money(analysis.scenarios.rent.totalRentalIncome)} gross rent · ${money(analysis.scenarios.rent.rentalOverheads.vacancyLoss + analysis.scenarios.rent.rentalOverheads.managementFees)} vacancy and management overhead`,
+    },
+  }];
+
+  const limitations = [
+    `Home value ${money(analysis.current.homeValueNow)}`,
+    `Rent ${money(analysis.current.monthlyRentNow)}/month`,
+    `Appreciation ${(analysis.current.appreciationRate * 100).toFixed(1)}%/year`,
+    `Selling costs ${(analysis.current.sellingCostRate * 100).toFixed(1)}%`,
+    debtKnown ? 'Mortgage modeled from the home record' : 'Mortgage effects are not fully modeled',
+  ];
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY',
+    id: 'sell-hold-rent-summary',
+    title: `Here is the current ${years}-year sell, hold, and rent comparison`,
+    body: `The model’s directional indicator currently points to ${winnerLabel}, but this is not a conclusion that now is the right time to sell. The sell figure is projected liquidity after selling costs and a mortgage payoff when known; hold and rent figures are modeled changes over the horizon, so the totals should not be treated as directly interchangeable investment returns. Confidence is ${analysis.recommendation.confidence.toLowerCase()}.`,
+    tone: lowConfidence || contextLimited ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-sell-hold-rent', label: 'Explore and adjust scenarios', href: workspaceHref, style: 'PRIMARY' }],
+  }, {
+    type: 'TABLE',
+    id: 'sell-hold-rent-comparison',
+    title: `${years}-year scenario snapshot`,
+    description: 'All amounts are planning estimates. Different scenario rows describe different economic outcomes and should be reviewed with the assumptions below.',
+    columns: [{ key: 'path', label: 'Path' }, { key: 'primary', label: 'Modeled outcome' }, { key: 'details', label: 'Key components' }],
+    rows,
+    actions: [],
+  }, {
+    type: 'GROUPED_LIST',
+    id: 'sell-hold-rent-assumptions',
+    title: 'Assumptions that materially affect the answer',
+    description: 'Adjust these in Sell / Hold / Rent before relying on the comparison for a major decision.',
+    sections: [{
+      id: 'assumptions', title: 'Current planning inputs', count: limitations.length,
+      items: limitations.map((title, index) => ({ id: `assumption-${index + 1}`, title, description: null, meta: [], status: null, href: workspaceHref })),
+    }],
+    actions: [],
+  }, {
+    type: 'EVIDENCE',
+    id: 'sell-hold-rent-evidence',
+    title: 'Sources used',
+    items: analysis.meta.dataSources.map((source, index) => ({
+      label: index === 0 ? 'Ownership costs and forecast' : `Planning input source ${index + 1}`,
+      source,
+      observedAt: analysis.meta.generatedAt,
+    })),
+  }, {
+    type: 'BOUNDARY',
+    id: 'sell-hold-rent-boundary',
+    title: 'Planning comparison—not financial, tax, legal, or valuation advice',
+    body: 'A sale decision can depend on current local demand, a professional valuation, transaction costs, taxes, financing, rental rules, landlord workload, replacement housing, and personal timing. Validate those inputs with qualified professionals before committing.',
+    severity: 'INFO',
+    suggestions: [],
+  }];
+
+  return {
+    status: contextLimited || lowConfidence || !debtKnown ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: captureRequests.length
+      ? 'SELL_HOLD_RENT_CONTEXT_OPTIONAL'
+      : permissionLimited
+        ? 'SELL_HOLD_RENT_CONTEXT_WRITE_PERMISSION_REQUIRED'
+        : lowConfidence || !debtKnown
+          ? 'SELL_HOLD_RENT_ESTIMATED_INPUTS'
+          : undefined,
+    contextVersion: context.contextVersion,
+    captureRequests,
+    blocks,
+    suggestions: permissionLimited
+      ? ['Ask a household owner or contributor to improve the property context', 'Open Sell / Hold / Rent']
+      : ['What assumptions matter most?', 'Open Sell / Hold / Rent', 'How much does this home cost each month?'],
+  };
+}
+
 async function refinanceAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const [profile, financialContext, marketSnapshot] = await Promise.all([
     getProfile(propertyId),
@@ -918,6 +1055,7 @@ async function executeOperation(input: { userId: string; sessionId: string; mess
     case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
+    case 'SELL_HOLD_RENT_ANALYSIS': return sellHoldRentAnalysisResult(input.userId, input.propertyId!);
     case 'HOUSEHOLD_INVITATION': return householdInvitationResult(input.userId, input.propertyId!, input.message);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
@@ -1031,7 +1169,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     }
     return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -1055,6 +1193,24 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       ...input,
       featureKey: 'HOME_SAVINGS',
       operationKey: 'RUN_ANALYSIS',
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({
+      userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation,
+    });
+    canonicalOwner = 'PropertyContext';
+  } else if (execution.operationId === 'SELL_HOLD_RENT_ANALYSIS') {
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: 'SELL_HOLD_RENT',
+      operationKey: 'VIEW_ANALYSIS',
     });
     if (!capture || typeof capture !== 'object' || Array.isArray(capture)
       || !('captureId' in capture) || typeof capture.captureId !== 'string'
