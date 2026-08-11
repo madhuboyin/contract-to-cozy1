@@ -73,6 +73,8 @@ Routing order is safety/negative boundary, registered deterministic rule, bounde
 
 Result synthesis is an optional presentation enhancement, not a reasoning or data-retrieval stage. It receives only a validated, redacted DTO projected from eligible typed result blocks. Actions, links, internal IDs, raw records, questions, context snapshots, confirmations, commands, boundaries, monitors, and workflow progress are excluded. Synthesis failures or unsupported numeric claims return the original deterministic result without failing Ask.
 
+Material refinance-rate and Maintenance deadline signals create deterministic Ask notification continuations before delivery. Each trigger uses a stable source identity to converge on one session/execution, stores typed signal parameters, and links the notification to `/dashboard/ask` with the selected property and exact session. The Ask result owns the explanation and domain deep link; the monitor/task domain remains the source of truth. Continuation failure is logged and degrades to the canonical domain URL.
+
 ## Retention and deletion
 
 - Ask sessions, raw messages, executions, execution events, capture receipts, and confirmation receipts expire together after 30 days by default.

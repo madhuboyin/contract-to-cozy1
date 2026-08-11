@@ -17,6 +17,7 @@ import { prisma } from '../lib/prisma';
 import { NotificationService } from './notification.service';
 import { areWorkerOutboundNotificationsEnabled } from '../config/workerExecutionPolicy';
 import { logger } from '../lib/logger';
+import { createAskNotificationContinuation } from './ask/askNotificationContinuation.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -86,13 +87,38 @@ export async function processMaintenanceReminders(options: {
           : daysUntilDue === 0
           ? 'due today'
           : `due ${dueAt.toLocaleDateString()} (in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'})`;
+      const domainActionUrl = `/dashboard/maintenance?propertyId=${encodeURIComponent(task.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=notification`;
+      let continuation: Awaited<ReturnType<typeof createAskNotificationContinuation>> | null = null;
+      try {
+        continuation = await createAskNotificationContinuation({
+          userId,
+          propertyId: task.propertyId,
+          triggerKey: `maintenance-deadline:${task.id}:${dueAt.toISOString()}`,
+          operationId: 'MAINTENANCE_STATUS',
+          question: `"${task.title}" is ${dueLabel}. Why does this matter, and what should I do next?`,
+          reasonCode: 'MAINTENANCE_DEADLINE_MONITOR_TRIGGERED',
+          title: `Maintenance attention: ${task.title}`,
+          body: `"${task.title}" is ${dueLabel}. Review the canonical task now to complete it, reschedule it, or correct the due date. Keeping the record current prevents missed work from remaining hidden in future home planning.`,
+          tone: daysUntilDue < 0 ? 'CRITICAL' : daysUntilDue <= MATERIAL_DEADLINE_DAYS ? 'CAUTION' : 'DEFAULT',
+          details: [
+            { label: 'What changed', value: dueLabel },
+            { label: 'Why it matters', value: 'The recorded maintenance obligation has entered its reminder window and may need completion, rescheduling, or correction' },
+            { label: 'Recommended next action', value: 'Review the task and record the current outcome or next due date' },
+          ],
+          domainAction: { id: 'open-maintenance-task', label: 'Open maintenance task', href: domainActionUrl },
+          parameters: { taskId: task.id, dueAt: dueAt.toISOString(), daysUntilDue, actionKey: task.actionKey ?? null },
+          suggestions: ['What maintenance is still pending?', `Help me review ${task.title}`],
+        });
+      } catch (error) {
+        logger.error({ err: error, taskId: task.id }, '[maintenance-reminders] Failed to create Ask continuation');
+      }
 
       const result = await NotificationService.create({
         userId,
         type: 'MAINTENANCE_TASK_REMINDER',
         title: `Maintenance reminder: ${task.title}`,
-        message: `"${task.title}" is ${dueLabel}.`,
-        actionUrl: `/dashboard/maintenance?propertyId=${encodeURIComponent(task.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=notification`,
+        message: `"${task.title}" is ${dueLabel}. Open Ask to see why it matters and review the recommended next action.`,
+        actionUrl: continuation?.actionUrl ?? domainActionUrl,
         entityType: 'PROPERTY_MAINTENANCE_TASK',
         entityId: task.id,
         category: isMaterial ? 'MATERIAL_DEADLINE' : 'MAINTENANCE',
@@ -103,6 +129,9 @@ export async function processMaintenanceReminders(options: {
           actionKey: task.actionKey ?? undefined,
           nextDueDate: dueAt.toISOString(),
           daysUntilDue,
+          askExecutionId: continuation?.executionId,
+          askSessionId: continuation?.sessionId,
+          domainActionUrl,
         },
       });
 

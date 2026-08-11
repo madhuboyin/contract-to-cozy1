@@ -546,7 +546,7 @@ function PendingWorkInbox({ items, loadingId, onResume }: { items: AskPendingWor
   );
 }
 
-export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string }) {
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string }) {
   const { selectedPropertyId } = usePropertyContext();
   const [sessionId, setSessionId] = useState('');
   const [executions, setExecutions] = useState<AskExecutionResponse[]>([]);
@@ -577,21 +577,27 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => {
     const controller = new AbortController();
     const key = sessionStorageKey(selectedPropertyId);
-    let nextSession = window.localStorage.getItem(key);
+    let nextSession = initialSessionId.trim() || window.localStorage.getItem(key);
     if (!nextSession) {
       nextSession = newId();
-      window.localStorage.setItem(key, nextSession);
     }
+    window.localStorage.setItem(key, nextSession);
     setSessionId(nextSession);
     setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
     setExecutions([]);
     setHistoryLoading(true);
     api.getAskSession(nextSession, { signal: controller.signal })
-      .then((response) => setExecutions('data' in response ? response.data?.executions ?? [] : []))
+      .then((response) => {
+        const loaded = 'data' in response ? response.data?.executions ?? [] : [];
+        setExecutions(loaded);
+        if (initialExecutionId && loaded.some((execution) => execution.executionId === initialExecutionId)) {
+          window.setTimeout(() => document.getElementById(`ask-execution-${initialExecutionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+        }
+      })
       .catch((caught) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) setExecutions([]); })
       .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
     return () => controller.abort();
-  }, [selectedPropertyId, initialQuestion]);
+  }, [selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId]);
 
   useEffect(() => {
     if (!initialQuestion) return;
@@ -701,7 +707,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         ) : (
           <div className="mx-auto max-w-3xl space-y-7">
             {executions.map((execution) => (
-              <article key={execution.executionId} className="space-y-3">
+              <article id={`ask-execution-${execution.executionId}`} key={execution.executionId} className="scroll-mt-6 space-y-3">
                 <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
                 <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
                   <div className="flex items-center gap-2 text-xs font-semibold text-teal-800"><Sparkles className="h-3.5 w-3.5" />Cozy response{execution.property ? ` · ${execution.property.label}` : ''}</div>

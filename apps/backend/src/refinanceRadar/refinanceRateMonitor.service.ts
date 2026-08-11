@@ -10,6 +10,8 @@ import { APIError } from '../middleware/error.middleware';
 import { NotificationService } from '../services/notification.service';
 import { getRefinanceAlertPreference, updateRefinanceAlertPreference } from './refinanceAlertPreference.service';
 import { resolvePropertyAccess } from '../services/propertyAccess.service';
+import { createAskNotificationContinuation } from '../services/ask/askNotificationContinuation.service';
+import { logger } from '../lib/logger';
 
 export interface RefinanceRateMonitorDTO {
   id: string;
@@ -116,16 +118,44 @@ export async function evaluateRefinanceRateMonitors(snapshot: {
     const thresholdPct = monitor.thresholdBps / 100;
     const shouldTrigger = observedRate <= thresholdPct && monitor.lastTriggeredSnapshotId !== snapshot.id;
     if (shouldTrigger) {
+      const domainActionUrl = `/dashboard/properties/${monitor.propertyId}/tools/mortgage-refinance-radar?from=notification&monitorId=${encodeURIComponent(monitor.id)}&snapshotId=${encodeURIComponent(snapshot.id)}`;
+      const productLabel = monitor.product === RefinanceRateMonitorProduct.FIXED_15_YEAR ? '15-year' : '30-year';
+      const difference = thresholdPct - observedRate;
+      let continuation: Awaited<ReturnType<typeof createAskNotificationContinuation>> | null = null;
+      try {
+        continuation = await createAskNotificationContinuation({
+          userId: monitor.userId,
+          propertyId: monitor.propertyId,
+          triggerKey: `refinance-rate-monitor:${monitor.id}:${snapshot.id}`,
+          operationId: 'REFINANCE_ANALYSIS',
+          question: `My ${productLabel} mortgage benchmark reached ${observedRate.toFixed(3)}%. What changed, why does it matter, and what should I do next?`,
+          reasonCode: 'REFINANCE_RATE_MONITOR_TRIGGERED',
+          title: 'Your mortgage-rate threshold was reached',
+          body: `The governed ${productLabel} benchmark is ${observedRate.toFixed(3)}%, ${difference.toFixed(3)} percentage points below your ${thresholdPct.toFixed(3)}% threshold. This is a benchmark signal, not a lender offer. Rerun the personalized break-even review using your current mortgage before contacting lenders.`,
+          tone: 'POSITIVE',
+          details: [
+            { label: 'What changed', value: `${productLabel} benchmark reached ${observedRate.toFixed(3)}%` },
+            { label: 'Why it matters', value: `It crossed your ${thresholdPct.toFixed(3)}% review threshold by ${difference.toFixed(3)} percentage points` },
+            { label: 'Recommended next action', value: 'Rerun the personalized refinance and break-even review with current mortgage facts' },
+            { label: 'Source', value: `${snapshot.source}${snapshot.date ? ` · ${snapshot.date}` : ''}` },
+          ],
+          domainAction: { id: 'open-refinance-radar', label: 'Open Mortgage Refinance Radar', href: domainActionUrl },
+          parameters: { monitorId: monitor.id, snapshotId: snapshot.id, benchmarkRatePct: observedRate, thresholdPct, source: snapshot.source, sourceRef: snapshot.sourceRef, observedAt: snapshot.date },
+          suggestions: ['Is refinancing worth reviewing now?', 'What mortgage details affect my break-even point?'],
+        });
+      } catch (error) {
+        logger.error({ err: error, monitorId: monitor.id, snapshotId: snapshot.id }, '[refinance-rate-monitor] Failed to create Ask continuation');
+      }
       await NotificationService.create({
         userId: monitor.userId,
         deduplicationKey: `refinance-rate-monitor:${monitor.id}:${snapshot.id}`,
         type: 'REFINANCE_RATE_THRESHOLD_REACHED',
         title: 'Your mortgage-rate threshold was reached',
-        message: `The governed ${monitor.product === RefinanceRateMonitorProduct.FIXED_15_YEAR ? '15-year' : '30-year'} benchmark is ${observedRate.toFixed(3)}%, ${(thresholdPct - observedRate).toFixed(3)} percentage points below your ${thresholdPct.toFixed(3)}% threshold. This threshold crossing is why you were notified; open Mortgage Refinance Radar to rerun the personalized break-even review before contacting lenders.`,
-        actionUrl: `/dashboard/properties/${monitor.propertyId}/tools/mortgage-refinance-radar?from=notification&monitorId=${encodeURIComponent(monitor.id)}&snapshotId=${encodeURIComponent(snapshot.id)}`,
+        message: `The governed ${productLabel} benchmark is ${observedRate.toFixed(3)}%, ${difference.toFixed(3)} percentage points below your ${thresholdPct.toFixed(3)}% threshold. Open Ask to see what changed, why it matters, and the recommended review step.`,
+        actionUrl: continuation?.actionUrl ?? domainActionUrl,
         entityType: 'REFINANCE_RATE_MONITOR', entityId: monitor.id,
         category: 'REFINANCE', urgency: 'MATERIAL',
-        metadata: { propertyId: monitor.propertyId, monitorId: monitor.id, snapshotId: snapshot.id, benchmarkRatePct: observedRate, thresholdPct, source: snapshot.source, sourceRef: snapshot.sourceRef, observedAt: snapshot.date, why: 'GOVERNED_BENCHMARK_AT_OR_BELOW_USER_THRESHOLD', nextAction: 'RERUN_PERSONALIZED_REFINANCE_REVIEW', askQuestion: 'Is refinancing worth reviewing now based on my current mortgage and this rate snapshot?' },
+        metadata: { propertyId: monitor.propertyId, monitorId: monitor.id, snapshotId: snapshot.id, benchmarkRatePct: observedRate, thresholdPct, source: snapshot.source, sourceRef: snapshot.sourceRef, observedAt: snapshot.date, why: 'GOVERNED_BENCHMARK_AT_OR_BELOW_USER_THRESHOLD', nextAction: 'RERUN_PERSONALIZED_REFINANCE_REVIEW', askExecutionId: continuation?.executionId, askSessionId: continuation?.sessionId, domainActionUrl },
       });
       triggered += 1;
     }

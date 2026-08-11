@@ -1,6 +1,15 @@
 import { resolveNotificationActionUrl } from '@/lib/notifications/destination';
 
 describe('resolveNotificationActionUrl', () => {
+  it('prefers a durable Ask continuation over the canonical entity fallback', () => {
+    expect(resolveNotificationActionUrl({
+      actionUrl: '/dashboard/maintenance?propertyId=property-1&taskId=task-1',
+      entityType: 'PROPERTY_MAINTENANCE_TASK',
+      entityId: 'task-1',
+      metadata: { propertyId: 'property-1', askSessionId: 'session-1', askExecutionId: 'execution-1' },
+    })).toBe('/dashboard/ask?propertyId=property-1&sessionId=session-1&executionId=execution-1&from=notification');
+  });
+
   test('routes maintenance entities to the selected task instead of a stale generic URL', () => {
     expect(resolveNotificationActionUrl({
       actionUrl: '/dashboard/properties/property-1/tools/guidance-overview',

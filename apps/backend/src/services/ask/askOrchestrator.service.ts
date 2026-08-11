@@ -3009,8 +3009,8 @@ function unsafeRestrictedResult(): AskOperationResult {
     reasonCode: 'ASK_SAFETY_BLOCKED',
     blocks: [{
       type: 'BOUNDARY', id: 'unsafe-restricted-boundary', title: 'I can’t help bypass safety, legal, or professional controls', severity: 'CAUTION',
-      body: 'I can help you understand the safe, documented path, prepare questions and records, or find the appropriate Contract to Cozy tool. I cannot help evade permits, disable safety equipment, conceal material facts, or guarantee a regulated approval or professional determination.',
-      suggestions: ['Review the safe permit or inspection path.', 'Open the relevant records and identify what is still unknown.', 'Consult the appropriate authority or qualified professional for a controlling determination.'],
+      body: 'I can help you understand the safe, documented path, prepare questions and records, or find the appropriate Contract to Cozy tool. I cannot help evade permits or inspections, disable safety equipment, conceal material facts, access another user’s private records, or guarantee a regulated, coverage, structural, or professional determination.',
+      suggestions: ['Review the safe permit, inspection, or policy-verification path.', 'Open only the records available for your selected home.', 'Consult the appropriate authority or qualified professional for a controlling determination.'],
     }],
     suggestions: ['What is required before my renovation can start?', 'Which home records should I verify?'],
   };
