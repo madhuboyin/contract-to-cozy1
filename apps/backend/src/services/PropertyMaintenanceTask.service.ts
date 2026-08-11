@@ -96,6 +96,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
           booking: true,
           warranty: true,
           inventoryItem: true,
+          room: true,
           seasonalChecklistItem: true,
         },
         orderBy: [

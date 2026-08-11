@@ -245,53 +245,246 @@ function needsPropertyResult(): AskOperationResult {
   };
 }
 
+type MaintenanceTimeframe = {
+  label: string;
+  matches: (date: Date) => boolean;
+};
+
+function safeTimezone(value: string | null | undefined): string {
+  if (!value) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date());
+    return value;
+  } catch {
+    return 'UTC';
+  }
+}
+
+function dateParts(value: Date, timeZone: string): { year: number; month: number; day: number; serial: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(value);
+  const number = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const year = number('year');
+  const month = number('month');
+  const day = number('day');
+  return { year, month, day, serial: Date.UTC(year, month - 1, day) };
+}
+
+function localDateKey(value: Date, timeZone: string): string {
+  const { year, month, day } = dateParts(value, timeZone);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function maintenanceDate(value: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', timeZone,
+  }).format(value);
+}
+
+function resolveMaintenanceTimeframe(message: string, now: Date, timeZone: string, purchaseDate: Date | null): { timeframe: MaintenanceTimeframe | null; missingPurchaseDate: boolean } {
+  const explicitDates = [...message.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map((match) => match[1]);
+  if (explicitDates.length >= 2) {
+    const [start, end] = explicitDates[0] <= explicitDates[1] ? explicitDates : [explicitDates[1], explicitDates[0]];
+    return { timeframe: { label: `${start} through ${end}`, matches: (date) => {
+      const key = localDateKey(date, timeZone);
+      return key >= start && key <= end;
+    } }, missingPurchaseDate: false };
+  }
+  if (/\bsince (?:i|we) (?:bought|purchased)|since (?:buying|purchasing)|since closing\b/i.test(message)) {
+    return purchaseDate
+      ? { timeframe: { label: `since ${maintenanceDate(purchaseDate, timeZone)}`, matches: (date) => date >= purchaseDate }, missingPurchaseDate: false }
+      : { timeframe: null, missingPurchaseDate: true };
+  }
+  const current = dateParts(now, timeZone);
+  if (/\btoday\b/i.test(message)) return {
+    timeframe: { label: 'today', matches: (date) => localDateKey(date, timeZone) === localDateKey(now, timeZone) }, missingPurchaseDate: false,
+  };
+  if (/\bthis week\b/i.test(message)) {
+    const weekdayName = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(now);
+    const weekday = Math.max(0, ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(weekdayName));
+    const start = current.serial - weekday * 86_400_000;
+    return { timeframe: { label: 'this week', matches: (date) => {
+      const serial = dateParts(date, timeZone).serial;
+      return serial >= start && serial < start + 7 * 86_400_000;
+    } }, missingPurchaseDate: false };
+  }
+  if (/\bthis month\b/i.test(message)) return {
+    timeframe: { label: 'this month', matches: (date) => {
+      const part = dateParts(date, timeZone);
+      return part.year === current.year && part.month === current.month;
+    } }, missingPurchaseDate: false,
+  };
+  if (/\blast year\b/i.test(message)) return {
+    timeframe: { label: 'last year', matches: (date) => dateParts(date, timeZone).year === current.year - 1 }, missingPurchaseDate: false,
+  };
+  if (/\bthis year\b/i.test(message)) return {
+    timeframe: { label: 'this year', matches: (date) => dateParts(date, timeZone).year === current.year }, missingPurchaseDate: false,
+  };
+  const rollingDays = message.match(/\blast\s+(30|90)\s+days?\b/i)?.[1];
+  if (rollingDays) {
+    const days = Number(rollingDays);
+    const cutoff = new Date(now.getTime() - days * 86_400_000);
+    return { timeframe: { label: `last ${days} days`, matches: (date) => date >= cutoff && date <= now }, missingPurchaseDate: false };
+  }
+  return { timeframe: null, missingPurchaseDate: false };
+}
+
+function maintenanceScopeTerms(message: string): string[] {
+  const aliases: Array<[RegExp, string[]]> = [
+    [/\b(?:hvac|furnace|air conditioner|heat pump|boiler)\b/i, ['hvac', 'furnace', 'air conditioner', 'heat pump', 'boiler']],
+    [/\b(?:roof|gutter|exterior)\b/i, ['roof', 'gutter', 'exterior']],
+    [/\b(?:plumbing|water heater|pipe|drain)\b/i, ['plumbing', 'water heater', 'pipe', 'drain']],
+    [/\b(?:electrical|breaker|panel|outlet)\b/i, ['electrical', 'breaker', 'panel', 'outlet']],
+    [/\b(?:refrigerator|fridge)\b/i, ['refrigerator', 'fridge']],
+    [/\b(?:seasonal|winter|spring|summer|fall|autumn)\b/i, ['seasonal', 'winter', 'spring', 'summer', 'fall', 'autumn']],
+    [/\b(?:safety|smoke detector|carbon monoxide|co detector)\b/i, ['safety', 'smoke detector', 'carbon monoxide', 'co detector']],
+  ];
+  return aliases.find(([pattern]) => pattern.test(message))?.[1] ?? [];
+}
+
+function maintenanceTaskText(task: Awaited<ReturnType<typeof PropertyMaintenanceTaskService.getTasksForProperty>>[number]): string {
+  return [task.title, task.description, task.category, task.assetType, task.serviceCategory, task.inventoryItem?.name, task.room?.name, task.season]
+    .filter(Boolean).join(' ').toLowerCase();
+}
+
+function maintenanceMoney(value: { toString(): string } | number | null | undefined): string | null {
+  if (value == null) return null;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value));
+}
+
 async function maintenanceResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const tasks = await PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true });
-  const completed = tasks.filter((task) => task.status === MaintenanceTaskStatus.COMPLETED);
-  const pending = tasks.filter((task) => task.status !== MaintenanceTaskStatus.COMPLETED && task.status !== MaintenanceTaskStatus.CANCELLED);
-  const wantsCompletedOnly = /\bcompleted|finished|done\b/i.test(message) && !/\bpending|remaining|still|overdue\b/i.test(message);
-  const wantsPendingOnly = /\bpending|remaining|still|overdue|due soon\b/i.test(message) && !/\bcompleted|finished|done\b/i.test(message);
-  const sections = [
-    ...(!wantsPendingOnly ? [{ id: 'completed', title: 'Completed', records: completed }] : []),
-    ...(!wantsCompletedOnly ? [{ id: 'pending', title: 'Pending', records: pending }] : []),
-  ].map((section) => ({
-    id: section.id,
-    title: section.title,
-    count: section.records.length,
-    items: section.records.slice(0, MAX_RESULT_ITEMS).map((task) => ({
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const now = new Date();
+  const [tasks, property, financing] = await Promise.all([
+    PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true }),
+    prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }),
+    prisma.propertyFinancingProfile.findUnique({ where: { propertyId }, select: { purchaseDate: true } }),
+  ]);
+  const timeZone = safeTimezone(property?.timezone);
+  const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(message, now, timeZone, financing?.purchaseDate ?? null);
+  const wantsCompleted = /\b(?:completed|finished|done|completion|service history|what did (?:i|we) complete)\b/i.test(message);
+  const wantsOpen = /\b(?:pending|remaining|still|open|overdue|due|upcoming|coming up|needs review|in progress|high priority|highest priority|priority tasks?|before (?:winter|spring|summer|fall|autumn))\b/i.test(message);
+  const includeCancelled = /\b(?:cancelled|canceled|archived|dismissed|all records|including cancelled|including canceled)\b/i.test(message);
+  const cancelledOnly = /\b(?:cancelled|canceled|archived|dismissed)\b/i.test(message)
+    && !/\b(?:including cancelled|including canceled|all records)\b/i.test(message);
+  const overdueOnly = /\boverdue|past due\b/i.test(message);
+  const dueSoonOnly = /\bdue soon|coming up|upcoming|what(?:'s| is) due\b/i.test(message);
+  const highPriorityOnly = /\b(?:urgent|high priority|highest priority|priority tasks?)\b/i.test(message);
+  const creationFocus = /\b(?:create|add|schedule|set up)\b.{0,30}\b(?:maintenance(?: task)?|tasks?)\b/i.test(message);
+  const scopeTerms = maintenanceScopeTerms(message);
+  const normalizedMessage = message.toLowerCase();
+  const roomScope = [...new Set(tasks.map((task) => task.room?.name?.trim()).filter((value): value is string => Boolean(value)))]
+    .sort((left, right) => right.length - left.length)
+    .find((roomName) => normalizedMessage.includes(roomName.toLowerCase())) ?? null;
+  const scoped = tasks.filter((task) =>
+    (!scopeTerms.length || scopeTerms.some((term) => maintenanceTaskText(task).includes(term)))
+    && (!roomScope || task.room?.name === roomScope));
+
+  const active = scoped.filter((task) => task.status !== MaintenanceTaskStatus.COMPLETED && task.status !== MaintenanceTaskStatus.CANCELLED);
+  const completed = scoped.filter((task) => task.status === MaintenanceTaskStatus.COMPLETED);
+  const cancelled = scoped.filter((task) => task.status === MaintenanceTaskStatus.CANCELLED);
+  const dueSoonBoundary = new Date(now.getTime() + 30 * 86_400_000);
+  // In a mixed query such as “completed this year and everything still
+  // pending,” the time phrase qualifies completion history only.
+  const openTimeframe = wantsCompleted && wantsOpen ? null : timeframe;
+  const matchesPendingDate = (task: typeof active[number]) => {
+    if (overdueOnly) return Boolean(task.nextDueDate && task.nextDueDate < now);
+    if (openTimeframe) return Boolean(task.nextDueDate && openTimeframe.matches(task.nextDueDate));
+    if (dueSoonOnly) return Boolean(task.nextDueDate && task.nextDueDate >= now && task.nextDueDate <= dueSoonBoundary);
+    return true;
+  };
+  const filteredActive = active.filter(matchesPendingDate).filter((task) => !highPriorityOnly || ['URGENT', 'HIGH'].includes(task.priority));
+  const filteredCompleted = completed.filter((task) => !timeframe || Boolean(task.lastCompletedDate && timeframe.matches(task.lastCompletedDate)))
+    .filter((task) => !highPriorityOnly || ['URGENT', 'HIGH'].includes(task.priority));
+  const showCompleted = !cancelledOnly && (wantsCompleted || (!wantsOpen && !creationFocus));
+  const showOpen = !cancelledOnly && (wantsOpen || (!wantsCompleted && !creationFocus) || (wantsCompleted && wantsOpen));
+  const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
+  const canManage = access.role !== HouseholdRole.VIEWER;
+
+  const recordItem = (task: typeof tasks[number], kind: 'OPEN' | 'COMPLETED' | 'CANCELLED') => {
+    const overdue = kind === 'OPEN' && task.nextDueDate && task.nextDueDate < now;
+    const cost = kind === 'COMPLETED' ? maintenanceMoney(task.actualCost) : maintenanceMoney(task.estimatedCost);
+    return {
       id: task.id,
       title: task.title,
       description: task.description ?? null,
-      status: task.status,
+      status: overdue ? 'OVERDUE' : task.status,
       meta: [
-        task.inventoryItem?.name ?? task.category ?? task.assetType ?? '',
-        task.status === MaintenanceTaskStatus.COMPLETED
-          ? humanDate(task.lastCompletedDate) ? `Completed ${humanDate(task.lastCompletedDate)}` : 'Completed date not recorded'
-          : humanDate(task.nextDueDate) ? `Due ${humanDate(task.nextDueDate)}` : 'No due date',
+        task.inventoryItem?.name ?? task.room?.name ?? task.category ?? task.assetType ?? 'Whole home',
+        kind === 'COMPLETED'
+          ? task.lastCompletedDate ? `Completed ${maintenanceDate(task.lastCompletedDate, timeZone)}` : 'Completion date not recorded'
+          : kind === 'CANCELLED' ? `Cancelled · updated ${maintenanceDate(task.updatedAt, timeZone)}`
+            : task.nextDueDate ? `${overdue ? 'Was due' : 'Due'} ${maintenanceDate(task.nextDueDate, timeZone)}` : 'Due date not recorded',
         `${task.priority.toLowerCase()} priority`,
-      ].filter(Boolean),
-      href: `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`,
-    })),
+        task.source.toLowerCase().replace(/_/g, ' '),
+        cost ? `${kind === 'COMPLETED' ? 'Actual' : 'Estimated'} cost ${cost}` : null,
+        task.isRecurring && task.frequency ? `Repeats ${task.frequency.toLowerCase().replace(/_/g, ' ')}` : null,
+      ].filter((value): value is string => Boolean(value)),
+      href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}&from=ask`,
+    };
+  };
+
+  const sections = [
+    ...(showOpen ? [{
+      id: overdueOnly ? 'overdue' : dueSoonOnly || openTimeframe ? 'due' : 'open',
+      title: overdueOnly ? 'Overdue' : dueSoonOnly || openTimeframe ? `Due ${openTimeframe?.label ?? 'within 30 days'}` : 'Pending and in progress',
+      records: filteredActive, kind: 'OPEN' as const,
+    }] : []),
+    ...(showCompleted ? [{ id: 'completed', title: `Completed${timeframe ? ` ${timeframe.label}` : ''}`, records: filteredCompleted, kind: 'COMPLETED' as const }] : []),
+    ...(includeCancelled ? [{ id: 'cancelled', title: 'Cancelled', records: cancelled, kind: 'CANCELLED' as const }] : []),
+  ].map((section) => ({
+    id: section.id, title: section.title, count: section.records.length,
+    items: section.records.slice(0, MAX_RESULT_ITEMS).map((task) => recordItem(task, section.kind)),
   }));
+  const displayed = sections.reduce((sum, section) => sum + section.count, 0);
+  const overdueCount = active.filter((task) => task.nextDueDate && task.nextDueDate < now).length;
+  const unscheduledCount = active.filter((task) => !task.nextDueDate).length;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'maintenance-summary',
+    title: creationFocus
+      ? canManage ? 'Create the task in Maintenance' : 'A contributor or owner can create this task'
+      : displayed ? `${displayed} maintenance record${displayed === 1 ? '' : 's'} match this request` : 'No matching maintenance records were found',
+    body: creationFocus
+      ? 'Ask has not created anything. The Maintenance workflow collects the schedule, recurrence, priority, and any system link before saving.'
+      : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}`,
+    tone: overdueCount ? 'CAUTION' : 'DEFAULT',
+    actions: creationFocus && canManage
+      ? [{ id: 'create-maintenance', label: 'Create maintenance task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'PRIMARY' }]
+      : [
+        { id: 'open-maintenance', label: 'Open maintenance', href: maintenanceHref, style: 'PRIMARY' },
+        ...(missingPurchaseDate ? [{ id: 'add-purchase-date', label: 'Add purchase date', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'SECONDARY' as const }] : []),
+      ],
+  }];
+  if (!creationFocus) blocks.push({
+    type: 'GROUPED_LIST', id: 'maintenance-groups', title: 'Maintenance record',
+    description: `${timeframe ? `Date filter: ${timeframe.label} in ${timeZone}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing up to ${MAX_RESULT_ITEMS} items per section.`,
+    sections, actions: canManage ? [{ id: 'create-maintenance', label: 'Create a task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'SECONDARY' }] : [],
+  });
+  const evidenceTasks = [...new Map([...filteredActive, ...filteredCompleted, ...(includeCancelled ? cancelled : [])].map((task) => [task.id, task])).values()];
+  if (evidenceTasks.length) blocks.push({
+    type: 'EVIDENCE', id: 'maintenance-evidence', title: 'Task sources and freshness',
+    items: evidenceTasks.slice(0, 30).map((task) => ({
+      label: task.title, source: `Maintenance · ${task.source.toLowerCase().replace(/_/g, ' ')}`, observedAt: task.updatedAt.toISOString(),
+    })),
+  });
+  if (missingPurchaseDate) blocks.push({
+    type: 'BOUNDARY', id: 'maintenance-purchase-date-missing', title: 'Purchase date is not recorded',
+    body: 'Ask could not apply “since I bought the home,” so the list is unbounded by purchase date. Add the property purchase date in the financing profile, then run this question again.',
+    severity: 'CAUTION', suggestions: [],
+  });
+  blocks.push({
+    type: 'BOUNDARY', id: 'maintenance-record-boundary', title: 'Based on recorded tasks',
+    body: 'An empty or completed task list is not a professional inspection or proof that no maintenance is needed. Unrecorded work and systems without tasks are outside this result.',
+    severity: 'INFO', suggestions: [],
+  });
 
   return {
-    status: 'ANSWERED',
-    blocks: [{
-      type: 'SUMMARY',
-      id: 'maintenance-summary',
-      title: pending.length ? `${pending.length} maintenance task${pending.length === 1 ? '' : 's'} still need attention` : 'No pending maintenance tasks found',
-      body: `${completed.length} completed and ${pending.length} pending task${pending.length === 1 ? '' : 's'} are recorded for this home. Cancelled tasks are excluded.`,
-      tone: pending.some((task) => task.nextDueDate && task.nextDueDate < new Date()) ? 'CAUTION' : 'DEFAULT',
-      actions: [{ id: 'open-maintenance', label: 'Open maintenance', href: `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`, style: 'PRIMARY' }],
-    }, {
-      type: 'GROUPED_LIST',
-      id: 'maintenance-groups',
-      title: 'Maintenance record',
-      description: tasks.length > MAX_RESULT_ITEMS ? `Showing up to ${MAX_RESULT_ITEMS} items per section.` : null,
-      sections,
-      actions: [],
-    }],
-    suggestions: ['Show overdue tasks only', 'What maintenance is coming up next?', 'Create a maintenance task'],
+    status: missingPurchaseDate ? 'READY_WITH_LIMITATIONS' : creationFocus ? (canManage ? 'READY_WITH_LIMITATIONS' : 'BLOCKED') : 'ANSWERED',
+    reasonCode: missingPurchaseDate ? 'MAINTENANCE_PURCHASE_DATE_MISSING' : creationFocus ? (canManage ? 'MAINTENANCE_WORKFLOW_REQUIRED' : 'ASK_PERMISSION_REQUIRED') : undefined,
+    contextVersion: createHash('sha256').update(JSON.stringify(tasks.map((task) => ({ id: task.id, status: task.status, updatedAt: task.updatedAt })))).digest('hex'),
+    blocks,
+    suggestions: ['Show overdue tasks only', 'What maintenance is due soon?', 'Create a maintenance task'],
   };
 }
 

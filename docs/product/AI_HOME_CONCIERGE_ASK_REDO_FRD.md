@@ -2,9 +2,9 @@
 title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
-status: "Proposed"
-version: "1.1"
-date: "August 10, 2026"
+status: "Implementation in progress"
+version: "1.2"
+date: "August 11, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
   - "Stay Ahead"
@@ -18,15 +18,67 @@ primary_customer_jobs:
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
-| Version | 1.1 |
-| Date | August 10, 2026 |
+| Status | Implementation in progress |
+| Version | 1.2 |
+| Date | August 11, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
 | Primary framework dependency | [ContractToCozy Product Framework](./ContractToCozy_Product_Framework.md) |
 | Supporting platform dependencies | [Property Context JIT Capture](../property-context/PROPERTY_CONTEXT_JUST_IN_TIME_CAPTURE_FRD.md); [Capability Discovery and Recommendation Platform](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md) |
 | Working feature name | Ask |
 | Product surface name | AI Home Concierge |
+
+---
+
+## Implementation status snapshot — August 11, 2026
+
+This FRD is the living product and implementation contract for Ask. The repository now contains the durable Ask foundation and multiple end-to-end vertical slices. “Implemented” below means the repository behavior exists and has passed the slice-level validation recorded during implementation; it does not imply that every phase exit criterion, production rollout gate, or full desktop/mobile E2E certification is complete.
+
+### As-built platform foundation
+
+- Durable `AskSession`, `AskExecution`, execution-event, capture-receipt, and confirmation state is persisted through the Ask API.
+- A versioned deterministic operation registry resolves supported homeowner intents before any language-model call.
+- Typed execution responses render summary, grouped-list, table, evidence, boundary, capability, monitor, and workflow-progress blocks alongside structured capture requests and confirmations in the shared Ask workspace.
+- Property selection, property authorization, owner/contributor/viewer policy, execution continuity, inline capture/resume, confirmation idempotency, and negative-prompt boundaries are backend-owned.
+- Deterministic operations query canonical domain services and format results without an LLM. The current implementation does not require a local or remote model for the operations listed below.
+- The adaptive Ask workspace and global entry point are implemented. Continued accessibility, responsive, and end-to-end certification remains part of launch hardening.
+
+### As-built operation catalog
+
+| Operation | Status | Implemented behavior | Current boundary or remaining work |
+| --- | --- | --- | --- |
+| Maintenance status | Implemented | Completed, pending, overdue, due-soon, upcoming, cancelled, priority, seasonal, system/category, room, rolling-window, calendar-window, explicit-date, and since-purchase queries; dates, costs, recurrence, source, evidence, task links, and permission-aware task-creation handoff | Ask does not directly create or mutate a task in this slice; material writes remain in Maintenance until the generic confirmed-command adapter is completed |
+| Coverage review | Implemented | Separates confirmed no coverage, unclear coverage, expired, expiring within 90 days, and missing evidence; supports exposure/evidence filters, freshness, masked references, viewer safety, and one-at-a-time canonical relational capture/resume | A linked record is not represented as a coverage determination; document upload remains in the canonical coverage/inventory workflow |
+| Home Actions | Implemented | Reads only the final governed Home Actions feed; supports top-focus, urgent, soon, plan, and wait views with ranking explanation, evidence, confidence, canonical CTAs, honest empty states, and optional Property Context capture | Ask does not bypass the confirmation or workflow requirements of the underlying material action |
+| Savings opportunities | Implemented | Aggregates canonical savings, hidden-asset, and benefit sources; separates verified, estimated, and discoverable opportunities; supports deterministic ranking and optional context improvement | Availability and value remain bounded by registered source coverage and confidence |
+| Inventory lookup | Implemented | Searches canonical items and systems, supports entity/category/lifecycle/history/incomplete-record views, shows provenance and freshness, and can capture selected-item lifecycle context inline | Broad document-assisted item extraction remains later-phase work |
+| Property summary | Implemented | Summarizes governed property facts, completeness, rooms, inventory, documents, household access, recent verified events, freshness, degraded sections, and correction paths | A summary is not a professional inspection or completeness guarantee |
+| Ownership costs | Implemented | Provides deterministic cash-outflow and operating-expense lenses with canonical categories, periods, evidence, coverage limitations, and optional context capture | Outputs remain limited by recorded expense/financing coverage |
+| Sell/hold/rent analysis | Implemented | Uses the canonical decision service, registered scenario inputs, assumptions, evidence, professional boundaries, and inline context improvement | Planning analysis only; not tax, legal, appraisal, or investment advice |
+| Refinance analysis | Implemented | Runs canonical refinance analysis, captures the minimum reusable financing profile inline, automatically resumes, and presents calculations, evidence, assumptions, and lending boundaries | Not a loan offer; lender underwriting and formal estimates remain authoritative |
+| Refinance-rate monitor | Implemented | Collects threshold/product/channel preferences, requires explicit consent and confirmation, writes the canonical monitor idempotently, and returns monitor state | Delivery remains subject to notification policy, source health, rollout, cadence, and channel configuration |
+| Household invitation | Implemented | Owner-only inline recipient/role collection, explicit confirmation, idempotent canonical invitation creation, durable workflow result, and invitation delivery handoff | Invitation grants application access only and does not change legal ownership |
+| Refrigerator replacement guidance | Implemented vertical slice | Resolves the refrigerator entity, uses recorded lifecycle details, provides bounded general guidance when records are absent, captures missing item context canonically, and resumes | Expansion across all inventory categories remains Phase 5 work |
+| Capability discovery | Implemented backend slice | Queries the canonical capability registry, evaluates readiness/availability, and returns only registered launch destinations | Broader synonym evaluation, ranking certification, and catalog-wide launch hardening remain open |
+| Emergency, unsafe, and out-of-scope boundaries | Implemented foundation | Deterministically intercepts representative emergencies, arbitrary coding requests, prompt-extraction attempts, and unsupported general requests before execution | The red-team and golden negative catalogs must continue expanding |
+| Grounded home guidance fallback | Implemented foundation | Uses the bounded grounded-answer service and evidence contract when no higher-confidence registered operation resolves | Must not become an unbounded general chatbot or author arbitrary commands |
+
+### Delivery-phase status
+
+| Phase | Repository status as of August 11, 2026 | Remaining exit work |
+| --- | --- | --- |
+| Phase 0 — Foundation | Substantially implemented | Complete registry governance automation, certified negative CI pack, retention sign-off, and operational baselines |
+| Phase 1 — Deterministic record queries | All six named launch operations implemented | Full golden accuracy/latency certification, telemetry dashboard completion, restart/scale evidence, and desktop/mobile E2E launch sign-off |
+| Phase 2 — Inline capture | Partially implemented across refrigerator, refinance, savings, ownership costs, sell/hold/rent, inventory, property summary, Home Actions, and coverage | Complete conflict/stale/not-sure E2E matrices, approximate-date UX certification, and repeated-prompt measurement |
+| Phase 3 — Capability discovery | Backend slice implemented | Semantic breadth, top-1 ranking certification, related-capability continuity, and unavailable-tool E2E coverage |
+| Phase 4 — Confirmed actions and monitors | Partially implemented for refinance monitoring and household invitations | Generic command lifecycle, Ask-native maintenance mutations, additional monitors, edit/pause/stop/reverse paths, and complete role matrices |
+| Phase 5 — Decision intelligence | Partially implemented for sell/hold/rent, ownership costs, refrigerator replacement, and coverage review | Remaining priority analyses and category expansion |
+| Phase 6 — Model optimization | Not started | Benchmark before adopting a local classifier; deterministic routing remains the production baseline |
+| Phase 7 — Proactive continuity and scale | Not started | Portfolio queries, notification-to-Ask continuity, document-assisted reviewed capture, and scaled personalization |
+
+### Documentation maintenance rule
+
+Every Ask implementation slice must update this snapshot and the affected journey/phase notes in the same commit as the code. Status must distinguish repository implementation from production rollout, operational approval, and E2E certification. Future work must not mark a phase complete solely because its primary code path exists.
 
 ---
 
@@ -481,6 +533,8 @@ Requirements:
 - Offer “Create a task,” “Show overdue only,” and “Open maintenance.”
 - Do not call an LLM to retrieve or format the list.
 
+**Implementation status — August 11, 2026: Implemented.** `MAINTENANCE_STATUS` now queries canonical property maintenance tasks and deterministically supports completed/open combinations; overdue, due-soon, upcoming, cancelled, and priority views; today, week, month, year, last-year, rolling 30/90-day, explicit ISO-date range, and since-purchase filters; and common system/seasonal scopes. Results include recorded completion/due dates, item or room, actual or estimated cost, priority, recurrence, source, evidence freshness, exact counts, task deep links, and the default cancelled-record exclusion. Mixed queries bind a completion timeframe only to completion history, so “completed this year and everything still pending” does not hide older open tasks. Missing purchase date is disclosed with a correction route. Task creation remains a permission-aware handoff to the canonical Maintenance workflow; Ask does not silently create a task.
+
 ### 12.2 Missing coverage
 
 **Question:** “Which items are missing coverage?”
@@ -492,6 +546,8 @@ Requirements:
 - Never describe unknown coverage as definitively uncovered.
 - Offer relational inline capture to associate an existing policy/warranty or create one.
 - Preserve policy-number masking and authorization rules.
+
+**Implementation status — August 11, 2026: Implemented.** `COVERAGE_GAPS` uses the canonical inventory coverage presentation and a homeowner-facing coverage-review read model. It keeps confirmed no coverage, unclear coverage, expired coverage, coverage expiring within 90 days, and missing supporting evidence distinct; supports exposure, expiry, and evidence-focused questions; returns source freshness and correction links; and never treats an empty relationship as proof that the homeowner is uninsured. Owner/contributor users receive one relational capture at a time and automatically resume after confirming no coverage, selecting an existing policy/warranty, or creating a canonical record. Viewers remain read-only. Policy and warranty references exposed by relational selectors are masked to their final four characters.
 
 ### 12.3 Savings opportunities
 
