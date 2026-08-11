@@ -36,6 +36,22 @@ Material writes must also be present in `ASK_DOMAIN_COMMAND_REGISTRY`. The comma
 
 All commands show a typed review card, require explicit consent, expire after 30 minutes, write a confirmation receipt, and return an artifact-linked completion. Creation paths use stable action keys, canonical get-or-create transactions, or the unique nullable `GuidanceJourney.sourceAskExecutionId` key to converge under retries and concurrency. The repository includes the Prisma schema change but intentionally includes no migration script; schema application is user-managed.
 
+## Phase 5 decision-intelligence matrix
+
+| Decision adapter | Canonical owner | Ask boundary |
+| --- | --- | --- |
+| Sell/hold/rent | Sell/Hold/Rent service | Directional planning comparison; never financial, tax, legal, appraisal, or investment advice |
+| Ownership costs | Ownership Cost read model | Missing categories are not zero; cash-outflow and operating-expense lenses remain distinct |
+| Quote comparison review | Service Quote Decision workspace and comparability engine | Read-only comparison; never selects, accepts, or endorses a provider |
+| Repair/replace | Repair vs Replace engine and selected Inventory item | Item-specific planning model; never a diagnosis or provider quote |
+| Capital timeline and reserve | Home Capital Timeline and Reserve Fund | Forecast ranges; never guaranteed failure timing or a substitute for emergency savings |
+| Property-tax appeal readiness | Property Tax Center, reviewed rules, and appeal-readiness service | Preparation readiness; never predicts success or replaces official rules/advice |
+| Coverage review | Coverage Intelligence | Unknown linkage remains unknown; never asserts coverage without canonical evidence |
+| Renovation and permit readiness | Renovation Case, readiness checklist, and Permit Tracker | Organizes current records; never grants legal permission to start work |
+| Major-event entry | Live capability registry and readiness policy | Entry-point routing only; creates, shares, or commits nothing automatically |
+
+All nine Phase 5 families are property-authorized, deterministic, independently kill-switchable, and registered with material-decision safety. The Ask eval pack verifies homeowner-language routing, canonical service invocation, professional boundaries, emergency precedence, and out-of-scope precedence. Database-backed outcome accuracy, production-like latency, browser evidence, and domain-owner sign-off remain launch certification gates.
+
 ## Runtime controls
 
 | Environment variable | Default | Purpose |

@@ -28,7 +28,12 @@ export type AskOperationId =
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
+  | 'QUOTE_COMPARISON_REVIEW'
   | 'HOME_DEADLINE_MONITOR'
+  | 'CAPITAL_RESERVE_PLAN'
+  | 'PROPERTY_TAX_APPEAL_READINESS'
+  | 'RENOVATION_PERMIT_READINESS'
+  | 'MAJOR_EVENT_ENTRY'
   | 'EMERGENCY_BOUNDARY'
   | 'OUT_OF_SCOPE_BOUNDARY'
   | 'GROUNDED_GUIDANCE';
@@ -67,7 +72,8 @@ export interface AskOperationResult {
 
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
-  'MAINTENANCE_TASK_UPDATE', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'HOME_DEADLINE_MONITOR',
+  'MAINTENANCE_TASK_UPDATE', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
+  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY',
   'COVERAGE_GAPS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -110,14 +116,19 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   PROPERTY_SUMMARY: definition('PROPERTY_SUMMARY', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property.summary', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   HOME_ACTIONS: definition('HOME_ACTIONS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'home-actions.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
   CAPABILITY_DISCOVERY: definition('CAPABILITY_DISCOVERY', 'CAPABILITY_DISCOVERY', false, 'DETERMINISTIC', 'STANDARD', null, 'capability.discovery', ['SUMMARY', 'CAPABILITY_LIST']),
-  REPLACEMENT_GUIDANCE: definition('REPLACEMENT_GUIDANCE', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'inventory.replacement', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
+  REPLACEMENT_GUIDANCE: definition('REPLACEMENT_GUIDANCE', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'inventory.replacement', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   REFINANCE_ANALYSIS: definition('REFINANCE_ANALYSIS', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'refinance.analysis', ['SUMMARY', 'TABLE', 'EVIDENCE']),
   REFINANCE_RATE_MONITOR: definition('REFINANCE_RATE_MONITOR', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'refinance.monitor', ['SUMMARY', 'MONITOR', 'WORKFLOW_PROGRESS']),
   SELL_HOLD_RENT_ANALYSIS: definition('SELL_HOLD_RENT_ANALYSIS', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'sale-case.analysis', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   HOUSEHOLD_INVITATION: definition('HOUSEHOLD_INVITATION', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'household.invitation', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   GUIDANCE_JOURNEY_CREATE: definition('GUIDANCE_JOURNEY_CREATE', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance.journey.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   QUOTE_COMPARISON_CREATE: definition('QUOTE_COMPARISON_CREATE', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'quote-comparison.create', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  QUOTE_COMPARISON_REVIEW: definition('QUOTE_COMPARISON_REVIEW', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'quote-comparison.review', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   HOME_DEADLINE_MONITOR: definition('HOME_DEADLINE_MONITOR', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-deadline.monitor', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  CAPITAL_RESERVE_PLAN: definition('CAPITAL_RESERVE_PLAN', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'capital-reserve.plan', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
+  PROPERTY_TAX_APPEAL_READINESS: definition('PROPERTY_TAX_APPEAL_READINESS', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'property-tax.appeal-readiness', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
+  RENOVATION_PERMIT_READINESS: definition('RENOVATION_PERMIT_READINESS', 'GENERAL_HOME_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'renovation-permit.readiness', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY']),
+  MAJOR_EVENT_ENTRY: definition('MAJOR_EVENT_ENTRY', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'major-event.entry', ['SUMMARY', 'CAPABILITY_LIST', 'BOUNDARY']),
   EMERGENCY_BOUNDARY: definition('EMERGENCY_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'EMERGENCY_BOUNDARY', null, 'boundary.emergency', ['BOUNDARY']),
   OUT_OF_SCOPE_BOUNDARY: definition('OUT_OF_SCOPE_BOUNDARY', 'OUT_OF_SCOPE', false, 'DETERMINISTIC', 'OUT_OF_SCOPE_BOUNDARY', null, 'boundary.out-of-scope', ['BOUNDARY']),
   GROUNDED_GUIDANCE: definition('GROUNDED_GUIDANCE', 'GENERAL_HOME_GUIDANCE', false, 'REMOTE_GENERATION', 'STANDARD', null, 'grounded.guidance', ['SUMMARY', 'EVIDENCE', 'BOUNDARY']),
@@ -150,7 +161,12 @@ const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\
 const maintenanceUpdatePattern = /\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore)\b.{0,100}\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b|\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:reschedule|assign|archive|cancel|reopen|priority|due date)\b/i;
 const guidanceJourneyCreatePattern = /\b(?:start|create|open|begin)\b.{0,50}\b(?:guided plan|guidance journey|guided journey|step-by-step plan)\b/i;
 const quoteComparisonCreatePattern = /\b(?:create|start|open|set up)\b.{0,50}\b(?:quote comparison|comparison workspace|workspace for (?:my )?(?:quotes|bids|proposals))\b/i;
+const quoteComparisonReviewPattern = /\b(?:compare|review|show|evaluate|which)\b.{0,70}\b(?:quotes?|bids?|proposals?|estimates?)\b|\b(?:quotes?|bids?|proposals?)\b.{0,70}\b(?:compare|comparison|best|cheapest|differences?|review)\b/i;
 const homeDeadlineMonitorPattern = /\b(?:notify|alert|remind|monitor|tell me)\b.{0,80}\b(?:maintenance|task|warranty|insurance|policy|coverage)\b.{0,50}\b(?:due|expire|expires|expiring|renewal)\b|\b(?:warranty|insurance|policy|coverage)\b.{0,50}\b(?:expire|expires|expiring|renewal)\b.{0,80}\b(?:notify|alert|remind|monitor|tell me)\b/i;
+const capitalReservePattern = /\b(?:reserve fund|sinking fund|capital timeline|capital plan|major replacements?|future home expenses?|how much should i save|budget for (?:my )?(?:roof|hvac|systems?|replacements?))\b/i;
+const propertyTaxAppealPattern = /\b(?:property tax|assessment|assessed value|tax class|tax exemption)\b.{0,80}\b(?:appeal|contest|challenge|readiness|overassessed|too high|evidence|deadline)\b|\b(?:appeal|contest|challenge)\b.{0,60}\b(?:property tax|assessment|assessed value|tax class|exemption)\b/i;
+const renovationPermitPattern = /\b(?:renovation|remodel|addition|project|permit|inspection|hoa)\b.{0,80}\b(?:ready|readiness|start|require|needed|block|blocking|blockers?|compliance|status)\b|\b(?:can i start|am i ready|what is blocking|what are the blockers?)\b.{0,60}\b(?:renovation|remodel|project|work)\b/i;
+const majorEventPattern = /\b(?:help|guide|prepare|plan|checklist|what should i do)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|major renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?))\b/i;
 const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b/i;
 const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|break down)\b.{0,45}\b(?:home|house|housing|property|ownership)\b.{0,45}\b(?:cost|costs|expense|expenses|outflow)\b|\b(?:how much am i|what am i)\b.{0,45}\b(?:paying|spending)\b.{0,45}\b(?:home|house|housing|property)\b|\b(?:monthly|annual|yearly|total|true|ownership|operating|cash)\s+(?:home |house |housing |property )?(?:cost|costs|expenses?|outflow)\b|\bcost of owning\b|\b(?:largest|biggest|highest|most expensive)\b.{0,35}\b(?:home |ownership )?(?:cost|expense|category)\b|\bwhich (?:cost |expense )?categor(?:y|ies)\b.{0,35}\b(?:most|highest|largest)\b/i;
@@ -188,8 +204,23 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (quoteComparisonCreatePattern.test(message)) {
     return resolved('QUOTE_COMPARISON_CREATE', 0.97);
   }
+  if (quoteComparisonReviewPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bcan you help me\b/i.test(message)) {
+    return resolved('QUOTE_COMPARISON_REVIEW', 0.97);
+  }
   if (homeDeadlineMonitorPattern.test(message)) {
     return resolved('HOME_DEADLINE_MONITOR', 0.97);
+  }
+  if (propertyTaxAppealPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('PROPERTY_TAX_APPEAL_READINESS', 0.98);
+  }
+  if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('CAPITAL_RESERVE_PLAN', 0.97);
+  }
+  if (renovationPermitPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('RENOVATION_PERMIT_READINESS', 0.97);
+  }
+  if (majorEventPattern.test(message)) {
+    return resolved('MAJOR_EVENT_ENTRY', 0.96);
   }
   if (maintenanceCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_CREATE', 0.97);

@@ -52,9 +52,16 @@ import { InventoryService } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
 import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
-import { getOrCreateQuoteComparisonWorkspace } from '../quoteComparison.service';
+import { getOrCreateQuoteComparisonWorkspace, getQuoteComparisonWorkspace, getWorkspaceComparability } from '../quoteComparison.service';
 import { upsertNotificationPreference } from '../notificationPreference.service';
 import { updateInsurancePolicy } from '../home-management.service';
+import { ReplaceRepairService } from '../replaceRepairAnalysis.service';
+import { homeReserveFundService } from '../homeReserveFund.service';
+import { HomeCapitalTimelineService } from '../homeCapitalTimeline.service';
+import { propertyTaxAppealReadinessService } from '../propertyTax/propertyTaxAppealReadiness.service';
+import { listRenovationCases } from '../renovationCase.service';
+import { getReadiness as getRenovationReadiness } from '../renovationReadiness.service';
+import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 
 const MAX_RESULT_ITEMS = 50;
@@ -65,6 +72,9 @@ const homeSavingsService = new HomeSavingsService();
 const hiddenAssetService = new HiddenAssetService();
 const sellHoldRentService = new SellHoldRentService();
 const inventoryService = new InventoryService();
+const replaceRepairService = new ReplaceRepairService();
+const homeCapitalTimelineService = new HomeCapitalTimelineService();
+const permitTrackerService = new PermitTrackerService();
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -167,6 +177,26 @@ function asInputJson(value: unknown): Prisma.InputJsonValue {
 function humanDate(value: Date | null | undefined): string | null {
   if (!value) return null;
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(value);
+}
+
+function askCaptureRequest(requirement: any, contextVersion: string, destinationLabel: string, fallbackHref: string): AskCaptureRequest {
+  return {
+    requirementId: requirement.requirementId,
+    captureKey: requirement.capture.captureKey,
+    classification: requirement.classification,
+    state: requirement.state,
+    title: requirement.capture.title,
+    question: requirement.capture.question,
+    helpText: requirement.capture.helpText ?? null,
+    inputSchema: requirement.capture.inputSchema,
+    ...(requirement.currentAnswer === undefined ? {} : { currentAnswer: requirement.currentAnswer }),
+    allowNotSure: requirement.capture.allowNotSure,
+    sensitivity: requirement.capture.sensitivity,
+    destinationLabel,
+    fallbackHref,
+    confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
 }
 
 function propertyLabel(property: { name: string | null; address: string; city: string; state: string }): string {
@@ -913,6 +943,40 @@ async function quoteComparisonCreateResult(propertyId: string, message: string):
   };
 }
 
+async function quoteComparisonReviewResult(propertyId: string): Promise<AskOperationResult> {
+  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true } });
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/quote-comparison`;
+  if (!latest) return {
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'QUOTE_COMPARISON_NOT_STARTED',
+    blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: 'Create a workspace and add at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.', tone: 'CAUTION', actions: [{ id: 'create-comparison', label: 'Create comparison workspace', href, style: 'PRIMARY' }] }],
+    suggestions: ['Create a quote comparison workspace for roofing bids'],
+  };
+  const [workspace, comparability] = await Promise.all([
+    getQuoteComparisonWorkspace(propertyId, latest.id), getWorkspaceComparability(propertyId, latest.id),
+  ]);
+  if (!workspace) throw new Error('Quote comparison workspace is unavailable.');
+  const quotes = (workspace.quotes ?? []) as Array<any>;
+  const comparisonReady = new Set(comparability.eligibleQuoteIds);
+  const amounts = quotes.map((quote) => Number(quote.quoteAmount)).filter(Number.isFinite);
+  const lowest = amounts.length ? Math.min(...amounts) : null;
+  const highest = amounts.length ? Math.max(...amounts) : null;
+  const workspaceHref = `${href}?workspaceId=${encodeURIComponent(workspace.id)}`;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'quote-review-summary', title: quotes.length < 2 ? 'Add another proposal before comparing' : comparability.status === 'COMPARABLE' ? `${quotes.length} proposals are ready for a scope-aligned review` : 'The recorded proposals are not safely comparable yet',
+    body: `${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
+    tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-comparison', label: 'Open quote comparison', href: workspaceHref, style: 'PRIMARY' }],
+  }];
+  if (quotes.length) blocks.push({
+    type: 'TABLE', id: 'quote-review-table', title: 'Recorded proposals', description: 'Ask preserves the canonical readiness state and does not select a provider.',
+    columns: [{ key: 'vendor', label: 'Provider' }, { key: 'amount', label: 'Price' }, { key: 'readiness', label: 'Readiness' }, { key: 'scope', label: 'Scope' }],
+    rows: quotes.map((quote) => ({ id: quote.id, values: { vendor: quote.vendorName, amount: `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, readiness: comparisonReady.has(quote.id) ? 'Comparison ready' : String(quote.readinessStage ?? 'Needs review').toLowerCase().replace(/_/g, ' '), scope: quote.scopeSummary ?? quote.serviceLabelRaw ?? 'Scope not confirmed' } })), actions: [],
+  });
+  blocks.push({ type: 'GROUPED_LIST', id: 'quote-review-gaps', title: 'Comparison controls', description: 'Resolve scope or fact gaps in the canonical workspace before making a decision.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: workspaceHref })) }], actions: [] });
+  blocks.push({ type: 'EVIDENCE', id: 'quote-review-evidence', title: 'Proposal freshness', items: quotes.slice(0, 20).map((quote) => ({ label: quote.vendorName, source: quote.sourceType ? `Quote · ${String(quote.sourceType).toLowerCase()}` : 'Recorded quote', observedAt: quote.updatedAt?.toISOString?.() ?? quote.createdAt?.toISOString?.() ?? null })) });
+  blocks.push({ type: 'BOUNDARY', id: 'quote-review-boundary', title: 'Comparison support—not provider endorsement', body: 'Verify scope, credentials, insurance, references, permits, warranties, payment milestones, and final terms. Ask does not accept a quote, rank provider trust, or guarantee workmanship.', severity: 'INFO', suggestions: [] });
+  return { status: comparability.status === 'COMPARABLE' ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: comparability.status === 'COMPARABLE' ? undefined : `QUOTE_${comparability.status}`, contextVersion: workspace.updatedAt?.toISOString?.() ?? null, blocks, suggestions: ['What makes these quotes incomparable?', 'Open quote comparison'] };
+}
+
 async function guidanceJourneyCreateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const inventory = await prisma.inventoryItem.findMany({ where: { propertyId }, select: { id: true, name: true }, take: 100 });
   const lower = message.toLowerCase();
@@ -1292,56 +1356,56 @@ function yearsSince(value: Date | null): number | null {
   return Math.max(0, Math.floor((Date.now() - value.getTime()) / (365.25 * 24 * 60 * 60 * 1000)));
 }
 
-async function replacementGuidanceResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  const items = await prisma.inventoryItem.findMany({
-    where: {
-      propertyId,
-      OR: [
-        { name: { contains: 'refrigerator', mode: 'insensitive' } },
-        { name: { contains: 'fridge', mode: 'insensitive' } },
-        { assetType: { contains: 'refrigerator', mode: 'insensitive' } },
-      ],
-    },
-    orderBy: [{ isVerified: 'desc' }, { updatedAt: 'desc' }],
-    take: 2,
-    select: { id: true, name: true, condition: true, installedOn: true, purchasedOn: true, expectedExpiryDate: true },
+async function replacementGuidanceResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const allItems = await prisma.inventoryItem.findMany({
+    where: { propertyId }, orderBy: [{ isVerified: 'desc' }, { updatedAt: 'desc' }], take: 200,
+    select: { id: true, name: true, category: true, assetType: true, brand: true, model: true, condition: true, installedOn: true, purchasedOn: true, expectedExpiryDate: true, updatedAt: true },
   });
+  const query = message.toLowerCase().replace(/\b(?:when|should|i|we|repair|replace|replacement|versus|vs|my|our|the|is|it|time|good|to|do)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const aliases = /\b(?:hvac|furnace|air conditioner|heat pump)\b/i.test(message) ? ['hvac', 'furnace', 'air conditioner', 'heat pump']
+    : /\b(?:refrigerator|fridge)\b/i.test(message) ? ['refrigerator', 'fridge']
+      : /\bwater heater\b/i.test(message) ? ['water heater']
+        : /\b(?:roof|roofing)\b/i.test(message) ? ['roof']
+          : /\b(?:washer|washing machine)\b/i.test(message) ? ['washer', 'washing machine']
+            : /\bdryer\b/i.test(message) ? ['dryer']
+              : /\bdishwasher\b/i.test(message) ? ['dishwasher'] : query ? [query] : [];
+  const itemText = (item: typeof allItems[number]) => [item.name, item.category, item.assetType, item.brand, item.model].filter(Boolean).join(' ').toLowerCase();
+  const items = aliases.length ? allItems.filter((item) => aliases.some((alias) => itemText(item).includes(alias) || alias.includes(item.name.toLowerCase()))) : [];
   if (!items.length) {
     return {
       status: 'READY_WITH_LIMITATIONS',
-      reasonCode: 'REFRIGERATOR_NOT_IN_HOME_RECORD',
+      reasonCode: 'REPAIR_REPLACE_ITEM_NOT_IN_HOME_RECORD',
       blocks: [{
-        type: 'SUMMARY', id: 'refrigerator-general-estimate', title: 'Most refrigerators last about 10–15 years',
-        body: 'Replacement timing also depends on condition, repair frequency, energy use, and parts availability. I could not find a refrigerator in this home’s inventory, so this is general guidance rather than a home-specific recommendation.',
+        type: 'SUMMARY', id: 'repair-replace-no-item', title: 'Choose a recorded appliance or home system first',
+        body: `I could not resolve this request to one canonical inventory item. Ask will not manufacture a repair/replace calculation without the item’s condition, lifecycle, cost, and repair history.${allItems.length ? ` This home has ${allItems.length} recorded item${allItems.length === 1 ? '' : 's'}.` : ''}`,
         tone: 'CAUTION',
-        actions: [{ id: 'add-refrigerator', label: 'Add refrigerator to inventory', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }],
+        actions: [{ id: 'open-inventory', label: allItems.length ? 'Choose from inventory' : 'Add an inventory item', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }],
       }],
-      suggestions: ['What signs mean a refrigerator should be replaced?', 'Open Repair vs Replace'],
+      suggestions: allItems.slice(0, 3).map((item) => `Should I repair or replace ${item.name}?`),
     };
   }
   if (items.length > 1) {
     return {
       status: 'NEEDS_ENTITY',
-      reasonCode: 'MULTIPLE_REFRIGERATORS',
+      reasonCode: 'MULTIPLE_REPAIR_REPLACE_ITEMS',
       blocks: [{
-        type: 'GROUPED_LIST', id: 'refrigerator-selection', title: 'Which refrigerator do you mean?',
-        description: 'Open the matching inventory record, or make its name more specific, then ask again.',
+        type: 'GROUPED_LIST', id: 'repair-replace-selection', title: 'Which item should I analyze?',
+        description: 'Use the item’s exact name, room, brand, or model. Ask will not combine separate systems into one verdict.',
         sections: [{ id: 'matches', title: 'Possible matches', count: items.length, items: items.map((item) => ({
-          id: item.id, title: item.name, description: null, status: item.condition, meta: [],
-          href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`,
+          id: item.id, title: item.name, description: [item.brand, item.model].filter(Boolean).join(' ') || null, status: item.condition, meta: [item.category.toLowerCase().replace(/_/g, ' ')],
+          href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?openItemId=${encodeURIComponent(item.id)}`,
         })) }], actions: [],
       }],
-      suggestions: ['Open home inventory'],
+      suggestions: items.slice(0, 3).map((item) => `Should I repair or replace ${item.name}?`),
     };
   }
 
   const item = items[0];
-  const lifecycleDate = item.installedOn ?? item.purchasedOn;
-  const age = yearsSince(lifecycleDate);
   const evaluation = await evaluateFeatureContext(propertyId, userId, {
     featureKey: 'REPAIR_REPLACE', operationKey: 'RUN_ANALYSIS', operationInput: { inventoryItemId: item.id },
   });
-  const captureRequests: AskCaptureRequest[] = evaluation.requirements.map((requirement) => ({
+  const captureRequests: AskCaptureRequest[] = access.role === HouseholdRole.VIEWER ? [] : evaluation.requirements.slice(0, 1).map((requirement) => ({
     requirementId: requirement.requirementId,
     captureKey: requirement.capture.captureKey,
     classification: requirement.classification,
@@ -1357,31 +1421,29 @@ async function replacementGuidanceResult(userId: string, propertyId: string): Pr
     confirmationText: null,
     expectedContextVersion: evaluation.contextVersion,
   }));
-  const remainingYears = age === null ? null : Math.max(0, 12 - age);
-  const conditionCopy = item.condition === 'POOR'
-    ? 'Its recorded condition is poor, so replacement planning should begin now.'
-    : item.condition === 'FAIR'
-      ? 'Its recorded condition is fair; compare any major repair against replacement cost and efficiency.'
-      : 'Continue monitoring cooling performance, noise, seals, and repair frequency.';
+  const analysis = await replaceRepairService.runItemAnalysis(propertyId, item.id, userId, undefined, evaluation.contextVersion);
+  const verdict = analysis.verdict.toLowerCase().replace(/_/g, ' ');
+  const rows = [
+    { id: 'repair', values: { path: 'Estimated next repair', amount: analysis.estimatedNextRepairCostCents == null ? 'Not available' : money(analysis.estimatedNextRepairCostCents / 100), meaning: 'Modeled from category defaults, condition, and recorded repair history' } },
+    { id: 'replace', values: { path: 'Estimated replacement', amount: analysis.estimatedReplacementCostCents == null ? 'Not available' : money(analysis.estimatedReplacementCostCents / 100), meaning: 'Planning estimate—not a contractor or retailer quote' } },
+    { id: 'risk', values: { path: 'Annual repair risk', amount: analysis.expectedAnnualRepairRiskCents == null ? 'Not available' : money(analysis.expectedAnnualRepairRiskCents / 100), meaning: 'Probability-weighted planning exposure' } },
+  ];
   return {
-    status: captureRequests.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: captureRequests.length ? 'LIFECYCLE_CONTEXT_OPTIONAL' : undefined,
+    status: captureRequests.length || analysis.confidence !== 'HIGH' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: captureRequests.length ? 'LIFECYCLE_CONTEXT_OPTIONAL' : analysis.confidence !== 'HIGH' ? 'REPAIR_REPLACE_CONFIDENCE_LIMITED' : undefined,
     contextVersion: evaluation.contextVersion,
     parameters: { inventoryItemId: item.id },
     captureRequests,
     blocks: [{
-      type: 'SUMMARY', id: 'refrigerator-replacement-guidance', title: age === null
-        ? `${item.name}: add its age for a home-specific replacement window`
-        : remainingYears === 0
-          ? `${item.name} is in the typical replacement window`
-          : `${item.name} may have roughly ${remainingYears} year${remainingYears === 1 ? '' : 's'} before the typical replacement window`,
-      body: age === null
-        ? `Most refrigerators last about 10–15 years. ${conditionCopy} Add an approximate install or purchase date below and I’ll update this answer immediately.`
-        : `The home record indicates an age of about ${age} year${age === 1 ? '' : 's'}. Most refrigerators last about 10–15 years, but this is a planning range—not a guaranteed failure date. ${conditionCopy}`,
-      tone: item.condition === 'POOR' || (age !== null && age >= 12) ? 'CAUTION' : 'DEFAULT',
+      type: 'SUMMARY', id: 'repair-replace-guidance', title: `${item.name}: ${verdict}`,
+      body: `${analysis.summary ?? `The canonical model currently indicates ${verdict}.`} Confidence is ${analysis.confidence.toLowerCase()}.${analysis.breakEvenMonths == null ? '' : ` Modeled break-even is about ${analysis.breakEvenMonths} months.`}`,
+      tone: ['REPLACE_NOW', 'REPLACE_SOON'].includes(analysis.verdict) ? 'CAUTION' : 'DEFAULT',
       actions: [{ id: 'open-repair-replace', label: 'Open Repair vs Replace', href: `/dashboard/replace-repair?propertyId=${encodeURIComponent(propertyId)}&inventoryItemId=${encodeURIComponent(item.id)}`, style: 'PRIMARY' }],
-    }],
-    suggestions: ['What replacement warning signs should I watch?', 'How much should I budget for replacement?'],
+    }, { type: 'TABLE', id: 'repair-replace-costs', title: 'Modeled decision inputs', description: 'Amounts are planning estimates from the canonical Repair vs Replace engine.', columns: [{ key: 'path', label: 'Measure' }, { key: 'amount', label: 'Amount' }, { key: 'meaning', label: 'How to interpret it' }], rows, actions: [] },
+    { type: 'GROUPED_LIST', id: 'repair-replace-trace', title: 'Why the model reached this result', description: 'Decision factors are bounded to the item and its recorded history.', sections: [{ id: 'factors', title: 'Decision factors', count: analysis.decisionTrace.length, items: analysis.decisionTrace.slice(0, 12).map((factor, index) => ({ id: `factor-${index}`, title: factor.label, description: factor.detail, meta: [factor.impact], status: null, href: null })) }], actions: [] },
+    { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },
+    { type: 'BOUNDARY', id: 'repair-replace-boundary', title: 'Planning guidance—not a diagnosis or quote', body: 'A qualified technician should diagnose safety, performance, and repairability. Actual repair and replacement prices, efficiency gains, warranties, and code requirements may differ.', severity: 'INFO', suggestions: [] }],
+    suggestions: ['How much should I reserve for this item?', 'Show my capital timeline'],
   };
 }
 
@@ -1746,6 +1808,115 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
       ? ['Show operating expenses only', 'Which category costs the most?', 'Where could I save money?']
       : ['Show cash outflow including mortgage principal', 'Which category costs the most?', 'Where could I save money?'],
   };
+}
+
+async function capitalReservePlanResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/capital-timeline`;
+  const reserveHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/reserve-fund`;
+  const [access, capitalContext, reserveContext, property, inventoryCount] = await Promise.all([
+    ensurePropertyAccess(userId, propertyId),
+    evaluateFeatureContext(propertyId, userId, { featureKey: 'CAPITAL_TIMELINE', operationKey: 'RUN_TIMELINE' }),
+    evaluateFeatureContext(propertyId, userId, { featureKey: 'RESERVE_FUND', operationKey: 'RECALCULATE' }),
+    prisma.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true } }),
+    prisma.inventoryItem.count({ where: { propertyId } }),
+  ]);
+  const activeRequirement = reserveContext.requirements[0] ?? capitalContext.requirements[0];
+  const captureFeature = reserveContext.requirements[0] ? 'RESERVE_FUND' as const : 'CAPITAL_TIMELINE' as const;
+  const captureRequests = access.role !== HouseholdRole.VIEWER && activeRequirement
+    ? [askCaptureRequest(activeRequirement, activeRequirement === reserveContext.requirements[0] ? reserveContext.contextVersion : capitalContext.contextVersion, 'Saved to the Living Home Record and reused by capital planning', `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`)]
+    : [];
+  let analysis: any = await homeCapitalTimelineService.getLatestTimeline(propertyId);
+  if (!analysis && property && inventoryCount > 0) {
+    analysis = await homeCapitalTimelineService.runTimeline(propertyId, property.homeownerProfileId, 10, { createdByUserId: userId, propertyContextVersion: capitalContext.contextVersion, awaitReserveFundSync: true });
+  }
+  const fund: any = await homeReserveFundService.getSummary(propertyId);
+  const lineItems: any[] = await homeReserveFundService.listLineItems(propertyId, { status: 'ACTIVE' });
+  if (!analysis || !Array.isArray(analysis.items) || analysis.items.length === 0) return {
+    status: 'NEEDS_CONTEXT', reasonCode: 'CAPITAL_PLAN_INVENTORY_REQUIRED', contextVersion: capitalContext.contextVersion, parameters: { phase5CaptureFeature: captureFeature }, captureRequests,
+    blocks: [{ type: 'SUMMARY', id: 'capital-plan-empty', title: 'Add at least one major appliance or system to build a capital plan', body: 'A reserve target without recorded systems would be a generic guess. Add the roof, HVAC, water heater, appliances, or other capital items and Ask will calculate a property-specific timeline.', tone: 'CAUTION', actions: [{ id: 'open-inventory', label: 'Add home systems', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }] }],
+    suggestions: ['Show my home inventory'],
+  };
+  const items: any[] = analysis.items;
+  const upcoming = items.slice().sort((a, b) => new Date(a.windowStart).getTime() - new Date(b.windowStart).getTime()).slice(0, 12);
+  const totalLow = upcoming.reduce((sum, item) => sum + (item.estimatedCostMinCents ?? 0), 0);
+  const totalHigh = upcoming.reduce((sum, item) => sum + (item.estimatedCostMaxCents ?? 0), 0);
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'capital-reserve-summary', title: `${upcoming.length} upcoming capital event${upcoming.length === 1 ? '' : 's'} are in the current plan`,
+    body: `The modeled cost range for the displayed ${analysis.horizonYears ?? 10}-year horizon is ${money(totalLow / 100)}–${money(totalHigh / 100)}. The canonical reserve plan currently suggests ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month and records a ${money((fund.currentShortfallCents ?? 0) / 100)} shortfall.`,
+    tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open capital timeline', href, style: 'PRIMARY' }, { id: 'open-reserve', label: 'Open reserve fund', href: reserveHref, style: 'SECONDARY' }],
+  }, { type: 'TABLE', id: 'capital-timeline-table', title: 'Upcoming capital windows', description: 'Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes.', columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Planning window' }, { key: 'cost', label: 'Estimated range' }, { key: 'confidence', label: 'Confidence' }], rows: upcoming.map((item) => ({ id: item.id, values: { item: item.inventoryItem?.name ?? String(item.category).toLowerCase().replace(/_/g, ' '), window: `${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`, cost: item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null ? 'Not available' : `${money(item.estimatedCostMinCents / 100)}–${money(item.estimatedCostMaxCents / 100)}`, confidence: String(item.confidence).toLowerCase() } })), actions: [] },
+  { type: 'GROUPED_LIST', id: 'reserve-allocations', title: 'Active reserve allocations', description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.', sections: [{ id: 'allocations', title: 'Funding plan', count: lineItems.length, items: lineItems.slice(0, 20).map((line) => ({ id: line.id, title: line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' '), description: `${money(line.allocatedMonthlyCents / 100)}/month toward ${money(line.targetCostCents / 100)}`, meta: [String(line.status).toLowerCase()], status: line.status, href: reserveHref })) }], actions: [] },
+  { type: 'EVIDENCE', id: 'capital-plan-evidence', title: 'Planning sources and freshness', items: upcoming.map((item) => ({ label: item.inventoryItem?.name ?? String(item.category), source: `Home Capital Timeline · ${String(item.confidence).toLowerCase()} confidence`, observedAt: analysis.computedAt?.toISOString?.() ?? String(analysis.computedAt) })) },
+  { type: 'BOUNDARY', id: 'capital-plan-boundary', title: 'Planning range—not a guaranteed expense schedule', body: 'Actual condition, inspections, maintenance, local labor and material prices, financing, insurance, and homeowner choices can move timing and cost. Keep emergency savings and capital reserves conceptually separate.', severity: 'INFO', suggestions: [] }];
+  return { status: captureRequests.length || analysis.confidence === 'LOW' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: captureRequests.length ? 'CAPITAL_PLAN_CONTEXT_OPTIONAL' : analysis.confidence === 'LOW' ? 'CAPITAL_PLAN_LOW_CONFIDENCE' : undefined, contextVersion: capitalContext.contextVersion, parameters: { phase5CaptureFeature: captureFeature }, captureRequests, blocks, suggestions: ['Which expense is coming first?', 'Should I repair or replace my oldest system?'] };
+}
+
+async function propertyTaxAppealReadinessResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const ground = /\b(?:tax class|classification)\b/i.test(message) ? 'TAX_CLASS' as const : /\bexemption\b/i.test(message) ? 'EXEMPTION' as const : 'ASSESSED_VALUE' as const;
+  const context = await evaluateFeatureContext(propertyId, userId, { featureKey: 'TAX_APPEAL', operationKey: 'RUN_ANALYSIS' });
+  const requirement = context.requirements[0];
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/property-tax`;
+  const captureRequests = access.role !== HouseholdRole.VIEWER && requirement
+    ? [askCaptureRequest(requirement, context.contextVersion, 'Saved to the canonical property-tax and Property Context records', href)] : [];
+  const readiness: any = await propertyTaxAppealReadinessService.evaluate(propertyId, userId, ground);
+  if (readiness.status === 'NOT_COVERED') return {
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'PROPERTY_TAX_RULE_COVERAGE_UNAVAILABLE', contextVersion: context.contextVersion, captureRequests,
+    blocks: [{ type: 'SUMMARY', id: 'tax-readiness-not-covered', title: 'Reviewed appeal rules are not available for this property', body: readiness.reason ?? 'Ask cannot determine filing readiness without an active reviewed jurisdiction rule.', tone: 'CAUTION', actions: [{ id: 'open-property-tax', label: 'Open Property Tax Center', href, style: 'PRIMARY' }] }, { type: 'BOUNDARY', id: 'tax-coverage-boundary', title: 'Verify with the official authority', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] }], suggestions: ['Show my recorded property-tax facts'],
+  };
+  const atStake = readiness.taxAtStake;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'tax-readiness-summary', title: readiness.status === 'READY' ? `${readiness.ground?.label ?? ground}: preparation requirements are present` : readiness.status === 'NO_SUPPORTED_GROUND' ? 'The current evidence does not support this reviewed ground' : `${readiness.gaps.length} readiness gap${readiness.gaps.length === 1 ? '' : 's'} remain`,
+    body: `${readiness.reason ?? ''}${atStake ? ` The sourced planning range for annual tax at stake is ${money(atStake.low)}–${money(atStake.high)}.` : ''} Readiness does not predict appeal success.`,
+    tone: readiness.status === 'READY' ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-property-tax', label: 'Open appeal readiness', href: `${href}?section=appeal-readiness&ground=${ground}`, style: 'PRIMARY' }],
+  }];
+  if (readiness.canonical) blocks.push({ type: 'TABLE', id: 'tax-canonical-facts', title: 'Canonical tax facts used', description: 'Unknown facts remain unknown and are never treated as zero.', columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }], rows: [
+    ['Tax year', readiness.canonical.taxYear], ['Classification', readiness.canonical.classification], ['Assessed value', readiness.canonical.totalAssessedValue == null ? null : money(readiness.canonical.totalAssessedValue)], ['Taxable value', readiness.canonical.taxableValue == null ? null : money(readiness.canonical.taxableValue)], ['Effective tax rate', readiness.canonical.effectiveTaxRate == null ? null : `${(readiness.canonical.effectiveTaxRate * 100).toFixed(3)}%`],
+  ].map(([fact, value], index) => ({ id: `tax-fact-${index}`, values: { fact: String(fact), value: value == null ? 'Not confirmed' : String(value) } })), actions: [] });
+  blocks.push({ type: 'GROUPED_LIST', id: 'tax-readiness-gaps', title: readiness.gaps.length ? 'What is still needed' : 'Evidence package', description: `Estimated preparation effort: ${String(readiness.effort).toLowerCase()}.`, sections: [{ id: 'gaps', title: readiness.gaps.length ? 'Readiness gaps' : 'Confirmed evidence', count: readiness.gaps.length || readiness.evidence.length, items: readiness.gaps.length ? readiness.gaps.map((gap: string, index: number) => ({ id: `tax-gap-${index}`, title: gap, description: null, meta: [], status: 'OPEN', href })) : readiness.evidence.map((evidence: any) => ({ id: evidence.id, title: evidence.title, description: evidence.description ?? null, meta: [String(evidence.type).toLowerCase().replace(/_/g, ' ')], status: 'CONFIRMED', href })) }], actions: [] });
+  if (readiness.evidence.length || readiness.ruleProfile) blocks.push({ type: 'EVIDENCE', id: 'tax-readiness-evidence', title: 'Rule and evidence provenance', items: [{ label: readiness.ruleProfile?.title ?? 'Reviewed appeal rule', source: readiness.ruleProfile ? `Rule ${readiness.ruleProfile.version}` : 'Property Tax Center', observedAt: readiness.ruleProfile?.reviewedAt?.toISOString?.() ?? readiness.ruleProfile?.reviewedAt ?? readiness.evaluatedAt }, ...readiness.evidence.slice(0, 15).map((evidence: any) => ({ label: evidence.title, source: evidence.sourceUrl ? 'Sourced appeal evidence' : 'Vault-supported appeal evidence', observedAt: evidence.confirmedAt }))] });
+  blocks.push({ type: 'BOUNDARY', id: 'tax-readiness-boundary', title: 'Preparation support—not tax, appraisal, or legal advice', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] });
+  return { status: readiness.status === 'READY' && !captureRequests.length ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: readiness.status === 'READY' ? (captureRequests.length ? 'PROPERTY_TAX_CONTEXT_OPTIONAL' : undefined) : `PROPERTY_TAX_${readiness.status}`, contextVersion: context.contextVersion, captureRequests, blocks, suggestions: ['Which tax facts are missing?', 'Open Property Tax Center'] };
+}
+
+async function renovationPermitReadinessResult(propertyId: string, message: string): Promise<AskOperationResult> {
+  const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/projects`;
+  const permitsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/permits`;
+  if (!cases.length) return {
+    status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
+    blocks: [{ type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'Start a governed renovation case before checking readiness', body: `No active renovation case is recorded. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work.`, tone: 'CAUTION', actions: [{ id: 'start-renovation', label: 'Start renovation planning', href, style: 'PRIMARY' }, { id: 'open-permits', label: 'Review permits', href: permitsHref, style: 'SECONDARY' }] }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: ['What permits are already recorded?'],
+  };
+  const lower = message.toLowerCase();
+  const selected = cases.find((candidate) => lower.includes(candidate.name.toLowerCase())) ?? cases[0];
+  let readiness: any;
+  try { readiness = await getRenovationReadiness(propertyId, selected.id); } catch { readiness = { summary: { state: 'NOT_EVALUATED', disclaimer: 'Readiness has not been evaluated for the current scope.' }, items: [], project: null }; }
+  const summary = readiness.summary ?? {};
+  const items: any[] = readiness.items ?? [];
+  const blockers = items.filter((item) => item.isBlocking && item.status !== 'SATISFIED');
+  const open = items.filter((item) => item.status !== 'SATISFIED');
+  const caseHref = `${href}?renovationCaseId=${encodeURIComponent(selected.id)}`;
+  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-case', label: 'Open renovation case', href: caseHref, style: 'PRIMARY' }, { id: 'open-permits', label: 'Open Permit Tracker', href: permitsHref, style: 'SECONDARY' }] }];
+  if (items.length) blocks.push({ type: 'GROUPED_LIST', id: 'renovation-readiness-items', title: 'Readiness checklist', description: 'Blocking state is owned by the canonical renovation scope, requirement, compliance, quote, schedule, and evidence records.', sections: [{ id: 'blocking', title: 'Blocking', count: blockers.length, items: blockers.slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction, item.evidenceRequired].filter(Boolean), status: item.status, href: caseHref })) }, { id: 'other-open', title: 'Other open items', count: Math.max(0, open.length - blockers.length), items: open.filter((item) => !item.isBlocking).slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction].filter(Boolean), status: item.status, href: caseHref })) }].filter((section) => section.count > 0), actions: [] });
+  blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });
+  blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization—not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A “ready” app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
+  return { status: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: summary.state === 'READY' ? (permitSummary.openFlags ? 'PERMIT_FLAGS_OPEN' : undefined) : `RENOVATION_${summary.state ?? 'NOT_READY'}`, contextVersion: selected.updatedAt.toISOString(), blocks, suggestions: cases.length > 1 ? cases.slice(1, 4).map((candidate) => `Is ${candidate.name} ready to start?`) : ['What is blocking this renovation?'] };
+}
+
+async function majorEventEntryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const event = /\b(?:sell|selling|home sale)\b/i.test(message) ? 'SELLING'
+    : /\b(?:renovation|remodel)\b/i.test(message) ? 'RENOVATION'
+      : /\b(?:claim|storm damage)\b/i.test(message) ? 'CLAIM'
+        : /\b(?:aging in place)\b/i.test(message) ? 'AGING_IN_PLACE' : 'MOVING';
+  const goal = event === 'SELLING' ? 'prepare my home to sell and organize seller records'
+    : event === 'RENOVATION' ? 'plan a renovation, permits, and project tracking'
+      : event === 'CLAIM' ? 'review insurance coverage and organize claim evidence'
+        : event === 'AGING_IN_PLACE' ? 'plan home improvements and maintenance for aging in place'
+          : 'organize home records and prepare for moving';
+  const result = await capabilityResult(userId, propertyId, goal);
+  result.blocks.unshift({ type: 'SUMMARY', id: 'major-event-entry', title: `${event.toLowerCase().replace(/_/g, ' ')} plan for this home`, body: 'Start with the governed tools below. They reuse the selected home’s verified records and keep material decisions in their owning workflows; nothing has been started or shared automatically.', tone: 'DEFAULT', actions: [] });
+  result.blocks.push({ type: 'BOUNDARY', id: 'major-event-boundary', title: 'A guided entry point—not a complete professional checklist', body: 'Legal, tax, insurance, accessibility, safety, transaction, permit, and disclosure requirements can vary. Verify material obligations with the appropriate authority or qualified professional.', severity: 'INFO', suggestions: [] });
+  return { ...result, reasonCode: `MAJOR_EVENT_${event}`, suggestions: event === 'SELLING' ? ['Should I sell, hold, or rent?', 'Check sale readiness'] : event === 'RENOVATION' ? ['Is my renovation ready to start?', 'Do I need a permit?'] : ['Summarize my home record', 'What should I do next?'] };
 }
 
 const INVENTORY_QUERY_STOP_WORDS = new Set([
@@ -2856,14 +3027,19 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'INVENTORY_LOOKUP': return inventoryLookupResult(input.userId, input.propertyId!, input.message);
     case 'PROPERTY_SUMMARY': return propertySummaryResult(input.userId, input.propertyId!, input.message);
     case 'HOME_ACTIONS': return homeActionsResult(input.userId, input.propertyId!, input.message);
-    case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!);
+    case 'REPLACEMENT_GUIDANCE': return replacementGuidanceResult(input.userId, input.propertyId!, input.message);
     case 'REFINANCE_ANALYSIS': return refinanceAnalysisResult(input.userId, input.propertyId!);
     case 'REFINANCE_RATE_MONITOR': return refinanceRateMonitorResult(input.userId, input.propertyId!, input.message);
     case 'SELL_HOLD_RENT_ANALYSIS': return sellHoldRentAnalysisResult(input.userId, input.propertyId!);
     case 'HOUSEHOLD_INVITATION': return householdInvitationResult(input.userId, input.propertyId!, input.message);
     case 'GUIDANCE_JOURNEY_CREATE': return guidanceJourneyCreateResult(input.userId, input.propertyId!, input.message);
     case 'QUOTE_COMPARISON_CREATE': return quoteComparisonCreateResult(input.propertyId!, input.message);
+    case 'QUOTE_COMPARISON_REVIEW': return quoteComparisonReviewResult(input.propertyId!);
     case 'HOME_DEADLINE_MONITOR': return homeDeadlineMonitorResult(input.userId, input.propertyId!, input.message);
+    case 'CAPITAL_RESERVE_PLAN': return capitalReservePlanResult(input.userId, input.propertyId!);
+    case 'PROPERTY_TAX_APPEAL_READINESS': return propertyTaxAppealReadinessResult(input.userId, input.propertyId!, input.message);
+    case 'RENOVATION_PERMIT_READINESS': return renovationPermitReadinessResult(input.propertyId!, input.message);
+    case 'MAJOR_EVENT_ENTRY': return majorEventEntryResult(input.userId, input.propertyId!, input.message);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
   }
@@ -2886,7 +3062,12 @@ const ASK_OPERATION_CAPABILITY: Partial<Record<AskOperationResolution['operation
   SELL_HOLD_RENT_ANALYSIS: 'sell-hold-rent',
   GUIDANCE_JOURNEY_CREATE: 'guidance-overview',
   QUOTE_COMPARISON_CREATE: 'quote-comparison',
+  QUOTE_COMPARISON_REVIEW: 'quote-comparison',
   HOME_DEADLINE_MONITOR: 'maintenance',
+  CAPITAL_RESERVE_PLAN: 'capital-timeline',
+  PROPERTY_TAX_APPEAL_READINESS: 'property-tax',
+  RENOVATION_PERMIT_READINESS: 'home-renovation-risk-advisor',
+  MAJOR_EVENT_ENTRY: 'property-brief',
 };
 
 async function executeOperation(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
@@ -2961,6 +3142,11 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'SAVINGS_OPPORTUNITIES': return `${base}/tools/home-savings`;
     case 'OWNERSHIP_COSTS': return `${base}/ownership-costs`;
     case 'SELL_HOLD_RENT_ANALYSIS': return `${base}/seller-prep`;
+    case 'CAPITAL_RESERVE_PLAN': return `${base}/tools/capital-timeline`;
+    case 'PROPERTY_TAX_APPEAL_READINESS': return `${base}/tools/property-tax`;
+    case 'QUOTE_COMPARISON_REVIEW': return `${base}/tools/quote-comparison`;
+    case 'RENOVATION_PERMIT_READINESS': return `${base}/projects`;
+    case 'MAJOR_EVENT_ENTRY': return `${base}/tools`;
     case 'HOME_ACTIONS': return `${base}/home-operations`;
     case 'HOUSEHOLD_INVITATION': return `${base}/household`;
     case 'MAINTENANCE_TASK_CREATE':
@@ -3158,7 +3344,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'HOME_DEADLINE_MONITOR', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -3178,7 +3364,27 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
   let capturedContextVersion: string;
   let result: AskOperationResult;
   let canonicalOwner: string;
-  if (execution.operationId === 'SAVINGS_OPPORTUNITIES') {
+  if (execution.operationId === 'CAPITAL_RESERVE_PLAN' || execution.operationId === 'PROPERTY_TAX_APPEAL_READINESS') {
+    const tax = execution.operationId === 'PROPERTY_TAX_APPEAL_READINESS';
+    const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown> : {};
+    const capitalTimeline = !tax && parameters.phase5CaptureFeature === 'CAPITAL_TIMELINE';
+    const capture = await captureFeatureContext(execution.propertyId, userId, {
+      ...input,
+      featureKey: tax ? 'TAX_APPEAL' : capitalTimeline ? 'CAPITAL_TIMELINE' : 'RESERVE_FUND',
+      operationKey: tax ? 'RUN_ANALYSIS' : capitalTimeline ? 'RUN_TIMELINE' : 'RECALCULATE',
+    });
+    if (!capture || typeof capture !== 'object' || Array.isArray(capture)
+      || !('captureId' in capture) || typeof capture.captureId !== 'string'
+      || !('contextVersion' in capture) || typeof capture.contextVersion !== 'string') {
+      throw new Error('Property context capture did not return a valid receipt.');
+    }
+    captureId = capture.captureId;
+    capturedContextVersion = capture.contextVersion;
+    const operation = resolveAskOperation(execution.message);
+    result = await executeOperation({ userId, sessionId: execution.sessionId, message: execution.message, propertyId: execution.propertyId, operation });
+    canonicalOwner = 'PropertyContext';
+  } else if (execution.operationId === 'SAVINGS_OPPORTUNITIES') {
     const capture = await captureFeatureContext(execution.propertyId, userId, {
       ...input,
       featureKey: 'HOME_SAVINGS',
