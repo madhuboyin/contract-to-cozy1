@@ -62,6 +62,20 @@ export const askRemoteGenerationCharactersTotal = new Counter({
   registers: [register],
 });
 
+export const askRoutingDecisionsTotal = new Counter({
+  name: 'ask_routing_decisions_total',
+  help: 'Ask routing decisions by bounded cascade stage and outcome',
+  labelNames: ['stage', 'outcome'] as const,
+  registers: [register],
+});
+
+export const askResultSynthesisTotal = new Counter({
+  name: 'ask_result_synthesis_total',
+  help: 'Optional result-only Ask synthesis attempts by bounded outcome',
+  labelNames: ['outcome'] as const,
+  registers: [register],
+});
+
 export const askFeedbackTotal = new Counter({
   name: 'ask_feedback_total',
   help: 'Ask execution feedback by rating',

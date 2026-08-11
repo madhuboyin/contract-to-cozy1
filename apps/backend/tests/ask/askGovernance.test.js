@@ -80,10 +80,14 @@ test('golden and negative prompts route before remote generation', () => {
   }
 });
 
-test('Ask operational controls support global, remote, per-operation, retention, and timeout overrides', () => {
+test('Ask operational controls support global, routing, synthesis, remote, per-operation, retention, and timeout overrides', () => {
   const controls = readAskOperationalControls({
     ASK_ENABLED: 'false',
     ASK_REMOTE_GENERATION_ENABLED: '0',
+    ASK_LOCAL_ROUTING_ENABLED: 'false',
+    ASK_RESULT_SYNTHESIS_ENABLED: 'true',
+    ASK_LOCAL_ROUTING_MIN_CONFIDENCE: '0.61',
+    ASK_ROUTING_AMBIGUITY_MARGIN: '0.14',
     ASK_OPERATION_MAINTENANCE_STATUS_ENABLED: 'off',
     ASK_RAW_CONVERSATION_RETENTION_DAYS: '45',
     ASK_FEEDBACK_RETENTION_DAYS: '400',
@@ -91,6 +95,10 @@ test('Ask operational controls support global, remote, per-operation, retention,
   });
   assert.equal(controls.askEnabled, false);
   assert.equal(controls.remoteGenerationEnabled, false);
+  assert.equal(controls.localRoutingEnabled, false);
+  assert.equal(controls.resultSynthesisEnabled, true);
+  assert.equal(controls.localRoutingMinimumConfidence, 0.61);
+  assert.equal(controls.routingAmbiguityMargin, 0.14);
   assert.equal(controls.operationEnabled('MAINTENANCE_STATUS'), false);
   assert.equal(controls.operationEnabled('PROPERTY_SUMMARY'), true);
   assert.equal(controls.rawConversationRetentionDays, 45);

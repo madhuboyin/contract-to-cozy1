@@ -15,7 +15,7 @@ import {
   type SubmitAskFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../lib/metrics';
+import { askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal } from '../../lib/metrics';
 import { resolvePropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
@@ -63,6 +63,8 @@ import { listRenovationCases } from '../renovationCase.service';
 import { getReadiness as getRenovationReadiness } from '../renovationReadiness.service';
 import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
+import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
+import { synthesizeAskResult } from './askResultSynthesis.service';
 
 const MAX_RESULT_ITEMS = 50;
 const refinanceRadarService = new RefinanceRadarService();
@@ -2947,6 +2949,37 @@ function outOfScopeResult(): AskOperationResult {
   };
 }
 
+function routingClarificationResult(decision: AskRoutingDecision): AskOperationResult {
+  const choices = decision.candidates.slice(0, 3).map((candidate) => candidate.operationId.toLowerCase().replace(/_/g, ' '));
+  return {
+    status: 'NEEDS_CLARIFICATION',
+    reasonCode: 'ASK_ROUTING_AMBIGUOUS',
+    blocks: [{
+      type: 'SUMMARY',
+      id: 'routing-clarification',
+      title: 'What would you like to focus on?',
+      body: choices.length
+        ? `I found more than one possible home-related request: ${choices.join(', ')}. Add one detail so I can use the right home record and calculation.`
+        : 'Add one detail about the home record, decision, task, or tool you want to use.',
+      tone: 'DEFAULT',
+      actions: [],
+    }],
+    suggestions: choices.map((choice) => `Help me with ${choice}`).slice(0, 3),
+  };
+}
+
+async function maybeSynthesizeDeterministicResult(operationId: AskOperationResolution['operationId'], result: AskOperationResult, enabled: boolean): Promise<AskOperationResult> {
+  if (!enabled) return result;
+  try {
+    const synthesized = await synthesizeAskResult(operationId, result);
+    askResultSynthesisTotal.inc({ outcome: synthesized === result ? 'ineligible' : 'success' });
+    return synthesized;
+  } catch {
+    askResultSynthesisTotal.inc({ outcome: 'failure_fallback' });
+    return result;
+  }
+}
+
 function operationalUnavailableResult(reason: 'ASK_DISABLED' | 'OPERATION_DISABLED' | 'REMOTE_GENERATION_DISABLED'): AskOperationResult {
   const remoteOnly = reason === 'REMOTE_GENERATION_DISABLED';
   return {
@@ -3266,19 +3299,32 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   });
   await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'RECEIVED', metadataJson: asInputJson({ surface: input.launchContext?.surface ?? 'unknown' }) } });
 
-  const operation = resolveAskOperation(input.message);
+  const routingDecision = resolveAskRoutingCascade(input.message, {
+    localRoutingEnabled: controls.localRoutingEnabled,
+    localMinimumConfidence: controls.localRoutingMinimumConfidence,
+    ambiguityMargin: controls.routingAmbiguityMargin,
+  });
+  const operation = routingDecision.operation;
   const operationDefinition = getAskOperationDefinition(operation.operationId);
-  const generationMode = operationDefinition.executionMode === 'REMOTE_GENERATION' ? 'remote' : 'deterministic';
+  const generationMode = routingDecision.requiresClarification
+    ? 'deterministic'
+    : operationDefinition.executionMode === 'REMOTE_GENERATION' ? 'remote' : 'deterministic';
+  askRoutingDecisionsTotal.inc({ stage: routingDecision.stage.toLowerCase(), outcome: routingDecision.requiresClarification ? 'clarification' : operation.operationId.toLowerCase() });
   const startedAt = Date.now();
   await prisma.askExecution.update({
     where: { id: execution.id },
     data: { operationId: operation.operationId, operationVersion: operation.version, intentFamily: operation.family, intentConfidence: operation.confidence, status: 'RUNNING' },
   });
   try {
-    const result = await withAskTimeout(
-      executeOperation({ userId, sessionId: session.id, message: input.message, propertyId: input.propertyId, operation }),
+    const rawResult = await withAskTimeout(
+      routingDecision.requiresClarification
+        ? Promise.resolve(routingClarificationResult(routingDecision))
+        : executeOperation({ userId, sessionId: session.id, message: input.message, propertyId: input.propertyId, operation }),
       controls.executionTimeoutMs,
     );
+    const result = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
+      ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled)
+      : rawResult;
     const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && !operationDefinition.allowedBlockTypes.includes(block.type));
     if (disallowedBlock) throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;

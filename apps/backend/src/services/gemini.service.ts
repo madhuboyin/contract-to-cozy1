@@ -13,6 +13,7 @@ import {
 import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
+import { minimizeAskQuestion, selectRelevantAskFacts } from './ask/askPromptMinimization';
 // Load environment variables
 dotenv.config();
 
@@ -34,16 +35,17 @@ const geminiChatCircuit = new AICircuitBreaker('gemini-chat', {
 });
 
 class GeminiService {
-  private ai: GoogleGenAI;
+  private ai: GoogleGenAI | null = null;
   private model: string = LLM_MODEL_CONFIG.DEFAULT_MODEL;
 
-  constructor() {
+  private getAI(): GoogleGenAI {
+    if (this.ai) return this.ai;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      // This is a known point of failure if the key is not configured in the deployed environment.
-      throw new Error("GEMINI_API_KEY is not set in environment variables.");
+      throw new APIError('AI generation is not configured.', 503, 'AI_PROVIDER_NOT_CONFIGURED');
     }
     this.ai = new GoogleGenAI({ apiKey });
+    return this.ai;
   }
 
   /**
@@ -70,7 +72,7 @@ class GeminiService {
         //instruction = `You are an expert AI assistant providing advice for the user's specific property. The following are key facts about the property: [${propertyContext}]. Use this context to personalize your advice, especially on property risk and maintenance. **REMINDER: The Risk Score is inverse (100=BEST, 0=WORST).** If a specific detail is missing from the facts, state that you do not have that specific detail for the property.`;
     }
 
-    const chat = this.ai.chats.create({
+    const chat = this.getAI().chats.create({
       model: this.model,
       config: {
         systemInstruction: instruction,
@@ -96,15 +98,18 @@ class GeminiService {
     propertyId?: string 
   ): Promise<string> {
     
+    const minimizedQuestion = minimizeAskQuestion(message);
     let propertyContext: string | undefined;
     let contextVersion = 'GENERAL';
 
     if (propertyId) {
         const context = await getAggregationPropertyContext(propertyId, userId, 'SEARCH_ASSISTANT');
+        const relevantFacts = selectRelevantAskFacts(minimizedQuestion, Object.values(context.facts));
         const usedFacts: string[] = [];
         const missingFacts: string[] = [];
         const boundedFacts: Record<string, unknown> = {};
-        for (const [key, fact] of Object.entries(context.facts)) {
+        for (const fact of relevantFacts) {
+          const key = fact.key;
           if (fact.state === 'KNOWN') {
             usedFacts.push(key);
             boundedFacts[key] = fact.value;
@@ -132,7 +137,7 @@ class GeminiService {
         withTimeout(
           async () =>
             chat.sendMessage({
-              message,
+              message: minimizedQuestion,
             }),
           {
             timeoutMs: GEMINI_CHAT_TIMEOUT_MS,
@@ -165,6 +170,32 @@ class GeminiService {
       logger.error({ err: error }, "Gemini API call error");
       throw new APIError('Failed to get response from AI service.', 502, 'AI_UPSTREAM_ERROR');
     }
+  }
+
+  public async synthesizeAskResult(resultOnlyPayload: string): Promise<unknown> {
+    const response = await geminiChatCircuit.execute(async () =>
+      withTimeout(
+        async () => this.getAI().models.generateContent({
+          model: this.model,
+          contents: resultOnlyPayload,
+          config: {
+            systemInstruction: 'You format validated Contract to Cozy result data. Return JSON only. Never add facts, advice, numbers, dates, links, actions, or conclusions.',
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'object',
+              properties: { summary: { type: 'string' } },
+              required: ['summary'],
+              additionalProperties: false,
+            },
+            temperature: 0.1,
+            maxOutputTokens: 220,
+          },
+        }),
+        { timeoutMs: GEMINI_CHAT_TIMEOUT_MS, operation: 'ask_result_synthesis' },
+      ),
+    );
+    if (!response.text) throw new APIError('AI result synthesis returned an empty response.', 502, 'AI_EMPTY_RESPONSE');
+    return JSON.parse(response.text);
   }
 }
 

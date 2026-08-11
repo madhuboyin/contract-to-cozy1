@@ -58,12 +58,20 @@ All nine Phase 5 families are property-authorized, deterministic, independently 
 | --- | --- | --- |
 | `ASK_ENABLED` | `true` | Global Ask kill switch |
 | `ASK_REMOTE_GENERATION_ENABLED` | `true` | Turns off open-ended generation while deterministic Ask remains available |
+| `ASK_LOCAL_ROUTING_ENABLED` | `true` | Independently disables the bounded local lexical-classifier stage and returns unmatched questions to the governed remote fallback |
+| `ASK_LOCAL_ROUTING_MIN_CONFIDENCE` | `0.42` | Minimum bounded classifier score required to select a deterministic operation |
+| `ASK_ROUTING_AMBIGUITY_MARGIN` | `0.10` | Minimum lead over another qualified candidate; closer candidates produce clarification |
+| `ASK_RESULT_SYNTHESIS_ENABLED` | `false` | Opts eligible deterministic answers into result-only remote formatting; canonical typed output remains the fallback |
 | `ASK_OPERATION_<OPERATION_ID>_ENABLED` | `true` | Per-operation kill switch |
 | `ASK_EXECUTION_TIMEOUT_MS` | `15000` | Bounded execution timeout; maximum accepted value is 120 seconds |
 | `ASK_RAW_CONVERSATION_RETENTION_DAYS` | `30` | Raw session, message, execution, event, and receipt retention |
 | `ASK_FEEDBACK_RETENTION_DAYS` | `365` | Ask-specific homeowner feedback retention |
 
 When generation is disabled, `GROUNDED_GUIDANCE` returns a typed unavailable boundary and routes the homeowner toward deterministic record questions. It does not synthesize or invent a fallback answer.
+
+Routing order is safety/negative boundary, registered deterministic rule, bounded local lexical classifier, ambiguity clarification, then remote grounded guidance. The local classifier receives only the current question in process and makes no database or model-provider call. Grounded generation receives a redacted question capped at 600 characters and no more than 20 relevant Property Context facts within a 6,000-character serialized budget. It never receives the complete property snapshot merely because no relevant fact matched.
+
+Result synthesis is an optional presentation enhancement, not a reasoning or data-retrieval stage. It receives only a validated, redacted DTO projected from eligible typed result blocks. Actions, links, internal IDs, raw records, questions, context snapshots, confirmations, commands, boundaries, monitors, and workflow progress are excluded. Synthesis failures or unsupported numeric claims return the original deterministic result without failing Ask.
 
 ## Retention and deletion
 
@@ -84,6 +92,8 @@ Operational metrics:
 - `ask_execution_duration_seconds{operation,generation_mode}`
 - `ask_remote_generation_total{outcome}`
 - `ask_remote_generation_characters_total{direction}` as the provider-neutral cost proxy
+- `ask_routing_decisions_total{stage,outcome}` for deterministic containment, local-classifier use, clarification, and remote fallback
+- `ask_result_synthesis_total{outcome}` for eligible, successful, and failure-fallback formatting attempts
 - `ask_feedback_total{rating}`
 - `ask_retention_deletions_total{reason}`
 - `ask_inline_captures_total{operation,outcome}` for prompted, submitted, resumed, resume-failed, conflict, permission-denied, dismissed, full-form-opened, and repeated-prompt outcomes
@@ -109,5 +119,6 @@ The product launch target remains p95 ≤ 1.5 seconds for deterministic queries.
 5. Apply the retention CronJob and verify one dry run against a non-production database.
 6. Verify deterministic containment, latency, capture resume success, and repeated-prompt rate in the dashboard.
 7. For an incident, disable the affected `ASK_OPERATION_<ID>_ENABLED` flag. Disable `ASK_REMOTE_GENERATION_ENABLED` for model/provider incidents. Use `ASK_ENABLED=false` only when the entire surface must be paused.
+8. For routing regressions, set `ASK_LOCAL_ROUTING_ENABLED=false`. For formatting regressions, set `ASK_RESULT_SYNTHESIS_ENABLED=false`; both controls preserve canonical deterministic answers.
 
 Production launch still requires recorded desktop/mobile E2E, accuracy/latency, restart, horizontal-scale, privacy, and domain-owner sign-off evidence. Repository implementation alone does not manufacture those attestations.
