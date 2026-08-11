@@ -12,6 +12,7 @@ export type AskIntentFamily =
 export type AskOperationId =
   | 'MAINTENANCE_STATUS'
   | 'MAINTENANCE_TASK_CREATE'
+  | 'MAINTENANCE_TASK_COMPLETE'
   | 'COVERAGE_GAPS'
   | 'SAVINGS_OPPORTUNITIES'
   | 'OWNERSHIP_COSTS'
@@ -51,6 +52,7 @@ const emergencyPattern = /\b(smell(?:ing)? gas|gas leak|carbon monoxide|\bco ala
 const outOfScopePattern = /\b(python|javascript|typescript|coding interview|write (?:me )?(?:a )?program|never[- ]ending loop|system prompt|celebrity news|school essay)\b/i;
 const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|what(?:'s| is) due|completed work|pending work|service history|what did (?:i|we) complete|work (?:i |we )?(?:completed|finished)|what should (?:i|we) do before (?:winter|spring|summer|fall|autumn))\b/i;
 const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:maintenance(?: task)?|tasks?|gutter (?:cleaning|inspection)|clean(?:ing)? (?:the )?gutters?|filter change|(?:hvac|furnace|boiler|roof|water heater) (?:service|inspection|cleaning|repair|replacement))\b|\b(?:remind me to|put on my maintenance list)\b/i;
+const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:complete|completed|done)|(?:complete|finish)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair))\b|\b(?:i|we) (?:completed|finished)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?))\b/i;
 const savingsOpportunitiesPattern = /\b(where|how|ways?|opportunities?)\b.{0,45}\b(save|saving|savings|lower|reduce)\b.{0,35}\b(money|costs?|bills?|expenses?|insurance|internet|utilities|energy|warranty)\b|\b(?:where|how) (?:can|could|do) (?:i|we) save\b|\b(?:saving|savings) opportunities\b|\blower (?:my |our )?(?:home |household )?(?:costs?|bills?|expenses?)\b|\bwhat savings\b.{0,35}\b(?:realized|received|saved)\b|\b(?:fastest|shortest|best) payback\b/i;
 const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|break down)\b.{0,45}\b(?:home|house|housing|property|ownership)\b.{0,45}\b(?:cost|costs|expense|expenses|outflow)\b|\b(?:how much am i|what am i)\b.{0,45}\b(?:paying|spending)\b.{0,45}\b(?:home|house|housing|property)\b|\b(?:monthly|annual|yearly|total|true|ownership|operating|cash)\s+(?:home |house |housing |property )?(?:cost|costs|expenses?|outflow)\b|\bcost of owning\b|\b(?:largest|biggest|highest|most expensive)\b.{0,35}\b(?:home |ownership )?(?:cost|expense|category)\b|\bwhich (?:cost |expense )?categor(?:y|ies)\b.{0,35}\b(?:most|highest|largest)\b/i;
@@ -71,6 +73,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (outOfScopePattern.test(message)) {
     return { operationId: 'OUT_OF_SCOPE_BOUNDARY', version: '1.0', family: 'OUT_OF_SCOPE', confidence: 0.99, requiresProperty: false };
+  }
+  if (maintenanceCompletePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return { operationId: 'MAINTENANCE_TASK_COMPLETE', version: '1.0', family: 'WORKFLOW_GUIDANCE', confidence: 0.97, requiresProperty: true };
   }
   if (maintenanceCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return { operationId: 'MAINTENANCE_TASK_CREATE', version: '1.0', family: 'WORKFLOW_GUIDANCE', confidence: 0.97, requiresProperty: true };

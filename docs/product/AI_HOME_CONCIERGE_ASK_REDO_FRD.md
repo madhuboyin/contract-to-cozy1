@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.3"
+version: "1.4"
 date: "August 11, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.3 |
+| Version | 1.4 |
 | Date | August 11, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -48,7 +48,8 @@ This FRD is the living product and implementation contract for Ask. The reposito
 | Operation | Status | Implemented behavior | Current boundary or remaining work |
 | --- | --- | --- | --- |
 | Maintenance status | Implemented | Completed, pending, overdue, due-soon, upcoming, cancelled, priority, seasonal, system/category, room, rolling-window, calendar-window, explicit-date, and since-purchase queries; dates, costs, recurrence, source, evidence, and task links | Read-only status remains bounded by recorded tasks and is not an inspection or all-clear |
-| Maintenance task creation | Implemented | Resolves explicit create/add/schedule/reminder intent separately from status queries; extracts safe task details when present; collects missing title, priority, schedule, recurrence, notes, and estimate inline; requires contributor/owner role and explicit confirmation; creates through the canonical Maintenance service; returns the task; and uses a stable execution action key plus confirmation receipt for retry safety | Task updates, bulk creation, assignment, completion, archive, and maintenance monitors remain future confirmed-command adapters |
+| Maintenance task creation | Implemented | Resolves explicit create/add/schedule/reminder intent separately from status queries; extracts safe task details when present; collects missing title, priority, schedule, recurrence, notes, and estimate inline; requires contributor/owner role and explicit confirmation; creates through the canonical Maintenance service; returns the task; and uses a stable execution action key plus confirmation receipt for retry safety | Task updates, bulk creation, assignment, archive, and maintenance monitors remain future confirmed-command adapters |
+| Maintenance task completion | Implemented | Resolves an exact open task deterministically; asks the homeowner to select when the reference is missing or ambiguous; captures optional actual cost and required project follow-up outcome inline; requires contributor/owner role and explicit confirmation; completes through the canonical Maintenance service; reports the recurring next due date and downstream reconciliation; and uses stable completion metadata plus a confirmation receipt for retry recovery | Reschedule, reprioritize, assignment, archive, bulk completion, editable confirmation, and maintenance monitors remain future confirmed-command adapters |
 | Coverage review | Implemented | Separates confirmed no coverage, unclear coverage, expired, expiring within 90 days, and missing evidence; supports exposure/evidence filters, freshness, masked references, viewer safety, and one-at-a-time canonical relational capture/resume | A linked record is not represented as a coverage determination; document upload remains in the canonical coverage/inventory workflow |
 | Home Actions | Implemented | Reads only the final governed Home Actions feed; supports top-focus, urgent, soon, plan, and wait views with ranking explanation, evidence, confidence, canonical CTAs, honest empty states, and optional Property Context capture | Ask does not bypass the confirmation or workflow requirements of the underlying material action |
 | Savings opportunities | Implemented | Aggregates canonical savings, hidden-asset, and benefit sources; separates verified, estimated, and discoverable opportunities; supports deterministic ranking and optional context improvement | Availability and value remain bounded by registered source coverage and confidence |
@@ -72,7 +73,7 @@ This FRD is the living product and implementation contract for Ask. The reposito
 | Phase 1 — Deterministic record queries | All six named launch operations implemented | Full golden accuracy/latency certification, telemetry dashboard completion, restart/scale evidence, and desktop/mobile E2E launch sign-off |
 | Phase 2 — Inline capture | Partially implemented across refrigerator, refinance, savings, ownership costs, sell/hold/rent, inventory, property summary, Home Actions, and coverage | Complete conflict/stale/not-sure E2E matrices, approximate-date UX certification, and repeated-prompt measurement |
 | Phase 3 — Capability discovery | Backend slice implemented | Semantic breadth, top-1 ranking certification, related-capability continuity, and unavailable-tool E2E coverage |
-| Phase 4 — Confirmed actions and monitors | Partially implemented for maintenance task creation, refinance monitoring, and household invitations | Generic adapter extraction, maintenance update/completion commands, additional monitors, edit/pause/stop/reverse paths, and complete role matrices |
+| Phase 4 — Confirmed actions and monitors | Partially implemented for maintenance task creation and completion, refinance monitoring, and household invitations | Generic adapter extraction, remaining maintenance update/reschedule/assignment/archive commands, additional monitors, edit/pause/stop/reverse paths, and complete role matrices |
 | Phase 5 — Decision intelligence | Partially implemented for sell/hold/rent, ownership costs, refrigerator replacement, and coverage review | Remaining priority analyses and category expansion |
 | Phase 6 — Model optimization | Not started | Benchmark before adopting a local classifier; deterministic routing remains the production baseline |
 | Phase 7 — Proactive continuity and scale | Not started | Portfolio queries, notification-to-Ask continuity, document-assisted reviewed capture, and scaled personalization |
@@ -538,6 +539,8 @@ Requirements:
 
 `MAINTENANCE_TASK_CREATE` now owns explicit create/add/schedule/reminder requests. It can deterministically prefill a task title, due date, priority, recurrence, and estimated cost from supported phrasing, then uses a structured workflow-input card for any missing or editable details. Nothing is written before a time-limited confirmation card is accepted. Confirmation rechecks contributor-or-owner authorization and maintenance-record freshness, then calls `PropertyMaintenanceTaskService.createUserTask`. The task receives a stable Ask-execution action key, preventing duplicate artifacts under retry or concurrent confirmation. Cancellation creates no task. Viewers receive a read-only boundary.
 
+`MAINTENANCE_TASK_COMPLETE` now owns explicit mark/complete/finish requests while historical questions remain routed to `MAINTENANCE_STATUS`. It deterministically resolves a unique open task or collects the exact task inline when the reference is missing or ambiguous. The workflow can record actual cost and requires a health outcome for project follow-up tasks. No record changes before confirmation. Confirmation rechecks contributor-or-owner authorization and the selected task version, then completes through `PropertyMaintenanceTaskService.updateTaskStatus`. The response reports recorded cost, recurring next due date, and project outcome when applicable. A stable completion idempotency key stored with the canonical task lets a retried execution recover after a successful side effect without resetting completion time, advancing recurrence twice, or duplicating downstream reconciliation. Cancellation leaves the task unchanged. Viewers remain read-only.
+
 ### 12.2 Missing coverage
 
 **Question:** “Which items are missing coverage?”
@@ -829,7 +832,7 @@ A capability card must show:
 
 Ask may initiate a registered journey and continue to answer questions within it, but the domain workflow remains the source of truth for milestones, dependencies, completion, and outcome recording.
 
-**Implementation status — August 11, 2026:** The shared capture → review → confirm → artifact response lifecycle is implemented for maintenance task creation, household invitations, and refinance-rate monitors. Each operation rechecks authorization and a domain-specific freshness version at confirmation. Maintenance creation additionally uses a stable canonical action key to close the side-effect/receipt retry gap. The next command slice should extract this repeated lifecycle into a generic registered-command adapter without weakening operation-specific validation.
+**Implementation status — August 11, 2026:** The shared capture → review → confirm → artifact response lifecycle is implemented for maintenance task creation and completion, household invitations, and refinance-rate monitors. Each operation rechecks authorization and a domain-specific freshness version at confirmation. Maintenance creation uses a stable canonical action key, while completion stores a stable idempotency key in canonical completion metadata and recovers a result if the side effect succeeded before the Ask receipt was persisted. This prevents a retry from resetting completion time, advancing a recurring task twice, or repeating downstream reconciliation. The next command slice should extract this repeated lifecycle into a generic registered-command adapter without weakening operation-specific validation.
 
 ## 17. Monitoring, notifications, and follow-up
 
@@ -1747,7 +1750,7 @@ Exit criteria:
 Deliverables:
 
 - generic confirmation lifecycle over registered domain commands;
-- maintenance task creation/update;
+- maintenance task creation/completion/update;
 - household invitation workflow;
 - guidance journey and comparison-workspace creation;
 - refinance threshold monitor;

@@ -578,11 +578,12 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
      * both mutation paths write identical completion data.
      */
     private static buildStatusUpdateData(
-      task: Pick<PropertyMaintenanceTask, 'actionKey' | 'isRecurring' | 'frequency' | 'nextDueDate'>,
+      task: Pick<PropertyMaintenanceTask, 'actionKey' | 'isRecurring' | 'frequency' | 'nextDueDate' | 'completionMetadata'>,
       status: MaintenanceTaskStatus,
       userId: string,
       actualCost?: number,
       outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
+      completionIdempotencyKey?: string,
     ): Record<string, unknown> {
       const updateData: Record<string, unknown> = { status };
       if (status !== 'COMPLETED') return updateData;
@@ -592,14 +593,21 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         updateData.actualCost = actualCost;
       }
 
+      const existingMetadata = task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata)
+        ? task.completionMetadata as Record<string, unknown>
+        : {};
       const projectFollowUpMatch = task.actionKey?.match(/^project:([^:]+):follow-up$/);
       if (projectFollowUpMatch) {
         updateData.completionMetadata = {
+          ...existingMetadata,
           kind: 'PROJECT_OUTCOME_FOLLOW_UP',
           projectId: projectFollowUpMatch[1],
           outcomeHealth: outcomeHealth ?? 'CONFIRMED_HEALTHY',
           recordedByUserId: userId,
+          ...(completionIdempotencyKey ? { completionIdempotencyKey } : {}),
         };
+      } else if (completionIdempotencyKey) {
+        updateData.completionMetadata = { ...existingMetadata, completionIdempotencyKey, recordedByUserId: userId };
       }
 
       if (task.isRecurring && task.frequency) {
@@ -1061,6 +1069,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       status: MaintenanceTaskStatus,
       actualCost?: number,
       outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
+      completionIdempotencyKey?: string,
     ): Promise<PropertyMaintenanceTask> {
       // Verify access (CONTRIBUTOR+ required to mutate tasks)
       await this.getTask(userId, taskId, 'CONTRIBUTOR');
@@ -1074,10 +1083,18 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         throw new Error('Task not found.');
       }
 
+      const completionMetadata = task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata)
+        ? task.completionMetadata as Record<string, unknown>
+        : {};
+      if (status === 'COMPLETED' && task.status === 'COMPLETED'
+        && completionIdempotencyKey && completionMetadata.completionIdempotencyKey === completionIdempotencyKey) {
+        return task;
+      }
+
       const wasCompleted = task.status === 'COMPLETED';
       const isNowCompleted = status === 'COMPLETED';
 
-      const updateData = this.buildStatusUpdateData(task, status, userId, actualCost, outcomeHealth);
+      const updateData = this.buildStatusUpdateData(task, status, userId, actualCost, outcomeHealth, completionIdempotencyKey);
 
       const updatedTask = await prisma.propertyMaintenanceTask.update({
         where: { id: taskId },
