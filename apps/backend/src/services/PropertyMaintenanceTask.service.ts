@@ -1096,10 +1096,33 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
 
       const updateData = this.buildStatusUpdateData(task, status, userId, actualCost, outcomeHealth, completionIdempotencyKey);
 
-      const updatedTask = await prisma.propertyMaintenanceTask.update({
-        where: { id: taskId },
+      // Atomic compare-and-swap: Prisma has no row locking, so an
+      // unconditional update() lets two concurrent completions (e.g. a
+      // retried Ask confirmation) both read a pre-completion task, both
+      // pass the idempotency check above, and both apply side effects —
+      // advancing a recurring task's due date twice or double-firing
+      // downstream reconciliation. Guarding the write on `updatedAt`
+      // (bumped by every prior write) ensures only one request's write can
+      // match; the loser re-reads and either replays idempotently or
+      // surfaces a genuine conflict instead of silently double-applying.
+      const claimed = await prisma.propertyMaintenanceTask.updateMany({
+        where: { id: taskId, updatedAt: task.updatedAt },
         data: updateData,
       });
+
+      if (claimed.count === 0) {
+        const current = await prisma.propertyMaintenanceTask.findUnique({ where: { id: taskId } });
+        const currentCompletionMetadata = current?.completionMetadata && typeof current.completionMetadata === 'object' && !Array.isArray(current.completionMetadata)
+          ? current.completionMetadata as Record<string, unknown>
+          : {};
+        if (current && status === 'COMPLETED' && current.status === 'COMPLETED'
+          && completionIdempotencyKey && currentCompletionMetadata.completionIdempotencyKey === completionIdempotencyKey) {
+          return current;
+        }
+        throw new Error('This task was changed by a concurrent update. Reload it and try again.');
+      }
+
+      const updatedTask = await prisma.propertyMaintenanceTask.findUniqueOrThrow({ where: { id: taskId } });
 
       await this.applyTaskCompletionSideEffects(userId, task, updatedTask, wasCompleted, isNowCompleted, outcomeHealth);
 

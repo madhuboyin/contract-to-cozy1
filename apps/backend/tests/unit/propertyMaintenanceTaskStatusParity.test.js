@@ -102,9 +102,15 @@ let currentTask = makeTask();
 const prismaMock = {
   propertyMaintenanceTask: {
     findUnique: async () => currentTask,
+    findUniqueOrThrow: async () => currentTask,
     update: async (args) => {
       currentTask = { ...currentTask, ...args.data };
       return currentTask;
+    },
+    updateMany: async (args) => {
+      if (currentTask.updatedAt.getTime() !== args.where.updatedAt.getTime()) return { count: 0 };
+      currentTask = { ...currentTask, ...args.data, updatedAt: new Date(currentTask.updatedAt.getTime() + 1) };
+      return { count: 1 };
     },
     upsert: async () => ({}),
   },

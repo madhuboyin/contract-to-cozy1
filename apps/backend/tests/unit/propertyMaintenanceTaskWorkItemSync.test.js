@@ -115,6 +115,17 @@ const prismaMock = {
       tasks.set(where.id, row);
       return row;
     },
+    updateMany: async ({ where, data }) => {
+      const row = tasks.get(where.id);
+      if (!row || row.updatedAt?.getTime?.() !== where.updatedAt?.getTime?.()) return { count: 0 };
+      tasks.set(where.id, { ...row, ...data, updatedAt: new Date(row.updatedAt.getTime() + 1) });
+      return { count: 1 };
+    },
+    findUniqueOrThrow: async ({ where }) => {
+      const row = tasks.get(where.id);
+      if (!row) throw new Error('Task not found.');
+      return row;
+    },
     delete: async ({ where }) => {
       const row = tasks.get(where.id);
       tasks.delete(where.id);
