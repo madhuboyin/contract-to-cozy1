@@ -98,13 +98,23 @@ function validateInputValue(schema: ScalarCaptureInputSchema, value: unknown, al
 export function normalizeAnswers(
   definition: ReturnType<typeof getCaptureDefinition>,
   answer: Record<string, unknown>,
+  allowNotSureOverride?: boolean,
 ): Array<{ factKey: string; value: unknown }> {
+  // The evaluator (evaluateFeatureContext.ts's applyRequirementPolicy) forces
+  // allowNotSure to false for every REQUIRED_* classification, but that
+  // correction lives on the evaluated requirement, not the static capture
+  // catalog definition. Callers on the write path MUST pass the resolved
+  // requirement's allowNotSure through allowNotSureOverride so a
+  // REQUIRED_SAFETY/APPLICABILITY/CALCULATION capture can't be persisted as
+  // "not sure" just because its catalog entry defaults to allowing it for
+  // other (e.g. enhancement) contexts.
+  const allowNotSure = allowNotSureOverride ?? definition.allowNotSure;
   if (definition.mode === 'SCALAR') {
     if (!Object.prototype.hasOwnProperty.call(answer, 'value')) throw new Error('Scalar capture requires an answer value.');
     if (definition.inputSchema.type === 'GROUP' || definition.inputSchema.type === 'RELATIONAL_SELECT_CREATE' || definition.inputSchema.type === 'RELATIONAL_UPDATE') {
       throw new Error('Scalar capture has an invalid input schema.');
     }
-    validateInputValue(definition.inputSchema, answer.value, definition.allowNotSure);
+    validateInputValue(definition.inputSchema, answer.value, allowNotSure);
     return [{ factKey: definition.factKeys[0], value: normalizeCaptureValue(definition.factKeys[0], answer.value) }];
   }
   if (definition.mode !== 'STRUCTURED' || definition.inputSchema.type !== 'GROUP' || !definition.answerBindings) {
@@ -120,7 +130,7 @@ export function normalizeAnswers(
     if (!supplied && field.required) throw new Error(`Structured capture is missing required field: ${field.key}`);
     if (!supplied) continue;
     const answerValue = answer[field.key];
-    validateInputValue(field.inputSchema, answerValue, definition.allowNotSure);
+    validateInputValue(field.inputSchema, answerValue, allowNotSure);
     if (field.required && field.inputSchema.type === 'MULTI_SELECT' && Array.isArray(answerValue) && answerValue.length === 0) {
       throw new Error(`Structured capture requires at least one selection for: ${field.key}`);
     }
@@ -169,7 +179,7 @@ async function captureFeatureContextInternal(propertyId: string, userId: string,
 
   let answers: Array<{ factKey: string; value: unknown }> = [];
   try {
-    if (definition.mode !== 'RELATIONAL') answers = normalizeAnswers(definition, input.answer);
+    if (definition.mode !== 'RELATIONAL') answers = normalizeAnswers(definition, input.answer, active.capture.allowNotSure);
     else if ((definition.inputSchema.type !== 'RELATIONAL_SELECT_CREATE' && definition.inputSchema.type !== 'RELATIONAL_UPDATE') || !definition.relationalAdapterKey) {
       throw new Error('Relational capture is not backed by an allowlisted domain command.');
     }

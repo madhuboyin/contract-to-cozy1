@@ -47,6 +47,27 @@ test('outdoor structured capture applies conditional fields and clears types ato
   ]);
 });
 
+test('normalizeAnswers rejects "not sure" for a REQUIRED_SAFETY capture even though its catalog entry allows it for other contexts', () => {
+  const definition = getCaptureDefinition('SAFETY_DETECTOR_PROFILE');
+  // The catalog default (used for non-required contexts) allows "not sure".
+  assert.equal(definition.allowNotSure, true);
+  const nullAnswer = { hasSmokeDetectors: null, hasCoDetectors: null, commonSafetyResponsibility: null };
+  // Without an override, catalog default still governs (unchanged behavior).
+  assert.deepEqual(normalizeAnswers(definition, nullAnswer), [
+    { factKey: 'safety.hasSmokeDetectors', value: null },
+    { factKey: 'safety.hasCoDetectors', value: null },
+    { factKey: 'responsibility.commonSafety', value: 'UNKNOWN' },
+  ]);
+  // The write path must pass the resolved requirement's allowNotSure
+  // (evaluateFeatureContext.ts's applyRequirementPolicy forces this to false
+  // for REQUIRED_SAFETY/APPLICABILITY/CALCULATION classifications) so a
+  // required-safety fact can never be silently persisted as unknown.
+  assert.throws(
+    () => normalizeAnswers(definition, nullAnswer, false),
+    /Expected a yes or no answer\./,
+  );
+});
+
 test('explicit unknown evidence remains distinct from false and canonical values', () => {
   const now = new Date('2026-07-17T12:00:00.000Z');
   const unknown = createPropertyFact('safety.hasSmokeDetectors', true, {
