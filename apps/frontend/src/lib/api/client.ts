@@ -537,6 +537,7 @@ class APIClient {
       return data; 
 
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
       // Critical: Ensure every error path results in a thrown error so the UI catch/finally blocks run
       if (error instanceof APIError) {
         if (error.status === 429) {
@@ -1000,15 +1001,15 @@ class APIClient {
   async createAskExecution(payload: CreateAskExecutionPayload): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>('/api/ask/executions', { method: 'POST', body: payload });
   }
-  async getAskSession(sessionId: string): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
-    return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`);
+  async getAskSession(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
+    return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, options);
   }
-  async getAskExecution(executionId: string): Promise<APIResponse<AskExecutionResponse>> {
-    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}`);
+  async getAskExecution(executionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}`, options);
   }
-  async getAskPendingWork(propertyId?: string): Promise<APIResponse<{ items: import('@/features/ask/types').AskPendingWorkItem[] }>> {
+  async getAskPendingWork(propertyId?: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ items: import('@/features/ask/types').AskPendingWorkItem[] }>> {
     const query = propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : '';
-    return this.request(`/api/ask/pending${query}`);
+    return this.request(`/api/ask/pending${query}`, options);
   }
   async continueAskExecution(executionId: string, surface: 'ASK_PAGE' | 'GLOBAL_LAUNCHER'): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/continue`, { method: 'POST', body: { surface } });

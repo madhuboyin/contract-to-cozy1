@@ -49,7 +49,7 @@ export interface AskExecutionResponse {
 }
 
 export interface AskPendingWorkItem {
-  pendingKind: 'CLARIFICATION' | 'ENTITY_SELECTION' | 'CONTEXT_CAPTURE' | 'CONFIRMATION';
+  pendingKind: 'CLARIFICATION' | 'ENTITY_SELECTION' | 'CONTEXT_CAPTURE' | 'CONFIRMATION' | 'COMMAND_RECOVERY';
   actionLabel: string;
   execution: AskExecutionResponse;
 }

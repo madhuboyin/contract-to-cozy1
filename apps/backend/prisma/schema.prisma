@@ -6867,15 +6867,21 @@ model AskConfirmationReceipt {
   executionId         String
   idempotencyKey      String
   confirmationVersion Int
-  artifactType        String
+  status              String   @default("CLAIMED")
+  artifactType        String?
   artifactId          String?
   inputHash           String
+  leaseExpiresAt      DateTime
+  attemptCount        Int      @default(1)
+  completedAt         DateTime?
+  lastErrorCode       String?
   createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   execution AskExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
+  @@unique([executionId])
   @@unique([executionId, idempotencyKey])
-  @@index([executionId, createdAt])
   @@map("ask_confirmation_receipts")
 }
 

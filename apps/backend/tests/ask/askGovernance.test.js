@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 
 require('ts-node/register');
 
@@ -44,6 +46,18 @@ test('every material Ask command has governed confirmation, authorization, cance
     assert.equal(ASK_OPERATION_DEFINITIONS[definition.operationId].propertyRoleFloor, definition.roleFloor);
     assert.equal(ASK_OPERATION_DEFINITIONS[definition.operationId].adapterKey, definition.adapterKey);
   }
+});
+
+test('material confirmations acquire a unique leased claim before domain mutation', () => {
+  const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const claimCreate = orchestrator.indexOf('await tx.askConfirmationReceipt.create');
+  const firstDomainMutation = orchestrator.indexOf("if (execution.operationId === 'MAINTENANCE_TASK_COMPLETE')", claimCreate);
+  assert.match(schema, /model AskConfirmationReceipt[\s\S]*leaseExpiresAt\s+DateTime[\s\S]*@@unique\(\[executionId\]\)/);
+  assert.ok(claimCreate > 0);
+  assert.ok(firstDomainMutation > claimCreate);
+  assert.match(orchestrator, /status: 'RUNNING', reasonCode: 'ASK_CONFIRMATION_CLAIMED'/);
+  assert.match(orchestrator, /status: 'COMPLETED', artifactType, artifactId, completedAt/);
 });
 
 test('golden and negative prompts route before remote generation', () => {

@@ -400,7 +400,7 @@ async function householdInvitationResult(
 function needsPropertyResult(): AskOperationResult {
   return {
     status: 'NEEDS_PROPERTY',
-    reasonCode: 'PROPERTY_REQUIRED',
+    reasonCode: 'ASK_PROPERTY_REQUIRED',
     blocks: [{
       type: 'SUMMARY',
       id: 'property-required',
@@ -3192,7 +3192,20 @@ const ASK_OPERATION_CAPABILITY: Partial<Record<AskOperationResolution['operation
 };
 
 async function executeOperation(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution }): Promise<AskOperationResult> {
-  const result = await executeOperationCore(input);
+  const coreResult = await executeOperationCore(input);
+  const result: AskOperationResult = coreResult.status === 'NEEDS_ENTITY'
+    ? {
+      ...coreResult,
+      reasonCode: 'ASK_ENTITY_REQUIRED',
+      parameters: { ...(coreResult.parameters ?? {}), requirementReasonCode: coreResult.reasonCode ?? null },
+    }
+    : coreResult.status === 'OUT_OF_SCOPE'
+      ? {
+        ...coreResult,
+        reasonCode: 'ASK_OPERATION_UNSUPPORTED',
+        parameters: { ...(coreResult.parameters ?? {}), requirementReasonCode: coreResult.reasonCode ?? null },
+      }
+      : coreResult;
   const currentCapabilityId = ASK_OPERATION_CAPABILITY[input.operation.operationId];
   if (
     !input.propertyId
@@ -4117,21 +4130,23 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
-  const inputHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
-  const previous = await prisma.askConfirmationReceipt.findUnique({
-    where: { executionId_idempotencyKey: { executionId, idempotencyKey: input.idempotencyKey } },
-  });
+  const inputHash = createHash('sha256').update(JSON.stringify({
+    confirmationVersion: input.confirmationVersion,
+    consentConfirmed: input.consentConfirmed,
+  })).digest('hex');
+  const previous = await prisma.askConfirmationReceipt.findUnique({ where: { executionId } });
   if (previous) {
     if (previous.inputHash !== inputHash) {
-      const error = new Error('The idempotency key was already used for a different confirmation.');
+      const error = new Error('Another confirmation already claimed this execution.');
       (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_IDEMPOTENCY_CONFLICT';
       throw error;
     }
-    return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+    if (previous.status === 'COMPLETED') return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   }
   const access = await ensurePropertyAccess(userId, execution.propertyId);
   const command = getAskDomainCommandByOperation(execution.operationId ?? '');
-  if (!command || execution.status !== 'NEEDS_CONFIRMATION') {
+  const recoveringClaim = previous?.status === 'CLAIMED' && execution.status === 'RUNNING';
+  if (!command || (execution.status !== 'NEEDS_CONFIRMATION' && !recoveringClaim)) {
     const error = new Error('This confirmation is no longer active.');
     (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
     throw error;
@@ -4147,7 +4162,10 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     : {};
   const expectedVersion = parameters.confirmationVersion;
   const expiresAt = typeof parameters.confirmationExpiresAt === 'string' ? new Date(parameters.confirmationExpiresAt) : null;
-  if (!expiresAt || expiresAt <= new Date()) {
+  // Once a command has been durably claimed, confirmation expiry must not
+  // incorrectly assert that no action occurred. Recovery replays only the
+  // already-confirmed input through domain idempotency controls.
+  if ((!expiresAt || expiresAt <= new Date()) && !recoveringClaim) {
     const expired = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {
@@ -4162,6 +4180,68 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     const error = new Error('This confirmation version is no longer active.');
     (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
     throw error;
+  }
+  if (previous) {
+    const recovered = await prisma.askConfirmationReceipt.updateMany({
+      where: { executionId, status: 'CLAIMED', leaseExpiresAt: { lte: new Date() } },
+      data: {
+        idempotencyKey: input.idempotencyKey,
+        inputHash,
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+        attemptCount: { increment: 1 },
+        lastErrorCode: null,
+      },
+    });
+    if (recovered.count !== 1) {
+      const error = new Error('This action is already being completed. Ask will reconcile the durable result shortly.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_IN_PROGRESS';
+      throw error;
+    }
+    await prisma.askExecutionEvent.create({
+      data: { executionId, eventType: 'CONFIRMATION_RECOVERY_CLAIMED', metadataJson: asInputJson({ confirmationVersion: input.confirmationVersion }) },
+    });
+  } else {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const claimed = await tx.askExecution.updateMany({
+          where: { id: execution.id, userId, status: 'NEEDS_CONFIRMATION' },
+          data: { status: 'RUNNING', reasonCode: 'ASK_CONFIRMATION_CLAIMED', completedAt: null },
+        });
+        if (claimed.count !== 1) {
+          const error = new Error('This confirmation is no longer active.');
+          (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+          throw error;
+        }
+        await tx.askConfirmationReceipt.create({
+          data: {
+            executionId,
+            idempotencyKey: input.idempotencyKey,
+            confirmationVersion: input.confirmationVersion,
+            inputHash,
+            status: 'CLAIMED',
+            leaseExpiresAt: new Date(Date.now() + 60_000),
+          },
+        });
+        await tx.askExecutionEvent.create({
+          data: { executionId, eventType: 'CONFIRMATION_CLAIMED', metadataJson: asInputJson({ confirmationVersion: input.confirmationVersion }) },
+        });
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      const winner = await prisma.askConfirmationReceipt.findUnique({ where: { executionId } });
+      if (!winner || winner.inputHash !== inputHash) {
+        const conflict = new Error('Another confirmation already claimed this execution.');
+        (conflict as Error & { code?: string }).code = 'ASK_CONFIRMATION_IDEMPOTENCY_CONFLICT';
+        throw conflict;
+      }
+      if (winner.status === 'COMPLETED') {
+        const completed = await prisma.askExecution.findFirstOrThrow({ where: { id: executionId, userId } });
+        return mapPersistedExecution(completed, await propertySummary(execution.propertyId));
+      }
+      const inProgress = new Error('This action is already being completed. Ask will reconcile the durable result shortly.');
+      (inProgress as Error & { code?: string }).code = 'ASK_CONFIRMATION_IN_PROGRESS';
+      throw inProgress;
+    }
   }
   let result: AskOperationResult;
   let artifactType: string;
@@ -4520,18 +4600,17 @@ export async function confirmAskExecution(userId: string, executionId: string, i
         where: { id: execution.id },
         data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions }), completedAt: new Date() },
       });
-      await tx.askConfirmationReceipt.create({
-        data: { executionId, idempotencyKey: input.idempotencyKey, confirmationVersion: input.confirmationVersion, artifactType, artifactId, inputHash },
+      await tx.askConfirmationReceipt.update({
+        where: { executionId },
+        data: { status: 'COMPLETED', artifactType, artifactId, completedAt: new Date(), lastErrorCode: null },
       });
       await tx.askExecutionEvent.create({ data: { executionId, eventType: 'CONFIRMED', metadataJson: asInputJson({ artifactType, artifactId }) } });
       return updated;
     });
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-    const duplicate = await prisma.askConfirmationReceipt.findUnique({
-      where: { executionId_idempotencyKey: { executionId, idempotencyKey: input.idempotencyKey } },
-    });
-    if (!duplicate || duplicate.inputHash !== inputHash) throw error;
+    const duplicate = await prisma.askConfirmationReceipt.findUnique({ where: { executionId } });
+    if (!duplicate || duplicate.idempotencyKey !== input.idempotencyKey || duplicate.inputHash !== inputHash) throw error;
     const completed = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
     if (!completed) throw error;
     saved = completed;
@@ -4598,9 +4677,11 @@ export async function getAskExecution(userId: string, executionId: string): Prom
   return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
 }
 
-const CONTINUABLE_ASK_STATUSES: AskExecutionStatus[] = ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'];
+const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'];
+const CONTINUABLE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_STATUSES, 'RUNNING'];
 
 function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKind'] {
+  if (status === 'RUNNING') return 'COMMAND_RECOVERY';
   if (status === 'NEEDS_ENTITY') return 'ENTITY_SELECTION';
   if (status === 'NEEDS_CONTEXT') return 'CONTEXT_CAPTURE';
   if (status === 'NEEDS_CONFIRMATION') return 'CONFIRMATION';
@@ -4608,6 +4689,7 @@ function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKin
 }
 
 function pendingActionLabel(status: AskExecutionStatus): string {
+  if (status === 'RUNNING') return 'Check action status';
   if (status === 'NEEDS_ENTITY') return 'Choose a record';
   if (status === 'NEEDS_CONTEXT') return 'Add the missing detail';
   if (status === 'NEEDS_CONFIRMATION') return 'Review and confirm';
@@ -4629,6 +4711,7 @@ function pendingInteractionExpiresAt(execution: { resultJson: Prisma.JsonValue |
 }
 
 async function expirePendingInteraction(execution: AskExecution): Promise<AskExecution> {
+  if (execution.status === 'RUNNING') return execution;
   const interactionExpiresAt = pendingInteractionExpiresAt(execution);
   if (!interactionExpiresAt || interactionExpiresAt > new Date()) return execution;
   const updated = await prisma.askExecution.updateMany({
@@ -4654,8 +4737,13 @@ export async function getAskPendingWork(userId: string, propertyId: string | nul
     where: {
       userId,
       propertyId,
-      status: { in: CONTINUABLE_ASK_STATUSES },
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      AND: [
+        { OR: [
+          { status: { in: INTERACTIVE_ASK_STATUSES } },
+          { status: 'RUNNING', confirmations: { some: { status: 'CLAIMED' } } },
+        ] },
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+      ],
     },
     orderBy: { updatedAt: 'desc' },
     take: 20,

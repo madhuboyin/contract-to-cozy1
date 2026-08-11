@@ -32,6 +32,20 @@ function captureDraftStorageKey(executionId: string, requirementId: string): str
   return `ctc:ask-capture-draft:v1:${executionId}:${requirementId}`;
 }
 
+function confirmationAttemptStorageKey(executionId: string, version: number): string {
+  return `ctc:ask-confirmation-attempt:v1:${executionId}:${version}`;
+}
+
+const capturePolicy = {
+  REQUIRED_SAFETY: { eyebrow: 'Safety information required', note: 'This fact is required to give safe guidance. A general estimate cannot be substituted.', border: 'border-red-200 bg-red-50/80' },
+  REQUIRED_APPLICABILITY: { eyebrow: 'Applicability check required', note: 'This determines whether the workflow applies to this home.', border: 'border-amber-200 bg-amber-50/80' },
+  REQUIRED_CALCULATION: { eyebrow: 'Calculation input required', note: 'This value is required before Ask can calculate a personalized result.', border: 'border-indigo-200 bg-indigo-50/80' },
+  ENHANCEMENT_ACCURACY: { eyebrow: 'Improve this answer', note: null, border: 'border-sky-200 bg-sky-50/80' },
+  SCENARIO_INPUT: { eyebrow: 'Scenario detail', note: null, border: 'border-sky-200 bg-sky-50/80' },
+  PREFERENCE_INPUT: { eyebrow: 'Your preference', note: null, border: 'border-sky-200 bg-sky-50/80' },
+  WORKFLOW_INPUT: { eyebrow: 'Complete this workflow', note: null, border: 'border-sky-200 bg-sky-50/80' },
+} satisfies Record<AskCaptureRequest['classification'], { eyebrow: string; note: string | null; border: string }>;
+
 function ActionLink({ action }: { action: AskAction }) {
   if (!action.href) return null;
   return (
@@ -293,7 +307,14 @@ function ConfirmationCard({ executionId, confirmation, onCompleted }: { executio
   const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [idempotencyKey] = useState(newId);
+  const [idempotencyKey] = useState(() => {
+    const key = confirmationAttemptStorageKey(executionId, confirmation.version);
+    const existing = window.sessionStorage.getItem(key);
+    if (existing) return existing;
+    const created = newId();
+    window.sessionStorage.setItem(key, created);
+    return created;
+  });
   const expired = new Date(confirmation.expiresAt) <= new Date();
 
   const confirm = async () => {
@@ -302,8 +323,21 @@ function ConfirmationCard({ executionId, confirmation, onCompleted }: { executio
     try {
       const response = await api.confirmAskExecution(executionId, { confirmationVersion: confirmation.version, idempotencyKey, consentConfirmed: true });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not complete this action.');
+      window.sessionStorage.removeItem(confirmationAttemptStorageKey(executionId, confirmation.version));
       onCompleted(response.data);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not complete this action.'); }
+    } catch (caught) {
+      // A disconnected client cannot cancel a server-side mutation. Reconcile
+      // the durable execution before inviting the homeowner to retry.
+      try {
+        const reconciled = await api.getAskExecution(executionId);
+        if (reconciled.success && reconciled.data && reconciled.data.status !== 'NEEDS_CONFIRMATION') {
+          onCompleted(reconciled.data);
+          if (reconciled.data.status !== 'RUNNING') window.sessionStorage.removeItem(confirmationAttemptStorageKey(executionId, confirmation.version));
+          return;
+        }
+      } catch { /* retain the original actionable error */ }
+      setError(caught instanceof Error ? caught.message : 'Could not complete this action.');
+    }
     finally { setSaving(false); }
   };
   const cancel = async () => {
@@ -338,6 +372,7 @@ function InlineCaptureCard({
   onCompleted: (execution: AskExecutionResponse) => void;
 }) {
   const schema = request.inputSchema;
+  const policy = capturePolicy[request.classification];
   const scalarCapture = schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' && schema.type !== 'GROUP';
   const [values, setValues] = useState<Record<string, unknown>>(() => {
     const canonical = schema.type === 'RELATIONAL_UPDATE'
@@ -426,11 +461,12 @@ function InlineCaptureCard({
   };
 
   return (
-    <form onSubmit={save} className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4" aria-busy={saving}>
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">{request.classification === 'WORKFLOW_INPUT' ? 'Complete this workflow' : 'Improve this answer'}</p>
+    <form onSubmit={save} className={cn('rounded-2xl border p-4', policy.border)} aria-busy={saving}>
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">{policy.eyebrow}</p>
       <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
       <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
       {request.helpText && <p className="mt-1 text-xs leading-5 text-slate-500">{request.helpText}</p>}
+      {policy.note && <p className="mt-2 text-xs font-semibold leading-5 text-slate-700">{policy.note}</p>}
       {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel} after you continue.</p>}
       <div className="mt-4 space-y-4">
         {activeFields.map((field) => <CaptureFieldControl key={field.key} field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />)}
@@ -529,16 +565,17 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     setPendingLoading(true);
-    api.getAskPendingWork(selectedPropertyId)
-      .then((response) => { if (active) setPendingWork(response.success && response.data ? response.data.items : []); })
-      .catch(() => { if (active) setPendingWork([]); })
-      .finally(() => { if (active) setPendingLoading(false); });
-    return () => { active = false; };
+    api.getAskPendingWork(selectedPropertyId, { signal: controller.signal })
+      .then((response) => setPendingWork(response.success && response.data ? response.data.items : []))
+      .catch((caught) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) setPendingWork([]); })
+      .finally(() => { if (!controller.signal.aborted) setPendingLoading(false); });
+    return () => controller.abort();
   }, [selectedPropertyId]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const key = sessionStorageKey(selectedPropertyId);
     let nextSession = window.localStorage.getItem(key);
     if (!nextSession) {
@@ -549,10 +586,11 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
     setExecutions([]);
     setHistoryLoading(true);
-    api.getAskSession(nextSession)
+    api.getAskSession(nextSession, { signal: controller.signal })
       .then((response) => setExecutions('data' in response ? response.data?.executions ?? [] : []))
-      .catch(() => setExecutions([]))
-      .finally(() => setHistoryLoading(false));
+      .catch((caught) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) setExecutions([]); })
+      .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
+    return () => controller.abort();
   }, [selectedPropertyId, initialQuestion]);
 
   useEffect(() => {

@@ -309,7 +309,7 @@ export const AskExecutionResponseSchema = z.object({
 });
 
 export const AskPendingWorkItemSchema = z.object({
-  pendingKind: z.enum(['CLARIFICATION', 'ENTITY_SELECTION', 'CONTEXT_CAPTURE', 'CONFIRMATION']),
+  pendingKind: z.enum(['CLARIFICATION', 'ENTITY_SELECTION', 'CONTEXT_CAPTURE', 'CONFIRMATION', 'COMMAND_RECOVERY']),
   actionLabel: z.string().trim().min(1).max(120),
   execution: AskExecutionResponseSchema,
 });

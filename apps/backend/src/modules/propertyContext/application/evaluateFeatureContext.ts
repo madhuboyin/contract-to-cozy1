@@ -29,6 +29,23 @@ export const evaluateFeatureContextInputSchema = z.object({
 
 export type EvaluateFeatureContextInput = z.infer<typeof evaluateFeatureContextInputSchema>;
 
+const REQUIRED_CLASSIFICATION_RANK: Record<EvaluatedContextRequirement['classification'], number> = {
+  REQUIRED_SAFETY: 0,
+  REQUIRED_APPLICABILITY: 1,
+  REQUIRED_CALCULATION: 2,
+  ENHANCEMENT_ACCURACY: 3,
+};
+
+function applyRequirementPolicy(requirement: EvaluatedContextRequirement): EvaluatedContextRequirement {
+  if (!requirement.classification.startsWith('REQUIRED_')) return requirement;
+  return {
+    ...requirement,
+    // Required safety, applicability, and calculation facts may never be
+    // bypassed with an unresolved "not sure" value.
+    capture: { ...requirement.capture, allowNotSure: false },
+  };
+}
+
 export function selectedItemCoverageEvidenceState(item: {
   warrantyId?: unknown;
   insurancePolicyId?: unknown;
@@ -204,7 +221,9 @@ async function evaluateFeatureContextInternal(
   const required = (await Promise.all(contract.required
     .sort((left, right) => left.priority - right.priority)
     .map((requirement) => evaluateRequirement(contractKey, requirement, context, input.operationInput))))
-    .filter((value): value is EvaluatedContextRequirement => Boolean(value));
+    .filter((value): value is EvaluatedContextRequirement => Boolean(value))
+    .map(applyRequirementPolicy)
+    .sort((left, right) => REQUIRED_CLASSIFICATION_RANK[left.classification] - REQUIRED_CLASSIFICATION_RANK[right.classification]);
   const enhancements = (await Promise.all(contract.enhancements
     .sort((left, right) => left.priority - right.priority)
     .map((requirement) => evaluateRequirement(contractKey, requirement, context, input.operationInput))))
