@@ -1145,7 +1145,7 @@ async function homeDeadlineMonitorResult(userId: string, propertyId: string, mes
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_DEADLINE_MONITOR_CONFIRMATION_REQUIRED', parameters: { homeDeadlineMonitor: input, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'deadline-monitor-review', title: 'Review this expiration reminder', body: 'Ask will create a dated canonical Maintenance obligation so the existing governed reminder worker can notify you.', tone: 'DEFAULT', actions: [] }],
-    confirmation: { confirmationId: `home-deadline-${source.id}-1`, version: 1, title: `Monitor this ${warranty ? 'warranty' : 'policy'} expiration?`, description: 'This creates one deduplicated reminder task and enables maintenance deadline email preferences for this home.', fields: [{ label: 'Provider', value: provider }, { label: 'Expires', value: expiry.toISOString().slice(0, 10) }, { label: 'Reminder date', value: input.dueDate }, { label: 'Channel', value: 'In-app plus email' }], confirmLabel: 'Activate reminder', consentText: 'I consent to receive this home-deadline reminder by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `home-deadline-${source.id}-1`, version: 1, title: `Monitor this ${warranty ? 'warranty' : 'policy'} expiration?`, description: 'This creates one deduplicated reminder task and enables expiration-deadline email preferences for this home. It does not change maintenance-task email preferences.', fields: [{ label: 'Provider', value: provider }, { label: 'Expires', value: expiry.toISOString().slice(0, 10) }, { label: 'Reminder date', value: input.dueDate }, { label: 'Channel', value: 'In-app plus email' }], confirmLabel: 'Activate reminder', consentText: 'I consent to receive this expiration-deadline reminder by email and in the app.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -4650,7 +4650,15 @@ export async function confirmAskExecution(userId: string, executionId: string, i
         task = await PropertyMaintenanceTaskService.updateTask(userId, task.id, { nextDueDate: candidate.data.dueDate, status: MaintenanceTaskStatus.PENDING, priority: MaintenanceTaskPriority.HIGH });
       }
     }
-    await Promise.all(['MAINTENANCE', 'MATERIAL_DEADLINE'].map((category) => upsertNotificationPreference(userId, { propertyId: execution.propertyId!, category: category as 'MAINTENANCE' | 'MATERIAL_DEADLINE', channel: 'EMAIL', enabled: true, cadence: 'IMMEDIATE', timezone: 'UTC' })));
+    // Notification categories are property-wide switches (userId + property +
+    // category + channel), not scoped to the single task/policy just
+    // confirmed. Enabling both MAINTENANCE and MATERIAL_DEADLINE regardless
+    // of which reminder was actually confirmed silently turns on emails for
+    // an unrelated category the consent copy never disclosed. Enable only
+    // the category the confirmed reminder belongs to.
+    const deadlineCategory: 'MAINTENANCE' | 'MATERIAL_DEADLINE' = candidate.data.sourceType === 'MAINTENANCE' ? 'MAINTENANCE' : 'MATERIAL_DEADLINE';
+    const property = await prisma.property.findUnique({ where: { id: execution.propertyId }, select: { timezone: true } });
+    await upsertNotificationPreference(userId, { propertyId: execution.propertyId!, category: deadlineCategory, channel: 'EMAIL', enabled: true, cadence: 'IMMEDIATE', timezone: property?.timezone ?? 'UTC' });
     const href = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
     const maintenanceSource = candidate.data.sourceType === 'MAINTENANCE';
     result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [{ id: 'manage-reminder', label: 'Manage reminder', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [`Reschedule ${task.title}`, `Archive ${task.title}`] };
@@ -4851,9 +4859,19 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   if (!session) return [];
   const executions = await prisma.askExecution.findMany({ where: { sessionId, userId }, orderBy: { createdAt: 'asc' } });
   const propertyIds = [...new Set(executions.map((execution) => execution.propertyId).filter((value): value is string => Boolean(value)))];
-  const properties = await prisma.property.findMany({ where: { id: { in: propertyIds } }, select: { id: true, name: true, address: true, city: true, state: true } });
+  // Row ownership (userId) proves this is the homeowner's own conversation,
+  // not that they still hold current access to every property it touches.
+  // A revoked household member must lose visibility into that property's
+  // stored answers immediately (FRD ASK-25.2), so each referenced property
+  // is rechecked here rather than trusting the historical snapshot; any
+  // execution for a property the user can no longer reach is dropped
+  // rather than failing the whole session read.
+  const accessEntries = await Promise.all(propertyIds.map(async (propertyId) => [propertyId, Boolean(await resolvePropertyAccess(userId, propertyId))] as const));
+  const accessiblePropertyIds = new Set(accessEntries.filter(([, accessible]) => accessible).map(([propertyId]) => propertyId));
+  const visibleExecutions = executions.filter((execution) => !execution.propertyId || accessiblePropertyIds.has(execution.propertyId));
+  const properties = await prisma.property.findMany({ where: { id: { in: [...accessiblePropertyIds] } }, select: { id: true, name: true, address: true, city: true, state: true } });
   const labels = new Map(properties.map((property) => [property.id, { id: property.id, label: propertyLabel(property) }]));
-  return executions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
+  return visibleExecutions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
 }
 
 export async function getAskExecution(userId: string, executionId: string): Promise<AskExecutionResponse> {
@@ -4863,6 +4881,7 @@ export async function getAskExecution(userId: string, executionId: string): Prom
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
+  if (execution.propertyId) await ensurePropertyAccess(userId, execution.propertyId);
   return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
 }
 

@@ -200,6 +200,7 @@ export async function getAskExecutionById(req: AuthRequest, res: Response, next:
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
     return next(error);
   }
 }
