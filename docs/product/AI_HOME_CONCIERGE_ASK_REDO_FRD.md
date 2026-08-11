@@ -46,7 +46,12 @@ This FRD is the living product and implementation contract for Ask. The reposito
 - The adaptive Ask workspace and global entry point include panel-to-workspace continuity, question and inline-capture draft preservation, pending-work close protection (including Escape), scoped live-region announcements, focus trapping/restoration, answer feedback, correction links, and inline history deletion. Continued responsive and end-to-end certification remains part of launch hardening.
 - Ambiguous routing and every current operation/entity clarification path now create a durable, versioned, expiring clarification on the original execution. This includes maintenance-task selection/update details, guided-plan scope, quote service scope, maintenance-monitor task selection, repair/replace and inventory item selection, and refinance thresholds. Option and free-text replies are validated, safety routing is re-applied, concurrent resumes are claimed once, and the same execution continues without creating a second conversation turn.
 - Ask exposes execution-by-id and correction-request APIs, distinguishes terminal from retryable execution failures, and persists explicit `EXPIRED` results for expired clarification or confirmation workflows.
-- Confirmation freshness is rechecked for guided-plan scope, quote-comparison workspace state, and refinance monitor data/preferences in addition to the existing household and maintenance versions. Stale confirmation attempts fail closed before canonical mutation.
+- Confirmation freshness is rechecked for guided-plan scope, quote-comparison workspace state, and refinance monitor data/preferences in addition to the existing household and maintenance versions. Stale confirmation attempts fail closed before canonical mutation. A post-claim conflict (e.g. the underlying task/policy/workspace changed while confirmation was open) now atomically releases the claim and lands on the same durable "ask again" `EXPIRED` state used elsewhere, instead of leaving the execution wedged at `RUNNING` indefinitely.
+- Execution-phase failures (including remote-guidance dependency failures) now persist a typed `ERROR_STATE` result and return normally rather than only throwing; the workspace shows the failed turn inline with a retry action instead of an empty card on reload.
+- A bounded, durable follow-up resolver reads the current session's most recent typed execution (never raw model chat) to resolve deterministic-routing continuations — entity pronouns ("now complete it") substituted from a singularly-named prior result, and bare filter refinements ("only show the urgent ones") re-routed to the same prior read operation — failing closed (no substitution) whenever the prior turn named more than one candidate.
+- `NEEDS_PROPERTY` is a resumable execution, not a dead end: it is included in pending-work discovery, and a dedicated endpoint lets the homeowner attach a property to the same execution and continue, rather than restarting the question.
+- `getAskSession` and `getAskExecution` (conversation history reads) now recheck current property access rather than only execution ownership, so a revoked household member immediately loses visibility into that property's stored answers; session history filters out inaccessible executions rather than failing the whole read.
+- The intent-family taxonomy now includes `DECISION_ANALYSIS`, `COMMAND`, and `MONITOR` alongside the existing families, and a genuinely ambiguous routing turn records `CLARIFICATION` rather than inheriting the placeholder candidate's family; operations are re-categorized to match (e.g. refinance/sell-hold-rent/repair-replace analyses under `DECISION_ANALYSIS`, maintenance task commands and household invitation under `COMMAND`, refinance-rate and home-deadline monitors under `MONITOR`).
 
 ### As-built operation catalog
 
@@ -59,8 +64,8 @@ This FRD is the living product and implementation contract for Ask. The reposito
 | Guided-plan creation | Implemented | Grounds the requested plan in a recorded item or approved service journey, requires explicit confirmation, creates through the canonical Guidance service, links the resulting journey, and uses a unique Ask execution key to prevent duplicates under retry/concurrency | Journey step execution and dismissal remain governed by the Guidance workspace |
 | Quote-comparison creation | Implemented | Collects a supported service scope, requires explicit confirmation, and uses the canonical serializable get-or-create workspace writer; no provider is selected and no quote is accepted | Adding and deciding between proposals remains in the comparison workspace |
 | Quote-comparison review | Implemented | Reads the latest canonical workspace, preserves homeowner-confirmed readiness and comparability, presents recorded prices and scope, explains gaps, and refuses to select or endorse a provider | Proposal capture, disposition, selection, negotiation, and acceptance remain governed workspace actions |
-| Maintenance and home-deadline monitors | Implemented | Activates scoped delivery preferences for an existing Maintenance task without duplicating it; captures a missing task due date inline and resumes automatically; finds the next recorded warranty/policy expiration; captures a missing insurance expiration date inline into the canonical policy; requires channel consent and confirmation; creates one stable canonical reminder task for expiration lead time; and uses the existing governed reminder worker | The Maintenance worker’s launch horizon is seven days; warranty creation/renewal and policies that do not yet exist remain in Coverage/Home Records; in-app continuity is mandatory and email is homeowner-configurable |
-| Coverage review | Implemented | Separates confirmed no coverage, unclear coverage, expired, expiring within 90 days, and missing evidence; supports exposure/evidence filters, freshness, masked references, viewer safety, and one-at-a-time canonical relational capture/resume | A linked record is not represented as a coverage determination; document upload remains in the canonical coverage/inventory workflow |
+| Maintenance and home-deadline monitors | Implemented | Activates scoped delivery preferences for an existing Maintenance task without duplicating it; captures a missing task due date inline and resumes automatically; finds the next recorded warranty/policy expiration; captures a missing insurance expiration date inline into the canonical policy; requires channel consent and confirmation; creates one stable canonical reminder task for expiration lead time; enables only the notification category the confirmed reminder actually belongs to (`MAINTENANCE` or `MATERIAL_DEADLINE`, never both); and uses the existing governed reminder worker | The Maintenance worker’s launch horizon is seven days; warranty creation/renewal and policies that do not yet exist remain in Coverage/Home Records; in-app continuity is mandatory and email is homeowner-configurable |
+| Coverage review | Implemented | Separates confirmed no coverage, unclear coverage, expired, expiring within 90 days, and missing evidence; supports exposure/evidence filters, freshness, masked references, viewer safety, and inline select-an-existing-record-or-create-a-new-one relational capture/resume rendered directly in the conversation | A linked record is not represented as a coverage determination; broader document-upload capture remains in the canonical coverage/inventory workflow |
 | Home Actions | Implemented | Reads only the final governed Home Actions feed; supports top-focus, urgent, soon, plan, and wait views with ranking explanation, evidence, confidence, canonical CTAs, honest empty states, and optional Property Context capture | Ask does not bypass the confirmation or workflow requirements of the underlying material action |
 | Savings opportunities | Implemented | Aggregates canonical savings, hidden-asset, and benefit sources; separates verified, estimated, and discoverable opportunities; supports deterministic ranking and optional context improvement | Availability and value remain bounded by registered source coverage and confidence |
 | Inventory lookup | Implemented | Searches canonical items and systems, supports entity/category/lifecycle/history/incomplete-record views, shows provenance and freshness, and can capture selected-item lifecycle context inline | Broad document-assisted item extraction remains later-phase work |
@@ -476,6 +481,8 @@ Ask should be available from:
 
 Every entry point supplies launch context such as property, entity, current capability, source action, workflow, and return destination.
 
+**Implementation status — August 11, 2026:** Partially implemented. `launchContextJson` was previously write-only — persisted per execution but never read back for routing. Every "Ask Cozy" launcher now sends a real, differentiated `surface` identifying its originating page, and the two entry points with an unambiguous capability mapping (warranties, insurance — both resolve to coverage review) also send `capabilityId`, which the backend now reads back to bias routing (see §20.3). No current entry point supplies a specific `entityType`/`entityId` yet — none of today's launch points have a single entity in scope at the point Ask opens — so that half of the contract is wired end-to-end (schema, plumbing, and backend read-back all exist) but has no live populated caller.
+
 ### 10.2 Default interaction
 
 1. The user asks in homeowner language.
@@ -485,6 +492,8 @@ Every entry point supplies launch context such as property, entity, current capa
 5. The UI renders the appropriate answer, capture, clarification, capability, confirmation, or boundary card.
 6. The user may ask a follow-up without restating property or entity context.
 7. Confirmed changes update canonical records and conversation state.
+
+**Implementation status — August 11, 2026:** Point 6 is now partially implemented for two bounded, deterministic continuation shapes (ASK-FR-003). Before routing, a resolver reads the session's most recent typed execution (a durable `AskExecution` row, never raw model chat history) within a short recency window. An entity-continuation phrasing ("Now complete it.", "Mark that task done.") has its pronoun substituted with the prior turn's single named item, extracted from that turn's own result blocks — and is left unresolved, on purpose, when the prior turn named more than one candidate, since guessing which one would be exactly the silent-misattribution risk this must avoid. A bare filter-refinement phrasing ("Only show the urgent ones.") is concatenated with the prior question and, only if the classifier still can't resolve it confidently on its own, re-routed to that same prior read-only operation; write/analysis operations are excluded from this path so a filter refinement can never silently redirect into a mutation or scenario-bound analysis. Broader reference resolution (timeframe pronouns, ambiguous goal continuation, multi-turn entity chains) remains unimplemented.
 
 ### 10.3 Zero-friction behaviors
 
@@ -534,6 +543,8 @@ Every entry point supplies launch context such as property, entity, current capa
 - The system limits clarification/capture loops to a configured maximum and then offers a full workspace or safe limited result.
 - A new user message may cancel, replace, or branch the pending execution; the UI must make that state visible.
 
+**Implementation status — August 11, 2026:** `NEEDS_PROPERTY` is now a genuinely resumable state rather than a dead end. It is included in the interactive/pending-work status set (surfaced through pending-work discovery when no property is selected, matching the fact that a `NEEDS_PROPERTY` execution has no property of its own yet), and a dedicated endpoint lets the homeowner attach a property to the already-resolved operation and resume the same execution — the workspace renders an inline property picker in place of the earlier plain "select a home" navigation link, and bridges the browser's per-property session mapping so the resumed conversation stays visible after the switch.
+
 ## 12. Core homeowner journeys
 
 ### 12.1 Existing-data question
@@ -567,7 +578,7 @@ Requirements:
 - Offer relational inline capture to associate an existing policy/warranty or create one.
 - Preserve policy-number masking and authorization rules.
 
-**Implementation status — August 11, 2026: Implemented.** `COVERAGE_GAPS` uses the canonical inventory coverage presentation and a homeowner-facing coverage-review read model. It keeps confirmed no coverage, unclear coverage, expired coverage, coverage expiring within 90 days, and missing supporting evidence distinct; supports exposure, expiry, and evidence-focused questions; returns source freshness and correction links; and never treats an empty relationship as proof that the homeowner is uninsured. Owner/contributor users receive one relational capture at a time and automatically resume after confirming no coverage, selecting an existing policy/warranty, or creating a canonical record. Viewers remain read-only. Policy and warranty references exposed by relational selectors are masked to their final four characters.
+**Implementation status — August 11, 2026: Implemented.** `COVERAGE_GAPS` uses the canonical inventory coverage presentation and a homeowner-facing coverage-review read model. It keeps confirmed no coverage, unclear coverage, expired coverage, coverage expiring within 90 days, and missing supporting evidence distinct; supports exposure, expiry, and evidence-focused questions; returns source freshness and correction links; and never treats an empty relationship as proof that the homeowner is uninsured. Owner/contributor users receive one relational capture at a time and automatically resume after confirming no coverage, selecting an existing policy/warranty, or creating a canonical record. Viewers remain read-only. Policy and warranty references exposed by relational selectors are masked to their final four characters. The workspace previously rendered this relational capture as only an "Open full form" link, ignoring the registered options/create-fields the backend already returned; it now renders the select-existing and create-new choices directly in the conversation, with "Open full form" retained as a fallback.
 
 ### 12.3 Savings opportunities
 
@@ -881,7 +892,7 @@ Ask should support registered monitors such as:
 
 When a monitor fires, the notification must link back to an Ask context or domain result explaining what changed, why it matters, and the recommended next action. It must not merely repeat the threshold.
 
-**Implementation status — August 11, 2026:** Refinance-rate and Maintenance deadline notifications now create an idempotent, single-property Ask session and typed execution at trigger time. The notification opens that exact execution, whose structured result preserves the triggering monitor/snapshot or task/due date, explains what changed and why it matters, and recommends the next action. The owning Refinance Radar or Maintenance task remains a secondary action. If continuation creation fails, notification delivery degrades to the owning domain URL rather than suppressing the alert. Unconsumed free-text `askQuestion` metadata has been removed in favor of durable `askExecutionId` and `askSessionId` linkage.
+**Implementation status — August 11, 2026:** Refinance-rate and Maintenance deadline notifications now create an idempotent, single-property Ask session and typed execution at trigger time. The notification opens that exact execution, whose structured result preserves the triggering monitor/snapshot or task/due date, explains what changed and why it matters, and recommends the next action. The owning Refinance Radar or Maintenance task remains a secondary action. If continuation creation fails, notification delivery degrades to the owning domain URL rather than suppressing the alert. Unconsumed free-text `askQuestion` metadata has been removed in favor of durable `askExecutionId` and `askSessionId` linkage. The notification link also carries `propertyId`, which the `/dashboard/ask` page now reads and syncs into the workspace before its data-loading effects run, rather than only `sessionId`/`executionId` — without this, the globally-selected property (from an earlier page or localStorage) could differ from the notification's property, so the header and any follow-up question asked on landing would silently use the wrong scope, and the stale first render would have written the notification's session id into the previous property's local session-key slot.
 
 ## 18. Negative, irrelevant, unsafe, and adversarial prompts
 
@@ -917,6 +928,7 @@ Before any remote model call, classify or detect:
 | “Delete my wife from the household.” | Resolve owner authorization and use governed household workflow with confirmation |
 | Extremely long/repeated input | Enforce length/rate limits and return a stable error |
 
+**Implementation status — August 11, 2026:** Verified by executing the deterministic patterns directly against every literal example in this table (not paraphrases). Two of this table's own examples previously fell through undetected to grounded guidance: `emergencyPattern` required verb-then-noun ordering (`smell(?:ing)? gas`) and missed this row's own noun-then-verb phrasing "gas smell"; the injection pattern's determiner list (`all `/`the `/nothing) didn't anticipate "your" in "Ignore your rules." Both are fixed — `emergencyPattern` now also matches "gas smell," and the injection determiner check now accepts any short phrase between "ignore"/"forget" and "previous/prior instructions" rather than an enumerated list. Re-verified against the full table plus a battery of ordinary homeowner questions and known near-miss phrasings ("forget about the old quote," "ignore the old due date") with no new false positives.
 ### 18.4 Prompt-injection isolation
 
 - Treat documents, database text, provider content, and retrieved web text as untrusted data.
@@ -1022,6 +1034,8 @@ Use a cascade:
 
 The router returns structured candidates and confidence. It does not answer the question.
 
+**Implementation status — August 11, 2026:** The registered intent-family taxonomy now includes `DECISION_ANALYSIS`, `COMMAND`, and `MONITOR` alongside the previously-registered families, and operations are re-categorized to match the family definitions in §9.1 (analysis-and-recommendation operations under `DECISION_ANALYSIS`; maintenance task create/complete/update and household invitation under `COMMAND`; refinance-rate and home-deadline monitors under `MONITOR`). A routing decision that resolves to a genuine clarification now records `CLARIFICATION` as its family rather than inheriting whatever family the placeholder candidate operation happened to carry, so analytics segmentation by family is no longer systematically skewed toward `GENERAL_HOME_GUIDANCE`/`WORKFLOW_GUIDANCE`. Two additional deterministic, bounded routing signals were added ahead of step 3: a same-session follow-up resolver (reads the most recent typed execution, never raw chat) that rewrites bare entity/filter continuations into an effective message before classification, and a launch-context `capabilityId` bias read from `launchContextJson` — both apply only when the cascade would otherwise fall through with no confident match, and the launch-context bias only when the capability maps unambiguously to a single operation.
+
 ## 21. Query, calculation, and formatting strategy
 
 ### 21.1 Deterministic-first rule
@@ -1059,6 +1073,8 @@ Avoid exposing raw Prisma records directly to Ask. Create stable read adapters w
 - Offer filters or “View all.”
 - Never paste unbounded record collections into an LLM prompt.
 - Support export only through registered domain export workflows.
+
+**Implementation status — August 11, 2026:** Partially implemented. Backend read models already bound result size at the source and, for `GROUPED_LIST` blocks, report a true section count distinct from the (possibly truncated) shown items. The workspace now renders a "+N more" link using that signal, and `TABLE` blocks convert to stacked label/value cards below the mobile breakpoint instead of only horizontally scrolling. `TABLE` blocks do not yet carry a true-vs-shown count, so tables cannot show a "+N more" affordance; no block type has in-conversation sort/filter controls yet.
 
 ### 21.4 Optional synthesis guard
 
@@ -1312,6 +1328,8 @@ Introduce durable execution records. Suggested conceptual models:
 - Record consent separately from inferred preferences.
 - Support property-access revocation immediately in history and resume endpoints.
 
+**Implementation status — August 11, 2026:** Implemented for conversation-history reads. `getAskSession` and `getAskExecution` now recheck current property access rather than only row ownership (`userId`) — a revoked household member's own conversation rows still exist, but the property-scoped answers inside them are no longer returned. A multi-execution session read filters out only the executions tied to properties the caller can no longer reach rather than failing the whole read; a single-execution read fails closed. Pending-work discovery and resume already rechecked access (Phase 7).
+
 ### 25.3 Security
 
 - Strict request and response schemas.
@@ -1551,6 +1569,8 @@ The backend response schema determines which blocks and actions are rendered. Th
 - Localize date, currency, percentage, number, unit, and timezone display.
 - Store canonical normalized values separately from display strings.
 - Do not assume every property uses US units in long-term contracts, even if initial launch is US-focused.
+
+**Implementation status — August 11, 2026:** Not implemented; one narrow, deliberately-scoped correctness fix landed. Rendered dates previously hardcoded UTC regardless of the property's actual timezone. Threading an explicit parameter through the ~20 call sites that format dates would have touched most of the orchestrator, so a small `AsyncLocalStorage`-based execution context (the same pattern `lib/requestContext.ts` already uses) now lets each top-level entry point set the property's recorded timezone once per request; date formatting reads it implicitly and falls back to UTC when unset. Verified concurrency-safe (interleaved requests for different properties do not leak each other's timezone). Copy externalization, locale-aware number/currency formatting, and non-US units remain unaddressed — the app remains explicitly US-focused (`en-US` locale, `USD` default) throughout.
 
 ## 29. Reliability, performance, and cost requirements
 

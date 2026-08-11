@@ -83,6 +83,7 @@ Material refinance-rate and Maintenance deadline signals create deterministic As
 - `DELETE /api/ask/sessions/:sessionId` lets the authenticated homeowner remove a conversation and its Ask feedback immediately.
 - Deleting an Ask session never deletes canonical domain artifacts such as maintenance tasks, invitations, monitors, property facts, or financing profiles. Their owning domain retention policy applies.
 - Prometheus metrics contain bounded registry labels only and never include prompts, user IDs, property IDs, addresses, execution IDs, session IDs, or captured values.
+- Conversation history reads (`GET /api/ask/sessions/:sessionId`, `GET /api/ask/executions/:executionId`) recheck current property access, not just row ownership. A revoked household member's session/execution rows are not deleted, but property-scoped answers inside them stop being returned to that user the moment access is revoked — retention/deletion remain the only mechanisms that remove the underlying rows.
 
 ## Measurement and cost baseline
 
