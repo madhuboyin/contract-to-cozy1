@@ -239,6 +239,28 @@ const RecommendationChangeBlockSchema = z.object({
   changedAt: z.string(),
 });
 
+// Ask Intelligence FRD §16.4. Rendered from PropertyChange rows (the
+// existing HomeChangeView read projection, see decisionPlatformChangeEmitter.ts
+// and propertyChange.service.ts) -- never a copied source value, since
+// PropertyChange itself stores none. "Previous/current semantic state" is
+// disclosed via changeType + a server-built summary rather than a literal
+// value diff.
+const ChangeSummaryBlockSchema = z.object({
+  type: z.literal('CHANGE_SUMMARY'), id: z.string(), title: z.string(),
+  source: z.string(),
+  changeType: z.enum([
+    'SOURCE_RECORD_CREATED', 'SOURCE_RECORD_REVISED', 'SOURCE_LIFECYCLE_CHANGED',
+    'PROPERTY_FACT_CHANGED', 'ACTION_STATE_CHANGED', 'OUTCOME_CONFIRMED', 'SOURCE_HEALTH_CHANGED',
+  ]),
+  summary: z.string(),
+  effectiveAt: z.string().nullable(),
+  detectedAt: z.string(),
+  materiality: z.enum(['INFORMATIONAL', 'MEANINGFUL', 'IMPORTANT', 'URGENT']),
+  materialityReasonCodes: z.array(z.string()).max(12),
+  confidence: z.number().min(0).max(1).nullable(),
+  linkedAction: z.object({ label: z.string(), href: z.string() }).nullable(),
+});
+
 const AssumptionsBlockSchema = z.object({ type: z.literal('ASSUMPTIONS'), id: z.string(), title: z.string(), items: z.array(z.string()).min(1).max(20) });
 const LimitationBlockSchema = z.object({ type: z.literal('LIMITATION'), id: z.string(), title: z.string(), body: z.string(), severity: z.enum(['INFO', 'CAUTION']) });
 const EmptyStateBlockSchema = z.object({ type: z.literal('EMPTY_STATE'), id: z.string(), title: z.string(), body: z.string(), actions: z.array(AskActionSchema).max(3).default([]) });
@@ -262,6 +284,7 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   PreferenceReferenceBlockSchema,
   WhyNowBlockSchema,
   RecommendationChangeBlockSchema,
+  ChangeSummaryBlockSchema,
   AssumptionsBlockSchema,
   LimitationBlockSchema,
   EmptyStateBlockSchema,

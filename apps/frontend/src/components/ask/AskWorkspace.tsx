@@ -410,6 +410,29 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
     );
   }
 
+  if (block.type === 'CHANGE_SUMMARY') {
+    const materialityTone = block.materiality === 'URGENT' ? 'border-red-200 bg-red-50'
+      : block.materiality === 'IMPORTANT' ? 'border-amber-200 bg-amber-50/70'
+        : 'border-slate-200 bg-white';
+    const materialityBadge = block.materiality === 'URGENT' ? 'bg-red-100 text-red-800'
+      : block.materiality === 'IMPORTANT' ? 'bg-amber-200 text-amber-900'
+        : 'bg-slate-100 text-slate-600';
+    return (
+      <section className={cn('rounded-2xl border p-4', materialityTone)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-semibold text-slate-950">{block.source}</h3>
+          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
+        </div>
+        <p className="mt-2 text-sm leading-5 text-slate-700">{block.summary}</p>
+        <p className="mt-2 text-xs text-slate-600">
+          Detected {new Date(block.detectedAt).toLocaleDateString()}
+          {block.effectiveAt && ` · Effective ${new Date(block.effectiveAt).toLocaleDateString()}`}
+        </p>
+        {block.linkedAction && <div className="mt-3"><ActionLink action={{ id: `${block.id}-linked-action`, label: block.linkedAction.label, href: block.linkedAction.href, style: 'SECONDARY' }} /></div>}
+      </section>
+    );
+  }
+
   if (block.type === 'ASSUMPTIONS') return <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title}</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">{block.items.map((item) => <li key={item}>{item}</li>)}</ul></details>;
 
   if (block.type === 'LIMITATION' || block.type === 'EMPTY_STATE' || block.type === 'ERROR_STATE') {

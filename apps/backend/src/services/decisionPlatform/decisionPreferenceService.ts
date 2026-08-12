@@ -15,6 +15,7 @@
 import { prisma } from '../../lib/prisma';
 import { DECISION_PREFERENCE_DEFINITIONS } from './decisionPreferenceRegistry';
 import type { HvacDecisionContext } from './hvacRepairReplaceEngine.service';
+import { emitDecisionPreferenceChange } from './decisionPlatformChangeEmitter';
 import type { DecisionPreferenceVisibility } from '../../productFramework/decisionPlatform/decisionPlatform.contract';
 
 export class HouseholdProfileNotEnabledError extends Error {
@@ -262,7 +263,7 @@ export async function saveOwnershipHorizonPreference(
   if (!household) throw new HouseholdProfileNotEnabledError();
   const definition = DECISION_PREFERENCE_DEFINITIONS.OWNERSHIP_HORIZON;
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const previous = await tx.decisionPreferenceValue.findFirst({
       where: { definitionId: 'OWNERSHIP_HORIZON', subjectType: 'HOUSEHOLD', subjectId: household.id, propertyId: null, status: 'ACTIVE' },
     });
@@ -282,8 +283,18 @@ export async function saveOwnershipHorizonPreference(
         status: 'ACTIVE', supersedesId: previous?.id ?? null,
       },
     });
-    return { preferenceValueId: created.id };
+    return { preferenceValueId: created.id, isNew: !previous };
   });
+
+  // propertyId: null here -- OWNERSHIP_HORIZON is household-wide (see
+  // decisionPlatformChangeEmitter.ts's guard), so this is a documented no-op
+  // today, not silently skipped logic.
+  await emitDecisionPreferenceChange({
+    propertyId: null, definitionId: 'OWNERSHIP_HORIZON', subjectType: 'HOUSEHOLD', subjectId: household.id,
+    preferenceValueId: result.preferenceValueId, action: result.isNew ? 'SAVED_NEW' : 'SAVED_REVISED',
+  });
+
+  return { preferenceValueId: result.preferenceValueId };
 }
 
 export async function saveRepairReplaceApproachPreference(
@@ -291,7 +302,7 @@ export async function saveRepairReplaceApproachPreference(
 ): Promise<{ preferenceValueId: string }> {
   const definition = DECISION_PREFERENCE_DEFINITIONS.REPAIR_REPLACE_APPROACH;
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const previous = await tx.decisionPreferenceValue.findFirst({
       where: { definitionId: 'REPAIR_REPLACE_APPROACH', subjectType: 'USER', subjectId: userId, propertyId, status: 'ACTIVE' },
     });
@@ -311,8 +322,15 @@ export async function saveRepairReplaceApproachPreference(
         status: 'ACTIVE', supersedesId: previous?.id ?? null,
       },
     });
-    return { preferenceValueId: created.id };
+    return { preferenceValueId: created.id, isNew: !previous };
   });
+
+  await emitDecisionPreferenceChange({
+    propertyId, definitionId: 'REPAIR_REPLACE_APPROACH', subjectType: 'USER', subjectId: userId,
+    preferenceValueId: result.preferenceValueId, action: result.isNew ? 'SAVED_NEW' : 'SAVED_REVISED',
+  });
+
+  return { preferenceValueId: result.preferenceValueId };
 }
 
 // FRD §7.5: "revocation prevents all future use before the API returns
@@ -322,9 +340,9 @@ export async function saveRepairReplaceApproachPreference(
 // so the caller (askOrchestrator, to avoid a circular import with
 // decisionThreadService) can mark them stale.
 export async function revokeHvacPreference(preferenceValueId: string, userId: string): Promise<{ affectedThreadIds: string[] }> {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const value = await tx.decisionPreferenceValue.findUnique({ where: { id: preferenceValueId } });
-    if (!value || value.status !== 'ACTIVE') return { affectedThreadIds: [] };
+    if (!value || value.status !== 'ACTIVE') return { affectedThreadIds: [], revoked: null };
 
     if (value.subjectType === 'USER') {
       if (value.subjectId !== userId) throw new PreferenceNotAuthorizedError();
@@ -337,6 +355,19 @@ export async function revokeHvacPreference(preferenceValueId: string, userId: st
     const references = await tx.decisionThreadPreferenceReference.findMany({
       where: { preferenceValueId: value.id }, select: { decisionThreadId: true },
     });
-    return { affectedThreadIds: [...new Set(references.map((reference) => reference.decisionThreadId))] };
+    return {
+      affectedThreadIds: [...new Set(references.map((reference) => reference.decisionThreadId))],
+      revoked: value,
+    };
   });
+
+  if (result.revoked) {
+    await emitDecisionPreferenceChange({
+      propertyId: result.revoked.propertyId, definitionId: result.revoked.definitionId,
+      subjectType: result.revoked.subjectType, subjectId: result.revoked.subjectId,
+      preferenceValueId: result.revoked.id, action: 'REVOKED',
+    });
+  }
+
+  return { affectedThreadIds: result.affectedThreadIds };
 }

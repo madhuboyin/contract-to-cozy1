@@ -72,6 +72,8 @@ import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import * as decisionThreadService from '../decisionPlatform/decisionThreadService';
 import * as decisionPreferenceService from '../decisionPlatform/decisionPreferenceService';
 import { HouseholdProfileNotEnabledError, PreferenceNotAuthorizedError } from '../decisionPlatform/decisionPreferenceService';
+import { listPropertyChanges } from '../../propertyChanges/propertyChange.service';
+import { sourceTypeLabel, buildChangeSummaryText } from '../decisionPlatform/homeChangeSummaryMapping';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
@@ -2067,6 +2069,67 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
   };
 }
 
+// Ask Intelligence FRD Phase 9A ("What changed?", §16). Reads the existing
+// PropertyChange ledger (FRD §16's HomeChangeView, see propertyChange.service.ts)
+// rather than a new store -- this operation is a thin presentation layer over
+// already-governed materiality/dedup/supersession, not a second change system.
+const HOME_CHANGE_SUMMARY_WINDOW_DAYS = 30;
+const HOME_CHANGE_SUMMARY_MAX_ITEMS = 10;
+// Named explicitly in the empty-state response so "nothing changed" never
+// reads as "the whole home was checked" -- FRD §16.4/§23.2: distinguish no
+// material change from unavailable coverage.
+const HOME_CHANGE_SUMMARY_COVERED_SOURCES = [
+  'home events', 'property record updates', 'documents', 'insurance claims', 'projects',
+  'maintenance records', 'Home Actions', 'HVAC repair/replace recommendations', 'saved decision preferences',
+];
+
+async function homeChangeSummaryResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const since = new Date(Date.now() - HOME_CHANGE_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const changes = await listPropertyChanges({ propertyId, userId, since });
+  const material = changes.filter((change) => change.materiality !== 'INFORMATIONAL').slice(0, HOME_CHANGE_SUMMARY_MAX_ITEMS);
+
+  if (!material.length) {
+    return {
+      status: 'ANSWERED', reasonCode: 'HOME_CHANGE_SUMMARY_NONE',
+      blocks: [{
+        type: 'EMPTY_STATE', id: 'home-change-summary-empty', title: 'No material changes in the last 30 days',
+        body: `This covers ${HOME_CHANGE_SUMMARY_COVERED_SOURCES.join(', ')}. It is not a confirmation that nothing at all happened at this property -- only that no material change was recorded in these sources.`,
+        actions: [],
+      }],
+      suggestions: ['What should I do next?', 'Summarize my home record'],
+    };
+  }
+
+  const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
+  const blocks: AskPresentationBlock[] = await Promise.all(material.map(async (change) => {
+    let detailOverride: string | null = null;
+    if (change.sourceType === 'DECISION_PREFERENCE_VALUE') {
+      const [detail] = await decisionPreferenceService.getPreferenceReferenceDetails([change.sourceRevision]);
+      detailOverride = detail?.summary ?? null;
+    }
+    return {
+      type: 'CHANGE_SUMMARY', id: `home-change-${change.id}`,
+      title: sourceTypeLabel(change.sourceType),
+      source: sourceTypeLabel(change.sourceType),
+      changeType: change.changeType,
+      summary: buildChangeSummaryText({ sourceType: change.sourceType, changeType: change.changeType, detailOverride }),
+      effectiveAt: change.occurredAt ? change.occurredAt.toISOString() : null,
+      detectedAt: change.detectedAt.toISOString(),
+      materiality: change.materiality,
+      materialityReasonCodes: change.materialityReasonCodes,
+      confidence: change.confidence,
+      linkedAction: change.canonicalAction ? { label: 'View home action', href: homeHref } : null,
+    };
+  }));
+
+  return {
+    status: 'ANSWERED', reasonCode: 'HOME_CHANGE_SUMMARY_FOUND',
+    blocks,
+    suggestions: ['What should I do next?'],
+  };
+}
+
 function money(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
 }
@@ -3749,6 +3812,7 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'HVAC_DECISION_ABANDON': return hvacDecisionAbandonResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_PREFERENCE_SAVE': return hvacPreferenceSaveResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_PREFERENCE_FORGET': return hvacPreferenceForgetResult(input.userId, input.propertyId!, input.message);
+    case 'HOME_CHANGE_SUMMARY': return homeChangeSummaryResult(input.userId, input.propertyId!);
   }
 }
 

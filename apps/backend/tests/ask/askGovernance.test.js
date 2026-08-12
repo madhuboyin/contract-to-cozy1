@@ -25,7 +25,7 @@ const {
 
 test('every Ask operation has a complete governed definition', () => {
   assert.deepEqual(validateAskOperationDefinitions(), []);
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 35);
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 36);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -163,6 +163,15 @@ test('golden and negative prompts route before remote generation', () => {
     ['Show my appliance inventory', 'INVENTORY_LOOKUP'],
     ['Summarize my home record', 'PROPERTY_SUMMARY'],
     ['What should I do next?', 'HOME_ACTIONS'],
+    ['What changed on my property recently?', 'HOME_CHANGE_SUMMARY'],
+    ['Any recent updates to my home?', 'HOME_CHANGE_SUMMARY'],
+    // Phase 9A: a message mentioning "decision" is a Decision Thread
+    // continuity question ("what changed about this decision"), not a
+    // property-wide change digest -- it has no HVAC-family keyword for
+    // hvacDecisionContinuePattern to key off, so it must keep falling
+    // through to the same place it did before this operation existed
+    // (GROUNDED_GUIDANCE), not get captured by the new generic pattern.
+    ['What changed about this decision?', 'GROUNDED_GUIDANCE'],
     ['Create a maintenance task to clean gutters', 'MAINTENANCE_TASK_CREATE'],
     ['Mark the gutter cleaning task complete', 'MAINTENANCE_TASK_COMPLETE'],
     ['Reschedule the gutter maintenance task', 'MAINTENANCE_TASK_UPDATE'],

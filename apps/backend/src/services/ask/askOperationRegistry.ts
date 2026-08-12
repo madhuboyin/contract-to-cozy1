@@ -48,7 +48,8 @@ export type AskOperationId =
   | 'HVAC_DECISION_SCENARIO'
   | 'HVAC_DECISION_ABANDON'
   | 'HVAC_PREFERENCE_SAVE'
-  | 'HVAC_PREFERENCE_FORGET';
+  | 'HVAC_PREFERENCE_FORGET'
+  | 'HOME_CHANGE_SUMMARY';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -168,6 +169,10 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // HVAC_DECISION_ABANDON's STANDARD choice.
   HVAC_PREFERENCE_SAVE: definition('HVAC_PREFERENCE_SAVE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.preference.save', ['SUMMARY', 'PREFERENCE_REFERENCE', 'BOUNDARY']),
   HVAC_PREFERENCE_FORGET: definition('HVAC_PREFERENCE_FORGET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.preference.forget', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // Ask Intelligence FRD Phase 9A ("What changed?", §16). Pure read-only,
+  // mirrors INCIDENT_CLAIM_STATUS's shape: no confirmation, no
+  // askDomainCommandRegistry entry, VIEWER floor.
+  HOME_CHANGE_SUMMARY: definition('HOME_CHANGE_SUMMARY', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-change.summary', ['CHANGE_SUMMARY', 'EMPTY_STATE']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
@@ -219,6 +224,14 @@ const ownershipCostsPattern = /\b(?:how much|what does|what is|what are|show|bre
 const inventoryLookupPattern = /\b(?:what do you know about|tell me about|show|find|list|which|do i have)\b.{0,65}\b(?:inventory|appliances?|systems?|equipment|hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b|\b(?:inventory|appliance|system|equipment)\s+(?:record|records|details|items|list)\b|\b(?:incomplete|missing)\b.{0,35}\b(?:inventory|appliance|system)\s+(?:record|records|details|information)\b|\b(?:my|the|this)\s+(?:hvac|furnace|air conditioner|heat pump|boiler|refrigerator|fridge|water heater|roof|washer|dryer|dishwasher)\b.{0,45}\b(?:history|record|details|information|know)\b|\b(?:systems?|equipment|appliances?)\b.{0,45}\b(?:end of life|expiry|expire|incomplete)\b/i;
 const propertySummaryPattern = /\b(?:summarize|summary of|overview of|what do you know about|tell me about|show me)\b.{0,60}\b(?:my|this|the)?\s*(?:home|house|property|home record|living home record)\b|\b(?:home|property|living home)\s+(?:record )?(?:summary|overview|profile)\b|\bhow complete\b.{0,45}\b(?:home record|property profile|home profile|living home record)\b/i;
 const homeActionsPattern = /\b(?:what should i do next|what needs (?:my |our )?attention|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what should i plan|anything urgent|urgent home action|where should i start)\b/i;
+// Ask Intelligence FRD Phase 9A ("What changed?", §16). Deliberately excludes
+// any message mentioning "decision" (checked at the call site) -- a phrase
+// like "what changed about this decision" is a Decision Thread continuity
+// question, not a property-wide change digest, but has no HVAC-family
+// keyword for hvacDecisionContinuePattern to key off; routing it into this
+// generic operation would be a worse answer than today's existing fallback,
+// so it's left alone for a future phase with real conversational context.
+const homeChangeSummaryPattern = /\bwhat(?:'s| is|s)?\s+(?:changed|new)\b|\banything\s+(?:new|changed)\b|\bany\s+(?:recent\s+)?(?:changes|updates)\b|\brecent(?:ly)?\s+(?:changes|updates)\b|\bwhat happened\s+(?:recently|lately)\b|\bwhat'?s different\b/i;
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
 // Ask Intelligence FRD Phase 8A: HVAC-specific repair/replace decision
 // routing must win over the generic replacementPattern above for HVAC
@@ -343,6 +356,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (maintenancePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_STATUS', 0.94);
+  }
+  if (homeChangeSummaryPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bdecision\b/i.test(message)) {
+    return resolved('HOME_CHANGE_SUMMARY', 0.9);
   }
   if (replacementPattern.test(message)) {
     return resolved('REPLACEMENT_GUIDANCE', 0.96);

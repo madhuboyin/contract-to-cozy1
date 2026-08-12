@@ -257,11 +257,13 @@ export async function listPropertyChanges(input: {
   propertyId: string;
   userId: string;
   unseenOnly?: boolean;
+  since?: Date;
 }) {
   return prisma.propertyChange.findMany({
     where: {
       propertyId: input.propertyId,
       supersededAt: null,
+      ...(input.since ? { detectedAt: { gte: input.since } } : {}),
       ...(input.unseenOnly
         ? {
             audienceStates: {

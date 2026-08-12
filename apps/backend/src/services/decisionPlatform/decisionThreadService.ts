@@ -29,6 +29,7 @@ import {
   getActiveHvacPreferences,
   RecommendationChangeDiff,
 } from './decisionPreferenceService';
+import { emitDecisionRecommendationChange } from './decisionPlatformChangeEmitter';
 import type { DecisionThreadContextStatus } from '../../productFramework/decisionPlatform/decisionPlatform.contract';
 
 export class DecisionThreadVersionConflictError extends Error {
@@ -120,7 +121,7 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
   const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const thread = await tx.decisionThread.create({
       data: {
         propertyId: input.propertyId,
@@ -190,6 +191,17 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
 
     return { thread: updatedThread, snapshot, preferencesUsed: preferences };
   });
+
+  await emitDecisionRecommendationChange({
+    propertyId: input.propertyId,
+    decisionThreadId: result.thread.id,
+    snapshotId: result.snapshot.id,
+    generatedAt: result.snapshot.generatedAt,
+    isFirstSnapshot: true,
+    category: null,
+  });
+
+  return result;
 }
 
 export async function loadHvacDecisionThreadDetail(threadId: string, propertyId: string) {
@@ -257,7 +269,7 @@ export async function recomputeStaleThread(threadId: string) {
   const limitationCodes = Array.from(new Set([...evaluation.limitationCodes, ...compositionLimitationCodes]));
   const preferenceValueIds = preferenceIdsFrom(preferences);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const current = await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
     const previousSnapshot = current.currentRecommendationSnapshotId
       ? await tx.recommendationSnapshot.findUnique({ where: { id: current.currentRecommendationSnapshotId } })
@@ -324,6 +336,17 @@ export async function recomputeStaleThread(threadId: string) {
       triggerReasonCodes: current.contextIssueCodes,
     };
   });
+
+  await emitDecisionRecommendationChange({
+    propertyId: result.thread.propertyId,
+    decisionThreadId: threadId,
+    snapshotId: result.snapshot.id,
+    generatedAt: result.snapshot.generatedAt,
+    isFirstSnapshot: false,
+    category: result.change?.category ?? null,
+  });
+
+  return result;
 }
 
 async function markThreads(threads: { id: string; contextStatus: DecisionThreadContextStatus; contextIssueCodes: string[]; version: number }[], reasonCode: string): Promise<void> {
