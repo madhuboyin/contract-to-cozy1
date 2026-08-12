@@ -25,7 +25,7 @@ const {
 
 test('every Ask operation has a complete governed definition', () => {
   assert.deepEqual(validateAskOperationDefinitions(), []);
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 29);
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 33);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -35,7 +35,7 @@ test('every Ask operation has a complete governed definition', () => {
 
 test('every material Ask command has governed confirmation, authorization, cancellation, and correction metadata', () => {
   assert.deepEqual(validateAskDomainCommandRegistry(), []);
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 8);
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 11);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);

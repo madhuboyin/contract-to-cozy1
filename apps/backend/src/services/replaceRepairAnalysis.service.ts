@@ -127,7 +127,7 @@ function contextVersionFromSnapshot(value: Prisma.JsonValue | null | undefined):
   return typeof version === 'string' && version.trim() ? version : null;
 }
 
-function ageYearsFromDate(date?: Date | null): number | undefined {
+export function ageYearsFromDate(date?: Date | null): number | undefined {
   if (!date) return undefined;
   const years = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24 * 365);
   if (!Number.isFinite(years) || years < 0) return undefined;
@@ -146,7 +146,7 @@ function toleranceMultiplier(riskTolerance: RiskTolerance): number {
   return 1;
 }
 
-function conditionAdjustment(condition: InventoryItemCondition): number {
+export function conditionAdjustment(condition: InventoryItemCondition): number {
   if (condition === 'NEW') return -0.05;
   if (condition === 'GOOD') return 0;
   if (condition === 'FAIR') return 0.08;

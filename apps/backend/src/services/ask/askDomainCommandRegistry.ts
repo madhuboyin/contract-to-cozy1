@@ -7,6 +7,9 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'QUOTE_COMPARISON_CREATE',
   'REFINANCE_MONITOR_CREATE',
   'HOME_DEADLINE_MONITOR_CREATE',
+  'HVAC_DECISION_START',
+  'HVAC_DECISION_SCENARIO',
+  'HVAC_DECISION_ABANDON',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -57,6 +60,9 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   QUOTE_COMPARISON_CREATE: command('QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_CREATE', 'quote-comparison.create', 'CONTRIBUTOR', 'QUOTE_COMPARISON_WORKSPACE', ['EDIT', 'STOP'], { title: 'Comparison workspace not created', body: 'No quote workspace or provider comparison was created.', suggestion: 'Show quote comparison tools' }),
   REFINANCE_MONITOR_CREATE: command('REFINANCE_MONITOR_CREATE', 'REFINANCE_RATE_MONITOR', 'refinance.monitor', 'CONTRIBUTOR', 'REFINANCE_RATE_MONITOR', ['EDIT', 'PAUSE', 'RESUME', 'STOP'], { title: 'Monitor not created', body: 'No mortgage-rate notification preference or threshold was changed.', suggestion: 'Set a different rate threshold' }),
   HOME_DEADLINE_MONITOR_CREATE: command('HOME_DEADLINE_MONITOR_CREATE', 'HOME_DEADLINE_MONITOR', 'home-deadline.monitor', 'CONTRIBUTOR', 'PROPERTY_MAINTENANCE_TASK', ['EDIT', 'STOP', 'REOPEN'], { title: 'Deadline reminder not created', body: 'No maintenance reminder or notification preference was changed.', suggestion: 'Review expiring coverage' }),
+  HVAC_DECISION_START: command('HVAC_DECISION_START', 'HVAC_DECISION_START', 'decision-platform.hvac.start', 'CONTRIBUTOR', 'DECISION_THREAD', ['STOP'], { title: 'Decision thread not created', body: 'No durable HVAC repair/replace decision or recommendation snapshot was created.', suggestion: 'What needs my attention?' }),
+  HVAC_DECISION_SCENARIO: command('HVAC_DECISION_SCENARIO', 'HVAC_DECISION_SCENARIO', 'decision-platform.hvac.scenario', 'CONTRIBUTOR', 'SCENARIO', ['STOP'], { title: 'Scenario not created', body: 'No counterfactual quote scenario was recorded; the current decision recommendation is unchanged.', suggestion: 'Show my HVAC decision' }),
+  HVAC_DECISION_ABANDON: command('HVAC_DECISION_ABANDON', 'HVAC_DECISION_ABANDON', 'decision-platform.hvac.abandon', 'CONTRIBUTOR', 'DECISION_THREAD', ['REOPEN'], { title: 'Decision thread not abandoned', body: 'The decision thread remains active with its current recommendation.', suggestion: 'Show my HVAC decision' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

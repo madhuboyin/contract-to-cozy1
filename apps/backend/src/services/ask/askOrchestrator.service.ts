@@ -69,6 +69,7 @@ import { listRenovationCases } from '../renovationCase.service';
 import { getReadiness as getRenovationReadiness } from '../renovationReadiness.service';
 import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
+import * as decisionThreadService from '../decisionPlatform/decisionThreadService';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
@@ -180,6 +181,20 @@ const HomeDeadlineTaskDueCaptureSchema = z.object({
   }
 });
 
+const HvacDecisionStartInputSchema = z.object({
+  inventoryItemId: z.string().trim().min(1).max(160),
+}).strict();
+
+const HvacDecisionScenarioInputSchema = z.object({
+  decisionThreadId: z.string().trim().min(1).max(160),
+  quoteAmountCents: z.number().int().positive(),
+  vendorLabel: z.string().trim().min(1).max(160),
+}).strict();
+
+const HvacDecisionAbandonInputSchema = z.object({
+  decisionThreadId: z.string().trim().min(1).max(160),
+}).strict();
+
 function asInputJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
 }
@@ -265,6 +280,16 @@ async function guidanceJourneyContextVersion(propertyId: string, input: z.infer<
   }
   const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, updatedAt: true } });
   return askContextFingerprint([property?.id ?? propertyId, property?.updatedAt?.toISOString() ?? 'missing', input.serviceKey]);
+}
+
+async function hvacDecisionStartContextVersion(propertyId: string, inventoryItemId: string): Promise<string> {
+  const item = await prisma.inventoryItem.findFirst({ where: { id: inventoryItemId, propertyId }, select: { id: true, updatedAt: true } });
+  return askContextFingerprint(item ? [item.id, item.updatedAt.toISOString()] : ['missing', inventoryItemId]);
+}
+
+async function hvacDecisionThreadVersionFingerprint(threadId: string): Promise<string> {
+  const thread = await prisma.decisionThread.findUnique({ where: { id: threadId }, select: { id: true, version: true, lifecycleStatus: true } });
+  return askContextFingerprint(thread ? [thread.id, thread.version, thread.lifecycleStatus] : ['missing', threadId]);
 }
 
 async function refinanceMonitorContextVersion(userId: string, propertyId: string): Promise<string> {
@@ -1528,6 +1553,250 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },
     { type: 'BOUNDARY', id: 'repair-replace-boundary', title: 'Planning guidance—not a diagnosis or quote', body: 'A qualified technician should diagnose safety, performance, and repairability. Actual repair and replacement prices, efficiency gains, warranties, and code requirements may differ.', severity: 'INFO', suggestions: [] }],
     suggestions: ['How much should I reserve for this item?', 'Show my capital timeline'],
+  };
+}
+
+// Ask Intelligence FRD Phase 8A — HVAC Decision Thread foundation. Distinct
+// from replacementGuidanceResult above: these operate on the Decision
+// Platform's durable DecisionThread/RecommendationSnapshot models via the
+// registered HVAC engine (services/decisionPlatform/), not the generic
+// ReplaceRepairService heuristic.
+
+type DecisionProgressThread = { id: string; lifecycleStatus: string; contextStatus: string; contextIssueCodes: string[] };
+type DecisionProgressSnapshot = { verdictCode: string; reasonCodes: string[]; limitationCodes: string[]; confidenceBreakdown: unknown; generatedAt: Date } | null;
+
+function decisionProgressBlock(
+  id: string, title: string, thread: DecisionProgressThread, snapshot: DecisionProgressSnapshot,
+  actions: { id: string; label: string; href?: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET' }[],
+): AskPresentationBlock {
+  return {
+    type: 'DECISION_PROGRESS', id, title,
+    decisionThreadId: thread.id,
+    lifecycleStatus: thread.lifecycleStatus as any,
+    contextStatus: thread.contextStatus as any,
+    verdict: snapshot?.verdictCode ?? null,
+    reasonCodes: snapshot?.reasonCodes ?? [],
+    limitationCodes: snapshot?.limitationCodes ?? [],
+    contextIssueCodes: thread.contextIssueCodes,
+    confidenceLabel: (snapshot?.confidenceBreakdown as { label?: 'HIGH' | 'MEDIUM' | 'LOW' } | undefined)?.label ?? null,
+    generatedAt: snapshot?.generatedAt ? snapshot.generatedAt.toISOString() : null,
+    actions,
+  };
+}
+
+// HvacRepairReplaceVerdict is ordinal (REPAIR < MONITOR < REPLACE), not
+// binary -- comparing verdict codes directly would mislabel, e.g., a
+// REPLACE-to-MONITOR shift as "favors repair" when it's really just "less
+// urgent to replace." Rank the two verdicts and compare ranks instead.
+const HVAC_VERDICT_RANK: Record<string, number> = { REPAIR: 0, MONITOR: 1, REPLACE: 2 };
+
+function scenarioComparisonBlock(
+  id: string, title: string, decisionThreadId: string, scenarioId: string,
+  baseline: { label: string; verdictCode: string; reasonCodes: string[]; limitationCodes: string[] },
+  scenario: { label: string; verdictCode: string; reasonCodes: string[]; limitationCodes: string[]; assumptions: { label: string; value: string }[] },
+): AskPresentationBlock {
+  const baselineRank = HVAC_VERDICT_RANK[baseline.verdictCode] ?? 1;
+  const scenarioRank = HVAC_VERDICT_RANK[scenario.verdictCode] ?? 1;
+  const comparisonDirection = scenarioRank === baselineRank
+    ? 'NO_CHANGE'
+    : scenarioRank > baselineRank ? 'SCENARIO_FAVORS_REPLACE' : 'SCENARIO_FAVORS_REPAIR';
+  return {
+    type: 'SCENARIO_COMPARISON', id, title, decisionThreadId, scenarioId,
+    baseline: { label: baseline.label, verdict: baseline.verdictCode, reasonCodes: baseline.reasonCodes, limitationCodes: baseline.limitationCodes },
+    scenario: { label: scenario.label, verdict: scenario.verdictCode, reasonCodes: scenario.reasonCodes, limitationCodes: scenario.limitationCodes, assumptions: scenario.assumptions },
+    comparisonDirection,
+    actions: [],
+  };
+}
+
+async function findHvacItemForMessage(propertyId: string, message: string): Promise<{ items: { id: string; name: string }[]; item: { id: string; name: string } | null }> {
+  const items = await prisma.inventoryItem.findMany({ where: { propertyId, category: 'HVAC' }, select: { id: true, name: true }, take: 50 });
+  const lower = message.toLowerCase();
+  const matched = items.find((candidate) => lower.includes(candidate.name.toLowerCase()));
+  const item = matched ?? (items.length === 1 ? items[0] : null);
+  return { items, item };
+}
+
+function hvacDecisionThreadAmbiguousResult(operationId: AskOperationId, candidates: { id: string; title: string; lifecycleStatus: string }[]): AskOperationResult {
+  return {
+    status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_THREAD_AMBIGUOUS',
+    ...durableFreeTextClarification(operationId, 'Multiple decision threads are active for this HVAC system. Which one should Ask continue?'),
+    blocks: [{
+      type: 'GROUPED_LIST', id: 'hvac-decision-thread-candidates', title: 'Active decision threads',
+      description: 'This should not normally happen; contact support if it persists.',
+      sections: [{ id: 'threads', title: 'Threads', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.lifecycleStatus, meta: [], status: candidate.lifecycleStatus, href: null })) }],
+      actions: [],
+    }],
+    suggestions: [],
+  };
+}
+
+async function hvacDecisionStartResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const { items, item } = await findHvacItemForMessage(propertyId, message);
+  if (!items.length) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
+      ...durableFreeTextClarification('HVAC_DECISION_START', 'No HVAC system is recorded on this property yet. What HVAC system should Ask track?'),
+      blocks: [{ type: 'SUMMARY', id: 'hvac-decision-no-item', title: 'No HVAC system recorded', body: 'Add the HVAC system to the home record first, then ask again.', tone: 'CAUTION', actions: [{ id: 'open-inventory', label: 'Add HVAC system', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }] }],
+      suggestions: [],
+    };
+  }
+  if (!item) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_AMBIGUOUS',
+      ...durableFreeTextClarification('HVAC_DECISION_START', 'Which recorded HVAC system should Ask evaluate?'),
+      blocks: [{ type: 'GROUPED_LIST', id: 'hvac-decision-items', title: 'Choose an HVAC system', description: 'Use the exact name in your next message.', sections: [{ id: 'items', title: 'Recorded HVAC systems', count: items.length, items: items.map((candidate) => ({ id: candidate.id, title: candidate.name, description: null, meta: [], status: null, href: null })) }], actions: [] }],
+      suggestions: items.slice(0, 3).map((candidate) => `Should I repair or replace my ${candidate.name}?`),
+    };
+  }
+
+  const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
+  if (selection.kind === 'UNIQUE') {
+    const thread = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId);
+    return {
+      status: 'ANSWERED', reasonCode: 'HVAC_DECISION_ALREADY_ACTIVE',
+      blocks: [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])],
+      suggestions: ['What changed about this decision?'],
+    };
+  }
+  if (selection.kind === 'AMBIGUOUS') {
+    return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_START', selection.candidates);
+  }
+
+  const contextVersion = await hvacDecisionStartContextVersion(propertyId, item.id);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HVAC_DECISION_START_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { hvacDecisionStart: { inventoryItemId: item.id }, hvacDecisionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'hvac-decision-review', title: `Start a decision thread for ${item.name}?`, body: 'This creates a durable, resumable repair-vs-replace decision using the registered HVAC engine. No purchase or provider selection happens.', tone: 'DEFAULT', actions: [] }],
+    confirmation: {
+      confirmationId: `hvac-decision-start-${item.id}-1`, version: 1, title: `Start a decision thread for ${item.name}?`,
+      description: 'Ask will evaluate the recorded condition, age, repair history, and warranty for this system and produce an explainable repair-or-replace recommendation you can resume across sessions.',
+      fields: [{ label: 'System', value: item.name }],
+      confirmLabel: 'Start decision thread', consentText: 'I authorize creating this decision thread in the shared home record.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+async function hvacDecisionContinueResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const { items, item } = await findHvacItemForMessage(propertyId, message);
+  if (!item) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
+      ...durableFreeTextClarification('HVAC_DECISION_CONTINUE', 'Which HVAC decision should Ask resume?'),
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-decision-continue-empty', title: 'No matching HVAC decision found', body: 'Name the HVAC system exactly as recorded, or start a new decision.', actions: [] }],
+      suggestions: items.slice(0, 3).map((candidate) => `What's the status of my ${candidate.name} decision?`),
+    };
+  }
+  const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
+  if (selection.kind === 'NONE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-decision-none', title: 'No active decision for this system yet', body: `Ask has not started a repair-or-replace decision for ${item.name}.`, actions: [{ id: 'open-inventory', label: 'Open inventory', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }] }],
+      suggestions: [`Should I repair or replace my ${item.name}?`],
+    };
+  }
+  if (selection.kind === 'AMBIGUOUS') {
+    return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_CONTINUE', selection.candidates);
+  }
+  const thread = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId);
+  return {
+    status: 'ANSWERED', reasonCode: 'HVAC_DECISION_RESUMED',
+    blocks: [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])],
+    suggestions: ['Compare a new quote for this decision', 'Abandon this decision'],
+  };
+}
+
+async function hvacDecisionScenarioResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const { item } = await findHvacItemForMessage(propertyId, message);
+  if (!item) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
+      ...durableFreeTextClarification('HVAC_DECISION_SCENARIO', 'Which HVAC decision does this quote apply to?'),
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-scenario-item-required', title: 'Which HVAC system?', body: 'Name the HVAC system exactly as recorded.', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
+  if (selection.kind === 'AMBIGUOUS') return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_SCENARIO', selection.candidates);
+  if (selection.kind !== 'UNIQUE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-scenario-no-thread', title: 'No active decision to compare against', body: `Start a repair-or-replace decision for ${item.name} first.`, actions: [] }],
+      suggestions: [`Should I repair or replace my ${item.name}?`],
+    };
+  }
+
+  const amountMatch = message.match(/\$\s*([\d][\d,]*(?:\.\d{2})?)/) ?? message.match(/([\d][\d,]*(?:\.\d{2})?)\s*dollars/i);
+  const vendorMatch = message.match(/from\s+([A-Z][\w&' -]{1,60})/);
+  if (!amountMatch) {
+    // Not a captureRequests/inline-capture flow: submitAskCapture (this
+    // file) only resumes a fixed allowlist of operationIds, and a scenario
+    // quote amount isn't a canonical-record patch like the capture flows in
+    // that allowlist -- it's a one-time input for this evaluation only. The
+    // free-text clarification path (already proven for "which item" above)
+    // re-resolves and re-executes this same operation with the answer, so
+    // reuse it instead of a capture form with no working submission path.
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_SCENARIO_QUOTE_REQUIRED',
+      ...durableFreeTextClarification('HVAC_DECISION_SCENARIO', 'What was the quoted replacement amount, and from which vendor?'),
+      blocks: [{ type: 'SUMMARY', id: 'hvac-scenario-quote-required', title: 'What was the quote amount?', body: 'Ask needs the quoted amount to compare this scenario against the current recommendation, e.g. "$8,500 from Acme HVAC". This is used only to evaluate a what-if scenario; it does not change the recorded decision until you review it.', tone: 'DEFAULT', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const quoteAmountCents = Math.round(Number(amountMatch[1].replace(/,/g, '')) * 100);
+  const vendorLabel = vendorMatch?.[1]?.trim() || 'the quoted vendor';
+
+  const contextVersion = await hvacDecisionThreadVersionFingerprint(selection.thread.id);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HVAC_DECISION_SCENARIO_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { hvacDecisionScenario: { decisionThreadId: selection.thread.id, quoteAmountCents, vendorLabel }, hvacDecisionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'hvac-scenario-review', title: `Compare a ${vendorLabel} quote?`, body: `Evaluate a $${(quoteAmountCents / 100).toFixed(2)} quote from ${vendorLabel} against the current recommendation. This does not change the recorded decision.`, tone: 'DEFAULT', actions: [] }],
+    confirmation: {
+      confirmationId: `hvac-decision-scenario-${selection.thread.id}-1`, version: 1, title: `Compare this ${vendorLabel} quote?`,
+      description: 'Ask will run the registered HVAC engine against this quote as an isolated scenario. It never overwrites the recorded decision.',
+      fields: [{ label: 'Vendor', value: vendorLabel }, { label: 'Amount', value: `$${(quoteAmountCents / 100).toFixed(2)}` }],
+      confirmLabel: 'Compare scenario', consentText: 'I authorize evaluating this scenario against the recorded decision.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+async function hvacDecisionAbandonResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const { item } = await findHvacItemForMessage(propertyId, message);
+  if (!item) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
+      ...durableFreeTextClarification('HVAC_DECISION_ABANDON', 'Which HVAC decision should Ask abandon?'),
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-abandon-item-required', title: 'Which HVAC system?', body: 'Name the HVAC system exactly as recorded.', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
+  if (selection.kind === 'AMBIGUOUS') return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_ABANDON', selection.candidates);
+  if (selection.kind !== 'UNIQUE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-abandon-no-thread', title: 'No active decision to abandon', body: `There is no active repair-or-replace decision for ${item.name}.`, actions: [] }],
+      suggestions: [],
+    };
+  }
+
+  const contextVersion = await hvacDecisionThreadVersionFingerprint(selection.thread.id);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HVAC_DECISION_ABANDON_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { hvacDecisionAbandon: { decisionThreadId: selection.thread.id }, hvacDecisionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'hvac-abandon-review', title: `Abandon the decision for ${item.name}?`, body: 'The decision thread and its history remain visible but no longer active. This does not change the item record.', tone: 'CAUTION', actions: [] }],
+    confirmation: {
+      confirmationId: `hvac-decision-abandon-${selection.thread.id}-1`, version: 1, title: 'Abandon this decision?',
+      description: 'You can start a new decision for this system at any time.',
+      fields: [{ label: 'System', value: item.name }],
+      confirmLabel: 'Abandon decision', consentText: 'I authorize abandoning this decision thread.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
   };
 }
 
@@ -3326,6 +3595,10 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'MAJOR_EVENT_ENTRY': return majorEventEntryResult(input.userId, input.propertyId!, input.message);
     case 'CAPABILITY_DISCOVERY': return capabilityResult(input.userId, input.propertyId, input.message);
     case 'GROUNDED_GUIDANCE': return groundedGuidanceResult(input);
+    case 'HVAC_DECISION_START': return hvacDecisionStartResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_SCENARIO': return hvacDecisionScenarioResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_DECISION_ABANDON': return hvacDecisionAbandonResult(input.userId, input.propertyId!, input.message);
   }
 }
 
@@ -4842,6 +5115,87 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     result = { status: 'COMPLETED', reasonCode: created.reused ? 'QUOTE_COMPARISON_REUSED' : 'QUOTE_COMPARISON_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `quote-workspace-${created.workspace.id}`, title: created.reused ? 'Existing comparison workspace opened' : 'Quote comparison workspace created', status: 'COMPLETED', description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.', details: [{ label: 'Service', value: candidate.data.serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Status', value: created.workspace.status.toLowerCase() }], actions: [{ id: 'open-workspace', label: 'Open comparison', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
     artifactType = command.artifactType;
     artifactId = created.workspace.id;
+  } else if (execution.operationId === 'HVAC_DECISION_START') {
+    const candidate = HvacDecisionStartInputSchema.safeParse(parameters.hvacDecisionStart);
+    if (!candidate.success) {
+      const error = new Error('The decision thread settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionStartContextVersion(execution.propertyId, candidate.data.inventoryItemId)) {
+      const error = new Error('The HVAC system record changed while confirmation was open. Review the current record and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const startSelection = await decisionThreadService.selectHvacDecisionThread(execution.propertyId, candidate.data.inventoryItemId);
+    if (startSelection.kind !== 'NONE') {
+      const error = new Error('A decision thread already exists for this HVAC system.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const { thread: createdThread, snapshot: createdSnapshot } = await decisionThreadService.createHvacDecisionThread({
+      propertyId: execution.propertyId, userId, inventoryItemId: candidate.data.inventoryItemId, askExecutionId: execution.id,
+      ownershipHorizonMonths: null, repairReplaceApproach: null,
+    });
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_START_CREATED',
+      blocks: [decisionProgressBlock('hvac-decision-created', 'Decision thread started', createdThread, createdSnapshot, [])],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = createdThread.id;
+  } else if (execution.operationId === 'HVAC_DECISION_SCENARIO') {
+    const candidate = HvacDecisionScenarioInputSchema.safeParse(parameters.hvacDecisionScenario);
+    if (!candidate.success) {
+      const error = new Error('The scenario settings are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
+      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const scenarioThread = await prisma.decisionThread.findFirst({ where: { id: candidate.data.decisionThreadId, propertyId: execution.propertyId }, include: { currentRecommendationSnapshot: true } });
+    if (!scenarioThread) {
+      const error = new Error('Decision thread not found.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const { scenario, scenarioSnapshot } = await decisionThreadService.createHvacScenario(scenarioThread.id, userId, {
+      quoteAmountCents: candidate.data.quoteAmountCents, vendorLabel: candidate.data.vendorLabel,
+    });
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_SCENARIO_CREATED',
+      blocks: [scenarioComparisonBlock(
+        'hvac-scenario-comparison', `Scenario: ${candidate.data.vendorLabel}`, scenarioThread.id, scenario.id,
+        { label: 'Current recommendation', verdictCode: scenarioThread.currentRecommendationSnapshot?.verdictCode ?? 'UNKNOWN', reasonCodes: scenarioThread.currentRecommendationSnapshot?.reasonCodes ?? [], limitationCodes: scenarioThread.currentRecommendationSnapshot?.limitationCodes ?? [] },
+        { label: scenario.label, verdictCode: scenarioSnapshot.verdictCode, reasonCodes: scenarioSnapshot.reasonCodes, limitationCodes: scenarioSnapshot.limitationCodes, assumptions: [{ label: 'Quote amount', value: `$${(candidate.data.quoteAmountCents / 100).toFixed(2)}` }, { label: 'Vendor', value: candidate.data.vendorLabel }] },
+      )],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = scenario.id;
+  } else if (execution.operationId === 'HVAC_DECISION_ABANDON') {
+    const candidate = HvacDecisionAbandonInputSchema.safeParse(parameters.hvacDecisionAbandon);
+    if (!candidate.success) {
+      const error = new Error('The abandon request is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    if (parameters.hvacDecisionContextVersion !== await hvacDecisionThreadVersionFingerprint(candidate.data.decisionThreadId)) {
+      const error = new Error('The decision changed while confirmation was open. Review the current decision and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const abandonedThread = await decisionThreadService.abandonDecisionThread(candidate.data.decisionThreadId, execution.propertyId);
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_DECISION_ABANDONED',
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `hvac-decision-abandoned-${abandonedThread.id}`, title: 'Decision abandoned', status: 'COMPLETED', description: 'The decision thread is no longer active. You can start a new one at any time.', details: [{ label: 'Thread', value: abandonedThread.title }], actions: [] }],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = abandonedThread.id;
   } else if (execution.operationId === 'HOME_DEADLINE_MONITOR') {
     const candidate = HomeDeadlineMonitorInputSchema.safeParse(parameters.homeDeadlineMonitor);
     if (!candidate.success) {

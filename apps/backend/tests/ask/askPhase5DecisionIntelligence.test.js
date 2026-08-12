@@ -10,8 +10,17 @@ const {
   resolveAskOperation,
 } = require('../../src/services/ask/askOperationRegistry.ts');
 
+// "Should I repair or replace my HVAC?" is deliberately NOT in this list
+// anymore. Ask Intelligence FRD Phase 8A supersedes REPLACEMENT_GUIDANCE for
+// HVAC specifically: it now routes to HVAC_DECISION_START, which creates a
+// durable Decision Thread via the registered HVAC engine rather than the
+// generic ReplaceRepairService heuristic. HVAC_DECISION_START has a
+// CONTRIBUTOR role floor and MATERIAL_DECISION two-phase confirmation (it
+// creates a record), which doesn't fit this suite's shared VIEWER-floor
+// assertion below -- see tests/decisionPlatform/hvacDecisionRouting.test.js
+// for its dedicated coverage. Every other appliance ("my fridge", "my water
+// heater", etc.) still routes to REPLACEMENT_GUIDANCE unchanged.
 const phase5Cases = [
-  ['Should I repair or replace my HVAC?', 'REPLACEMENT_GUIDANCE'],
   ['Compare the contractor bids I recorded', 'QUOTE_COMPARISON_REVIEW'],
   ['Show my reserve fund and capital timeline', 'CAPITAL_RESERVE_PLAN'],
   ['Am I ready to appeal my assessed value?', 'PROPERTY_TAX_APPEAL_READINESS'],

@@ -42,7 +42,11 @@ export type AskOperationId =
   | 'EMERGENCY_BOUNDARY'
   | 'UNSAFE_RESTRICTED_BOUNDARY'
   | 'OUT_OF_SCOPE_BOUNDARY'
-  | 'GROUNDED_GUIDANCE';
+  | 'GROUNDED_GUIDANCE'
+  | 'HVAC_DECISION_START'
+  | 'HVAC_DECISION_CONTINUE'
+  | 'HVAC_DECISION_SCENARIO'
+  | 'HVAC_DECISION_ABANDON';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -141,6 +145,15 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   UNSAFE_RESTRICTED_BOUNDARY: definition('UNSAFE_RESTRICTED_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'UNSAFE_RESTRICTED_BOUNDARY', null, 'boundary.unsafe-restricted', ['BOUNDARY']),
   OUT_OF_SCOPE_BOUNDARY: definition('OUT_OF_SCOPE_BOUNDARY', 'OUT_OF_SCOPE', false, 'DETERMINISTIC', 'OUT_OF_SCOPE_BOUNDARY', null, 'boundary.out-of-scope', ['BOUNDARY']),
   GROUNDED_GUIDANCE: definition('GROUNDED_GUIDANCE', 'GENERAL_HOME_GUIDANCE', false, 'REMOTE_GENERATION', 'STANDARD', null, 'grounded.guidance', ['SUMMARY', 'EVIDENCE', 'BOUNDARY']),
+  // Ask Intelligence FRD Phase 8A — HVAC Decision Thread foundation
+  // (docs/product/AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md §10, §25).
+  // Distinct from REPLACEMENT_GUIDANCE: these operate on the Decision
+  // Platform's durable DecisionThread/RecommendationSnapshot models via the
+  // registered HVAC repair/replace engine, not the generic appliance heuristic.
+  HVAC_DECISION_START: definition('HVAC_DECISION_START', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.start', ['SUMMARY', 'DECISION_PROGRESS', 'EVIDENCE', 'LIMITATION', 'ASSUMPTIONS', 'GROUPED_LIST', 'BOUNDARY']),
+  HVAC_DECISION_CONTINUE: definition('HVAC_DECISION_CONTINUE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'decision-platform.hvac.continue', ['DECISION_PROGRESS', 'EVIDENCE', 'LIMITATION', 'EMPTY_STATE']),
+  HVAC_DECISION_SCENARIO: definition('HVAC_DECISION_SCENARIO', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.scenario', ['SUMMARY', 'SCENARIO_COMPARISON', 'LIMITATION', 'BOUNDARY']),
+  HVAC_DECISION_ABANDON: definition('HVAC_DECISION_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.abandon', ['SUMMARY', 'WORKFLOW_PROGRESS']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
@@ -193,6 +206,17 @@ const inventoryLookupPattern = /\b(?:what do you know about|tell me about|show|f
 const propertySummaryPattern = /\b(?:summarize|summary of|overview of|what do you know about|tell me about|show me)\b.{0,60}\b(?:my|this|the)?\s*(?:home|house|property|home record|living home record)\b|\b(?:home|property|living home)\s+(?:record )?(?:summary|overview|profile)\b|\bhow complete\b.{0,45}\b(?:home record|property profile|home profile|living home record)\b/i;
 const homeActionsPattern = /\b(?:what should i do next|what needs (?:my |our )?attention|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what should i plan|anything urgent|urgent home action|where should i start)\b/i;
 const replacementPattern = /\b(when should i (?:replace|upgrade)|replace (?:my|the)|repair or replace|how (?:old|long).*(?:refrigerator|fridge)|(?:refrigerator|fridge).*(?:replace|replacement|lifespan|life expectancy))\b/i;
+// Ask Intelligence FRD Phase 8A: HVAC-specific repair/replace decision
+// routing must win over the generic replacementPattern above for HVAC
+// systems (the FRD's certified first vertical slice), while every other
+// item (fridge, water heater, etc.) keeps routing to REPLACEMENT_GUIDANCE
+// unchanged -- these four patterns are checked before replacementPattern in
+// the cascade below and all require an HVAC-family keyword.
+const hvacKeyword = '(?:hvac|furnace|air conditioner|a\\/?c unit|heat pump|central air|heating system|cooling system)';
+const hvacDecisionContinuePattern = new RegExp(`\\b(?:status of|resume|continue|check on|where (?:are we|do things stand)|update on)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b|\\bdecision\\b.{0,40}\\b(?:status|update|progress)\\b.{0,60}\\b${hvacKeyword}\\b`, 'i');
+const hvacDecisionScenarioPattern = new RegExp(`\\b(?:new |another )?quote\\b.{0,80}\\b${hvacKeyword}\\b.{0,60}\\b(?:decision|repair or replace|compare|change)\\b|\\b${hvacKeyword}\\b.{0,60}\\bquote\\b.{0,60}\\b(?:decision|compare|scenario)\\b`, 'i');
+const hvacDecisionAbandonPattern = new RegExp(`\\b(?:abandon|cancel|stop tracking|drop)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b`, 'i');
+const hvacDecisionStartPattern = new RegExp(`\\b(?:repair or replace|should i replace|should i repair|fix or replace|worth repairing|worth replacing)\\b.{0,60}\\b${hvacKeyword}\\b|\\b${hvacKeyword}\\b.{0,60}\\b(?:repair or replace|repair vs\\.? replace|fix or replace|worth repairing|worth replacing)\\b`, 'i');
 const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;
 const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
 const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b/i;
@@ -216,6 +240,24 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (outOfScopePattern.test(message)) {
     return resolved('OUT_OF_SCOPE_BOUNDARY', 0.99);
+  }
+  // Ask Intelligence FRD Phase 8A: checked ahead of quoteComparisonReviewPattern
+  // and replacementPattern below, since both are generic enough to otherwise
+  // capture HVAC-specific decision-thread phrasing (e.g. a quote-plus-decision
+  // sentence matches quoteComparisonReviewPattern's "quote ... compare" shape
+  // too). All four require an HVAC-family keyword, so non-HVAC phrasing is
+  // unaffected and still falls through to the generic patterns unchanged.
+  if (hvacDecisionContinuePattern.test(message)) {
+    return resolved('HVAC_DECISION_CONTINUE', 0.97);
+  }
+  if (hvacDecisionScenarioPattern.test(message)) {
+    return resolved('HVAC_DECISION_SCENARIO', 0.96);
+  }
+  if (hvacDecisionAbandonPattern.test(message)) {
+    return resolved('HVAC_DECISION_ABANDON', 0.97);
+  }
+  if (hvacDecisionStartPattern.test(message)) {
+    return resolved('HVAC_DECISION_START', 0.96);
   }
   if (maintenanceCompletePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_COMPLETE', 0.97);

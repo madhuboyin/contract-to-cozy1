@@ -18,6 +18,7 @@ import { logger } from '../lib/logger';
 import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { buildInventoryCoveragePresentation } from './inventoryCoverageState.service';
 import JobQueueService from './JobQueue.service';
+import { markThreadStaleOnFactCorrection } from './decisionPlatform/decisionThreadService';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -586,6 +587,17 @@ export class InventoryService {
       'Inventory changed; the home projection is being refreshed.',
       { sourceReferenceIds: [itemId] },
     ).catch((err) => logger.error({ err }, '[INVENTORY_UPDATE] Twin refresh enqueue failed'));
+
+    // Ask Intelligence FRD §10.4 correction/invalidation flow: a canonical
+    // fact this item's active Decision Thread(s) depend on just changed.
+    // Non-blocking, matching the twin-refresh/lifespan-recalc pattern above
+    // -- the correction has already been durably written; marking dependent
+    // threads stale is a side effect, not part of this write's own success.
+    if (existing.category === 'HVAC' && ['condition', 'installedOn', 'purchasedOn', 'warrantyId', 'replacementCostCents'].some((field) => field in patch)) {
+      markThreadStaleOnFactCorrection(propertyId, itemId, 'HVAC_ITEM_FACT_CORRECTED').catch((err) => {
+        logger.error({ err }, '[INVENTORY_UPDATE] Decision thread staleness marking failed (non-blocking)');
+      });
+    }
 
     return updated;
   }

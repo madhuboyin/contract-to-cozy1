@@ -166,6 +166,42 @@ const DecisionTraceBlockSchema = z.object({
   steps: z.array(z.object({ label: z.string(), detail: z.string(), outcome: z.string().nullable().optional() })).min(1).max(12),
 });
 
+// Ask Intelligence FRD §21.4. Renders a durable DecisionThread without
+// relying on raw conversation history. lifecycleStatus and contextStatus are
+// independent (FRD §10.2/§10.3) and both surfaced distinctly, never
+// collapsed into one status string.
+const DecisionProgressBlockSchema = z.object({
+  type: z.literal('DECISION_PROGRESS'), id: z.string(), title: z.string(),
+  decisionThreadId: z.string(),
+  lifecycleStatus: z.enum(['OPEN', 'GATHERING_CONTEXT', 'READY_TO_COMPARE', 'RECOMMENDATION_AVAILABLE', 'ACTION_IN_PROGRESS', 'DECIDED', 'COMPLETED', 'ABANDONED', 'ARCHIVED']),
+  contextStatus: z.enum(['CURRENT', 'STALE', 'CONFLICTED']),
+  verdict: z.string().nullable(),
+  reasonCodes: z.array(z.string()).max(12),
+  limitationCodes: z.array(z.string()).max(12),
+  contextIssueCodes: z.array(z.string()).max(12),
+  confidenceLabel: z.enum(['HIGH', 'MEDIUM', 'LOW']).nullable(),
+  generatedAt: z.string().nullable(),
+  actions: z.array(AskActionSchema).max(4).default([]),
+});
+
+// Ask Intelligence FRD §21.3. Compares a registered baseline against one
+// Scenario version (FRD §13); never mutates the thread's current snapshot.
+const ScenarioComparisonBlockSchema = z.object({
+  type: z.literal('SCENARIO_COMPARISON'), id: z.string(), title: z.string(),
+  decisionThreadId: z.string(), scenarioId: z.string(),
+  baseline: z.object({
+    label: z.string(), verdict: z.string(),
+    reasonCodes: z.array(z.string()).max(12), limitationCodes: z.array(z.string()).max(12),
+  }),
+  scenario: z.object({
+    label: z.string(), verdict: z.string(),
+    reasonCodes: z.array(z.string()).max(12), limitationCodes: z.array(z.string()).max(12),
+    assumptions: z.array(z.object({ label: z.string(), value: z.string() })).max(8),
+  }),
+  comparisonDirection: z.enum(['SCENARIO_FAVORS_REPLACE', 'SCENARIO_FAVORS_REPAIR', 'NO_CHANGE']),
+  actions: z.array(AskActionSchema).max(3).default([]),
+});
+
 const AssumptionsBlockSchema = z.object({ type: z.literal('ASSUMPTIONS'), id: z.string(), title: z.string(), items: z.array(z.string()).min(1).max(20) });
 const LimitationBlockSchema = z.object({ type: z.literal('LIMITATION'), id: z.string(), title: z.string(), body: z.string(), severity: z.enum(['INFO', 'CAUTION']) });
 const EmptyStateBlockSchema = z.object({ type: z.literal('EMPTY_STATE'), id: z.string(), title: z.string(), body: z.string(), actions: z.array(AskActionSchema).max(3).default([]) });
@@ -184,6 +220,8 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   TimelineBlockSchema,
   ComparisonBlockSchema,
   DecisionTraceBlockSchema,
+  DecisionProgressBlockSchema,
+  ScenarioComparisonBlockSchema,
   AssumptionsBlockSchema,
   LimitationBlockSchema,
   EmptyStateBlockSchema,
