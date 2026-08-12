@@ -2,8 +2,8 @@
 title: "AI Home Concierge — Intelligence, Personalization, and Proactive Concierge"
 subtitle: "Prioritized normative amendment to Ask Redo v1.6"
 document_type: "Incremental Functional Requirements Document"
-status: "Proposed — implementation blocked on P0 approval gates"
-version: "1.0"
+status: "Proposed — production implementation and real-user collection blocked on P0 approval gates"
+version: "1.1"
 date: "August 11, 2026"
 parent_document: "AI_HOME_CONCIERGE_ASK_REDO_FRD.md v1.6"
 accountable_product_area: "Homeowner Product / Home Intelligence / Ask"
@@ -15,8 +15,8 @@ accountable_product_area: "Homeowner Product / Home Intelligence / Ask"
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed — implementation blocked on P0 approval gates |
-| Version | 1.0 |
+| Status | Proposed — production implementation and real-user collection blocked on P0 approval gates |
+| Version | 1.1 |
 | Date | August 11, 2026 |
 | Parent contract | [AI Home Concierge — Ask Redo v1.6](./AI_HOME_CONCIERGE_ASK_REDO_FRD.md) |
 | Relationship | Normative extension; does not replace or weaken the parent contract |
@@ -163,7 +163,7 @@ This initiative shall not:
 
 | Priority | Meaning | Release effect |
 | --- | --- | --- |
-| P0 | Canonical ownership, privacy, authorization, deletion, or irreversible trust prerequisite | Blocks implementation or real-user data collection |
+| P0 | Canonical ownership, privacy, authorization, deletion, or irreversible trust prerequisite | Blocks production implementation that establishes canonical behavior and all real-user collection; permits ADRs, fixtures, prototypes, and non-production evaluation that use no real-user intelligence data |
 | P1 | Required for a safe, coherent, measurable first product release | Blocks launch of the affected vertical slice |
 | P2 | Required for proactive delivery or reviewed outcome learning | Blocks the corresponding later phase, not the first decision slice |
 | P3 | Advanced cross-domain and portfolio intelligence | Future-facing; cannot be simulated in earlier phases |
@@ -205,7 +205,7 @@ The following matrix is normative.
 | Durable decision preferences | Personalization profile owner, extended by a typed decision-preference registry | Capture after confirmation and disclose use | Free-form `HomeownerDecisionProfile` EAV store owned by Ask |
 | External observations and revisions | Home Event Radar or registered domain source | Summarize and link | Generic signal replacing Radar lineage |
 | Actionable signals | Guidance or applicable domain signal owner | Resolve, present, continue | Second canonical signal source |
-| Qualified cross-source change view | Home Intelligence read projection | Compose references and materiality; own no source truth | Copying source state into an authoritative record |
+| Qualified cross-source change view | Home Intelligence non-authoritative read projection | Compose references and materiality; own no source truth; any cache is disposable and invalidatable | Durable canonical `HomeChangeView` record or copied source state |
 | Recommendations | Personalization or registered canonical decision engine | Invoke and render | LLM-authored recommendation truth |
 | Home Actions | Existing governed Home Actions feed | Query, filter, explain, and present | Competing action feed |
 | Ranking policy | Personalization/Home Actions ranking owner | Request a channel-specific ranked view | Ask-local opaque score |
@@ -223,7 +223,7 @@ The originally proposed `HomeownerDecisionProfile`, `HomeSignal`, and `HomePrior
 They are replaced by:
 
 - a typed `DecisionPreferenceDefinition` and `DecisionPreferenceValue` extension under the Personalization owner;
-- a `HomeChangeView` read projection referencing Radar, Guidance, monitor, Home Action, and registered domain revisions; and
+- a non-authoritative `HomeChangeView` read projection referencing Radar, Guidance, monitor, Home Action, and registered domain revisions; any materialized cache is disposable, reconstructable, and governed by source invalidation; and
 - a versioned ranking breakdown produced by the canonical Home Actions/Personalization ranking owner.
 
 `DecisionThread`, `Scenario`, `RecommendationSnapshot`, and normalized outcome records are approved as new concepts subject to the P0 contracts below.
@@ -244,7 +244,8 @@ DecisionPreferenceValue
 - subjectId
 - propertyId nullable
 - valueJson
-- sourceType: EXPLICIT | IMPORTED_REVIEWED | DERIVED_REVIEW_REQUIRED
+- provenanceType: USER_ENTERED | DOCUMENT_EXTRACTED | IMPORTED_REVIEWED | SYSTEM_DERIVED
+- storageClass: DURABLE_PROFILE | TEMPORARY_PROFILE
 - assertedByUserId
 - visibility: PRIVATE | OWNER_ONLY | HOUSEHOLD_SUMMARY | HOUSEHOLD_DETAIL
 - purposeCode
@@ -261,6 +262,14 @@ DecisionPreferenceValue
 ```
 
 The definition registry shall declare value schema, allowed subject/scope, sensitivity class, default expiry, reconfirmation policy, eligible operations, correction route, and whether a privacy-safe shared explanation is permitted.
+
+`provenanceType`, `storageClass`, and `status` are independent axes:
+
+- provenance describes how a candidate value originated;
+- storage class describes where and for how long an approved profile value may persist; and
+- status describes whether that value may currently be used.
+
+`SYSTEM_DERIVED`, `DOCUMENT_EXTRACTED`, and any imported value shall remain `PENDING_CONFIRMATION` when its definition requires homeowner review. Provenance alone never grants permission to use a value in a material recommendation.
 
 ### 7.2 Role rules
 
@@ -381,8 +390,9 @@ DecisionThread
 - title
 - goalCode
 - goalDetailRef nullable
-- status
+- lifecycleStatus: OPEN | GATHERING_CONTEXT | READY_TO_COMPARE | RECOMMENDATION_AVAILABLE | ACTION_IN_PROGRESS | DECIDED | COMPLETED | ABANDONED | ARCHIVED
 - contextStatus: CURRENT | STALE | CONFLICTED
+- contextIssueCodes[]
 - currentRecommendationSnapshotId nullable
 - version
 - createdAt
@@ -405,25 +415,38 @@ Related typed models:
 - `RecommendationSnapshot`; and
 - `DecisionOutcomeLink`.
 
-### 10.2 Lifecycle
+### 10.2 Lifecycle and context health
 
-| From | To | Trigger |
+`lifecycleStatus` records progress through the homeowner decision. `contextStatus` independently records whether the thread's referenced decision basis is currently usable. A context-health change shall not replace or erase the lifecycle position. For example, a thread may be `ACTION_IN_PROGRESS` with `contextStatus = STALE`.
+
+#### Lifecycle transitions
+
+| From lifecycle status | To lifecycle status | Trigger |
 | --- | --- | --- |
 | `OPEN` | `GATHERING_CONTEXT` | Required context is missing |
 | `OPEN` or `GATHERING_CONTEXT` | `READY_TO_COMPARE` | Minimum registered context is satisfied |
 | `READY_TO_COMPARE` | `RECOMMENDATION_AVAILABLE` | Canonical engine produces a material result |
 | `RECOMMENDATION_AVAILABLE` | `ACTION_IN_PROGRESS` | User confirms or launches a governed action |
-| Any active state | `STALE` | Referenced fact, preference, policy, engine, or evidence materially changes or expires |
-| `STALE` | applicable active state | Registered recomputation succeeds |
-| Any active state | `CONFLICTED` | Entity, household plan, or concurrent edit cannot be resolved safely |
-| `CONFLICTED` | applicable active state | Authorized clarification resolves conflict |
 | `RECOMMENDATION_AVAILABLE` or `ACTION_IN_PROGRESS` | `DECIDED` | Homeowner records selected option |
 | `DECIDED` | `COMPLETED` | Verified completion/outcome is linked |
 | Any nonterminal state | `ABANDONED` | Authorized explicit abandon action or approved inactivity policy |
 | `ABANDONED`, `DECIDED`, or `COMPLETED` | `OPEN` | Explicit authorized reopen creates a new version/event |
 | Any state | `ARCHIVED` | Authorized archival; no further evaluation until reopened |
+| `ARCHIVED` | `OPEN` | Explicit authorized reopen creates a new version/event and re-evaluates context health |
 
-All transitions shall be append-only audited and protected by optimistic concurrency.
+#### Context-health transitions
+
+| From context status | To context status | Trigger |
+| --- | --- | --- |
+| `CURRENT` | `STALE` | A referenced fact, preference, policy, engine, evidence item, or source-freshness requirement materially changes or expires |
+| `CURRENT` or `STALE` | `CONFLICTED` | Entity resolution, household plan, canonical sources, or a concurrent edit cannot be reconciled safely |
+| `CONFLICTED` | `STALE` | Authorized clarification resolves the conflict but one or more retained dependencies still require recomputation |
+| `CONFLICTED` | `CURRENT` | Authorized clarification resolves the conflict and all dependencies remain valid |
+| `STALE` | `CURRENT` | Registered recomputation succeeds against current permitted dependencies |
+
+When stale and conflicted conditions coexist, the externally visible `contextStatus` shall be `CONFLICTED`; all stale and conflict reasons remain in `contextIssueCodes`. Resolving the conflict shall restore `STALE`, not `CURRENT`, when any stale reason remains.
+
+All lifecycle and context-health transitions shall be append-only audited and protected by optimistic concurrency. `ARCHIVED` threads shall not recompute context until explicitly reopened.
 
 ### 10.3 Selection and ambiguity
 
@@ -449,30 +472,31 @@ The first certified thread shall support one HVAC item, repair and replacement o
 
 ## 11. P1 — Durable decision preferences
 
-### 11.1 Preference classes
+### 11.1 Preference storage and usage classes
 
-Each registered value shall be one of:
+The decision-preference definition registry shall assign one storage/usage class independently of provenance and confirmation status:
 
-- `EXPLICIT_DURABLE`;
-- `EXPLICIT_TEMPORARY`;
-- `SCENARIO_SPECIFIC`;
-- `DERIVED_REVIEW_REQUIRED`; or
-- `NOT_STORABLE`.
+- `DURABLE_PROFILE` — may persist in the Personalization profile until expiry or revocation;
+- `TEMPORARY_PROFILE` — persists in the Personalization profile only for its bounded validity period;
+- `SCENARIO_ONLY` — belongs only to the Scenario owner and never creates a profile value;
+- `SESSION_ONLY` — belongs only to transient Ask context and expires under the parent Ask retention policy; or
+- `PROHIBITED` — must not be persisted or used as reusable personalization.
 
-`DERIVED_REVIEW_REQUIRED` cannot affect a material recommendation until confirmation. `SCENARIO_SPECIFIC` is stored only in the Scenario owner. `NOT_STORABLE` may be used for the current execution only and must not be logged as a profile value.
+Only `DURABLE_PROFILE` and `TEMPORARY_PROFILE` produce `DecisionPreferenceValue` records. `SCENARIO_ONLY` values use the registered Scenario schema. `SESSION_ONLY` values must not be logged as profile values. `PROHIBITED` values must not be stored in profile, scenario, conversation telemetry, or generic execution logs.
+
+A definition whose candidate value may originate from `SYSTEM_DERIVED`, `DOCUMENT_EXTRACTED`, or `IMPORTED_REVIEWED` shall separately declare whether confirmation is required. Any required confirmation is represented by `status = PENDING_CONFIRMATION`; it is not a storage-class or provenance value.
 
 ### 11.2 Initial preference registry
 
 Only the following keys may enter the first release:
 
-| Preference key | Scope | Default validity | Initial consumers |
-| --- | --- | --- | --- |
-| `OWNERSHIP_HORIZON` | Household plus property override | 12 months or until confirmed plan date passes | HVAC repair/replace; sell-prep |
-| `REPAIR_REPLACE_APPROACH` | User or household | 12 months | HVAC repair/replace only |
-| `DECISION_DETAIL_LEVEL` | User | Until changed | Presentation only; never material ranking |
-| `PROACTIVE_CATEGORY_PERMISSION` | User plus property/category | Until revoked | Central notification policy |
+| Preference key | Storage class | Scope | Default validity | Initial consumers |
+| --- | --- | --- | --- | --- |
+| `OWNERSHIP_HORIZON` | `TEMPORARY_PROFILE` | Household plus property override | 12 months or until confirmed plan date passes | HVAC repair/replace; sell-prep |
+| `REPAIR_REPLACE_APPROACH` | `TEMPORARY_PROFILE` | User or household | 12 months | HVAC repair/replace only |
+| `DECISION_DETAIL_LEVEL` | `DURABLE_PROFILE` | User | Until changed | Presentation only; never material ranking |
 
-Cost sensitivity, accessibility/aging-in-place goals, household plans, and financial preferences require separate privacy and domain review before registration.
+Proactive category/channel permission is not a decision-profile value; it remains owned by the central notification/preference policy and enters scope only under §18 and Phase 9C. Cost sensitivity, accessibility/aging-in-place goals, household plans, and financial preferences require separate privacy and domain review before registration.
 
 ### 11.3 Capture experience
 
@@ -688,7 +712,7 @@ New graph infrastructure is prohibited until query volume, latency, or relationa
 - recommendation snapshot changes; and
 - authorized preference or plan changes.
 
-The projection owns no source truth.
+The projection owns no source truth and is not a durable canonical intelligence object. An implementation may materialize a disposable cache for bounded read performance, but the cache shall be reconstructable from authorized source revisions, shall carry source versions and expiry, and shall be invalidated or discarded when a source changes, access is revoked, or retention requires deletion.
 
 ### 16.2 Separation of lifecycle
 
@@ -917,6 +941,8 @@ OUTCOME_SUMMARY
 RECOMMENDATION_CHANGE
 ```
 
+### 21.1 Shared block requirements
+
 Each block shall:
 
 - declare a schema version and allowed operation definitions;
@@ -929,6 +955,67 @@ Each block shall:
 - fail visibly and safely when an unsupported version is received.
 
 The Concierge Home and all new controls shall meet the parent responsive, focus, live-region, and WCAG 2.2 AA requirements.
+
+### 21.2 `PRIORITY_LIST`
+
+`PRIORITY_LIST` shall render only the channel-specific ranked view returned by the canonical Home Actions owner. Its versioned payload shall include:
+
+- property and ranking-policy version;
+- generated and source-freshness timestamps;
+- ordered canonical Home Action references;
+- consumer priority category for each item;
+- comparative reason codes sufficient to explain why each item ranks above the following item;
+- evidence, confidence/quality, deadline, and material dependency references permitted for the current role;
+- canonical CTA or honest watch/no-action state;
+- suppression, completion, unavailable, and stale state where applicable; and
+- a flag indicating whether the list was truncated by the registered display limit.
+
+The block shall not invent an action, mutate action state, expose an internal numeric score by default, or imply that an unavailable or empty feed means the property requires no attention. When ranking cannot be reproduced for the requested policy version, the block shall fail visibly rather than silently reorder items.
+
+### 21.3 `SCENARIO_COMPARISON`
+
+`SCENARIO_COMPARISON` shall compare a registered baseline with one or more compatible, authorized Scenario versions. Its versioned payload shall include:
+
+- Decision Thread, baseline Scenario, comparison Scenario, and evaluation-version references;
+- changed assumption definitions and privacy-safe values or redacted markers;
+- only the impact dimensions supported by every displayed comparison, or a per-dimension availability state;
+- baseline and comparison ranges, units, price/effective dates, and comparison direction;
+- evidence, confidence/quality, and limitation codes for each dimension;
+- stale, expired, deleted-input, and not-comparable reasons; and
+- authorized controls to revise an assumption, select an option, or return to the current canonical baseline.
+
+The block shall never normalize incompatible units, price bases, time horizons, or engine versions without a registered conversion/comparison rule. It shall distinguish `UNKNOWN`, `UNAVAILABLE`, and `NOT_COMPARABLE` and shall not treat an absent impact dimension as zero.
+
+### 21.4 `DECISION_PROGRESS`
+
+`DECISION_PROGRESS` shall present the durable Decision Thread without relying on raw conversation history. Its versioned payload shall include:
+
+- Decision Thread and decision-definition references;
+- privacy-safe title, goal code, and primary entity reference;
+- `lifecycleStatus` and independent `contextStatus`;
+- completed, current, blocked, and next registered stages;
+- missing required context and unresolved question codes;
+- latest permitted Recommendation Snapshot reference and generated time;
+- context issue, stale dependency, or conflict codes;
+- last activity and applicable expiry/staleness time; and
+- authorized resume, resolve-conflict, refresh, correct, abandon, archive, or reopen actions.
+
+The UI shall not present a stale or conflicted recommendation as current. A user without permission to view a sensitive goal or preference shall receive a role-safe summary rather than the hidden value. If the thread target is ambiguous, the block shall not be emitted until the typed selection clarification resolves it.
+
+### 21.5 `OUTCOME_SUMMARY`
+
+`OUTCOME_SUMMARY` shall distinguish reported events, verified facts, attribution, and evaluation. Its versioned payload shall include:
+
+- authorized Outcome Observation and Recommendation Snapshot references;
+- observation type, occurrence time, and verification status;
+- provenance/source label and reviewed evidence references;
+- attributed relationship type and attribution confidence/review status;
+- comparable predicted and observed cost, timing, action, or result fields with units and normalization basis;
+- unknown, excluded, disputed, rejected, or superseded components;
+- correction, dispute, evidence-review, or unlink controls permitted for the current role; and
+- a limitation stating that deviation or a different homeowner choice does not by itself prove that the recommendation was incorrect.
+
+`REPORTED` observations shall never render as verified. The block shall not show predicted-versus-observed deltas when units, inclusions, time basis, or attribution are not comparable, and it shall not expose whether an observation entered a calibration dataset unless that disclosure is approved and privacy-safe.
 
 ---
 
@@ -1083,7 +1170,7 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 
 **Deliverables:**
 
-- Decision Thread and typed HVAC Scenario;
+- Decision Thread, typed HVAC Scenario, and `SCENARIO_COMPARISON`;
 - execution linking, selection, versioning, stale/conflict handling;
 - Recommendation Snapshot and `DECISION_PROGRESS`;
 - correction/invalidation flow; and
@@ -1198,7 +1285,7 @@ All controls require audit, owner, reason, effective time, recovery procedure, a
 
 **Deliverables:**
 
-- Outcome Observation and Recommendation Attribution;
+- Outcome Observation, Recommendation Attribution, and `OUTCOME_SUMMARY`;
 - supported source adapters;
 - reported/corroborated/verified distinction;
 - cost/timing normalization; and
@@ -1248,7 +1335,7 @@ Portfolio planning, life-event orchestration, dynamic long-horizon capital seque
 | ASK-INT-006 | P0 | Protect writes with idempotency, authorization recheck, confirmation where required, and optimistic concurrency. | Retry/concurrency suite |
 | ASK-INT-007 | P1 | Maintain durable authorized Decision Threads across executions and sessions. | Phase 8A metrics |
 | ASK-INT-008 | P1 | Fail closed on ambiguous thread, entity, scenario, property, or shared goal. | Ambiguity suite |
-| ASK-INT-009 | P1 | Mark dependent decisions stale or conflicted when referenced inputs change. | Invalidation suite |
+| ASK-INT-009 | P1 | Preserve Decision Thread lifecycle independently from context health and mark context stale or conflicted when referenced inputs change. | Lifecycle/context transition and invalidation suite |
 | ASK-INT-010 | P1 | Store reusable preferences only through the Personalization-owned typed registry. | Phase 8B tests |
 | ASK-INT-011 | P1 | Prevent unconfirmed, expired, revoked, private, or out-of-purpose preferences from affecting material results. | Zero-tolerance gates |
 | ASK-INT-012 | P1 | Compose cross-domain inputs only through a registered bounded context contract. | Composer contract tests |
