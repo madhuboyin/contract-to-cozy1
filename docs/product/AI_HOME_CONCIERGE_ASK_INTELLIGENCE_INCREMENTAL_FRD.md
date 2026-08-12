@@ -3,7 +3,7 @@ title: "AI Home Concierge — Intelligence, Personalization, and Proactive Conci
 subtitle: "Prioritized normative amendment to Ask Redo v1.6"
 document_type: "Incremental Functional Requirements Document"
 status: "Proposed — production implementation and real-user collection blocked on P0 approval gates"
-version: "1.2"
+version: "1.3"
 date: "August 11, 2026"
 parent_document: "AI_HOME_CONCIERGE_ASK_REDO_FRD.md v1.6"
 accountable_product_area: "Homeowner Product / Home Intelligence / Ask"
@@ -16,7 +16,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence / Ask"
 | Field | Value |
 | --- | --- |
 | Status | Proposed — production implementation and real-user collection blocked on P0 approval gates |
-| Version | 1.2 |
+| Version | 1.3 |
 | Date | August 11, 2026 |
 | Parent contract | [AI Home Concierge — Ask Redo v1.6](./AI_HOME_CONCIERGE_ASK_REDO_FRD.md) |
 | Relationship | Normative extension; does not replace or weaken the parent contract |
@@ -429,9 +429,9 @@ Related typed models:
 - `RecommendationSnapshot`; and
 - `DecisionOutcomeLink`.
 
-### 10.2 Lifecycle transitions
+`lifecycleStatus` and `contextStatus` are independent fields governed by the separate transition tables in §10.2 and §10.3. `lifecycleStatus` records progress through the homeowner decision. `contextStatus` independently records whether the thread's referenced decision basis is currently usable. A context-health change shall not replace or erase the lifecycle position. For example, a thread may be `ACTION_IN_PROGRESS` with `contextStatus = STALE`.
 
-`lifecycleStatus` records progress through the homeowner decision. `contextStatus` independently records whether the thread's referenced decision basis is currently usable. A context-health change shall not replace or erase the lifecycle position. For example, a thread may be `ACTION_IN_PROGRESS` with `contextStatus = STALE`.
+### 10.2 Lifecycle transitions
 
 | From lifecycle status | To lifecycle status | Trigger |
 | --- | --- | --- |
@@ -446,7 +446,7 @@ Related typed models:
 | Any state | `ARCHIVED` | Authorized archival; no further evaluation until reopened |
 | `ARCHIVED` | `OPEN` | Explicit authorized reopen creates a new version/event and re-evaluates context health |
 
-`completedAt` shall be set when lifecycle status first enters `COMPLETED`. Reopening a completed thread shall not rewrite its prior transition event; it shall clear the current-row `completedAt`, create the required new version/event, and preserve the historical completion time in the append-only transition log. `archivedAt` follows the equivalent rule for entry into and reopening from `ARCHIVED`.
+`completedAt` shall be set when lifecycle status first enters `COMPLETED`. Reopening a completed thread shall not rewrite its prior transition event; it shall clear the current-row `completedAt`, create the required new version/event, and preserve the historical completion time in the append-only transition log. `archivedAt` follows the equivalent rule for entry into and reopening from `ARCHIVED`: reopening always clears the current-row `archivedAt`, regardless of the lifecycle status the thread held before archival. When a thread was `COMPLETED` before entering `ARCHIVED` and is then reopened directly to `OPEN`, that single reopen event shall clear both the current-row `completedAt` and `archivedAt`, and shall preserve both historical timestamps in the append-only transition log.
 
 ### 10.3 Context-health transitions
 
