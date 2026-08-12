@@ -2130,6 +2130,13 @@ model User {
   // Neighbourhood Trust Network
   neighbourhoodEndorsementsAuthored NeighbourhoodEndorsement[] @relation("NeighbourhoodEndorsementAuthor")
 
+  // Decision Platform (Ask Intelligence FRD Phase 7A — see
+  // docs/product/decision-platform/adr-0001-ownership-and-scope.md)
+  decisionPreferenceValuesAsserted DecisionPreferenceValue[] @relation("DecisionPreferenceValueAssertedBy")
+  decisionThreadsCreated           DecisionThread[]          @relation("DecisionThreadCreatedBy")
+  decisionThreadParticipations     DecisionThreadParticipant[]
+  scenariosCreated                 Scenario[]                @relation("ScenarioCreatedBy")
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -3181,6 +3188,12 @@ model Property {
   salePrepProfile      PropertySalePrepProfile?
   responsibilities     PropertyResponsibility[]
   propertyFactEvidence PropertyFactEvidence[]
+
+  // Decision Platform (Ask Intelligence FRD Phase 7A — see
+  // docs/product/decision-platform/adr-0001-ownership-and-scope.md)
+  decisionPreferenceValues DecisionPreferenceValue[]
+  decisionThreads          DecisionThread[]
+  recommendationSnapshots  RecommendationSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6826,6 +6839,10 @@ model AskExecution {
   captures      AskCaptureReceipt[]
   confirmations AskConfirmationReceipt[]
 
+  // Decision Platform (Ask Intelligence FRD Phase 7A) — links a Decision
+  // Thread's durable state back to the raw Ask executions that touched it.
+  decisionThreadExecutionLinks DecisionThreadExecutionLink[]
+
   @@unique([userId, clientRequestId])
   @@index([sessionId, createdAt])
   @@index([propertyId, status, createdAt])
@@ -6939,6 +6956,357 @@ model GroundedAskArtifact {
 
   @@index([propertyId, artifactType, createdAt])
   @@map("grounded_ask_artifacts")
+}
+
+// ============================================================================
+// DECISION PLATFORM (Ask Intelligence FRD Phase 7A — P0 contract closure)
+// ============================================================================
+// Schema for docs/product/AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md.
+// See docs/product/decision-platform/ for the ADRs and policies this schema
+// implements. Definition/registry objects (DecisionPreferenceDefinition,
+// DecisionContextContract, decision-family catalog) are code-based —
+// apps/backend/src/services/decisionPlatform/ — not stored here. Only
+// durable instance/value records get Prisma models. Out of scope for this
+// phase (deferred to Phase 9A/10A per the FRD): HomeChangeView,
+// OutcomeObservation, RecommendationAttribution, DecisionOutcomeLink.
+
+enum DecisionPreferenceSubjectType {
+  USER
+  HOUSEHOLD
+}
+
+enum DecisionPreferenceProvenanceType {
+  USER_ENTERED
+  DOCUMENT_EXTRACTED
+  IMPORTED_REVIEWED
+  SYSTEM_DERIVED
+}
+
+// Only the two storage classes that ever produce a DecisionPreferenceValue
+// row (FRD §11.1). SCENARIO_ONLY/SESSION_ONLY/PROHIBITED values never reach
+// this table — they live in Scenario.assumptionsJson or are not persisted.
+enum DecisionPreferenceStorageClass {
+  DURABLE_PROFILE
+  TEMPORARY_PROFILE
+}
+
+enum DecisionPreferenceVisibility {
+  PRIVATE
+  OWNER_ONLY
+  HOUSEHOLD_SUMMARY
+  HOUSEHOLD_DETAIL
+}
+
+enum DecisionPreferenceStatus {
+  PENDING_CONFIRMATION
+  ACTIVE
+  REVOKED
+  EXPIRED
+  SUPERSEDED
+}
+
+enum DecisionThreadLifecycleStatus {
+  OPEN
+  GATHERING_CONTEXT
+  READY_TO_COMPARE
+  RECOMMENDATION_AVAILABLE
+  ACTION_IN_PROGRESS
+  DECIDED
+  COMPLETED
+  ABANDONED
+  ARCHIVED
+}
+
+enum DecisionThreadContextStatus {
+  CURRENT
+  STALE
+  CONFLICTED
+}
+
+enum DecisionThreadQuestionStatus {
+  OPEN
+  RESOLVED
+}
+
+enum DecisionThreadExecutionLinkRole {
+  CREATED
+  CONTINUED
+}
+
+enum ScenarioStatus {
+  DRAFT
+  READY
+  EVALUATED
+  STALE
+  EXPIRED
+  ARCHIVED
+}
+
+// FRD §7.1. definitionId references the code-based DecisionPreferenceDefinition
+// registry (apps/backend/src/services/decisionPlatform/decisionPreferenceRegistry.ts),
+// not a DB row. subjectId is polymorphic on subjectType (User.id or
+// Household.id — never HouseholdMember, per
+// docs/product/decision-platform/adr-0001-ownership-and-scope.md) and so is
+// not a Prisma relation, mirroring the existing Signal.sourceModel/sourceId
+// polymorphic-reference pattern used elsewhere in this schema.
+model DecisionPreferenceValue {
+  id                    String                            @id @default(uuid())
+  definitionId          String
+  subjectType           DecisionPreferenceSubjectType
+  subjectId             String
+  propertyId            String?
+  valueJson             Json
+  provenanceType        DecisionPreferenceProvenanceType
+  storageClass          DecisionPreferenceStorageClass
+  assertedByUserId      String
+  visibility            DecisionPreferenceVisibility
+  purposeCode           String
+  consentPolicyVersion  String
+  consentedAt           DateTime
+  lastConfirmedAt       DateTime?
+  validFrom             DateTime                          @default(now())
+  expiresAt             DateTime?
+  status                DecisionPreferenceStatus          @default(PENDING_CONFIRMATION)
+  supersedesId          String?
+  version               Int                               @default(1)
+  createdAt             DateTime                          @default(now())
+  updatedAt             DateTime                          @updatedAt
+
+  property     Property?                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assertedBy   User                      @relation("DecisionPreferenceValueAssertedBy", fields: [assertedByUserId], references: [id])
+  supersedes   DecisionPreferenceValue?  @relation("DecisionPreferenceValueSupersession", fields: [supersedesId], references: [id])
+  supersededBy DecisionPreferenceValue[] @relation("DecisionPreferenceValueSupersession")
+
+  threadReferences DecisionThreadPreferenceReference[]
+
+  @@index([subjectType, subjectId, definitionId, status])
+  @@index([propertyId, definitionId, status])
+  @@map("decision_preference_values")
+}
+
+// FRD §10.1/§10.2/§10.3. lifecycleStatus and contextStatus are independent —
+// see docs/product/decision-platform/adr-0003-decision-thread-and-scenario-schema.md
+// and apps/backend/src/services/decisionPlatform/decisionThreadTransitions.ts
+// for the transition contract that governs legal changes to these fields.
+model DecisionThread {
+  id                               String                         @id @default(uuid())
+  propertyId                       String
+  subjectHouseholdId               String?
+  createdByUserId                  String
+  decisionDefinitionId             String
+  primaryEntityType                String?
+  primaryEntityId                  String?
+  title                            String
+  goalCode                         String
+  goalDetailRef                    String?
+  lifecycleStatus                  DecisionThreadLifecycleStatus @default(OPEN)
+  contextStatus                    DecisionThreadContextStatus   @default(CURRENT)
+  contextIssueCodes                String[]                       @default([])
+  currentRecommendationSnapshotId  String?                        @unique
+  version                          Int                            @default(1)
+  createdAt                        DateTime                       @default(now())
+  updatedAt                        DateTime                       @updatedAt
+  staleAt                          DateTime?
+  completedAt                      DateTime?
+  archivedAt                       DateTime?
+
+  property                      Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  subjectHousehold               Household?              @relation(fields: [subjectHouseholdId], references: [id])
+  createdBy                      User                    @relation("DecisionThreadCreatedBy", fields: [createdByUserId], references: [id])
+  currentRecommendationSnapshot  RecommendationSnapshot? @relation("DecisionThreadCurrentSnapshot", fields: [currentRecommendationSnapshotId], references: [id])
+
+  participants           DecisionThreadParticipant[]
+  factReferences          DecisionThreadFactReference[]
+  preferenceReferences     DecisionThreadPreferenceReference[]
+  assumptions               DecisionThreadAssumption[]
+  options                     DecisionThreadOption[]
+  questions                     DecisionThreadQuestion[]
+  executionLinks                  DecisionThreadExecutionLink[]
+  scenarios                          Scenario[]
+  recommendationSnapshots               RecommendationSnapshot[] @relation("DecisionThreadSnapshots")
+
+  @@index([propertyId, decisionDefinitionId, lifecycleStatus])
+  @@index([subjectHouseholdId, lifecycleStatus])
+  @@map("decision_threads")
+}
+
+model DecisionThreadParticipant {
+  id               String        @id @default(uuid())
+  decisionThreadId String
+  userId           String
+  role             HouseholdRole
+  addedAt          DateTime      @default(now())
+
+  decisionThread DecisionThread @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionThreadId, userId])
+  @@map("decision_thread_participants")
+}
+
+// Polymorphic reference to a canonical fact elsewhere in the schema (HVAC
+// record, insurance policy, mortgage term, etc.) — no FK, mirroring the
+// existing Signal.sourceModel/sourceId pattern, since the referenced
+// entities span many unrelated domain tables (FRD §15: read abstraction,
+// not a graph database).
+model DecisionThreadFactReference {
+  id                     String   @id @default(uuid())
+  decisionThreadId       String
+  canonicalEntityType    String
+  canonicalEntityId      String
+  canonicalFieldPath     String?
+  capturedContextVersion String?
+  createdAt              DateTime @default(now())
+
+  decisionThread DecisionThread @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+
+  @@index([decisionThreadId])
+  @@index([canonicalEntityType, canonicalEntityId])
+  @@map("decision_thread_fact_references")
+}
+
+model DecisionThreadPreferenceReference {
+  id                     String   @id @default(uuid())
+  decisionThreadId       String
+  preferenceValueId      String
+  capturedContextVersion String?
+  createdAt              DateTime @default(now())
+
+  decisionThread  DecisionThread          @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+  preferenceValue DecisionPreferenceValue @relation(fields: [preferenceValueId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionThreadId, preferenceValueId])
+  @@map("decision_thread_preference_references")
+}
+
+// Thread-level baseline assumptions/limitations (e.g. "no technician
+// assessment on file") — distinct from Scenario.assumptionsJson, which
+// holds isolated counterfactual assumptions for a specific what-if branch
+// (FRD §13.3 isolation rule).
+model DecisionThreadAssumption {
+  id               String   @id @default(uuid())
+  decisionThreadId String
+  assumptionKey    String
+  valueJson        Json
+  createdAt        DateTime @default(now())
+
+  decisionThread DecisionThread @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+
+  @@index([decisionThreadId, assumptionKey])
+  @@map("decision_thread_assumptions")
+}
+
+model DecisionThreadOption {
+  id               String    @id @default(uuid())
+  decisionThreadId String
+  optionKey        String
+  label            String
+  detailJson       Json?
+  selectedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  decisionThread DecisionThread @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionThreadId, optionKey])
+  @@map("decision_thread_options")
+}
+
+model DecisionThreadQuestion {
+  id               String                       @id @default(uuid())
+  decisionThreadId String
+  questionCode     String
+  status           DecisionThreadQuestionStatus @default(OPEN)
+  askedAt          DateTime                     @default(now())
+  resolvedAt       DateTime?
+
+  decisionThread DecisionThread @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+
+  @@index([decisionThreadId, status])
+  @@map("decision_thread_questions")
+}
+
+model DecisionThreadExecutionLink {
+  id               String                          @id @default(uuid())
+  decisionThreadId String
+  askExecutionId   String
+  linkRole         DecisionThreadExecutionLinkRole
+  linkedAt         DateTime                        @default(now())
+
+  decisionThread DecisionThread @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+  askExecution   AskExecution   @relation(fields: [askExecutionId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionThreadId, askExecutionId])
+  @@map("decision_thread_execution_links")
+}
+
+// FRD §13.1. definitionId references the code-based decision-engine schema
+// (per decision family), not a DB row.
+model Scenario {
+  id                                String         @id @default(uuid())
+  decisionThreadId                 String
+  definitionId                     String
+  schemaVersion                    Int
+  label                             String
+  baselineRecommendationSnapshotId String?
+  assumptionsJson                  Json
+  status                            ScenarioStatus @default(DRAFT)
+  createdByUserId                   String
+  version                            Int            @default(1)
+  createdAt                          DateTime       @default(now())
+  updatedAt                          DateTime       @updatedAt
+  expiresAt                          DateTime?
+
+  decisionThread                  DecisionThread          @relation(fields: [decisionThreadId], references: [id], onDelete: Cascade)
+  baselineRecommendationSnapshot  RecommendationSnapshot? @relation("ScenarioBaselineSnapshot", fields: [baselineRecommendationSnapshotId], references: [id])
+  createdBy                       User                    @relation("ScenarioCreatedBy", fields: [createdByUserId], references: [id])
+
+  recommendationSnapshots RecommendationSnapshot[] @relation("ScenarioSnapshots")
+
+  @@index([decisionThreadId, status])
+  @@map("scenarios")
+}
+
+// FRD §14.1. Immutable once created — no update path is expected beyond the
+// fields Prisma tracks automatically; a changed recommendation always
+// creates a new row linked via supersedesSnapshotId, never an in-place edit.
+model RecommendationSnapshot {
+  id                               String   @id @default(uuid())
+  decisionThreadId                 String?
+  propertyId                       String
+  recommendationOwner              String
+  recommendationDefinitionId       String
+  recommendationDefinitionVersion  String
+  operationId                      String
+  operationVersion                 String
+  engineVersion                    String
+  contextContractVersion           String
+  canonicalFactReferences          Json
+  preferenceReferenceIds           String[] @default([])
+  scenarioId                       String?
+  signalReferences                 Json
+  evidenceReferences               Json
+  resultPayloadVersion             String
+  verdictCode                      String
+  reasonCodes                      String[] @default([])
+  limitationCodes                  String[] @default([])
+  confidenceBreakdown              Json
+  rankingPolicyVersion             String?
+  generatedAt                      DateTime @default(now())
+  supersedesSnapshotId              String?
+  inputDigest                       String
+
+  decisionThread DecisionThread? @relation("DecisionThreadSnapshots", fields: [decisionThreadId], references: [id], onDelete: Cascade)
+  property       Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  scenario       Scenario?       @relation("ScenarioSnapshots", fields: [scenarioId], references: [id])
+  supersedes     RecommendationSnapshot?  @relation("RecommendationSnapshotSupersession", fields: [supersedesSnapshotId], references: [id])
+  supersededBy   RecommendationSnapshot[] @relation("RecommendationSnapshotSupersession")
+
+  currentForThread     DecisionThread? @relation("DecisionThreadCurrentSnapshot")
+  baselineForScenarios Scenario[]      @relation("ScenarioBaselineSnapshot")
+
+  @@index([propertyId, recommendationDefinitionId, generatedAt])
+  @@index([decisionThreadId, generatedAt])
+  @@map("recommendation_snapshots")
 }
 
 // ============================================================================
@@ -19456,6 +19824,15 @@ model Household {
   owner          User                @relation(fields: [ownerUserId], references: [id])
   properties     HouseholdProperty[]
   profileAnswers ProfileAnswer[]
+
+  // Decision Platform (Ask Intelligence FRD Phase 7A) — this is the
+  // canonical HOUSEHOLD subject for DecisionPreferenceValue.subjectId per
+  // adr-0001-ownership-and-scope.md, but subjectId is a polymorphic
+  // reference (User.id or Household.id) with no DB-level FK, mirroring
+  // Signal.sourceModel/sourceId — so there is no reciprocal Prisma relation
+  // here for it. DecisionThread.subjectHouseholdId is a real FK and does
+  // resolve here, never to HouseholdMember.
+  decisionThreads DecisionThread[]
 
   @@index([ownerUserId])
   @@map("personalization_households")

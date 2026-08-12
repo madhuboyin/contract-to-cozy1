@@ -185,11 +185,27 @@ import { requestIdMiddleware } from './middleware/requestId.middleware';
 import { APP_CONFIG_KEYS, isEmailVerificationDisabled } from './config/appConfig';
 import { validateAskOperationDefinitions } from './services/ask/askOperationRegistry';
 import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
+import { validateDecisionPreferenceRegistry } from './services/decisionPlatform/decisionPreferenceRegistry';
+import { validateDecisionContextContracts } from './services/decisionPlatform/decisionContextContracts';
+import { validateDecisionDefinitionRegistry } from './services/decisionPlatform/decisionDefinitionRegistry';
+import { validateDecisionThreadTransitionContract } from './services/decisionPlatform/decisionThreadTransitions';
 dotenv.config();
 
 const askRegistryIssues = [...validateAskOperationDefinitions(), ...validateAskDomainCommandRegistry()];
 if (askRegistryIssues.length) {
   throw new Error(`FATAL: Ask registry validation failed: ${askRegistryIssues.join('; ')}`);
+}
+
+// Decision Platform (Ask Intelligence FRD Phase 7A) — same fail-fast
+// registry validation pattern as the Ask registries above.
+const decisionPlatformRegistryIssues = [
+  ...validateDecisionPreferenceRegistry(),
+  ...validateDecisionContextContracts(),
+  ...validateDecisionDefinitionRegistry(),
+  ...validateDecisionThreadTransitionContract(),
+];
+if (decisionPlatformRegistryIssues.length) {
+  throw new Error(`FATAL: Decision Platform registry validation failed: ${decisionPlatformRegistryIssues.join('; ')}`);
 }
 
 const app = express();
