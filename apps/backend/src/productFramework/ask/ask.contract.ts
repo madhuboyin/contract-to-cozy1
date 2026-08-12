@@ -202,6 +202,43 @@ const ScenarioComparisonBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3).default([]),
 });
 
+// Ask Intelligence FRD §11.4. Rendered whenever a confirmed, active
+// preference materially affected a recommendation; privacy-appropriate
+// summary copy only, never the raw stored value. "Change"/"forget" controls
+// are surfaced as suggested follow-up messages (see askOrchestrator.service.ts),
+// not action hrefs -- AskAction is link-only and these are commands, not
+// navigation.
+const PreferenceReferenceBlockSchema = z.object({
+  type: z.literal('PREFERENCE_REFERENCE'), id: z.string(), title: z.string(),
+  preferenceKey: z.string(),
+  summary: z.string(),
+  visibility: z.enum(['PRIVATE', 'OWNER_ONLY', 'HOUSEHOLD_SUMMARY', 'HOUSEHOLD_DETAIL']),
+  confirmedAt: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+});
+
+// Ask Intelligence FRD §14.2. Rendered only from recorded trigger, evidence,
+// timing, and confidence codes -- never generated as a post-hoc rationale.
+const WhyNowBlockSchema = z.object({
+  type: z.literal('WHY_NOW'), id: z.string(), title: z.string(),
+  triggerCodes: z.array(z.string()).max(12),
+  evidenceCodes: z.array(z.string()).max(12),
+  timingNote: z.string().nullable(),
+  confidenceLabel: z.enum(['HIGH', 'MEDIUM', 'LOW']).nullable(),
+});
+
+// Ask Intelligence FRD §14.3. Compares two compatible snapshots; a changed
+// engine/contract version with no changed homeowner fact must be disclosed
+// as a system-method change, distinct from a material verdict change.
+const RecommendationChangeBlockSchema = z.object({
+  type: z.literal('RECOMMENDATION_CHANGE'), id: z.string(), title: z.string(),
+  decisionThreadId: z.string(),
+  previousVerdict: z.string(), currentVerdict: z.string(),
+  category: z.enum(['MATERIAL', 'CONFIDENCE_ONLY', 'SYSTEM_METHOD_ONLY', 'UNCHANGED']),
+  changedFactors: z.array(z.string()).max(12),
+  changedAt: z.string(),
+});
+
 const AssumptionsBlockSchema = z.object({ type: z.literal('ASSUMPTIONS'), id: z.string(), title: z.string(), items: z.array(z.string()).min(1).max(20) });
 const LimitationBlockSchema = z.object({ type: z.literal('LIMITATION'), id: z.string(), title: z.string(), body: z.string(), severity: z.enum(['INFO', 'CAUTION']) });
 const EmptyStateBlockSchema = z.object({ type: z.literal('EMPTY_STATE'), id: z.string(), title: z.string(), body: z.string(), actions: z.array(AskActionSchema).max(3).default([]) });
@@ -222,6 +259,9 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   DecisionTraceBlockSchema,
   DecisionProgressBlockSchema,
   ScenarioComparisonBlockSchema,
+  PreferenceReferenceBlockSchema,
+  WhyNowBlockSchema,
+  RecommendationChangeBlockSchema,
   AssumptionsBlockSchema,
   LimitationBlockSchema,
   EmptyStateBlockSchema,

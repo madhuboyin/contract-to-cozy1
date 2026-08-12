@@ -10,6 +10,8 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'HVAC_DECISION_START',
   'HVAC_DECISION_SCENARIO',
   'HVAC_DECISION_ABANDON',
+  'HVAC_PREFERENCE_SAVE',
+  'HVAC_PREFERENCE_FORGET',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -63,6 +65,8 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   HVAC_DECISION_START: command('HVAC_DECISION_START', 'HVAC_DECISION_START', 'decision-platform.hvac.start', 'CONTRIBUTOR', 'DECISION_THREAD', ['STOP'], { title: 'Decision thread not created', body: 'No durable HVAC repair/replace decision or recommendation snapshot was created.', suggestion: 'What needs my attention?' }),
   HVAC_DECISION_SCENARIO: command('HVAC_DECISION_SCENARIO', 'HVAC_DECISION_SCENARIO', 'decision-platform.hvac.scenario', 'CONTRIBUTOR', 'SCENARIO', ['STOP'], { title: 'Scenario not created', body: 'No counterfactual quote scenario was recorded; the current decision recommendation is unchanged.', suggestion: 'Show my HVAC decision' }),
   HVAC_DECISION_ABANDON: command('HVAC_DECISION_ABANDON', 'HVAC_DECISION_ABANDON', 'decision-platform.hvac.abandon', 'CONTRIBUTOR', 'DECISION_THREAD', ['REOPEN'], { title: 'Decision thread not abandoned', body: 'The decision thread remains active with its current recommendation.', suggestion: 'Show my HVAC decision' }),
+  HVAC_PREFERENCE_SAVE: command('HVAC_PREFERENCE_SAVE', 'HVAC_PREFERENCE_SAVE', 'decision-platform.hvac.preference.save', 'CONTRIBUTOR', 'DECISION_PREFERENCE_VALUE', ['EDIT', 'REVOKE'], { title: 'Preference not saved', body: 'No decision preference was created or changed.', suggestion: 'Show my HVAC decision' }),
+  HVAC_PREFERENCE_FORGET: command('HVAC_PREFERENCE_FORGET', 'HVAC_PREFERENCE_FORGET', 'decision-platform.hvac.preference.forget', 'CONTRIBUTOR', 'DECISION_PREFERENCE_VALUE', ['REOPEN'], { title: 'Preference not forgotten', body: 'The preference remains active and in use.', suggestion: 'Show my HVAC decision' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

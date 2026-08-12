@@ -46,7 +46,9 @@ export type AskOperationId =
   | 'HVAC_DECISION_START'
   | 'HVAC_DECISION_CONTINUE'
   | 'HVAC_DECISION_SCENARIO'
-  | 'HVAC_DECISION_ABANDON';
+  | 'HVAC_DECISION_ABANDON'
+  | 'HVAC_PREFERENCE_SAVE'
+  | 'HVAC_PREFERENCE_FORGET';
 
 export interface AskOperationResolution {
   operationId: AskOperationId;
@@ -150,10 +152,22 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // Distinct from REPLACEMENT_GUIDANCE: these operate on the Decision
   // Platform's durable DecisionThread/RecommendationSnapshot models via the
   // registered HVAC repair/replace engine, not the generic appliance heuristic.
-  HVAC_DECISION_START: definition('HVAC_DECISION_START', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.start', ['SUMMARY', 'DECISION_PROGRESS', 'EVIDENCE', 'LIMITATION', 'ASSUMPTIONS', 'GROUPED_LIST', 'BOUNDARY']),
-  HVAC_DECISION_CONTINUE: definition('HVAC_DECISION_CONTINUE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'decision-platform.hvac.continue', ['DECISION_PROGRESS', 'EVIDENCE', 'LIMITATION', 'EMPTY_STATE']),
-  HVAC_DECISION_SCENARIO: definition('HVAC_DECISION_SCENARIO', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.scenario', ['SUMMARY', 'SCENARIO_COMPARISON', 'LIMITATION', 'BOUNDARY']),
+  // Phase 8B: HVAC_DECISION_START's "already active" branch and
+  // HVAC_DECISION_CONTINUE both go through continueHvacDecisionThread,
+  // which can trigger a stale recompute -- so both must declare WHY_NOW and
+  // RECOMMENDATION_CHANGE, not just DECISION_PROGRESS, or
+  // createAskExecution's "undeclared block type" guard throws the first
+  // time a recompute actually happens.
+  HVAC_DECISION_START: definition('HVAC_DECISION_START', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.start', ['SUMMARY', 'DECISION_PROGRESS', 'WHY_NOW', 'RECOMMENDATION_CHANGE', 'PREFERENCE_REFERENCE', 'EVIDENCE', 'LIMITATION', 'ASSUMPTIONS', 'GROUPED_LIST', 'BOUNDARY']),
+  HVAC_DECISION_CONTINUE: definition('HVAC_DECISION_CONTINUE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'decision-platform.hvac.continue', ['DECISION_PROGRESS', 'WHY_NOW', 'RECOMMENDATION_CHANGE', 'PREFERENCE_REFERENCE', 'EVIDENCE', 'LIMITATION', 'EMPTY_STATE']),
+  HVAC_DECISION_SCENARIO: definition('HVAC_DECISION_SCENARIO', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.scenario', ['SUMMARY', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE', 'LIMITATION', 'BOUNDARY']),
   HVAC_DECISION_ABANDON: definition('HVAC_DECISION_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.abandon', ['SUMMARY', 'WORKFLOW_PROGRESS']),
+  // Ask Intelligence FRD Phase 8B — confirmed ownership-horizon
+  // personalization (FRD §11). Preferences are sensitive/material, hence
+  // MATERIAL_DECISION for save; forget/revoke is safety-neutral, matching
+  // HVAC_DECISION_ABANDON's STANDARD choice.
+  HVAC_PREFERENCE_SAVE: definition('HVAC_PREFERENCE_SAVE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.preference.save', ['SUMMARY', 'PREFERENCE_REFERENCE', 'BOUNDARY']),
+  HVAC_PREFERENCE_FORGET: definition('HVAC_PREFERENCE_FORGET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.preference.forget', ['SUMMARY', 'WORKFLOW_PROGRESS']),
 });
 
 export function getAskOperationDefinition(operationId: AskOperationId): AskOperationDefinition {
@@ -216,6 +230,14 @@ const hvacKeyword = '(?:hvac|furnace|air conditioner|a\\/?c unit|heat pump|centr
 const hvacDecisionContinuePattern = new RegExp(`\\b(?:status of|resume|continue|check on|where (?:are we|do things stand)|update on)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b|\\bdecision\\b.{0,40}\\b(?:status|update|progress)\\b.{0,60}\\b${hvacKeyword}\\b`, 'i');
 const hvacDecisionScenarioPattern = new RegExp(`\\b(?:new |another )?quote\\b.{0,80}\\b${hvacKeyword}\\b.{0,60}\\b(?:decision|repair or replace|compare|change)\\b|\\b${hvacKeyword}\\b.{0,60}\\bquote\\b.{0,60}\\b(?:decision|compare|scenario)\\b`, 'i');
 const hvacDecisionAbandonPattern = new RegExp(`\\b(?:abandon|cancel|stop tracking|drop)\\b.{0,60}\\b${hvacKeyword}\\b.{0,40}\\bdecision\\b`, 'i');
+// Ask Intelligence FRD Phase 8B: an explicit save/remember verb combined
+// with a substantive preference mention (sell timeframe or repair/replace
+// approach) -- the FRD requires this never be silently inferred, so routing
+// alone is not the confirmation; decisionPreferenceService.ts's parsers are
+// the strict, save-verb-gated source of truth for what actually gets saved.
+const hvacPreferenceSaveVerbPattern = /\b(?:save|remember|keep track of|note that|record that)\b/i;
+const hvacPreferenceSaveSubjectPattern = /\b(?:sell|selling|plan(?:s|ning)?\s+to\s+sell)\b.{0,40}\b(?:month|year)s?\b|\bminimi[sz]e (?:the )?(?:upfront|long[- ]term) cost\b|\bmaximi[sz]e reliability\b/i;
+const hvacPreferenceForgetPattern = /\b(?:forget|stop using|remove|revoke)\b.{0,60}\b(?:ownership horizon|sell(?:ing)? (?:plan|timeline)|repair[- ]replace approach|repair or replace preference|hvac (?:preference|plan))\b/i;
 const hvacDecisionStartPattern = new RegExp(`\\b(?:repair or replace|should i replace|should i repair|fix or replace|worth repairing|worth replacing)\\b.{0,60}\\b${hvacKeyword}\\b|\\b${hvacKeyword}\\b.{0,60}\\b(?:repair or replace|repair vs\\.? replace|fix or replace|worth repairing|worth replacing)\\b`, 'i');
 const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;
 const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
@@ -252,6 +274,12 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (hvacDecisionScenarioPattern.test(message)) {
     return resolved('HVAC_DECISION_SCENARIO', 0.96);
+  }
+  if (hvacPreferenceForgetPattern.test(message)) {
+    return resolved('HVAC_PREFERENCE_FORGET', 0.96);
+  }
+  if (hvacPreferenceSaveVerbPattern.test(message) && hvacPreferenceSaveSubjectPattern.test(message)) {
+    return resolved('HVAC_PREFERENCE_SAVE', 0.95);
   }
   if (hvacDecisionAbandonPattern.test(message)) {
     return resolved('HVAC_DECISION_ABANDON', 0.97);

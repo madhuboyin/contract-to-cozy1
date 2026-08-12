@@ -70,6 +70,8 @@ import { getReadiness as getRenovationReadiness } from '../renovationReadiness.s
 import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import * as decisionThreadService from '../decisionPlatform/decisionThreadService';
+import * as decisionPreferenceService from '../decisionPlatform/decisionPreferenceService';
+import { HouseholdProfileNotEnabledError, PreferenceNotAuthorizedError } from '../decisionPlatform/decisionPreferenceService';
 import { resolveAskRoutingCascade, type AskRoutingDecision } from './askRoutingCascade';
 import { resolveAskFollowUpMessage } from './askFollowUpContext';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
@@ -1609,6 +1611,47 @@ function scenarioComparisonBlock(
   };
 }
 
+// Ask Intelligence FRD Phase 8B — WHY_NOW (§14.2), RECOMMENDATION_CHANGE
+// (§14.3), and PREFERENCE_REFERENCE (§11.4). rendered only from recorded
+// codes on the actual snapshot/diff -- never generated as a post-hoc
+// rationale.
+type ResolvedSnapshot = NonNullable<DecisionProgressSnapshot>;
+
+function whyNowBlock(id: string, snapshot: ResolvedSnapshot, triggerReasonCodes: string[]): AskPresentationBlock {
+  return {
+    type: 'WHY_NOW', id, title: 'Why now',
+    triggerCodes: triggerReasonCodes.length ? triggerReasonCodes : snapshot.reasonCodes,
+    evidenceCodes: snapshot.reasonCodes,
+    timingNote: triggerReasonCodes.length ? 'Recalculated after a recorded fact changed.' : null,
+    confidenceLabel: (snapshot.confidenceBreakdown as { label?: 'HIGH' | 'MEDIUM' | 'LOW' } | undefined)?.label ?? null,
+  };
+}
+
+function recommendationChangeBlock(id: string, decisionThreadId: string, change: decisionPreferenceService.RecommendationChangeDiff): AskPresentationBlock {
+  return {
+    type: 'RECOMMENDATION_CHANGE', id, title: 'What changed', decisionThreadId,
+    previousVerdict: change.previousVerdict, currentVerdict: change.currentVerdict,
+    category: change.category, changedFactors: change.changedFactors,
+    changedAt: new Date().toISOString(),
+  };
+}
+
+// Built from a specific snapshot's own recorded preferenceReferenceIds
+// (FRD §14.1 lineage), NOT a fresh "what's active right now" read -- those
+// can diverge (a different household member viewing later, or the
+// preference changing before a recompute runs). See
+// decisionPreferenceService.getPreferenceReferenceDetails.
+async function preferenceReferenceBlocksForSnapshot(idPrefix: string, preferenceReferenceIds: string[]): Promise<AskPresentationBlock[]> {
+  const details = await decisionPreferenceService.getPreferenceReferenceDetails(preferenceReferenceIds);
+  return details.map((detail) => ({
+    type: 'PREFERENCE_REFERENCE', id: `${idPrefix}-preference-${detail.definitionId.toLowerCase().replace(/_/g, '-')}`,
+    title: detail.definitionId === 'OWNERSHIP_HORIZON' ? 'Using your confirmed plan' : 'Using your confirmed preference',
+    preferenceKey: detail.definitionId, summary: detail.summary, visibility: detail.visibility,
+    confirmedAt: detail.confirmedAt ? detail.confirmedAt.toISOString() : null,
+    expiresAt: detail.expiresAt ? detail.expiresAt.toISOString() : null,
+  }));
+}
+
 async function findHvacItemForMessage(propertyId: string, message: string): Promise<{ items: { id: string; name: string }[]; item: { id: string; name: string } | null }> {
   const items = await prisma.inventoryItem.findMany({ where: { propertyId, category: 'HVAC' }, select: { id: true, name: true }, take: 50 });
   const lower = message.toLowerCase();
@@ -1652,10 +1695,16 @@ async function hvacDecisionStartResult(userId: string, propertyId: string, messa
 
   const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
   if (selection.kind === 'UNIQUE') {
-    const thread = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId);
+    const { thread, change, triggerReasonCodes } = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId);
+    const blocks: AskPresentationBlock[] = [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])];
+    if (change && thread.currentRecommendationSnapshot) {
+      blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
+      blocks.push(recommendationChangeBlock('hvac-decision-change', thread.id, change));
+    }
+    blocks.push(...await preferenceReferenceBlocksForSnapshot('hvac-decision', thread.currentRecommendationSnapshot?.preferenceReferenceIds ?? []));
     return {
       status: 'ANSWERED', reasonCode: 'HVAC_DECISION_ALREADY_ACTIVE',
-      blocks: [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])],
+      blocks,
       suggestions: ['What changed about this decision?'],
     };
   }
@@ -1700,10 +1749,16 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
   if (selection.kind === 'AMBIGUOUS') {
     return hvacDecisionThreadAmbiguousResult('HVAC_DECISION_CONTINUE', selection.candidates);
   }
-  const thread = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId);
+  const { thread, change, triggerReasonCodes } = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId);
+  const blocks: AskPresentationBlock[] = [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])];
+  if (change && thread.currentRecommendationSnapshot) {
+    blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
+    blocks.push(recommendationChangeBlock('hvac-decision-change', thread.id, change));
+  }
+  blocks.push(...await preferenceReferenceBlocksForSnapshot('hvac-decision', thread.currentRecommendationSnapshot?.preferenceReferenceIds ?? []));
   return {
     status: 'ANSWERED', reasonCode: 'HVAC_DECISION_RESUMED',
-    blocks: [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])],
+    blocks,
     suggestions: ['Compare a new quote for this decision', 'Abandon this decision'],
   };
 }
@@ -1795,6 +1850,99 @@ async function hvacDecisionAbandonResult(userId: string, propertyId: string, mes
       description: 'You can start a new decision for this system at any time.',
       fields: [{ label: 'System', value: item.name }],
       confirmLabel: 'Abandon decision', consentText: 'I authorize abandoning this decision thread.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+// Ask Intelligence FRD Phase 8B §11.3 capture experience. No contextVersion
+// conflict check here (unlike the other HVAC commands): unlike a thread or
+// an inventory item, there is no mutable external row this depends on
+// between propose and confirm -- the value being saved is entirely the
+// homeowner's own just-typed statement, captured in `parameters`. The one
+// real dependency (an enabled household profile for OWNERSHIP_HORIZON) is
+// checked live at confirm time and surfaced as a clear error, not silently
+// bypassed (see HouseholdProfileNotEnabledError below).
+async function hvacPreferenceSaveResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const ownership = decisionPreferenceService.parseOwnershipHorizonFromMessage(message);
+  const approach = decisionPreferenceService.parseRepairReplaceApproachFromMessage(message);
+  if (!ownership && !approach) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HVAC_PREFERENCE_SAVE_DETAILS_REQUIRED',
+      ...durableFreeTextClarification('HVAC_PREFERENCE_SAVE', 'What would you like Ask to save for future HVAC decisions?'),
+      blocks: [{ type: 'SUMMARY', id: 'hvac-preference-save-details-required', title: 'What should Ask save?', body: 'Say something like "Save that we plan to sell in about 18 months" or "Remember I want to minimize upfront cost."', tone: 'DEFAULT', actions: [] }],
+      suggestions: ['Save that we plan to sell in about 18 months', 'Remember I want to minimize long-term cost'],
+    };
+  }
+
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const fields: { label: string; value: string }[] = [];
+  if (ownership) fields.push({ label: 'Plan', value: `Sell in about ${ownership.horizonMonths} months` });
+  if (approach) fields.push({ label: 'Approach', value: approach.approach.replace(/_/g, ' ').toLowerCase() });
+  fields.push(
+    { label: 'Who can see this', value: 'Household summary' },
+    { label: 'Used for', value: 'HVAC repair/replace decisions' },
+    { label: 'Expires', value: 'In 12 months, or when you update or forget it' },
+  );
+
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HVAC_PREFERENCE_SAVE_CONFIRMATION_REQUIRED',
+    parameters: { hvacPreferenceSave: { ownership, approach }, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'hvac-preference-save-review', title: 'Save this for future HVAC decisions?', body: 'You can change or forget this at any time.', tone: 'DEFAULT', actions: [] }],
+    confirmation: {
+      confirmationId: `hvac-preference-save-${propertyId}-1`, version: 1, title: 'Save this for future HVAC decisions?',
+      description: 'Ask will reuse this confirmed preference for repair-vs-replace recommendations on this home until it expires or you change it.',
+      fields,
+      confirmLabel: 'Save', consentText: 'I confirm this is accurate and authorize saving it for future HVAC decisions.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+async function hvacPreferenceForgetResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const preferences = await decisionPreferenceService.getActiveHvacPreferences(propertyId, userId);
+  const active: { key: 'OWNERSHIP_HORIZON' | 'REPAIR_REPLACE_APPROACH'; preferenceValueId: string; label: string }[] = [];
+  if (preferences.ownershipHorizonPreferenceId) {
+    active.push({ key: 'OWNERSHIP_HORIZON', preferenceValueId: preferences.ownershipHorizonPreferenceId, label: `your plan to sell in about ${preferences.ownershipHorizonMonths} months` });
+  }
+  if (preferences.repairReplaceApproachPreferenceId) {
+    active.push({ key: 'REPAIR_REPLACE_APPROACH', preferenceValueId: preferences.repairReplaceApproachPreferenceId, label: 'your repair/replace approach' });
+  }
+
+  if (!active.length) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HVAC_PREFERENCE_NONE_ACTIVE',
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-preference-forget-none', title: 'Nothing to forget', body: 'No confirmed HVAC decision preference is currently saved.', actions: [] }],
+      suggestions: [],
+    };
+  }
+
+  let target = active[0];
+  if (active.length > 1) {
+    const mentionsApproach = /\bapproach\b/i.test(message);
+    const mentionsOwnership = /\b(?:ownership|sell(?:ing)?)\b/i.test(message);
+    const matched = active.find((candidate) => (candidate.key === 'REPAIR_REPLACE_APPROACH' && mentionsApproach) || (candidate.key === 'OWNERSHIP_HORIZON' && mentionsOwnership));
+    if (!matched) {
+      return {
+        status: 'NEEDS_ENTITY', reasonCode: 'HVAC_PREFERENCE_FORGET_AMBIGUOUS',
+        ...durableFreeTextClarification('HVAC_PREFERENCE_FORGET', 'Which saved preference should Ask forget — the ownership horizon or the repair/replace approach?'),
+        blocks: [{ type: 'GROUPED_LIST', id: 'hvac-preference-forget-candidates', title: 'Saved preferences', description: 'Use the exact name in your next message.', sections: [{ id: 'preferences', title: 'Active', count: active.length, items: active.map((candidate) => ({ id: candidate.key, title: candidate.label, description: null, meta: [], status: null, href: null })) }], actions: [] }],
+        suggestions: ['Forget my ownership horizon', 'Forget my repair/replace approach'],
+      };
+    }
+    target = matched;
+  }
+
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HVAC_PREFERENCE_FORGET_CONFIRMATION_REQUIRED',
+    parameters: { hvacPreferenceForget: { preferenceValueId: target.preferenceValueId }, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'hvac-preference-forget-review', title: `Forget ${target.label}?`, body: 'Ask will no longer use this for HVAC repair/replace recommendations. Any decision that used it will be recalculated.', tone: 'CAUTION', actions: [] }],
+    confirmation: {
+      confirmationId: `hvac-preference-forget-${target.preferenceValueId}-1`, version: 1, title: `Forget ${target.label}?`,
+      description: 'This does not delete any decision history — it only stops this preference from being reused.',
+      fields: [{ label: 'Preference', value: target.label }],
+      confirmLabel: 'Forget it', consentText: 'I authorize forgetting this preference.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -3599,6 +3747,8 @@ async function executeOperationCore(input: { userId: string; sessionId: string; 
     case 'HVAC_DECISION_CONTINUE': return hvacDecisionContinueResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_DECISION_SCENARIO': return hvacDecisionScenarioResult(input.userId, input.propertyId!, input.message);
     case 'HVAC_DECISION_ABANDON': return hvacDecisionAbandonResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_PREFERENCE_SAVE': return hvacPreferenceSaveResult(input.userId, input.propertyId!, input.message);
+    case 'HVAC_PREFERENCE_FORGET': return hvacPreferenceForgetResult(input.userId, input.propertyId!, input.message);
   }
 }
 
@@ -5135,11 +5285,14 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     }
     const { thread: createdThread, snapshot: createdSnapshot } = await decisionThreadService.createHvacDecisionThread({
       propertyId: execution.propertyId, userId, inventoryItemId: candidate.data.inventoryItemId, askExecutionId: execution.id,
-      ownershipHorizonMonths: null, repairReplaceApproach: null,
     });
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_DECISION_START_CREATED',
-      blocks: [decisionProgressBlock('hvac-decision-created', 'Decision thread started', createdThread, createdSnapshot, [])],
+      blocks: [
+        decisionProgressBlock('hvac-decision-created', 'Decision thread started', createdThread, createdSnapshot, []),
+        whyNowBlock('hvac-decision-why-now', createdSnapshot, []),
+        ...await preferenceReferenceBlocksForSnapshot('hvac-decision-created', createdSnapshot.preferenceReferenceIds),
+      ],
       confirmation: null, suggestions: [],
     };
     artifactType = command.artifactType;
@@ -5167,11 +5320,14 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     });
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_DECISION_SCENARIO_CREATED',
-      blocks: [scenarioComparisonBlock(
-        'hvac-scenario-comparison', `Scenario: ${candidate.data.vendorLabel}`, scenarioThread.id, scenario.id,
-        { label: 'Current recommendation', verdictCode: scenarioThread.currentRecommendationSnapshot?.verdictCode ?? 'UNKNOWN', reasonCodes: scenarioThread.currentRecommendationSnapshot?.reasonCodes ?? [], limitationCodes: scenarioThread.currentRecommendationSnapshot?.limitationCodes ?? [] },
-        { label: scenario.label, verdictCode: scenarioSnapshot.verdictCode, reasonCodes: scenarioSnapshot.reasonCodes, limitationCodes: scenarioSnapshot.limitationCodes, assumptions: [{ label: 'Quote amount', value: `$${(candidate.data.quoteAmountCents / 100).toFixed(2)}` }, { label: 'Vendor', value: candidate.data.vendorLabel }] },
-      )],
+      blocks: [
+        scenarioComparisonBlock(
+          'hvac-scenario-comparison', `Scenario: ${candidate.data.vendorLabel}`, scenarioThread.id, scenario.id,
+          { label: 'Current recommendation', verdictCode: scenarioThread.currentRecommendationSnapshot?.verdictCode ?? 'UNKNOWN', reasonCodes: scenarioThread.currentRecommendationSnapshot?.reasonCodes ?? [], limitationCodes: scenarioThread.currentRecommendationSnapshot?.limitationCodes ?? [] },
+          { label: scenario.label, verdictCode: scenarioSnapshot.verdictCode, reasonCodes: scenarioSnapshot.reasonCodes, limitationCodes: scenarioSnapshot.limitationCodes, assumptions: [{ label: 'Quote amount', value: `$${(candidate.data.quoteAmountCents / 100).toFixed(2)}` }, { label: 'Vendor', value: candidate.data.vendorLabel }] },
+        ),
+        ...await preferenceReferenceBlocksForSnapshot('hvac-scenario', scenarioSnapshot.preferenceReferenceIds),
+      ],
       confirmation: null, suggestions: [],
     };
     artifactType = command.artifactType;
@@ -5196,6 +5352,81 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     };
     artifactType = command.artifactType;
     artifactId = abandonedThread.id;
+  } else if (execution.operationId === 'HVAC_PREFERENCE_SAVE') {
+    const candidate = parameters.hvacPreferenceSave as {
+      ownership: decisionPreferenceService.ParsedOwnershipHorizon | null;
+      approach: decisionPreferenceService.ParsedRepairReplaceApproach | null;
+    } | undefined;
+    if (!candidate || (!candidate.ownership && !candidate.approach)) {
+      const error = new Error('The preference details are invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    const savedIds: string[] = [];
+    const savedBlocks: AskPresentationBlock[] = [];
+    try {
+      if (candidate.ownership) {
+        const saved = await decisionPreferenceService.saveOwnershipHorizonPreference(execution.propertyId, userId, candidate.ownership);
+        savedIds.push(saved.preferenceValueId);
+        savedBlocks.push({
+          type: 'PREFERENCE_REFERENCE', id: 'hvac-preference-saved-ownership-horizon', title: 'Ownership horizon saved',
+          preferenceKey: 'OWNERSHIP_HORIZON', summary: `Saved: plan to sell in about ${candidate.ownership.horizonMonths} months.`,
+          visibility: 'HOUSEHOLD_SUMMARY', confirmedAt: new Date().toISOString(), expiresAt: null,
+        });
+      }
+      if (candidate.approach) {
+        const saved = await decisionPreferenceService.saveRepairReplaceApproachPreference(execution.propertyId, userId, candidate.approach);
+        savedIds.push(saved.preferenceValueId);
+        savedBlocks.push({
+          type: 'PREFERENCE_REFERENCE', id: 'hvac-preference-saved-approach', title: 'Approach saved',
+          preferenceKey: 'REPAIR_REPLACE_APPROACH', summary: `Saved: ${candidate.approach.approach.replace(/_/g, ' ').toLowerCase()}.`,
+          visibility: 'HOUSEHOLD_SUMMARY', confirmedAt: new Date().toISOString(), expiresAt: null,
+        });
+      }
+    } catch (caught) {
+      if (caught instanceof HouseholdProfileNotEnabledError) {
+        const error = new Error('The optional household profile is not enabled for this property yet, so this plan cannot be saved as a household preference. Enable the household profile first, then try again.');
+        (error as Error & { code?: string }).code = 'ASK_HOUSEHOLD_PROFILE_REQUIRED';
+        throw error;
+      }
+      throw caught;
+    }
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_PREFERENCE_SAVED',
+      blocks: savedBlocks, confirmation: null, suggestions: ['Should I repair or replace my HVAC?'],
+    };
+    artifactType = command.artifactType;
+    artifactId = savedIds[0] ?? '';
+  } else if (execution.operationId === 'HVAC_PREFERENCE_FORGET') {
+    const candidate = parameters.hvacPreferenceForget as { preferenceValueId: string } | undefined;
+    if (!candidate?.preferenceValueId) {
+      const error = new Error('The preference to forget is invalid.');
+      (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
+      throw error;
+    }
+    let affectedThreadIds: string[];
+    try {
+      ({ affectedThreadIds } = await decisionPreferenceService.revokeHvacPreference(candidate.preferenceValueId, userId));
+    } catch (caught) {
+      if (caught instanceof PreferenceNotAuthorizedError) {
+        const error = new Error(caught.message);
+        (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+        throw error;
+      }
+      throw caught;
+    }
+    await decisionThreadService.markThreadsStaleByIds(affectedThreadIds, 'PREFERENCE_REVOKED');
+    result = {
+      status: 'COMPLETED', reasonCode: 'HVAC_PREFERENCE_FORGOTTEN',
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `hvac-preference-forgotten-${candidate.preferenceValueId}`, title: 'Preference forgotten', status: 'COMPLETED',
+        description: affectedThreadIds.length ? 'Affected decisions will be recalculated the next time you open them.' : 'No active decision used this preference.',
+        details: [], actions: [],
+      }],
+      confirmation: null, suggestions: [],
+    };
+    artifactType = command.artifactType;
+    artifactId = candidate.preferenceValueId;
   } else if (execution.operationId === 'HOME_DEADLINE_MONITOR') {
     const candidate = HomeDeadlineMonitorInputSchema.safeParse(parameters.homeDeadlineMonitor);
     if (!candidate.success) {

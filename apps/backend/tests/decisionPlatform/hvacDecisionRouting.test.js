@@ -74,6 +74,42 @@ test('HVAC abandon phrasing routes to HVAC_DECISION_ABANDON', () => {
   }
 });
 
+test('an explicit save verb plus a substantive preference mention routes to HVAC_PREFERENCE_SAVE (FRD Phase 8B §11.3)', () => {
+  const cases = [
+    'Save that we plan to sell in about 18 months',
+    'Remember I want to minimize upfront cost',
+    'Note that I want to maximize reliability',
+  ];
+  for (const prompt of cases) {
+    const result = resolveAskOperation(prompt);
+    assert.equal(result.operationId, 'HVAC_PREFERENCE_SAVE', prompt);
+    assert.equal(ASK_OPERATION_DEFINITIONS.HVAC_PREFERENCE_SAVE.safetyClass, 'MATERIAL_DECISION');
+    assert.equal(ASK_OPERATION_DEFINITIONS.HVAC_PREFERENCE_SAVE.propertyRoleFloor, 'CONTRIBUTOR');
+  }
+});
+
+test('a save verb with no substantive preference mention does not route to HVAC_PREFERENCE_SAVE — FRD §4.2: never silently infer', () => {
+  assert.notEqual(resolveAskOperation('Please save my recent changes').operationId, 'HVAC_PREFERENCE_SAVE');
+});
+
+test('forget/revoke phrasing for a saved preference routes to HVAC_PREFERENCE_FORGET', () => {
+  const cases = [
+    'Forget my ownership horizon',
+    'Stop using my sell timeline for HVAC decisions',
+    'Remove my repair-replace approach',
+  ];
+  for (const prompt of cases) {
+    assert.equal(resolveAskOperation(prompt).operationId, 'HVAC_PREFERENCE_FORGET', prompt);
+  }
+});
+
+test('HVAC_PREFERENCE_FORGET and HVAC_PREFERENCE_SAVE are checked ahead of HVAC_DECISION_ABANDON in the cascade, avoiding any accidental overlap', () => {
+  // "forget/save" vocabulary is distinct from "abandon/cancel the decision"
+  // vocabulary, but this pins the intended precedence explicitly.
+  assert.equal(resolveAskOperation('Forget my ownership horizon').operationId, 'HVAC_PREFERENCE_FORGET');
+  assert.equal(resolveAskOperation('Abandon the HVAC decision').operationId, 'HVAC_DECISION_ABANDON');
+});
+
 test('a bare emergency HVAC phrase is still caught by the safety boundary before any Decision Platform routing', () => {
   // Safety precedence (FRD's parent Ask contract) must never be weakened by
   // adding new deterministic routing patterns.

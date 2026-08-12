@@ -2,10 +2,12 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 import axeCore from 'axe-core';
 import { installAskContext, propertyId } from './fixtures';
 
-// Ask Intelligence FRD Phase 8A exit criterion: "desktop/mobile accessibility
-// evidence retained" for the two new presentation blocks (DECISION_PROGRESS,
-// SCENARIO_COMPARISON). No live backend/DB is used -- these are self-contained
-// route mocks, following the axe-core pattern already established in
+// Ask Intelligence FRD Phase 8A/8B exit criterion: "desktop/mobile
+// accessibility evidence retained" for the five HVAC Decision Platform
+// presentation blocks (DECISION_PROGRESS, SCENARIO_COMPARISON from Phase 8A;
+// PREFERENCE_REFERENCE, WHY_NOW, RECOMMENDATION_CHANGE from Phase 8B). No
+// live backend/DB is used -- these are self-contained route mocks,
+// following the axe-core pattern already established in
 // e2e/savings-benefits/savings-benefits.spec.ts.
 
 const apiOrigin = 'http://localhost:8080';
@@ -36,7 +38,11 @@ async function installDecisionPlatformRoutes(page: Page) {
             limitationCodes: ['NO_TECHNICIAN_ASSESSMENT_ON_FILE', 'REPLACEMENT_COST_RANGE_UNAVAILABLE'],
             contextIssueCodes: ['HVAC_ITEM_FACT_CORRECTED'], confidenceLabel: 'MEDIUM',
             generatedAt: new Date().toISOString(),
-            actions: [{ id: 'open-decision', label: 'Open decision', href: `/dashboard/properties/${propertyId}/tools/decision-platform?decisionThreadId=thread-1`, style: 'PRIMARY' }],
+            // No "Open decision" action -- there is no decision-platform
+            // dashboard page in this phase's scope (see the Phase 8A
+            // functional-review commit); the block renders everything
+            // inline instead of linking out.
+            actions: [],
           }],
           captureRequests: [], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         },
@@ -57,8 +63,50 @@ async function installDecisionPlatformRoutes(page: Page) {
             baseline: { label: 'Current recommendation', verdict: 'MONITOR', reasonCodes: ['NO_RECENT_REPAIR_SPEND'], limitationCodes: ['NO_TECHNICIAN_ASSESSMENT_ON_FILE'] },
             scenario: { label: 'Quote from Acme HVAC', verdict: 'REPLACE', reasonCodes: ['ELEVATED_REPAIR_SPEND'], limitationCodes: ['NO_TECHNICIAN_ASSESSMENT_ON_FILE'], assumptions: [{ label: 'Quote amount', value: '$8,500.00' }, { label: 'Vendor', value: 'Acme HVAC' }] },
             comparisonDirection: 'SCENARIO_FAVORS_REPLACE',
-            actions: [{ id: 'open-decision', label: 'Open decision', href: `/dashboard/properties/${propertyId}/tools/decision-platform?decisionThreadId=thread-1`, style: 'PRIMARY' }],
+            actions: [],
           }],
+          captureRequests: [], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        },
+      }, 201);
+      return;
+    }
+
+    if (/recomputed hvac decision/i.test(body.message)) {
+      await fulfill(route, {
+        success: true, data: {
+          schemaVersion: '1.0', executionId: 'execution-hvac-decision-recomputed', sessionId: 'ask-acceptance-session',
+          question: body.message, status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' },
+          operation: { id: 'HVAC_DECISION_CONTINUE', version: '1.0', family: 'DECISION_ANALYSIS' },
+          contextVersion: 'hvac-decision-recomputed-context-v1',
+          // A recompute after a fact correction: DECISION_PROGRESS (now
+          // CURRENT again) + WHY_NOW (the recompute trigger) +
+          // RECOMMENDATION_CHANGE (the verdict shift) + PREFERENCE_REFERENCE
+          // (a confirmed preference was used) all render together, exactly
+          // as continueHvacDecisionThread assembles them server-side.
+          blocks: [
+            {
+              type: 'DECISION_PROGRESS', id: 'hvac-decision-progress', title: 'Repair or replace: Furnace',
+              decisionThreadId: 'thread-1', lifecycleStatus: 'RECOMMENDATION_AVAILABLE', contextStatus: 'CURRENT',
+              verdict: 'REPLACE', reasonCodes: ['ELEVATED_REPAIR_SPEND', 'CONDITION_POOR'],
+              limitationCodes: ['NO_TECHNICIAN_ASSESSMENT_ON_FILE'], contextIssueCodes: [], confidenceLabel: 'HIGH',
+              generatedAt: new Date().toISOString(), actions: [],
+            },
+            {
+              type: 'WHY_NOW', id: 'hvac-decision-why-now', title: 'Why now',
+              triggerCodes: ['HVAC_ITEM_FACT_CORRECTED'], evidenceCodes: ['ELEVATED_REPAIR_SPEND', 'CONDITION_POOR'],
+              timingNote: 'Recalculated after a recorded fact changed.', confidenceLabel: 'HIGH',
+            },
+            {
+              type: 'RECOMMENDATION_CHANGE', id: 'hvac-decision-change', title: 'What changed', decisionThreadId: 'thread-1',
+              previousVerdict: 'MONITOR', currentVerdict: 'REPLACE', category: 'MATERIAL',
+              changedFactors: ['CANONICAL_FACT', 'PREFERENCE'], changedAt: new Date().toISOString(),
+            },
+            {
+              type: 'PREFERENCE_REFERENCE', id: 'hvac-decision-preference-ownership-horizon', title: 'Using your confirmed plan',
+              preferenceKey: 'OWNERSHIP_HORIZON', summary: 'Using your confirmed plan to sell in about 18 months.',
+              visibility: 'HOUSEHOLD_SUMMARY', confirmedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 31536000000).toISOString(),
+            },
+          ],
           captureRequests: [], confirmation: null, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         },
       }, 201);
@@ -98,9 +146,27 @@ test('DECISION_PROGRESS (including a STALE context banner) passes accessibility 
   await expect(page.getByRole('heading', { name: 'Repair or replace: Furnace' })).toBeVisible();
   await expect(page.getByText('MONITOR', { exact: false })).toBeVisible();
   await expect(page.getByText('Needs refresh')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open decision' })).toHaveAttribute('href', /decisionThreadId=thread-1/);
 
   await expectZeroAxeViolations(page, 'Repair or replace: Furnace');
+});
+
+test('WHY_NOW, RECOMMENDATION_CHANGE, and PREFERENCE_REFERENCE (rendered together after a recompute) pass accessibility checks', async ({ page }) => {
+  await installDecisionPlatformRoutes(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill("What's the status of my recomputed HVAC decision?");
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Repair or replace: Furnace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Why now' })).toBeVisible();
+  await expect(page.getByText('Recalculated after a recorded fact changed.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What changed' })).toBeVisible();
+  await expect(page.getByText('This changes the recommendation')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Using your confirmed plan' })).toBeVisible();
+  await expect(page.getByText('Using your confirmed plan to sell in about 18 months.')).toBeVisible();
+
+  await expectZeroAxeViolations(page, 'Why now');
+  await expectZeroAxeViolations(page, 'What changed');
+  await expectZeroAxeViolations(page, 'Using your confirmed plan');
 });
 
 test('SCENARIO_COMPARISON passes accessibility checks', async ({ page }) => {

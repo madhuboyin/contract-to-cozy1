@@ -5,12 +5,12 @@
 // (FRD §9: "stale writes shall fail closed rather than overwrite a newer
 // preference, thread, scenario, or outcome").
 //
-// Preference persistence (real DecisionPreferenceValue rows, confirmation,
-// expiry/reconfirmation) is Phase 8B's job, not Phase 8A's (FRD §25 phase
-// split). Phase 8A accepts ownership-horizon/approach as raw per-command
-// inputs and records them as DecisionThreadAssumption rows so
-// recomputeStaleThread can find "what was assumed last time" without a
-// persisted preference row to read.
+// Preference reads/writes go through decisionPreferenceService.ts's
+// getActiveHvacPreferences (Phase 8B) — this file no longer echoes raw
+// preference params into DecisionThreadAssumption rows (that was a Phase 8A
+// stopgap for "no persistence exists yet"; DecisionThreadPreferenceReference
+// + RecommendationSnapshot.preferenceReferenceIds are the schema-intended
+// lineage mechanism, per docs/product/decision-platform/adr-0003).
 
 import { createHash } from 'crypto';
 import { prisma } from '../../lib/prisma';
@@ -24,6 +24,12 @@ import {
   evaluateHvacRepairReplace,
   HvacDecisionContext,
 } from './hvacRepairReplaceEngine.service';
+import {
+  compareRecommendationSnapshots,
+  getActiveHvacPreferences,
+  RecommendationChangeDiff,
+} from './decisionPreferenceService';
+import type { DecisionThreadContextStatus } from '../../productFramework/decisionPlatform/decisionPlatform.contract';
 
 export class DecisionThreadVersionConflictError extends Error {
   constructor(threadId: string) {
@@ -77,23 +83,40 @@ function inputDigestFor(context: HvacDecisionContext): string {
   return createHash('sha256').update(JSON.stringify(context)).digest('hex');
 }
 
+function preferenceIdsFrom(preferences: { ownershipHorizonPreferenceId: string | null; repairReplaceApproachPreferenceId: string | null }): string[] {
+  return [preferences.ownershipHorizonPreferenceId, preferences.repairReplaceApproachPreferenceId]
+    .filter((id): id is string => id !== null);
+}
+
+async function linkPreferenceReferences(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  decisionThreadId: string,
+  preferenceValueIds: string[],
+): Promise<void> {
+  if (!preferenceValueIds.length) return;
+  await tx.decisionThreadPreferenceReference.createMany({
+    data: preferenceValueIds.map((preferenceValueId) => ({ decisionThreadId, preferenceValueId })),
+    skipDuplicates: true,
+  });
+}
+
 interface CreateThreadInput {
   propertyId: string;
   userId: string;
   inventoryItemId: string;
   askExecutionId: string;
-  ownershipHorizonMonths: number | null;
-  repairReplaceApproach: HvacDecisionContext['repairReplaceApproach'];
 }
 
 export async function createHvacDecisionThread(input: CreateThreadInput) {
+  const preferences = await getActiveHvacPreferences(input.propertyId, input.userId);
   const context = await composeHvacDecisionContext(input.propertyId, input.inventoryItemId, {
-    ownershipHorizonMonths: input.ownershipHorizonMonths,
-    repairReplaceApproach: input.repairReplaceApproach,
+    ownershipHorizonMonths: preferences.ownershipHorizonMonths,
+    repairReplaceApproach: preferences.repairReplaceApproach,
   });
   if (!context) throw new Error('The selected item is not a recorded HVAC system on this property.');
 
   const evaluation = evaluateHvacRepairReplace(context);
+  const preferenceValueIds = preferenceIdsFrom(preferences);
 
   return prisma.$transaction(async (tx) => {
     const thread = await tx.decisionThread.create({
@@ -130,7 +153,7 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
           { entityType: 'InventoryItem', entityId: input.inventoryItemId, fieldPath: 'condition' },
           { entityType: 'InventoryItem', entityId: input.inventoryItemId, fieldPath: 'installedOn' },
         ],
-        preferenceReferenceIds: [],
+        preferenceReferenceIds: preferenceValueIds,
         signalReferences: [],
         evidenceReferences: [],
         resultPayloadVersion: '1.0',
@@ -157,18 +180,13 @@ export async function createHvacDecisionThread(input: CreateThreadInput) {
       ],
     });
 
-    const assumptions: { assumptionKey: string; valueJson: number | string }[] = [];
-    if (input.ownershipHorizonMonths !== null) assumptions.push({ assumptionKey: 'OWNERSHIP_HORIZON_MONTHS_ASSUMED', valueJson: input.ownershipHorizonMonths });
-    if (input.repairReplaceApproach !== null) assumptions.push({ assumptionKey: 'REPAIR_REPLACE_APPROACH_ASSUMED', valueJson: input.repairReplaceApproach });
-    if (assumptions.length) {
-      await tx.decisionThreadAssumption.createMany({ data: assumptions.map((a) => ({ decisionThreadId: thread.id, ...a })) });
-    }
+    await linkPreferenceReferences(tx, thread.id, preferenceValueIds);
 
     await tx.decisionThreadExecutionLink.create({
       data: { decisionThreadId: thread.id, askExecutionId: input.askExecutionId, linkRole: 'CREATED' },
     });
 
-    return { thread: updatedThread, snapshot };
+    return { thread: updatedThread, snapshot, preferencesUsed: preferences };
   });
 }
 
@@ -193,11 +211,18 @@ export async function loadHvacDecisionThreadDetail(threadId: string, propertyId:
 // resumption work, so omitting the link here does not weaken FRD §10's
 // continuity guarantee. Material commands that DO have execution.id in
 // scope (see confirmAskExecution) still record it.
+//
+// Returns `change` (non-null only when a stale-triggered recompute actually
+// ran) so callers can render RECOMMENDATION_CHANGE.
 export async function continueHvacDecisionThread(threadId: string, propertyId: string, askExecutionId?: string) {
   let thread = await loadHvacDecisionThreadDetail(threadId, propertyId);
+  let change: RecommendationChangeDiff | null = null;
+  let triggerReasonCodes: string[] = [];
 
   if (thread.contextStatus === 'STALE') {
-    await recomputeStaleThread(threadId);
+    const recomputed = await recomputeStaleThread(threadId);
+    change = recomputed.change;
+    triggerReasonCodes = recomputed.triggerReasonCodes;
     thread = await loadHvacDecisionThreadDetail(threadId, propertyId);
   }
 
@@ -207,40 +232,32 @@ export async function continueHvacDecisionThread(threadId: string, propertyId: s
     });
   }
 
-  return thread;
-}
-
-async function readAssumedPreferences(threadId: string): Promise<{
-  ownershipHorizonMonths: number | null;
-  repairReplaceApproach: HvacDecisionContext['repairReplaceApproach'];
-}> {
-  const rows = await prisma.decisionThreadAssumption.findMany({
-    where: { decisionThreadId: threadId, assumptionKey: { in: ['OWNERSHIP_HORIZON_MONTHS_ASSUMED', 'REPAIR_REPLACE_APPROACH_ASSUMED'] } },
-    orderBy: { createdAt: 'desc' },
-  });
-  const horizon = rows.find((row) => row.assumptionKey === 'OWNERSHIP_HORIZON_MONTHS_ASSUMED');
-  const approach = rows.find((row) => row.assumptionKey === 'REPAIR_REPLACE_APPROACH_ASSUMED');
-  return {
-    ownershipHorizonMonths: typeof horizon?.valueJson === 'number' ? horizon.valueJson : null,
-    repairReplaceApproach: (typeof approach?.valueJson === 'string' ? approach.valueJson : null) as HvacDecisionContext['repairReplaceApproach'],
-  };
+  return { thread, change, triggerReasonCodes };
 }
 
 // FRD §10.4 correction/invalidation flow: recompute against current facts,
-// create a new immutable snapshot superseding the old one, and restore
-// contextStatus to CURRENT only when no stale reason remains (delegated to
-// computeContextStatus, matching FRD §10.3's coexistence precedence rule).
+// create a new immutable snapshot superseding the old one, diff it against
+// the previous snapshot (FRD §14.3), and restore contextStatus to CURRENT
+// only when no stale reason remains (delegated to computeContextStatus,
+// matching FRD §10.3's coexistence precedence rule).
 export async function recomputeStaleThread(threadId: string) {
   const thread = await prisma.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
   if (!thread.primaryEntityId) throw new Error(`Decision thread ${threadId} has no primary entity to recompute against.`);
 
-  const preferences = await readAssumedPreferences(threadId);
+  // The thread's own creator is the acting user for an automatic,
+  // system-triggered recompute — this isn't a new user action, just a
+  // continuation of the existing thread's own preference basis.
+  const preferences = await getActiveHvacPreferences(thread.propertyId, thread.createdByUserId);
   const context = await composeHvacDecisionContext(thread.propertyId, thread.primaryEntityId, preferences);
   if (!context) throw new Error('The referenced HVAC item is no longer available on this property.');
   const evaluation = evaluateHvacRepairReplace(context);
+  const preferenceValueIds = preferenceIdsFrom(preferences);
 
   return prisma.$transaction(async (tx) => {
     const current = await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
+    const previousSnapshot = current.currentRecommendationSnapshotId
+      ? await tx.recommendationSnapshot.findUnique({ where: { id: current.currentRecommendationSnapshotId } })
+      : null;
 
     const newSnapshot = await tx.recommendationSnapshot.create({
       data: {
@@ -257,7 +274,7 @@ export async function recomputeStaleThread(threadId: string) {
           { entityType: 'InventoryItem', entityId: current.primaryEntityId, fieldPath: 'condition' },
           { entityType: 'InventoryItem', entityId: current.primaryEntityId, fieldPath: 'installedOn' },
         ],
-        preferenceReferenceIds: [],
+        preferenceReferenceIds: preferenceValueIds,
         signalReferences: [],
         evidenceReferences: [],
         resultPayloadVersion: '1.0',
@@ -269,6 +286,8 @@ export async function recomputeStaleThread(threadId: string) {
         inputDigest: inputDigestFor(context),
       },
     });
+
+    await linkPreferenceReferences(tx, threadId, preferenceValueIds);
 
     // Recomputation resolved every stale reason (this function only runs
     // against the current facts); any unresolved conflict reason is
@@ -290,8 +309,37 @@ export async function recomputeStaleThread(threadId: string) {
     });
     if (updateResult.count === 0) throw new DecisionThreadVersionConflictError(threadId);
 
-    return { thread: await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } }), snapshot: newSnapshot };
+    const change = previousSnapshot
+      ? compareRecommendationSnapshots(previousSnapshot, newSnapshot, current.contextIssueCodes)
+      : null;
+
+    return {
+      thread: await tx.decisionThread.findUniqueOrThrow({ where: { id: threadId } }),
+      snapshot: newSnapshot,
+      change,
+      triggerReasonCodes: current.contextIssueCodes,
+    };
   });
+}
+
+async function markThreads(threads: { id: string; contextStatus: DecisionThreadContextStatus; contextIssueCodes: string[]; version: number }[], reasonCode: string): Promise<void> {
+  for (const thread of threads) {
+    const nextContextStatus = computeContextStatus({ hasUnresolvedConflict: thread.contextStatus === 'CONFLICTED', hasUnresolvedStale: true });
+    if (thread.contextStatus === nextContextStatus && thread.contextIssueCodes.includes(reasonCode)) continue;
+    if (thread.contextStatus !== nextContextStatus && !isContextTransitionAllowed(thread.contextStatus, nextContextStatus)) {
+      continue; // already CONFLICTED and staying CONFLICTED is a no-op transition, not an error
+    }
+    const updateResult = await prisma.decisionThread.updateMany({
+      where: { id: thread.id, version: thread.version },
+      data: {
+        contextStatus: nextContextStatus,
+        contextIssueCodes: Array.from(new Set([...thread.contextIssueCodes, reasonCode])),
+        staleAt: thread.contextStatus === 'CURRENT' ? new Date() : undefined,
+        version: { increment: 1 },
+      },
+    });
+    if (updateResult.count === 0) throw new DecisionThreadVersionConflictError(thread.id);
+  }
 }
 
 // FRD §10.4: fired when a canonical fact this thread depends on is
@@ -305,36 +353,37 @@ export async function markThreadStaleOnFactCorrection(propertyId: string, invent
       lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] },
     },
   });
+  await markThreads(threads, reasonCode);
+}
 
-  for (const thread of threads) {
-    const nextContextStatus = computeContextStatus({ hasUnresolvedConflict: thread.contextStatus === 'CONFLICTED', hasUnresolvedStale: true });
-    if (thread.contextStatus === nextContextStatus && thread.contextIssueCodes.includes(reasonCode)) continue;
-    if (thread.contextStatus !== nextContextStatus && !isContextTransitionAllowed(thread.contextStatus, nextContextStatus)) {
-      continue; // already CONFLICTED and staying CONFLICTED is a no-op transition, not an error
-    }
-    const updateResult = await prisma.decisionThread.updateMany({
-      where: { id: thread.id, version: thread.version },
-      data: {
-        contextStatus: nextContextStatus,
-        contextIssueCodes: Array.from(new Set([...thread.contextIssueCodes, reasonCode])),
-        staleAt: thread.contextStatus === 'CURRENT' ? new Date() : thread.staleAt,
-        version: { increment: 1 },
-      },
-    });
-    if (updateResult.count === 0) throw new DecisionThreadVersionConflictError(thread.id);
-  }
+// FRD §7.5/§11.4: fired when a preference is revoked/forgotten. Marks every
+// thread that referenced the revoked value stale, by id (the caller already
+// knows exactly which threads via DecisionThreadPreferenceReference — see
+// decisionPreferenceService.ts's revokeHvacPreference, which returns
+// affectedThreadIds rather than importing this file, to avoid a circular
+// import between the two decisionPlatform services).
+export async function markThreadsStaleByIds(threadIds: string[], reasonCode: string): Promise<void> {
+  if (!threadIds.length) return;
+  const threads = await prisma.decisionThread.findMany({
+    where: { id: { in: threadIds }, lifecycleStatus: { in: [...ACTIVE_LIFECYCLE_STATUSES] } },
+  });
+  await markThreads(threads, reasonCode);
 }
 
 // FRD §13: an isolated counterfactual. Never updates the thread's "current"
-// snapshot pointer — comparison only, per the §13.3 isolation rule.
+// snapshot pointer — comparison only, per the §13.3 isolation rule. Never
+// calls a decisionPreferenceService save function (no scenario-to-profile
+// leakage, FRD §13.3 / Phase 8B exit criterion) — it only *reads* active
+// preferences to establish the baseline it compares the scenario against.
 export async function createHvacScenario(threadId: string, userId: string, input: { quoteAmountCents: number; vendorLabel: string }) {
   const thread = await prisma.decisionThread.findUniqueOrThrow({ where: { id: threadId } });
   if (!thread.primaryEntityId) throw new Error(`Decision thread ${threadId} has no primary entity.`);
 
-  const preferences = await readAssumedPreferences(threadId);
+  const preferences = await getActiveHvacPreferences(thread.propertyId, userId);
   const baselineContext = await composeHvacDecisionContext(thread.propertyId, thread.primaryEntityId, preferences);
   if (!baselineContext) throw new Error('The referenced HVAC item is no longer available on this property.');
   const scenarioEvaluation = evaluateHvacRepairReplace({ ...baselineContext, scenarioQuoteAmountCents: input.quoteAmountCents });
+  const preferenceValueIds = preferenceIdsFrom(preferences);
 
   return prisma.$transaction(async (tx) => {
     const scenario = await tx.scenario.create({
@@ -362,7 +411,7 @@ export async function createHvacScenario(threadId: string, userId: string, input
         engineVersion: scenarioEvaluation.engineVersion,
         contextContractVersion: scenarioEvaluation.contextContractVersion,
         canonicalFactReferences: [{ entityType: 'InventoryItem', entityId: thread.primaryEntityId, fieldPath: 'condition' }],
-        preferenceReferenceIds: [],
+        preferenceReferenceIds: preferenceValueIds,
         scenarioId: scenario.id,
         signalReferences: [],
         evidenceReferences: [],
@@ -374,6 +423,8 @@ export async function createHvacScenario(threadId: string, userId: string, input
         inputDigest: inputDigestFor({ ...baselineContext, scenarioQuoteAmountCents: input.quoteAmountCents }),
       },
     });
+
+    await linkPreferenceReferences(tx, threadId, preferenceValueIds);
 
     return { scenario, scenarioSnapshot, baselineSnapshotId: thread.currentRecommendationSnapshotId };
   });

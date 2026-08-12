@@ -359,6 +359,57 @@ function BlockView({ block }: { block: AskPresentationBlock }) {
     );
   }
 
+  if (block.type === 'PREFERENCE_REFERENCE') {
+    // FRD §11.4: privacy-appropriate summary copy only, plus a visibility
+    // disclosure -- "change/forget" controls are suggested follow-up
+    // messages (the chip row below the response), not action links, since
+    // these are commands rather than navigation.
+    return (
+      <section className="rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-semibold text-slate-950">{block.title}</h3>
+          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800">{block.visibility.replace(/_/g, ' ').toLowerCase()}</span>
+        </div>
+        <p className="mt-2 text-sm leading-5 text-slate-700">{block.summary}</p>
+        {block.expiresAt && <p className="mt-2 text-xs text-slate-600">Expires {new Date(block.expiresAt).toLocaleDateString()} unless reconfirmed.</p>}
+      </section>
+    );
+  }
+
+  if (block.type === 'WHY_NOW') {
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-semibold text-slate-950">{block.title}</h3>
+          {block.confidenceLabel && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">{block.confidenceLabel.toLowerCase()} confidence</span>}
+        </div>
+        {block.timingNote && <p className="mt-2 text-sm text-slate-600">{block.timingNote}</p>}
+        {block.triggerCodes.length > 0 && (
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">{block.triggerCodes.map((code) => <li key={code}>{code.replace(/_/g, ' ').toLowerCase()}</li>)}</ul>
+        )}
+      </section>
+    );
+  }
+
+  if (block.type === 'RECOMMENDATION_CHANGE') {
+    const categoryLabel = block.category === 'MATERIAL' ? 'This changes the recommendation'
+      : block.category === 'CONFIDENCE_ONLY' ? 'The recommendation stayed the same; confidence changed'
+        : block.category === 'SYSTEM_METHOD_ONLY' ? 'Only the calculation method changed, not your home’s facts'
+          : 'Nothing material changed';
+    return (
+      <section className={cn('rounded-2xl border p-4', block.category === 'MATERIAL' ? 'border-amber-200 bg-amber-50/70' : 'border-slate-200 bg-white')}>
+        <h3 className="font-semibold text-slate-950">{block.title}</h3>
+        <p className="mt-2 text-sm leading-5 text-slate-700">{categoryLabel}</p>
+        {block.previousVerdict !== block.currentVerdict && (
+          <p className="mt-2 text-sm text-slate-800"><span className="line-through text-slate-500">{block.previousVerdict.replace(/_/g, ' ')}</span> {'→'} <span className="font-semibold">{block.currentVerdict.replace(/_/g, ' ')}</span></p>
+        )}
+        {block.changedFactors.length > 0 && (
+          <ul className="mt-3 flex flex-wrap gap-2">{block.changedFactors.map((factor) => <li key={factor} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">{factor.replace(/_/g, ' ').toLowerCase()}</li>)}</ul>
+        )}
+      </section>
+    );
+  }
+
   if (block.type === 'ASSUMPTIONS') return <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title}</summary><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">{block.items.map((item) => <li key={item}>{item}</li>)}</ul></details>;
 
   if (block.type === 'LIMITATION' || block.type === 'EMPTY_STATE' || block.type === 'ERROR_STATE') {
