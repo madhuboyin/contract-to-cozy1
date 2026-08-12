@@ -3,7 +3,7 @@ title: "AI Home Concierge — Intelligence, Personalization, and Proactive Conci
 subtitle: "Prioritized normative amendment to Ask Redo v1.6"
 document_type: "Incremental Functional Requirements Document"
 status: "Proposed — production implementation and real-user collection blocked on P0 approval gates"
-version: "1.1"
+version: "1.2"
 date: "August 11, 2026"
 parent_document: "AI_HOME_CONCIERGE_ASK_REDO_FRD.md v1.6"
 accountable_product_area: "Homeowner Product / Home Intelligence / Ask"
@@ -16,7 +16,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence / Ask"
 | Field | Value |
 | --- | --- |
 | Status | Proposed — production implementation and real-user collection blocked on P0 approval gates |
-| Version | 1.1 |
+| Version | 1.2 |
 | Date | August 11, 2026 |
 | Parent contract | [AI Home Concierge — Ask Redo v1.6](./AI_HOME_CONCIERGE_ASK_REDO_FRD.md) |
 | Relationship | Normative extension; does not replace or weaken the parent contract |
@@ -261,7 +261,19 @@ DecisionPreferenceValue
 - updatedAt
 ```
 
-The definition registry shall declare value schema, allowed subject/scope, sensitivity class, default expiry, reconfirmation policy, eligible operations, correction route, and whether a privacy-safe shared explanation is permitted.
+The definition registry shall declare:
+
+- value schema;
+- allowed subject and property scope;
+- allowed provenance types;
+- storage class;
+- confirmation policy by provenance;
+- sensitivity class and visibility policy;
+- default validity and expiry;
+- reconfirmation policy;
+- eligible operations;
+- correction route; and
+- whether a privacy-safe shared explanation is permitted.
 
 `provenanceType`, `storageClass`, and `status` are independent axes:
 
@@ -339,7 +351,9 @@ Authorized users shall be able to inspect and export active reusable preference 
 
 ### 8.4 Approval gate
 
-No real-user collection of decision preferences, durable threads, or outcomes may begin until Product, Privacy, Security, and the owning domain approve this matrix and concrete retention durations.
+No real-user collection of decision preferences, durable threads, or outcomes may begin until Product, the owning Domain, Architecture, Privacy, Security, Trust, and Operations approve the applicable ownership, authorization, retention, deletion, export, and lineage contracts and concrete retention durations.
+
+These approvals constitute the real-user data-collection portion of the broader Phase 7A exit gate; they do not by themselves close Phase 7A or authorize production launch.
 
 ---
 
@@ -398,7 +412,7 @@ DecisionThread
 - createdAt
 - updatedAt
 - staleAt nullable
-- resolvedAt nullable
+- completedAt nullable
 - archivedAt nullable
 ```
 
@@ -415,11 +429,9 @@ Related typed models:
 - `RecommendationSnapshot`; and
 - `DecisionOutcomeLink`.
 
-### 10.2 Lifecycle and context health
+### 10.2 Lifecycle transitions
 
 `lifecycleStatus` records progress through the homeowner decision. `contextStatus` independently records whether the thread's referenced decision basis is currently usable. A context-health change shall not replace or erase the lifecycle position. For example, a thread may be `ACTION_IN_PROGRESS` with `contextStatus = STALE`.
-
-#### Lifecycle transitions
 
 | From lifecycle status | To lifecycle status | Trigger |
 | --- | --- | --- |
@@ -434,7 +446,9 @@ Related typed models:
 | Any state | `ARCHIVED` | Authorized archival; no further evaluation until reopened |
 | `ARCHIVED` | `OPEN` | Explicit authorized reopen creates a new version/event and re-evaluates context health |
 
-#### Context-health transitions
+`completedAt` shall be set when lifecycle status first enters `COMPLETED`. Reopening a completed thread shall not rewrite its prior transition event; it shall clear the current-row `completedAt`, create the required new version/event, and preserve the historical completion time in the append-only transition log. `archivedAt` follows the equivalent rule for entry into and reopening from `ARCHIVED`.
+
+### 10.3 Context-health transitions
 
 | From context status | To context status | Trigger |
 | --- | --- | --- |
@@ -446,15 +460,17 @@ Related typed models:
 
 When stale and conflicted conditions coexist, the externally visible `contextStatus` shall be `CONFLICTED`; all stale and conflict reasons remain in `contextIssueCodes`. Resolving the conflict shall restore `STALE`, not `CURRENT`, when any stale reason remains.
 
-All lifecycle and context-health transitions shall be append-only audited and protected by optimistic concurrency. `ARCHIVED` threads shall not recompute context until explicitly reopened.
+`staleAt` records the start of the current unresolved stale episode. It shall be set when context first enters `STALE`; preserved through `STALE → CONFLICTED → STALE`; and cleared only when context returns to `CURRENT`. A conflict with no stale dependency shall not set `staleAt`. When a direct `CONFLICTED → STALE` transition reveals a previously retained stale dependency, `staleAt` shall use the time that dependency first became stale when known, otherwise the transition time.
 
-### 10.3 Selection and ambiguity
+All lifecycle and context-health transitions shall be append-only audited and protected by optimistic concurrency. The append-only transition log is authoritative history; `staleAt`, `completedAt`, and `archivedAt` are current-row query conveniences. `ARCHIVED` threads shall not recompute context until explicitly reopened.
+
+### 10.4 Selection and ambiguity
 
 Ask may continue a thread only when the property, decision family, and entity resolve uniquely. If multiple active HVAC, refinance, or sale-preparation threads are plausible, Ask shall return a typed thread selection clarification.
 
 Raw conversation history, recency alone, or an LLM guess may not select a material thread.
 
-### 10.4 Correction and invalidation
+### 10.5 Correction and invalidation
 
 When a homeowner corrects a canonical fact, Ask shall use the registered Property Context/domain capture and confirmation path. After the canonical write:
 
@@ -464,7 +480,7 @@ When a homeowner corrects a canonical fact, Ask shall use the registered Propert
 4. changed recommendations receive a new snapshot; and
 5. Ask may explain the changed evidence without inventing a new reason.
 
-### 10.5 First acceptance slice
+### 10.6 First acceptance slice
 
 The first certified thread shall support one HVAC item, repair and replacement options, an optional quote assumption, confirmed ownership horizon, multi-session continuation, fact correction, stale recomputation, and explicit abandonment.
 
