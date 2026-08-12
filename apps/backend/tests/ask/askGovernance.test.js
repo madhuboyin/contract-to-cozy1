@@ -121,6 +121,14 @@ test('TABLE blocks carry a true-vs-shown count like GROUPED_LIST sections alread
   assert.match(orchestrator, /id: 'capital-timeline-table'.*totalCount: items\.length/);
 });
 
+test('RECEIVED is a genuinely reachable execution.status, not just an AskExecutionEvent.eventType', () => {
+  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const createIndex = orchestrator.indexOf('const execution = await prisma.askExecution.create({');
+  const eventIndex = orchestrator.indexOf("eventType: 'RECEIVED'", createIndex);
+  const createCall = orchestrator.slice(createIndex, eventIndex);
+  assert.match(createCall, /status: 'RECEIVED',/, 'the initial execution row must be persisted with status RECEIVED, not skip straight to ROUTING/RUNNING');
+});
+
 test('material monitor notifications link to durable Ask continuations', () => {
   const continuation = readFileSync(resolve(__dirname, '../../src/services/ask/askNotificationContinuation.service.ts'), 'utf8');
   const refinance = readFileSync(resolve(__dirname, '../../src/refinanceRadar/refinanceRateMonitor.service.ts'), 'utf8');
@@ -132,6 +140,12 @@ test('material monitor notifications link to durable Ask continuations', () => {
   assert.doesNotMatch(refinance, /askQuestion:/);
   assert.match(refinance, /askExecutionId:/);
   assert.match(maintenance, /askExecutionId:/);
+});
+
+test('notification continuation execution creation is a true atomic upsert, not findUnique-then-create', () => {
+  const continuation = readFileSync(resolve(__dirname, '../../src/services/ask/askNotificationContinuation.service.ts'), 'utf8');
+  assert.match(continuation, /tx\.askExecution\.upsert\(\{/, 'two racing callers on the same trigger must not both attempt create() and risk an unhandled unique-constraint error');
+  assert.doesNotMatch(continuation, /tx\.askExecution\.findUnique/);
 });
 
 test('golden and negative prompts route before remote generation', () => {

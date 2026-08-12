@@ -67,12 +67,19 @@ export async function createAskNotificationContinuation(input: AskNotificationCo
       create: { id: sessionId, userId: input.userId, propertyId: input.propertyId, title: input.title.slice(0, 120), expiresAt },
       update: { lastActiveAt: new Date(), expiresAt },
     });
-    const existing = await tx.askExecution.findUnique({
+    // A true atomic upsert, not findUnique-then-create: two callers racing
+    // on the same trigger (e.g. concurrent monitor-evaluation runs hitting
+    // the same clientRequestId) previously both read "no existing row" and
+    // then both attempted create(), so the loser hit the unique-constraint
+    // violation as an unhandled error inside this transaction. Both
+    // callers already catch and fall back to the plain domain URL on any
+    // failure here, so no notification was actually lost -- but the
+    // Ask-continuation link was, for no real reason, since "ensure exactly
+    // one execution exists for this trigger" is precisely what upsert
+    // already guarantees atomically at the database level.
+    const created = await tx.askExecution.upsert({
       where: { userId_clientRequestId: { userId: input.userId, clientRequestId } },
-    });
-    if (existing) return existing;
-    const created = await tx.askExecution.create({
-      data: {
+      create: {
         sessionId,
         userId: input.userId,
         propertyId: input.propertyId,
@@ -102,7 +109,13 @@ export async function createAskNotificationContinuation(input: AskNotificationCo
         completedAt: new Date(),
         expiresAt,
       },
+      // Idempotent replay of an already-created continuation for this
+      // exact trigger: leave the existing durable execution untouched.
+      update: {},
     });
+    // Best-effort audit trail; a duplicate event under the same rare race
+    // this upsert now tolerates is harmless (append-only, informational),
+    // unlike the crash the previous find-then-create pattern risked.
     await tx.askExecutionEvent.create({
       data: {
         executionId: created.id,

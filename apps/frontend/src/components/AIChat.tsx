@@ -4,6 +4,8 @@ import { CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { MessageCircle, Sparkles, X } from 'lucide-react';
 import { AskWorkspace } from '@/components/ask/AskWorkspace';
 
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function AIChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [initialQuestion, setInitialQuestion] = useState('');
@@ -14,6 +16,24 @@ export function AIChat() {
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const confirmDialogRef = useRef<HTMLDivElement>(null);
+  const keepWorkingRef = useRef<HTMLButtonElement>(null);
+  const panelCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const wasConfirmingRef = useRef(false);
+
+  // Moves focus into the "Close Ask Cozy?" overlay when it appears (it
+  // previously gave screen-reader users no cue it had opened), defaulting
+  // to the non-destructive "Keep working" control rather than the first
+  // DOM control, which happens to be the one that discards pending work.
+  // Returns focus to the panel's own close button when the overlay is
+  // dismissed via "Keep working"; on the full-close path this is a no-op
+  // since the panel (and this ref) has already unmounted by then, and
+  // close() already restores focus to the launcher itself.
+  useEffect(() => {
+    if (confirmClose) keepWorkingRef.current?.focus();
+    else if (wasConfirmingRef.current) panelCloseButtonRef.current?.focus();
+    wasConfirmingRef.current = confirmClose;
+  }, [confirmClose]);
 
   // On the mobile full-screen sheet (the desktop floating panel below sets
   // its own fixed lg: height and is unaffected), the layout viewport
@@ -63,8 +83,14 @@ export function AIChat() {
     if (!isOpen) return;
     const handleKeyboard = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); requestClose(); return; }
-      if (event.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+      if (event.key !== 'Tab') return;
+      // While the close-confirmation overlay is open, trap Tab to just its
+      // own two controls -- previously the trap always scoped to the
+      // whole panel, so Tab/Shift+Tab kept cycling through the underlying
+      // composer/thumbs/etc. controls still visually present beneath it.
+      const trapRoot = confirmClose ? confirmDialogRef.current : dialogRef.current;
+      if (!trapRoot) return;
+      const focusable = [...trapRoot.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)];
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -73,7 +99,7 @@ export function AIChat() {
     };
     document.addEventListener('keydown', handleKeyboard);
     return () => document.removeEventListener('keydown', handleKeyboard);
-  }, [isOpen, requestClose]);
+  }, [isOpen, requestClose, confirmClose]);
 
   return (
     <>
@@ -96,9 +122,9 @@ export function AIChat() {
             style={viewportHeight != null ? ({ '--ask-viewport-height': `${viewportHeight}px` } as CSSProperties) : undefined}
             className="relative h-[var(--ask-viewport-height,100%)] w-full overflow-hidden bg-white shadow-2xl lg:h-[min(780px,calc(100vh-3rem))] lg:w-[560px] lg:rounded-[28px] lg:border lg:border-slate-200"
           >
-            <button onClick={requestClose} aria-label="Close Ask Cozy" className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl bg-white text-slate-500 shadow-sm hover:bg-slate-100"><X className="h-4 w-4" /></button>
+            <button ref={panelCloseButtonRef} onClick={requestClose} aria-label="Close Ask Cozy" className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl bg-white text-slate-500 shadow-sm hover:bg-slate-100"><X className="h-4 w-4" /></button>
             <AskWorkspace mode="panel" onClose={requestClose} onPendingStateChange={setHasPendingWork} initialQuestion={initialQuestion} launchSurface={launchSurface} launchCapabilityId={launchCapabilityId} />
-            {confirmClose && <div className="absolute inset-x-4 top-16 z-30 rounded-2xl border border-amber-200 bg-white p-4 shadow-xl" role="alertdialog" aria-modal="true" aria-labelledby="ask-close-title"><h2 id="ask-close-title" className="font-semibold text-slate-950">Close Ask Cozy?</h2><p className="mt-1 text-sm text-slate-600">Your typed and inline-capture drafts are saved on this device. Any unconfirmed action will remain pending.</p><div className="mt-4 flex gap-2"><button type="button" onClick={close} className="min-h-10 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white">Close</button><button type="button" onClick={() => setConfirmClose(false)} className="min-h-10 rounded-xl px-4 text-sm font-semibold text-slate-700">Keep working</button></div></div>}
+            {confirmClose && <div ref={confirmDialogRef} className="absolute inset-x-4 top-16 z-30 rounded-2xl border border-amber-200 bg-white p-4 shadow-xl" role="alertdialog" aria-modal="true" aria-labelledby="ask-close-title"><h2 id="ask-close-title" className="font-semibold text-slate-950">Close Ask Cozy?</h2><p className="mt-1 text-sm text-slate-600">Your typed and inline-capture drafts are saved on this device. Any unconfirmed action will remain pending.</p><div className="mt-4 flex gap-2"><button type="button" onClick={close} className="min-h-10 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white">Close</button><button ref={keepWorkingRef} type="button" onClick={() => setConfirmClose(false)} className="min-h-10 rounded-xl px-4 text-sm font-semibold text-slate-700">Keep working</button></div></div>}
           </div>
         </div>
       )}

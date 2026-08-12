@@ -712,13 +712,19 @@ function ExecutionFeedback({ executionId, propertyId }: { executionId: string; p
       <div className="flex flex-wrap items-center gap-2">
         <span>{saved ? 'Thanks—your feedback was saved.' : 'Was this helpful?'}</span>
         <button type="button" disabled={saving} aria-label="Helpful response" aria-pressed={rating === 'UP'} onClick={() => void submit('UP')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'UP' && 'bg-teal-50 text-teal-700')}><ThumbsUp className="h-4 w-4" /></button>
-        <button type="button" disabled={saving} aria-label="Not helpful response" aria-pressed={rating === 'DOWN'} onClick={() => { setRating('DOWN'); setSaved(false); }} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'DOWN' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-4 w-4" /></button>
+        {/* Persists a bare "not helpful" vote immediately, the same as the
+            thumbs-up button, instead of only marking the button visually
+            pressed and waiting for a separate "Send feedback" click on the
+            comment box below -- previously the vote looked saved (aria-
+            pressed, highlighted) but was silently lost if the user
+            navigated away before sending a comment. */}
+        <button type="button" disabled={saving} aria-label="Not helpful response" aria-pressed={rating === 'DOWN'} onClick={() => void submit('DOWN')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'DOWN' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-4 w-4" /></button>
         {propertyId && <button type="button" disabled={correcting} onClick={() => void correctHomeRecord()} className="ml-auto font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'Correct home information'}</button>}
       </div>
-      {rating === 'DOWN' && !saved && (
+      {rating === 'DOWN' && (
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <input value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1000} placeholder="What should be improved? (optional)" aria-label="Ask feedback details" className="min-h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800" />
-          <button type="button" disabled={saving} onClick={() => void submit('DOWN', comment)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-700">Send feedback</button>
+          <button type="button" disabled={saving || !comment.trim()} onClick={() => void submit('DOWN', comment)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-700 disabled:opacity-50">Add detail</button>
         </div>
       )}
       {error && <p className="mt-2 text-red-700" role="alert">{error}</p>}
@@ -853,8 +859,18 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
 
   const submit = (event: FormEvent) => { event.preventDefault(); void ask(input); };
+  // Relying only on event.nativeEvent.isComposing is unreliable across
+  // browsers (Safari in particular can report it as already false by the
+  // time the confirming Enter keydown fires), so composition state is
+  // also tracked explicitly via onCompositionStart/End. Without this,
+  // pressing Enter to commit an IME candidate (CJK and other composed
+  // input) sent the half-typed question instead of just committing it.
+  const isComposingRef = useRef(false);
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void ask(input); }
+    if (event.key === 'Enter' && !event.shiftKey && !isComposingRef.current && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void ask(input);
+    }
   };
 
   const clearHistory = async () => {
@@ -959,7 +975,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         <form onSubmit={submit} className="mx-auto max-w-3xl">
           {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700"><AlertTriangle className="h-4 w-4" />{error}</div>}
           <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100">
-            <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); window.localStorage.setItem(draftStorageKey(selectedPropertyId), event.target.value); }} onKeyDown={keyDown} rows={1} maxLength={4000} placeholder="Ask anything about your home…" className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400" />
+            <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); window.localStorage.setItem(draftStorageKey(selectedPropertyId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={1} maxLength={4000} placeholder="Ask anything about your home…" className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400" />
             <button type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40"><Send className="h-4 w-4" /></button>
           </div>
           <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>

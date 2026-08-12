@@ -3585,7 +3585,13 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       clientRequestId: input.clientRequestId,
       message: input.message,
       launchContextJson: input.launchContext ? asInputJson(input.launchContext) : undefined,
-      status: 'ROUTING',
+      // The row's true first persisted state: the request has been
+      // accepted but routing hasn't run yet. Previously this was created
+      // directly as 'ROUTING', so RECEIVED was declared in
+      // AskExecutionStatus (and matches the schema column default) but
+      // could never actually be observed as execution.status -- only as
+      // this same-named AskExecutionEvent.eventType below.
+      status: 'RECEIVED',
       expiresAt,
     },
   });
